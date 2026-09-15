@@ -446,6 +446,14 @@ SPECIES.resident = { ...SPECIES.warden, id:'resident', form:FORM.HUMAN, human:tr
   hp:100, dmg:10, height:1.8, radius:.32, mass:76, speed:3.6, xp:0, countsAs:0,
   strikeRange:1.2, engage:[0,1.5], standoff:0, deathNoise:14 };
 SPECIES.cashier = { ...SPECIES.resident, id:'cashier' };
+// THE THREE COMPANIONS (the Eleven rewire). A resident's brain — neutral, civilian, no
+// headcount, no XP — in three authored bodies. The SPECIES ID IS THE buildHuman STYLE
+// (bodies.js buildBody), so art/people.js's greer/roan/sheet cuts are reached by nothing more
+// than spawning one. `fixedVariant` pins the face, skin and hair so a companion you recruited
+// last night is the same person tonight. world/companions.js owns the following.
+SPECIES.greer = { ...SPECIES.resident, id:'greer', height:1.84, fixedVariant:6, speed:3.8 };
+SPECIES.roan  = { ...SPECIES.resident, id:'roan',  height:1.86, fixedVariant:3, speed:3.6 };
+SPECIES.sheet = { ...SPECIES.resident, id:'sheet', height:1.80, fixedVariant:9, speed:3.5 };
 SPECIES.sentry = { ...SPECIES.poacher, id:'sentry', human:true, hp:180, xp:90, countsAs:0 };
 // ROUND 22. ALEX, 2026-09-10: "The dog-caller. The voice in the woods calling a name all game
 // is a person. Biggest light in the county, hunts you with the pack. Kill him and the hounds
@@ -511,6 +519,10 @@ export const POOL = Object.freeze({
   // live runner (ROSTER maxAlive 1); one dog-caller, because there is one voice in the woods.
   runner: 3, dogcaller: 1,
   candle: 4, drowned: 4,
+  // THE THREE COMPANIONS. One slot each and that is the whole budget: only one may be
+  // following you at a time, and the other two are standing in their own hamlet or walking
+  // home from wherever you left them. A slot is a body record and a merged mesh at boot.
+  greer: 1, roan: 1, sheet: 1,
 });
 
 /* Species allowed to answer a pressure order, in the order a budget prefers

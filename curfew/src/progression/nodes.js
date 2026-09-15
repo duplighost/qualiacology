@@ -85,10 +85,29 @@ export const HOOK_POINTS = Object.freeze([
   // down." Two points, because a car that stops wearing at 70% worn is still a dog: `wearAdd`
   // is every gram of new wear (ONE funnel, car.js _addWear) and `wearMend` takes off what is
   // already there while the engine runs.
+  // THE ELEVEN REWIRE: REBUILT now takes the MILEAGE out of the car and nothing else —
+  // `why === 'drive'` reduces to zero and every other reason is untouched. `wearMend` has
+  // no installer any more (the car healing itself would have left gas nothing to do); the
+  // point stays because car.js still samples it and base 0 is the honest answer.
   { name: 'wearAdd', kind: 'reduce', runner: 'car', base: 'the wear about to be added',
     at: 'vehicle/car.js _addWear()', sig: '(delta, ctx, why) -> delta' },
   { name: 'wearMend', kind: 'reduce', runner: 'car', base: '0',
     at: 'vehicle/car.js the wear branch of step()', sig: '(perMinute, ctx, running) -> perMinute' },
+  // THE ELEVEN REWIRE, the four parts that had no hook before. Each one is fitted by the
+  // boss named beside it (vehicle/parts.js) and read once per step or once per event by the
+  // car. An install onto a name that is not in this table is refused loudly at boot.
+  { name: 'lampWearProof', kind: 'reduce', runner: 'car', base: 'false',
+    at: 'vehicle/car.js _filament(), the damage term',
+    sig: '(bool, ctx) -> bool   // STOLEN LIGHT, from the Lantern Eater' },
+  { name: 'mothScreen', kind: 'reduce', runner: 'car', base: 'false',
+    at: 'vehicle/car.js _stepMoths(), the rise branch',
+    sig: '(bool, ctx) -> bool   // MOTH SCREEN, from the Moonmolt' },
+  { name: 'offRoadMul', kind: 'reduce', runner: 'car', base: '1',
+    at: 'vehicle/car.js _stepDriving(), K.offRoad and K.accelOff',
+    sig: '(mul, ctx) -> mul   // MIRE TYRES, from the Mire Bride' },
+  { name: 'funeralPeal', kind: 'reduce', runner: 'car', base: 'null',
+    at: 'vehicle/car.js _horn()',
+    sig: '(spec|null, ctx) -> {chargeS,radius,deafS,cooldownS}|null   // from the Bellwether' },
   // ROUND 18, 2026-09-09, Alex: "If an upgrade is wicked expensive and it lets it crash
   // through the trees in a forest knocking them over/temporarily destroying them, that
   // would be the best." Installed by the GARAGE (vehicle/garage.js), not by a node — the

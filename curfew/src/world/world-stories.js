@@ -29,7 +29,8 @@ export class WorldStories {
   for(const family of['timber','plaster','stone','metal']){const mat=places.matBody.clone();mat.name='story-'+family;mat.map=places.surfaceTextures?.[family]||null;mat.bumpMap=places.surfaceTextures?.[family+'-bump']||null;mat.bumpScale=family==='plaster'?.018:.035;this.materials[family]=mat;}
   this.material=this.materials.timber;
   this._christmas();this._sinkhole();this._roadNotice();this._siteRecords();this._appendix();
-  if(typeof document!=='undefined'){this.caption=document.createElement('div');this.caption.style.cssText='display:none;position:fixed;left:50%;bottom:19%;transform:translateX(-50%);width:min(610px,70vw);padding:17px 22px;border-left:2px solid #b6a177;background:linear-gradient(100deg,rgba(12,16,22,.94),rgba(12,16,22,.80));color:#d8d2c2;font:16px/1.6 Georgia,serif;pointer-events:none;z-index:24;text-shadow:0 1px 2px #000';document.body.append(this.caption);}
+  // THE ELEVEN REWIRE: the caption element is gone. What a note says is a line like any
+  // other line and goes through dialogue/dialogue.js, so a note cannot talk over a person.
   this.drownedMemory=new DrownedLightMemory(this.ctx);this.bellAnswers=new LoreBellAnswers(this.ctx);this.readyState=true;
  }
  ready(){return this.readyState;}
@@ -166,12 +167,16 @@ export class WorldStories {
   // A service reel and a severed orange lead repeat the cable at the houses.
   k.cyl(.6,.6,.85,20,x+2,y+.64,z-1,WOOD,0,Math.PI/2);cable(k,[[x+2,y+.3,z-1],[x-1,y+.06,z-3],[x-4,y+.06,z-7],[x-3,y+.07,z-13]],.037,[.15,.079,.032]);this._mesh(k,root);
  }
- _say(text){this.receipt=Math.max(10,Math.min(45,text.length/20));if(this.caption){this.caption.textContent=text;this.caption.style.whiteSpace='pre-line';}}
+ // The speaker is 'a note' rather than a person: it is what is written down, read out.
+ // Priority 5 so a resident saying hello cannot bury it, interruptible so danger can.
+ _say(text,id){this.receipt=Math.max(10,Math.min(45,text.length/20));
+  this._sys('dialogue')?.say({id:'story.'+(id||'note'),speaker:'a note',text,priority:5,interrupt:true,
+   durS:Math.max(6,Math.min(26,text.length/17))});}
  _use(t){const pr=this._sys('progress'),key='story:'+t.id,first=!pr.flag(key);
   if(t.kind==='repair'&&!first)return;
   if(first){pr.flag(key,true);if(t.reward)pr.award(t.reward,t.x,t.y,t.z,'discovery');if(t.cash)pr.payCash(t.cash,t.x,t.y,t.z,'story');if(t.kind==='repair')this._sys('dusk-to-dawn')?.addBulb(2);pr.save.flush();}
   if(t.rumour)this._reveal(t.id==='sinkhole-view');
-  this._say(t.text);this.ctx.bus.emit('story:read',{id:t.id,first,title:t.title,text:t.text,siteId:t.siteId,hand:t.hand});
+  this._say(t.text,t.id);this.ctx.bus.emit('story:read',{id:t.id,first,title:t.title,text:t.text,siteId:t.siteId,hand:t.hand});
  }
  _reveal(visited=false){const pr=this._sys('progress');pr.learnRumour({id:SINKHOLE.id,name:SINKHOLE.name,x:SINKHOLE.x,z:SINKHOLE.z,kind:'story'});if(visited)pr.discoverBoss(SINKHOLE.id);}
  step(dt){
@@ -195,8 +200,8 @@ export class WorldStories {
   else if(this.lamp){lights?.release(this.lamp);this.lamp=null;}
   if(Math.hypot(p.pos.x-SINKHOLE.x,p.pos.z-SINKHOLE.z)<64&&pr.mapStatus(SINKHOLE.id)!=='discovered')this._reveal(true);
  }
- present(alpha){this.bellAnswers?.present(alpha);const p=this._sys('player')?.pos;for(const a of this.groups)a.g.visible=!p||Math.hypot(p.x-a.x,p.z-a.z)<550;if(this.caption)this.caption.style.display=this.receipt>0&&!this.ctx.paused&&this.ctx.playing?'block':'none';}
+ present(alpha){this.bellAnswers?.present(alpha);const p=this._sys('player')?.pos;for(const a of this.groups)a.g.visible=!p||Math.hypot(p.x-a.x,p.z-a.z)<550;}
  state(){return{power:!!this._sys('progress')?.flag('story:xmas-power'),generator:this.generator?{x:this.generator.x,y:this.generator.y,z:this.generator.z}:null,sinkhole:this.sinkhole,targets:this.targets.map(t=>({id:t.id,kind:t.kind,x:t.x,y:t.y,z:t.z})),target:this.target?.id||null};}
- dispose(){this.drownedMemory?.dispose();this.bellAnswers?.dispose();this.caption?.remove();this._sys('lights')?.release(this.lamp);for(const id of['story:xmas','story:sinkhole','story:road-notice','story:records'])this._sys('collision')?.removeChunk(id);this.group?.traverse(o=>{o.geometry?.dispose();});for(const s of this.signs){s.material.map.dispose();s.material.dispose();}this.switch?.material.dispose();for(const mat of Object.values(this.materials||{}))mat.dispose();this.group?.removeFromParent();}
+ dispose(){this.drownedMemory?.dispose();this.bellAnswers?.dispose();this._sys('lights')?.release(this.lamp);for(const id of['story:xmas','story:sinkhole','story:road-notice','story:records'])this._sys('collision')?.removeChunk(id);this.group?.traverse(o=>{o.geometry?.dispose();});for(const s of this.signs){s.material.map.dispose();s.material.dispose();}this.switch?.material.dispose();for(const mat of Object.values(this.materials||{}))mat.dispose();this.group?.removeFromParent();}
 }
 export default WorldStories;

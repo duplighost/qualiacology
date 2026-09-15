@@ -55,28 +55,30 @@ import {
 import { SaveBlob } from './save.js';
 // ROUND 18: the car upgrades left the tree and are bought with money at a lookout. They
 // install onto the SAME hook registry the nodes do — nothing in car.js changed.
-import {
-  UPGRADES, UPGRADE_BY_ID, LEGACY_NODE_UPGRADE, LEGACY_NODE_COST,
-} from '../vehicle/garage.js';
+import { UPGRADES, UPGRADE_BY_ID } from '../vehicle/garage.js';
+// THE ELEVEN REWIRE: parts are not bought. Each of the Eleven leaves one on the car.
+import { PART_BY_BOSS } from '../vehicle/parts.js';
+// Only for a finish's NAME on the receipt. boss-catalog.js is pure data with no imports:
+// weapons/finishes.js would drag the renderer into a file that has no business with it.
+import { BOSS_BY_ID } from '../world/boss-catalog.js';
 
 /* ---------------------------------------------------------------- constants -- */
 // None of these have a home in CFG yet. config.js is the engine owner's file and is deep
 // frozen, so every one is a named local with its reason beside it and a request is filed in
 // docs/HANDOFF.md P-4 for a `CFG.progress` block. Nothing below is a magic number twice.
 
-const SAVE_KEY = 'curfew.progress';
+const SAVE_KEY = 'curfew.eleven';
 // Emitted once, at the end of init(), the moment the blob has been read and progress is
 // consistent. places (manifest 85) and refuge (88) both own world state the save describes
 // and both init BEFORE progress (102), so this is the earliest instant either of them can
 // restore itself from real data. Frozen and reused; it carries no payload, only the moment.
 const _loadedPayload = Object.freeze({});
-// 2 since round 6: the `visited` bitmap and the `fires` list joined the blob. A version-1
-// blob still loads — save.js merges per key and the new fields take their defaults.
-// 3 since round 13: the bitmap is 128 x 128 and records what he has SEEN, not the one cell he
-// stood in; a version-2 blob's 1024-char bitmap is upscaled 2x2 on load (_decodeVisited).
-// ROUND 15: 3 -> 4 for the purse. SaveBlob merges a stored blob key-by-key against a fresh
-// defaults factory, so an existing save gains the new key and loses nothing.
-const SAVE_VERSION = 4;
+// THE ELEVEN REWIRE, version 1 under a NEW KEY. The schema moved too far for a merge to be
+// honest — parts replace bought upgrades, cases replace boss finishes, gas replaces repair —
+// and Alex authorised the clean break: "clear the save and skip migration entirely". A page
+// still holding the old `curfew.progress` key boots as a fresh game; that key is never read
+// again. Every load-time migration this file used to carry went out with it.
+const SAVE_VERSION = 1;
 
 // WHERE HE HAS BEEN. Alex, fifth playtest: "a large map in the menu that shows where you've
 // been and if you've finished places"; seventh: "The map should not even show roads or anything
@@ -96,9 +98,6 @@ const SAVE_VERSION = 4;
 const VISITED_N = 256;
 const VISITED_CELLS = VISITED_N * VISITED_N;
 const VISITED_HEX_LEN = VISITED_CELLS / 4;
-// Every grid this game has ever saved, smallest first, for the load-time upscale. A save is
-// recognised by the LENGTH of its hex string, which is why this works without a version bump.
-const VISITED_OLD_N = [64, 128];    // rounds 6-12, and rounds 13-17
 const VISITED_EVERY_STEPS = 60;     // once a second at the fixed step
 const REVEAL_R_FOOT = 40;           // m of county a walking player reveals around himself
 const REVEAL_R_CAR = 120;           // m from the car seat
@@ -293,16 +292,32 @@ export class Progress {
       waypoint: {},
       unbanked: 0,      // carried since the last lit fire; at risk, and only this is
       level: 1,
-      curveVersion: 0,
-      startPointCredit: 0,
+      // Round 19's curve, now the only curve: level one with the free first pick carried as a
+      // credit. There is nothing older to migrate from any more, so this is simply the start.
+      curveVersion: 2,
+      startPointCredit: 1,
       nodes: [],        // owned node ids (bought AND auto-granted)
       auto: [],         // the subset that was auto-granted, so it never costs a point
       // ROUND 18. The five car upgrades, bought with COINS at a lookout mechanic rather
       // than with points on the card (vehicle/garage.js). A separate list from `nodes`
       // because they are a separate currency and a separate counter, and because a save
       // that predates this round has its wheel_* ids in `nodes` and must keep them working.
+      // THE ELEVEN REWIRE: nothing sells these. Each row arrives from one of the Eleven
+      // (vehicle/parts.js) the instant it dies, and the list is the car's fitted parts.
       carUpgrades: [],
-      carMigrated: 0,   // 1 once the wheel_* -> garage migration has run on this save
+      // Gas. No meter, no tank, no partial cans: a count of whole cans carried, and one can
+      // is one full car. Bought from the tower keepers, found in the world.
+      gasCans: 0,
+      // Site ids whose sealed case has been opened. A case holds a weapon finish; `finishes`
+      // is still what a gun wears, and `cases` is where each one came from.
+      cases: [],
+      // Ari's schemes. Appearance only, bought once, free to swap for ever after.
+      paint: { owned: ['moss'], current: 'moss' },
+      // A FREE-FORM BAG (save.js: a `{}` default declares one). companions[id] =
+      // { met, joined, trust, talks, home }.
+      companions: {},
+      // Dialogue line ids marked `once` that have already been spoken.
+      dialogueOnce: [],
       found: [],        // place ids discovered
       claimed: [],      // place ids claimed
       roadLit: [],      // 100 m road buckets already paid for
@@ -424,50 +439,20 @@ export class Progress {
     const d = this.save.data;
     d.bossesCleared = d.bossesCleared.filter(id => typeof id === 'string');
     d.finishes = d.finishes.filter(id => typeof id === 'string');
+    d.cases = Array.isArray(d.cases) ? d.cases.filter(id => typeof id === 'string') : [];
+    d.dialogueOnce = Array.isArray(d.dialogueOnce) ? d.dialogueOnce.filter(id => typeof id === 'string') : [];
+    d.gasCans = Math.max(0, Math.floor(d.gasCans) || 0);
+    if (!d.paint || typeof d.paint !== 'object') d.paint = { owned: ['moss'], current: 'moss' };
+    if (!Array.isArray(d.paint.owned) || !d.paint.owned.length) d.paint.owned = ['moss'];
+    if (!d.paint.owned.includes(d.paint.current)) d.paint.current = d.paint.owned[0];
     d.rumours = d.rumours.filter(r => r && typeof r.id === 'string' && Number.isFinite(r.x) && Number.isFinite(r.z));
     if (d.equippedFinish !== 'original' && !d.finishes.includes(d.equippedFinish)) d.equippedFinish = 'original';
-    // Make the first choice intentional. Preserve every old purchase and earned level
-    // while moving a returning save to the slower curve, once, at its existing progress.
-    if (!d.curveVersion) {
-      if (this.save.loadedFrom === 'store') {
-        const oldThreshold=L=>L<=1?0:Math.round(100*Math.pow(L,1.45));
-        let L=Math.max(1,Math.floor(Math.pow(Math.max(0,d.xp)/100,1/1.45)));
-        while(oldThreshold(L+1)<=d.xp)L++;
-        const fraction=(d.xp-oldThreshold(L))/Math.max(1,oldThreshold(L+1)-oldThreshold(L));
-        d.xp=xpForLevel(L)+Math.round(fraction*(xpForLevel(L+1)-xpForLevel(L)));
-        // Old saves earned a point at level one. Keep that earned point as a migration credit.
-        d.startPointCredit=1;
-      } else {
-        // ROUND 19, and see the v2 block below: a fresh save starts at LEVEL ONE with the
-        // free first pick carried as a credit, not at level two with the xp for it.
-        d.xp=0;d.level=1;d.startPointCredit=1;
-      }
-      d.curveVersion=2;this.save.mark();
-    }
-    // ROUND 19. ALEX: "Start at level one instead of level 2." / "Let's start the player on
-    // level one." A fresh save was handed xpForLevel(2) so that _points() — which pays
-    // `level - 1 + credit` — could give the first pause one thing to click. The point was
-    // right and the LEVEL was a lie: the card and the HUD both read "LV 2" before he had
-    // earned anything. Level one, and the free first pick becomes the credit instead, so
-    // the number of points is identical and only the label changed.
-    //
-    // Applied to a save only where it is provably still the untouched opening blob: exactly
-    // at the level-2 floor, no credit, nothing spent, nothing found. A returning save that
-    // has actually earned its way to level two is left alone.
-    if (d.curveVersion === 1) {
-      const untouched = d.xp === xpForLevel(2) && !(d.startPointCredit > 0)
-        && (!d.nodes || d.nodes.length === 0) && (!d.found || d.found.length === 0)
-        && (!d.claimed || d.claimed.length === 0) && !(d.unbanked > 0);
-      if (untouched) { d.xp = 0; d.level = 1; d.startPointCredit = 1; }
-      d.curveVersion = 2; this.save.mark();
-    }
 
     for (const id of d.nodes) if (NODE_BY_ID[id]) this._owned.add(id);
     for (const id of d.auto) if (NODE_BY_ID[id]) this._auto.add(id);
     if (Array.isArray(d.carUpgrades)) {
       for (const id of d.carUpgrades) if (UPGRADE_BY_ID[id]) this._carOwned.add(id);
     }
-    this._migrateWheel();
     for (const id of d.found) this.found.add(id);
     for (const id of d.claimed) this.claimed.add(id);
     for (const b of d.roadLit) this.roadLit.add(b | 0);
@@ -846,11 +831,20 @@ export class Progress {
   /** Boss rewards are permanent, including the XP: a victory never becomes a corpse run. */
   bossCleared(id) { return this.save.data.bossesCleared.includes(id) || !!this.flag('boss:' + id); }
 
-  completeBoss({ id, name, finishId, xp = 0, cash = 0, x, y, z } = {}) {
+  /**
+   * THE ELEVEN REWIRE. A boss no longer leaves a weapon finish (those are in sealed cases
+   * now) — it leaves a PART, bolted to the car the instant it dies. Ownership lands BEFORE
+   * the emit and before the flush: the spectacle is allowed to be late, the fitting is not,
+   * so a crash between the kill and the receipt still leaves you with the part.
+   */
+  completeBoss({ id, name, xp = 0, cash = 0, x, y, z } = {}) {
     if (typeof id !== 'string' || !id || this.bossCleared(id)) return false;
     const d = this.save.data;
     d.bossesCleared.push(id); d.worldFlags['boss:' + id] = true;
-    if (typeof finishId === 'string' && finishId && !d.finishes.includes(finishId)) d.finishes.push(finishId);
+    const partId = PART_BY_BOSS[id] || '';
+    if (partId) this.grantUpgrade(partId, 'boss');
+    const part = partId && UPGRADE_BY_ID[partId]
+      ? { id: partId, name: UPGRADE_BY_ID[partId].name, line: UPGRADE_BY_ID[partId].line } : null;
     const amount = Math.max(0, Math.round(Number(xp) || 0));
     d.xp += amount;
     this.save.mark(); this._checkLevel(); this._publish();
@@ -859,8 +853,113 @@ export class Progress {
     z = Number.isFinite(z) ? z : this._playerAt(2);
     if (amount) this.ctx.bus.emit('xp:gained', {amount, x, y, z, reason:'boss', _own:true});
     this.payCash(cash, x, y, z, 'boss');
-    this.ctx.bus.emit('boss:cleared', {id, name: name || id, xp:amount, cash, skin:finishId, x, y, z});
+    this.ctx.bus.emit('boss:cleared', {id, name: name || id, xp:amount, cash, part, x, y, z});
     this.save.flush();
+    return true;
+  }
+
+  /* ----------------------------------------------------- the car's parts -- */
+
+  /**
+   * Fit a part. Free, permanent, and the only door: nothing in the county sells one. The
+   * emit is still `garage:bought` because car.js, car-fittings.js and the receipt already
+   * listen for it and the part arriving is the same event whatever paid for it; `price: 0`
+   * and `reason` say where it came from.
+   */
+  grantUpgrade(id, reason = 'boss') {
+    const u = UPGRADE_BY_ID[id];
+    if (!u || this._carOwned.has(id)) return false;
+    this._carOwned.add(id);
+    this._recompute();
+    this.save.mark();
+    this.ctx.bus.emit('garage:bought', { id, name: u.name, line: u.line, price: 0, reason });
+    return true;
+  }
+
+  /* ------------------------------------------------------- sealed cases -- */
+
+  /**
+   * A case gives up its weapon finish, once, for every gun you own now and later. `cases`
+   * remembers WHICH site it came from, so the Weapons page can name the place without ever
+   * naming a boss, and so a keeper's Look from the Top knows what is still out there.
+   */
+  grantFinish(id, site = '') {
+    if (typeof id !== 'string' || !id) return false;
+    const d = this.save.data;
+    const already = d.finishes.includes(id);
+    if (!already) d.finishes.push(id);
+    if (site && !d.cases.includes(site)) d.cases.push(site);
+    this.save.mark(); this.save.flush();
+    if (already) return false;
+    const b = BOSS_BY_ID[id];
+    this.ctx.bus.emit('finish:found', { id, name: (b && b.skin && b.skin.name) || id, site });
+    return true;
+  }
+
+  caseOpened(site) { return this.save.data.cases.includes(site); }
+  casesOpened() { return this.save.data.cases.slice(); }
+
+  /* ---------------------------------------------------------------- gas -- */
+
+  // No meter, no tank, no partial cans. One can is one full car; the count is the whole
+  // model. The number never appears on the HUD (the no-words law) — only in the prompt at
+  // the filler cap, in a receipt, and on a keeper's card.
+  gas() { return this.save.data.gasCans | 0; }
+
+  addGas(n = 1) {
+    const add = Math.max(0, Math.floor(n) || 0);
+    if (!add) return this.gas();
+    this.save.data.gasCans = this.gas() + add;
+    this.save.mark(); this.save.flush();
+    this.ctx.bus.emit('gas:changed', { cans: this.gas(), delta: add });
+    return this.gas();
+  }
+
+  /** One can out of the boot. False when there was none: the caller must not pour. */
+  takeGas() {
+    const have = this.gas();
+    if (have <= 0) return false;
+    this.save.data.gasCans = have - 1;
+    this.save.mark(); this.save.flush();
+    this.ctx.bus.emit('gas:changed', { cans: this.gas(), delta: -1 });
+    return true;
+  }
+
+  /* -------------------------------------------------------------- paint -- */
+
+  paint() { return this.save.data.paint.current; }
+  paintsOwned() { return this.save.data.paint.owned.slice(); }
+  ownsPaint(id) { return this.save.data.paint.owned.includes(id); }
+
+  /** Bought once. Appearance only, and free to swap for ever after. */
+  buyPaint(id, price) {
+    const d = this.save.data;
+    if (typeof id !== 'string' || !id) return false;
+    if (d.paint.owned.includes(id)) return this.setPaint(id);
+    if (price > 0 && !this.spendCash(price, 'paint:' + id)) return false;
+    d.paint.owned.push(id); d.paint.current = id;
+    this.save.mark(); this.save.flush();
+    this.ctx.bus.emit('car:paint', { id, bought: true });
+    return true;
+  }
+
+  setPaint(id) {
+    const d = this.save.data;
+    if (!d.paint.owned.includes(id)) return false;
+    if (d.paint.current === id) return true;
+    d.paint.current = id;
+    this.save.mark(); this.save.flush();
+    this.ctx.bus.emit('car:paint', { id, bought: false });
+    return true;
+  }
+
+  /* ----------------------------------------------------------- dialogue -- */
+
+  /** Has this `once` line been spoken? The dialogue system asks; nobody else should. */
+  saidOnce(id) { return this.save.data.dialogueOnce.includes(id); }
+  markSaid(id) {
+    if (typeof id !== 'string' || !id || this.saidOnce(id)) return false;
+    this.save.data.dialogueOnce.push(id); this.save.mark();
     return true;
   }
 
@@ -893,6 +992,12 @@ export class Progress {
     this.save.mark();this.save.flush();this.ctx.bus.emit('map:waypoint',this.save.data.waypoint);return true;
   }
   mapStatus(id) {
+    // 'case:<site>' — a sealed case, for the keepers' Look from the Top and Bo's lead. It is
+    // 'cleared' once the case is open, whatever else has happened at that site.
+    if (typeof id === 'string' && id.startsWith('case:')) {
+      if (this.caseOpened(id.slice(5))) return 'cleared';
+      return this.save.data.rumours.some(r => r.id === id) ? 'rumoured' : 'unknown';
+    }
     if (this.bossCleared(id) || this.claimed.has(id)) return 'cleared';
     if (this.found.has(id) || this.flag('boss-found:' + id)) return 'discovered';
     return this.save.data.rumours.some(r => r.id === id) ? 'rumoured' : 'unknown';
@@ -1507,31 +1612,9 @@ export class Progress {
     const cells = this.visited;
     cells.fill(0);
     let count = 0;
-    // ROUND 18: generalised. Round 13 upscaled the one older grid it knew about; there are two
-    // now and there will be more, so a save is matched on its hex LENGTH and each old cell
-    // becomes its k x k block of new ones — exact and area-preserving, so a returning player
-    // keeps every trail he ever made. Ordered smallest first; VISITED_OLD_N is the whole list.
-    const oldN = typeof hex === 'string'
-      ? VISITED_OLD_N.find(N => hex.length === N * N / 4 && N < VISITED_N) : 0;
-    if (oldN) {
-      const k = VISITED_N / oldN;
-      const len = oldN * oldN / 4;
-      for (let i = 0; i < len; i++) {
-        const v = parseInt(hex.charAt(i), 16);
-        if (!(v >= 0)) continue;
-        for (let b = 0; b < 4; b++) {
-          if (!(v & (1 << b))) continue;
-          const old = i * 4 + b;
-          const ox = old % oldN, oz = (old / oldN) | 0;
-          for (let dz = 0; dz < k; dz++) {
-            for (let dx = 0; dx < k; dx++) {
-              const j = (oz * k + dz) * VISITED_N + (ox * k + dx);
-              if (!cells[j]) { cells[j] = 1; count++; }
-            }
-          }
-        }
-      }
-    } else if (typeof hex === 'string' && hex.length > 0) {
+    // One grid, one length. The old smaller bitmaps and their load-time upscale left with the
+    // old save key: there is nothing on disk any more that was not written at VISITED_N.
+    if (typeof hex === 'string' && hex.length > 0) {
       const n = Math.min(hex.length, VISITED_HEX_LEN);
       for (let i = 0; i < n; i++) {
         const v = parseInt(hex.charAt(i), 16);
@@ -1607,35 +1690,6 @@ export class Progress {
 
   /* --------------------------------------------------- the garage, ROUND 18 -- */
 
-  /**
-   * A save from before the car upgrades left the tree. Anyone who spent points on wheel_*
-   * KEEPS the upgrade and GETS THE POINTS BACK — Alex's rule for this game is that nothing
-   * is ever taken away, and silently deleting four bought nodes because a lane moved would
-   * be exactly that. Runs once; `carMigrated` remembers.
-   */
-  _migrateWheel() {
-    const d = this.save.data;
-    if (d.carMigrated) return;
-    // Read the BLOB, not `_owned`: the load loop filters against NODE_BY_ID and wheel_* is
-    // no longer a node, so by the time we get here those ids have already been dropped on
-    // the floor. This was the whole trap in the migration and it is worth the line.
-    let moved = 0;
-    const list = Array.isArray(d.nodes) ? d.nodes : [];
-    for (let i = 0; i < list.length; i++) {
-      const up = LEGACY_NODE_UPGRADE[list[i]];
-      if (!up) continue;
-      this._carOwned.add(up);
-      moved++;
-    }
-    // The points come back on their own: _points() recomputes `spent` from `_owned`, and
-    // these ids are not in it any more. LEGACY_NODE_COST is here for a test that wants to
-    // assert exactly how many points a particular legacy save got back.
-    void LEGACY_NODE_COST;
-    d.carMigrated = 1;
-    d.nodes = list.filter((id) => !LEGACY_NODE_UPGRADE[id]);
-    if (moved) this.save.mark();
-  }
-
   /** Every upgrade, with what it costs and whether it is already on the car. */
   upgrades() {
     return UPGRADES.map((u) => ({
@@ -1646,21 +1700,8 @@ export class Progress {
   ownsUpgrade(id) { return this._carOwned.has(id); }
   upgradesOwned() { return Array.from(this._carOwned); }
 
-  /**
-   * Fit one. Money leaves through the same spendCash every other price in the county uses,
-   * so a refused purchase is refused for exactly one reason and the receipt is the same.
-   */
-  buyUpgrade(id) {
-    const u = UPGRADE_BY_ID[id];
-    if (!u || this._carOwned.has(id)) return false;
-    if (!this.spendCash(u.price, 'garage:' + id)) return false;
-    this._carOwned.add(id);
-    this._recompute();
-    this.save.mark();
-    this.ctx.bus.emit('garage:bought', { id, name:u.name, line:u.line, price: u.price });
-    this._chimeUI('xp_node', 1, 0.5);
-    return true;
-  }
+  // THE ELEVEN REWIRE: there is no buyUpgrade any more. Nothing in the county sells a car
+  // part; every one of them comes off one of the Eleven, through grantUpgrade above.
 
   /* --------------------------------------------------- the lane-facing surface -- */
   /**

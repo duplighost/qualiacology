@@ -563,6 +563,50 @@ export const MAJORS = Object.freeze([
     claim: { how: 'touch', dx: 0, dy: 0.14, dz: 3.0, r: 2.6 },
     xpFind: 80, xpClaim: 500, startClaimed: false,
   },
+
+  /* ===================================================== THE ELEVEN REWIRE: HAMLETS == */
+  // ALEX: "more little towns. Not like that big gates town, but places with a few smaller
+  // houses where people live. Each one very different. They must be related to some unique
+  // environment. Make 3 of them. each with a different companion you can talk to and acquire."
+  //
+  // Not destinations to CLAIM. `claim: { how: 'none' }` and no xpClaim: a hamlet is somewhere
+  // people already live, not ground to take, and taking it would be the wrong verb entirely.
+  // Every one of these three points was MEASURED before it was written down
+  // (tools/_hamlet-sites.mjs, the §4.I rule): a road within 40-150 m so the car reaches it,
+  // no other major within 300 m, clear of every boss ground by 320 m, no lookout tower within
+  // 120 m, and under 8 degrees of fall across the footprint.
+  {
+    id: 'eelwater', name: 'Eelwater',
+    x: -1541, z: 363, region: 'fen', terrainRegion: 'marsh', kind: 'stilts',
+    // LIT, unlike every other major. A hamlet is somewhere people are still living and their
+    // lamps are already on: the glow does not wait for a claim that can never come.
+    lit: true, hub: false, clearR: 40,
+    flat: { radius: 52, blend: 0.80 }, apronCol: [0.031, 0.036, 0.034],
+    approach: { x: -22, z: -19, w: 2.4, h: 6.2, style: 'stilts', existing: true },
+    discoverR: 34, nearR: 110, horizon: false,
+    claim: { how: 'none' },
+    xpFind: 60, startClaimed: false,
+  },
+  {
+    id: 'the-cut', name: 'The Cut',
+    x: 2235, z: -1115, region: 'ridge', terrainRegion: 'ridge', kind: 'quarry-cut',
+    lit: true, hub: false, clearR: 44,
+    flat: { radius: 58, blend: 0.74 }, apronCol: [0.086, 0.083, 0.076],
+    approach: { x: -16.5, z: -2, w: 6.8, h: 12.0, style: 'quarry-cut', existing: true },
+    discoverR: 36, nearR: 120, horizon: false,
+    claim: { how: 'none' },
+    xpFind: 60, startClaimed: false,
+  },
+  {
+    id: 'highwood', name: 'Highwood',
+    x: -1832, z: -1866, region: 'pines', terrainRegion: 'pines', kind: 'treehouses',
+    lit: true, hub: false, clearR: 36,
+    flat: { radius: 48, blend: 0.72 }, apronCol: [0.038, 0.036, 0.030],
+    approach: { x: 0, z: -14, w: 3.6, h: 8.4, style: 'treehouses', existing: true },
+    discoverR: 34, nearR: 110, horizon: false,
+    claim: { how: 'none' },
+    xpFind: 60, startClaimed: false,
+  },
 ]);
 
 /** id -> row. Built once; MAJORS is frozen so this can never drift from it. */

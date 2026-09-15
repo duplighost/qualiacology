@@ -60,6 +60,7 @@
 import * as THREE from 'three';
 import { CFG } from '../config.js';
 import { clamp, clamp01, damp, dampAngle, lerp, ease, TAU } from '../engine/math.js';
+import { PAINT_BY_ID, DEFAULT_PAINT } from './paint.js';
 import { ACTIONS } from '../engine/input.js';
 import { MASK } from '../world/collision.js';
 import { MAJORS } from '../world/placedata.js';
@@ -274,7 +275,13 @@ const HORN_REPEAT = 0.55;
 // rise less (they already registered on the needle) so the car is worn out by DRIVING it,
 // not by a thicket.
 const W = K.wear || {};
-const WEAR_START = 0.15;
+// THE ELEVEN REWIRE: ZERO. Alex — "starts at full condition". A car handed to you in a
+// garage on the first night with 15% already gone was the old economy speaking, where a
+// mechanic sold you a repair. A can of gas is the repair now, and the car begins whole.
+const WEAR_START = 0;
+// How fast the condition NEEDLE chases the real wear. A pour zeroes `wear` on one frame;
+// the gauge sweeping up over about two seconds is what makes the pour read as a pour.
+const WEAR_SHOWN_RATE = 0.5;
 const WEAR_DRIVE_M = W.driveMetres || 16000;     // metres of road from 0 to 1
 const WEAR_OFFROAD_MUL = W.offRoadMul || 1.4;    // gravel and grass wear it faster
 const WEAR_PER_IMPACT = W.impact || 0.070;       // scaled by how much speed the contact actually cost
@@ -494,6 +501,9 @@ export class Car {
     // How beaten the car is, 0..1. Costs top speed and browns the lamp; the WHEEL branch's
     // 'Kept' node is the only thing in the game that takes any of it back.
     this.wear = WEAR_START;
+    // What the gauge and the smoke are showing. Chases `wear`; only the pour ever moves the
+    // two apart by enough to see, and that is the point of it.
+    this.wearShown = WEAR_START;
     this._engineFailed = false;
     this._failureAnnounced = false;
     // ROUND 22: the moths on the lens, 0..1 (see the MOTH_ block). `_mothPushed` is the
@@ -553,6 +563,11 @@ export class Car {
     this.hornHeld = false;
     this.hornCount = 0;
     this.hornSoundCount = 0;
+    // THE FUNERAL PEAL (car part, from the Bellwether). How long H has been down, and how
+    // long until the bell will answer again. Both live here so a reload, a release and a
+    // forced exit all leave a clean charge.
+    this.pealHoldT = 0;
+    this.pealCooldown = 0;
     // A horn press is still a real world/progression event if audio is waking from autoplay
     // suspension. Owe at most ONE audible answer and settle it on the first runnable step;
     // a boolean cannot grow into a queue of stale voices while the tab is asleep.
@@ -667,8 +682,13 @@ export class Car {
     if (bus && bus.on) {
       this._offGarage = bus.on('garage:bought', ({id}) => {
         this.body?.setUpgrades(this._progress.upgradesOwned());
-        if (id === 'kept') this.repairFull();
+        if (id === 'rebuilt') this.repairFull();
+        // REBUILT takes the tiredness out of whatever scheme is on the car; it does not
+        // choose a colour any more, so the colour has to be re-asserted after it.
+        if (id === 'rebuilt') this._applyPaint();
       });
+      // Ari's schemes (vehicle/paint.js). Appearance only, so this is the whole consumer.
+      bus.on('car:paint', () => this._applyPaint());
       bus.on('player:died', () => this._forceRelease());
       bus.on('player:respawn', (p) => {
         const wasIn = this._forceRelease();
@@ -1228,7 +1248,11 @@ export class Car {
    * A fully caked lens still passes MOTH_FLOOR of what it had: dim, never dark.
    */
   _filament() {
-    return clamp01(this.lampFade) * (1 - WEAR_LAMP_LOSS * clamp01(this.wear))
+    // STOLEN LIGHT (from the Lantern Eater): the damage term goes to 1. Wear still stops the
+    // car and still smokes; it no longer dims the one lamp you have.
+    const proof = this._progress?.perk('lampWearProof', false);
+    const wearTerm = proof ? 1 : (1 - WEAR_LAMP_LOSS * clamp01(this.wear));
+    return clamp01(this.lampFade) * wearTerm
       * (1 - (1 - MOTH_FLOOR) * clamp01(this.moths));
   }
 
@@ -1335,6 +1359,13 @@ export class Car {
    * moving too, and a box rather than three circles so a foot on the bonnet or the tailgate
    * is over the car. Pure; allocates nothing; null while no car exists.
    */
+  /** Put the saved scheme on the shell. Safe before the save has loaded and with no body. */
+  _applyPaint() {
+    const id = this._progress?.save?.data?.paint?.current;
+    const p = PAINT_BY_ID[id] || PAINT_BY_ID[DEFAULT_PAINT];
+    if (p) this.body?.setPaint?.(p.hex);
+  }
+
   roofHeightAt(x, z) {
     if (!this.exists) return null;
     const dx = x - this.x, dz = z - this.z;
@@ -1354,6 +1385,8 @@ export class Car {
       this.body?.setRepaired(!!this._progress.flag('car:fully-repaired'));
       this.body?.setUpgrades(this._progress.upgradesOwned());
       if(saved>0)this.wear=clamp01((saved-1)/1000000);
+      this.wearShown=this.wear;
+      this._applyPaint();
       this._wearLoaded=true;this._wearSaveT=0;
     }
     if(this._wearLoaded&&this.ctx.playing&&!this.ctx.paused){
@@ -1686,13 +1719,19 @@ export class Car {
    */
   _pollEnter(dt) {
     void dt;
+    // THE FILLER CAP BEATS THE DOOR. Every interactable in this game reads E for itself and
+    // there is no arbitration beyond prompt rank, so without this line one press at the cap
+    // would pour AND open the door. world/gas.js sets `targeting` in its own step; one step
+    // stale is harmless, because the cap is about 1.9 m from the door point and you cannot
+    // cross that between two fixed steps.
+    if (this.ctx.systems.get('gas')?.targeting) return;
     const p = this._player;
     // ROUND 13: the key glyph on the driver's door while the seat is in reach.
     if (p && !p.dead && this.mode === 'idle' && this._reach() <= ENTER_RANGE && this.ctx.bus) {
       const o = this._doorPoint(this._doorOut || (this._doorOut = { x: 0, z: 0 }));
       _promptP.kind = 'use'; _promptP.label = 'E';
-      _promptP.detail = this.wear >= .999 ? 'CAR DISABLED · REPAIR REQUIRED' : 'GET IN';
-      _promptP.subdetail = this.wear >= .999 ? 'FIND A MECHANIC TO REPAIR' : '';
+      _promptP.detail = this.wear >= .999 ? 'CAR DISABLED · NEEDS GAS' : 'GET IN';
+      _promptP.subdetail = this.wear >= .999 ? 'USE A CAN AT THE FILLER CAP' : '';
       _promptP.x = o.x; _promptP.y = this.y + 1.05; _promptP.z = o.z; _promptP.k = 0;
       this.ctx.bus.emit('prompt', _promptP);
     }
@@ -1945,7 +1984,10 @@ export class Car {
     const boost = this._boostMul || 1;
     const boostAccel = this._boostAccel || 1;
     this._boostMul = 1; this._boostAccel = 1;
-    const maxForward = (onRoad ? K.onRoad : K.offRoad) * worn * boost;
+    // MIRE TYRES (from the Mire Bride). One multiplier, read once a step, on both off-road
+    // numbers: the surface still costs you, it costs you less. On road it is never read.
+    const offMul = this._progress?.perk('offRoadMul', 1) || 1;
+    const maxForward = (onRoad ? K.onRoad : K.offRoad * offMul) * worn * boost;
     const maxReverse = (onRoad ? MAX_REV_ON : MAX_REV_OFF) * worn;
 
     // ROUND 18. Alex, 2026-09-09: "I want the car to feel a bit smoother to drive."
@@ -1962,7 +2004,7 @@ export class Car {
     this.pedal = this.pedal === undefined ? want
       : this.pedal + clamp(want - this.pedal, -rate * dt, rate * dt);
     if (this.pedal > 0.001) {
-      this.speed += (onRoad ? K.accelOn : K.accelOff) * boostAccel * this.pedal * dt;
+      this.speed += (onRoad ? K.accelOn : K.accelOff * offMul) * boostAccel * this.pedal * dt;
     }
     if (brake) {
       if (this.speed > 0.55) this.speed -= K.brake * dt;
@@ -2788,7 +2830,7 @@ export class Car {
     }
   }
 
-  _dashboardPrompt(node,label,detail){
+  _dashboardPrompt(node,label,detail,k=0){
     if(!node||!this.ctx.camera)return;
     node.getWorldPosition(_hubV);
     const cam=this.ctx.camera,dx=_hubV.x-cam.position.x,dy=_hubV.y-cam.position.y,dz=_hubV.z-cam.position.z;
@@ -2799,7 +2841,47 @@ export class Car {
     // "he looked at the dashboard" and is nothing you do while watching the road.
     if(_dir.y>-DASH_LOOK_DOWN)return;
     if((dx*_dir.x+dy*_dir.y+dz*_dir.z)/d<.965)return;
-    this.ctx.bus.emit('prompt',{kind:'dashboard',label,detail,x:_hubV.x,y:_hubV.y,z:_hubV.z,k:0,rank:5});
+    this.ctx.bus.emit('prompt',{kind:'dashboard',label,detail,x:_hubV.x,y:_hubV.y,z:_hubV.z,k,rank:5});
+  }
+
+  /**
+   * THE PEAL ITSELF. State first: the county scatters, then the show. It deliberately does
+   * NOT emit `noise` — the ordinary horn's noise IS the lure, and a bell that scattered
+   * everything and then called it back would be a toy. One bell whisper (400 m reach, the
+   * baked wh_bell), the horn buffer dropped an octave and a bit under it for the body of
+   * the sound, a breath of trauma, and the cooldown.
+   */
+  _peal(spec) {
+    this.pealHoldT = 0;
+    this.pealCooldown = spec.cooldownS;
+    const en = this.ctx.systems.get('enemies');
+    const scattered = (en && typeof en.scatter === 'function')
+      ? en.scatter(this.x, this.z, spec.radius, spec.deafS) : 0;
+    const a = this._audio;
+    if (a && typeof a.whisper === 'function') a.whisper('bell', 'funeral', this.x, this.y + 1, this.z);
+    this._soundPeal();
+    this._fx?.addTrauma?.(0.08);
+    this._emit('car:peal', { x: this.x, y: this.y, z: this.z, scattered, radius: spec.radius });
+  }
+
+  /** The peal's own body: the horn buffer, slowed, quieter and wider than a honk. */
+  _soundPeal() {
+    const a = this._audio;
+    const ac = a && (a.audioCtx || a.context || a.actx);
+    if (!a || a.enabled !== true || !a.baked || a.silent || !ac || ac.state !== 'running'
+        || typeof a.spec !== 'function' || typeof a.play !== 'function'
+        || typeof a.has !== 'function' || !a.has('car_horn')) return false;
+    const s = a.spec();
+    s.x = null;
+    s.gain = 0.30;
+    s.rate = 0.55;              // an octave and a bit down: a bell, not a horn
+    s.bus = 'world';
+    s.send = 0.26;              // it wants the tail; this is the one thing the car rings
+    s.air = false; s.occl = false;
+    s.lpHz = 0;
+    s.filterHz = 900; s.toneDb = 1.0;
+    s.priority = 1;
+    return !!a.play('car_horn', s);
   }
 
   /* ----------------------------------------------------------------- nitro -- */
@@ -2976,6 +3058,12 @@ export class Car {
    * ever did.
    */
   _stepWear(dt) {
+    // The needle and the smoke lag the number, always, so the pour has something to watch.
+    if (this.wearShown !== this.wear) {
+      const step = WEAR_SHOWN_RATE * dt;
+      const d = this.wear - this.wearShown;
+      this.wearShown = Math.abs(d) <= step ? this.wear : this.wearShown + Math.sign(d) * step;
+    }
     if (this.wear <= 0 || this.wear >= .999) return;
     const pr = this._progress;
     if (!pr || typeof pr.perk !== 'function') return;
@@ -3006,9 +3094,12 @@ export class Car {
     const v = Math.abs(this.speed);
     const seated = this.mode === 'driving' && this.engineOn && this.headlightsOn;
     let m = this.moths;
+    // MOTH SCREEN (from the Moonmolt): the level never RISES. It still clears, so a lens you
+    // caked before the screen went on comes clean the first time you drive.
+    const screened = this._progress?.perk('mothScreen', false);
     if (seated && v < MOTH_IDLE_SPEED) {
       this._mothIdleT += dt;
-      if (this._mothIdleT > MOTH_GRACE_S) m = Math.min(1, m + dt / MOTH_RISE_S);
+      if (!screened && this._mothIdleT > MOTH_GRACE_S) m = Math.min(1, m + dt / MOTH_RISE_S);
     } else {
       this._mothIdleT = 0;
       if (v > MOTH_CLEAR_SPEED && m > 0) m = Math.max(0, m - dt / MOTH_CLEAR_S);
@@ -3056,9 +3147,24 @@ export class Car {
     }
   }
 
+  /**
+   * GAS. One can is one full car: no meter, no tank, no partial fill, and deliberately NOT
+   * repairFull() — a pour does not recharge the Storm Ward and does not clean the lens.
+   * Those are the ward's job and the moths' job, and a can of petrol has nothing to say
+   * about either. State lands here, on this frame; the animation is world/gas.js's.
+   */
+  refuel(){
+    this.wear=0;this._wearLoaded=true;this._progress?.flag('car:wear',1);
+    this._syncEngineFailure();
+    this.hitCooldown=0;this.stuckT=0;
+    // The lamp brightens as the wear comes off (unless STOLEN LIGHT already held it there).
+    if(this.body&&this.headlightsOn)this.body.setLamp(this._filament(),this.engineOn,this.moths);
+    this._emit('car:refuelled',{condition:100});
+  }
+
   repairFull(){
     this.shield=3;this.shieldDelay=0;
-    this.wear=0;this._wearLoaded=true;this._progress?.flag('car:wear',1);
+    this.wear=0;this.wearShown=0;this._wearLoaded=true;this._progress?.flag('car:wear',1);
     this._syncEngineFailure();
     this._progress?.flag('car:fully-repaired',1);this.body?.setRepaired(true);
     this.hitCooldown=0;this.stuckT=0;
@@ -3070,6 +3176,7 @@ export class Car {
   _horn(dt) {
     this._radio();
     this.hornT = Math.max(0, this.hornT - dt);
+    this.pealCooldown = Math.max(0, (this.pealCooldown || 0) - dt);
     // Read both doors EVERY fixed step. `pressed` makes every fresh tap immediate even if a
     // previous honk is still ringing; held is the accessibility/focus fallback and repeats
     // at a physical, readable cadence without trusting browser key-repeat.
@@ -3077,7 +3184,32 @@ export class Car {
     const held = this._hornHeld();
     const beganHeld = held && !this.hornHeld;
     this.hornHeld = held;
+
+    // THE FUNERAL PEAL (from the Bellwether). HOLD the horn and the bell under the bumper
+    // answers: everything hunting you inside the radius breaks off and goes deaf. Tap and
+    // you still get the ordinary horn, which is still a LURE — the two are opposite tools
+    // and the difference is how long you keep your finger down.
+    const peal = this._progress?.perk('funeralPeal', null);
+    if (peal && held) {
+      this.pealHoldT = (this.pealHoldT || 0) + dt;
+      // The charge shows on the dashboard H prompt while it fills, so the hold is taught by
+      // the gauge rather than by a word.
+      if (this.pealCooldown <= 0) {
+        const k = clamp01(this.pealHoldT / peal.chargeS);
+        this._dashboardPrompt(this.body?.steer, 'H', 'PEAL', k);
+        if (this.pealHoldT >= peal.chargeS) { this._peal(peal); return; }
+      }
+    } else {
+      this.pealHoldT = 0;
+    }
+
     if (!pressed && !beganHeld && !(held && this.hornT <= 0)) return;
+    // While a peal is charging, the horn's REPEAT stays quiet — but the first press still
+    // sounds. Holding H is one gesture that says both things: you honk, and if you keep
+    // holding, the bell answers. Suppressing the press as well would have taken the ordinary
+    // horn away from anybody who owns the Peal, and the horn's noise lure is the other half
+    // of this control.
+    if (peal && held && !pressed && !beganHeld && this.pealCooldown <= 0) return;
     this.hornT = HORN_REPEAT;
     this.hornCount++;
     // The horn belongs to the CAR and always did: pressing it is a 46 m disturbance whatever
@@ -3220,6 +3352,7 @@ export class Car {
     this.holdT = 0;
     this.hornT = 0;
     this.hornHeld = false;
+    this.pealHoldT = 0;                  // a half-charged bell does not survive a death
     this.hornSoundPending = false;
     this.refuseLatch = false;
     this._useConsumed = true;     // a key still down through a death does not re-enter
@@ -3272,9 +3405,16 @@ export class Car {
     // ROUND 18: the condition gauge on the binnacle. Alex asked for the breakdown meter to
     // be "on the cars dashboard and not on the hud", so this is the only place the number
     // is shown and the HUD line that used to print it is gone (ui/readouts.js).
-    if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wear), (this.ctx.time && this.ctx.time.t) || 0);
+    if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wearShown), (this.ctx.time && this.ctx.time.t) || 0);
     this.distress?.update(this, this.ctx.time?.t || 0);
     this.body.setMotion?.(this.speed, this.boost, this.boosting, this.ctx.time?.t || 0,this.shield??3);
+    // FUNERAL PEAL: the bell's own glow IS the charge meter. Cheap enough to push here with
+    // the rest of the dashboard, and it reads from outside the car as well as from the seat.
+    if (this.body.setPealCharge) {
+      const ps = this._progress?.perk('funeralPeal', null);
+      this.body.setPealCharge(ps && this.pealCooldown <= 0
+        ? clamp01((this.pealHoldT || 0) / ps.chargeS) : 0);
+    }
     // ROUND 19: the glass. From the seat it is glass; from outside it is a haze. Driven
     // here, not on the door event, so a reload, a respawn or a teleport into the seat can
     // never leave the wash on. See carbody.js setCabinView.

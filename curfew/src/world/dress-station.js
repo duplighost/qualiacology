@@ -439,33 +439,37 @@ function serviceBay(k, api) {
     }
   }
 
-  // Raised segmented shutter and a battered frame: the opening reads before the contents.
+  // The shutter housing it rolls up into, and a battered frame. THE SHUTTER ITSELF IS NOT
+  // HERE: world/garage-opening.js owns it, because on a fresh night it is CLOSED and rolls up
+  // once, and a thing that moves cannot live in a merged static mesh.
   k.box(w + 0.25, 0.36, 0.42, x, y + h - 0.12, z - hd, C.rust);
   for (const sx of [-1, 1]) k.box(0.42, h, 0.48, x + sx * hw, y + h * 0.5, z - hd, C.rust);
-  for (let i = 0; i < 4; i++) {
-    k.box(w - 1.0, 0.58, 0.12, x, y + h - 0.48 - i * 0.57, z - hd + 0.30 + i * 0.16,
-      i % 2 ? D.conduit : D.enamel, 0, -0.18);
-    for (let j = 0; j < 5; j++) k.box(0.045, 0.52, 0.13,
-      x - 3.5 + j * 1.75, y + h - 0.48 - i * 0.57, z - hd + 0.23 + i * 0.16, C.rust);
-  }
 
-  // A two-post lift and a half-repaired estate car create a deliberate interior target.
-  for (const lx of [-2.35, 2.35]) {
-    k.box(0.34, 3.85, 0.52, x + lx, y + 1.93, z + 0.25, C.rust);
-    k.box(0.62, 0.14, 2.7, x + lx * 0.52, y + 1.05, z + 0.25, D.conduit, lx > 0 ? -0.34 : 0.34);
-    api.emit({ kind: 'obb', x: x + lx, z: z + 0.25, halfX: 0.22, halfZ: 0.32,
-      yaw: 0, y0: y - 0.2, y1: y + 3.85, tag: 'metal', climbable: false });
-  }
-  k.box(5.10, 0.28, 0.42, x, y + 3.76, z + 0.25, D.conduit);
-  k.box(1.78, 0.46, 4.18, x, y + 1.36, z + 0.35, [0.080, 0.060, 0.045], 0.04);
-  k.box(1.58, 0.56, 1.82, x, y + 1.82, z + 0.15, C.slate, 0.04);
-  for (const [sx, sz] of [[-0.86, -1.30], [0.86, -1.30], [-0.86, 1.28]])
-    k.cyl(0.30, 0.30, 0.20, 10, x + sx, y + 1.14, z + 0.35 + sz, D.tyre, 0, 0, Math.PI * 0.5);
-  // Missing front wheel, hub and a wheel on the floor explain why it never left.
-  k.cyl(0.14, 0.14, 0.24, 10, x + 0.86, y + 1.14, z + 1.63, C.rust, 0, 0, Math.PI * 0.5);
-  k.cyl(0.34, 0.34, 0.22, 10, x + 2.95, y + 0.34, z + 1.82, D.tyre, 0.4, 0, Math.PI * 0.5);
-  api.emit({ kind: 'obb', x, z: z + 0.35, halfX: 0.95, halfZ: 2.12, yaw: 0.04,
-    y0: y + 0.85, y1: y + 2.18, tag: 'metal', standable: true, climbable: false });
+  // THE ELEVEN REWIRE. The two-post lift, the half-repaired estate car, the loose wheel and
+  // their three colliders are GONE: this is where the real car stands now, on the first night
+  // and every night after. The bench and the tool wall stay — the bay still reads as a place
+  // somebody worked, and the thing on the floor is yours.
+  //
+  // What replaces them is the furniture of a night shift: a floor drain, a wall clock that
+  // can be redrawn, a bench radio with one warm pip, a work-lamp housing over the bay, and
+  // a rack for the two cans of gas.
+  k.cyl(0.26, 0.26, 0.05, 12, x, y + 0.025, z - 1.1, D.conduit);
+  for (let i = 0; i < 5; i++) k.box(0.42, 0.03, 0.035, x, y + 0.055, z - 1.28 + i * 0.09, C.rust);
+  // the work-lamp housing, over the middle of the bay. The LIGHT is a borrowed rover, never
+  // a constructed one; this is the shade it hangs in.
+  k.cyl(0.015, 0.015, 0.62, 6, x, y + h - 0.32, z, D.conduit);
+  k.tube(0.42, 0.26, 0.24, 12, x, y + h - 0.70, z, C.rust);
+  k.box(0.30, 0.09, 0.30, x, y + h - 0.84, z, D.liningUp);
+  // the bench radio, on the workbench at the back wall
+  k.box(0.34, 0.16, 0.12, x - 3.60, y + 0.94, z + hd - 0.75, D.conduit);
+  k.box(0.22, 0.045, 0.02, x - 3.60, y + 0.96, z + hd - 0.82, C.rust);
+  // the can rack, back-right corner, where world/gas.js puts two cans
+  const canX = x + 3.40, canZ = z + hd - 1.05;
+  for (const sx of [-0.55, 0.55]) k.box(0.07, 0.72, 0.07, canX + sx, y + 0.36, canZ, C.rust);
+  k.box(1.24, 0.06, 0.40, canX, y + 0.06, canZ, D.timber);
+  k.box(1.24, 0.06, 0.08, canX, y + 0.70, canZ, C.rust);
+  api.emit({ kind: 'obb', x: canX, z: canZ, halfX: 0.64, halfZ: 0.24, yaw: 0,
+    y0: y - 0.2, y1: y + 0.10, tag: 'wood', standable: true });
 
   // Workbench, pegboard and individually silhouetted tools on the back wall.
   k.box(4.30, 0.86, 0.78, x - 2.45, y + 0.43, z + hd - 0.75, D.timber);

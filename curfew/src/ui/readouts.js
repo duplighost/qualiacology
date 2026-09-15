@@ -1,5 +1,4 @@
 import {xpForLevel} from '../progression/nodes.js';
-import {FINISH_BY_ID} from '../weapons/finishes.js';
 
 // Explicit, quiet information for the things the player earns and loses. These read the
 // authoritative systems; receipt events never change a balance or award a second reward.
@@ -60,7 +59,10 @@ export class Readouts {
     on('refuge:puzzle',()=>this.receipt('NINE LIGHTS','light'));
     on('map:rumour',p=>{this.receipt('MAP UPDATED · '+p.name+' · M','rumour');this.receipts.at(-1).until=this.now()+6.5;});
     on('map:waypoint',p=>this.receipt(p.cleared?'WAYPOINT CLEARED':'WAYPOINT SET · '+p.name,'rumour'));
-    on('boss:cleared',p=>{const f=FINISH_BY_ID[p.skin];this.receipt((f?.name||p.skin||'TROPHY')+' · WEAPON FINISH UNLOCKED','ability');this.receipts.at(-1).until=this.now()+8;});
+    // THE ELEVEN REWIRE: a boss leaves a CAR PART, which arrives on 'garage:bought' just
+    // above and is already receipted there. What a boss no longer leaves is a weapon
+    // finish — that comes out of a sealed case, and this is it.
+    on('finish:found',p=>{this.receipt((p.name||'A FINISH').toUpperCase()+' · WEAPON FINISH UNLOCKED','ability');this.receipts.at(-1).until=this.now()+8;});
     // p?.n, not p.n: weapons/weapon.js listens on this same channel and deliberately takes a
     // missing payload as nothing (`p ? ... : 0`). This one threw on it instead, inside the
     // fixed step — which is why tests/weapon.mjs aborted at (j) and the 60-odd checks after
@@ -120,7 +122,7 @@ export class Readouts {
     this.condition.hidden=!(inCar&&car&&car.wear>=.999);
     if(car){
       if(!this.condition.hidden){
-        this.text(this.condition,Math.abs(car.speed)>1.6?'ENGINE DEAD · SPACE TO STOP':'ENGINE DEAD · E GET OUT · FIND A MECHANIC');
+        this.text(this.condition,Math.abs(car.speed)>1.6?'ENGINE DEAD · SPACE TO STOP':'ENGINE DEAD · E GET OUT · USE GAS');
         this.condition.style.color='#e2a087';
       }
       // Nitro. The meter exists only in the seat and only once the tank does —

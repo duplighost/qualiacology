@@ -765,6 +765,11 @@ export class Enemies {
    * back noticed him again on the next tick, and the new life began with a body on him.
    */
   _calmHolds(e) {
+    // THE FUNERAL PEAL deafened it (scatter()). Hard, with no near exception and no ambush
+    // exception: the whole point of the bell is that for those seconds it cannot find you.
+    // Every notice path routes through here, so this one line covers sight as well as sound;
+    // hear() checks it separately because a gunshot skips the ordinary calm.
+    if (e.deafUntil > this._t) return true;
     if (e.scripted) return false;             // ROUND 13: an ambush is never calm
     if (e.respawnCalmT > 0) return true;
     if (!(e.calmT > 0)) return false;
@@ -1041,6 +1046,8 @@ export class Enemies {
       // Pulling the trigger is an explicit choice to engage this body. Other noises remain
       // subject to both the ordinary stand-down calm and the full new-life grace.
       if (source === 'shot') { e.calmT = 0; e.respawnCalmT = 0; }
+      // THE FUNERAL PEAL left it deaf. It is running; it is not listening for you.
+      if (e.deafUntil > this._t) continue;
       if (e.state === 'dormant') {
         if (radius >= e.def.wakeNoise * 0.5 && !this._calmHolds(e)) this._wake(e);
         continue;
@@ -1126,6 +1133,38 @@ export class Enemies {
    * @param beyond metres. Bodies closer than this keep you. Default 0.
    * @returns how many bodies lost the trail.
    */
+  /**
+   * THE FUNERAL PEAL (car part, from the Bellwether). Everything of the PRESSURE kind inside
+   * `radius` breaks off and runs, and stays deaf to you for `seconds` so it cannot simply
+   * re-hear the car it was hunting and turn round.
+   *
+   * The exclusions are loseTrail's, reasoned out the same way: horror is not frightened by a
+   * bell, neutrals are not hunting you in the first place, and a boss encounter is not in
+   * this pool. Unlike loseTrail it does NOT require `aware` — the point of a peal is that it
+   * clears the ground ahead of you as well as the ground behind. Returns how many ran.
+   */
+  scatter(x, z, radius, seconds) {
+    const r2 = radius * radius;
+    let n = 0;
+    for (let i = 0; i < this.all.length; i++) {
+      const e = this.all[i];
+      if (!e.alive || e.neutral || e.initiallyNeutral || e.encounter || e.def.unique) continue;
+      if (e.def.owner !== OWNER.PRESSURE) continue;
+      const dx = e.pos.x - x, dz = e.pos.z - z;
+      if (dx * dx + dz * dz > r2) continue;
+      this._uncommit(e);
+      e.state = 'flee'; e.stateT = 0; e.staged = false;
+      e.aware = 0; e.memT = 0; e.alerted = false; e.hunt = false; e.huntSpeedMul = 1;
+      e.stallT = 0; e.stallN = 0; e.stallAX = e.pos.x; e.stallAZ = e.pos.z;
+      // It runs FROM the bell, and the bell is where it last knew anything was.
+      e.heardX = x; e.heardZ = z;
+      e.navBest = undefined;
+      e.deafUntil = this._t + seconds;
+      n++;
+    }
+    return n;
+  }
+
   loseTrail(x, z, beyond) {
     // Deliberately does NOT stamp `_lastAsk`: that field measures the
     // DIRECTOR's silence for the dead-man's handle, and the player hiding is
@@ -1247,7 +1286,11 @@ export class Enemies {
     let x, z, opts;
     if (typeof c === 'number') { x = a; z = c; opts = d; }        // (key, x, y, z, opts)
     else { x = a; z = b; opts = c; }                              // (key, x, z, opts)
-    if(!opts?.neutral && !opts?.initiallyNeutral && this._sys('holdfast-life')?.contains(x,z)) return null;
+    // NO HOSTILE SPAWNS ON LIT GROUND. The Holdfast, and now the three hamlets: without the
+    // second clause hounds spawn on Eelwater's boardwalk and the place is a fight instead of
+    // somewhere people live.
+    if(!opts?.neutral && !opts?.initiallyNeutral
+      && (this._sys('holdfast-life')?.contains(x,z) || this._sys('hamlet-life')?.contains(x,z))) return null;
     if(!opts?.neutral && !opts?.initiallyNeutral && (this.ctx.shared.bossZones||[]).some(q=>q.on&&Math.hypot(x-q.x,z-q.z)<q.r)) return null;
     this._lastAsk = this._t;
     const def = SPECIES[key];

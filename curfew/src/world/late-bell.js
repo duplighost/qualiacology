@@ -65,7 +65,7 @@ export class LateBell {
   _revealRoute() {
     if(this.routeLoaded)return;
     const pr=this._sys('progress'), places=this._sys('places');
-    if(!carriesMorning(pr?.save?.data?.finishes))return;
+    if(!carriesMorning(pr?.save?.data?.bossesCleared))return;
     const bell=places?.nodes?.get('bell-tower')?.def;
     if(!bell)return;
     const kept=!!pr.flag('morning:route-kept'),missingNote=!this._sys('lore-ledger')?.has('note:day-bell-route');
@@ -90,7 +90,7 @@ export class LateBell {
     const length = Math.hypot(dx, dy, dz), f = Math.max(0, 1 - 3.1 / Math.max(1, length));
     const visible = !col?.segmentClear || col.segmentClear(car.pos.x, cy, car.pos.z,
       car.pos.x + dx * f, cy + dy * f, car.pos.z + dz * f);
-    if (!canRingLateBell({ finishes: pr?.save?.data?.finishes, phase: this.ctx.shared.phase,
+    if (!canRingLateBell({ cleared: pr?.save?.data?.bossesCleared, phase: this.ctx.shared.phase,
       carDistance: distance, carVisible: visible, started: !!this.last })) return false;
     this.last = { rang: true, elapsed: 0, complete: false };
     this.answers = ANSWERS.map(([id, at]) => ({ id, at })); this.answerT = 0;

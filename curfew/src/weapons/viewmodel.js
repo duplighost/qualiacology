@@ -46,6 +46,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, DEG, clamp, clamp01, lerp, ease, Spring, Spring3, sway2 } from '../engine/math.js';
 import CFG from '../config.js';
 import {buildClimbingHand,climbingHandMaterials,placeClimbingHand} from './climbing-hands.js';
+import {buildPourRig} from './pour-hands.js';
 
 // Small bevels carry a moving light edge on the stock, receiver and grip.
 function bevelBox(w,h,d) {
@@ -670,6 +671,13 @@ export class Viewmodel {
       const hand=buildClimbingHand(side,handMaterials);hand.visible=false;
       this.root.add(hand);this.climbHands.push(hand);
     }
+    // THE POUR RIG (the Eleven rewire). Shown by world/gas.js while a can of gas goes into
+    // the car, exactly the way the climbing hands are shown while you are on a wall: the gun
+    // goes away, this comes up, and nothing about the camera or the feet is taken.
+    this.pourRig=buildPourRig();
+    for(const mat of this.pourRig.materials){this._grade(mat);this._mats.push(mat);}
+    this.root.add(this.pourRig.root);
+    this.pouring=false;
     const add = (parent, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, y, z); mesh.rotation.set(rx, ry, rz); parent.add(mesh);
@@ -1165,9 +1173,17 @@ export class Viewmodel {
     if (this.ctx.scene) this.ctx.scene.remove(this.brass);
     this.brass.geometry.dispose();
     this.brass.material.dispose();
+    this.pourRig?.dispose();
     for (const m of this._mats) m.dispose();
     this.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   }
+
+  /* -------------------------------------------------- the pour rig (gas) -- */
+
+  /** world/gas.js raises and lowers it. Pure presentation: it holds no state of its own. */
+  setPourRig(on) { this.pouring = !!on; if (this.pourRig && !on) this.pourRig.setTip(0); }
+  /** Radians the can is tipped over. */
+  setPourTip(rad) { this.pourRig?.setTip(rad); }
 
   onResize(w, h) {
     this.camera.aspect = w / Math.max(1, h);
@@ -1589,7 +1605,11 @@ export class Viewmodel {
     this.root.quaternion.identity();
     const gripping=p.scaling||p.scaleDescending||p.climb!==0;
     _v.y-=.72*_S[C.LOWER];_e.x+=1.05*_S[C.LOWER];
-    this.gun.visible=!gripping&&_S[C.LOWER]<.999;
+    // The pour hides the gun for as long as it lasts. It rides the same bob and sway as the
+    // gun does, because it is in the same hands.
+    if(this.pourRig){this.pourRig.root.visible=this.pouring&&!gripping;
+      if(this.pourRig.root.visible){this.pourRig.root.position.copy(_v);this.pourRig.root.rotation.copy(_e);}}
+    this.gun.visible=!gripping&&!this.pouring&&_S[C.LOWER]<.999;
     for(const hand of this.climbHands){
       hand.visible=gripping&&!!this.ctx.camera&&placeClimbingHand(hand,p,this.ctx.camera,this.camera);
     }

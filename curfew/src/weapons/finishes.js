@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import {BOSSES} from '../world/boss-catalog.js';
 
+// THE ELEVEN REWIRE: a finish is no longer a trophy from a boss — it is what is inside a
+// SEALED CASE somewhere in the county, and the Weapons page must not name the boss or the
+// place until the case has been opened. So `location` and `boss` are gone from this table
+// and the page composes its own subtitle from what the save knows.
 export const FINISHES = Object.freeze([
-  {id:'original', name:'Worn steel', location:'Original finish', pattern:'original', colors:{base:0x28313b,accent:0x8e7960}, index:0},
-  ...BOSSES.map((b,i)=>({...b.skin, location:b.location, boss:b.name, index:i+1})),
+  {id:'original', name:'Worn steel', pattern:'original', colors:{base:0x28313b,accent:0x8e7960}, index:0},
+  ...BOSSES.map((b,i)=>({...b.skin, index:i+1})),
 ]);
 export const FINISH_BY_ID = Object.freeze(Object.fromEntries(FINISHES.map(f=>[f.id,f])));
 

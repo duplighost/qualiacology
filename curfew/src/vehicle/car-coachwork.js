@@ -192,6 +192,23 @@ export function buildCoachwork(spec){
   flush();
   const fittings=buildCarFittings({root,box,cylinder,tube,sphere,collect,flush,surfaces,extraMaterials,geometries});
   let repaired=false,headLevel=0;
+
+  /* ---------------------------------------------------- THE FILLER CAP, gas -- */
+  // A can of gas is what repairs the car now, so the car has to SAY where a can goes. The
+  // cap is on the right rear quarter (+X) — the door is on the left at x -1.00 and the seat
+  // at x -0.31, so walking to the cap is never walking to the door. The ring around it is
+  // the whole teaching: it pulses only while a pour is actually possible (you carry a can
+  // AND the car is worn), and a cap with no ring is a cap with nothing to do.
+  const fillerRing=new THREE.MeshStandardMaterial({color:0x1d2426,emissive:0xffcf8e,emissiveIntensity:0,roughness:.42,metalness:.55});fillerRing.name='car-filler-ring';extraMaterials.push(fillerRing);
+  cylinder(.91,1.24,1.42,.098,.020,dark,0,Math.PI/2);           // the recess the cap sits in
+  collect(new THREE.TorusGeometry(.092,.011,8,26),fillerRing,.928,1.24,1.42,0,0,Math.PI/2);
+  cylinder(.935,1.24,1.42,.080,.026,chrome,0,Math.PI/2);         // the cap itself
+  for(let n=0;n<6;n++){const a=n/6*Math.PI*2;box(.950,1.24+Math.sin(a)*.048,1.42+Math.cos(a)*.048,.010,.020,.020,dark,0,0,0);}
+  cylinder(.952,1.24,1.42,.022,.012,dark,0,Math.PI/2);
+  // the little hinged flap, parked open against the quarter panel
+  box(.946,1.335,1.475,.012,.145,.155,paint,0,0,-.22);
+  const setFiller=(on,k)=>{fillerRing.emissiveIntensity=on?.35+.35*Math.sin(4*(k||0)):0;};
+
   const setRepaired=on=>{repaired=!!on;deadMat.emissiveIntensity=repaired?headLevel*1.6:0;};
   return{
     root,wheels,steer,lampGood:lamps[0],lampDead:lamps[1],radio:radioNeedle,doorGroup:door,
@@ -199,11 +216,17 @@ export function buildCoachwork(spec){
     get tris(){let n=0;root.traverse(o=>{if(o.isMesh){const g=o.geometry;n+=(g.index?g.index.count:g.attributes.position.count)/3*(o.isInstancedMesh?o.count:1);}});return Math.round(n);},
     setLamp(head,tail,cake=0){headLevel=head;headMat.emissiveIntensity=head*1.6;headMat.color.setHex(cake>.5?0x827047:0xb6c8be);deadMat.emissiveIntensity=repaired?head*1.6:0;tailMat.emissiveIntensity=tail?.65:0;},
     setRepaired,
+    /** The filler cap's ring. `on` = a pour is possible right now; `k` is the clock. */
+    setFiller,
     setCabinView(inside){glass.opacity=inside?.018:.19;},
     setRadioDial(t){radioNeedle.position.x=(clamp(t)*2-1)*.095;},
     setCondition(t,time=0){conditionNeedle.rotation.z=(1.17-1.34*clamp(t))*Math.PI-Math.PI/2;warning.visible=t<.45;warnMat.color.setHex(t<.2?0xff381e:0xe69b2c);warning.scale.setScalar(t<.2?.8+Math.sin(time*8.5)*.2:1);},
     setMotion(speed,boost,boosting,time,shield=3){speedNeedle.rotation.z=(1.17-1.34*clamp(Math.abs(speed)/42))*Math.PI-Math.PI/2;fittings.animate(boost,boosting,time,shield);},
-    setUpgrades(ids){fittings.setOwned(ids);surfaces.restored(ids.includes('kept'));if(ids.includes('kept'))setRepaired(true);},
+    /** FUNERAL PEAL: the bell under the bumper brightens while the horn is held. */
+    setPealCharge(k){fittings.pealCharge(k);},
+    setUpgrades(ids){fittings.setOwned(ids);surfaces.restored(ids.includes('rebuilt'));if(ids.includes('rebuilt'))setRepaired(true);},
+    /** Ari's schemes. Appearance only; REBUILT's gloss layers over whatever this sets. */
+    setPaint(hex){surfaces.setPaint(hex);},
     setDoor(t){door.rotation.y=-clamp(t)*openMax;},
     setCabin(level){warm.emissiveIntensity=.12+clamp(level)*.60;},
     dispose(){geometries.forEach(g=>g.dispose());extraMaterials.forEach(m=>m.dispose());surfaces.dispose();root.removeFromParent();},

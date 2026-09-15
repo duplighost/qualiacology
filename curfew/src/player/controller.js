@@ -506,7 +506,15 @@ export class PlayerController {
     });
     const terr = this._terrain;
     // World owns the spawn; until it publishes one we start at the origin of the valley.
-    const start = (terr && terr.playerStart) || this.ctx.spawn || null;
+    let start = (terr && terr.playerStart) || this.ctx.spawn || null;
+    // THE ELEVEN REWIRE. Alex: "on a fresh game the car exists, parked in the Filling Station
+    // garage, visible immediately." So the night starts IN THE BAY, standing in front of it,
+    // rather than out on the forecourt looking for it. The bay's point is site-local and has
+    // to come from places (which owns each destination's yaw, computed off the real road):
+    // terrain builds playerStart in its constructor, long before any of that exists.
+    // Falls back to the yard if the station is not there, which is what a test world is.
+    const bay = this._bayStart();
+    if (bay) start = bay;
     const x = start ? start.x : 0;
     const z = start ? start.z : 0;
     this.spawnX = x; this.spawnZ = z;
@@ -514,6 +522,24 @@ export class PlayerController {
     this.vel.set(0, 0, 0);
     this._sync();
     this._spawned = true;
+  }
+
+  /**
+   * The service bay floor at the Filling Station, in world coordinates, or null. The local
+   * point is in front of where the car stands (dress-station.js serviceBay: x -23.0, z -0.2,
+   * open on -Z), far enough forward that you are looking at the car and not inside it.
+   */
+  _bayStart() {
+    const places = this.ctx.systems?.get?.('places');
+    const rec = places?.nodes?.get?.('filling-station');
+    if (!rec || !Number.isFinite(rec.yaw)) return null;
+    // MEASURED IN THE BAY, not reasoned about. Straight behind the car (lz 1.9) put the eye
+    // 2.6 m off the tailgate looking through the cabin, which is a picture of a back seat.
+    // From the back-left corner the whole car reads three-quarters on, the shut mouth is
+    // beyond it, and the wall clock is one turn of the head to the left.
+    const lx = -25.0, lz = 3.4;
+    const cy = Math.cos(rec.yaw), sy = Math.sin(rec.yaw);
+    return { x: rec.def.x + lx * cy + lz * sy, z: rec.def.z - lx * sy + lz * cy };
   }
 
   ready() {

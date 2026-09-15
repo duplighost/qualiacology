@@ -48,7 +48,7 @@ export function buildCarFittings({root,box,cylinder,tube,sphere,collect,flush,su
   for(let i=0;i<8;i++){const g=new THREE.BoxGeometry(.015,.021,.004),m=new THREE.Mesh(g,boostMat);m.position.set(-.070+i*.020,0,.021);m.name='car-boost-charge-'+i;boostPanel.add(m);pips.push(m);geometries.push(g);}
   const fireMat=new THREE.MeshBasicMaterial({color:0x72c8eb,transparent:true,opacity:.68,depthWrite:false});fireMat.name='car-nitro-exhaust';extraMaterials.push(fireMat);
   const flames=[];for(const x of [-.29,.29]){const g=new THREE.ConeGeometry(.047,.34,16),m=new THREE.Mesh(g,fireMat);m.position.set(x,.52,2.38);m.rotation.x=Math.PI/2;m.visible=false;nitro.add(m);flames.push(m);geometries.push(g);}
-  const rebuilt=group('kept');
+  const rebuilt=group('rebuilt');
   // The rebuilt engine gains bright finned hardware through its bonnet vents,
   // clean trim and a proper caged touring roof basket.
   for(const x of [-.39,.39]){box(x,1.238,-1.47,.24,.035,.44,dark,0,0,0,rebuilt);for(let n=0;n<8;n++)box(x,1.262,-1.66+n*.051,.214,.012,.018,chrome,0,0,0,rebuilt);}
@@ -65,9 +65,60 @@ export function buildCarFittings({root,box,cylinder,tube,sphere,collect,flush,su
     for(let n=0;n<4;n++)cylinder(side*(.22+n*.17),.80,-2.46,.013,.017,dark,Math.PI/2,0,breaker);
     tube([[side*.83,1.03,-2.31],[side*.75,1.66,-1.32],[side*.69,2.05,-.81]],.011,chrome,breaker);
   }
+
+  /* ------------------------------------- THE ELEVEN REWIRE: four more parts -- */
+  // Each of these arrives off a boss, so each has to read as SALVAGE — taken off a thing
+  // and bolted on — rather than as catalogue kit. The working lamp is the left one
+  // (x -.66); the dead one on the right stays dead unless REBUILT lights it.
+
+  // STOLEN LIGHT, from the Lantern Eater: a deep cowl and a caged guard over the one lamp
+  // you have, so nothing can take it off you again.
+  const stolen=group('stolenlight');
+  cylinder(-.66,1.02,-2.30,.166,.13,dark,Math.PI/2,0,stolen);
+  collect(new THREE.TorusGeometry(.163,.020,10,36),chrome,-.66,1.02,-2.355,0,0,0,stolen);
+  for(let n=0;n<7;n++){const a=n/6*Math.PI-Math.PI/2;box(-.66+Math.sin(a)*.128,1.02+Math.cos(a)*.128-.002,-2.372,.013,.013,.030,chrome,0,0,a,stolen);}
+  for(let n=0;n<4;n++){const a=n/3*Math.PI*2;collect(new THREE.TorusGeometry(.150,.009,8,28),chrome,-.66,1.02,-2.30+n*.018,0,0,a,stolen);}
+  tube([[-.66,1.16,-2.28],[-.60,1.22,-2.10],[-.44,1.21,-1.86]],.014,dark,stolen);
+
+  // MOTH SCREEN, from the Moonmolt: a fine mesh disc standing a little proud of the lens,
+  // with a ring that holds it off the glass. Sparse enough to see the lamp through.
+  const screen=group('mothscreen');
+  collect(new THREE.TorusGeometry(.126,.011,8,32),chrome,-.66,1.02,-2.262,0,0,0,screen);
+  for(let k=-5;k<=5;k++){const h=Math.sqrt(Math.max(0,.122*.122-(k*.023)**2))*2;if(h>.01){box(-.66+k*.023,1.02,-2.268,.0035,h,.0035,chrome,0,0,0,screen);box(-.66,1.02+k*.023,-2.268,h,.0035,.0035,chrome,0,0,0,screen);}}
+  for(const side of [-1,1])tube([[-.66+side*.124,1.02,-2.262],[-.66+side*.150,1.01,-2.205]],.008,dark,screen);
+
+  // MIRE TYRES, from the Mire Bride. The wheels themselves are one InstancedMesh that car.js
+  // poses every step, so the tread cannot live here — what lives here is everything ROUND
+  // the wheels: wide arch flares, heavy mud flaps behind each one, and the spare strapped to
+  // the tail, which is the part you actually see from outside the car.
+  const tyres=group('miretyres');
+  for(const side of [-1,1])for(const z of [-1.275,1.275]){
+    for(let n=0;n<7;n++){const a=(-.34+n*.113)*Math.PI;box(side*.97,.40+Math.cos(a)*.505,z+Math.sin(a)*.505,.115,.055,.085,dark,0,0,0,tyres);}
+    box(side*.96,.185,z+(z<0?-.50:.56),.20,.36,.028,rubber,.12,0,0,tyres);
+    for(const x of [-.06,.06])cylinder(side*.96+x*side,.345,z+(z<0?-.495:.555),.012,.010,chrome,Math.PI/2,0,tyres);
+  }
+  collect(new THREE.TorusGeometry(.295,.115,10,26),dark,0,1.20,2.29,0,0,0,tyres);
+  cylinder(0,1.20,2.29,.175,.075,chrome,Math.PI/2,0,tyres);
+  for(let n=0;n<14;n++){const a=n/14*Math.PI*2;box(Math.sin(a)*.315,1.20+Math.cos(a)*.315,2.31,.070,.035,.055,dark,0,0,a,tyres);}
+  for(const y of [1.02,1.38])tube([[-.30,y,2.20],[0,y,2.36],[.30,y,2.20]],.017,rubber,tyres);
+
+  // FUNERAL PEAL, from the Bellwether: a small brass bell slung under the front bumper on a
+  // yoke, with its clapper. It is `warm` so it catches the light and says where the sound
+  // comes from without ever being a light itself.
+  const peal=group('funeralpeal');
+  const brass=new THREE.MeshStandardMaterial({color:0x8a6a33,emissive:0xffbe62,emissiveIntensity:.10,roughness:.34,metalness:.82});brass.name='car-peal-bell';extraMaterials.push(brass);
+  for(const side of [-1,1])tube([[side*.17,.72,-2.02],[side*.20,.60,-2.09],[side*.115,.525,-2.13]],.016,dark,peal);
+  cylinder(0,.516,-2.13,.038,.030,chrome,0,0,peal);
+  for(let n=0;n<5;n++)cylinder(0,.496-n*.038,-2.13,.055+n*.029,.040,brass,0,0,peal);
+  collect(new THREE.TorusGeometry(.176,.022,10,30),brass,0,.322,-2.13,Math.PI/2,0,0,peal);
+  cylinder(0,.404,-2.13,.010,.115,dark,0,0,peal);
+  sphere(0,.330,-2.13,.040,.040,.040,chrome,peal);
+
   flush();
   return{
     setOwned(ids){for(const [id,g]of Object.entries(groups))g.visible=ids.includes(id);},
+    /** The bell brightens with the peal charge, so the hold has a face on the car itself. */
+    pealCharge(k){brass.emissiveIntensity=.10+Math.max(0,Math.min(1,k))*1.25;},
     animate(charge,active,time=0,shield=3){wardMat.emissiveIntensity=.06+Math.max(0,shield)/3*(.85+.1*Math.sin(time*2));pips.forEach((p,i)=>{p.visible=charge>(i+.35)/8;});boostMat.color.setHex(active?0xb8f8ff:charge<.15?0xd68746:0x71cdda);flames.forEach((f,i)=>{f.visible=active;f.scale.y=.78+Math.sin(time*43+i)*.22;});},
   };
 }

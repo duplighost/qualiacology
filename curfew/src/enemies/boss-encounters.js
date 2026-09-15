@@ -310,7 +310,7 @@ export class BossEncounters {
   this._hitHazards(k,p,k.hazards,t);
   if(t>=k.duration)this._finishAttack(k,p);
  }
- _die(k){if(!k.alive)return;if(k.rover?.inUse)this._sys('lights')?.release?.(k.rover);k.rover=null;k.hp=0;k.alive=false;k.dead=true;k.state='dying';k.stateT=0;k.weakOpen=false;k.pendingRupture=false;this._clearHazards(k);this._unseat(k);this._voice(k,'death',.7);this._sys('fx')?.addTrauma?.(.22);this._sys('progress')?.completeBoss?.({id:k.id,name:k.def.name,xp:k.def.xp,cash:k.def.cash,finishId:k.def.skin.id,x:k.pos.x,y:k.pos.y,z:k.pos.z});
+ _die(k){if(!k.alive)return;if(k.rover?.inUse)this._sys('lights')?.release?.(k.rover);k.rover=null;k.hp=0;k.alive=false;k.dead=true;k.state='dying';k.stateT=0;k.weakOpen=false;k.pendingRupture=false;this._clearHazards(k);this._unseat(k);this._voice(k,'death',.7);this._sys('fx')?.addTrauma?.(.22);this._sys('progress')?.completeBoss?.({id:k.id,name:k.def.name,xp:k.def.xp,cash:k.def.cash,x:k.pos.x,y:k.pos.y,z:k.pos.z});
   // A dead arena stays physically changed: pale hearts go dark and the body remains collapsed.
   for(const a of k.site.anchors){a.spent=true;a.enemy.alive=false;}this.ctx.bus.emit('boss:world-cleared',{id:k.id,x:k.home.x,z:k.home.z});
  }
