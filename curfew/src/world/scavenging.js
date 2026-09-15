@@ -31,7 +31,11 @@ const BOX_REACH=2.4;
 // The hold keeps to the hand-tagged breakables (crate, drum, fence, strongbox...) and the
 // containers; a thing that is breakable only because it is small gets no prompt. The car and
 // the stock still break it.
-const NO_HOLD_TAG=new Set(['wood','metal','stone','wall','plank','vehicle','glass','concrete','earth','rust','dark']);
+// 'gascan' is here because a petrol can is not a box. It is crushable by SIZE (collision.js's
+// size rule, not BREAKABLE_TAGS), so nearestBreakable offered it to this verb, and OPEN on a
+// fuel can was the only prompt the county's cans had ever shown — world/gas.js's own TAKE
+// never fired, because the can occluded itself. Both halves fixed 2026-09-15.
+const NO_HOLD_TAG=new Set(['wood','metal','stone','wall','plank','vehicle','glass','concrete','earth','rust','dark','gascan']);
 const BOX_FACE=0.55;
 const BOX_HOLD_BASE=0.38;
 const BOX_HOLD_PER=0.22;   // per landing the stock would have needed: 0.6 s wood .. 1.3 s stone

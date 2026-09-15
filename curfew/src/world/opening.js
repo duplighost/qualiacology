@@ -182,6 +182,14 @@ export class Opening {
     // through the mouth. MEASURED in the bay, not reasoned: yaw + PI put it nose to the back
     // wall and the first thing a new player would have had to do is reverse.
     car.placeAt(api.wx(-23.0,-0.3),api.wz(-23.0,-0.3),n.yaw);
+    // ALEX, 2026-09-15: "lets have it start at zero gas."
+    //
+    // ONLY ON A NIGHT NOBODY HAS PLAYED YET — a save that has already been driven carries its
+    // own wear and this must not reach in and empty it. The bay has two cans on the rack ten
+    // metres from the seat, so the opening is: the shutter goes up, the car will not start,
+    // there is a can on the wall. Nothing has to say any of that out loud, which is the whole
+    // reason to teach the county's one real verb here rather than on a roadside at 3 a.m.
+    if(!this._sys('progress').flag('car:wear')){car.wear=1;car.wearShown=1;}
     car.beacon=false;
     this.off=[this.ctx.bus.on('phase:changed',p=>{if(p.phase==='night'&&p.prev==='dusk')this._night();}),
       this.ctx.bus.on('place:rest',p=>{if(p.id===O.id)this.pendingWake=true;})];
