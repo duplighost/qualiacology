@@ -62,6 +62,7 @@ import * as interiorHorrorMod from './director/interior-horror.js';
 import * as carMod from './vehicle/car.js';
 import * as progressMod from './progression/progress.js';
 import * as audioMod from './audio/audio.js';
+import * as dialogueMod from './dialogue/dialogue.js';
 import * as hudMod from './ui/hud.js';
 import * as kneelerMod from './enemies/kneeler.js';   // ROUND 6, lane C
 import * as dogcallerMod from './enemies/dogcaller.js';   // ROUND 22, lane C
@@ -70,15 +71,19 @@ import * as setpiecesMod from './world/setpieces.js'; // ROUND 22, lane H: the s
 import * as refugeMod from './world/refuge.js';
 import * as planetariumMod from './world/planetarium.js';   // ROUND 22: the town of Morning
 import * as openingMod from './world/opening.js';
+import * as garageOpeningMod from './world/garage-opening.js';
 import * as signageMod from './world/signage.js';     // ROUND 22, lane D: the promises
 import * as searchMod from './world/search.js';       // ROUND 15: going through a body
 import * as duskToDawnMod from './world/dusk-to-dawn.js';   // ROUND 22: the county's pole lights
 import * as dealerMod from './world/dealer.js';
 import * as mechanicsMod from './world/mechanics.js';
+import * as gasMod from './world/gas.js';
 import * as scavengingMod from './world/scavenging.js';
 import * as sanctuariesMod from './world/sanctuaries.js';
 import * as territoryMod from './world/territory.js';
 import * as holdfastLifeMod from './world/holdfast-life.js';
+import * as hamletLifeMod from './world/hamlet-life.js';
+import * as companionsMod from './world/companions.js';
 import * as bossSitesMod from './world/boss-sites.js';
 import * as bossEncountersMod from './enemies/boss-encounters.js';
 import * as worldStoriesMod from './world/world-stories.js';
@@ -142,8 +147,16 @@ const SYSTEMS = [
   ['territory', territoryMod], // counts authored kills after save load and owns secured ground
   ['dealer', dealerMod],      // saved cash/arsenal and the physical travelling shop
   ['mechanics', mechanicsMod],
+  ['gas', gasMod],             // THE ELEVEN REWIRE: the cans, the filler cap and the pour.
+                               // AFTER car and progress (it reads both every step) and after
+                               // mechanics (which sells the cans); BEFORE holdfast-life
   ['scavenging', scavengingMod],
   ['holdfast-life', holdfastLifeMod],
+  ['hamlet-life', hamletLifeMod],   // THE ELEVEN REWIRE: Eelwater, The Cut, Highwood. AFTER
+                                    // places (it reads each hamlet's pad and yaw) and enemies
+                                    // (it spawns their residents through it)
+  ['companions', companionsMod],    // and the one person who comes with you. AFTER hamlet-life
+                                    // (it asks where somebody lives when they walk home)
   ['world-stories', worldStoriesMod],
   ['lore-ledger', loreLedgerMod],
   ['lore-lookout', loreLookoutMod],
@@ -151,10 +164,16 @@ const SYSTEMS = [
   ['lore-dead', loreDeadMod],
   ['late-bell', lateBellMod],
   ['opening', openingMod],     // the station's authored grounds, calendar and first night
+  ['garage-opening', garageOpeningMod],  // THE ELEVEN REWIRE: the hour the clocks fell back,
+                               // played in the bay the car is parked in. AFTER opening (it
+                               // reads the station's pad and yaw, which opening also does)
   ['signage', signageMod],     // ROUND 22: the promises — words in the world, painted on the opening's paper program
   ['reward-feedback', rewardFeedbackMod],
   ['first-light', firstLightMod],
   ['audio', audioMod],         // late, so it can hear everything that happened this step
+  ['dialogue', dialogueMod],   // THE ELEVEN REWIRE: every spoken line in the county. AFTER
+                               // audio (it books voices through it) and BEFORE hud (its one
+                               // subtitle element is part of the no-words walk)
   ['hud', hudMod],
   // -- presentation, last ---------------------------------------------------------------
   ['fx', fxMod],

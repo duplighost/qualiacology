@@ -4,15 +4,19 @@ import { CFG } from '../config.js';
 
 export const LAST_NIGHT_S = CFG.clock.duskS + CFG.clock.deepNightS + CFG.clock.blackHourS + CFG.clock.falseDawnS;
 export const DAWN_START_S = LAST_NIGHT_S - CFG.clock.falseDawnS;
-export const REQUIRED_MORNING = Object.freeze(BOSSES.map(b => b.skin.id));
+// THE ELEVEN REWIRE. The ending used to key on owning eleven WEAPON FINISHES, which was the
+// same list by accident: a finish came from a boss, so having them all meant having killed
+// them all. Finishes are in sealed cases now and a case is not a kill, so the requirement is
+// what it always meant — the ELEVEN, each one dead, each one a part on the car.
+export const REQUIRED_MORNING = Object.freeze(BOSSES.map(b => b.id));
 
-export function carriesMorning(finishes) {
-  const owned = new Set(Array.isArray(finishes) ? finishes : []);
-  return REQUIRED_MORNING.every(id => owned.has(id));
+export function carriesMorning(cleared) {
+  const done = new Set(Array.isArray(cleared) ? cleared : []);
+  return REQUIRED_MORNING.every(id => done.has(id));
 }
 
-export function canRingLateBell({ finishes, phase, carDistance, carVisible, started }) {
-  return !started && phase === 'black' && carriesMorning(finishes)
+export function canRingLateBell({ cleared, phase, carDistance, carVisible, started }) {
+  return !started && phase === 'black' && carriesMorning(cleared)
     && Number.isFinite(carDistance) && carDistance <= 110 && carVisible === true;
 }
 

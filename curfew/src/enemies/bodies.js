@@ -1661,7 +1661,10 @@ function buildSpider(def) {
 export function buildBody(key, rng) {
   if(key==='marrow')return buildMarrow(rng);
   const def = SPECIES[key];
-  if (def.human) return buildHuman(key, Math.floor(rng.next()*12), def.height);
+  // A FIXED VARIANT is how an authored person stays the same person: the three companions
+  // (species.js greer/roan/sheet) must not roll a new face every time their chunk streams.
+  if (def.human) return buildHuman(key,
+    def.fixedVariant === undefined ? Math.floor(rng.next() * 12) : def.fixedVariant, def.height);
   const set = geoSetFor(key);
 
   // Per-instance tint: a spread of VALUE, plus a whisper of hue, so a crowd is

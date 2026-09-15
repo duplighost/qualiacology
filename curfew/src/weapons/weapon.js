@@ -517,7 +517,7 @@ export class Weapons {
 
   /**
    * The returning save, read LAZILY at the first step and never at construction. The save's
-   * claimed list (progression/save.js, key curfew.progress) is restored by progress.js:324
+   * claimed list (progression/save.js, key curfew.eleven) is restored by progress.js:324
    * into progress.claimed - progress's OWN Set. places.claimed is NOT restored from the save
    * (places.js:482 seeds startClaimed and nothing else), so asking places alone finds
    * nothing on a returning boot. Verification round 1 measured the first cut, which asked

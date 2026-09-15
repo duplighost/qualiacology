@@ -3,7 +3,10 @@ export const STATION_PYLON=Object.freeze({x:18,z:10});
 export const OPENING = Object.freeze({
   id:'filling-station', x:-520, z:240,
   tower:{x:16,z:-17,deck:12},
-  car:{route:'works-cut',distance:28},
+  // THE CAR IS IN THE GARAGE NOW (opening.js, and world/garage-opening.js owns the night it
+  // starts in). What is left of the old road park is the departure marks and the road signs,
+  // which still use `works-cut` at 28 m through openingRoadPoint below.
+  departure:{route:'works-cut',distance:28},
   path:[[7,5],[9,-7],[9,-16],[9,-24],[17,-28],[26,-24],[29,-14],[28,-3],[21,4],[13,9]],
   trees:[[-36,-21,0,.94],[-32,-29,4,.85],[-23,-30,1,1.1],[-11,-29,0,.9],[-3,-33,4,1.15],
     [7,-35,1,1.2],[16,-36,0,1.05],[25,-32,4,.93],[33,-25,1,1.1],[36,-14,0,1.14],

@@ -144,7 +144,7 @@ function groundLoop(k,api,roads){
   // The old painted bay pointed across the grass after the road was rerouted.
   const yaw=api.yaw||0,cy=Math.cos(yaw),sy=Math.sin(yaw);
   for(let distance=8;distance<=35;distance+=3){
-    const p=openingRoadPoint(roads,O.car.route,distance);if(!p)continue;
+    const p=openingRoadPoint(roads,O.departure.route,distance);if(!p)continue;
     for(const side of[-1,1]){
       const wx=p.x-p.tz*side*(p.width*.5+.35),wz=p.z+p.tx*side*(p.width*.5+.35),dx=wx-O.x,dz=wz-O.z;
       const x=dx*cy-dz*sy,z=dx*sy+dz*cy;
@@ -168,8 +168,21 @@ export class Opening {
     this.materials.push(mat);const mesh=new THREE.Mesh(g,mat);mesh.castShadow=true;mesh.receiveShadow=true;this.root.add(mesh);
     this._trees();this._papers();this._room();this._lanterns();this._weather();
     if(this._sys('progress').flag('opening:night'))this.nightT=20;
-    const car=this._sys('car'),departure=openingRoadPoint(this._sys('roads'),O.car.route,O.car.distance);
-    if(departure)car._park(departure.x,departure.z,departure.tx,departure.tz,true);
+    // THE ELEVEN REWIRE. Alex: "on a fresh game the car exists, parked in the Filling Station
+    // garage, full condition, visible immediately, no road spawn." So it is placed IN THE BAY
+    // at init, before the first step, and _considerSpawn's answer for the rest of the session
+    // is that the car is already here.
+    //
+    // Never _park() in here: that snaps the nose AWAY from the nearest major, which at the
+    // station would point the car into the back wall. placeAt takes a heading, and heading 0
+    // is -Z, which is the way the bay is open — so the site's own yaw plus PI faces the car
+    // out through the open mouth. The bay is at site-local x -23.0, z -0.2.
+    const car=this._sys('car');
+    // Heading 0 is -Z and the bay is open on -Z, so the site's own yaw points the nose out
+    // through the mouth. MEASURED in the bay, not reasoned: yaw + PI put it nose to the back
+    // wall and the first thing a new player would have had to do is reverse.
+    car.placeAt(api.wx(-23.0,-0.3),api.wz(-23.0,-0.3),n.yaw);
+    car.beacon=false;
     this.off=[this.ctx.bus.on('phase:changed',p=>{if(p.phase==='night'&&p.prev==='dusk')this._night();}),
       this.ctx.bus.on('place:rest',p=>{if(p.id===O.id)this.pendingWake=true;})];
   }
@@ -385,7 +398,7 @@ export class Opening {
     this.birds.visible=this.birdT>=0&&this.birdT<9;
     if(this.birds.visible){this.birds.position.set(-this.birdT*2.5,this.birdT*1.8,-this.birdT*3);this.birds.rotation.z=Math.sin(this.birdT*8)*.01;}
   }
-  state(){return{trees:this.trees.length,tower:O.tower,car:O.car,signs:this.signs,night:this.nightT>=0,woke:!!this.woke,cues:this.cues,calendar:this.calendar?.name};}
+  state(){return{trees:this.trees.length,tower:O.tower,car:O.departure,signs:this.signs,night:this.nightT>=0,woke:!!this.woke,cues:this.cues,calendar:this.calendar?.name};}
   ready(){return !!this.calendar&&this.trees.length>=12;}
   dispose(){this.off?.forEach(f=>f());this.root.removeFromParent();this._sys('collision').removeChunk('station-opening');if(this.lampHandle)this._sys('lights').release(this.lampHandle);this.geometries.forEach(g=>g.dispose());this.materials.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());}
 }

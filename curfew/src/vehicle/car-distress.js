@@ -13,7 +13,10 @@ export class CarDistress {
   }
   hit(shield){this.until=(this.ctx.time?.t||0)+3;this.blocked=shield;}
   update(car,time){
-    const failed=car.wear>=.999,severity=Math.max(0,(car.wear-.64)/.36),front=1.5;
+    // The SMOKE follows the needle (car.wearShown), not the raw number, so it thins out over
+    // the pour instead of vanishing on one frame. The disabled test is the real wear.
+    const shown=car.wearShown===undefined?car.wear:car.wearShown;
+    const failed=car.wear>=.999,severity=Math.max(0,(shown-.64)/.36),front=1.5;
     this.root.visible=car.exists&&severity>0;
     this.root.position.set(car.x-Math.sin(car.heading)*front,car.y+1.28,car.z-Math.cos(car.heading)*front);
     for(let i=0;i<this.puffs.length;i++){
@@ -23,7 +26,7 @@ export class CarDistress {
     }
     const player=this.ctx.systems.get('player'),near=player&&Math.hypot(player.pos.x-car.x,player.pos.z-car.z)<8;
     this.cue.hidden=this.ctx.paused||!this.ctx.playing||player?.dead||!(time<this.until||(failed&&near));
-    if(!this.cue.hidden)this.cue.textContent=failed?'CAR DISABLED · BUY A REPAIR AT A MECHANIC':this.blocked?'WARD ABSORBED THE HIT · '+Math.floor(car.shield)+' CHARGES':'BODY HIT · CAR CONDITION '+Math.max(0,Math.round((1-car.wear)*100))+'%';
+    if(!this.cue.hidden)this.cue.textContent=failed?'CAR DISABLED · USE GAS AT THE CAP':this.blocked?'WARD ABSORBED THE HIT · '+Math.floor(car.shield)+' CHARGES':'BODY HIT · CAR CONDITION '+Math.max(0,Math.round((1-shown)*100))+'%';
   }
   dispose(){this.root.removeFromParent();this.puffs.forEach(p=>p.material.dispose());this.texture.dispose();this.cue.remove();}
 }

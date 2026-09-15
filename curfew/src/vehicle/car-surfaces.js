@@ -33,5 +33,11 @@ export function carSurfaces(seed=17){
   const glass=new THREE.MeshBasicMaterial({color:0x1b3335,transparent:true,opacity:.19,depthWrite:false,side:THREE.DoubleSide});glass.name='car-glass';
   const warm=new THREE.MeshStandardMaterial({color:0xffd19b,emissive:0xffb66f,emissiveIntensity:.28,roughness:.45});warm.name='car-courtesy';
   const materials={paint,chrome,rubber,leather,dark,glass,warm};
-  return{...materials,materials:Object.values(materials),restored(on){paint.color.setHex(on?0x285b50:0x536b61);paint.roughness=on?.36:.78;paint.metalness=on?.32:.22;},dispose(){Object.values(materials).forEach(m=>m.dispose());[map,roughnessMap,normalMap].forEach(t=>t.dispose());}};
+  // THE ELEVEN REWIRE. restored() no longer sets a COLOUR: the colour is Ari's (vehicle/
+  // paint.js), and a rebuilt car used to be repainted green whatever scheme you had bought.
+  // Rebuilt layers over paint — it takes the tired roughness out of whatever is on the car.
+  return{...materials,materials:Object.values(materials),
+    restored(on){paint.roughness=on?.36:.78;paint.metalness=on?.32:.22;},
+    setPaint(hex){if(hex>=0)paint.color.setHex(hex);},
+    dispose(){Object.values(materials).forEach(m=>m.dispose());[map,roughnessMap,normalMap].forEach(t=>t.dispose());}};
 }

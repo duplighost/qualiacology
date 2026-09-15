@@ -32,6 +32,10 @@
 // frame. Every position is on or beside a wall the site already has.
 
 import { groundY, kits } from './sites.js';
+// A SEALED CASE draws a band in its finish's own accent colour. boss-catalog.js is pure data
+// with no imports; weapons/finishes.js would drag the renderer into a builder that has no
+// business with it, and the accent hex lives on the skin either way.
+import { BOSS_BY_ID } from './boss-catalog.js';
 
 /* sites.js's groundY() is ABSOLUTE world height at a site-local point — it already contains
  * the pad. `api.padY + groundY(...)` therefore counts the pad twice, which is how the first
@@ -41,6 +45,21 @@ import { groundY, kits } from './sites.js';
  * `groundY(...)` on its own. Nothing may have both. */
 
 const WOOD = [0.115, 0.078, 0.046];
+// The case's own lacquer: darker and colder than the strongbox's oak, so the two read apart
+// at a glance in the same room.
+const LACQUER = [0.038, 0.030, 0.028];
+
+/**
+ * A finish's accent, sRGB hex on the catalogue, as the LINEAR triple the solid kit takes.
+ * Done by hand rather than through THREE.Color so this file stays renderer-free: the sRGB
+ * transfer curve is the same three lines everywhere it appears.
+ */
+function accentOf(skinId) {
+  const hex = BOSS_BY_ID[skinId]?.skin?.colors?.accent;
+  if (!(hex >= 0)) return PALE;
+  const to = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return [to(((hex >> 16) & 255) / 255), to(((hex >> 8) & 255) / 255), to((hex & 255) / 255)];
+}
 const PALE = [0.255, 0.212, 0.140];
 const IRON = [0.058, 0.066, 0.072];
 const RUST = [0.125, 0.062, 0.033];
@@ -123,13 +142,65 @@ export function landing(k, api, o) {
  *
  * `id` must be stable across rebuilds — it is the flag key. Give it a name, not an index.
  */
+/**
+ * A GAS CAN. This function draws NOTHING: world/gas.js owns every can mesh in the county so
+ * that taking one can disappear on the frame you press E, rather than on the next time the
+ * site's geometry happens to stream back in. All this does is hand gas.js a world point out
+ * of the site's own local frame, the way stash() hands places.js one.
+ *
+ * `id` must be stable across rebuilds — it is the flag key.
+ */
+export function gasCan(k, api, o) {
+  void k;
+  const y = o.y === undefined ? groundY(api, o.x, o.z) : api.padY + o.y;
+  if (typeof api.registerGasCan === 'function') {
+    api.registerGasCan(o.x, o.z, y, 'gas:' + api.site.id + ':' + o.id, o.yaw || 0);
+  }
+  return y;
+}
+
 export function stash(k, api, o) {
   const S = k.solid;
   const x = o.x, z = o.z, yaw = o.yaw || 0;
   const g = o.y === undefined ? groundY(api, x, z) : api.padY + o.y;
   const opened = !!api.flag('stash:' + o.id);
+  // THE ELEVEN REWIRE. Eleven of the twenty-four boxes are SEALED CASES: same collider, same
+  // hit points, same landings, same coins, and a weapon finish inside. It is a long lacquered
+  // case with brass latches and one band in the finish's own colour, so you can see from the
+  // bottom of the climb that this one is not an ordinary coffer.
+  const caseId = typeof o.case === 'string' ? o.case : '';
 
   S.open();
+  if (caseId) {
+    const cos = Math.cos(yaw), sin = Math.sin(yaw);
+    // along the case's long axis (local +X, rotated), and out of its face (local +Z)
+    const along = (m) => [x + m * cos, z - m * sin];
+    if (opened) {
+      // Forced, lid off, empty. The band stays: the county remembers which one this was.
+      S.box(1.20, 0.10, 0.46, x, g + 0.05, z, LACQUER, yaw);
+      const [lx, lz] = along(0.44);
+      S.box(1.02, 0.09, 0.40, lx, g + 0.10, lz, LACQUER, yaw + 0.5);
+      S.box(1.21, 0.055, 0.12, x, g + 0.11, z, accentOf(caseId), yaw);
+      S.close(x, z, 0.8, LACQUER);
+      return g;
+    }
+    S.box(1.20, 0.26, 0.46, x, g + 0.13, z, LACQUER, yaw);
+    S.box(1.22, 0.075, 0.47, x, g + 0.29, z, LACQUER, yaw);   // the lid
+    S.box(1.23, 0.022, 0.48, x, g + 0.252, z, PALE, yaw);     // the raised lid seam
+    S.box(1.21, 0.060, 0.115, x, g + 0.185, z, accentOf(caseId), yaw);
+    for (const m of [-0.40, 0.40]) {
+      const [bx, bz] = along(m);
+      S.box(0.085, 0.13, 0.50, bx, g + 0.255, bz, PALE, yaw);   // the two latches
+      S.box(0.050, 0.055, 0.055, bx + sin * 0.26, g + 0.245, bz + cos * 0.26, PALE, yaw);
+    }
+    const [hx, hz] = along(0);
+    S.box(0.20, 0.045, 0.075, hx, g + 0.322, hz, PALE, yaw);  // the carrying handle
+    S.close(x, z, 0.9, LACQUER);
+    api.emit({ kind: 'obb', x, z, halfX: 0.62, halfZ: 0.25, yaw,
+      y0: g - 0.22, y1: g + 0.36, tag: 'strongbox', standable: true, breakable: true });
+    if (typeof api.registerStash === 'function') api.registerStash(x, z, g, 'stash:' + o.id, caseId);
+    return g;
+  }
   if (opened) {
     // Already had. What is left is a wrecked box, which is a better answer than nothing
     // there at all: the county remembers, and so does the player.
@@ -175,6 +246,19 @@ export function stash(k, api, o) {
    ========================================================================== */
 
 export const SITE_EXTRAS = Object.freeze({
+  // GAS CANS (`cans`) are the Eleven rewire's. A can is a one-time pickup, flagged like a
+  // stash, and one can fills the car — so they are spread thin and always somewhere a person
+  // would actually have kept petrol: a rack in the bay, a weigh office, a granary, a booth.
+  // Four sites below exist in this table ONLY because they carry one.
+  'filling-station': {
+    cans: [
+      { id: 'rack-a', x: -19.6, z: 3.6, y: 0.02, yaw: 0.2 },
+      { id: 'rack-b', x: -19.6, z: 2.9, y: 0.02, yaw: -0.4 },
+    ],
+  },
+  'the-toll': { cans: [{ id: 'booth', x: 3.4, z: -2.6, yaw: 1.1 }] },
+  'red-quarry': { cans: [{ id: 'landing', x: -6.2, z: 8.4, yaw: -0.6 }] },
+  'choir-vault': { cans: [{ id: 'stair-top', x: 4.8, z: -3.2, yaw: 0.8 }] },
   'blackthorn-manor': {
     climbs: [
       // the service wing's back wall, up to the first-floor gutter
@@ -187,35 +271,38 @@ export const SITE_EXTRAS = Object.freeze({
       { x: 15.6, z: -6.0, yaw: Math.PI / 2, top: 10.5, w: 2.0, d: 1.6 },
     ],
     stashes: [
-      { id: 'roof', x: -14.9, z: 6.9, y: 7.3, yaw: 0.4 },       // at the top of the climb
+      { id: 'roof', x: -14.9, z: 6.9, y: 7.3, yaw: 0.4, case: 'moth' },   // the case, at the top of the climb
       { id: 'chimney', x: 15.6, z: -6.6, y: 10.5, yaw: -0.3 },  // and the other one
       { id: 'cellar', x: -9.4, z: -12.6, y: 0.02, yaw: 0.8 },   // the cellar, by the resident
       { id: 'hall', x: 13.6, z: 5.6, y: 3.22, yaw: -0.5 },      // upstairs off the hall
       { id: 'yard', x: 8.8, z: 14.2, y: 0.02, yaw: 1.9 },       // behind the outbuilding
     ],
+    cans: [{ id: 'outbuilding', x: 9.4, z: 13.4, y: 0.02, yaw: 1.6 }],
   },
   'avery-house': {
     climbs: [{ x: 16.4, z: 5.0, yaw: Math.PI / 2, height: 7.2 }],
     landings: [{ x: 14.8, z: 5.0, yaw: Math.PI / 2, top: 7.3, w: 2.4, d: 1.8 }],
     stashes: [
       { id: 'roof', x: 14.8, z: 5.7, y: 7.3, yaw: -0.35 },
-      { id: 'upper', x: 12.4, z: 4.4, y: 7.42, yaw: 0.6 },
+      { id: 'upper', x: 12.4, z: 4.4, y: 7.42, yaw: 0.6, case: 'blacktide' },
       { id: 'scullery', x: -13.9, z: 5.4, y: 0.02, yaw: 1.2 },
     ],
+    cans: [{ id: 'scullery', x: -13.2, z: 6.1, y: 0.02, yaw: -0.5 }],
   },
   'weeping-mine': {
     climbs: [{ x: -12.6, z: -6.4, yaw: -Math.PI / 2, height: 8.6, width: 1.9 }],
     landings: [{ x: -11.0, z: -6.4, yaw: -Math.PI / 2, top: 8.7, w: 2.2, d: 1.7 }],
     stashes: [
-      { id: 'headgear', x: -11.0, z: -7.0, y: 8.7, yaw: 0.2 },
+      { id: 'headgear', x: -11.0, z: -7.0, y: 8.7, yaw: 0.2, case: 'furnace' },
       { id: 'shift', x: 9.1, z: -8.2, y: 0.02, yaw: -0.8 },
     ],
+    cans: [{ id: 'weigh-office', x: 8.4, z: -7.5, y: 0.02, yaw: 0.4 }],
   },
   cathedral: {
     climbs: [{ x: -9.4, z: 12.0, yaw: -Math.PI / 2, height: 11.0, width: 1.8 }],
     landings: [{ x: -7.8, z: 12.0, yaw: -Math.PI / 2, top: 11.1, w: 2.2, d: 1.7 }],
     stashes: [
-      { id: 'triforium', x: -7.8, z: 12.7, y: 11.1, yaw: 0.5 },
+      { id: 'triforium', x: -7.8, z: 12.7, y: 11.1, yaw: 0.5, case: 'choir' },
       { id: 'crypt', x: 2.6, z: 20.4, y: 0.02, yaw: -1.1 },
     ],
   },
@@ -223,7 +310,7 @@ export const SITE_EXTRAS = Object.freeze({
     climbs: [{ x: 6.6, z: 3.2, yaw: Math.PI / 2, height: 5.8, width: 1.7 }],
     landings: [{ x: 5.2, z: 3.2, yaw: Math.PI / 2, top: 5.9, w: 2.0, d: 1.5 }],
     stashes: [
-      { id: 'belfry', x: 5.2, z: 3.8, y: 5.9, yaw: 0.3 },
+      { id: 'belfry', x: 5.2, z: 3.8, y: 5.9, yaw: 0.3, case: 'rootmother' },
       { id: 'vestry', x: -2.4, z: 6.8, y: 0.02, yaw: 0.9 },
     ],
   },
@@ -231,15 +318,16 @@ export const SITE_EXTRAS = Object.freeze({
     climbs: [{ x: 13.0, z: 2.6, yaw: Math.PI / 2, height: 8.0, width: 1.9 }],
     landings: [{ x: 11.4, z: 2.6, yaw: Math.PI / 2, top: 8.1, w: 2.2, d: 1.7 }],
     stashes: [
-      { id: 'loft', x: 11.4, z: 3.3, y: 8.1, yaw: -0.4 },
+      { id: 'loft', x: 11.4, z: 3.3, y: 8.1, yaw: -0.4, case: 'antler' },
       { id: 'granary', x: 10.4, z: -5.6, y: 0.02, yaw: 1.4 },
     ],
+    cans: [{ id: 'granary', x: 9.7, z: -5.0, y: 0.02, yaw: -0.9 }],
   },
   'garden-of-rest': {
     climbs: [{ x: -20.4, z: -14.6, yaw: -Math.PI / 2, height: 6.4, width: 1.8 }],
     landings: [{ x: -18.8, z: -14.6, yaw: -Math.PI / 2, top: 6.5, w: 2.2, d: 1.6 }],
     stashes: [
-      { id: 'columbarium', x: -18.8, z: -15.2, y: 6.5, yaw: 0.25 },
+      { id: 'columbarium', x: -18.8, z: -15.2, y: 6.5, yaw: 0.25, case: 'underkeep' },
       { id: 'mausoleum', x: 2.4, z: 9.6, y: 0.02, yaw: -0.7 },
     ],
   },
@@ -247,24 +335,26 @@ export const SITE_EXTRAS = Object.freeze({
     climbs: [{ x: 7.2, z: 2.0, yaw: Math.PI / 2, height: 6.6, width: 1.9 }],
     landings: [{ x: 5.6, z: 2.0, yaw: Math.PI / 2, top: 6.7, w: 2.2, d: 1.6 }],
     stashes: [
-      { id: 'rafters', x: 5.6, z: 2.7, y: 6.7, yaw: 0.5 },
+      { id: 'rafters', x: 5.6, z: 2.7, y: 6.7, yaw: 0.5, case: 'fieldmaw' },
       { id: 'stalls', x: -3.4, z: -3.2, y: 0.02, yaw: 1.1 },
     ],
+    cans: [{ id: 'shed', x: -4.1, z: -2.5, y: 0.02, yaw: 0.3 }],
   },
   'bell-tower': {
     climbs: [{ x: 4.2, z: 0, yaw: Math.PI / 2, height: 9.4, width: 1.7 }],
     landings: [{ x: 2.8, z: 0, yaw: Math.PI / 2, top: 9.5, w: 2.0, d: 1.6 }],
-    stashes: [{ id: 'ringing-floor', x: 2.8, z: 0.7, y: 9.5, yaw: -0.2 }],
+    stashes: [{ id: 'ringing-floor', x: 2.8, z: 0.7, y: 9.5, yaw: -0.2, case: 'bellwether' }],
   },
   gallowsfen: {
     climbs: [{ x: 6.8, z: -3.4, yaw: Math.PI / 2, height: 7.6, width: 1.8 }],
     landings: [{ x: 5.2, z: -3.4, yaw: Math.PI / 2, top: 7.7, w: 2.1, d: 1.6 }],
-    stashes: [{ id: 'steeple', x: 5.2, z: -4.0, y: 7.7, yaw: 0.4 }],
+    stashes: [{ id: 'steeple', x: 5.2, z: -4.0, y: 7.7, yaw: 0.4, case: 'mire' }],
   },
   relay: {
     climbs: [{ x: 5.4, z: 4.8, yaw: Math.PI / 2, height: 8.2, width: 1.8 }],
     landings: [{ x: 3.8, z: 4.8, yaw: Math.PI / 2, top: 8.3, w: 2.1, d: 1.6 }],
-    stashes: [{ id: 'mast-deck', x: 3.8, z: 5.5, y: 8.3, yaw: -0.5 }],
+    stashes: [{ id: 'mast-deck', x: 3.8, z: 5.5, y: 8.3, yaw: -0.5, case: 'lantern' }],
+    cans: [{ id: 'mast-hut', x: 6.1, z: 3.2, yaw: 0.7 }],
   },
   'drowned-light': {
     climbs: [{ x: 5.6, z: -2.2, yaw: Math.PI / 2, height: 9.0, width: 1.7 }],
@@ -272,6 +362,20 @@ export const SITE_EXTRAS = Object.freeze({
     stashes: [{ id: 'gallery', x: 4.0, z: -2.9, y: 9.1, yaw: 0.3 }],
   },
 });
+
+/**
+ * THE ELEVEN SEALED CASES, derived from the table above: which weapon finish is in which
+ * site's case. Read by the Weapons page (to name the place a finish came from, and only once
+ * it is open) and by the keepers' Look from the Top and Bo's lead (to know what is left).
+ * Derived, never hand-written twice: the table above is the only place a case is declared.
+ */
+export const CASE_SITE = Object.freeze(Object.fromEntries(
+  Object.entries(SITE_EXTRAS).flatMap(([site, row]) =>
+    (row.stashes || []).filter(s => s.case).map(s => [s.case, site])),
+));
+export const SITE_CASE = Object.freeze(Object.fromEntries(
+  Object.entries(CASE_SITE).map(([finish, site]) => [site, finish]),
+));
 
 /**
  * Run the whole pass for one site. Called from destination-details.js, which every
@@ -287,6 +391,7 @@ export function addClimbsAndCaches(k, api) {
   if (rows.climbs) for (const c of rows.climbs) climbFace(k, api, c);
   if (rows.landings) for (const l of rows.landings) landing(k, api, l);
   if (rows.stashes) for (const s of rows.stashes) stash(k, api, s);
+  if (rows.cans) for (const c of rows.cans) gasCan(k, api, c);
   return true;
 }
 

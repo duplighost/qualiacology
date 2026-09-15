@@ -3,9 +3,15 @@ import * as THREE from 'three';
 import { HOLDFAST_TOWN as TOWN } from './holdfast-town-layout.js';
 import { BOSSES, bossMapPoint } from './boss-catalog.js';
 import { STOCK } from './dealer.js';
-import { UPGRADES } from '../vehicle/garage.js';
+import { PAINTS } from '../vehicle/paint.js';
+import { CASE_SITE } from './climbs-and-caches.js';
+import { MAJOR_BY_ID } from './placedata.js';
 import { CFG } from '../config.js';
 import { faceYaw } from '../enemies/nav.js';
+
+// Bo's price for a county-wide lead. Deliberately well above a keeper's Look from the Top
+// (60 coins, one tower's horizon): Bo sells you anywhere, and "forty is the floor" is his.
+const CASE_LEAD_PRICE = 260;
 
 const STORIES = {
   candlekeeper: ['Mara · candle keeper', ['We used to light these for the dead. Now we light them so people know which doors will open.', 'Keep a bulb with you. A road looks different when you know you can make one piece of it safe.']],
@@ -88,11 +94,10 @@ export class HoldfastLife {
   }
   ready(){return this.people.length>=20;}
   _buildUI(){
-    this.ui=document.createElement('section');this.ui.id='holdfast-conversation';this.ui.setAttribute('aria-live','polite');
-    this.ui.style.cssText='position:fixed;left:50%;bottom:10%;transform:translateX(-50%);width:min(650px,76vw);padding:22px 28px;color:#e3e1db;background:linear-gradient(110deg,rgba(13,17,27,.96),rgba(20,24,33,.93));border:1px solid #76798b66;border-left:3px solid #b7b0d0;box-shadow:0 18px 70px #0008;border-radius:3px;font:17px/1.6 Georgia,serif;z-index:22;display:none;pointer-events:none';
-    this.personEl=document.createElement('div');this.personEl.style.cssText='font:11px/1.4 system-ui;letter-spacing:.17em;text-transform:uppercase;color:#b8b3d0;margin-bottom:9px';
-    this.textEl=document.createElement('div');this.footer=document.createElement('div');this.footer.style.cssText='font:10px/1.4 system-ui;letter-spacing:.14em;text-transform:uppercase;color:#979ba6;margin-top:13px';
-    this.ui.append(this.personEl,this.textEl,this.footer);document.body.append(this.ui);
+    // THE ELEVEN REWIRE: this town no longer owns a conversation card. Every spoken line in
+    // the county goes through dialogue/dialogue.js, which owns the one subtitle element, the
+    // queue, priority and overlap. The resident STORIES stay exactly where they are — they
+    // are Alex's copy and will not be recorded — and are handed over as ad-hoc lines.
     this.shopEl=document.createElement('section');this.shopEl.id='holdfast-shop';
     this.shopEl.style.cssText='position:fixed;right:4%;top:22%;width:310px;max-height:60vh;overflow:hidden;background:linear-gradient(135deg,#101721f2,#12131eee);color:#e4e1da;border:1px solid #8f869966;border-radius:4px;padding:22px;box-shadow:0 20px 80px #0008;font:13px/1.5 system-ui;display:none;pointer-events:none;z-index:21';document.body.append(this.shopEl);
   }
@@ -196,15 +201,32 @@ export class HoldfastLife {
     if(use&&!this.useLock){this.useLock=true;this._sys('progress').flag('gate:holdfast',true);places.openGate('holdfast');this.ctx.bus.emit('holdfast:gate-opened-inside',{});}
     return true;
   }
+  /**
+   * ORIANA. Her name reaches the county through other people saying it, never through a
+   * screen that explains her. Vera keeps the days and has a page with a name on it, and she
+   * says it once, the first time, and never again. Priority 5 with once:true, so it lands
+   * before the archivist's own lines and cannot be farmed by walking away and back.
+   */
+  _oriana(r){
+    if(r.id!=='archivist')return false;
+    return !!this._sys('dialogue')?.say('vera.name',{speakerEntity:r.e,name:'Vera'});
+  }
+
   _talk(r){
-    const pr=this._sys('progress'),complete=BOSSES.every(b=>pr.unlockedFinishes().includes(b.skin.id));
+    // THE ELEVEN REWIRE: Hale reads the KILLS, not the weapon finishes. A finish is a thing
+    // you found in a box; what the stone wants back is the car.
+    const pr=this._sys('progress'),complete=BOSSES.every(b=>pr.bossCleared(b.id));
     const privateHint=r.id==='bellkeeper'&&complete;
     let lines=r.story[1];
     if(r.id==='keep-watcher'){const n=this._sys('lore-lookout')?.getPoweredCount()??Array.from(this._sys('places').nodes.values()).filter(n=>this._sys('places').isClaimed(n.def.id)||n.def.lit).length;const old=Number(pr.flag('story:ives-count'))||3;lines=[`${n} fires. ${n>old?'There were fewer when you last came. I counted them twice.':'I count them every night.'}`,r.story[1][1]];pr.flag('story:ives-count',n);}
-    if(privateHint)lines=['You have brought the Eleven home. I can feel the stone wanting it back.','The day bell. The priory tower in the north pines. Ring it in the Black Hour with your car in the yard, where the bell can see it. Then drive east. All the way to Morning.'];
+    if(privateHint)lines=['You have brought the Eleven home, Oriana. I can feel the stone wanting it back.','The day bell. The priory tower in the north pines. Ring it in the Black Hour with your car in the yard, where the bell can see it. Then drive east. All the way to Morning.'];
     if(r.id==='cook'&&pr.bossCleared('underkeep'))lines=['The bowl was still full.','I put it out again. Hot, still. Whatever we ate.'];
     if(r.id==='shrinekeeper'&&pr.bossCleared('underkeep'))lines=['I remembered how.','A wick. Oil. A clean glass. We can do that much ourselves.'];
+    if(this._oriana(r))return;
     const i=r.line++%lines.length;this.chat={id:r.id,name:r.story[0],text:lines[i],until:this.time+Math.max(14,lines[i].length/15)};
+    this._sys('dialogue')?.say(
+      {id:'holdfast.'+r.id+'.'+i,speaker:r.story[0],text:lines[i],priority:privateHint?6:4,interrupt:!privateHint},
+      {speakerEntity:r.e,name:r.story[0]});
     // Each rumour is spoken before being marked, including on repeat conversations.
     if(i===lines.length-1){
       if(privateHint){const d=this._sys('places').nodes.get('bell-tower')?.def;if(d){pr.learnRumour({id:'bell-tower',name:'The day bell · priory tower',x:d.x,z:d.z,kind:'place'});if(!this.ctx.shared.lateBellFinal)pr.setWaypoint({x:d.x,z:d.z,name:'The day bell · priory tower'});}}
@@ -213,25 +235,59 @@ export class HoldfastLife {
     this.ctx.bus.emit('holdfast:conversation',{id:r.id,name:r.story[0],text:lines[i],final:i===lines.length-1,rumour:privateHint?'bell-tower':r.story[2],privateHint});
     const e=r.e,p=this._sys('player');e.stagedYaw=faceYaw(e.pos.x,e.pos.z,p.pos.x,p.pos.z);
   }
+  /**
+   * THE ELEVEN REWIRE. Neither of the Holdfast's car people sells a repair or a part any
+   * more: the Eleven give the parts and a can of gas is the repair.
+   *
+   * ARI, inside, keeps the town's one car and has never driven it. He sells the only thing
+   * in the county that changes nothing — a colour. Bought once, owned for ever, free to
+   * swap back and forth after that.
+   *
+   * BO, on the gate, made the nine-light boards and will not work for less than forty coins.
+   * He sells the county's whereabouts: the nearest sealed case you have not found. One row,
+   * expensive, and it goes unavailable rather than taking your money for nothing.
+   */
   _offers(r){
-    const pr=this._sys('progress'),w=this._sys('weapons'),car=this._sys('car');
-    if(r.shop==='car')return [
-      ...(car.wear>.005?[{id:'repair',name:'Repair the car',line:'Engine, brakes and headlamps restored.',price:Math.max(40,Math.ceil(car.wear*260))}]:[]),
-      ...UPGRADES.filter(u=>!pr.ownsUpgrade(u.id)).map(u=>({...u,line:u.line||'',upgrade:true})),
-    ];
+    const pr=this._sys('progress'),w=this._sys('weapons');
+    if(r.shop==='car'&&r.outside)return [this._caseLead(pr)];
+    if(r.shop==='car'){
+      const current=pr.paint();
+      return PAINTS.map(p=>({id:p.id,name:p.name,line:p.line,price:pr.ownsPaint(p.id)?0:p.price,
+        paint:true,owned:pr.ownsPaint(p.id),current:p.id===current}));
+    }
     return STOCK.map(s=>{if(s.item)return{...s,line:'A new light for one of the county’s roadside poles.'};const owned=w.has(s.id),bundle=CFG.weapons.defs[s.id].reserve,rounds=Math.max(0,Math.min(bundle,bundle*2-w.reserveOf(s.id)));return{...s,owned,rounds,full:owned&&rounds===0,price:owned?Math.max(1,Math.ceil(Math.max(6,Math.round(s.price*.25))*rounds/bundle)):s.price,line:owned?`${rounds} rounds · ${w.reserveOf(s.id)} in reserve`:'Weapon and a full reserve of ammunition.'};});
   }
+  /** Bo's one row: the nearest case nobody has opened and nobody has told you about. */
+  _caseLead(pr){
+    let best=null,bd=Infinity;
+    const p=this._sys('player');
+    for(const site of Object.values(CASE_SITE)){
+      if(pr.mapStatus('case:'+site)!=='unknown')continue;
+      const d=MAJOR_BY_ID[site];if(!d)continue;
+      const dist=p?.pos?Math.hypot(p.pos.x-d.x,p.pos.z-d.z):0;
+      if(dist<bd){bd=dist;best={id:'case:'+site,name:d.name+' · a sealed case',x:d.x,z:d.z,kind:'place'};}
+    }
+    return best
+      ? {id:'lead',name:'A LEAD ON A SEALED CASE',price:CASE_LEAD_PRICE,lead:best,
+         line:'Forty is the floor. This is not forty.'}
+      : {id:'lead',name:'A LEAD ON A SEALED CASE',price:CASE_LEAD_PRICE,lead:null,empty:true,
+         line:'Nothing left to find. You have been everywhere I know about.'};
+  }
+
   _trade(r,dt,use,tune){
     const pr=this._sys('progress'),list=this._offers(r);if(!list.length){this._shopCard(r,[],0);return;}
     if(tune&&!this.tuneLock){this.offer=(this.offer+1)%list.length;this.tuneLock=true;this.hold=0;}
-    this.offer%=list.length;const o=list[this.offer],can=!o.full&&pr.cash()>=o.price;
+    this.offer%=list.length;const o=list[this.offer];
+    // A paint you already own costs nothing and is always available unless it is already on
+    // the car; a lead with nothing behind it is never for sale.
+    const can=!o.full&&!o.empty&&!o.current&&pr.cash()>=o.price;
     this._shopCard(r,list,this.offer);
-    this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:9,x:r.e.pos.x,y:r.e.pos.y+1.5,z:r.e.pos.z,k:this.hold/.8,detail:o.full?'AMMUNITION FULL':o.name+' · '+o.price+' COINS',subdetail:can?'HOLD E TO BUY · T NEXT':'T NEXT',unavailable:!can});
+    this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:9,x:r.e.pos.x,y:r.e.pos.y+1.5,z:r.e.pos.z,k:this.hold/.8,detail:o.full?'AMMUNITION FULL':o.empty?'NOTHING LEFT TO FIND':o.current?o.name+' · FITTED':o.name+(o.price?' · '+o.price+' COINS':' · FREE'),subdetail:can?(o.paint&&o.owned?'HOLD E TO FIT · T NEXT':'HOLD E TO BUY · T NEXT'):'T NEXT',unavailable:!can});
     if(!use||this.useLock||!can){this.hold=0;return;}this.hold+=dt;if(this.hold<.8)return;this.hold=0;this.useLock=true;
-    if(o.upgrade){pr.buyUpgrade(o.id);this.offer=0;}
+    if(o.paint){pr.buyPaint(o.id,o.owned?0:o.price);}
+    else if(o.lead){if(pr.spendCash(o.price,'holdfast:case-lead'))pr.learnRumour(o.lead);}
     else if(pr.spendCash(o.price,'holdfast:'+o.id)){
-      if(o.id==='repair')this._sys('car').repairFull();
-      else if(o.item)this._sys('dusk-to-dawn').addBulb(1);
+      if(o.item)this._sys('dusk-to-dawn').addBulb(1);
       else if(o.owned)this._sys('weapons').addReserveTo(o.id,o.rounds);
       else{this._sys('weapons').reward(o.id);pr.flag('dealer:weapon:'+o.id,true);}
       this.ctx.bus.emit('dealer:bought',{id:o.id,price:o.price,ammo:o.owned,rounds:o.rounds||0});
@@ -239,11 +295,11 @@ export class HoldfastLife {
   }
   _shopCard(r,list,chosen){
     if(this.lastShopMet!==r.id){this.lastShopMet=r.id;this.ctx.bus.emit('holdfast:conversation',{id:r.id,name:r.story[0],text:r.story[1][0],final:true});}
-    const key=r.id+':'+chosen+':'+this._sys('progress').cash()+':'+list.map(o=>o.id+o.rounds+o.price).join(',');
-    if(key!==this.cardKey){this.cardKey=key;this.shopEl.replaceChildren();const title=document.createElement('h3');title.style.cssText='font:22px Georgia;margin:0 0 6px';title.textContent=r.shop==='car'?'Parts & repairs':'Arms & ammunition';const sub=document.createElement('div');sub.style.cssText='color:#a7a8bc;font-size:11px;letter-spacing:.1em;margin-bottom:18px';sub.textContent=r.story[0]+' · '+this._sys('progress').cash()+' COINS';this.shopEl.append(title,sub);
+    const key=r.id+':'+chosen+':'+this._sys('progress').cash()+':'+list.map(o=>o.id+o.rounds+o.price+(o.current?'*':'')).join(',');
+    if(key!==this.cardKey){this.cardKey=key;this.shopEl.replaceChildren();const title=document.createElement('h3');title.style.cssText='font:22px Georgia;margin:0 0 6px';title.textContent=r.shop==='car'?(r.outside?'What is out there':'Paint'):'Arms & ammunition';const sub=document.createElement('div');sub.style.cssText='color:#a7a8bc;font-size:11px;letter-spacing:.1em;margin-bottom:18px';sub.textContent=r.story[0]+' · '+this._sys('progress').cash()+' COINS';this.shopEl.append(title,sub);
       const greeting=document.createElement('div');greeting.textContent=r.story[1][0];greeting.style.cssText='font:14px/1.5 Georgia;color:#cec8be;margin:8px 0 14px';this.shopEl.append(greeting);
-      list.forEach((o,i)=>{const row=document.createElement('div');row.style.cssText='padding:9px 11px;margin:3px 0;border-left:2px solid '+(i===chosen?'#cec7e9':'transparent')+';background:'+(i===chosen?'#77738b33':'transparent')+';color:'+(i===chosen?'#f0edf5':'#949ba7');row.textContent=o.name+' · '+(o.full?'full':o.price);this.shopEl.append(row);if(i===chosen){const line=document.createElement('div');line.style.cssText='font-size:12px;color:#bbb8c9;padding:0 11px 10px';line.textContent=o.line;this.shopEl.append(line);}});
-      const foot=document.createElement('div');foot.style.cssText='border-top:1px solid #85809144;margin-top:16px;padding-top:13px;color:#bab5cc;font-size:11px';foot.textContent=list.length?'T  Browse     Hold E  Buy':'Everything is fitted. Bring it back when it needs work.';this.shopEl.append(foot);
+      list.forEach((o,i)=>{const row=document.createElement('div');row.style.cssText='padding:9px 11px;margin:3px 0;border-left:2px solid '+(i===chosen?'#cec7e9':'transparent')+';background:'+(i===chosen?'#77738b33':'transparent')+';color:'+(i===chosen?'#f0edf5':'#949ba7');row.textContent=o.name+' · '+(o.full?'full':o.current?'fitted':o.empty?'—':o.price?o.price:'free');this.shopEl.append(row);if(i===chosen){const line=document.createElement('div');line.style.cssText='font-size:12px;color:#bbb8c9;padding:0 11px 10px';line.textContent=o.line;this.shopEl.append(line);}});
+      const foot=document.createElement('div');foot.style.cssText='border-top:1px solid #85809144;margin-top:16px;padding-top:13px;color:#bab5cc;font-size:11px';foot.textContent=list.length?'T  Browse     Hold E  Buy':'Nothing tonight. Bring it back when you need something.';this.shopEl.append(foot);
     }this.shopEl.style.display='block';
   }
   step(dt){
@@ -275,7 +331,7 @@ export class HoldfastLife {
     if(n?.glow){n.glow.visible=level>0;n.glow.material.opacity*=level;}
     for(const group of places?.bodies.values()||[])for(const b of group)if(b.id==='holdfast')b.group.traverse(o=>{if(o.isMesh&&o.name.includes('glow')){o.visible=level>0;o.material.opacity=level;}});
     if(!active||!this.target)this.shopEl.style.display='none';
-    if(active&&this.chat){this.ui.style.display='block';this.personEl.textContent=this.chat.name;this.textEl.textContent=this.chat.text;this.footer.textContent=this.target===this.chat.id?'E  Listen':'The Holdfast';}else this.ui.style.display='none';
+    void active;   // the subtitle is dialogue/dialogue.js's now, card and all
   }
   _addresses(){
     const p=this._sys('player'),q=this.local(p.pos.x,p.pos.z),y=p.pos.y-(this._frame()?.padY||0);let address=null;
@@ -283,5 +339,5 @@ export class HoldfastLife {
     if(address?.id!==this.address){this.address=address?.id||'';if(address)this.ctx.bus.emit('holdfast:address',{id:address.id,name:address.name});}
   }
   state(){return{residents:this.people.map(r=>({id:r.id,alive:!!r.e?.alive,dead:!!r.dead,pos:r.e?.pos.toArray(),shop:r.shop||null,walking:!!r.route})),hostile:!!this._sys('progress').flag('gate-hostile:holdfast'),chat:this.chat,target:this.target,epoch:this.epoch};}
-  dispose(){this.off.forEach(f=>f?.());for(const h of this.lamps.values())this._sys('lights')?.release(h);this.ui?.remove();this.shopEl?.remove();for(const s of this.signs){s.geometry.dispose();s.material.map.dispose();s.material.dispose();}this.signGroup?.removeFromParent();}
+  dispose(){this.off.forEach(f=>f?.());for(const h of this.lamps.values())this._sys('lights')?.release(h);this.shopEl?.remove();for(const s of this.signs){s.geometry.dispose();s.material.map.dispose();s.material.dispose();}this.signGroup?.removeFromParent();}
 }

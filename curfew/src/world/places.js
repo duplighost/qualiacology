@@ -845,6 +845,9 @@ export class Places {
     this.nodes = new Map();       // id -> landmark node record
     this.bodies = new Map();      // chunkKey -> [ body record ]
     this.minors = [];             // authored minor table
+    // THE ELEVEN REWIRE: every authored gas can this session has dressed into existence, in
+    // world coordinates. world/gas.js reads it and owns the meshes.
+    this._gasCans = [];
     this.minorsByChunk = new Map();
     this._roadPts = null;         // cached centreline trace, shared by minors and sight
     this._sightGrid = null;       // Uint8Array, 16 m cells; ART 4.3's plant exclusion
@@ -1074,6 +1077,11 @@ export class Places {
         if (Math.hypot(s.x - p.x, s.z - p.z) > 1.4) continue;
         if (Math.abs(s.y - p.y) > 1.4) continue;
         prog.flag('site:' + s.site + ':' + s.name, 1);
+        // AND IF IT WAS A CASE, the finish comes out of it. grantFinish is idempotent and
+        // flushes, so a second break on a rebuilt-but-not-yet-reflagged case pays nothing
+        // twice and a crash on the next frame cannot lose it. A case is never a boss kill:
+        // nothing here touches bossesCleared and the Eleven counter does not move.
+        if (s.caseId && typeof prog.grantFinish === 'function') prog.grantFinish(s.caseId, s.site);
         break;
       }
     });
@@ -1613,17 +1621,35 @@ export class Places {
        * flag to set, so the 'world:broke' listener can close the loop. Positions are in the
        * SITE'S OWN LOCAL FRAME here and converted the way emit() converts a collider.
        */
-      registerStash(lx, lz, wy, name) {
+      registerStash(lx, lz, wy, name, caseId) {
         // Deduped by site+name, because a site re-registers every one of its caches every
         // time it streams back in and an append-only list would grow for the whole session.
         for (let i = 0; i < self._stashes.length; i++) {
           const s = self._stashes[i];
-          if (s.site === d.id && s.name === name) { s.y = wy; return; }
+          if (s.site === d.id && s.name === name) { s.y = wy; s.caseId = caseId || ''; return; }
         }
         self._stashes.push({
           x: ox + lx * cy + lz * sy,
           z: oz - lx * sy + lz * cy,
-          y: wy, site: d.id, name,
+          // THE ELEVEN REWIRE: a SEALED CASE carries the id of the weapon finish inside it.
+          // Empty for the thirteen plain strongboxes, which pay coins and nothing else.
+          y: wy, site: d.id, name, caseId: caseId || '',
+        });
+      },
+      /**
+       * THE ELEVEN REWIRE — a GAS CAN's world point. Same conversion as registerStash, same
+       * dedupe by site + flag. This file does not draw the can and does not own it: it hands
+       * the point to world/gas.js, which owns every can mesh in the county so that taking one
+       * disappears on the frame you press E.
+       */
+      registerGasCan(lx, lz, wy, flag, yaw) {
+        for (let i = 0; i < self._gasCans.length; i++) {
+          if (self._gasCans[i].flag === flag) { self._gasCans[i].y = wy; return; }
+        }
+        self._gasCans.push({
+          x: ox + lx * cy + lz * sy,
+          z: oz - lx * sy + lz * cy,
+          y: wy, flag, site: d.id, yaw: (yaw || 0) + rec.yaw,
         });
       },
       cast(entries) {
@@ -3742,6 +3768,8 @@ export class Places {
     if (!this._minorsBuilt) this._buildMinorTable();
     return this.minors;
   }
+  /** Every authored gas can dressed so far, in world coordinates. world/gas.js reads this. */
+  gasCans() { return this._gasCans; }
   /** Every actual ember-bed campfire, with its position. A copy; tests and tools read it.
    * `_campfires` is the older hot-path name for ALL lit minor refuges; Round 7 added the
    * hunters' fire, roadblock lamp and dead headlight to that proximity table. Returning those

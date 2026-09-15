@@ -117,7 +117,13 @@ function hairGeometry(v,wardrobe){
 }
 function clothing(style,variant){
   const key=style+variant;if(cache.has(key))return cache.get(key);
-  const v=variant%4,wardrobe=Math.floor(variant/4)%3,civilian=style==='resident'||style==='cashier';
+  const v=variant%4,wardrobe=Math.floor(variant/4)%3;
+  // THE THREE COMPANIONS (the Eleven rewire). Each one is a civilian coat underneath with an
+  // authored silhouette over it, so they animate on the same rig as everybody else and still
+  // read apart at twenty metres, which is the whole test. Each has a FIXED variant where it
+  // is spawned, so a face and a hair colour never roll.
+  const companion=style==='greer'||style==='roan'||style==='sheet';
+  const civilian=style==='resident'||style==='cashier'||companion;
   const torso=[],upper=[],fore=[],thigh=[],shin=[],headwear=[],hair=[],eyes=[],neck=[],hands=[],boots=[];
   const c=style==='dealer'?[.065,.088,.078]:civilian?COATS[v].map(n=>n*(wardrobe===1?.88:1)):[.067,.080,.067];
   const armored=style==='marshal'||style==='dealer',scarf=SCARVES[(v+wardrobe)%4];
@@ -221,6 +227,87 @@ function clothing(style,variant){
     const s=x<0?-1:1;
     const ey=y-1.5-(v<2?.0048:0);
     hair.push(tint(tendon([[x*1.1-s*.012,ey+.014,z-.019],[x*1.1,ey+.018,z-.018],[x*1.1+s*.015,ey+.012,z-.010]],.0020,.0011,14,6),HAIR[v].map(n=>n*.60)));
+  }
+
+  /* ============================================ THE THREE COMPANIONS ============ */
+
+  // GREER, the eel-trapper out of Eelwater. Waxed thigh-length coat over hip waders, the
+  // poacher rifle slung across her back, a wool cap, gloves, and a lantern hook on the belt.
+  // Everything about her says she works on water in the dark and expects to come back.
+  if(style==='greer'){
+    const wax=[.038,.046,.043],rubber=[.030,.034,.036],brass=[.126,.094,.041];
+    // the coat: a long waxed skirt hanging past the knee, cut at the back for walking
+    garment(torso,[[.52,.212,.132],[.62,.206,.128],[.78,.196,.124],[.95,.176,.114],[1.10,.170,.112]],wax,variant,'coat');
+    for(const side of [-1,1])box(torso,side*.148,.70,-.086,.014,.42,.010,wax.map(n=>n*1.6),side*.03);
+    // the belt, its buckle and the lantern hook
+    box(torso,0,1.00,-.006,.372,.042,.238,[.052,.041,.033]);
+    box(torso,0,1.00,-.133,.052,.050,.020,brass);
+    torso.push(tint(tendon([[.152,1.00,-.055],[.176,.962,-.048],[.158,.928,-.040]],.0075,.0055,14,6),brass));
+    // the rifle, slung muzzle-down across the back
+    const bx=-.062,by=1.12,bz=.152;
+    torso.push(tint(tendon([[bx-.09,by+.30,bz],[bx+.05,by-.22,bz+.02]],.0135,.0135,12,6),[.062,.055,.046]));
+    box(torso,bx+.02,by-.10,bz+.03,.052,.30,.048,[.072,.050,.034],.24);
+    torso.push(tint(tendon([[bx-.20,by+.44,bz-.02],[bx+.09,by-.40,bz+.04]],.0165,.0110,14,6),[.052,.056,.054]));
+    box(torso,0,1.22,.128,.052,.30,.014,[.048,.042,.036],.30);      // the sling
+    // hip waders: the legs go dark and heavy from the thigh down
+    garment(thigh,[[.045,.101,.110],[0,.107,.115],[-.14,.096,.104],[-.31,.079,.084],[-.41,.077,.080]],rubber,variant,'trouser');
+    garment(shin,[[.030,.078,.081],[-.03,.081,.083],[-.14,.077,.085],[-.30,.066,.073],[-.37,.068,.073]],rubber,variant+1,'trouser');
+    box(boots,0,-.420,-.052,.176,.036,.300,[.022,.024,.025]);
+    // gloves, and a cap with cropped hair under it
+    garment(hands,[[-.250,.032,.027],[-.290,.037,.028],[-.330,.038,.026],[-.352,.032,.023]],[.056,.048,.040],v);
+    // MEASURED ON THE HEAD, not guessed: the wool cap's lowest ring has to clear the brows,
+    // which sit at head-local 0. At .196 the turn-up landed across her eyes.
+    garment(headwear,[[.222,.088,.094,-.016],[.250,.093,.098,-.018],[.278,.081,.084,-.022],[.302,.046,.048,-.024],[.309,.006,.006,-.024]],[.061,.074,.070],variant,'plain');
+    box(headwear,0,.226,-.082,.172,.022,.030,[.042,.052,.049]);
+  }
+
+  // ROAN, the ex-toll man out of The Cut. A sheepskin jacket worn open over a collarless
+  // shirt, slicked hair, a ring, and one gold tooth. He stands too close; the jacket is cut
+  // short so the whole of him is in your way.
+  if(style==='roan'){
+    const fleece=[.196,.176,.138],hideC=[.086,.060,.038],gold=[.198,.154,.056];
+    // the jacket: short, square, and the collar is up
+    garment(torso,[[.92,.202,.136],[1.02,.198,.134],[1.16,.200,.135],[1.30,.208,.139],[1.372,.196,.118]],hideC,variant,'coat');
+    for(const side of [-1,1]){
+      // the fleece collar and the open lapel rolls
+      torso.push(tint(tendon([[side*.020,1.470,-.082],[side*.112,1.400,-.090],[side*.140,1.270,-.066],[side*.098,1.150,-.062]],.0235,.0165,20,7),fleece));
+      box(torso,side*.176,1.10,.012,.024,.34,.132,fleece,side*.05);
+    }
+    box(torso,0,.96,-.010,.352,.038,.226,[.048,.038,.030]);           // the belt
+    box(torso,0,.96,-.126,.046,.046,.018,gold);
+    // the shirt, open at the throat
+    garment(torso,[[1.30,.148,.104],[1.40,.128,.088],[1.452,.096,.062]],[.200,.192,.172],variant,'plain');
+    // the ring, and a gold tooth: two warm points, and both of them are him. The tooth is
+    // FOUR MILLIMETRES and sits at the mouth line — head-local 0 is the brow, so a tooth is
+    // well under it. The first cut put it at eye height and he wore a gold blindfold.
+    oval(hands,-.020,-.306,-.008,.0125,.0125,.0125,gold);
+    oval(hair,.011,-.052,-.086,.0042,.0036,.0024,gold);
+    // slicked hair: flat to the skull, combed back, no cap
+    oval(hair,0,.186,.052,.086,.062,.082,HAIR[1]);
+    for(let i=0;i<7;i++)hair.push(tint(tendon([[(i-3)*.020,.246,-.050],[(i-3)*.024,.232,.030],[(i-3)*.026,.196,.086]],.0045,.0026,14,6),HAIR[1].map(n=>n*(.82+i*.04))));
+  }
+
+  // TOBIN, Highwood. A full bedsheet from the shoulders to a cut hem, two dark eye holes,
+  // a rope belt, boots showing, and a flat cap ON TOP OF THE SHEET. The arms come through
+  // slits in sheet-coloured sleeves so the rig's pivots still animate underneath. He has not
+  // taken it off since the last night the sun set and nobody in Highwood mentions it.
+  if(style==='sheet'){
+    const white=[.62,.60,.55],under=[.34,.33,.31],rope=[.128,.104,.064];
+    garment(torso,[[.35,.360,.300],[.52,.330,.276],[.74,.292,.244],[.98,.248,.208],[1.22,.216,.182],
+      [1.45,.190,.160],[1.56,.150,.128],[1.62,.086,.076]],white,variant,'coat');
+    // the underside of the hem, so the sheet reads as cloth over a person and not as a cone
+    garment(torso,[[.34,.352,.294],[.40,.340,.284]],under);
+    // the rope belt, tied
+    box(torso,0,1.06,0,.430,.030,.318,rope);
+    torso.push(tint(tendon([[.062,1.048,-.156],[.086,.980,-.150],[.058,.930,-.142]],.0085,.0060,14,6),rope));
+    // the eye holes, at eye height, cut into the sheet
+    for(const side of [-1,1])oval(torso,side*.040,1.492,-.146,.0225,.0165,.0090,[.014,.013,.012]);
+    // sleeves in the same cloth, so an arm reads as an arm through the sheet
+    garment(upper,[[.042,.052,.054],[.020,.066,.070],[-.06,.068,.072],[-.19,.062,.065],[-.31,.055,.056]],white,variant,'sleeve');
+    garment(fore,[[.026,.058,.058],[-.06,.058,.058],[-.18,.049,.048],[-.27,.042,.042]],white,variant+1,'cuff');
+    // the flat cap, on top of the sheet, which is the joke
+    garment(headwear,[[.238,.092,.098,-.014],[.268,.096,.101,-.016],[.296,.078,.082,-.022],[.312,.034,.036,-.024]],[.092,.086,.068],variant,'plain');
+    box(headwear,0,.236,-.096,.184,.018,.062,[.070,.066,.052],.06);
   }
   const set={shoulder,torso:finish(torso),upper:finish(upper),fore:finish(fore),thigh:finish(thigh),shin:finish(shin),headwear:finish(headwear),hair:finish(hair),eyes:finish(eyes),neck:finish(neck),hands:finish(hands),boots:finish(boots)};
   cache.set(key,set);return set;

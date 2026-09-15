@@ -39,6 +39,7 @@ import * as THREE from 'three';
 import { buildHoldfastKeepLandmark } from './holdfast-keep.js';
 import { makeOuterBuilders } from './outer-destinations.js';
 import { makePlanetariumBuilders } from './planetarium.js';   // ROUND 22: the town of Morning
+import { makeHamletBuilders } from './hamlets.js';            // THE ELEVEN REWIRE: three hamlets
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, clamp } from '../engine/math.js';
 
@@ -2731,6 +2732,7 @@ export const BUILDERS = {
 Object.assign(BUILDERS, makeOuterBuilders({ Kit, kits, C, GLOW, groundY }));
 // ROUND 22: the planetarium at Morning, authored in planetarium.js the same way.
 Object.assign(BUILDERS, makePlanetariumBuilders({ Kit, kits, C, GLOW, groundY }));
+Object.assign(BUILDERS, makeHamletBuilders({ kits, C, GLOW, groundY }));
 BUILDERS.manor = makeManorBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 BUILDERS.avery = makeAveryHouseBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 
