@@ -1,6 +1,7 @@
 // Small connected stories leave changes in the county, with ordinary E interaction.
 import * as THREE from 'three';
 import { Kit, C } from './sites.js';
+import { MASK } from './collision.js';
 import { mountSignBoard } from './sign-mount.js';
 import { projectPlaceSurfaceUVs } from './place-surfaces.js';
 import { heightAt, addFlat } from './terrain.js';
@@ -188,9 +189,23 @@ export class WorldStories {
   const cameras=this._sys('setpieces')?._triggers||[];
   this.targets=this.targets.filter(t=>!t.camera||cameras.includes(t.camera));
   for(const camera of cameras){if(this.targets.some(t=>t.camera===camera))continue;const id='camera:'+camera.rec.key+':'+Math.round(camera.x)+':'+Math.round(camera.z);this.targets.push({id,camera,kind:'read',x:camera.x,y:camera.y,z:camera.z,title:'READ THE CAMERA CARD',text:'OCT 31 · Deer. Deer. Deer.\nOCT 31 · 5:41 PM · The trail in daylight. Sun through the branches.\nNOV 1 · 1:47 AM · The empty trail.\nNOV 1 · 1:47 AM · The same trail. Everyone in the county is standing on it, facing east.\nNOV 1 · 1:'+String(10+Math.floor((this.time%300)/6)).padStart(2,'0')+' AM · You, from behind. Taken just now.'});}
-  let target=null,best=3.3;const forward={x:-Math.sin(p.yaw||0),z:-Math.cos(p.yaw||0)};
-  if(!this.ctx.shared.inCar&&!p.dead)for(const t of this.targets){const dx=t.x-p.pos.x,dz=t.z-p.pos.z,d=Math.hypot(dx,dz);if(d>best||Math.abs(t.y-(p.eyeY||p.pos.y+1.6))>2.1)continue;if(d>.3&&(dx*forward.x+dz*forward.z)/d<.25)continue;
-   const eye=p.eyeY||p.pos.y+1.6,len=Math.hypot(dx,t.y-eye,dz),ray=this._sys('collision')?.raycast({x:p.pos.x,y:eye,z:p.pos.z},{x:dx/len,y:(t.y-eye)/len,z:dz/len},len,1);if(ray&&ray.t<len-.70)continue;target=t;best=d;
+  let target=null,best=3.3;
+  const camera=this._sys('camera'),yaw=camera?.yaw??p.yaw??0,pitch=camera?.pitch??0;
+  const cp=Math.cos(pitch),forward={x:-Math.sin(yaw)*cp,y:Math.sin(pitch),z:-Math.cos(yaw)*cp};
+  const eye=p.eyeY??p.pos.y+1.6;
+  if(!this.ctx.shared.inCar&&!p.dead)for(const t of this.targets){
+   const dx=t.x-p.pos.x,dy=t.y-eye,dz=t.z-p.pos.z,len=Math.hypot(dx,dy,dz);
+   if(len>best||len<.001)continue;
+   // Reading follows the actual three-dimensional gaze. A sign above a doorway
+   // must not take its E prompt while the player looks through the doorway.
+   if((dx*forward.x+dy*forward.y+dz*forward.z)/len<.94)continue;
+   const ray=this._sys('collision')?.raycast({x:p.pos.x,y:eye,z:p.pos.z},{x:dx/len,y:dy/len,z:dz/len},len,MASK.SIGHT);
+   // The 0.70 m slack is the board a notice is nailed to: its collider stands in front of
+   // the point the target is registered at. MEASURED 2026-09-15 with tools over every target:
+   // at 0.12 m the Cathedral (a blocker 0.48 m short) and the Hollow Mill (0.19 m short) could
+   // no longer be read from any bearing.
+   if(ray&&ray.t<len-.70)continue;
+   target=t;best=len;
   }
   if(target!==this.target){this.target=target;this.hold=0;}
   if(target){const repaired=target.kind==='repair'&&pr.flag('story:xmas-power');this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:7,x:target.x,y:target.y,z:target.z,k:this.hold/(target.hold||.2),detail:repaired?'THE LIGHTS WILL STAY ON':target.title,subdetail:target.kind==='repair'?'SERVICE 17 · LOCAL POWER':'E · READ',unavailable:!!repaired});if(use&&!this.latch&&!repaired){this.hold+=dt;if(this.hold>=(target.hold||.2)){this._use(target);this.hold=0;this.latch=true;}}else this.hold=0;}
