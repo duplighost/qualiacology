@@ -33,9 +33,26 @@ export const LINES = Object.freeze({
 
   /* ------------------------------------------------------------------- the radio -- */
 
-  // THE OPENING, in the garage, the moment the lights fail and the clock falls back. It is
-  // the first time anybody says her name, and nothing in the game ever explains how a radio
-  // knows it. Priority 9 and interrupt:false — nothing cuts this.
+  // THE OPENING, in the garage, the moment the lights fail and the clock falls back.
+  //
+  // 2026-09-15. Alex: "i need you to also have like, a voice say 'One Saved Message' Before
+  // this one comes on." So it is not a broadcast arriving live any more — it is a message
+  // that was left BEFORE tonight, on the machine on the bench, and the machine says so first.
+  // That is what makes a radio knowing her name make sense: it never did. Somebody who knew
+  // it called, and the tape kept it.
+  //
+  // The two are ONE beat and the dialogue lane already owns that: `next` plays the message
+  // the moment the announcement ends, and the pause between them is the lane's own pacing
+  // (0.25 s of pad plus a 0.35 s fade, measured, plus the 0.16 s tail left on the wav) —
+  // about three quarters of a second, which is what a machine does before it plays the tape.
+  //
+  // Priority 9 and interrupt:false on both: nothing in the county cuts this.
+  'radio.answerphone': {
+    speaker: 'the machine',
+    text: 'One saved message.',
+    file: 'answerphone-saved.wav',
+    priority: 9, once: true, interrupt: false, next: 'radio.opening',
+  },
   'radio.opening': {
     speaker: 'radio',
     text: 'Oriana. If it gets light before the bell, it is not morning. Stay off the road until you hear it.',
