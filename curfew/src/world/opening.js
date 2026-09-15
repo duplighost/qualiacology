@@ -191,6 +191,24 @@ export class Opening {
     // reason to teach the county's one real verb here rather than on a roadside at 3 a.m.
     if(!this._sys('progress').flag('car:wear')){car.wear=1;car.wearShown=1;}
     car.beacon=false;
+    // YOU DO NOT DISCOVER THE GARAGE YOU WAKE UP IN.
+    //
+    // ALEX, 2026-09-15: "collecting those gas canisters might have given me xp. somehow it
+    // let me choose a couple perks ... start at level 1." It was not the cans — nothing
+    // subscribes to their pickup event. MEASURED: the night starts at (-545.0, 243.1) and
+    // this site's centre is (-520, 240), which is 25.19 m out against its own discoverR of
+    // 24. So the player spawns 1.2 m OUTSIDE the radius of the building they are standing
+    // in, and the first step towards the car or the can rack crosses in and "arrives".
+    // places.js already means to prevent exactly this — _seedInside is commented "record,
+    // never fire" — and it cannot, because at the spawn the station is not inside anything.
+    //
+    // A find is worth XP_PLACE.findMajor, which is 300, and level 2 is 273. So the county's
+    // first ten seconds handed out a level and a skill point for walking two metres across a
+    // floor. Mark it found here, where the lane that owns "the night starts here" lives, and
+    // pay nothing: coming home is not a discovery when you never left.
+    const pr=this._sys('progress');
+    if(places&&!places.found.has(O.id)){places.found.add(O.id);places._pinsDirty=true;}
+    pr?.found?.add?.(O.id);
     this.off=[this.ctx.bus.on('phase:changed',p=>{if(p.phase==='night'&&p.prev==='dusk')this._night();}),
       this.ctx.bus.on('place:rest',p=>{if(p.id===O.id)this.pendingWake=true;})];
   }

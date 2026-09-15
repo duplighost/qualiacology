@@ -24,8 +24,16 @@ export class CarDistress {
       p.visible=failed||i<12;p.position.set(Math.sin(i*2.4+age)*(.12+u*.5)+u*.6,age*(failed?1.15:.65),Math.cos(i*1.7)*(.12+u*.5));
       p.scale.setScalar((.48+u*2.9)*(failed?1:.64));p.material.opacity=Math.sin(u*Math.PI)*severity*(failed?.72:.4);p.material.rotation=i*2.1+time*.12;
     }
-    const player=this.ctx.systems.get('player'),near=player&&Math.hypot(player.pos.x-car.x,player.pos.z-car.z)<8;
-    this.cue.hidden=this.ctx.paused||!this.ctx.playing||player?.dead||!(time<this.until||(failed&&near));
+    // ALEX, 2026-09-15: "i don't thing we need that big rectangle on screen ... it already
+    // tells them that in the audio message and at the hover over on the car."
+    //
+    // This used to stand on screen for as long as you were within 8 m of a disabled car, and
+    // since the night now starts beside one it was simply UP from the first frame, over the
+    // opening. It said nothing the message and the car's own E prompt do not. What is left is
+    // the three-second RECEIPT for a hit you just took, which is the other half this element
+    // was built for and is not a standing sign.
+    const player=this.ctx.systems.get('player');
+    this.cue.hidden=this.ctx.paused||!this.ctx.playing||player?.dead||!(time<this.until);
     if(!this.cue.hidden)this.cue.textContent=failed?'CAR DISABLED · USE GAS AT THE CAP':this.blocked?'WARD ABSORBED THE HIT · '+Math.floor(car.shield)+' CHARGES':'BODY HIT · CAR CONDITION '+Math.max(0,Math.round((1-shown)*100))+'%';
   }
   dispose(){this.root.removeFromParent();this.puffs.forEach(p=>p.material.dispose());this.texture.dispose();this.cue.remove();}

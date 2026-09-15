@@ -1099,6 +1099,12 @@ export class Progress {
       this._stat.levelUps++;
       // ROUND 6: no deal on the level. The point waits; the whole tree is on the pause card
       // and the card says how many points there are to spend (ui/hud.js _refreshTree).
+      //
+      // IT MAKES A SOUND NOW. Alex, 2026-09-15 — the one moment in the game that means the
+      // tree grew had a 0.95 s pulse and a corner receipt the size of a coin pickup, and
+      // nothing to hear at all. The player is at the point they earned it, so the chime is
+      // thrown at them, on the ui bus, like every other receipt in this file.
+      this._chime('xp_level', this._playerAt(0), this._playerAt(1) + 1.2, this._playerAt(2), 1, 0.62);
       this.ctx.bus.emit('level:up', { level: L });
     }
   }
@@ -1900,6 +1906,38 @@ export class Progress {
         b[i] = clamp(strike(0, 659.25, 0.46) + strike(0.115, 987.77, 0.54), -1, 1);
       }
       A.reg('xp_gain', [b], sr);
+    }
+    // THE LEVEL. ALEX, 2026-09-15: "how in a game like fallout 3 or 4, leveling up kind of
+    // makes a sound and you can see it better? we should do that."
+    //
+    // Everything else in this file is ONE strike or two. This is three, climbing a major triad
+    // and landing on the octave, over the bank bell's own low G so the county hears it as the
+    // same instrument being struck harder. 1.9 s and the longest tail here, because it is the
+    // only cue in the game that means the tree grew — it should still be ringing while the
+    // words are on screen. Nothing loud: the partials are the bell's and the gain is under
+    // xp_gain's, it is the LENGTH that makes it land.
+    if (!A.has('xp_level')) {
+      const secs = 1.9;
+      const n = Math.max(1, Math.floor(sr * secs));
+      const b = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const strike = (at, hz, gain, decay) => {
+          const u = t - at;
+          if (u < 0) return 0;
+          const env = Math.exp(-u * decay) * (1 - Math.exp(-u * 900));
+          return (Math.sin(TAU * hz * u) * 0.58
+            + Math.sin(TAU * hz * 2.01 * u) * 0.22
+            + Math.sin(TAU * hz * 3.01 * u) * 0.09) * env * gain;
+        };
+        b[i] = clamp(
+          strike(0, BANK_BELL_HZ, 0.30, 1.9)            // the bank bell underneath it
+          + strike(0.00, 523.25, 0.34, 5.0)             // C
+          + strike(0.105, 659.25, 0.36, 4.6)            // E
+          + strike(0.210, 783.99, 0.40, 3.2)            // G
+          + strike(0.330, 1046.50, 0.30, 2.2), -1, 1);  // and the octave, left ringing
+      }
+      A.reg('xp_level', [b], sr);
     }
     // ROUND 13: a node bought. A rising fifth, shorter and drier than xp_gain's fourth, so a
     // click and a find are cousins, not twins.
