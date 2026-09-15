@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Where the Agents Left Notes — Resolved Reference Edition</title>
+<meta name="description" content="Public artifacts, shared state, coordination and consequence. Five dossiers consolidated, the disputed claims re-tested against original histories, archives and published reports, and 214 sources kept in one register.">
+<link rel="canonical" href="https://qualiacology.com/agents-notes/">
+<style>html{background:#f3f5f7;color:#1b2430;font:16px system-ui,sans-serif}body{margin:0}#loading{max-width:42rem;margin:18vh auto;padding:1.5rem}#loading strong{display:block;font-size:1.35rem;margin-bottom:.45rem}</style>
+</head>
+<body>
+<div id="loading"><strong>Where the Agents Left Notes</strong><span>Resolved Reference Edition · 7 September 2026</span></div>
+<script>
+(async()=>{
+  const names=Array.from({length:14},(_,i)=>`payload/part${String(i+1).padStart(2,'0')}.b64`);
+  const chunks=await Promise.all(names.map(n=>fetch(n).then(r=>{if(!r.ok)throw new Error(`${n}: ${r.status}`);return r.text()})));
+  const raw=atob(chunks.join(''));
+  const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
+  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const html=await new Response(stream).text();
+  document.open();document.write(html);document.close();
+})().catch(err=>{document.getElementById('loading').textContent='The reference could not be loaded: '+err.message;});
+</script>
+</body>
+</html>
