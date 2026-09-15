@@ -21,6 +21,7 @@
 
 import * as THREE from 'three';
 import { OPENING as O } from './opening-layout.js';
+import { buildBody } from '../enemies/bodies.js';
 
 /* -------------------------------------------------------------------- the bay -- */
 // dress-station.js serviceBay: x -23.0, z -0.2, 10.2 x 9.6 x 4.65, open on -Z.
@@ -47,6 +48,25 @@ const SHUTTER_ON_LAST_WORD = 0.60;
 // This is the dead-man's handle for a line that never reports itself finished, not a timing.
 const RADIO_MAX_S = 30;
 const RADIO_SILENT_S = 24;  // no dialogue system at all: hold six seconds, then open
+// THE THING AT THE DOOR. The whole event is 0.58 s and it happens once per save; the long
+// reasoning is on _readyScare below. SCARE_WAIT is the beat of empty yard after the shutter
+// locks — the relief that the drop takes away.
+const SCARE_FLAG = 'opening:door-scare';
+const SCARE_WAIT = 0.65;        // s of nothing after the shutter is fully up
+const SCARE_DROP = 0.09;        // the fall into the doorway
+const SCARE_SNATCH = 0.42;      // it is taken back upward at this point
+const SCARE_GONE = 0.58;        // and it is out of sight by this one
+// THESE ARE THE BODY ORIGIN, WHICH IS ITS FEET, and it hangs head-down — so the origin is
+// ABOVE the face by the whole length of the thing. The Marrow is 2.28 m at scale 1.08, so
+// its head is 2.46 m below its heels: an origin at 4.02 puts the face at about 1.56, which is
+// a standing eye. MEASURED after, not assumed — the first cut inverted about the feet and put
+// the entire body under the floor with its ankles showing.
+const SCARE_FROM_Y = 7.00;      // above the lintel, where it waits and where it goes back
+const SCARE_HOLD_Y = 4.02;      // heels here, face at a standing eye
+const SCARE_Z_LOCAL = BAY.z - BAY.d * 0.5 + 0.34;   // just inside the doorway
+const _scarePt = new THREE.Vector3();
+const SCARE_NEAR = 2.35;        // metres from the body: close enough to fill the frame
+const SCARE_REACH = 26;         // nobody in the bay, no scare: spend it on a room with a body in it
 const CLOCK_FROM = { h: 1, m: 58, s: 0 };
 
 export class GarageOpening {
@@ -62,6 +82,9 @@ export class GarageOpening {
     this.mouthLamp = null;
     this._tick = 0;
     this._collider = -1;
+    this._scareT = -1;        // -1 = not running; seconds since the drop otherwise
+    this._scareBody = undefined;
+    this._withdrew = false;
     this._offs = [];
   }
 
@@ -294,6 +317,13 @@ export class GarageOpening {
     if (this.done) {
       // The bay stays a lit place to come back to, dimmer than it was on the night.
       if (near) this._bayOn(BAY_DIM); else this._bayOff();
+      // THE THING AT THE DOOR lives on this side of the early return, because the shutter
+      // reaching the top is the same frame the beat is declared over.
+      if (this._doneT !== undefined && this._scareT < 0 && this._scareBody) {
+        this._doneT += dt;
+        if (this._doneT >= SCARE_WAIT) this._beginScare();
+      }
+      this._stepScare(dt);
       return;
     }
 
@@ -372,16 +402,19 @@ export class GarageOpening {
     if (this.stage === 'opening') {
       if (this.shutterK === 0) {
         this._creak();
+        this._readyScare();              // built while the shutter is still moving, never at boot
         this.ctx.bus.emit('garage:opening', {});
       }
       this.shutterK = Math.min(1, this.shutterK + dt / SHUTTER_RISE_S);
       this._placeShutter();
       if (this.shutterK >= 1) {
         this.stage = 'done'; this.done = true;
+        this._doneT = 0;
         this._sys('progress')?.flag('opening:garage-done', 1);
         this.ctx.bus.emit('garage:open', {});
       }
     }
+
   }
 
   /* ----------------------------------------------------------------- sound -- */
@@ -404,6 +437,132 @@ export class GarageOpening {
     this._sys('audio')?.dread?.('door',
       this.wx(BAY.x, BAY.z - BAY.d * 0.5), this.padY + 1.4,
       this.wz(BAY.x, BAY.z - BAY.d * 0.5), 0.72);
+  }
+
+
+  /* =========================================================== THE THING AT THE DOOR ==
+   * ALEX, 2026-09-15: "When the garage doors open, that should pull a jump scare. Not
+   * something you have to defeat as an enemy. But something that whisks itself away fast in a
+   * scary way too. so the player expects it could still be there."
+   *
+   * IT COMES DOWN, BECAUSE THE DOOR WENT UP. For three seconds the shutter has been dragging
+   * the player's eye upward and handing them an empty yard; the relief is the setup. Then, a
+   * beat after it locks, the Marrow drops head-first into the doorway on a rope of nothing,
+   * inverted, its face at standing eye height and its jaw open, and fills the opening it just
+   * finished revealing.
+   *
+   * IT GOES BACK UP, which is the whole point. Not sideways into the yard, where you could
+   * look at it and find it gone — STRAIGHT UP, over the lintel, into the one place you cannot
+   * see from inside a garage. The county's own sound for that is already written:
+   * audio.js DREAD.withdraw is commented "the watcher being GONE, which is worse than the
+   * watcher". It rings as the thing leaves.
+   *
+   * IT IS NOT AN ENEMY. No collider, no species slot, no director order, nothing to shoot and
+   * nothing to shoot back: it is a body this lane builds, moves for 0.58 s and disposes, like
+   * the shutter. And it happens ONCE per save — a scare you get every reload is a nuisance,
+   * and Alex's law on sound is "nothing loud or annoying". The stinger is short, the whole
+   * event is under a second, and it never happens again.
+   */
+
+  /** Build the body, hidden, while the radio is still talking. Never at boot. */
+  _readyScare() {
+    if (this._scareBody !== undefined) return;
+    this._scareBody = null;
+    if (this._sys('progress')?.flag(SCARE_FLAG)) return;      // already had it, once is once
+    let seed = 20260915;
+    const rng = { next: () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; } };
+    try {
+      const body = buildBody('marrow', rng);
+      if (!body?.group) return;
+      body.group.visible = false;
+      body.group.scale.setScalar(body.scale || 1);
+      this.root.add(body.group);
+      this._scareBody = body;
+    } catch (e) { void e; }                                    // no body, no scare, no crash
+  }
+
+  /** Start it, once, a beat after the shutter locks. */
+  _beginScare() {
+    if (!this._scareBody || this._scareT >= 0) return;
+    const p = this._sys('player');
+    // The doorway, in WORLD, for the sound and the reach test.
+    const dx = this.wx(BAY.x, BAY.z - BAY.d * 0.5), dz = this.wz(BAY.x, BAY.z - BAY.d * 0.5);
+    // If nobody is in the bay to be frightened, spend it later rather than on an empty room.
+    if (!p?.pos || Math.hypot(p.pos.x - dx, p.pos.z - dz) > SCARE_REACH) return;
+    this._scareT = 0;
+    this._scareX = dx; this._scareZ = dz;
+    this._sys('progress')?.flag(SCARE_FLAG, 1);
+    this._sys('audio')?.dread?.('stinger', dx, this.padY + 1.7, dz, 1);
+    this._sys('fx')?.addTrauma?.(0.62);
+  }
+
+  _stepScare(dt) {
+    const body = this._scareBody;
+    if (!body || this._scareT < 0) return;
+    this._scareT += dt;
+    const t = this._scareT, g = body.group;
+    if (t >= SCARE_GONE) { this._endScare(); return; }
+
+    // IT ARRIVES BETWEEN YOU AND THE DOOR, AND CLOSE. Everything here is in the station's
+    // LOCAL frame, because that is what `root` is — _buildShutter puts the slats at
+    // (BAY.x, padY, BAY.z - BAY.d/2 + 0.22) for the same reason, and a world coordinate on a
+    // child of a rotated parent lands in the trees.
+    //
+    // At the doorway itself it was 7.7 m from where the night starts: a hanging figure across
+    // a room, which is a photograph and not a scare. It drops on the line from the body to the
+    // opening it has just been watching, SCARE_NEAR metres out — close enough that a 2.3 m
+    // thing fills the frame — and never further than the doorway itself.
+    const p = this._sys('player');
+    let lx = BAY.x, lz = SCARE_Z_LOCAL, faceY = Math.PI;
+    if (p?.pos) {
+      _scarePt.set(p.pos.x, 0, p.pos.z);
+      this.root.worldToLocal(_scarePt);
+      const dx = BAY.x - _scarePt.x, dz = SCARE_Z_LOCAL - _scarePt.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const reach = Math.min(SCARE_NEAR, d);
+      lx = _scarePt.x + dx / d * reach;
+      lz = _scarePt.z + dz / d * reach;
+      faceY = Math.atan2(_scarePt.x - lx, _scarePt.z - lz);
+    }
+    g.rotation.set(0, faceY, Math.PI);        // Z is the inversion: it hangs by its heels
+
+    // 1. THE DROP, 0.09 s from above the lintel to eye height. 2. THE HOLD, twitching.
+    // 3. THE SNATCH, accelerating upward out through the top of the doorway.
+    let y;
+    if (t < SCARE_DROP) {
+      const k = t / SCARE_DROP;
+      y = SCARE_FROM_Y + (SCARE_HOLD_Y - SCARE_FROM_Y) * (1 - (1 - k) * (1 - k));
+    } else if (t < SCARE_SNATCH) {
+      y = SCARE_HOLD_Y + Math.sin(t * 88) * 0.012;              // it is not still, it is held
+    } else {
+      const k = (t - SCARE_SNATCH) / (SCARE_GONE - SCARE_SNATCH);
+      y = SCARE_HOLD_Y + (SCARE_FROM_Y + 1.6 - SCARE_HOLD_Y) * k * k;
+      if (!this._withdrew) {
+        this._withdrew = true;
+        this._sys('audio')?.dread?.('withdraw', this._scareX, this.padY + 3.2, this._scareZ, 1);
+        this._sys('fx')?.addTrauma?.(0.18);
+      }
+    }
+    g.position.set(lx, this.padY + y, lz);
+    g.visible = true;
+
+    // Its own 14 Hz twitch, jaw open, eyes up. moveAmp 0: it is not walking anywhere.
+    const coil = t < SCARE_DROP ? t / SCARE_DROP : 1;
+    // telegraph() is the eye emissive: 1.5 + v*2 on the Marrow. Past its normal range on
+    // purpose — this is the only time in the game the thing is 2.3 m from your face in a lit
+    // room, and two eyes catching the work lamp is the whole payoff of the drop.
+    body.telegraph?.(coil * 2.4);
+    body.animate?.({ time: (this.ctx.time?.t || 0), dead: false, moveAmp: 0, coil, swing: 0, gait: 0 });
+  }
+
+  _endScare() {
+    const body = this._scareBody;
+    this._scareT = -1;
+    this._scareBody = null;
+    if (!body) return;
+    body.group.visible = false;
+    body.group.removeFromParent();
+    body.dispose?.();
   }
 
   present() {
@@ -430,6 +589,7 @@ export class GarageOpening {
     this._clockGeo?.dispose(); this._clockMat?.dispose(); this._clockTex?.dispose();
     this._shadeGeo?.dispose(); this._shadeMat?.dispose();
     this._slatGeo?.dispose(); this._shutterMat?.dispose();
+    this._endScare();
     this._glowGeo?.dispose(); this._glowMat?.dispose();
     this.root?.removeFromParent();
   }
