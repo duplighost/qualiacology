@@ -22,6 +22,14 @@ export class Readouts {
 #curfew-readouts .receipts{position:fixed;right:30px;bottom:126px;display:flex;align-items:flex-end;flex-direction:column;gap:5px}
 #curfew-readouts .receipt{padding:6px 11px;background:rgba(5,9,13,.82);border-right:2px solid currentColor;color:#95d2d6;font-size:14px}
 #curfew-readouts .receipt.cash{color:#e9c785}
+/* THE LEVEL. Alex, 2026-09-15: "leveling up kind of makes a sound and you can see it better?
+   we should do that." It was a 14 px line the same size as a coin pickup, gone in 3.2 s, for
+   the one event in the game that grows the tree. Bigger, gold, its own rule top and bottom,
+   and it arrives with a short rise so the eye catches the movement rather than the text. */
+#curfew-readouts .receipt.level{color:#f0cf8a;font-size:19px;letter-spacing:.09em;padding:10px 16px;
+  background:rgba(8,12,17,.92);border-right:3px solid currentColor;border-top:1px solid #f0cf8a55;
+  border-bottom:1px solid #f0cf8a55;animation:curfew-level .42s ease-out both}
+@keyframes curfew-level{from{opacity:0;transform:translateY(9px) scale(.96)}to{opacity:1;transform:none}}
 #curfew-readouts .capture{position:fixed;left:50%;top:22px;transform:translateX(-50%);color:#bac8d0;background:#080d12b8;padding:6px 12px;font-size:11px}
 /* NITRO. Alex, 2026-09-09: "just a meter that lets you go fast and its fun for a bit. then it
    automatically regenerates." It exists only in the seat, and only once WHEEL 3 is bought, so
@@ -47,7 +55,7 @@ export class Readouts {
     on('cash:spent',p=>this.receipt('−'+p.amount+' COINS','cash'));
     on('xp:gained',p=>{if(p.reason!=='road')this.receipt('+'+p.amount+' XP','xp',p.amount);});
     on('xp:banked',p=>this.receipt(p.amount+' XP BANKED','bank'));
-    on('level:up',p=>this.receipt('LEVEL '+p.level+' · SKILL POINT','level'));
+    on('level:up',p=>{this.receipt('LEVEL '+p.level+' · SKILL POINT','level');this.receipts.at(-1).until=this.now()+7;});
     on('loot:searched',p=>{if(!p.coins)this.receipt('EMPTY POCKETS','empty');});
     on('car:repaired',()=>this.receipt('CAR RESTORED · 100%','repair'));
     on('car:failed',()=>{if(this.ctx.shared.inCar)this.receipt('ENGINE DEAD','empty');});
