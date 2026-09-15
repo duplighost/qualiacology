@@ -199,15 +199,34 @@ export function buildCoachwork(spec){
   // at x -0.31, so walking to the cap is never walking to the door. The ring around it is
   // the whole teaching: it pulses only while a pour is actually possible (you carry a can
   // AND the car is worn), and a cap with no ring is a cap with nothing to do.
+  //
+  // IT HAD NEVER BEEN DRAWN. collect() only fills `batches`; flush() is what merges a batch
+  // into a mesh and puts it on the car. There is one flush in this file and this block ran
+  // after it, so the recess, the ring, the cap, the bolts and the flap were all collected
+  // and then dropped on the floor — and setFiller() has been setting an emissive on a
+  // material attached to nothing since the day it was written. MEASURED 2026-09-15: a
+  // raycast straight down the +X axis at the cap's own coordinates found the quarter panel
+  // at 0.895 and nothing in front of it. The flush at the end of this block is the fix, and
+  // it is why Alex could not find anywhere to put the petrol.
+  //
+  // WHERE IT SITS, measured on the panel rather than guessed. At the old z 1.42 the clean
+  // flank is only the 0.175 m band between the rubbing strip (y 1.04) and the beltline
+  // (y 1.24) — the wheel arch takes everything below y 0.95. Behind the arch's rear edge
+  // (z 1.845) the quarter runs clean from y 0.61 to the waist, so the filler door goes
+  // there: a portrait door on the rear quarter, which is where an estate keeps one anyway.
   const fillerRing=new THREE.MeshStandardMaterial({color:0x1d2426,emissive:0xffcf8e,emissiveIntensity:0,roughness:.42,metalness:.55});fillerRing.name='car-filler-ring';extraMaterials.push(fillerRing);
-  cylinder(.91,1.24,1.42,.098,.020,dark,0,Math.PI/2);           // the recess the cap sits in
-  collect(new THREE.TorusGeometry(.092,.011,8,26),fillerRing,.928,1.24,1.42,0,0,Math.PI/2);
-  cylinder(.935,1.24,1.42,.080,.026,chrome,0,Math.PI/2);         // the cap itself
-  for(let n=0;n<6;n++){const a=n/6*Math.PI*2;box(.950,1.24+Math.sin(a)*.048,1.42+Math.cos(a)*.048,.010,.020,.020,dark,0,0,0);}
-  cylinder(.952,1.24,1.42,.022,.012,dark,0,Math.PI/2);
-  // the little hinged flap, parked open against the quarter panel
-  box(.946,1.335,1.475,.012,.145,.155,paint,0,0,-.22);
+  const FX=.900,FY=.95,FZ=1.93;
+  box(FX,FY,FZ,.026,.360,.230,dark,0,0,0);                       // the shadow gap round it
+  box(FX+.020,FY,FZ,.026,.310,.185,chrome,0,0,0);                // the door, proud and pale
+  cylinder(FX+.038,FY,FZ,.082,.022,dark,0,Math.PI/2);            // the recess the cap sits in
+  collect(new THREE.TorusGeometry(.082,.013,8,26),fillerRing,FX+.052,FY,FZ,0,0,Math.PI/2);
+  cylinder(FX+.058,FY,FZ,.064,.024,chrome,0,Math.PI/2);          // the cap itself
+  for(let n=0;n<6;n++){const a=n/6*Math.PI*2;box(FX+.070,FY+Math.sin(a)*.040,FZ+Math.cos(a)*.040,.010,.018,.018,dark,0,0,0);}
+  cylinder(FX+.072,FY,FZ,.019,.012,dark,0,Math.PI/2);
+  // the hinge knuckles down the door's forward edge, so it reads as a door and not a decal
+  for(const dy of [-.110,0,.110])box(FX+.022,FY+dy,FZ-.104,.028,.062,.026,dark,0,0,0);
   const setFiller=(on,k)=>{fillerRing.emissiveIntensity=on?.35+.35*Math.sin(4*(k||0)):0;};
+  flush();                                                       // <- the bug, above
 
   const setRepaired=on=>{repaired=!!on;deadMat.emissiveIntensity=repaired?headLevel*1.6:0;};
   return{

@@ -278,6 +278,11 @@ const W = K.wear || {};
 // THE ELEVEN REWIRE: ZERO. Alex — "starts at full condition". A car handed to you in a
 // garage on the first night with 15% already gone was the old economy speaking, where a
 // mechanic sold you a repair. A can of gas is the repair now, and the car begins whole.
+//
+// THE FIRST NIGHT IS THE EXCEPTION and it is world/opening.js's to make, not this constant's:
+// Alex, 2026-09-15, "lets have it start at zero gas." Emptying the tank HERE would also empty
+// every car a fixture or a respawn ever places, which is two dozen rigs measuring braking and
+// crush and nothing to do with petrol.
 const WEAR_START = 0;
 // How fast the condition NEEDLE chases the real wear. A pour zeroes `wear` on one frame;
 // the gauge sweeping up over about two seconds is what makes the pour read as a pour.
@@ -2190,30 +2195,38 @@ export class Car {
     // MEASURED: with only the two axle probes, a trunk beside the car's middle was never
     // seen and the body ended up 0.98 m from a trunk it should have been 1.57 m off —
     // the car ate the tree. Three points at -1.4 / 0 / +1.4 cover a 4.3 m body.
-    if (col.debugNearest) {
+    //
+    // AND IT IS THE BOX'S SURFACE, NOT ITS BOUNDING CIRCLE. This used to rank and push off
+    // `debugNearest`, which measures to hypot(centre) - radius — and for an OBB that radius
+    // is the corner radius. A wall is an OBB. MEASURED 2026-09-15: the garage shutter is
+    // 10.0 m wide and 0.28 m thick, so it reported itself as a 5.0 m disc centred in the
+    // doorway; the parked car, 2.5 m behind it, was inside that disc and got shoved 3.5 m
+    // radially — sideways, then out through a shut door, at t = 0.67 s of the first drive.
+    // From outside the disc pushed the car away instead, which is why the door read as a
+    // one-way. collision.nearestSurface() ranks and pushes off the real surface, so a wall
+    // stops the car where the wall is and a trunk behaves exactly as it did.
+    if (col.nearestSurface) {
       for (let pass = 0; pass < 3; pass++) {
         let moved = false;
         for (let a = 0; a < 3; a++) {
           const t = (a - 1) * 1.40;
           const ax = this.x + fx * t, az = this.z + fz * t;
-          const near = col.debugNearest(ax, az, 3.0);
+          const near = col.nearestSurface(ax, az, 3.0);
           if (!near) continue;
-          // copy the scalars: debugNearest returns shared scratch (collision.js:497-506).
-          const cx = near.x, cz = near.z, cr = near.radius;
-          const y0 = near.y0, y1 = near.y1;
-          // Skip our OWN roof colliders by id (collision.js:505 fills out.id). `near.tag`
+          // copy the scalars: it returns shared scratch, like every query in that file.
+          const gap = near.distance, y0 = near.y0, y1 = near.y1;
+          let ux = near.normalX, uz = near.normalZ;
+          // Skip our OWN roof colliders by id (collision.js fills out.id). `near.tag`
           // is never set for an addCircle collider, so the old tag compare was dead code.
           if (this._isOwnCollider(near.id)) continue;
           if (y1 < feet + 0.34 || y0 > feet + ROOF_Y) continue;   // a kerb, or an overhang
-          const minD = cr + 1.02;
-          let dx = ax - cx, dz = az - cz;
-          let d = Math.hypot(dx, dz);
-          if (d >= minD) continue;
-          if (d < 1e-4) { dx = -fz; dz = fx; d = 1; }
-          const push = (minD - d) + 0.01;
-          this.x += dx / d * push;
-          this.z += dz / d * push;
-          if (!hit) { nx = dx / d; nz = dz / d; }
+          if (gap >= 1.02) continue;
+          // Dead centre of a circle, or exactly on a face: leave across the body instead.
+          if (!(ux * ux + uz * uz > 1e-8)) { ux = -fz; uz = fx; }
+          const push = (1.02 - gap) + 0.01;
+          this.x += ux * push;
+          this.z += uz * push;
+          if (!hit) { nx = ux; nz = uz; }
           hit = true; moved = true;
         }
         if (!moved) break;

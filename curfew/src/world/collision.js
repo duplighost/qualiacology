@@ -355,6 +355,12 @@ export class Collision {
       x: 0, z: 0, radius: 0, kind: 'circle', halfX: 0, halfZ: 0, yaw: 0,
       y0: 0, y1: 0, distance: 0, id: -1,
     };
+    // nearestSurface()'s own record: the car reads it every driving step and must not have
+    // it rewritten by a debugNearest() call in the same step.
+    this._nearestSurf = {
+      x: 0, z: 0, radius: 0, kind: 'circle', halfX: 0, halfZ: 0, yaw: 0,
+      y0: 0, y1: 0, distance: 0, normalX: 1, normalZ: 0, tag: null, id: -1,
+    };
     // ROUND 19: nearestBreakable's own record. See the note in that method — it runs every
     // fixed step and must never be able to rewrite a nearestTagged() result a caller is
     // still holding across steps.
@@ -731,6 +737,57 @@ export class Collision {
     return t;
   }
 
+  /**
+   * NEAREST BY ITS ACTUAL SURFACE, not by its bounding circle.
+   *
+   * debugNearest() ranks by hypot(centre) - _r, and for an OBB _r is the corner radius. A
+   * 10 m wide, 0.28 m thin wall therefore reports itself as a 5 m disc: it wins the ranking
+   * from three metres away, and a caller that then pushes out to _r + its own radius is
+   * pushed off a wall it is nowhere near. MEASURED 2026-09-15: the garage shutter (halfX 5.0,
+   * halfZ 0.14) ejected the parked car 3.5 m sideways and out through the closed door.
+   *
+   * `distance` here is the signed distance to the real surface — negative inside — and
+   * `normalX`/`normalZ` is the unit direction out of it, in world space. Same box transform
+   * as _overlap(). Returns the shared _nearestSurf record, or null.
+   */
+  nearestSurface(x, z, maxRadius = 16) {
+    let best = -1, bestD = Infinity, bnx = 1, bnz = 0;
+    const n = this._gather(x, z, maxRadius);
+    for (let k = 0; k < n; k++) {
+      const i = this._near[k];
+      const dx = x - this._x[i], dz = z - this._z[i];
+      let d, nx, nz;
+      if (this._kind[i] === KIND_OBB) {
+        const c = this._cos[i], si = this._sin[i];
+        const lx = c * dx - si * dz, lz = si * dx + c * dz;
+        const hx = this._hx[i], hz = this._hz[i];
+        let ux = lx - clamp(lx, -hx, hx), uz = lz - clamp(lz, -hz, hz);
+        d = Math.sqrt(ux * ux + uz * uz);
+        if (d > EPS) { ux /= d; uz /= d; }
+        else {
+          const fx = hx - Math.abs(lx), fz = hz - Math.abs(lz);
+          if (fx < fz) { ux = lx >= 0 ? 1 : -1; uz = 0; d = -fx; }
+          else { ux = 0; uz = lz >= 0 ? 1 : -1; d = -fz; }
+        }
+        nx = c * ux + si * uz; nz = -si * ux + c * uz;
+      } else {
+        const h = Math.sqrt(dx * dx + dz * dz);
+        d = h - this._r[i];
+        if (h > EPS) { nx = dx / h; nz = dz / h; } else { nx = 1; nz = 0; }
+      }
+      if (d < bestD) { bestD = d; best = i; bnx = nx; bnz = nz; }
+    }
+    if (best < 0 || bestD > maxRadius) return null;
+    const out = this._nearestSurf;
+    out.x = this._x[best]; out.z = this._z[best]; out.radius = this._r[best];
+    out.kind = this._kind[best] === KIND_OBB ? 'obb' : 'circle';
+    out.halfX = this._hx[best]; out.halfZ = this._hz[best]; out.yaw = this._yaw[best];
+    out.y0 = this._y0[best]; out.y1 = this._y1[best];
+    out.distance = bestD; out.normalX = bnx; out.normalZ = bnz;
+    out.tag = this._tag[best];
+    out.id = best * 65536 + this._gen[best];
+    return out;
+  }
   // Nearest live collider to (x, z) within maxRadius, as { x, z, radius } — or null.
   // Debug/authoring only: it widens the gather ring, so it is not a hot-path query.
   debugNearest(x, z, maxRadius = 16) {

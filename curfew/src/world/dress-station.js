@@ -422,7 +422,15 @@ function serviceBay(k, api) {
   }
 
   // Deep pitched roof, patched in alternating strips, plus two crooked turbine vents.
-  k.gable(w + 0.75, d + 0.80, y + h, 1.75, x, 0, z, C.slate, 0);
+  //
+  // THE ENDS ARE CLOSED, and this is the first thing anybody sees. The bay's roof was an
+  // open prism: the shutter stops at 4.40 m and the ridge is at 6.40, so a two-metre
+  // triangle of open sky sat directly above the shut door on the opening frame, with the
+  // county's trees showing through it. Kit.gable() has taken an `ends` spec since the
+  // round-14 work (tests/gable-enclosures.mjs proves the merge and the rays); the bay
+  // simply never passed one.
+  k.gable(w + 0.75, d + 0.80, y + h, 1.75, x, 0, z, C.slate, 0,
+    { api, depth: d + 0.80, col: wall });
   gableFloor(api, x, z, w + 0.75, d + 0.80, y + h, 1.75, 0);
   for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) {
     const px = x + sx * (1.0 + i * 0.82);

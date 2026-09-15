@@ -250,10 +250,17 @@ export const SITE_EXTRAS = Object.freeze({
   // stash, and one can fills the car — so they are spread thin and always somewhere a person
   // would actually have kept petrol: a rack in the bay, a weigh office, a granary, a booth.
   // Four sites below exist in this table ONLY because they carry one.
+  // The service bay's pair are the FIRST two cans in the game and the car starts the night
+  // empty, so they are the only reason it can begin. They used to stand 0.70 m apart ONE
+  // BEHIND THE OTHER on the approach, and the picker took whichever was nearer: measured from
+  // six bearings, the front one answered every time and the back one could not be taken from
+  // any stance a body can stand in (collision.canOccupy refused both sides of it). Spread
+  // along the rack instead — dress-station.js draws it 1.24 m wide at local x -19.6, z 3.55 —
+  // so they are side by side with open floor in front of both, and gas.js picks by gaze.
   'filling-station': {
     cans: [
-      { id: 'rack-a', x: -19.6, z: 3.6, y: 0.02, yaw: 0.2 },
-      { id: 'rack-b', x: -19.6, z: 2.9, y: 0.02, yaw: -0.4 },
+      { id: 'rack-a', x: -20.15, z: 3.5, y: 0.02, yaw: 0.2 },
+      { id: 'rack-b', x: -19.05, z: 3.5, y: 0.02, yaw: -0.4 },
     ],
   },
   'the-toll': { cans: [{ id: 'booth', x: 3.4, z: -2.6, yaw: 1.1 }] },

@@ -22,10 +22,16 @@ import { BOSSES } from './boss-catalog.js';
 
 /* ------------------------------------------------------------------ numbers -- */
 
-const CAP = Object.freeze({ x: 0.91, y: 1.24, z: 1.42 });  // car-local, right rear quarter
+// Car-local, on the rear quarter behind the wheel arch — where car-coachwork.js actually
+// draws the filler door. The old (0.91, 1.24, 1.42) was the beltline, half of it in the
+// window aperture, and it targeted a cap that was never merged into the car at all.
+const CAP = Object.freeze({ x: 0.91, y: 0.95, z: 1.93 });
 const CAP_RANGE = 2.6;          // metres from the cap's world point
 const CAP_OUT = 0.45;           // how far off the quarter panel the sight line actually ends
-const CAP_DOT = 0.60;           // how squarely you have to be looking at it
+// Loosened 0.60 -> 0.48 with the fuel door: you look at the door, not at the cap. It cannot
+// go much wider than this — car.js _pollEnter returns early while targeting is set, so a cap
+// that answers from the driver side is a car you cannot get into.
+const CAP_DOT = 0.48;           // how squarely you have to be looking at it
 const CAN_RANGE = 2.2;
 const CAN_DOT = 0.55;
 const POUR_S = 2.2;             // how long the rig is up; the gun is hidden for exactly this
@@ -33,6 +39,11 @@ const TIP_S = 0.6;              // how long the can takes to go over, and to com
 const TIP_RAD = 70 * Math.PI / 180;
 const POUR_LEAVE = 2.0;         // walk this far from the cap and the pour ends early
 const KEEPER_CAN_PRICE = 100;   // Alex's number
+const CAN_BODY = 0.45;          // how much of its own body the sight ray may end inside
+
+// Scratch for the sight ray. Allocated once: _stepCans runs every step the player is afoot.
+const _org = { x: 0, y: 0, z: 0 };
+const _ray = { x: 0, y: 0, z: 0 };
 
 /* ------------------------------------------------------------- the can mesh -- */
 
@@ -60,6 +71,26 @@ function buildCanGeometry() {
 function buildCapGeometry() {
   const g = new THREE.CylinderGeometry(0.036, 0.036, 0.024, 12);
   g.rotateX(Math.PI / 2); g.translate(0.10, 0.49, 0);
+  return g;
+}
+
+/**
+ * THE BAND. Alex, 2026-09-15: "make those canisters for gas really distinct looking so you
+ * know you can pick them up."
+ *
+ * A dark red box in a dark garage is a dark red box. The county's petrol cans now carry a
+ * painted cream band right round the waist and a second one up the spout, which is a real
+ * thing painted on real fuel cans and reads as one silhouette at twenty metres under a
+ * headlamp. It is paint, not light: no emissive, so it never becomes a lamp in a dark shed
+ * and never promises a prompt the way the filler ring does.
+ */
+function buildBandGeometry() {
+  const parts = [];
+  const push = (g, x, y, z) => { g.translate(x, y, z); parts.push(g); };
+  push(new THREE.BoxGeometry(0.352, 0.062, 0.197), 0, 0.255, 0);
+  push(new THREE.BoxGeometry(0.046, 0.046, 0.046), 0.10, 0.435, 0);
+  const g = mergeGeometries(parts.map(p => p.toNonIndexed()), false);
+  parts.forEach(p => p.dispose());
   return g;
 }
 
@@ -94,10 +125,14 @@ export class Gas {
     this.ctx.scene.add(this.group);
     this.canGeo = buildCanGeometry();
     this.capGeo = buildCapGeometry();
-    // One material for every can in the county, and one for every cap. Red enough to read at
-    // twenty metres under a headlamp, dark enough never to glow on its own.
-    this.canMat = new THREE.MeshStandardMaterial({ color: 0x5c1310, roughness: 0.62, metalness: 0.22 });
+    this.bandGeo = buildBandGeometry();
+    // One material for every can in the county, one for every cap, one for every band. The
+    // body was 0x5c1310, which is a dark brick and disappeared into an unlit garage; this is
+    // the red a petrol can is actually painted, and still nowhere near glowing.
+    this.canMat = new THREE.MeshStandardMaterial({ color: 0xa8281a, roughness: 0.58, metalness: 0.20 });
     this.canMat.name = 'gas-can';
+    this.bandMat = new THREE.MeshStandardMaterial({ color: 0xd8cfb4, roughness: 0.80, metalness: 0.05 });
+    this.bandMat.name = 'gas-can-band';
     this.capMat = new THREE.MeshStandardMaterial({
       color: 0xb6ab92, emissive: 0xffd9a2, emissiveIntensity: 0.55, roughness: 0.44, metalness: 0.30,
     });
@@ -137,6 +172,7 @@ export class Gas {
     m.position.set(x, y, z); m.rotation.y = rec.yaw;
     m.castShadow = true; m.name = 'gas-can:' + flag;
     m.add(new THREE.Mesh(this.capGeo, this.capMat));
+    m.add(new THREE.Mesh(this.bandGeo, this.bandMat));
     this.group.add(m);
     rec.mesh = m;
     const col = this._sys('collision');
@@ -280,10 +316,14 @@ export class Gas {
     const pct = Math.max(0, Math.round((1 - car.wear) * 100));
     this.ctx.bus.emit('prompt', {
       kind: 'use', label: 'E', rank: 7, x: this.capX, y: this.capY + 0.10, z: this.capZ, k: 0,
-      detail: cans > 0 ? 'USE GAS' : 'NO GAS',
+      // ALEX, 2026-09-15: "You don't have to tell the player in the gas prompt on the car that
+      // you can buy them." And NO GAS on the car's own filler read as the CAR being empty when
+      // it meant the player was carrying nothing — which is the opposite end of the same
+      // sentence. The cap says what the cap can do; the tank is the gauge's job.
+      detail: cans > 0 ? 'USE GAS' : 'NO CAN',
       subdetail: cans > 0
         ? cans + (cans === 1 ? ' CAN · ' : ' CANS · ') + pct + '% → 100%'
-        : 'KEEPERS SELL IT · ' + KEEPER_CAN_PRICE + ' COINS',
+        : pct + '% IN THE TANK',
       unavailable: cans <= 0,
     });
     if (!use || this._useRelease || cans <= 0) return true;
@@ -353,22 +393,50 @@ export class Gas {
 
   /* --------------------------------------------------------------- cans -- */
 
+  /**
+   * THE CAN USED TO OCCLUDE ITSELF, and so the TAKE prompt had never once appeared.
+   *
+   * MEASURED 2026-09-15 at the Filling Station's bay rack, from six bearings: segmentClear()
+   * false every time. Of course it was — the segment ENDS at (c.x, c.y + 0.3, c.z), which is
+   * the middle of the can's own 0.40 x 0.28 x 0.65 m collider, so the line can never be clear.
+   * scavenging.js:274 hit this exact bug and wrote a paragraph about it; this file never got
+   * the same treatment. Cast at the can and accept if nothing solid stands in front of its own
+   * surface, which is the thing the check was ever for: a wall between you and it.
+   *
+   * The knock-on was worse than a missing prompt. The can is crushable by size, so
+   * collision.nearestBreakable() offered it to scavenging's hold-to-open verb instead, and the
+   * only prompt a petrol can has ever shown a player is OPEN. 'gascan' is on that file's
+   * NO_HOLD_TAG list now; a fuel can is not a box.
+   */
+  _canVisible(col, p, c) {
+    if (!col) return true;
+    const dx = c.x - p.pos.x, dy = (c.y + 0.28) - p.eyeY, dz = c.z - p.pos.z;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    if (typeof col.raycast !== 'function') return true;
+    _ray.x = dx / len; _ray.y = dy / len; _ray.z = dz / len;
+    _org.x = p.pos.x; _org.y = p.eyeY; _org.z = p.pos.z;
+    const hit = col.raycast(_org, _ray, len, col.MASK ? col.MASK.SIGHT : 4);
+    return !hit || hit.t >= len - CAN_BODY;
+  }
+
   _stepCans(p, use) {
     const cam = this._sys('camera');
     if (!cam) return;
     const col = this._sys('collision');
-    let best = null, bestD = CAN_RANGE;
+    // PICKED BY WHERE YOU ARE LOOKING, not by which is nearer. The bay rack carries two cans
+    // 0.70 m apart; by distance the front one answered from every stance a body can stand in
+    // and the back one could not be taken at all.
+    let best = null, bestDot = CAN_DOT;
     for (let i = 0; i < this.cans.length; i++) {
       const c = this.cans[i];
       if (!c.mesh) continue;
       const dx = c.x - p.pos.x, dz = c.z - p.pos.z;
       const d = Math.hypot(dx, dz);
-      if (d > bestD || Math.abs(c.y - p.pos.y) > 2.2) continue;
+      if (d > CAN_RANGE || Math.abs(c.y - p.pos.y) > 2.2) continue;
       const dot = (dx * -Math.sin(cam.yaw) + dz * -Math.cos(cam.yaw)) / (d || 1);
-      if (dot < CAN_DOT) continue;
-      if (col && typeof col.segmentClear === 'function'
-          && !col.segmentClear(p.pos.x, p.eyeY, p.pos.z, c.x, c.y + 0.3, c.z)) continue;
-      best = c; bestD = d;
+      if (dot <= bestDot) continue;
+      if (!this._canVisible(col, p, c)) continue;
+      best = c; bestDot = dot;
     }
     if (!best) return;
     this.ctx.bus.emit('prompt', {
@@ -415,8 +483,8 @@ export class Gas {
     this._offs.length = 0;
     this._clear();
     this.group?.removeFromParent();
-    this.canGeo?.dispose(); this.capGeo?.dispose();
-    this.canMat?.dispose(); this.capMat?.dispose();
+    this.canGeo?.dispose(); this.capGeo?.dispose(); this.bandGeo?.dispose();
+    this.canMat?.dispose(); this.capMat?.dispose(); this.bandMat?.dispose();
   }
 }
 
