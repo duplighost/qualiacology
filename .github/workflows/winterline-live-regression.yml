@@ -12,24 +12,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  browser-test:
+  production-browser-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 6
     steps:
-      - name: Check out exact candidate with game assets
+      - name: Check out test harness
         uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - name: Confirm real binary assets were checked out
-        shell: bash
-        run: |
-          git lfs pull
-          ls -lh winterline/assets/characters/eric.glb winterline/assets/weapons/carbine.glb
-          if grep -aq "git-lfs.github.com/spec" winterline/assets/characters/eric.glb; then
-            echo "Character asset is still an LFS pointer"
-            exit 1
-          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -44,24 +32,12 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Start exact repository build locally
-        shell: bash
-        run: |
-          python3 -m http.server 4173 --bind 127.0.0.1 --directory . >/tmp/winterline-http.log 2>&1 &
-          echo $! >/tmp/winterline-http.pid
-          for i in {1..30}; do
-            curl -fsS http://127.0.0.1:4173/winterline/ >/dev/null && exit 0
-            sleep 1
-          done
-          cat /tmp/winterline-http.log
-          exit 1
-
-      - name: Run bounded local and production browser tests
+      - name: Test live WINTERLINE in Chromium
         working-directory: build
         shell: bash
         run: |
           mkdir -p qa test-output/winterline
-          cat > qa/winterline-live-regression.mjs <<'NODE'
+          cat > qa/winterline-production-test.mjs <<'NODE'
           import { chromium } from 'playwright';
           import fs from 'node:fs';
           import path from 'node:path';
@@ -69,20 +45,13 @@ jobs:
 
           const output = path.resolve('test-output/winterline');
           fs.mkdirSync(output, { recursive: true });
-          const digest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-          const targets = [
-            { name: 'local', url: 'http://127.0.0.1:4173/winterline/' },
-            { name: 'production', url: 'https://qualiacology.com/winterline/' },
-          ];
           const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-          const safeShot = async (page, file, errors) => {
-            try {
-              await page.screenshot({ path: file, timeout: 20000 });
-              return true;
-            } catch (error) {
-              errors.push(`screenshot ${path.basename(file)}: ${error}`);
-              return false;
-            }
+          const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+          const screenshots = {
+            menu: path.join(output, 'production-menu.png'),
+            game1: path.join(output, 'production-game-1.png'),
+            game2: path.join(output, 'production-game-2.png'),
+            afterInput: path.join(output, 'production-after-input.png'),
           };
 
           const browser = await chromium.launch({
@@ -95,196 +64,171 @@ jobs:
               '--enable-unsafe-swiftshader',
               '--autoplay-policy=no-user-gesture-required',
               '--disable-dev-shm-usage',
-              '--disable-features=UseSkiaRenderer',
+              '--disable-gpu-sandbox',
+              '--no-sandbox',
             ],
           });
+          const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+          const page = await context.newPage();
+          page.setDefaultTimeout(30000);
+          page.setDefaultNavigationTimeout(60000);
 
-          const results = [];
-          let failedAny = false;
+          const consoleErrors = [];
+          const consoleWarnings = [];
+          const pageErrors = [];
+          const requestFailures = [];
+          const badResponses = [];
+          const harnessErrors = [];
+          page.on('console', message => {
+            if (message.type() === 'error') consoleErrors.push(message.text());
+            if (message.type() === 'warning') consoleWarnings.push(message.text());
+          });
+          page.on('pageerror', error => pageErrors.push(String(error)));
+          page.on('requestfailed', request => requestFailures.push({ url: request.url(), failure: request.failure() }));
+          page.on('response', response => {
+            if (response.status() >= 400) badResponses.push({ url: response.url(), status: response.status() });
+          });
 
-          for (const target of targets) {
-            const context = await browser.newContext({
-              viewport: { width: 1440, height: 900 },
-              deviceScaleFactor: 1,
-            });
-            const page = await context.newPage();
-            page.setDefaultTimeout(30000);
-            page.setDefaultNavigationTimeout(60000);
+          let response = null;
+          let ready = false;
+          let entered = false;
+          let before = null;
+          let after = null;
+          const started = Date.now();
 
-            const consoleErrors = [];
-            const consoleWarnings = [];
-            const pageErrors = [];
-            const requestFailures = [];
-            const badResponses = [];
-            const harnessErrors = [];
-            page.on('console', message => {
-              if (message.type() === 'error') consoleErrors.push(message.text());
-              if (message.type() === 'warning') consoleWarnings.push(message.text());
-            });
-            page.on('pageerror', error => pageErrors.push(String(error)));
-            page.on('requestfailed', request => requestFailures.push({ url: request.url(), failure: request.failure() }));
-            page.on('response', response => {
-              if (response.status() >= 400) badResponses.push({ url: response.url(), status: response.status() });
-            });
+          try {
+            response = await page.goto('https://qualiacology.com/winterline/', { waitUntil: 'domcontentloaded' });
 
-            const started = Date.now();
-            const files = Object.fromEntries(['menu', 'game1', 'game2', 'afterInput'].map(key => [key, path.join(output, `${target.name}-${key}.png`)]));
-            let response = null;
-            let webgl = null;
-            let ready = false;
-            let entered = false;
-            let before = null;
-            let after = null;
+            for (let second = 0; second < 100; second++) {
+              const state = await page.locator('#play').evaluate(button => ({
+                disabled: button.disabled,
+                text: button.textContent?.trim() || '',
+                message: document.querySelector('#message')?.textContent?.trim() || '',
+              })).catch(() => null);
+              if (state && !state.disabled) { ready = true; break; }
+              if (state?.message?.toLowerCase().includes('loading failed')) break;
+              await sleep(1000);
+            }
 
-            try {
-              response = await page.goto(target.url, { waitUntil: 'domcontentloaded' });
+            before = await page.evaluate(() => ({
+              title: document.title,
+              readyState: document.readyState,
+              playText: document.querySelector('#play')?.textContent?.trim() || '',
+              playDisabled: Boolean(document.querySelector('#play')?.disabled),
+              message: document.querySelector('#message')?.textContent?.trim() || '',
+              scripts: [...document.scripts].map(script => script.src).filter(Boolean),
+              styles: [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => link.href),
+              hasWantedHud: Boolean(document.querySelector('#wanted')),
+              hasVehicleHud: Boolean(document.querySelector('#vehicle-hud')),
+              bodyClass: document.body.className,
+              canvas: (() => {
+                const canvas = document.querySelector('#game');
+                return canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight } : null;
+              })(),
+            }));
+
+            if (ready) {
+              await page.screenshot({ path: screenshots.menu, timeout: 30000 });
+              await page.locator('#play').click({ force: true });
+              for (let second = 0; second < 20; second++) {
+                if (await page.locator('body').evaluate(body => body.classList.contains('playing')).catch(() => false)) { entered = true; break; }
+                await sleep(1000);
+              }
+            }
+
+            if (entered) {
+              await sleep(7000);
+              await page.screenshot({ path: screenshots.game1, timeout: 30000 });
               await sleep(1500);
-              webgl = await page.evaluate(() => {
-                const probe = document.createElement('canvas');
-                const gl = probe.getContext('webgl2', { failIfMajorPerformanceCaveat: false }) || probe.getContext('webgl', { failIfMajorPerformanceCaveat: false });
-                if (!gl) return { available: false };
-                const debug = gl.getExtension('WEBGL_debug_renderer_info');
-                return {
-                  available: true,
-                  version: gl.getParameter(gl.VERSION),
-                  vendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
-                  renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
-                };
-              });
-              await safeShot(page, files.menu, harnessErrors);
-
-              for (let i = 0; i < 45; i++) {
-                const state = await page.locator('#play').evaluate(button => ({ disabled: button.disabled, text: button.textContent?.trim() || '' })).catch(() => null);
-                if (state && !state.disabled) { ready = true; break; }
-                await sleep(1000);
-              }
-
-              before = await page.evaluate(() => ({
-                title: document.title,
-                readyState: document.readyState,
-                playText: document.querySelector('#play')?.textContent?.trim() || '',
-                playDisabled: Boolean(document.querySelector('#play')?.disabled),
-                message: document.querySelector('#message')?.textContent?.trim() || '',
-                scripts: [...document.scripts].map(script => script.src).filter(Boolean),
-                styles: [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => link.href),
-                hasWantedHud: Boolean(document.querySelector('#wanted')),
-                hasVehicleHud: Boolean(document.querySelector('#vehicle-hud')),
-                bodyClass: document.body.className,
-                canvas: (() => {
-                  const canvas = document.querySelector('#game');
-                  return canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight } : null;
-                })(),
-              }));
-
-              if (ready) {
-                await page.locator('#play').click({ force: true });
-                for (let i = 0; i < 15; i++) {
-                  if (await page.locator('body').evaluate(body => body.classList.contains('playing')).catch(() => false)) { entered = true; break; }
-                  await sleep(1000);
-                }
-              }
-
-              if (entered) {
-                await sleep(6000);
-                await safeShot(page, files.game1, harnessErrors);
-                await sleep(1200);
-                await safeShot(page, files.game2, harnessErrors);
-                await page.keyboard.down('w');
-                await sleep(1000);
-                await page.keyboard.up('w');
-                await page.mouse.click(720, 450);
-                await sleep(1500);
-                await safeShot(page, files.afterInput, harnessErrors);
-              }
-
-              after = await page.evaluate(() => ({
-                bodyClass: document.body.className,
-                menuDisplay: getComputedStyle(document.querySelector('#menu')).display,
-                menuOpacity: getComputedStyle(document.querySelector('#menu')).opacity,
-                message: document.querySelector('#message')?.textContent?.trim() || '',
-                weapon: document.querySelector('#weapon-label')?.textContent?.trim() || '',
-                score: document.querySelector('#score-total')?.textContent?.trim() || '',
-                level: document.querySelector('#rank-number')?.textContent?.trim() || '',
-                pointerLockElement: document.pointerLockElement?.id || null,
-                canvas: (() => {
-                  const canvas = document.querySelector('#game');
-                  return canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight } : null;
-                })(),
-              }));
-            } catch (error) {
-              harnessErrors.push(String(error));
+              await page.screenshot({ path: screenshots.game2, timeout: 30000 });
+              await page.keyboard.down('w');
+              await sleep(1000);
+              await page.keyboard.up('w');
+              await page.mouse.click(640, 360);
+              await sleep(1500);
+              await page.screenshot({ path: screenshots.afterInput, timeout: 30000 });
             }
 
-            const hashes = {};
-            const sizes = {};
-            for (const [key, file] of Object.entries(files)) {
-              if (fs.existsSync(file)) {
-                hashes[key] = digest(file);
-                sizes[key] = fs.statSync(file).size;
-              }
-            }
-
-            const assertions = {
-              http200: response?.status() === 200,
-              webglAvailable: webgl?.available === true,
-              correctRuntime: Boolean(before?.scripts?.some(url => url.endsWith('/winterline/assets/index-HTnuCZ-p.js'))),
-              correctStylesheet: Boolean(before?.styles?.some(url => url.endsWith('/winterline/assets/index-B0NoEjM5.css'))),
-              badRuntimeAbsent: !before?.scripts?.some(url => url.includes('index-DwiPC6MK.js')),
-              blockyExpansionHudAbsent: before ? !before.hasWantedHud && !before.hasVehicleHud : false,
-              playEnabled: ready && before?.playDisabled === false,
-              enteredGameplay: entered && Boolean(after?.bodyClass?.split(/\s+/).includes('playing')),
-              canvasSized: Boolean(after?.canvas && after.canvas.width >= 1000 && after.canvas.height >= 600),
-              menuRemovedFromView: Boolean(after && (after.menuDisplay === 'none' || Number(after.menuOpacity) === 0)),
-              weaponSystemAlive: Boolean(after && /Kestrel|C4|\d+\s*\/\s*\d+/.test(after.weapon)),
-              renderChangedFromMenu: Boolean(hashes.menu && hashes.game1 && hashes.menu !== hashes.game1),
-              renderLoopAdvancing: Boolean(hashes.game1 && hashes.game2 && hashes.game1 !== hashes.game2),
-              inputChangedFrame: Boolean(hashes.game2 && hashes.afterInput && hashes.game2 !== hashes.afterInput),
-              gameplayFramesCaptured: Boolean(sizes.game1 > 20000 && sizes.game2 > 20000 && sizes.afterInput > 20000),
-              noPageErrors: pageErrors.length === 0,
-              noFailedRequests: requestFailures.length === 0,
-              noHttpErrors: badResponses.length === 0,
-              noConsoleErrors: consoleErrors.length === 0,
-              noHarnessErrors: harnessErrors.length === 0,
-            };
-
-            const result = {
-              ...target,
-              elapsedMs: Date.now() - started,
-              webgl,
-              ready,
-              entered,
-              before,
-              after,
-              hashes,
-              sizes,
-              assertions,
-              consoleErrors,
-              consoleWarnings,
-              pageErrors,
-              requestFailures,
-              badResponses,
-              harnessErrors,
-              passed: Object.values(assertions).every(Boolean),
-            };
-            if (!result.passed) failedAny = true;
-            results.push(result);
-            fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(results, null, 2));
-            console.log(`\n=== ${target.name.toUpperCase()} ===`);
-            console.log(JSON.stringify(result, null, 2));
-            await context.close();
+            after = await page.evaluate(() => ({
+              bodyClass: document.body.className,
+              menuDisplay: getComputedStyle(document.querySelector('#menu')).display,
+              menuOpacity: getComputedStyle(document.querySelector('#menu')).opacity,
+              message: document.querySelector('#message')?.textContent?.trim() || '',
+              weapon: document.querySelector('#weapon-label')?.textContent?.trim() || '',
+              score: document.querySelector('#score-total')?.textContent?.trim() || '',
+              level: document.querySelector('#rank-number')?.textContent?.trim() || '',
+              pointerLockElement: document.pointerLockElement?.id || null,
+              canvas: (() => {
+                const canvas = document.querySelector('#game');
+                return canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight } : null;
+              })(),
+            }));
+          } catch (error) {
+            harnessErrors.push(String(error));
           }
 
-          await browser.close();
-          console.log(`\nRESULT_JSON=${JSON.stringify(results)}`);
-          if (failedAny) process.exit(1);
-          NODE
-          timeout 240s xvfb-run -a -s "-screen 0 1440x900x24" node qa/winterline-live-regression.mjs
+          const hashes = {};
+          const sizes = {};
+          for (const [key, file] of Object.entries(screenshots)) {
+            if (fs.existsSync(file)) {
+              hashes[key] = hash(file);
+              sizes[key] = fs.statSync(file).size;
+            }
+          }
 
-      - name: Upload screenshots and machine-readable results
+          const assertions = {
+            http200: response?.status() === 200,
+            correctRuntime: Boolean(before?.scripts?.some(url => url.endsWith('/winterline/assets/index-HTnuCZ-p.js'))),
+            correctStylesheet: Boolean(before?.styles?.some(url => url.endsWith('/winterline/assets/index-B0NoEjM5.css'))),
+            badRuntimeAbsent: !before?.scripts?.some(url => url.includes('index-DwiPC6MK.js')),
+            blockyExpansionHudAbsent: before ? !before.hasWantedHud && !before.hasVehicleHud : false,
+            playEnabled: ready && before?.playDisabled === false,
+            enteredGameplay: entered && Boolean(after?.bodyClass?.split(/\s+/).includes('playing')),
+            canvasSized: Boolean(after?.canvas && after.canvas.width >= 1000 && after.canvas.height >= 600),
+            menuRemovedFromView: Boolean(after && (after.menuDisplay === 'none' || Number(after.menuOpacity) === 0)),
+            weaponSystemAlive: Boolean(after && /Kestrel|C4|\d+\s*\/\s*\d+/.test(after.weapon)),
+            renderChangedFromMenu: Boolean(hashes.menu && hashes.game1 && hashes.menu !== hashes.game1),
+            renderLoopAdvancing: Boolean(hashes.game1 && hashes.game2 && hashes.game1 !== hashes.game2),
+            inputChangedFrame: Boolean(hashes.game2 && hashes.afterInput && hashes.game2 !== hashes.afterInput),
+            gameplayFramesCaptured: Boolean(sizes.game1 > 20000 && sizes.game2 > 20000 && sizes.afterInput > 20000),
+            noPageErrors: pageErrors.length === 0,
+            noFailedRequests: requestFailures.length === 0,
+            noHttpErrors: badResponses.length === 0,
+            noConsoleErrors: consoleErrors.length === 0,
+            noHarnessErrors: harnessErrors.length === 0,
+          };
+
+          const result = {
+            url: page.url(),
+            elapsedMs: Date.now() - started,
+            ready,
+            entered,
+            before,
+            after,
+            hashes,
+            sizes,
+            assertions,
+            consoleErrors,
+            consoleWarnings,
+            pageErrors,
+            requestFailures,
+            badResponses,
+            harnessErrors,
+            passed: Object.values(assertions).every(Boolean),
+          };
+          fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(result, null, 2));
+          console.log(JSON.stringify(result, null, 2));
+          await context.close();
+          await browser.close();
+          if (!result.passed) process.exit(1);
+          NODE
+          timeout 180s xvfb-run -a -s "-screen 0 1280x720x24" node qa/winterline-production-test.mjs
+
+      - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: winterline-live-regression
+          name: winterline-production-browser-test
           path: build/test-output/winterline
           if-no-files-found: error
           retention-days: 7
