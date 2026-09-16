@@ -53,9 +53,29 @@ const RADIO_SILENT_S = 24;  // no dialogue system at all: hold six seconds, then
 // locks — the relief that the drop takes away.
 const SCARE_FLAG = 'opening:door-scare';
 const SCARE_WAIT = 0.65;        // s of nothing after the shutter is fully up
-const SCARE_DROP = 0.09;        // the fall into the doorway
-const SCARE_SNATCH = 0.42;      // it is taken back upward at this point
-const SCARE_GONE = 0.58;        // and it is out of sight by this one
+// ALEX, 2026-09-16: "THe scary thing that pops in when the garage door opens has to be
+// scarier. What triggers it? timing or leaving the garage? make sure the player sees it."
+//
+// IT IS TIMING, and it always was: SCARE_WAIT after the shutter locks, once per save, if
+// somebody is within SCARE_REACH of the doorway. Leaving the garage has nothing to do with
+// it. And that is exactly how it could be missed — the whole thing was 0.58 s, of which 0.33
+// was the hold, so a player looking at the car when the clock ran out saw an empty doorway by
+// the time they turned round. Two fixes, and only one of them is a number:
+//
+//   1. IT WAITS FOR YOUR EYES. The drop does not begin until the doorway is inside the
+//      camera's forward half, up to SCARE_PATIENCE seconds. Nothing takes the camera — you
+//      are never turned — it is the thing being patient, which is worse.
+//   2. IT STAYS LONG ENOUGH TO BE SEEN, AND IT MOVES WHILE IT IS THERE. A second of hold, a
+//      lunge a third of the way through it, and the bay light dies as it arrives and comes
+//      back as it leaves, so the room you were safe in goes with it.
+const SCARE_PATIENCE = 7.0;     // s it will wait for the doorway to be in front of you
+const SCARE_FACE = -0.05;       // dot of camera forward to the doorway: the forward half
+const SCARE_DROP = 0.08;        // the fall into the doorway
+const SCARE_LUNGE = 0.46;       // when it comes at you, once, inside the hold
+const SCARE_LUNGE_S = 0.16;     // and how long that takes
+const SCARE_LUNGE_M = 0.62;     // metres it closes
+const SCARE_SNATCH = 1.06;      // it is taken back upward at this point
+const SCARE_GONE = 1.30;        // and it is out of sight by this one
 // THESE ARE THE BODY ORIGIN, WHICH IS ITS FEET, and it hangs head-down — so the origin is
 // ABOVE the face by the whole length of the thing. The Marrow is 2.28 m at scale 1.08, so
 // its head is 2.46 m below its heels: an origin at 4.02 puts the face at about 1.56, which is
@@ -323,6 +343,8 @@ export class GarageOpening {
         this._doneT += dt;
         if (this._doneT >= SCARE_WAIT) this._beginScare();
       }
+      // _stepScare owns the bay lamp for as long as it is running, so it runs AFTER the
+      // _bayOn(BAY_DIM) above and its write is the one that lands.
       this._stepScare(dt);
       return;
     }
@@ -481,7 +503,7 @@ export class GarageOpening {
     } catch (e) { void e; }                                    // no body, no scare, no crash
   }
 
-  /** Start it, once, a beat after the shutter locks. */
+  /** Start it, once, a beat after the shutter locks — and once you are facing the door. */
   _beginScare() {
     if (!this._scareBody || this._scareT >= 0) return;
     const p = this._sys('player');
@@ -489,11 +511,20 @@ export class GarageOpening {
     const dx = this.wx(BAY.x, BAY.z - BAY.d * 0.5), dz = this.wz(BAY.x, BAY.z - BAY.d * 0.5);
     // If nobody is in the bay to be frightened, spend it later rather than on an empty room.
     if (!p?.pos || Math.hypot(p.pos.x - dx, p.pos.z - dz) > SCARE_REACH) return;
+    // ARE YOU LOOKING THAT WAY? Past SCARE_PATIENCE it goes anyway, because a player who
+    // never turns round still has to be able to finish the night.
+    this._scareWait = (this._scareWait || 0) + ((this.ctx.time && this.ctx.time.dt) || 1 / 60);
+    if (this._scareWait < SCARE_PATIENCE) {
+      const cam = this._sys('camera');
+      const ax = dx - p.pos.x, az = dz - p.pos.z, d = Math.hypot(ax, az) || 1;
+      const dot = cam ? (ax * -Math.sin(cam.yaw) + az * -Math.cos(cam.yaw)) / d : 1;
+      if (dot < SCARE_FACE) return;
+    }
     this._scareT = 0;
     this._scareX = dx; this._scareZ = dz;
     this._sys('progress')?.flag(SCARE_FLAG, 1);
     this._sys('audio')?.dread?.('stinger', dx, this.padY + 1.7, dz, 1);
-    this._sys('fx')?.addTrauma?.(0.62);
+    this._sys('fx')?.addTrauma?.(0.82);
   }
 
   _stepScare(dt) {
@@ -513,17 +544,26 @@ export class GarageOpening {
     // opening it has just been watching, SCARE_NEAR metres out — close enough that a 2.3 m
     // thing fills the frame — and never further than the doorway itself.
     const p = this._sys('player');
+    // THE LUNGE. Once, a third of the way through the hold, it takes SCARE_LUNGE_M off the
+    // gap and keeps it. A thing that hangs perfectly still is a prop; a thing that comes at
+    // you once and then stops is a decision.
+    const lunge = t <= SCARE_LUNGE ? 0
+      : SCARE_LUNGE_M * Math.min(1, (t - SCARE_LUNGE) / SCARE_LUNGE_S);
     let lx = BAY.x, lz = SCARE_Z_LOCAL, faceY = Math.PI;
     if (p?.pos) {
       _scarePt.set(p.pos.x, 0, p.pos.z);
       this.root.worldToLocal(_scarePt);
       const dx = BAY.x - _scarePt.x, dz = SCARE_Z_LOCAL - _scarePt.z;
       const d = Math.hypot(dx, dz) || 1;
-      const reach = Math.min(SCARE_NEAR, d);
+      const reach = Math.max(1.25, Math.min(SCARE_NEAR, d) - lunge);
       lx = _scarePt.x + dx / d * reach;
       lz = _scarePt.z + dz / d * reach;
       faceY = Math.atan2(_scarePt.x - lx, _scarePt.z - lz);
     }
+    // THE ROOM GOES WITH IT. The bay lamp is crushed to a coal while the thing is in the
+    // doorway and comes back as it is snatched away, so the light you were standing in is
+    // the second thing it takes.
+    this._bayOn(t < SCARE_SNATCH ? BAY_DIM * 0.22 : BAY_DIM);
     g.rotation.set(0, faceY, Math.PI);        // Z is the inversion: it hangs by its heels
 
     // 1. THE DROP, 0.09 s from above the lintel to eye height. 2. THE HOLD, twitching.
@@ -533,14 +573,23 @@ export class GarageOpening {
       const k = t / SCARE_DROP;
       y = SCARE_FROM_Y + (SCARE_HOLD_Y - SCARE_FROM_Y) * (1 - (1 - k) * (1 - k));
     } else if (t < SCARE_SNATCH) {
-      y = SCARE_HOLD_Y + Math.sin(t * 88) * 0.012;              // it is not still, it is held
+      // Not still: a 14 Hz tremor, and a deeper shudder on the frames it lunges.
+      const shudder = t > SCARE_LUNGE && t < SCARE_LUNGE + SCARE_LUNGE_S ? 0.055 : 0.012;
+      y = SCARE_HOLD_Y + Math.sin(t * 88) * shudder;
+      if (t > SCARE_LUNGE && !this._lunged) {
+        this._lunged = true;
+        this._sys('fx')?.addTrauma?.(0.34);
+        // DREAD.watcher is the county's "cloth and breath" row and this is the one time
+        // anything in the game is close enough for it to be literal.
+        this._sys('audio')?.dread?.('watcher', this._scareX, this.padY + 1.6, this._scareZ, 1);
+      }
     } else {
       const k = (t - SCARE_SNATCH) / (SCARE_GONE - SCARE_SNATCH);
       y = SCARE_HOLD_Y + (SCARE_FROM_Y + 1.6 - SCARE_HOLD_Y) * k * k;
       if (!this._withdrew) {
         this._withdrew = true;
         this._sys('audio')?.dread?.('withdraw', this._scareX, this.padY + 3.2, this._scareZ, 1);
-        this._sys('fx')?.addTrauma?.(0.18);
+        this._sys('fx')?.addTrauma?.(0.28);
       }
     }
     g.position.set(lx, this.padY + y, lz);

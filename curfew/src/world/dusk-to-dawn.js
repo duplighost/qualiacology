@@ -92,7 +92,21 @@ const FLICKER_EVERY = 4;
  * pole at exactly 30 m does not borrow and release every other step. */
 const ROVER_DROP_R = ROVER_R * 1.5;
 /* The relight flash: the same 14 cd / short ttl places.js uses on a claim, a little softer. */
-const RELIGHT_FLASH_I = 12, RELIGHT_FLASH_S = 1.4;
+// ALEX, 2026-09-16: "I still don't know how the lamps you have to light work exactly.
+// highlight them more and have them really look like you can do something and light up
+// beautifully."
+//
+// A DEAD POLE IS NOT A BLACK POLE ANY MORE. It used to write zero into the bead, so a burnt
+// lamp was geometrically identical to a fencepost at forty metres and the only way to find
+// one was to walk the verge. The bead now keeps a cold ember: something is still IN the
+// glass. The number is deliberately under airlight's GLOW_ON_FLOOR (0.14) so it makes no
+// halo, throws no pool, is not a safe light and never touches the hounds' fence — it is a
+// point you can see from the road and walk to, and nothing else.
+const DEAD_EMBER = 0.115;
+// AND IT COMES BACK LIKE SOMETHING WORTH THE BULB. 12 for 1.4 s was a blink; the bead's own
+// ripple (RIPPLE_S) already swells over more than a second, so the flash now lives as long
+// as the ripple it belongs to and is bright enough to throw the verge into relief.
+const RELIGHT_FLASH_I = 30, RELIGHT_FLASH_S = 2.4;
 /* How often the countdown is written to the save while nothing else happens, so a reload
  * mid-cycle resumes close to where it was. progress.flag() only marks the blob dirty;
  * the write itself is debounced there. */
@@ -329,7 +343,7 @@ export class DuskToDawn {
       r0 = r1;
     }
     // Apply the boot state to the beads.
-    for (let i = 0; i < poles.length; i++) if (!poles[i].lit) this._writePole(i, 0);
+    for (let i = 0; i < poles.length; i++) if (!poles[i].lit) this._writePole(i, DEAD_EMBER);
   }
 
   /**
@@ -369,7 +383,7 @@ export class DuskToDawn {
     const nextS = Number(pr.flag('d2d:nextS'));
     if (Number.isFinite(nextS) && nextS > 0) this.nextS = Math.min(nextS, BURNOUT_EVERY_S + BURNOUT_JITTER_S);
     if (Array.isArray(out)) {
-      for (const i of out) { const p = this.poles[i | 0]; if (p && p.lit) { p.lit = false; this._writePole(p.i, 0); } }
+      for (const i of out) { const p = this.poles[i | 0]; if (p && p.lit) { p.lit = false; this._writePole(p.i, DEAD_EMBER); } }
     }
     if (Array.isArray(relit)) {
       for (const i of relit) { const p = this.poles[i | 0]; if (!p) continue; p.relit = true; if (!p.lit) { p.lit = true; this._writePole(p.i, 1); } }   // relit stays set, or the next _persistLists() drops a bought light
@@ -421,7 +435,7 @@ export class DuskToDawn {
         p.flickerT -= dt;
         if (p.flickerT <= 0) {
           p.flickerT = 0; p.lit = false; p.relit = false;
-          this._writePole(i, 0);
+          this._writePole(i, DEAD_EMBER);
           _evt.i = i; _evt.x = p.hx; _evt.z = p.hz;
           this.ctx.bus.emit('dusk-to-dawn:out', _evt);
           this._persistLists();
@@ -608,7 +622,7 @@ export class DuskToDawn {
     if (this.honestNight === !!on) return;
     this.honestNight = !!on;
     if (on) for (const p of this.poles) if (p.flickerT > 0) {
-      p.flickerT = 0; p.k = 1; this._writePole(p.i, p.daylightOff ? 0 : 1);
+      p.flickerT = 0; p.k = 1; this._writePole(p.i, p.lit ? (p.daylightOff ? 0 : 1) : DEAD_EMBER);
     }
   }
 
@@ -625,7 +639,9 @@ export class DuskToDawn {
       const off = next > 0 && (next >= 1 || p.hx >= edge);
       if (!!p.daylightOff === off) continue;
       p.daylightOff = off;
-      this._writePole(p.i, p.lit && !off ? 1 : 0);
+      // A pole with no bulb in it keeps its ember through the sweep: the photocell decides
+      // whether a WORKING lamp burns, and a dead one is dead either way.
+      this._writePole(p.i, p.lit ? (off ? 0 : 1) : DEAD_EMBER);
       if (off && p.lit) {
         if (pos && Math.hypot(pos.x - p.hx, pos.z - p.hz) < 65) this._sys('audio')?.dread?.('door', p.hx, p.headY, p.hz, .18);
         this.ctx.bus?.emit('dusk-to-dawn:photocell', { i: p.i, x: p.hx, z: p.hz });
@@ -698,8 +714,10 @@ export class DuskToDawn {
     const bulbs = this._bulbs;
     _prompt.x = p.x; _prompt.y = p.gy + 1.5; _prompt.z = p.z;
     _prompt.k = this.hold / HOLD_S;
-    _prompt.detail = bulbs > 0 ? 'REPLACE BULB' : 'NO BULB';
-    _prompt.subdetail = bulbs > 0 ? (bulbs + (bulbs === 1 ? ' BULB' : ' BULBS')) : 'THE DEALER SELLS THEM';
+    _prompt.detail = bulbs > 0 ? 'LIGHT THIS LAMP' : 'DEAD LAMP · NO BULB';
+    _prompt.subdetail = bulbs > 0
+      ? (bulbs + (bulbs === 1 ? ' BULB · ' : ' BULBS · ') + 'A LIT POLE IS SAFE GROUND')
+      : 'THE DEALER SELLS BULBS';
     _prompt.unavailable = bulbs === 0;
     this.ctx.bus.emit('prompt', _prompt);
     if (!use || this._release || bulbs === 0) { this.hold = 0; return; }
@@ -726,7 +744,12 @@ export class DuskToDawn {
       lights.borrow('relight', p.hx, p.headY, p.hz, GLOW.lamp, RELIGHT_FLASH_I, RELIGHT_FLASH_S);
     }
     const audio = this._sys('audio');
-    if (audio && typeof audio.dread === 'function') audio.dread('door', p.x, p.gy + 1.2, p.z, 0.7);
+    // The switch closing, then the filament taking: two sounds, the second under the first,
+    // so the moment has a shape instead of a click.
+    if (audio && typeof audio.dread === 'function') {
+      audio.dread('door', p.x, p.gy + 1.2, p.z, 0.7);
+      audio.dread('lantern', p.hx, p.headY, p.hz, 0.5);
+    }
     this._persistLists();
     this._publish();
     _evt.i = i; _evt.x = p.hx; _evt.z = p.hz;
@@ -741,7 +764,7 @@ export class DuskToDawn {
     if (!p || !p.lit) return false;
     if (instant) {
       p.flickerT = 0; p.lit = false; p.relit = false; p.rippleT = -1;
-      this._writePole(i, 0);
+      this._writePole(i, DEAD_EMBER);
       _evt.i = i; _evt.x = p.hx; _evt.z = p.hz;
       this.ctx.bus.emit('dusk-to-dawn:out', _evt);
       this._persistLists();

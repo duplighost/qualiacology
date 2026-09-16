@@ -242,6 +242,20 @@ const DESCEND_REACH = 2.00;
 const DESCEND_TOP_ABOVE = .35;      // the wall's top may be this far above the boots
 const DESCEND_LETGO_SOFT = 2.60;    // let go under this and you step down instead of falling
 const DESCEND_BACKOFF = 2.00;       // a wall that refuses within this of the top puts you back on it
+// ALEX, 2026-09-16: "Climbing down things with e now makes that toggle appear everywhere."
+//
+// It did, and the reason is that the only thing the offer ever asked was whether the boots
+// were 1.2 m above the TERRAIN with a climbable face within 2 m. A kerb, a porch, a loading
+// deck, a crate, a boulder, a fallen trunk and the car's own roof all clear 1.2 m, and the
+// county lines its roads with climbable timber and stone — so the county is full of places
+// that satisfied it, and CLIMB DOWN is rank 6, above the door.
+//
+// A drop you can simply step off is not a thing to climb. FALL_FREE is 16 m/s, about 5.8 m,
+// so nothing under that costs a single point of health; the offer now wants a real fall under
+// the hands, measured at the spot the hands would take, plus a cheaper height gate in front
+// of the sixteen-ray search so a player standing on a doorstep never pays for it.
+const DESCEND_MIN_ABOVE = 2.40;     // m over the terrain before the search is worth running
+const DESCEND_MIN_DROP = 4.00;      // m of actual fall at the face, or walk off it instead
 // How far ABOVE the face's own top a scale may look for a landing when the top itself will
 // not take a body — a roof deck over an eave, a wall walk over a parapet. See _stepScale.
 const SCALE_ROOF_REACH = 2.60;
@@ -1616,7 +1630,7 @@ export class PlayerController {
     const col=this._collision;
     if(!col?.climbFace||!col?.fits||!col?.climbPathClear)return null;
     const ground=this._terrain?.heightAt(this.pos.x,this.pos.z)??this.pos.y;
-    if(!this.grounded||this.pos.y-ground<1.2||this.climb!==CLIMB_NONE||this.carried||this._held('crouch'))return null;
+    if(!this.grounded||this.pos.y-ground<DESCEND_MIN_ABOVE||this.climb!==CLIMB_NONE||this.carried||this._held('crouch'))return null;
     // Probe back towards the platform from just beyond an edge. This also finds
     // the ladder behind the player after a pull-up, without rotating their camera.
     //
@@ -1636,6 +1650,10 @@ export class PlayerController {
       if(!col.fits(x,z,this.pos.y-.2,P.RADIUS,P.STAND_H)
         ||!col.climbPathClear(this.pos.x,this.pos.z,this.pos.y,this.pos.x,this.pos.z,carryY,P.RADIUS,P.STAND_H)
         ||!col.climbPathClear(this.pos.x,this.pos.z,carryY,x,z,carryY,P.RADIUS,P.STAND_H))continue;
+      // IS THERE ACTUALLY A DROP HERE? Measured where the hands would be, a quarter of a
+      // metre under the boots so the platform we are standing on cannot answer for itself.
+      const support=col.supportHeight?col.supportHeight(x,z,this.pos.y-.25,P.RADIUS,0):null;
+      if(Number.isFinite(support)&&this.pos.y-support<DESCEND_MIN_DROP)continue;
       const d2=(x-this.pos.x)**2+(z-this.pos.z)**2;
       if(d2<bestD2){bestD2=d2;best={face,x,z,carryY};}
     }
@@ -1645,7 +1663,7 @@ export class PlayerController {
   _descentCue(dt) {
     this.descendProbeT-=dt;
     const ground=this._terrain?.heightAt(this.pos.x,this.pos.z)??this.pos.y;
-    if(!this.grounded||this.pos.y-ground<1.2||this.climb!==CLIMB_NONE||this.scaling||this.carried||this._held('crouch')){
+    if(!this.grounded||this.pos.y-ground<DESCEND_MIN_ABOVE||this.climb!==CLIMB_NONE||this.scaling||this.carried||this._held('crouch')){
       this.descendCandidate=null;this.descendProbeT=0;return;
     }
     if(this.descendProbeT<=0){

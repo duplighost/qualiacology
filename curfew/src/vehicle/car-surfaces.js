@@ -36,8 +36,28 @@ export function carSurfaces(seed=17){
   // THE ELEVEN REWIRE. restored() no longer sets a COLOUR: the colour is Ari's (vehicle/
   // paint.js), and a rebuilt car used to be repainted green whatever scheme you had bought.
   // Rebuilt layers over paint — it takes the tired roughness out of whatever is on the car.
-  return{...materials,materials:Object.values(materials),
-    restored(on){paint.roughness=on?.36:.78;paint.metalness=on?.32:.22;},
+  // ALEX, 2026-09-16: "some actions clearly don't have enough feedback. The car should
+  // glimmer or something when you fill it up." A pour zeroes the wear on one frame and the
+  // only answer was a needle sweeping up behind a windscreen you are not sitting behind.
+  // This is the answer from OUTSIDE the car, where the player is standing with the can: a
+  // warm sheen runs over the enamel and the chrome and dies away. It is emissive only —
+  // nothing here is a light, nothing casts, and REBUILT's gloss is untouched because the
+  // roughness it owns is restored from whatever it was set to, not from a constant.
+  let glimmerK=0;
+  const paintRough0={v:paint.roughness},chromeRough0={v:chrome.roughness};
+  const glimmer=k=>{
+    k=k>1?1:(k<0?0:k);
+    if(k===glimmerK)return;
+    if(glimmerK<=0){paintRough0.v=paint.roughness;chromeRough0.v=chrome.roughness;}
+    glimmerK=k;
+    paint.emissive.setHex(0xffcf93);paint.emissiveIntensity=k*.62;
+    chrome.emissive.setHex(0xfff0cf);chrome.emissiveIntensity=k*.85;
+    paint.roughness=paintRough0.v*(1-k*.45);
+    chrome.roughness=chromeRough0.v*(1-k*.50);
+    if(k<=0){paint.roughness=paintRough0.v;chrome.roughness=chromeRough0.v;}
+  };
+  return{...materials,materials:Object.values(materials),glimmer,
+    restored(on){paint.roughness=on?.36:.78;paint.metalness=on?.32:.22;paintRough0.v=paint.roughness;},
     setPaint(hex){if(hex>=0)paint.color.setHex(hex);},
     dispose(){Object.values(materials).forEach(m=>m.dispose());[map,roughnessMap,normalMap].forEach(t=>t.dispose());}};
 }

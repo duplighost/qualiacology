@@ -1547,7 +1547,12 @@ export class Hud {
       }
       if (this.carryNote) {
         const corpse = prog.save && prog.save.data && prog.save.data.corpse;
-        let note = carried > 0 ? 'carrying ' + carried + ' · it banks at the next light' : '';
+        // ALEX, 2026-09-16: "it is still unclear how xp works to me." The line used to vanish
+        // the moment the pile did, so the one place that states the rule was blank exactly
+        // when a player had nothing carried and was wondering what carrying even meant.
+        let note = carried > 0
+          ? 'carrying ' + carried + ' · a light banks it, and one bell says so'
+          : 'all banked · what you earn out there is carried until a light banks it';
         if (corpse && corpse.live) note += (note ? ' · ' : '') + corpse.xp + ' where you fell';
         // ROUND 15, THE PURSE. This is the ONLY place in the game a money figure is allowed
         // to appear: the pause card. During play the coin that flies into you and the note it

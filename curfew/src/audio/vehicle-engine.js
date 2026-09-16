@@ -15,11 +15,27 @@ export function motorSamples(sr=22050,seconds=2){
   return out;
 }
 
+// ALEX, 2026-09-16: "Car running out of health sounds too annoying with constant
+// ticking/beeping."
+//
+// MEASURED, and this is where it comes from. Past the 0.80 knee car.js collapses the top
+// speed to 12% of 22 m/s, so a dying car crawls — and the motor loop is a 50 Hz triangle
+// under a 25 Hz amplitude pulse played back at .76 + speed, which at a crawl is a 19-22 Hz
+// putt. At full gain. For as long as you limp. A repetitive low pulse held at one level is
+// what a fan sounds like, and the county's own earshot lane already learned that lesson once
+// (audio/earshot.js, "a true fact reported continuously is indistinguishable from a fan").
+//
+// So the engine BREAKS UP rather than nagging: from the knee it loses gain and loses top
+// end, and by the time the car has stopped it has gone quiet. Nothing is added — there was
+// never a beep in the code to remove; what there was was one loop that never let up.
+const WEAR_KNEE = .62;            // where the sound starts coming apart, under the 0.80 knee
 export function engineMix(car,allowed=true){
   const active=!!(allowed&&car?.exists&&car.engineOn&&car.wear<.999&&['driving','arriving'].includes(car.mode));
   const speed=clamp(Math.abs(car?.speed||0)/28,0,1),load=clamp(car?.pedal||0,0,1);
-  return{active,rate:.76+speed*1.12+load*.26,motor:active?(.38+speed*.24+load*.30):0,
-    tyres:active?speed*speed*.035:0,cutoff:440+speed*350+load*270};
+  const worn=clamp(((car?.wear||0)-WEAR_KNEE)/(1-WEAR_KNEE),0,1);
+  const duck=1-worn*.58;          // a limping engine is a QUIETER engine, not a louder one
+  return{active,rate:.76+speed*1.12+load*.26,motor:active?(.38+speed*.24+load*.30)*duck:0,
+    tyres:active?speed*speed*.035:0,cutoff:(440+speed*350+load*270)*(1-worn*.46)};
 }
 
 export class VehicleEngine {

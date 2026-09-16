@@ -106,8 +106,20 @@ export class Dialogue {
     // A higher priority takes the floor from an interruptible line. An equal or lower one
     // waits its turn, and the queue stays short: two waiting lines is a conversation, five
     // is a backlog nobody will listen to.
+    //
+    // ALEX, 2026-09-16: "Talking to people is annoying, you cant just keep hitting the button
+    // to get the next bit of text."
+    //
+    // NOBODY TALKS OVER THEMSELVES. A resident's lines are all priority 4, so the second E
+    // press took the "equal or lower" branch and QUEUED the next thing they had to say behind
+    // the thing they were still saying — and reading time is text length over 16, so a long
+    // line held the floor for six or seven seconds with the next one stacked up invisibly
+    // behind it. Pressing E again is a person being asked to go on, and a person who is asked
+    // to go on stops the sentence they are on. Anything marked interrupt:false — the one
+    // private hint Hale gives you — still finishes, because that line is the point of him.
     if (this.active) {
-      if (item.priority > this.active.priority && this.active.line.interrupt !== false) {
+      const sameMouth = !!line.speaker && line.speaker === this.active.line.speaker;
+      if ((item.priority > this.active.priority || sameMouth) && this.active.line.interrupt !== false) {
         this._cut(this.active);
       } else if (item.priority <= this.active.priority) {
         this.queue.push(item);
