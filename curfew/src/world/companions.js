@@ -32,6 +32,7 @@ const TELEPORT_AT = 40;        // past this they were left behind; put them back
 const AHEAD = 0.65;            // the probe distance the walk uses to slide round things
 const IDLE_BARK_S = 40;
 const ARRIVE_R = 2.2;
+const DROP_MAX = 0.75;         // metres of fall a following step may take before it is an edge
 
 /** Which bark belongs to whom. The ids are dialogue/lines.js's. */
 const BARKS = Object.freeze({
@@ -65,6 +66,32 @@ export class Companions {
   }
 
   _sys(id) { return this.ctx.systems.get(id); }
+
+  /**
+   * THE FLOOR UNDER A COMPANION — the collision world first, the terrain only as a fallback.
+   *
+   * ALEX, 2026-09-15, on the new companions. MEASURED: Greer stands on the Eelwater boardwalk
+   * at y 13.87 and the instant she joins she is at 12.32 — 1.55 m down, in the black water
+   * under the boards. Roan stands on the Cut's terrace at 103.02 and joins at 99.62: 3.40 m
+   * down, on the quarry floor. Two of the three companions live on BUILT ground, and this
+   * file only ever asked terrain.heightAt, which does not know a boardwalk or a terrace is
+   * there. Tobin was fine only because Highwood's is the one that stands on dirt.
+   *
+   * ASK FROM THE FEET. collision.supportHeight only searches GROUND_SNAP — 0.48 m — below the
+   * height it is handed, and falls back to bare terrain when it finds nothing in that band. A
+   * first cut of this asked from a metre above the body and so walked straight past the
+   * boardwalk 1.0 m under it and answered with the mud: Greer still ended up in the fen, just
+   * half a metre less of her. `fromY` is where the body actually is.
+   */
+  _floorAt(x, z, fromY) {
+    const col = this._sys('collision');
+    if (col?.supportHeight) {
+      const s = col.supportHeight(x, z, fromY, 0.34, 0.45);
+      if (Number.isFinite(s)) return s;
+    }
+    const terrain = this._sys('terrain');
+    return terrain?.heightAt ? terrain.heightAt(x, z) : 0;
+  }
 
   init() {
     const bus = this.ctx.bus;
@@ -171,9 +198,10 @@ export class Companions {
 
   _place(x, z) {
     const en = this._sys('enemies');
-    const terrain = this._sys('terrain');
     if (!en || !this.id) return;
-    const y = terrain?.heightAt ? terrain.heightAt(x, z) : 0;
+    // From the PLAYER's height, not from the sky: put them on the floor we are standing on.
+    const p = this._sys('player');
+    const y = this._floorAt(x, z, p?.pos ? p.pos.y : 0);
     this.e = en.spawn(this.id, x, z, {
       staged: true, neutral: true, initiallyNeutral: true,
       siteGuard: 'companion:' + this.id, feetY: y, yaw: 0, placementRadius: 0.8,
@@ -288,11 +316,31 @@ export class Companions {
         }
       }
       const step = Math.min(d, speed * dt);
-      e.stagedX += nx * step;
-      e.stagedZ += nz * step;
-      const terrain = this._sys('terrain');
-      const groundY = terrain?.heightAt ? terrain.heightAt(e.stagedX, e.stagedZ) : e.stagedY;
-      e.stagedY += (groundY - e.stagedY) * Math.min(1, dt * 6);
+      // DO NOT WALK THEM OFF THE BOARDS. A step whose floor is a long way below the one they
+      // are on is a step off an edge — the fen, the terrace, the rope bridge. Refuse it and
+      // try either side, the same answer this walk already gives a wall. Unless the player
+      // has gone down there too, in which case following them down IS the job.
+      const drop = (fy, floor) => fy - floor > DROP_MAX && p.pos.y > fy - DROP_MAX;
+      const tx = e.stagedX + nx * step, tz = e.stagedZ + nz * step;
+      let floor = this._floorAt(tx, tz, e.stagedY);
+      if (drop(e.stagedY, floor)) {
+        const sx = -nz, sz = nx;
+        let moved = false;
+        for (const s of [1, -1]) {
+          const ax = e.stagedX + sx * s * step, az = e.stagedZ + sz * s * step;
+          const aFloor = this._floorAt(ax, az, e.stagedY);
+          if (drop(e.stagedY, aFloor)) continue;
+          e.stagedX = ax; e.stagedZ = az; floor = aFloor; moved = true; break;
+        }
+        if (!moved) floor = this._floorAt(e.stagedX, e.stagedZ, e.stagedY);
+      } else {
+        e.stagedX = tx;
+        e.stagedZ = tz;
+      }
+      // AND DO NOT LOWER THEM INTO IT EITHER. A floor a long way down is a hole we have just
+      // refused to step into; following it with the height as well is the same fall taken
+      // slowly, which is exactly what put Roan on the quarry floor.
+      if (!drop(e.stagedY, floor)) e.stagedY += (floor - e.stagedY) * Math.min(1, dt * 6);
       // `townWalk` is the gait: metres a second, which is what enemies.js animates from.
       e.townWalk = step / Math.max(dt, 0.001);
       const want = Math.atan2(nx, nz) + Math.PI;
@@ -399,11 +447,8 @@ export class Companions {
     }
     const step = WALK * dt;
     e.stagedX += nx * step; e.stagedZ += nz * step;
-    const terrain = this._sys('terrain');
-    if (terrain?.heightAt) {
-      const g = terrain.heightAt(e.stagedX, e.stagedZ);
-      e.stagedY += (g - e.stagedY) * Math.min(1, dt * 6);
-    }
+    const g = this._floorAt(e.stagedX, e.stagedZ, e.stagedY);
+    e.stagedY += (g - e.stagedY) * Math.min(1, dt * 6);
     e.townWalk = step / Math.max(dt, 0.001);
     e.stagedYaw = Math.atan2(nx, nz) + Math.PI;
   }
