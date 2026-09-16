@@ -212,9 +212,36 @@ const SCALE_REACH = 1.42;
 const SCALE_LOSE_R = 1.65;
 const SCALE_STALL_S = 0.55;
 const SCALE_STALL_EPS = 0.05;   // m/s: under this the climb is not moving
-const DESCEND_HOLD_S = .18, DESCEND_REGRAB_S = .24;
+// CLIMBING BACK DOWN. ALEX, 2026-09-15: "hitting the e button to climb down spins them to
+// the climb part, but just drops them as they aren't climbing."
+//
+// MEASURED, on the authored landings: E held for 0.18 s COMMITTED — it slid the body off the
+// platform to the outside of the wall and started a 0.38 s camera turn — and then the first
+// line of _stepDescent let go of everything the moment E came up. The body was already over
+// the drop, so gravity took it: 6.34 m at Hollow Mill, 9.1 m at Drowned Light, 19-27 hp. The
+// camera turn OUTLIVES a tap, which is exactly the spin-then-fall he describes. And every
+// other E in this county is a tap: doors, signs, people, cans.
+//
+// So the descent is LATCHED now, not held. One press starts it; the key is never read again;
+// you leave by pressing again, by crouching, or by arriving. And nothing moves off the ledge
+// until the wall has been asked, at the exact point and height the scaler will ask from,
+// whether it will hold — see _beginDescentGrab.
+const DESCEND_REGRAB_S = .24;
+const DESCEND_REGRAB_SPEED = 4.2;   // m/s of the step to the lip; the reach below is 2 m
 const DESCEND_PROBE_S = .2;
-const DESCEND_PROBE_Y = [-.12,.35,.85,1.45];
+// A DECK 0.10 m ABOVE ITS OWN LADDER is this county's authored norm (climbs-and-caches.js
+// puts every landing at faceTop + 0.10), so a probe band that only reaches 0.12 m below the
+// feet had two centimetres of margin and nothing below that. These look for a lip up to
+// 0.90 m under the boots, which is what a person stepping off an edge is actually doing.
+const DESCEND_PROBE_Y = [-.12,-.45,-.90,.35,.85];
+// The candidate search: how far a face may be from the feet and still be offered. SCALE_REACH
+// (1.42) is the ASCENT's reach, measured from a body already against the wall; from the middle
+// of a landing the ladder is 1.4-1.68 m away, so at 1.42 the prompt never appeared on 10 of
+// the 12 landings in the game. The step to the lip is animated, so this can be honest.
+const DESCEND_REACH = 2.00;
+const DESCEND_TOP_ABOVE = .35;      // the wall's top may be this far above the boots
+const DESCEND_LETGO_SOFT = 2.60;    // let go under this and you step down instead of falling
+const DESCEND_BACKOFF = 2.00;       // a wall that refuses within this of the top puts you back on it
 // How far ABOVE the face's own top a scale may look for a landing when the top itself will
 // not take a body — a roof deck over an eave, a wall walk over a parapet. See _stepScale.
 const SCALE_ROOF_REACH = 2.60;
@@ -387,6 +414,7 @@ export class PlayerController {
     this.scaleDescending = false; this.descendGrab = null; this.descendHold = 0;
     this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
     this._descentClock=0;this._descentOtherUseUntil=-Infinity;this._descentTurn=null;
+    this.descendFrom = null;        // the ledge we stepped off, to put us back on a refusal
     this.floorWasCollider = false;                          // last frame's floor was a collider top (the step-up smoothing gate)
 
     // ---- the ONE stride clock. Nothing else may keep a locomotion timer.
@@ -432,7 +460,11 @@ export class PlayerController {
     this.forwardAxis = 0; this.strafeAxis = 0;   // published for the camera's lean
     this._in = null;                  // input layer, resolved once per step
     // Previous-frame edge state, for input layers that do not do edge detection themselves.
-    this._edge = { jump: false, sprint: false, crouch: false, tacsprint: false };
+    // `use` is here because the descent latch reads its RISING EDGE. Without it the derived
+    // fallback in _pressed() (for an input shape with no pressed() of its own, which is what
+    // the unit fixtures hand us) reads `!undefined` and reports a press on every single step —
+    // so a held E would start the climb down and cancel it again, forever.
+    this._edge = { jump: false, sprint: false, crouch: false, tacsprint: false, use: false };
     this._spawned = false;
   }
 
@@ -791,7 +823,7 @@ export class PlayerController {
       this.spaceClimbIntent = 0; this.climbQueued = false;
       this.climb = CLIMB_NONE;
       this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;
-      this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;
+      this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;this.descendFrom=null;
       this.grounded = true; this.sinceGround = 0;
       // Deliberately NOT _sync(): collapsing prev/curr here is the bug this door exists
       // to fix, not the fix.
@@ -831,7 +863,7 @@ export class PlayerController {
     this.spaceClimbIntent = 0; this.climbQueued = false;
     this.climb = CLIMB_NONE;
     this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;this.climbRefuse=false;
-    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;
+    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;this.descendFrom=null;
     this.grounded = true; this.sinceGround = 0;
     this._sync();
   }
@@ -845,7 +877,7 @@ export class PlayerController {
     this.spaceClimbIntent = 0; this.climbQueued = false;
     this.bobPhase = 0;
     this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;this.climbRefuse=false;
-    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;
+    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;this.descendFrom=null;
     this.init();
   }
 
@@ -1279,6 +1311,7 @@ export class PlayerController {
     this._edge.sprint = sprintHeld;
     this._edge.crouch = wantCrouch;
     this._edge.tacsprint = this._held('tacsprint');
+    this._edge.use = this._held('use');
 
     this._commit();
   }
@@ -1586,15 +1619,18 @@ export class PlayerController {
     if(!this.grounded||this.pos.y-ground<1.2||this.climb!==CLIMB_NONE||this.carried||this._held('crouch'))return null;
     // Probe back towards the platform from just beyond an edge. This also finds
     // the ladder behind the player after a pull-up, without rotating their camera.
+    //
+    // SIXTEEN BEARINGS, NOT EIGHT: at 45 degrees apart a ladder a sixth of a turn off the
+    // facing fell between two rays and the landing read as having nothing on it.
     let best=null,bestD2=Infinity;
-    for(let i=0;i<8;i++){
-      const a=this.yaw+(i===0?0:(i&1?1:-1)*Math.ceil(i/2)*Math.PI/4),dx=-Math.sin(a),dz=-Math.cos(a);
-      _rayO.x=this.pos.x+dx*(SCALE_REACH+.55);_rayO.y=this.pos.y-.18;_rayO.z=this.pos.z+dz*(SCALE_REACH+.55);
+    for(let i=0;i<16;i++){
+      const a=this.yaw+(i===0?0:(i&1?1:-1)*Math.ceil(i/2)*Math.PI/8),dx=-Math.sin(a),dz=-Math.cos(a);
+      _rayO.x=this.pos.x+dx*(DESCEND_REACH+.55);_rayO.y=this.pos.y-.18;_rayO.z=this.pos.z+dz*(DESCEND_REACH+.55);
       _rayD.x=-dx;_rayD.y=0;_rayD.z=-dz;
-      const hit=col.climbFace(_rayO,_rayD,SCALE_REACH+.65);
-      if(!hit||hit.top>this.pos.y+.12||hit.top<this.pos.y-2.5||hit.normal.x*dx+hit.normal.z*dz<.4)continue;
+      const hit=col.climbFace(_rayO,_rayD,DESCEND_REACH+.65);
+      if(!hit||hit.top>this.pos.y+DESCEND_TOP_ABOVE||hit.top<this.pos.y-2.5||hit.normal.x*dx+hit.normal.z*dz<.4)continue;
       const face={x:hit.point.x,z:hit.point.z,nx:hit.normal.x,nz:hit.normal.z,top:hit.top};
-      if(Math.hypot(face.x-this.pos.x,face.z-this.pos.z)>SCALE_REACH)continue;
+      if(Math.hypot(face.x-this.pos.x,face.z-this.pos.z)>DESCEND_REACH)continue;
       const x=face.x+face.nx*(P.RADIUS+.055),z=face.z+face.nz*(P.RADIUS+.055);
       const carryY=Math.max(this.pos.y,face.top);
       if(!col.fits(x,z,this.pos.y-.2,P.RADIUS,P.STAND_H)
@@ -1619,53 +1655,138 @@ export class PlayerController {
     // A cached edge cannot follow a teleport or a player walking away from it.
     if(Math.hypot(this.pos.x-this._descentProbeX,this.pos.z-this._descentProbeZ)>.35||Math.abs(this.pos.y-this._descentProbeY)>.13)this.descendCandidate=null;
     if(!this.descendCandidate||this._descentClock<=this._descentOtherUseUntil||this.descendUseBlocked)return;
-    const p=this._descentPrompt||(this._descentPrompt={kind:'hold',label:'E',rank:0,owner:'player-descent',detail:'CLIMB DOWN',subdetail:'HOLD E',unavailable:false});
+    // RANK 6, not 0. On the one bus where the highest rank wins (hud.js), a door is 3 and a
+    // sign is 7, so at 0 the only instruction a player gets for getting off a roof was
+    // silenced by any scenery that happened to be promptable. Above the door, under the sign
+    // and under a person: on a landing with a case on it, reading the case still wins.
+    // And 'use', not 'hold' — this is a tap now, and the ring that fills is a lie about it.
+    const p=this._descentPrompt||(this._descentPrompt={kind:'use',label:'E',rank:6,owner:'player-descent',detail:'CLIMB DOWN',subdetail:'E',unavailable:false});
     // Keep the instruction in view after pulling up with the ladder behind us.
-    p.x=this.pos.x+_fwd.x*1.6;p.y=this.eyeY-.5;p.z=this.pos.z+_fwd.z*1.6;p.k=clamp01(this.descendHold/DESCEND_HOLD_S);
+    p.x=this.pos.x+_fwd.x*1.6;p.y=this.eyeY-.5;p.z=this.pos.z+_fwd.z*1.6;p.k=0;
     this.ctx.bus.emit('prompt',p);
+  }
+
+  /**
+   * WILL THE WALL HOLD, asked from where the hands will be?
+   *
+   * This is the whole of Alex's bug. The old order was: step the body off the platform, turn
+   * the camera, and THEN let _stepScale look for the face — so every way that look could fail
+   * failed with the body already over the drop. Ask first, at the exact point and the exact
+   * heights the scaler will ask from one step later, and a refusal costs nothing at all.
+   */
+  _descentWillHold(best){
+    const col=this._collision;
+    if(!col?.climbFace)return false;
+    for(let k=0;k<DESCEND_PROBE_Y.length;k++){
+      _rayO.x=best.x;_rayO.y=best.carryY+DESCEND_PROBE_Y[k];_rayO.z=best.z;
+      _rayD.x=-best.face.nx;_rayD.y=0;_rayD.z=-best.face.nz;
+      if(col.climbFace(_rayO,_rayD,SCALE_REACH))return true;
+    }
+    return false;
   }
 
   _beginDescentGrab() {
     if(this.scaling&&this.scaleFace){this.scaleDescending=true;this.climbRefuse=false;return true;}
     const best=this._descentCandidate();
     if(!best){this.descendCandidate=null;return false;}
+    // NOTHING MOVES UNTIL THE WALL ANSWERS. No transfer, no camera turn, no fall.
+    if(!this._descentWillHold(best)){this.descendCandidate=null;return false;}
     this.descendCandidate=null;
     this.scaleFace=best.face;this.scaleDescending=true;this.scaleStall=0;this.climbRefuse=false;
     const camera=this._camera;
     if(camera){let turn=Math.atan2(best.face.nx,best.face.nz)-camera.yaw;turn=Math.atan2(Math.sin(turn),Math.cos(turn));this._descentTurn={start:camera.yaw,turn,last:camera.yaw,t:0};}
-    this.descendGrab={x0:this.pos.x,z0:this.pos.z,y0:this.pos.y,y:best.carryY,x:best.x,z:best.z,t:0};
+    // The ledge we are leaving, so a refusal part-way through the step puts us back on it
+    // rather than in the air over it.
+    this.descendFrom={x:this.pos.x,y:this.pos.y,z:this.pos.z};
+    // The step to the lip is walked at a person's pace, not snapped: DESCEND_REACH is 2 m now
+    // and a fixed 0.24 s over that distance is a lunge.
+    const span=Math.hypot(best.x-this.pos.x,best.z-this.pos.z);
+    const dur=Math.max(DESCEND_REGRAB_S,span/DESCEND_REGRAB_SPEED);
+    this.descendGrab={x0:this.pos.x,z0:this.pos.z,y0:this.pos.y,y:best.carryY,x:best.x,z:best.z,t:0,dur};
     this.vel.set(0,0,0);this.jumpBuffered=-1;this.spaceClimbIntent=0;this.holdChain=false;this.climbQueued=false;
     this.ctx.bus.emit('player:climb',{kind:'descend',top:best.face.top,x:best.x,z:best.z});
     return true;
   }
 
+  /**
+   * OFF THE WALL. `refused` is the wall saying no — the ROUND-19 stall, or the face running
+   * out under the hands — as against the player choosing to let go.
+   *
+   * A REFUSED DESCENT GOES BACK UP ONTO THE LEDGE IT LEFT. Measured at Hollow Mill: the wall
+   * is blocked 0.9 m under the loft deck, so the descent stalls there and the old answer —
+   * simply let go — dropped the body the remaining 7.2 m for 10 hp. Being put back where you
+   * pressed E, unhurt, says "not that way" just as clearly and costs nothing. Only from near
+   * the top: nobody is teleported six metres back up a wall they have most of the way down.
+   *
+   * Otherwise, letting go low down is a step down rather than a fall. The point of the whole
+   * fix is that nothing about climbing down can cost health by surprise.
+   */
+  _endDescent(letGo,refused){
+    const from=this.descendFrom;
+    this._descentTurn=null;
+    this.scaleDescending=false;this.descendGrab=null;this.descendFrom=null;
+    this.scaling=false;this.scaleFace=null;this.scaleStall=0;
+    this.descendHold=0;this.descendCandidate=null;
+    this.mantleCooldown=.2;
+    const col=this._collision;
+    if(refused&&from&&from.y-this.pos.y<=DESCEND_BACKOFF
+      &&(!col?.fits||col.fits(from.x,from.z,from.y,P.RADIUS,P.STAND_H))){
+      this.pos.set(from.x,from.y,from.z);this.vel.set(0,0,0);
+      this.grounded=true;this.sinceGround=0;this.climbRefuse=false;return;
+    }
+    if(letGo&&!this.grounded){
+      const support=col?.supportHeight?col.supportHeight(this.pos.x,this.pos.z,this.pos.y,P.RADIUS,0):null;
+      if(Number.isFinite(support)&&this.pos.y-support<=DESCEND_LETGO_SOFT&&this.pos.y-support>=-.05
+        &&(!col?.fits||col.fits(this.pos.x,this.pos.z,support,P.RADIUS,P.STAND_H))){
+        this.pos.y=support;this.vel.set(0,0,0);
+        this.grounded=true;this.sinceGround=0;this.climbRefuse=false;return;
+      }
+    }
+    this.climbRefuse=letGo&&!this.grounded;
+  }
+
   _stepDescent(dt) {
-    if(!this._held('use'))this.descendUseBlocked=false;
-    if(!this.scaleDescending&&!this.descendGrab&&this._held('use')&&this._descentClock<=this._descentOtherUseUntil)this.descendUseBlocked=true;
-    if(!this._held('use')||this._held('crouch')||this.carried||this.descendUseBlocked){
-      this.descendHold=0;
-      if(this.scaleDescending||this.descendGrab){
-        this._descentTurn=null;
-        this.scaleDescending=false;this.descendGrab=null;this.scaling=false;this.scaleFace=null;
-        this.mantleCooldown=.2;this.climbRefuse=!this.grounded;
+    const held=this._held('use'),pressed=this._pressed('use');
+    if(!held)this.descendUseBlocked=false;
+    const onWall=this.scaleDescending||!!this.descendGrab;
+
+    if(onWall){
+      // THE KEY IS NOT PART OF THIS ANY MORE. Releasing E used to tear the descent down with
+      // the body already off the platform — the fall Alex reported. You leave a climb now by
+      // asking to: a second E, Space, or crouch. Or by arriving, which _stepScale owns.
+      if(this.carried){this._endDescent(false,false);return false;}
+      if(pressed||this._pressed('jump')||this._held('crouch')){this._endDescent(true,false);return false;}
+      if(this.climb!==CLIMB_NONE)return false;
+      this._turnToDescentWall(dt);
+      const g=this.descendGrab;
+      if(g){
+        const dur=g.dur||DESCEND_REGRAB_S;
+        g.t+=dt;const lift=g.y>g.y0+.001?.07:0,u=ease.inOutQuad(clamp01((g.t-lift)/Math.max(.001,dur-lift))),x=lerp(g.x0,g.x,u),z=lerp(g.z0,g.z,u),y=lift?lerp(g.y0,g.y,clamp01(g.t/lift)):g.y;
+        if(!this._collision.climbPathClear(this.pos.x,this.pos.z,this.pos.y,x,z,y,P.RADIUS,P.STAND_H)){
+          // REFUSED PART-WAY: put the body back on the ledge it left, standing. The old code
+          // dropped the grab here and let gravity have whatever was left of the step.
+          const from=this.descendFrom;
+          if(from){this.pos.set(from.x,from.y,from.z);this.vel.set(0,0,0);this.grounded=true;this.sinceGround=0;}
+          this._endDescent(false,false);
+          return !!from;
+        }
+        this.pos.set(x,y,z);this.vel.set(0,0,0);this.grounded=false;this.scaling=true;this.sinceGround=P.COYOTE+1;
+        if(g.t>=dur)this.descendGrab=null;
+        return true;
       }
-      return false;
+      return this._stepScale(dt,true);
     }
-    this.descendHold+=dt;
-    if(this.climb!==CLIMB_NONE)return false;
-    if(!this.scaleDescending&&!this.descendGrab&&(this.descendHold<DESCEND_HOLD_S||(!this.descendCandidate&&!this.scaling)||!this._beginDescentGrab()))return false;
+
+    // NOT ON THE WALL. One press starts it, on the rising edge, the way every other E in the
+    // county works. A press another prompt already owns is not ours.
+    this.descendHold=0;
+    if(!pressed||this._held('crouch')||this.carried||this.climb!==CLIMB_NONE)return false;
+    if(this._descentClock<=this._descentOtherUseUntil){this.descendUseBlocked=true;return false;}
+    if(this.descendUseBlocked)return false;
+    if(!this.descendCandidate&&!this.scaling)return false;
+    if(!this._beginDescentGrab())return false;
     this._turnToDescentWall(dt);
-    const g=this.descendGrab;
-    if(g){
-      g.t+=dt;const lift=g.y>g.y0+.001?.07:0,u=ease.inOutQuad(clamp01((g.t-lift)/(DESCEND_REGRAB_S-lift))),x=lerp(g.x0,g.x,u),z=lerp(g.z0,g.z,u),y=lift?lerp(g.y0,g.y,clamp01(g.t/lift)):g.y;
-      if(!this._collision.climbPathClear(this.pos.x,this.pos.z,this.pos.y,x,z,y,P.RADIUS,P.STAND_H)){
-        this.descendGrab=null;this.scaleDescending=false;this.scaling=false;this.scaleFace=null;this.climbRefuse=true;return false;
-      }
-      this.pos.set(x,y,z);this.vel.set(0,0,0);this.grounded=false;this.scaling=true;this.sinceGround=P.COYOTE+1;
-      if(g.t>=DESCEND_REGRAB_S)this.descendGrab=null;
-      return true;
-    }
-    return this._stepScale(dt,true);
+    return true;
   }
 
   _turnToDescentWall(dt){
@@ -1683,7 +1804,9 @@ export class PlayerController {
    * sequence is imposed; the same capsule clearance and pull-up own the entire route. */
   _stepScale(dt,descending=false) {
     const col=this._collision;
-    if(!col?.climbFace||!(descending?this._held('use'):this._held('jump'))||this._held('crouch')||this.carried||this.climbRefuse){
+    // Going UP is held Space. Going DOWN is the latch _stepDescent set, never the key: E is
+    // released the instant a player taps it and the body is on a wall by then.
+    if(!col?.climbFace||!(descending?this.scaleDescending:this._held('jump'))||this._held('crouch')||this.carried||this.climbRefuse){
       if(this.scaling){this.scaling=false;this.scaleFace=null;this.mantleCooldown=.2;}
       if(descending)this.scaleDescending=false;
       return false;
@@ -1725,7 +1848,9 @@ export class PlayerController {
       // kept a face it had lost as long as its top was within 1.1 m, so a body that had
       // slid or been pushed off carried on "scaling" in mid air with nothing in front of
       // it. That is Alex's "Climbing on nothing".
-      this.scaling=false;this.scaleFace=null;this.scaleStall=0;if(descending)this.scaleDescending=false;return false;
+      this.scaling=false;this.scaleFace=null;this.scaleStall=0;
+      if(descending){this.scaleDescending=false;this._endDescent(true,true);}
+      return false;
     }
     const face=this.scaleFace,nx=face.nx,nz=face.nz,top=face.top;
     const wx=_wish.x,wz=_wish.z;_wish.set(-nx,0,-nz);
@@ -1762,7 +1887,13 @@ export class PlayerController {
     const z=face.z+nz*(P.RADIUS+.055)-nx*side*dt*1.8;
     const dy=dt*(descending||pitch<-.55?-2.6:3.4);
     const support=descending?(col.supportHeight?.(x,z,this.pos.y,P.RADIUS,0)??this._terrain.heightAt(x,z)):-Infinity;
-    const y=Math.max(support,Math.min(top+.02,this.pos.y+dy));
+    // THE CEILING IS NOT THE FACE TOP WHEN YOU ARE GOING DOWN. Clamping a descent to
+    // `top + 0.02` teleported the body down to the top of the ladder in one frame whenever it
+    // started above it — which is every authored landing, all of which sit 0.10 m proud of
+    // their own face. Descending, the only ceiling is where the body already is: down at the
+    // descent rate, never a snap.
+    const ceil=descending?this.pos.y:top+.02;
+    const y=Math.max(support,Math.min(ceil,this.pos.y+dy));
     // ROUND 19: AND IF IT CANNOT MOVE, IT LETS GO.
     //
     // ALEX: "Some climbing walls with the right thing on them to climb you cannot even
@@ -1796,11 +1927,15 @@ export class PlayerController {
       if(this.scaleStall>=SCALE_STALL_S){
         this.scaling=false;this.scaleFace=null;this.scaleStall=0;
         this.mantleCooldown=.35;this.climbRefuse=true;
+        // A stalled DESCENT is the same "that one will not go" answer as a stalled climb, but
+        // it must not leave the latch set with nothing under the hands.
+        if(descending){this.scaleDescending=false;this._endDescent(true,true);}
         return false;
       }
     }
     if(descending&&this.pos.y<=support+.015){
       this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.scaleStall=0;this.vel.set(0,0,0);
+      this.descendGrab=null;this.descendFrom=null;this.descendCandidate=null;
       this.grounded=true;this.sinceGround=0;this.mantleCooldown=.2;this.climbRefuse=false;return true;
     }
     this.scaling=true;this.vel.set(0,0,0);this.grounded=false;this.sinceGround=P.COYOTE+1;
