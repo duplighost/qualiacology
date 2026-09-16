@@ -1,0 +1,234 @@
+name: WINTERLINE live regression test
+
+on:
+  push:
+    branches: [test/winterline-live-regression]
+
+permissions:
+  contents: read
+
+jobs:
+  browser-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: build/package-lock.json
+
+      - name: Install browser test dependencies
+        working-directory: build
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Start exact repository build locally
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory . >/tmp/winterline-http.log 2>&1 &
+          echo $! >/tmp/winterline-http.pid
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/winterline/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/winterline-http.log
+          exit 1
+
+      - name: Run local and production browser tests
+        working-directory: build
+        shell: bash
+        run: |
+          mkdir -p qa test-output/winterline
+          cat > qa/winterline-live-regression.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import crypto from 'node:crypto';
+
+          const output = path.resolve('test-output/winterline');
+          fs.mkdirSync(output, { recursive: true });
+          const sha = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+          const targets = [
+            { name: 'local', url: 'http://127.0.0.1:4173/winterline/' },
+            { name: 'production', url: 'https://qualiacology.com/winterline/' },
+          ];
+
+          const browser = await chromium.launch({
+            headless: true,
+            args: [
+              '--enable-webgl',
+              '--ignore-gpu-blocklist',
+              '--use-angle=swiftshader',
+              '--enable-unsafe-swiftshader',
+              '--autoplay-policy=no-user-gesture-required',
+            ],
+          });
+
+          const complete = [];
+          let failed = false;
+
+          for (const target of targets) {
+            const context = await browser.newContext({
+              viewport: { width: 1440, height: 900 },
+              deviceScaleFactor: 1,
+              ignoreHTTPSErrors: false,
+            });
+            const page = await context.newPage();
+            page.setDefaultTimeout(120000);
+
+            const consoleErrors = [];
+            const pageErrors = [];
+            const requestFailures = [];
+            const badResponses = [];
+            page.on('console', message => {
+              if (message.type() === 'error') consoleErrors.push(message.text());
+            });
+            page.on('pageerror', error => pageErrors.push(String(error)));
+            page.on('requestfailed', request => requestFailures.push({ url: request.url(), failure: request.failure() }));
+            page.on('response', response => {
+              if (response.status() >= 400) badResponses.push({ url: response.url(), status: response.status() });
+            });
+
+            const started = Date.now();
+            const response = await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+            await page.waitForFunction(() => {
+              const play = document.querySelector('#play');
+              return play && !play.disabled;
+            }, null, { timeout: 120000 });
+
+            const menuShot = path.join(output, `${target.name}-menu.png`);
+            const gameShot1 = path.join(output, `${target.name}-game-1.png`);
+            const gameShot2 = path.join(output, `${target.name}-game-2.png`);
+            const inputShot = path.join(output, `${target.name}-after-input.png`);
+            await page.screenshot({ path: menuShot });
+
+            const before = await page.evaluate(() => ({
+              title: document.title,
+              playText: document.querySelector('#play')?.textContent?.trim() || '',
+              playDisabled: Boolean(document.querySelector('#play')?.disabled),
+              message: document.querySelector('#message')?.textContent?.trim() || '',
+              scripts: [...document.scripts].map(script => script.src).filter(Boolean),
+              styles: [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => link.href),
+              hasWantedHud: Boolean(document.querySelector('#wanted')),
+              hasVehicleHud: Boolean(document.querySelector('#vehicle-hud')),
+              canvas: (() => {
+                const canvas = document.querySelector('#game');
+                return canvas ? {
+                  width: canvas.width,
+                  height: canvas.height,
+                  clientWidth: canvas.clientWidth,
+                  clientHeight: canvas.clientHeight,
+                } : null;
+              })(),
+            }));
+
+            await page.locator('#play').click({ force: true });
+            await page.waitForFunction(() => document.body.classList.contains('playing'), null, { timeout: 30000 });
+            await page.waitForTimeout(8000);
+            await page.screenshot({ path: gameShot1 });
+            await page.waitForTimeout(1500);
+            await page.screenshot({ path: gameShot2 });
+
+            await page.keyboard.down('w');
+            await page.waitForTimeout(1200);
+            await page.keyboard.up('w');
+            await page.mouse.click(720, 450);
+            await page.waitForTimeout(1800);
+            await page.screenshot({ path: inputShot });
+
+            const after = await page.evaluate(() => ({
+              bodyClass: document.body.className,
+              menuDisplay: getComputedStyle(document.querySelector('#menu')).display,
+              menuOpacity: getComputedStyle(document.querySelector('#menu')).opacity,
+              message: document.querySelector('#message')?.textContent?.trim() || '',
+              weapon: document.querySelector('#weapon-label')?.textContent?.trim() || '',
+              score: document.querySelector('#score-total')?.textContent?.trim() || '',
+              level: document.querySelector('#rank-number')?.textContent?.trim() || '',
+              pointerLockElement: document.pointerLockElement?.id || null,
+              visibility: document.visibilityState,
+              canvas: (() => {
+                const canvas = document.querySelector('#game');
+                return canvas ? {
+                  width: canvas.width,
+                  height: canvas.height,
+                  clientWidth: canvas.clientWidth,
+                  clientHeight: canvas.clientHeight,
+                } : null;
+              })(),
+            }));
+
+            const hashes = {
+              menu: sha(menuShot),
+              game1: sha(gameShot1),
+              game2: sha(gameShot2),
+              afterInput: sha(inputShot),
+            };
+            const sizes = Object.fromEntries([
+              ['menu', menuShot],
+              ['game1', gameShot1],
+              ['game2', gameShot2],
+              ['afterInput', inputShot],
+            ].map(([key, file]) => [key, fs.statSync(file).size]));
+
+            const assertions = {
+              http200: response?.status() === 200,
+              correctRuntime: before.scripts.some(url => url.endsWith('/winterline/assets/index-HTnuCZ-p.js')),
+              correctStylesheet: before.styles.some(url => url.endsWith('/winterline/assets/index-B0NoEjM5.css')),
+              badRuntimeAbsent: !before.scripts.some(url => url.includes('index-DwiPC6MK.js')),
+              blockyExpansionHudAbsent: !before.hasWantedHud && !before.hasVehicleHud,
+              playEnabled: !before.playDisabled,
+              enteredGameplay: after.bodyClass.split(/\s+/).includes('playing'),
+              canvasSized: after.canvas && after.canvas.width >= 1000 && after.canvas.height >= 600,
+              menuRemovedFromView: after.menuDisplay === 'none' || Number(after.menuOpacity) === 0,
+              weaponSystemAlive: /Kestrel|C4|\d+\s*\/\s*\d+/.test(after.weapon),
+              renderChangedFromMenu: hashes.menu !== hashes.game1,
+              renderLoopAdvancing: hashes.game1 !== hashes.game2,
+              gameplayFrameSubstantial: sizes.game1 > 20000 && sizes.game2 > 20000,
+              noPageErrors: pageErrors.length === 0,
+              noFailedRequests: requestFailures.length === 0,
+              noHttpErrors: badResponses.length === 0,
+              noConsoleErrors: consoleErrors.length === 0,
+            };
+
+            const result = {
+              ...target,
+              elapsedMs: Date.now() - started,
+              before,
+              after,
+              hashes,
+              sizes,
+              assertions,
+              consoleErrors,
+              pageErrors,
+              requestFailures,
+              badResponses,
+              passed: Object.values(assertions).every(Boolean),
+            };
+            if (!result.passed) failed = true;
+            complete.push(result);
+            console.log(`\n=== ${target.name.toUpperCase()} ===`);
+            console.log(JSON.stringify(result, null, 2));
+            await context.close();
+          }
+
+          await browser.close();
+          fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(complete, null, 2));
+          console.log(`\nRESULT_JSON=${JSON.stringify(complete)}`);
+          if (failed) process.exit(1);
+          NODE
+          node qa/winterline-live-regression.mjs
+
+      - name: Upload screenshots and machine-readable results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: winterline-live-regression
+          path: build/test-output/winterline
+          if-no-files-found: error
+          retention-days: 7
