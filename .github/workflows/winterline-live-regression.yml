@@ -12,8 +12,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check out exact candidate
+      - name: Check out exact candidate with game assets
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Confirm real binary assets were checked out
+        shell: bash
+        run: |
+          git lfs pull
+          ls -lh winterline/assets/characters/eric.glb winterline/assets/weapons/carbine.glb
+          if grep -aq "git-lfs.github.com/spec" winterline/assets/characters/eric.glb; then
+            echo "Character asset is still an LFS pointer"
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -60,18 +72,20 @@ jobs:
           ];
 
           const browser = await chromium.launch({
-            headless: true,
+            headless: false,
             args: [
               '--enable-webgl',
               '--ignore-gpu-blocklist',
+              '--use-gl=angle',
               '--use-angle=swiftshader',
               '--enable-unsafe-swiftshader',
               '--autoplay-policy=no-user-gesture-required',
+              '--disable-dev-shm-usage',
             ],
           });
 
           const complete = [];
-          let failed = false;
+          let failedAny = false;
 
           for (const target of targets) {
             const context = await browser.newContext({
@@ -83,11 +97,13 @@ jobs:
             page.setDefaultTimeout(120000);
 
             const consoleErrors = [];
+            const consoleWarnings = [];
             const pageErrors = [];
             const requestFailures = [];
             const badResponses = [];
             page.on('console', message => {
               if (message.type() === 'error') consoleErrors.push(message.text());
+              if (message.type() === 'warning') consoleWarnings.push(message.text());
             });
             page.on('pageerror', error => pageErrors.push(String(error)));
             page.on('requestfailed', request => requestFailures.push({ url: request.url(), failure: request.failure() }));
@@ -96,104 +112,128 @@ jobs:
             });
 
             const started = Date.now();
-            const response = await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 120000 });
-            await page.waitForFunction(() => {
-              const play = document.querySelector('#play');
-              return play && !play.disabled;
-            }, null, { timeout: 120000 });
-
             const menuShot = path.join(output, `${target.name}-menu.png`);
             const gameShot1 = path.join(output, `${target.name}-game-1.png`);
             const gameShot2 = path.join(output, `${target.name}-game-2.png`);
             const inputShot = path.join(output, `${target.name}-after-input.png`);
-            await page.screenshot({ path: menuShot });
+            let response = null;
+            let ready = false;
+            let entered = false;
+            let before = null;
+            let after = null;
+            let hashes = {};
+            let sizes = {};
+            let fatal = null;
 
-            const before = await page.evaluate(() => ({
-              title: document.title,
-              playText: document.querySelector('#play')?.textContent?.trim() || '',
-              playDisabled: Boolean(document.querySelector('#play')?.disabled),
-              message: document.querySelector('#message')?.textContent?.trim() || '',
-              scripts: [...document.scripts].map(script => script.src).filter(Boolean),
-              styles: [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => link.href),
-              hasWantedHud: Boolean(document.querySelector('#wanted')),
-              hasVehicleHud: Boolean(document.querySelector('#vehicle-hud')),
-              canvas: (() => {
-                const canvas = document.querySelector('#game');
-                return canvas ? {
-                  width: canvas.width,
-                  height: canvas.height,
-                  clientWidth: canvas.clientWidth,
-                  clientHeight: canvas.clientHeight,
-                } : null;
-              })(),
-            }));
+            try {
+              response = await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+              await page.waitForTimeout(2500);
+              await page.screenshot({ path: menuShot });
+              try {
+                await page.waitForFunction(() => {
+                  const play = document.querySelector('#play');
+                  return play && !play.disabled;
+                }, null, { timeout: 90000 });
+                ready = true;
+              } catch (error) {
+                fatal = `Play never became ready: ${error}`;
+              }
 
-            await page.locator('#play').click({ force: true });
-            await page.waitForFunction(() => document.body.classList.contains('playing'), null, { timeout: 30000 });
-            await page.waitForTimeout(8000);
-            await page.screenshot({ path: gameShot1 });
-            await page.waitForTimeout(1500);
-            await page.screenshot({ path: gameShot2 });
+              before = await page.evaluate(() => ({
+                title: document.title,
+                playText: document.querySelector('#play')?.textContent?.trim() || '',
+                playDisabled: Boolean(document.querySelector('#play')?.disabled),
+                message: document.querySelector('#message')?.textContent?.trim() || '',
+                scripts: [...document.scripts].map(script => script.src).filter(Boolean),
+                styles: [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => link.href),
+                hasWantedHud: Boolean(document.querySelector('#wanted')),
+                hasVehicleHud: Boolean(document.querySelector('#vehicle-hud')),
+                bodyClass: document.body.className,
+                canvas: (() => {
+                  const canvas = document.querySelector('#game');
+                  return canvas ? {
+                    width: canvas.width,
+                    height: canvas.height,
+                    clientWidth: canvas.clientWidth,
+                    clientHeight: canvas.clientHeight,
+                  } : null;
+                })(),
+              }));
 
-            await page.keyboard.down('w');
-            await page.waitForTimeout(1200);
-            await page.keyboard.up('w');
-            await page.mouse.click(720, 450);
-            await page.waitForTimeout(1800);
-            await page.screenshot({ path: inputShot });
+              if (ready) {
+                await page.locator('#play').click({ force: true });
+                try {
+                  await page.waitForFunction(() => document.body.classList.contains('playing'), null, { timeout: 30000 });
+                  entered = true;
+                } catch (error) {
+                  fatal = `Play clicked but gameplay state never arrived: ${error}`;
+                }
+              }
 
-            const after = await page.evaluate(() => ({
-              bodyClass: document.body.className,
-              menuDisplay: getComputedStyle(document.querySelector('#menu')).display,
-              menuOpacity: getComputedStyle(document.querySelector('#menu')).opacity,
-              message: document.querySelector('#message')?.textContent?.trim() || '',
-              weapon: document.querySelector('#weapon-label')?.textContent?.trim() || '',
-              score: document.querySelector('#score-total')?.textContent?.trim() || '',
-              level: document.querySelector('#rank-number')?.textContent?.trim() || '',
-              pointerLockElement: document.pointerLockElement?.id || null,
-              visibility: document.visibilityState,
-              canvas: (() => {
-                const canvas = document.querySelector('#game');
-                return canvas ? {
-                  width: canvas.width,
-                  height: canvas.height,
-                  clientWidth: canvas.clientWidth,
-                  clientHeight: canvas.clientHeight,
-                } : null;
-              })(),
-            }));
+              if (entered) {
+                await page.waitForTimeout(8000);
+                await page.screenshot({ path: gameShot1 });
+                await page.waitForTimeout(1500);
+                await page.screenshot({ path: gameShot2 });
+                await page.keyboard.down('w');
+                await page.waitForTimeout(1200);
+                await page.keyboard.up('w');
+                await page.mouse.click(720, 450);
+                await page.waitForTimeout(1800);
+                await page.screenshot({ path: inputShot });
+              }
 
-            const hashes = {
-              menu: sha(menuShot),
-              game1: sha(gameShot1),
-              game2: sha(gameShot2),
-              afterInput: sha(inputShot),
-            };
-            const sizes = Object.fromEntries([
-              ['menu', menuShot],
-              ['game1', gameShot1],
-              ['game2', gameShot2],
-              ['afterInput', inputShot],
-            ].map(([key, file]) => [key, fs.statSync(file).size]));
+              after = await page.evaluate(() => ({
+                bodyClass: document.body.className,
+                menuDisplay: getComputedStyle(document.querySelector('#menu')).display,
+                menuOpacity: getComputedStyle(document.querySelector('#menu')).opacity,
+                message: document.querySelector('#message')?.textContent?.trim() || '',
+                weapon: document.querySelector('#weapon-label')?.textContent?.trim() || '',
+                score: document.querySelector('#score-total')?.textContent?.trim() || '',
+                level: document.querySelector('#rank-number')?.textContent?.trim() || '',
+                pointerLockElement: document.pointerLockElement?.id || null,
+                visibility: document.visibilityState,
+                canvas: (() => {
+                  const canvas = document.querySelector('#game');
+                  return canvas ? {
+                    width: canvas.width,
+                    height: canvas.height,
+                    clientWidth: canvas.clientWidth,
+                    clientHeight: canvas.clientHeight,
+                  } : null;
+                })(),
+              }));
+
+              for (const [key, file] of Object.entries({ menu: menuShot, game1: gameShot1, game2: gameShot2, afterInput: inputShot })) {
+                if (fs.existsSync(file)) {
+                  hashes[key] = sha(file);
+                  sizes[key] = fs.statSync(file).size;
+                }
+              }
+            } catch (error) {
+              fatal = String(error);
+            }
 
             const assertions = {
               http200: response?.status() === 200,
-              correctRuntime: before.scripts.some(url => url.endsWith('/winterline/assets/index-HTnuCZ-p.js')),
-              correctStylesheet: before.styles.some(url => url.endsWith('/winterline/assets/index-B0NoEjM5.css')),
-              badRuntimeAbsent: !before.scripts.some(url => url.includes('index-DwiPC6MK.js')),
-              blockyExpansionHudAbsent: !before.hasWantedHud && !before.hasVehicleHud,
-              playEnabled: !before.playDisabled,
-              enteredGameplay: after.bodyClass.split(/\s+/).includes('playing'),
-              canvasSized: after.canvas && after.canvas.width >= 1000 && after.canvas.height >= 600,
-              menuRemovedFromView: after.menuDisplay === 'none' || Number(after.menuOpacity) === 0,
-              weaponSystemAlive: /Kestrel|C4|\d+\s*\/\s*\d+/.test(after.weapon),
-              renderChangedFromMenu: hashes.menu !== hashes.game1,
-              renderLoopAdvancing: hashes.game1 !== hashes.game2,
-              gameplayFrameSubstantial: sizes.game1 > 20000 && sizes.game2 > 20000,
+              correctRuntime: Boolean(before?.scripts?.some(url => url.endsWith('/winterline/assets/index-HTnuCZ-p.js'))),
+              correctStylesheet: Boolean(before?.styles?.some(url => url.endsWith('/winterline/assets/index-B0NoEjM5.css'))),
+              badRuntimeAbsent: !before?.scripts?.some(url => url.includes('index-DwiPC6MK.js')),
+              blockyExpansionHudAbsent: before ? !before.hasWantedHud && !before.hasVehicleHud : false,
+              playEnabled: ready && !before?.playDisabled,
+              enteredGameplay: entered && Boolean(after?.bodyClass?.split(/\s+/).includes('playing')),
+              canvasSized: Boolean(after?.canvas && after.canvas.width >= 1000 && after.canvas.height >= 600),
+              menuRemovedFromView: Boolean(after && (after.menuDisplay === 'none' || Number(after.menuOpacity) === 0)),
+              weaponSystemAlive: Boolean(after && /Kestrel|C4|\d+\s*\/\s*\d+/.test(after.weapon)),
+              renderChangedFromMenu: Boolean(hashes.menu && hashes.game1 && hashes.menu !== hashes.game1),
+              renderLoopAdvancing: Boolean(hashes.game1 && hashes.game2 && hashes.game1 !== hashes.game2),
+              inputChangedFrame: Boolean(hashes.game2 && hashes.afterInput && hashes.game2 !== hashes.afterInput),
+              gameplayFrameSubstantial: Boolean(sizes.game1 > 20000 && sizes.game2 > 20000 && sizes.afterInput > 20000),
               noPageErrors: pageErrors.length === 0,
               noFailedRequests: requestFailures.length === 0,
               noHttpErrors: badResponses.length === 0,
               noConsoleErrors: consoleErrors.length === 0,
+              noFatalHarnessError: fatal === null,
             };
 
             const result = {
@@ -205,12 +245,14 @@ jobs:
               sizes,
               assertions,
               consoleErrors,
+              consoleWarnings,
               pageErrors,
               requestFailures,
               badResponses,
+              fatal,
               passed: Object.values(assertions).every(Boolean),
             };
-            if (!result.passed) failed = true;
+            if (!result.passed) failedAny = true;
             complete.push(result);
             console.log(`\n=== ${target.name.toUpperCase()} ===`);
             console.log(JSON.stringify(result, null, 2));
@@ -220,9 +262,9 @@ jobs:
           await browser.close();
           fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(complete, null, 2));
           console.log(`\nRESULT_JSON=${JSON.stringify(complete)}`);
-          if (failed) process.exit(1);
+          if (failedAny) process.exit(1);
           NODE
-          node qa/winterline-live-regression.mjs
+          xvfb-run -a -s "-screen 0 1440x900x24" node qa/winterline-live-regression.mjs
 
       - name: Upload screenshots and machine-readable results
         if: always()
