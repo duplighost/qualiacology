@@ -170,6 +170,8 @@ const EXIT_MAX_SPEED = 1.6;       // you cannot step out of a moving car; the re
 const ENGINE_NOISE_R = 60;        // DESIGN section 3: "the engine is a 60 m disturbance"
 const ENGINE_NOISE_EVERY = 0.40;
 const COOL_TICKS = 5;             // the engine ticking as it cools, after an arrival
+const GLIMMER_S = 2.10;           // s of warm sheen over the shell after a pour
+const GLIMMER_I = 26;             // the borrowed light's peak, at the car's own middle
 const COOL_GAP = 1.15;
 
 const PILOT_CRUISE = 9.5;         // m/s the pilot holds on its approach
@@ -3071,6 +3073,8 @@ export class Car {
    * ever did.
    */
   _stepWear(dt) {
+    // The pour's sheen burns down on the FIXED step, so a fast monitor cannot shorten it.
+    if (this.glimmerT > 0) this.glimmerT = Math.max(0, this.glimmerT - dt);
     // The needle and the smoke lag the number, always, so the pour has something to watch.
     if (this.wearShown !== this.wear) {
       const step = WEAR_SHOWN_RATE * dt;
@@ -3172,7 +3176,41 @@ export class Car {
     this.hitCooldown=0;this.stuckT=0;
     // The lamp brightens as the wear comes off (unless STOLEN LIGHT already held it there).
     if(this.body&&this.headlightsOn)this.body.setLamp(this._filament(),this.engineOn,this.moths);
+    // ALEX, 2026-09-16: "The car should glimmer or something when you fill it up." The gauge
+    // sweeping up is on the binnacle, and you are standing at the rear quarter with the can
+    // in your hands when it happens. GLIMMER_S of warm sheen over the whole shell, one
+    // borrowed light so the ground under it answers too, and the thing you just did is a
+    // thing you can see from where you are.
+    this.glimmerT=GLIMMER_S;
     this._emit('car:refuelled',{condition:100});
+  }
+
+  /**
+   * THE POUR'S RECEIPT. The clock burns down on the fixed step (_stepWear) so a fast monitor
+   * cannot shorten it; this only paints, from present(), where the interpolated position
+   * already is. Up over the first fourteenth, then a long fall, so it reads as a sheen
+   * crossing the shell rather than a lamp being switched on and off. Nothing here is state —
+   * a reload mid-glimmer simply arrives at a car that is already full, which is the truth.
+   */
+  _glimmer(x, y, z) {
+    const t = this.glimmerT || 0;
+    if (t <= 0) {
+      if (this._glimmerOn) { this._glimmerOn = false; this.body?.setGlimmer?.(0); }
+      if (this._glimmerLight) { this.ctx.systems.get('lights')?.release(this._glimmerLight); this._glimmerLight = null; }
+      return;
+    }
+    const done = 1 - t / GLIMMER_S;
+    const k = done < 0.07 ? done / 0.07 : Math.pow(Math.max(0, 1 - (done - 0.07) / 0.93), 1.6);
+    this._glimmerOn = true;
+    this.body?.setGlimmer?.(k);
+    const lights = this.ctx.systems.get('lights');
+    if (lights?.borrow) {
+      if (!this._glimmerLight?.inUse) this._glimmerLight = lights.borrow('car-pour', x, y + 1.0, z, 0xffc98e, GLIMMER_I, 0);
+      if (this._glimmerLight) {
+        this._glimmerLight.x = x; this._glimmerLight.y = y + 1.0; this._glimmerLight.z = z;
+        this._glimmerLight.peak = GLIMMER_I * k;
+      }
+    }
   }
 
   repairFull(){
@@ -3419,6 +3457,7 @@ export class Car {
     // be "on the cars dashboard and not on the hud", so this is the only place the number
     // is shown and the HUD line that used to print it is gone (ui/readouts.js).
     if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wearShown), (this.ctx.time && this.ctx.time.t) || 0);
+    this._glimmer(x, y, z);
     this.distress?.update(this, this.ctx.time?.t || 0);
     this.body.setMotion?.(this.speed, this.boost, this.boosting, this.ctx.time?.t || 0,this.shield??3);
     // FUNERAL PEAL: the bell's own glow IS the charge meter. Cheap enough to push here with

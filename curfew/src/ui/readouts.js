@@ -22,6 +22,13 @@ export class Readouts {
 #curfew-readouts .receipts{position:fixed;right:30px;bottom:126px;display:flex;align-items:flex-end;flex-direction:column;gap:5px}
 #curfew-readouts .receipt{padding:6px 11px;background:rgba(5,9,13,.82);border-right:2px solid currentColor;color:#95d2d6;font-size:14px}
 #curfew-readouts .receipt.cash{color:#e9c785}
+/* A CAR PART SAYS WHAT IT DOES. Alex, 2026-09-16: "I never know what my car part does when i
+   get it. it should tell you." One of the Eleven dies and a permanent part goes on the car;
+   the receipt used to read "STEEL SHELL · FITTED" and the sentence explaining it was sitting
+   unread on the event payload. The name stays the loud line and the sentence goes under it. */
+#curfew-readouts .receipt.part{color:#e9c785;max-width:330px;text-align:right}
+#curfew-readouts .receipt.part b{display:block;font-weight:400;font-size:15px;letter-spacing:.06em}
+#curfew-readouts .receipt.part i{display:block;font-style:normal;font-size:11px;line-height:1.5;color:#b9c3bd;margin-top:5px}
 /* THE LEVEL. Alex, 2026-09-15: "leveling up kind of makes a sound and you can see it better?
    we should do that." It was a 14 px line the same size as a coin pickup, gone in 3.2 s, for
    the one event in the game that grows the tree. Bigger, gold, its own rule top and bottom,
@@ -60,9 +67,14 @@ export class Readouts {
     on('car:repaired',()=>this.receipt('CAR RESTORED · 100%','repair'));
     on('car:failed',()=>{if(this.ctx.shared.inCar)this.receipt('ENGINE DEAD','empty');});
     on('node:bought',p=>{if(!p.auto)this.receipt(p.name||'ABILITY LEARNED','ability');});
-    on('garage:bought',p=>this.receipt((p.name||'UPGRADE')+' · FITTED','repair'));
+    on('garage:bought',p=>{
+      this.receipt((p.name||'UPGRADE')+' · FITTED ON THE CAR','part',0,p.line||'');
+      this.receipts.at(-1).until=this.now()+9;
+    });
     on('perk:triggered',p=>this.receipt(p.name+(p.detail?' · '+p.detail:''),'ability'));
-    on('sanctuary:lit',()=>this.receipt('THE WOODS ARE LIT','light'));
+    on('sanctuary:lit',()=>{this.receipt('THE WOODS ARE LIT · 96 M OF SAFE GROUND','light');this.receipts.at(-1).until=this.now()+6;});
+    // Finding a crown is the only moment anything ever tells you a crown can be bought.
+    on('sanctuary:found',()=>{this.receipt('A LANTERN CROWN · COINS AT ITS BOX LIGHT THE WOOD','light');this.receipts.at(-1).until=this.now()+7;});
     on('territory:secured',p=>this.receipt(p.name+' · SECURED','light'));
     on('refuge:puzzle',()=>this.receipt('NINE LIGHTS','light'));
     on('map:rumour',p=>{this.receipt('MAP UPDATED · '+p.name+' · M','rumour');this.receipts.at(-1).until=this.now()+6.5;});
@@ -80,10 +92,13 @@ export class Readouts {
     on('player:secondwind',()=>this.receipt('STILL STANDING','wind'));
   }
   now(){return this.ctx.time.t||0;}
-  receipt(text,kind,amount=0){
+  receipt(text,kind,amount=0,sub=''){
     const time=this.now(),last=this.receipts.at(-1);
     if(amount&&last?.kind===kind&&time-last.born<.45){last.amount+=amount;last.el.textContent='+'+last.amount+' XP';last.until=time+3.2;return;}
-    const el=document.createElement('div');el.className='receipt '+kind;el.textContent=text;this.list.appendChild(el);
+    const el=document.createElement('div');el.className='receipt '+kind;
+    if(sub){const b=document.createElement('b');b.textContent=text;const i=document.createElement('i');i.textContent=sub;el.append(b,i);}
+    else el.textContent=text;
+    this.list.appendChild(el);
     this.receipts.push({el,kind,amount,born:time,until:time+3.2});
     if(this.receipts.length>4)this.receipts.shift().el.remove();
   }
@@ -111,7 +126,7 @@ export class Readouts {
     if(pr){const d=pr.save.data,L=pr.level,from=xpForLevel(L),span=Math.max(1,xpForLevel(L+1)-from),here=Math.max(0,d.xp-from);
       this.text(this.money,(pr.cash()||0)+' COINS');this.text(this.xp,'LV '+L+' · '+Math.floor(here)+' / '+span+' XP');
       this.xpFill.style.width=Math.min(100,here/span*100).toFixed(1)+'%';
-      this.text(this.carried,d.unbanked>0?Math.floor(d.unbanked)+' UNBANKED · RESTORE A LIGHT':'XP BANKED');
+      this.text(this.carried,d.unbanked>0?Math.floor(d.unbanked)+' XP CARRIED · BANKS AT A LIGHT':'ALL XP BANKED');
     }
     if(p){const frac=Math.max(0,Math.min(1,p.hp/p.hpMax));
       if(p.hp<this.lastHp)this.trailAt=time+.7;

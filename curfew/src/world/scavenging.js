@@ -51,6 +51,16 @@ export class Scavenging {
     const chest=supplyChestGeometry(),earth=new Kit(),marker=new Kit(),excavated=new Kit();
     this.seamMat=new THREE.MeshBasicMaterial({color:0xe6b353,transparent:true,opacity:.75,toneMapped:false});
     this.seamGeo=new THREE.BoxGeometry(1.12,.022,.022);
+    // ALEX, 2026-09-16: "not so many of those piles of dirt look diggable anymore. they need
+    // to still look more special when they are diggable, and more of them need to be there."
+    //
+    // The mound, the rag, the stake and the half-exposed lid are all cut from the SAME wilds
+    // body material as the soil around them, so a turned patch at night was a slightly
+    // different shade of black. This is the one thing the county never gives ordinary ground:
+    // the spade cuts hold light. It breathes, slowly, and it is switched off the moment the
+    // third strike lands, so a seam is never a lie about a hole that is already open.
+    this.cutMat=new THREE.MeshBasicMaterial({color:0xd9a558,transparent:true,opacity:.62,toneMapped:false,depthWrite:false});
+    this.cutGeo=new THREE.BoxGeometry(1,.03,.035);
     const soil=new THREE.CylinderGeometry(.65,1.05,.25,24,3),v=soil.attributes.position;
     for(let i=0;i<v.count;i++){
       const x=v.getX(i),z=v.getZ(i),a=Math.atan2(z,x),r=Math.hypot(x,z);
@@ -83,6 +93,15 @@ export class Scavenging {
       const a=(i/3)*Math.PI*2+.48,r=(m.flat?.radius||30)*(i===2?1.22:(.52+i*.10));
       add(m.id+':'+i,m.x+Math.cos(a)*r,m.z+Math.sin(a)*r,i===2?'dig':'crate',i===2);
     }
+    // TWO MORE TURNED PATCHES AT EVERY DESTINATION, on their own ids so that not one flag in
+    // an existing save changes meaning. They are further out than the ring above and on a
+    // different bearing, so a destination has ground worth walking rather than one hole by
+    // the door. The ambush roll is the ordinary one: about a third of these have something
+    // in them, and what comes up out of a plain dig is still the MARROW.
+    for(const m of MAJORS.filter(m=>m.id!==OPENING.id))for(let i=0;i<2;i++){
+      const a=(i/2)*Math.PI*2+2.31,r=(m.flat?.radius||30)*(.78+i*.46);
+      add(m.id+':dug:'+i,m.x+Math.cos(a)*r,m.z+Math.sin(a)*r,'dig',true);
+    }
     const wild=this._sys('wilds');wild.lookouts();
     const station=this._sys('places').nodes.get(OPENING.id),cy=Math.cos(station.yaw),sy=Math.sin(station.yaw);
     for(const q of OPENING.supplies){
@@ -94,7 +113,7 @@ export class Scavenging {
     for(let i=0;i<wild.sites.length;i++){
       const w=wild.sites[i];if(w.kind==='travel-water')continue;
       const a=rng.next()*Math.PI*2,r=7+rng.next()*5;
-      add('wild:'+w.id,w.x+Math.cos(a)*r,w.z+Math.sin(a)*r,i%3===0?'crate':'dig',true);
+      add('wild:'+w.id,w.x+Math.cos(a)*r,w.z+Math.sin(a)*r,i%4===0?'crate':'dig',true);
     }
 
     /* ---- ROUND 18: THE GRAVES ------------------------------------------------------
@@ -159,8 +178,18 @@ export class Scavenging {
     const earth=new THREE.Mesh(this.geos.earth,this.mat);earth.visible=s.kind==='dig'&&s.stage<3;root.add(earth);
     const marker=s.kind==='dig'?new THREE.Mesh(this.geos.digMarker,this.mat):null,excavated=s.kind==='dig'?new THREE.Mesh(this.geos.excavated,this.mat):null;
     if(marker){marker.name='dig-rag-and-exposed-lid';marker.castShadow=true;marker.receiveShadow=true;root.add(marker,excavated);}
+    // The spade cuts, lit. They sit exactly on the two cuts modelled into the mound.
+    let cuts=null;
+    if(s.kind==='dig'){
+      cuts=new THREE.Group();cuts.name='dig-seam';
+      const bar=(w,x,y,z,ry)=>{const m2=new THREE.Mesh(this.cutGeo,this.cutMat);m2.scale.x=w;m2.position.set(x,y,z);m2.rotation.y=ry;cuts.add(m2);};
+      bar(.86,-.13,.301,-.13,.5);
+      bar(.52,.23,.276,.14,-.65);
+      bar(.34,.28,.291,-.12,.4);
+      root.add(cuts);
+    }
     earth.receiveShadow=true;
-    s.node={root,chest,body,lid,contents,seam,earth,marker,excavated,collider:-1,open:s.stage>=4?1:0};this.root.add(root);
+    s.node={root,chest,body,lid,contents,seam,earth,marker,excavated,cuts,collider:-1,open:s.stage>=4?1:0};this.root.add(root);
     if(s.bones){
       const kit=new Kit(),rng=this.ctx.rng.fork(s.id+':bones');
       const api={scatteredBones:true,heightAt:(x,z)=>terr.heightAt(x,z)-s.y,wx:(x,z)=>s.x+x,wz:(x,z)=>s.z+z,
@@ -174,6 +203,7 @@ export class Scavenging {
     const n=s.node;if(!n)return;const buried=s.kind==='dig'&&s.stage<3,taken=s.stage>=4;
     n.earth.visible=buried;n.earth.scale.y=Math.max(.12,1-s.stage*.34);
     if(n.marker){n.marker.visible=buried;n.excavated.visible=!buried;}
+    if(n.cuts)n.cuts.visible=buried;
     n.chest.visible=s.stage!==5&&(!buried||s.stage>=2);n.chest.position.y=buried?-.46:0;
     n.contents.visible=!taken||n.open<.85;n.lid.rotation.x=n.open*1.92;n.seam.visible=!taken;
     if(!buried&&!taken&&n.collider<0)n.collider=this._sys('collision').addCollider({kind:'obb',x:s.x,z:s.z,halfX:.71,halfZ:.50,yaw:0,y0:s.y-.05,y1:s.y+.93,tag:'supply',breakable:22,standable:true},s.id);
@@ -207,7 +237,7 @@ export class Scavenging {
     // chance that something comes out of it, and a PALLBEARER rather than a MARROW when it
     // does, because the pallbearer is already the species that lies in the ground and rises
     // where it was lying (species.js) and there is no sense inventing a second one.
-    const chance=s.ambushChance===undefined?.25:s.ambushChance;
+    const chance=s.ambushChance===undefined?.32:s.ambushChance;
     if(s.stage===3&&s.seed<chance&&!s.noAmbush){
       const kind=s.ambushSpecies||'marrow';
       const e=this._sys('enemies').spawn(kind,s.x,s.z,{feetY:s.y,awake:true,ambush:true,riseS:.95});
@@ -218,6 +248,9 @@ export class Scavenging {
   }
   step(dt){
     if(!this.ctx.playing||this.ctx.paused)return;this.time+=dt;
+    // One shared material, one write a step: every turned patch in the county breathes
+    // together, which is what makes a row of them read as the same KIND of thing.
+    this.cutMat.opacity=.40+.26*(.5+.5*Math.sin(this.time*1.35));
     const p=this._sys('player'),col=this._sys('collision'),use=this.ctx.input.held('use');if(!use)this.release=false;
     const cam=this._sys('camera');cam.aimDir(_dir);_from.set(p.pos.x,p.eyeY,p.pos.z);
     let target=null,near=3,budget=1;
@@ -309,5 +342,5 @@ export class Scavenging {
     }else this.boxHold=0;
   }
   state(){return{sites:this.sites.length,digs:this.sites.filter(s=>s.kind==='dig').length,resident:this.sites.filter(s=>s.node).map(s=>({id:s.id,kind:s.kind,x:s.x,y:s.y,z:s.z,stage:s.stage,seed:s.seed}))};}
-  dispose(){this.off?.();this.root.removeFromParent();for(const s of this.sites){this._sys('collision').removeChunk(s.id);s.node?.boneGeo?.dispose();}Object.values(this.geos).forEach(g=>g.dispose());this.seamGeo?.dispose();this.seamMat?.dispose();}
+  dispose(){this.off?.();this.root.removeFromParent();for(const s of this.sites){this._sys('collision').removeChunk(s.id);s.node?.boneGeo?.dispose();}Object.values(this.geos).forEach(g=>g.dispose());this.seamGeo?.dispose();this.seamMat?.dispose();this.cutGeo?.dispose();this.cutMat?.dispose();}
 }

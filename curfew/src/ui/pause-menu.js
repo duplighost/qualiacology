@@ -40,6 +40,17 @@ const CSS=`
 #curfew-pause .perk-detail{border-left:1px solid #63718855;padding:25px 0 16px 25px;align-self:stretch;display:flex;flex-direction:column}#curfew-pause .perk-emblem{font:72px/1 Georgia,serif;color:var(--accent);height:95px;opacity:.85}#curfew-pause .detail-eyebrow{text-transform:uppercase;font:10px/1.6 ui-monospace,Consolas,monospace;letter-spacing:.18em;color:var(--accent)}#curfew-pause .perk-detail h2{font-size:27px;font-weight:400;line-height:1.15;margin:14px 0 18px}#curfew-pause .perk-description{font-size:16px;line-height:1.65;color:#d1dce3}#curfew-pause .perk-context{font-size:12px;line-height:1.8;color:#8396a7;margin:20px 0}
 #curfew-pause .perk-action{padding-top:24px;margin-top:auto}#curfew-pause .primary-action{width:100%;padding:15px;border:1px solid #d5c095aa;background:#d5c09516;color:#ebd8b5;cursor:pointer;font-size:14px}#curfew-pause .primary-action:hover:enabled{background:#d5c0952a}#curfew-pause .primary-action:disabled{background:#7e8c9811;color:#8797a5;border-color:#7e8c9844}#curfew-pause .detail-requirement{min-height:31px;margin:12px 0 0;color:#a6b4bf;font-size:11px;line-height:1.5}
 #curfew-pause .map-page{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:28px;align-items:start}#curfew-pause .map-wrap{max-width:none}#curfew-pause .map{width:min(68vh,100%);max-width:760px;margin:0 auto;background:#050a1077;border:1px solid #64718533}#curfew-pause .map-journal{border-left:1px solid #64718544;padding-left:23px;max-height:65vh;overflow:auto}#curfew-pause .map-journal h2{font-size:16px;font-weight:400;margin:5px 0 20px}#curfew-pause .map-pin{display:block;width:100%;border:0;border-bottom:1px solid #63718433;background:transparent;text-align:left;padding:13px 0;cursor:pointer}#curfew-pause .map-pin strong{display:block;font-size:13px;font-weight:400}#curfew-pause .map-pin small{display:block;font:10px/1.5 ui-monospace,Consolas,monospace;color:#bea780;margin-top:5px}#curfew-pause .map-pin[data-state=cleared] small{color:#96c9ad}#curfew-pause .map-journal p{font-size:13px;line-height:1.8;color:#879baa}
+#curfew-pause .car-page{max-width:1060px;margin:0 auto}
+#curfew-pause .car-page h2{font-size:21px;font-weight:400;margin:0 0 6px}
+#curfew-pause .car-state{font:12px/1.9 ui-monospace,Consolas,monospace;color:#a5b5c4;margin:0 0 26px}
+#curfew-pause .car-state span{display:block}
+#curfew-pause .car-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 22px}
+#curfew-pause .car-part{padding:16px 20px;border:1px solid #82949f44;background:#6f849512;border-left:2px solid #c9b183}
+#curfew-pause .car-part strong{display:block;font-size:15px;font-weight:400;color:#e9d6ac;letter-spacing:.08em}
+#curfew-pause .car-part small{display:block;margin-top:8px;font-size:12.5px;line-height:1.65;color:#b4c1ca}
+#curfew-pause .car-part[data-owned=false]{opacity:.5;border-left-color:#6d7d88}
+#curfew-pause .car-part[data-owned=false] strong{color:#b4bfc6}
+#curfew-pause .car-note{color:#aabcc9;line-height:1.7;font-size:13.5px;margin:26px 0 0;max-width:760px}
 #curfew-pause .controls-page{max-width:1000px;margin:auto}#curfew-pause .controls-page h2{font-size:21px;font-weight:400;margin:0 0 10px}#curfew-pause .controls-page p{color:#92a4b3;font-size:13px;margin:0 0 28px}#curfew-pause dl{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 50px}#curfew-pause .pair{padding:12px 0;border-bottom:1px solid #67778d44}#curfew-pause dt{font-size:11px;opacity:.75}#curfew-pause dd{font-size:13px}
 #curfew-pause .weapons-page{display:grid;grid-template-columns:340px minmax(0,1fr);gap:34px}#curfew-pause .finish-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start;max-height:66vh;overflow:auto;padding:4px}#curfew-pause .finish-tile{position:relative;text-align:left;min-height:89px;padding:13px 11px;border:1px solid #63758b55;background:linear-gradient(140deg,var(--finish) -120%,#121c29 65%);cursor:pointer}#curfew-pause .finish-tile strong{display:block;font-size:12px;font-weight:500;margin-top:17px}#curfew-pause .finish-tile small{display:block;font-size:9px;line-height:1.5;color:#90a1b2;margin-top:6px}#curfew-pause .finish-tile:before{content:'';position:absolute;top:12px;left:12px;width:26px;height:3px;background:var(--accent);box-shadow:8px 0 14px var(--accent)}#curfew-pause .finish-tile[data-selected=true]{border-color:var(--accent)}#curfew-pause .finish-tile[data-locked=true]{opacity:.56}#curfew-pause .finish-tile[data-equipped=true]:after{content:'✓';position:absolute;right:10px;top:8px;color:#e4d3ae}
 #curfew-pause .finish-stage{min-width:0}#curfew-pause .weapon-tabs{display:flex;gap:8px;flex-wrap:wrap}#curfew-pause .weapon-tabs button{border:1px solid #66768a44;background:transparent;padding:9px 13px;font-size:11px;cursor:pointer}#curfew-pause .weapon-tabs button[aria-pressed=true]{border-color:#bda97e;color:#eddcba}#curfew-pause .weapon-preview{height:min(39vh,390px);min-height:210px;position:relative;background:radial-gradient(ellipse,#34425744,transparent 65%);cursor:grab}#curfew-pause .weapon-preview canvas{display:block;width:100%;height:100%}#curfew-pause .preview-hint{font:10px/1.7 ui-monospace,Consolas,monospace;color:#8194a8;margin:0 0 23px}#curfew-pause .finish-description{display:grid;grid-template-columns:1fr 180px;gap:25px;border-top:1px solid #63718855;padding-top:22px}#curfew-pause .finish-description h2{font-size:28px;font-weight:400;margin:0 0 10px}#curfew-pause .finish-description p{font-size:12px;line-height:1.7;color:#9bafbf;margin:0}
@@ -57,7 +68,7 @@ export class PauseMenu {
     wrap.replaceChildren();
     const header=el('header','menu-head'),identity=el('div');identity.append(el('div','menu-brand','We Were Promised Morning'));this.title=el('h1','','Paused');identity.append(this.title);header.append(identity);
     this.nav=el('nav','menu-nav');this.nav.setAttribute('aria-label','Pause pages');this.navButtons={};
-    for(const [id,title] of [['home','Overview'],['journey','Your way forward'],['perks','Perks'],['map','Map'],['weapons','Weapons'],['ledger','What we were told'],['controls','Controls']]){const b=button(title,()=>this.show(id));b.dataset.page=id;this.nav.append(b);this.navButtons[id]=b;}
+    for(const [id,title] of [['home','Overview'],['journey','Your way forward'],['perks','Perks'],['car','The car'],['map','Map'],['weapons','Weapons'],['ledger','What we were told'],['controls','Controls']]){const b=button(title,()=>this.show(id));b.dataset.page=id;this.nav.append(b);this.navButtons[id]=b;}
     header.append(this.nav);wrap.append(header);this.pages={};
     const page=(id,cls)=>{const p=el('section','menu-page '+cls);p.dataset.page=id;p.hidden=true;this.pages[id]=p;wrap.append(p);return p;};
     const home=page('home','pause-home'),intro=el('div');intro.append(el('div','home-moon'));intro.append(el('div','home-name','We Were Promised Morning'));this.homeStatus=el('div','home-status');intro.append(this.homeStatus);this.nextStep=button('',()=>this.show('journey'),'primary-action');this.nextStep.style.cssText='display:block;margin-top:18px;max-width:390px;text-align:left;line-height:1.5;white-space:normal';intro.append(this.nextStep);home.append(intro);
@@ -65,6 +76,11 @@ export class PauseMenu {
     for(const [id,title,hint,key] of [['resume','Return','Back to the world','Esc'],['perks','Perks','Choose what keeps you alive','Tab'],['map','Map','Places found. Things heard.','M'],['weapons','Weapons','The marks you brought back',''],['ledger','What we were told','Vera’s ledger','']]){const b=button('',()=>id==='resume'?hud._resume():this.show(id),'home-choice'),text=el('span');text.append(el('strong','',title),el('small','',hint));b.append(text,el(key?'kbd':'span','',key||'→'));links.append(b);}home.append(links);
     const perks=page('perks','perks-layout');this.branches=el('div','perk-branches');for(const row of [...tree.querySelectorAll('.br')])this.branches.append(row);tree.append(this.branches);perks.append(tree);
     this.detail=el('aside','perk-detail');this.emblem=el('div','perk-emblem');this.eyebrow=el('div','detail-eyebrow');this.perkName=el('h2');this.description=el('div','perk-description');this.context=el('p','perk-context');const action=el('div','perk-action');this.buy=button('Learn ability',()=>this.purchase(),'primary-action');this.requirement=el('p','detail-requirement');this.requirement.setAttribute('role','status');action.append(this.buy,this.requirement);this.detail.append(this.emblem,this.eyebrow,this.perkName,this.description,this.context,action);perks.append(this.detail);
+    // THE CAR. Alex, 2026-09-16: "I nevevr know what my car part does when i get it. it
+    // should tell you. and have it in the menu somewhere." Every part already carries the
+    // sentence that says what it does (vehicle/garage.js line); this is the one surface that
+    // keeps them all, fitted and not, so the car can be looked up between drives.
+    this.carPage=page('car','car-page');
     const map=page('map','map-page');map.append(mapWrap);this.journal=el('aside','map-journal');map.append(this.journal);
     this.journeyPage=page('journey','journey-page');this.journeyPage.style.cssText='max-width:1000px;margin:0 auto;padding:10px 20px;box-sizing:border-box';
     const ledger=page('ledger','ledger-container');this.ledgerView=new LedgerView(this.ctx);ledger.append(this.ledgerView.element);
@@ -79,12 +95,12 @@ export class PauseMenu {
   show(id,focus=true){
     this.page=this.pages[id]?id:'home';for(const [key,p] of Object.entries(this.pages))p.hidden=key!==this.page;
     for(const [key,b] of Object.entries(this.navButtons)){if(key===this.page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}
-    this.title.textContent={home:'Paused',journey:'Your way forward',perks:'Perks',map:'Map',weapons:'Weapons',ledger:'WHAT WE WERE TOLD',controls:'Controls'}[this.page];
+    this.title.textContent={home:'Paused',journey:'Your way forward',perks:'Perks',car:'The car',map:'Map',weapons:'Weapons',ledger:'WHAT WE WERE TOLD',controls:'Controls'}[this.page];
     this.hud.pauseEl?.setAttribute('data-page',this.page);this.refresh();
     if(this.page==='map')this.hud._drawMap();if(this.page==='weapons')this.renderWeapon();
     if(focus)this.navButtons[this.page].focus({preventScroll:true});
   }
-  refresh(){const p=this.ctx.systems.get('progress'),points=p?.points||0;this.homeStatus.textContent=`Level ${p?.level||1}   ·   ${p?.cash?.()||0} coins\n${points} skill ${points===1?'point':'points'} available`;this.homeStatus.style.whiteSpace='pre-line';this.selectPerk(this.selectedNode);this.refreshJourney();if(this.page==='map')this.refreshJournal();if(this.page==='weapons')this.refreshFinishes();if(this.page==='ledger')this.ledgerView.refresh();const unread=this.ctx.systems.get('lore-ledger')?.unreadCount()||0;this.navButtons.ledger.textContent='What we were told'+(unread?' · '+unread:'');}
+  refresh(){const p=this.ctx.systems.get('progress'),points=p?.points||0;this.homeStatus.textContent=`Level ${p?.level||1}   ·   ${p?.cash?.()||0} coins\n${points} skill ${points===1?'point':'points'} available`;this.homeStatus.style.whiteSpace='pre-line';this.selectPerk(this.selectedNode);this.refreshJourney();if(this.page==='car')this.refreshCar();if(this.page==='map')this.refreshJournal();if(this.page==='weapons')this.refreshFinishes();if(this.page==='ledger')this.ledgerView.refresh();const unread=this.ctx.systems.get('lore-ledger')?.unreadCount()||0;this.navButtons.ledger.textContent='What we were told'+(unread?' · '+unread:'');}
   refreshJourney(){
     const state=journeyState(this.ctx);this.nextStep.textContent=state.next+' →';if(this.page!=='journey')return;this.journeyPage.replaceChildren(el('h2','',state.next));
     const progress=this.ctx.systems.get('progress'),enabled=!progress.flag('guidance:hidden');
@@ -92,6 +108,12 @@ export class PauseMenu {
     const rows=el('div');rows.style.cssText='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px';
     for(const row of state.rows){const box=el('article');box.style.cssText='padding:20px 24px;border:1px solid #82949f44;background:#6f849512';const title=el('h3','',row.icon+'  '+row.title);title.style.cssText='margin:0 0 10px;font-size:20px;font-weight:400;color:#e5d4ae';const text=el('p','',row.text);text.style.cssText='margin:0;color:#b4c1ca;line-height:1.65;font-size:14px';box.append(title,text);rows.append(box);}this.journeyPage.append(rows);
     const note=el('p','','The torch helps you see and fight. Road lamps and woodland lanterns make safe ground. The nine-light puzzle beside a bed is an optional reward; the day bell is the route to Morning.');note.style.cssText='color:#aabcc9;line-height:1.65;font-size:14px;margin-top:24px';this.journeyPage.append(note);
+    // ALEX, 2026-09-16: "it is still unclear how xp works to me. does it also bank every time
+    // the bell rings?" The one small bell he is hearing IS the bank — progress.bank() rings it
+    // and nothing else does — and the county's curfew bell is a different sound that banks
+    // nothing. Said once, plainly, on the page that already explains the night.
+    const xpNote=el('p','','Experience is carried, not kept. What you earn out in the county is a light on you, and it is dropped where you fall. Standing anywhere lit banks all of it: a destination you claimed, a woodland crown you paid for, a road lamp you brought back, a rest with the door shut. One small bell rings the moment it banks, and that bell is the only thing that means it — the county tolling the hour is not it. A whole cycle survived before banking pays a quarter more, and levels are made of banked experience alone.');
+    xpNote.style.cssText='color:#aabcc9;line-height:1.65;font-size:14px;margin-top:18px';this.journeyPage.append(xpNote);
   }
   selectPerk(id){
     const n=NODES.find(n=>n.id===id)||NODES[0],b=BRANCHES.find(b=>b.id===n.branch),p=this.ctx.systems.get('progress'),owned=p?.ownedSet?.();this.selectedNode=n.id;
@@ -102,6 +124,28 @@ export class PauseMenu {
     this.requirement.textContent=own?'Yours to keep.':pre&&!owned?.has(pre.id)?'Learn '+pre.name+' first.':!can?`${n.cost} skill ${n.cost===1?'point':'points'} required. Bank experience at a light.`:'Permanently unlock this ability.';
   }
   purchase(){const p=this.ctx.systems.get('progress');if(!p?.buy?.(this.selectedNode))return;this.hud._refreshTree();this.hud._celebrateNode(this.selectedNode);this.selectPerk(this.selectedNode);this.requirement.textContent='Learned.';}
+  refreshCar(){
+    const p=this.ctx.systems.get('progress'),car=this.ctx.systems.get('car');
+    const rows=p?.upgrades?.()||[];
+    const fitted=rows.filter(r=>r.owned),waiting=rows.filter(r=>!r.owned);
+    const condition=car&&Number.isFinite(car.wear)?Math.max(0,Math.round((1-car.wear)*100)):null;
+    const cans=p?.gas?.()||0;
+    this.carPage.replaceChildren();
+    const state=el('p','car-state');
+    if(condition!==null)state.append(el('span','','Condition '+condition+'%'+(condition<=0?'  ·  the engine has stopped':'')));
+    state.append(el('span','',cans+' can'+(cans===1?'':'s')+' of gas carried  ·  a can at the filler cap puts it back to 100%'));
+    state.append(el('span','',fitted.length+' of '+rows.length+' parts fitted'));
+    this.carPage.append(el('h2','',fitted.length?'What is on the car':'Nothing is on the car yet'),state);
+    const grid=el('div','car-grid');
+    for(const r of [...fitted,...waiting]){
+      const box=el('article','car-part');
+      box.dataset.owned=String(!!r.owned);
+      box.append(el('strong','',r.name),el('small','',r.owned?r.line:'One of the Eleven is still carrying this.'));
+      grid.append(box);
+    }
+    this.carPage.append(grid);
+    this.carPage.append(el('p','car-note','Nothing in the county sells a part. Each of the Eleven leaves one on the car the moment it dies, and it is yours for good. A can of gas is the only repair.'));
+  }
   refreshJournal(){
     const p=this.ctx.systems.get('progress'),waypoint=p?.waypoint?.();this.journal.replaceChildren(el('h2','','Your waypoint'));
     this.journal.append(el('p','',waypoint?'◆ '+waypoint.name:'Click anywhere on the map to place a waypoint. Click again to move it.'));

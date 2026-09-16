@@ -1805,10 +1805,28 @@ export class Places {
   _buildBody(d, chunkKey) {
     const rec = this.nodes.get(d.id);
     const B = BUILDERS[d.kind];
-    if (!rec || !B || typeof B.body !== 'function') return null;
+    const hasBody = !!(B && typeof B.body === 'function');
+    // A KIND WITH NO BODY BUILDER CAN STILL BE DRESSED.
+    //
+    // MEASURED 2026-09-16: the Toll is kind 'checkpoint', and checkpoint is the one builder
+    // in sites.js with a landmark and no body — a boom across a road needs no compound. So
+    // _buildBody returned null there before the dress chain was ever reached, and the
+    // sleeping room destination-refuges.js asks for at the Toll was never built: refuge.js
+    // still put a door, a bag and a bedside board on the verge, with no walls round them.
+    //
+    // A dress adds and never replaces, so running the chain over an EMPTY body is exactly
+    // what a bodyless kind wants. The apron below is the one thing that is not a dress —
+    // it is made ground the compound builders assume — so a site that has never had one
+    // does not grow one now.
+    const dressed = DRESS_CHAIN.some(map => map && typeof (map[d.id] || map[d.kind]) === 'function');
+    if (!rec || (!hasBody && !dressed)) return null;
     const api = this._apiFor(d, rec, 'body', 'place:' + chunkKey);
     let out = null;
-    try { out = B.body(api); } catch (e) { this._note('body ' + d.id + ' threw: ' + e.message); return null; }
+    if (hasBody) {
+      try { out = B.body(api); } catch (e) { this._note('body ' + d.id + ' threw: ' + e.message); return null; }
+    } else {
+      out = { solid: null, glow: null, people: null };
+    }
     if (!out) return null;
     out = this._dress(d, rec, api, out);
     if (out.cast) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, out.cast, rec.padY);
@@ -1834,7 +1852,7 @@ export class Places {
       const fl = terrain && terrain.flats ? terrain.flats() : null;
       if (fl) for (let i = 0; i < fl.length; i++) if (fl[i].id === d.flatId) { rad = fl[i].r * 0.86; break; }
     }
-    const ap = apron(api, rad, d.apronCol || null);
+    const ap = hasBody ? apron(api, rad, d.apronCol || null) : null;
     if (ap) {
       projectPlaceSurfaceUVs(ap, 7);
       const m = new THREE.Mesh(ap, this.matBody);

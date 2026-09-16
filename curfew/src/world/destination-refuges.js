@@ -2,6 +2,22 @@
 // Each is a working part of its destination: lamp room, sacristy, weigh office or bunk room.
 import { kits, shell, groundY, gableFloor, C } from './sites.js';
 
+// ALEX, 2026-09-16: "do some of the destinations have those circuit board lever things and
+// not beds? lets try to make all the ones that have those have a room to shut the door with
+// a bed."
+//
+// They did. COUNTED against placedata.js: twenty destinations carry a claim fixture and only
+// twelve of them had a room — the-toll, gallowsfen, standing-stones, great-tree, black-rib,
+// mourning-glasshouse, choir-vault and red-quarry were all "throw the lever, now walk back to
+// the car". The eight rows at the bottom of this table are those eight.
+//
+// WHERE THEY STAND. Every destination frames its arrival from +Z (placedata's "approach"
+// routes come in on that axis), and every claim fixture is listed in that file, so each of
+// these sits on the far quarter from both: back and to the left of the yard, inside the
+// site's own flat pad, out of the approach corridor and clear of the fixture. dress() below
+// builds the whole thing — shell, gable, porch stairs that walk themselves down to whatever
+// the ground is doing, and the climb up the east side — so there is nothing to place by hand
+// except these six numbers.
 export const DESTINATION_REFUGES = Object.freeze([
   { id: 'weeping-mine', x: -15, z: -14, w: 7, d: 7, yaw: 0, type: 'weigh', roof: 3.2 },
   { id: 'cathedral', x: -16, z: -13, w: 7, d: 6, yaw: 0, type: 'sacristy', roof: 3.8 },
@@ -15,6 +31,26 @@ export const DESTINATION_REFUGES = Object.freeze([
   // the walls); yaw PI puts the leaf on the site's +Z face at (0, 24); the bag is in the foyer.
   { id: 'morning', x: 0, z: 11, w: 17, d: 26, yaw: Math.PI, existing: true,
     doorW: 2.4, bag: { x: 4.6, z: -10.6, yaw: 0 } },
+
+  /* ---- the eight that had a lever and nowhere to sleep ------------------------------- */
+  // The checkpoint's pad covers 42 m of highway; this is off the carriageway on the west
+  // verge, well behind the barrier line and clear of the dead gantry up the road.
+  { id: 'the-toll', x: -20, z: -9, w: 6.5, d: 6, yaw: 0, type: 'weigh', roof: 3.2 },
+  // The steeple stands in water and the belfry lamp is shot from it; this is back on the
+  // bank on the west side, away from both the wading line and the control cabinet at +5.4.
+  { id: 'gallowsfen', x: -17, z: -11, w: 6, d: 6, yaw: 0, type: 'keeper', roof: 3.2 },
+  // Outside the ring, not in it: the altar is the claim and the stones are the place.
+  { id: 'standing-stones', x: -22, z: -13, w: 6.5, d: 6, yaw: 0, type: 'bunk', roof: 3.2 },
+  // Clear of the trunk and of the spiral climb that goes up the east side to the crown deck.
+  { id: 'great-tree', x: -23, z: -15, w: 6.5, d: 6, yaw: 0, type: 'bunk', roof: 3.2 },
+  // Under the arch's west shoulder, off the stair that runs up to the crown.
+  { id: 'black-rib', x: -20, z: -13, w: 6, d: 6, yaw: 0, type: 'bunk', roof: 3.2 },
+  // A 108 m pad and the claim 51 m up the nave: this is the gardener's end of the glass.
+  { id: 'mourning-glasshouse', x: -27, z: -15, w: 7, d: 6.5, yaw: 0, type: 'keeper', roof: 3.4 },
+  // The vault's claim is out at (16, -34); the sacristy is on the other side of the yard.
+  { id: 'choir-vault', x: -28, z: -17, w: 7, d: 6.5, yaw: 0, type: 'sacristy', roof: 3.4 },
+  // The quarry's claim is 46 m out on the east bench; this is the weigh hut at the gate.
+  { id: 'red-quarry', x: -31, z: -17, w: 7, d: 6.5, yaw: 0, type: 'weigh', roof: 3.4 },
 ]);
 
 const timber = [0.12,0.082,0.047], trim=[0.20,0.18,0.14], metal=[0.045,0.05,0.047];

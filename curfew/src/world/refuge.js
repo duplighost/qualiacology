@@ -131,6 +131,35 @@ const EXTRA_SPECS = Object.freeze([
       { x: -1.75, z: -0.25, yaw: 0 }),
   }),
   Object.freeze({
+    /* ================================================================== THE HOLDFAST ==
+     * ALEX, 2026-09-16: "There needs to somehow be a bed in the main town that you can use.
+     * can you activate something in that main castle then close the door? that would be
+     * good."
+     *
+     * THE KEEP'S GROUND-FLOOR REAR ROOM, which holdfast-town-layout.js already builds, floors,
+     * walls and furnishes as the bakery (KEEP_ROOMS 'keep-rear-0', centre (-8.7, -20.1),
+     * 8.1 m along Z by 6.2 m along X). Nothing new is built: dressHoldfastKeep already leaves
+     * a 2.4 m doorway through the x = -4.7 wall at exactly z = -20.1, so the leaf goes in the
+     * hole that is already there, and furnishRoom puts its shelving on the far wall at
+     * z-local +2.48 and its lantern in the near corner, leaving the half of the room the bag
+     * wants empty.
+     *
+     * The Holdfast's claim is "how: none" — it is an inhabited town, not a place you take —
+     * so this is the one destination refuge with its OWN breaker, which is what Alex is asking
+     * for: something to throw, then a door to shut. compactAnchors puts the board on the hall
+     * side of the doorway wall, the way the Filling Station's is on the forecourt side.
+     *
+     * The keep's ground deck stands ON_APRON + 0.08 = 0.117 m over the site pad and this
+     * refuge's own timber floor would top out at 0.116 — one millimetre under the stone that
+     * is already there — so it does not build one.
+     */
+    id: 'holdfast', claimPowered: false, buildBreaker: true, buildBag: true, buildFloor: false,
+    xpPower: 60, lampIn: 7.5, lampOut: 4.5, lampDecay: 1.28,
+    room: Object.freeze({ x: -8.05, z: -20.1, w: 7.4, d: 6.7, yaw: -Math.PI / 2 }),
+    anchors: compactAnchors({ x: -8.05, z: -20.1, w: 7.4, d: 6.7, yaw: -Math.PI / 2 }, 2.4,
+      { x: -1.4, z: -0.05, yaw: 0 }),
+  }),
+  Object.freeze({
     // The Avery House's boiler room is a real refuge inside a real destination. Its fuse
     // board is the destination claim fixture, so this system adds only the closing door,
     // sleeping bag and powered lamps—one interaction, one state, no duplicate switch.
@@ -154,13 +183,27 @@ const EXTRA_SPECS = Object.freeze([
 
 /* ------------------------------------------------------------------ the verbs -- */
 const REACH_BREAKER = 2.30;      // m, ground distance to the handle
-const REACH_DOOR = 2.40;         // m, to the middle of the doorway, from EITHER side
+const REACH_DOOR = 2.80;         // m, to the NEAREST POINT of the doorway, from EITHER side
 const REACH_BED = 1.90;          // m, to the middle of the bag. You stand BESIDE a bed to get
                                  // into it: at 1.25 the bag's own 1.06 m half-width put the
                                  // usable ring inside the mattress and it could not be reached
                                  // on foot at all (measured, tests/refuge.mjs walk section).
 const FACE_MIN = 0.35;           // look-direction dot; a shallower cone than the claim's,
                                  // because you are inside a room and cannot back off
+// ALEX, 2026-09-16: "it is hard to shut the doors. i'm realizing maybe the toggle is in the
+// middle. sometimes i'm standing behind the door inside though. it should be easier to close."
+//
+// He is right about the middle: _candidate measured to doorWX/doorWZ, one point at the centre
+// of a 2.0-2.6 m opening. Standing at the hinge end of a wide doorway — which is exactly where
+// you end up when you walk in past a leaf that swings inward — the middle is over a metre to
+// the side, so the look-dot to it collapses and the prompt goes even though the doorway is at
+// your elbow. Two changes, and neither of them lets you shut a door from another room:
+//
+//   1. THE DOORWAY IS A LINE, NOT A POINT. Distance and facing are taken to the nearest point
+//      on the opening's own span, so every part of the threshold is equally yours.
+//   2. THE CONE OPENS AS YOU CLOSE. At arm's length there is nothing else you could mean, so
+//      the facing test relaxes from FACE_MIN at REACH_DOOR to nothing at DOOR_NEAR_FREE.
+const DOOR_NEAR_FREE = 1.15;     // m: inside this the doorway needs no facing at all
 const HOLD_BREAKER = 0.50;       // s of hold before the handle goes over centre
 const THROW_S = 0.40;            // s of swing after it does. Alex: nothing floaty.
 const HOLD_REST = 0.45;          // s of hold on the bag before the screen starts to go
@@ -415,12 +458,16 @@ export class Refuge {
     if (scene) scene.add(this.group);
     else this._note('ctx.scene missing at refuge init: nothing will be visible');
     // A raised timber floor separates the room from road and apron surfaces beneath it.
-    const room=this.spec.room,floor=new Kit(),w=room.w-.28,d=room.d-.28,n=Math.ceil(w/.32);
-    for(let i=0;i<n;i++)floor.box(w/n-.006,.095,d,-w/2+(i+.5)*w/n,this.padY+.068,0,[.075,.060,.043]);
-    const deck=new THREE.Mesh(floor.build(),this.matBody);deck.name='refuge-floor-'+this.siteId;
-    deck.position.set(room.x,0,room.z);deck.rotation.y=room.yaw||0;this.group.add(deck);
-    this._sys('collision')?.addCollider({kind:'obb',x:this._wx(room.x,room.z),z:this._wz(room.x,room.z),
-      halfX:w/2,halfZ:d/2,yaw:this.yaw+(room.yaw||0),y0:this.padY+.02,y1:this.padY+.116,tag:'wood',standable:true,breakable:false},'refuge-floor:'+this.siteId);
+    // A room that is already floored by the building it is inside says buildFloor: false.
+    const room=this.spec.room;
+    if(this.spec.buildFloor!==false){
+      const floor=new Kit(),w=room.w-.28,d=room.d-.28,n=Math.ceil(w/.32);
+      for(let i=0;i<n;i++)floor.box(w/n-.006,.095,d,-w/2+(i+.5)*w/n,this.padY+.068,0,[.075,.060,.043]);
+      const deck=new THREE.Mesh(floor.build(),this.matBody);deck.name='refuge-floor-'+this.siteId;
+      deck.position.set(room.x,0,room.z);deck.rotation.y=room.yaw||0;this.group.add(deck);
+      this._sys('collision')?.addCollider({kind:'obb',x:this._wx(room.x,room.z),z:this._wz(room.x,room.z),
+        halfX:w/2,halfZ:d/2,yaw:this.yaw+(room.yaw||0),y0:this.padY+.02,y1:this.padY+.116,tag:'wood',standable:true,breakable:false},'refuge-floor:'+this.siteId);
+    }
 
     if (this.spec.buildBreaker !== false) this._buildBreaker();
     this._buildDoor();
@@ -930,17 +977,26 @@ export class Refuge {
   _candidate(px, py, pz) {
     const cam = this._sys('camera');
     const lookX = cam ? -Math.sin(cam.yaw) : 0, lookZ = cam ? -Math.cos(cam.yaw) : -1;
-    let best = '', bestD = Infinity;
-    const test = (kind, wx, wy, wz, reach, needFace) => {
+    let best = '', bestD = Infinity, bestRank = -1;
+    // A DOORWAY IS BIG AND EVERYTHING ELSE IN THE ROOM IS SMALL. Now that the door is ranged
+    // to the nearest point of its own opening, its threshold can be closer to you than the
+    // board bolted a hand's width beside it — and the first lesson in the game is the board.
+    // So the small, specific things outrank the doorway when both are in reach and faced;
+    // distance only breaks ties inside a rank.
+    const test = (kind, wx, wy, wz, reach, needFace, rank = 2) => {
       const dx = wx - px, dz = wz - pz;
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d >= reach) return;
       if (Math.abs(py - wy) > 2.6) return;
-      if (needFace && d > 0.35) {
+      // The door's cone opens as you close on it; everything else keeps the old flat one.
+      const floor = needFace === 'door'
+        ? FACE_MIN * Math.max(0, (d - DOOR_NEAR_FREE) / Math.max(0.01, reach - DOOR_NEAR_FREE))
+        : FACE_MIN;
+      if (needFace && d > 0.35 && floor > 0) {
         const dot = (dx * lookX + dz * lookZ) / d;
-        if (dot < FACE_MIN) return;
+        if (dot < floor) return;
       }
-      if (d < bestD) { bestD = d; best = kind; }
+      if (rank > bestRank || (rank === bestRank && d < bestD)) { bestRank = rank; bestD = d; best = kind; }
     };
     // ROUND 21: RANGED TO THE DOORWAY, NOT TO THE HANDLE.
     //
@@ -952,8 +1008,29 @@ export class Refuge {
     // not close it from the side you were standing on. The constant has always said "to the
     // middle of the doorway, from EITHER side", and the doorway middle is already here: it
     // is where the door's own sounds play from.
-    test('door', this.doorWX, this.doorWY, this.doorWZ, REACH_DOOR, true);
-    if (this.spec.buildBreaker !== false) test('breaker', this.breakerWX, this.breakerWY - 0.65, this.breakerWZ, REACH_BREAKER, true);
+    // The nearest point on the doorway's own span, not its midpoint. The opening runs from
+    // the hinge along the leaf's SHUT direction for its full width.
+    const dr = this.anchors.door;
+    const da = this.yaw + (dr.yaw || 0);
+    const ex = Math.cos(da), ez = -Math.sin(da);
+    const hx = this._wx(dr.hingeX, dr.hingeZ), hz = this._wz(dr.hingeX, dr.hingeZ);
+    let dt = ((px - hx) * ex + (pz - hz) * ez) / (dr.width || 1);
+    dt = dt < 0 ? 0 : (dt > 1 ? 1 : dt);
+    const nearX = hx + ex * dr.width * dt, nearZ = hz + ez * dr.width * dt;
+    test('door', nearX, this.doorWY, nearZ, REACH_DOOR, 'door', 1);
+    // MEASURED 2026-09-16 in the Holdfast keep, and it is true of every compact refuge:
+    // compactAnchors stands the board 1.92 m along the wall from the middle of its own
+    // doorway, so from the one spot outside a door where you would naturally stand to shut
+    // it the board is 2.19 m away and 60 degrees off the look — inside REACH_BREAKER and
+    // inside FACE_MIN both. A board that has ALREADY been thrown prompts nothing (it says so
+    // thirty lines below), but it was still winning the candidate, so E at the doorway of a
+    // powered refuge answered with the board's dead click instead of shutting the door.
+    // A thrown breaker ranks under everything: its refusal is still there for a player
+    // standing at the board with nothing else in reach, and it can no longer eat a door.
+    if (this.spec.buildBreaker !== false) {
+      test('breaker', this.breakerWX, this.breakerWY - 0.65, this.breakerWZ, REACH_BREAKER, true,
+        this.power ? 0 : 2);
+    }
     const b = this.anchors.bag;
     const bx = this._wx(b.x, b.z), bz = this._wz(b.x, b.z);
     // A bed never works from the other side of its wall or from the roof above it.
@@ -1359,6 +1436,10 @@ export class Refuge {
     const b = this.anchors.bag;
     return {
       id: this.siteId, ready: this._ready, claimPowered: !!this.spec.claimPowered,
+      // A room with its OWN handle on the wall rather than a destination claim behind it.
+      // The Filling Station has always been one; the Holdfast keep is the second, because an
+      // inhabited town is not a place you take and so it has no claim fixture to borrow.
+      ownBreaker: this.spec.buildBreaker !== false,
       power: this.power, powerK: +this.powerK.toFixed(3),
       lever: +this.leverK.toFixed(3), throwing: this.throwT >= 0,
       door: +this.doorK.toFixed(3), doorTarget: this.doorTarget, doorBlocked:this.doorBlocked, collider: this.doorColliderOn,

@@ -6,6 +6,23 @@ import { heightAt } from './terrain.js';
 import { Kit } from './sites.js';
 
 const TAU = Math.PI * 2, RADIUS = 96, HOLD = 1.15;
+// ALEX, 2026-09-16: "I still don't know how the lamps you have to light work exactly.
+// highlight them more and have them really look like you can do something and light up
+// beautifully."
+//
+// AN UNLIT CROWN USED TO BE INVISIBLE. Every glow on it was multiplied by s.k, and s.k is
+// zero until it is paid for — so an eleven-metre iron fixture standing in a black wood was
+// literally dark metal on black, and the only way to learn it existed was to walk into it.
+// It carries a cold pilot now: something is alight in the six lanterns, it is the wrong
+// colour for warmth, and it breathes. That is a fixture waiting, and it reads from the road.
+const PILOT = .195;              // the unlit glow's opacity
+const PILOT_COLD = 0x5c86a8;     // and its colour: moonlight in glass, not fire
+// THE PAYMENT IS A BEAT, NOT A FADE. k still ramps over about three seconds; FLARE is an
+// overshoot laid on top of it that dies away, so the moment you pay the crown OVERFILLS and
+// then settles into what it will be for the rest of the night.
+const FLARE_S = 2.30;
+const REACH = 4.20;              // m to the coin box; 3.1 put the prompt inside the plinth
+const REACH_DOT = .30;
 const IRON = [.042,.050,.049], BRONZE = [.24,.15,.063], STONE = [.19,.17,.135];
 
 function lanternCrown(s, bodyMat) {
@@ -96,7 +113,7 @@ export class Sanctuaries {
         if(!road?.hit||rd<28||rd>100||terrain.slopeAt(x,z)>.20||heightAt(x,z)<5)continue;
         if(MAJORS.some(m=>Math.hypot(x-m.x,z-m.z)<115))continue;
         if(this.sites.some(m=>Math.hypot(x-m.x,z-m.z)<450)||wilds?.padClear(x,z))continue;
-        this.sites.push({id:d.id,x,z,y:heightAt(x,z),roadX:road.x,roadZ:road.z,r:RADIUS,on:false,found:false,k:0,price:this.sites.length===0?120:200,art:null});break;
+        this.sites.push({id:d.id,x,z,y:heightAt(x,z),roadX:road.x,roadZ:road.z,r:RADIUS,on:false,found:false,k:0,flare:0,price:this.sites.length===0?120:200,art:null});break;
       }
     }
   }
@@ -121,13 +138,15 @@ export class Sanctuaries {
     this.off=this.ctx.bus.on('save:loaded',()=>{this.loaded=false;});
   }
   ready(){return this.sites.length>0;}
-  _restore(){const pr=this._sys('progress');for(const s of this.sites){s.on=!!pr.flag('sanctuary:'+s.id);s.found=s.on||!!pr.flag('sanctuary-found:'+s.id);s.k=s.on?1:0;}this.loaded=true;}
+  _restore(){const pr=this._sys('progress');for(const s of this.sites){s.on=!!pr.flag('sanctuary:'+s.id);s.found=s.on||!!pr.flag('sanctuary-found:'+s.id);s.k=s.on?1:0;s.flare=0;}this.loaded=true;}
   light(id){
     const s=this.sites.find(q=>q.id===id),pr=this._sys('progress');
     if(!s||s.on||!pr.spendCash(s.price,'woodland-sanctuary'))return false;
-    s.on=s.found=true;pr.flag('sanctuary:'+s.id,true);pr.flag('sanctuary-found:'+s.id,true);
+    s.on=s.found=true;s.flare=FLARE_S;pr.flag('sanctuary:'+s.id,true);pr.flag('sanctuary-found:'+s.id,true);
     this.ctx.bus.emit('sanctuary:lit',{id:s.id,x:s.x,y:s.y,z:s.z,r:s.r});
     this._sys('audio')?.whisper?.('claim','',s.x,s.y+5,s.z);
+    this._sys('audio')?.dread?.('lantern',s.x,s.y+7,s.z,.85);
+    this._sys('fx')?.flash?.(s.x,s.y+7,s.z,0xffc176,26,.8);
     return true;
   }
   step(dt){
@@ -139,11 +158,24 @@ export class Sanctuaries {
       const dx=s.x-p.pos.x,dz=s.z+1.45-p.pos.z,dist=Math.hypot(dx,dz);
       if(dist<80&&!s.found){s.found=true;pr.flag('sanctuary-found:'+s.id,true);this.ctx.bus.emit('sanctuary:found',{id:s.id});}
       s.k=Math.min(1,Math.max(0,s.k+(s.on?dt*.35:0)));
+      if(s.flare>0)s.flare=Math.max(0,s.flare-dt);
       if(s.on&&dist<nearD){nearD=dist;nearest=s;}
       s.art.root.visible=dist<560;
-      if(s.art.root.visible){s.art.mat.opacity=s.k*.75;s.art.beamMat.opacity=s.k*.008;s.art.groundMat.opacity=s.k;s.art.pm.opacity=s.k*(.45+Math.sin(this.clock*.65)*.1);s.art.motes.position.y=Math.sin(this.clock*.5)*.13;}
+      if(s.art.root.visible){
+        // The overshoot, squared so it lands rather than sags, plus a slow breath on the
+        // pilot so an unpaid crown is plainly a live thing and not a silhouette.
+        const flare=s.flare>0?(s.flare/FLARE_S)*(s.flare/FLARE_S):0;
+        const breath=.86+.14*Math.sin(this.clock*.9+s.x*.01);
+        const glow=s.on?s.k*.75+flare*.75:PILOT*breath;
+        s.art.mat.color.setHex(s.on?0xffffff:PILOT_COLD);
+        s.art.mat.opacity=glow;
+        s.art.beamMat.opacity=s.on?s.k*.008+flare*.030:PILOT*breath*.004;
+        s.art.groundMat.opacity=s.k*(1+flare*.9);
+        s.art.pm.opacity=s.k*(.45+Math.sin(this.clock*.65)*.1)+flare*.35;
+        s.art.motes.position.y=Math.sin(this.clock*.5)*.13;
+      }
       const cam=this._sys('camera'),dot=(-Math.sin(cam.yaw)*dx-Math.cos(cam.yaw)*dz)/(dist||1);
-      if(dist<3.1&&Math.abs(p.pos.y-s.y)<1.7&&dot>.45&&!this.ctx.shared.inCar)target=s;
+      if(dist<REACH&&Math.abs(p.pos.y-s.y)<1.7&&dot>REACH_DOT&&!this.ctx.shared.inCar)target=s;
     }
     // Publish the same circles to both placement and pursuit. Every entry remains stable.
     this.safe.length=0;this.safe.push(...(this.ctx.shared.litPoles||[]),...this.sites,...(this.ctx.shared.territoryZones||[]));this.ctx.shared.safeLightZones=this.safe;
@@ -151,8 +183,8 @@ export class Sanctuaries {
     if(target!==this.target){this.target=target;this.hold=0;}
     if(target){const s=target,can=pr.cash()>=s.price;
       this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:5,x:s.x,y:s.y+1.25,z:s.z+1.5,k:this.hold/HOLD,
-        detail:s.on?'THE WOODS ARE LIT':'LIGHT THE WOODS · '+s.price+' COINS',
-        subdetail:s.on?'96 M OF QUIET':can?'A PERMANENT CIRCLE OF LIGHT':'YOU HAVE '+pr.cash()+' · NEED '+(s.price-pr.cash()),unavailable:s.on||!can});
+        detail:s.on?'THE WOODS ARE LIT':'LIGHT THE CROWN · '+s.price+' COINS',
+        subdetail:s.on?'96 M OF QUIET · NOTHING HUNTS IN HERE':can?'96 M OF PERMANENT LIGHT · NOTHING HUNTS IN IT':'YOU HAVE '+pr.cash()+' · NEED '+(s.price-pr.cash()),unavailable:s.on||!can});
       if(use&&!this.release&&can&&!s.on){this.hold+=dt;if(this.hold>=HOLD){this.light(s.id);this.release=true;this.hold=0;}}else this.hold=0;
     }else this.hold=0;
     const lights=this._sys('lights');
