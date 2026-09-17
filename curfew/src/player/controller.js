@@ -38,9 +38,10 @@ const P = CFG.player;
 // Requested in docs/HANDOFF.md; local consts meanwhile so nothing is invented silently.
 const STICK = 0.42;            // [vigil controller.js:13] ground stick band, keeps you glued going downhill
 const AIR_CAP = 1.40;          // [vigil controller.js:10] air-control cap; bhop cannot exist
-// How far above terrain.heightAt the solver's own floor has to be before this file believes
+// How far above the terrain floor the solver's own floor has to be before this file believes
 // it is a COLLIDER top rather than the same terrain sample by another name. The solver reads
-// the identical analytic field (collision.js groundHeight -> terrain.heightAt), so on open
+// the identical analytic field (collision.js groundHeight -> terrain.surfaceAt, the bed or the
+// ice over it; this file's _floorAt reads the same one, contract C9), so on open
 // ground the two agree to the bit and this branch is never taken; 2 cm is the same slack the
 // airborne test below already uses. Round 5, integrator item 2.
 const COLLIDER_FLOOR_EPS = 0.02;
@@ -485,6 +486,9 @@ export class PlayerController {
   // Systems are read LAZILY, at use, never captured at construction: construction order is
   // manifest order and terrain/collision may be half-built when we are made.
   get _terrain() { return this.ctx.systems.get('terrain'); }
+  /** The floor under (x, z): terrain.surfaceAt (the bed, or the ice over it; contract C9)
+   *  when the terrain has one, else heightAt. Fixtures that carry only heightAt still work. */
+  _floorAt(terr, x, z) { return terr.surfaceAt ? terr.surfaceAt(x, z) : terr.heightAt(x, z); }
   get _collision() { return this.ctx.systems.get('collision'); }
   get _camera() { return this.ctx.systems.get('camera'); }
   get _weapons() { return this.ctx.systems.get('weapons'); }
@@ -564,7 +568,7 @@ export class PlayerController {
     const x = start ? start.x : 0;
     const z = start ? start.z : 0;
     this.spawnX = x; this.spawnZ = z;
-    this.pos.set(x, terr ? terr.heightAt(x, z) : 0, z);
+    this.pos.set(x, terr ? this._floorAt(terr, x, z) : 0, z);
     this.vel.set(0, 0, 0);
     this._sync();
     this._spawned = true;
@@ -868,7 +872,7 @@ export class PlayerController {
   /** Test hook. Both prev and curr are set so no interpolation streak is drawn. */
   teleport(x, z, yaw) {
     const terr = this._terrain;
-    this.pos.set(x, terr ? terr.heightAt(x, z) : this.pos.y, z);
+    this.pos.set(x, terr ? this._floorAt(terr, x, z) : this.pos.y, z);
     this.vel.set(0, 0, 0);
     if (typeof yaw === 'number') this.yaw = yaw;
     this.sliding = false; this.slideT = 0; this.slideViewT = 0;
@@ -1183,7 +1187,7 @@ export class PlayerController {
     //
     // AND IT ALSO ANSWERS `grounded`. resolveCapsule finds the support under the feet,
     // puts the feet on it and reports the flag (collision.js:978 and :1017). This file used
-    // to throw that answer away and re-derive the ground from terrain.heightAt alone, so a
+    // to throw that answer away and re-derive the ground from the terrain field alone, so a
     // body standing on a collider top — the filling-station canopy, the shop roof, the crate
     // stair — was metres above terrain, read as AIRBORNE, ran the air branch (no friction,
     // AIR_CAP, no jump) and coasted off the edge. Measured on the shipped tree: canopy
@@ -1204,9 +1208,11 @@ export class PlayerController {
     }
 
     const terr = this._terrain;
-    let g = terr ? terr.heightAt(this.pos.x, this.pos.z) : 0;
+    // The floor is surfaceAt where the terrain has one (the ice over the reservoir), else the
+    // bed; the solver's groundHeight reads the identical field, so g and its floor agree.
+    let g = terr ? this._floorAt(terr, this.pos.x, this.pos.z) : 0;
 
-    // A WALL IS NOT A SLOPE. Lifted straight, this clamp snaps you to heightAt() however far
+    // A WALL IS NOT A SLOPE. Lifted straight, this clamp snaps you to the floor however far
     // above you it is, which teleports the body up any cliff and makes the mantle pointless.
     // Back out to where we started the step instead, and let the mantle be the way over.
     // At M0 amplitudes (CFG.world.height: 35 m @ 0.0022, 6 @ 0.011, 1.2 @ 0.055) terrain
@@ -1214,7 +1220,7 @@ export class PlayerController {
     // never fires on open ground and only ever catches a genuine step.
     if (g - this.pos.y > P.STEP_UP && this.vel.y <= 0.001) {
       this.pos.x = _preX; this.pos.z = _preZ;
-      const gBack = terr ? terr.heightAt(this.pos.x, this.pos.z) : 0;
+      const gBack = terr ? this._floorAt(terr, this.pos.x, this.pos.z) : 0;
       // Only kill the run if backing out actually cleared it. If we were already buried
       // (spawn inside a hill, a chunk that rebuilt under us) fall through and recover
       // upward: being under the world is never an acceptable resting state.
@@ -1227,7 +1233,7 @@ export class PlayerController {
 
     // THE FLOOR IS WHICHEVER IS HIGHER: the terrain field, or the collider top the solver
     // actually put the feet on. Only a floor ABOVE the terrain here can be a collider — the
-    // case heightAt cannot see — so everywhere else this is `g` and nothing changed.
+    // case the terrain field cannot see — so everywhere else this is `g` and nothing changed.
     const floorIsCollider = solverFloor > g + COLLIDER_FLOOR_EPS;
     const floorY = floorIsCollider ? solverFloor : g;
 
@@ -1533,11 +1539,15 @@ export class PlayerController {
 
   /** Signed downhill grade along a unit XZ direction. Terrain normal writes into module
    * scratch, so both the fixed step and a long descent remain allocation-free. Collider
-   * tops deliberately read as flat: terrain far below a roof cannot pull the body sideways. */
+   * tops deliberately read as flat: terrain far below a roof cannot pull the body sideways.
+   * The SURFACE normal where the terrain has one (contract C9): the ice is level however
+   * steep the drowned bank under it is, so a sheet never slides you toward the deep. */
   _downhillAlong(dx, dz) {
     const terr = this._terrain;
-    if (!terr || typeof terr.normalAt !== 'function' || this.floorWasCollider) return 0;
-    terr.normalAt(this.pos.x, this.pos.z, _groundNormal);
+    if (!terr || this.floorWasCollider) return 0;
+    if (typeof terr.surfaceNormalAt === 'function') terr.surfaceNormalAt(this.pos.x, this.pos.z, _groundNormal);
+    else if (typeof terr.normalAt === 'function') terr.normalAt(this.pos.x, this.pos.z, _groundNormal);
+    else return 0;
     return dx * _groundNormal.x + dz * _groundNormal.z;
   }
 
@@ -1629,7 +1639,7 @@ export class PlayerController {
   _descentCandidate() {
     const col=this._collision;
     if(!col?.climbFace||!col?.fits||!col?.climbPathClear)return null;
-    const ground=this._terrain?.heightAt(this.pos.x,this.pos.z)??this.pos.y;
+    const ground=this._terrain?this._floorAt(this._terrain,this.pos.x,this.pos.z):this.pos.y;
     if(!this.grounded||this.pos.y-ground<DESCEND_MIN_ABOVE||this.climb!==CLIMB_NONE||this.carried||this._held('crouch'))return null;
     // Probe back towards the platform from just beyond an edge. This also finds
     // the ladder behind the player after a pull-up, without rotating their camera.
@@ -1662,7 +1672,7 @@ export class PlayerController {
 
   _descentCue(dt) {
     this.descendProbeT-=dt;
-    const ground=this._terrain?.heightAt(this.pos.x,this.pos.z)??this.pos.y;
+    const ground=this._terrain?this._floorAt(this._terrain,this.pos.x,this.pos.z):this.pos.y;
     if(!this.grounded||this.pos.y-ground<DESCEND_MIN_ABOVE||this.climb!==CLIMB_NONE||this.scaling||this.carried||this._held('crouch')){
       this.descendCandidate=null;this.descendProbeT=0;return;
     }
@@ -1904,7 +1914,7 @@ export class PlayerController {
     const x=face.x+nx*(P.RADIUS+.055)+nz*side*dt*1.8;
     const z=face.z+nz*(P.RADIUS+.055)-nx*side*dt*1.8;
     const dy=dt*(descending||pitch<-.55?-2.6:3.4);
-    const support=descending?(col.supportHeight?.(x,z,this.pos.y,P.RADIUS,0)??this._terrain.heightAt(x,z)):-Infinity;
+    const support=descending?(col.supportHeight?.(x,z,this.pos.y,P.RADIUS,0)??this._floorAt(this._terrain,x,z)):-Infinity;
     // THE CEILING IS NOT THE FACE TOP WHEN YOU ARE GOING DOWN. Clamping a descent to
     // `top + 0.02` teleported the body down to the top of the ladder in one frame whenever it
     // started above it — which is every authored landing, all of which sit 0.10 m proud of
@@ -2117,7 +2127,7 @@ export class PlayerController {
     }
 
     // ---- 3. THE MANTLE: the highest of terrain, collider top and car roof at the probe. -
-    const tTop = terr.heightAt(p1x, p1z);
+    const tTop = this._floorAt(terr, p1x, p1z);
     let cTop = -Infinity, cx = p1x, cz = p1z;
     if (sees) {
       const a = col.ledgeHeight(p1x, p1z, this.pos.y, P.RADIUS, reach);
@@ -2131,7 +2141,11 @@ export class PlayerController {
         }
       }
     }
-    const rTop = this._roofAt(p1x, p1z, this.pos.y, reach);
+    // Contract C19 / decision D12: the parked car's roof answers a DELIBERATE Space press only.
+    // The passive walking mantle used to take it, and the walk to the driver's door is a walk
+    // straight into the flank, so 'go to the car' put you on its roof. The airborne grab
+    // (section 1) keeps _roofAt: a jump at the car still catches it.
+    const rTop = explicitJump ? this._roofAt(p1x, p1z, this.pos.y, reach) : null;
     if (rTop !== null && rTop > cTop) { cTop = rTop; cx = p1x; cz = p1z; }
 
     if (tTop >= cTop) {

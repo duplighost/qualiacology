@@ -23,6 +23,7 @@ const PILOT_COLD = 0x5c86a8;     // and its colour: moonlight in glass, not fire
 const FLARE_S = 2.30;
 const REACH = 4.20;              // m to the coin box; 3.1 put the prompt inside the plinth
 const REACH_DOT = .30;
+const FOUND_XP = 40;             // the first approach of a crown: the wilds' 'found' XP (CFG.wilds.xp.found)
 const IRON = [.042,.050,.049], BRONZE = [.24,.15,.063], STONE = [.19,.17,.135];
 
 function lanternCrown(s, bodyMat) {
@@ -156,7 +157,8 @@ export class Sanctuaries {
     let target=null,nearest=null,nearD=Infinity;
     for(const s of this.sites){
       const dx=s.x-p.pos.x,dz=s.z+1.45-p.pos.z,dist=Math.hypot(dx,dz);
-      if(dist<80&&!s.found){s.found=true;pr.flag('sanctuary-found:'+s.id,true);this.ctx.bus.emit('sanctuary:found',{id:s.id});}
+      // D14: finding a crown in the woods pays like finding a wild site (40 XP, once per save).
+      if(dist<80&&!s.found){s.found=true;pr.flag('sanctuary-found:'+s.id,true);this.ctx.bus.emit('sanctuary:found',{id:s.id});pr.award?.(FOUND_XP,s.x,s.y+2,s.z,'sanctuary');}
       s.k=Math.min(1,Math.max(0,s.k+(s.on?dt*.35:0)));
       if(s.flare>0)s.flare=Math.max(0,s.flare-dt);
       if(s.on&&dist<nearD){nearD=dist;nearest=s;}
@@ -187,6 +189,10 @@ export class Sanctuaries {
         subdetail:s.on?'96 M OF QUIET · NOTHING HUNTS IN HERE':can?'96 M OF PERMANENT LIGHT · NOTHING HUNTS IN IT':'YOU HAVE '+pr.cash()+' · NEED '+(s.price-pr.cash()),unavailable:s.on||!can});
       if(use&&!this.release&&can&&!s.on){this.hold+=dt;if(this.hold>=HOLD){this.light(s.id);this.release=true;this.hold=0;}}else this.hold=0;
     }else this.hold=0;
+    // D13: one hold per press (see scavenging._publishHold): the coin box says so while its
+    // hold runs or has paid and E is still down, and clears only its own name.
+    const sh=this.ctx.shared;
+    if(this.hold>0||this.release)sh.holdOwner='sanctuary';else if(sh.holdOwner==='sanctuary')sh.holdOwner='';
     const lights=this._sys('lights');
     if(nearest&&nearD<125){
       for(let i=0;i<3;i++){

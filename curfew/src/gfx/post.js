@@ -65,6 +65,7 @@ const G = CFG.render.grade;
  */
 const CONTRAST_TO = 0.42;     // ART.md 1.7, was CFG.render.grade.contrastTo 0.30
 const CONTRAST = 1.16;        // ART.md 1.7, was CFG.render.grade.contrast 1.10
+const GRAIN_HZ = 24;          // D18: the grain plate changes at film rate, not at the frame rate
 
 /**
  * ART.md 1.8 / 6.1 — THE VIGNETTE MUST NOT STOP AT THE GUN.
@@ -158,6 +159,11 @@ const GradeShader = {
     uVignette: { value: G.vignette },
     // ROUND 7 lane E: local contrast. See the shader.
     uLocal: { value: 0.34 },
+    // D18 — chromatic aberration, the BASE term. The shader adds uDread * 0.002 and
+    // uPulse * 0.004 on top. 0.0009 of the half-frame is 0.6 px at the corner of a 1280
+    // frame: invisible at rest, which is the point — the lens only comes apart when the
+    // director says so. A uniform (not a literal) so a tool can zero it like uGrain.
+    uAberr: { value: 0.0009 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -171,7 +177,7 @@ const GradeShader = {
     uniform vec2 uResolution;
     uniform float uTime, uDread, uPulse, uTunnel;
     uniform float uContrastFrom, uContrastTo, uContrast, uBlackFloor, uGrain, uVignette;
-    uniform float uKnee, uShoulder, uLocal;
+    uniform float uKnee, uShoulder, uLocal, uAberr;
 
     float hash12(vec2 p) {
       return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -183,7 +189,15 @@ const GradeShader = {
     float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
 
     void main() {
+      // --- CHROMATIC ABERRATION (D18): the lens comes apart under dread ---------
+      // Two extra taps. Red is pulled outward from the centre and blue inward by a radial
+      // offset that grows with uDread and uPulse, so a stinger or the black hour's pulse
+      // fringes the edges of the frame for a beat and a calm frame shows nothing. Sampled
+      // BEFORE local contrast so the fringe is graded like everything else. Zero programs.
+      vec2 ab = (vUv - 0.5) * (uAberr + uDread * 0.002 + uPulse * 0.004);
       vec3 col = texture2D(tDiffuse, vUv).rgb;
+      col.r = texture2D(tDiffuse, vUv + ab).r;
+      col.b = texture2D(tDiffuse, vUv - ab).b;
       float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
 
       // --- LOCAL CONTRAST: the torch must CARVE, not wash -----------------------
@@ -378,8 +392,11 @@ export class Post {
 
   present(alpha) {
     // Grain must crawl on wall-clock time or it freezes into a static texture during
-    // hitstop and reads as a dropped frame.
-    this.grade.uniforms.uTime.value = this.ctx.time ? this.ctx.time.t : 0;
+    // hitstop and reads as a dropped frame. D18: QUANTISED TO 24 HZ. uTime feeds only the
+    // grain hashes, and at 60 Hz a fresh grain plate every frame reads as video noise; a
+    // plate that holds for 2-3 frames reads as film, which is what the grain was meant to be.
+    const t = this.ctx.time ? this.ctx.time.t : 0;
+    this.grade.uniforms.uTime.value = Math.floor(t * GRAIN_HZ) / GRAIN_HZ;
   }
 
   /** Called by gfx.render(). Never call this and renderer.render() in the same frame. */

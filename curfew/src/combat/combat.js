@@ -409,7 +409,9 @@ export class Combat {
       // Round UP off zero: armour and angle decide HOW MUCH, never WHETHER.
       // HANDS 'damageMul' (ROUND 6, lane G registers it; lane C reads it): a multiplier on
       // every round, base 1, so with nothing owned a shot resolves exactly as it did.
-      const dmg = Math.max(1, Math.round(base * zmul * penMul * statDmgMul));
+      // D3: `f.dmgMul` rides the weapon:fire payload - the primed magazine (an active-reload
+      // hit with HANDS 'Primed' owned), 1 otherwise. A round's multiplier, never the melee's.
+      const dmg = Math.max(1, Math.round(base * zmul * penMul * statDmgMul * (f.dmgMul || 1)));
 
       const deflected = h.zone === 'plate';
       let killed = false;
@@ -687,7 +689,9 @@ export class Combat {
     // block you had to swing at twice gives you rather more. It is deliberately small
     // money — a site rebuilds its props when it streams back in, so anything worth a drive
     // would be a farm, and the real money in this county is the strongbox and the dead.
-    const generic = !LOOT_TAGS[b.tag] && !COIN_TAGS[b.tag];
+    // A scavenging 'supply' chest is NOT generic: smashing it pays nothing here, because
+    // scavenging.js pays it on 'world:broke' (D13: never a second payout for one chest).
+    const generic = !LOOT_TAGS[b.tag] && !COIN_TAGS[b.tag] && b.tag !== 'supply';
     const heft = clamp(b.mass / 60, 0.4, 2.6);
     if (LOOT_TAGS[b.tag] ? this.lootRng.next() < BREAK_LOOT_CHANCE
       : (generic && this.lootRng.next() < 0.42)) {

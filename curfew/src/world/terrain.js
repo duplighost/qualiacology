@@ -2,10 +2,16 @@
 //
 // ONE pure analytic height function is the single ground truth. The chunk meshes are
 // BUILT from heightAt(); collision samples heightAt(); flora plants against heightAt();
-// hitscan marches heightAt(). Nothing raycasts the terrain mesh — a Raycaster against a
+// hitscan marches the surface. Nothing raycasts the terrain mesh — a Raycaster against a
 // heightfield cost DUSKFALL a 125 ms shotgun hitch, and the mesh is a LOD approximation
 // of this function anyway, so a mesh hit and a physics hit would disagree by up to a
 // quad. (Discipline: SKYSHARD src/world/terrain.js:1-5, VIGIL src/world/terrain.js:1-4.)
+//
+// TWO HEIGHTS SINCE THE ICE (contracts D15 / C9). heightAt() is the BED and is what every
+// builder and planter reads. surfaceAt() = max(heightAt, iceLevelAt) is what MOVERS stand on:
+// the player (collision.groundHeight, controller), the car, enemies, and marchRay. The ice
+// bodies live in frozen-water.js, which takes heightAt as its bed sampler the same way
+// roads.js does, so there is still no import cycle and still no THREE.
 //
 // THIS FILE IMPORTS NO THREE, and it must stay that way. chunk-worker.js imports it, a
 // Worker cannot resolve the page importmap, and world/roads.js is already three-free for
@@ -43,6 +49,7 @@ import { clamp, clamp01, lerp, smoothstep } from '../engine/math.js';
 import {
   M0_SITES, roadFlatten, setRoadBaseSampler, ensureRoadElevations, invalidateRoadElevations,
 } from './roads.js';
+import { setIceBaseSampler, iceLevelAt } from './frozen-water.js';
 
 /* ------------------------------------------------------------------ *
  * Noise. Deterministic value noise, allocation-free.
@@ -327,6 +334,26 @@ export function heightAt(x, z) {
   return storyHeightAt(x,z,passageHeightAt(x,z,applyFlats(h, x, z, FLATS.length)));
 }
 
+let iceBaseInstalled = false;
+/** Idempotent, like installRoadBase: the ice plan is a picture of the bed, so the bed goes
+ *  in at module scope before any surfaceAt() can ask for it. */
+function installIceBase() {
+  if (iceBaseInstalled) return;
+  iceBaseInstalled = true;
+  setIceBaseSampler(heightAt);
+}
+installIceBase();
+
+/** The ice level under (x, z) or -Infinity (frozen-water.js). Re-exported for consumers. */
+export { iceLevelAt };
+
+/** What a body stands on: the bed, or the ice sheet over it. Allocation-free. */
+export function surfaceAt(x, z) {
+  const h = heightAt(x, z);
+  const ice = iceLevelAt(x, z);
+  return ice > h ? ice : h;
+}
+
 // Central-difference epsilon. 0.75 m is under the finest quad (1.6 m) so the gradient
 // tracks the mesh the player is standing on, and wide enough that the detail octave
 // (period ~18 m) does not alias into it.
@@ -348,6 +375,19 @@ const _n = { x: 0, y: 1, z: 0 };
 export function normalAt(x, z, out) {
   const hx = (heightAt(x + GRAD_E, z) - heightAt(x - GRAD_E, z)) / (2 * GRAD_E);
   const hz = (heightAt(x, z + GRAD_E) - heightAt(x, z - GRAD_E)) / (2 * GRAD_E);
+  const inv = 1 / Math.sqrt(hx * hx + hz * hz + 1);
+  const nx = -hx * inv, ny = inv, nz = -hz * inv;
+  if (!out) { _n.x = nx; _n.y = ny; _n.z = nz; return _n; }
+  if (typeof out.set === 'function') out.set(nx, ny, nz);
+  else { out.x = nx; out.y = ny; out.z = nz; }
+  return out;
+}
+
+/** normalAt on the SURFACE (the bed, or the ice over it): level on the sheet however steep
+ *  the drowned bank under it is. The controller's downhill slide reads this one. */
+export function surfaceNormalAt(x, z, out) {
+  const hx = (surfaceAt(x + GRAD_E, z) - surfaceAt(x - GRAD_E, z)) / (2 * GRAD_E);
+  const hz = (surfaceAt(x, z + GRAD_E) - surfaceAt(x, z - GRAD_E)) / (2 * GRAD_E);
   const inv = 1 / Math.sqrt(hx * hx + hz * hz + 1);
   const nx = -hx * inv, ny = inv, nz = -hz * inv;
   if (!out) { _n.x = nx; _n.y = ny; _n.z = nz; return _n; }
@@ -536,7 +576,8 @@ export function regionAt(x, z) {
 /* ------------------------------------------------------------------ *
  * marchRay — hitscan against the ground.
  *
- * Adaptive march plus bisection against the height function. NOTHING may raycast the
+ * Adaptive march plus bisection against the SURFACE (surfaceAt: the bed, or the ice over
+ * it, so a shot stops on the sheet and never hits the drowned road under it). NOTHING may raycast the
  * terrain mesh: DUSKFALL's shotgun fired eight Raycaster pellets at a heightfield and
  * paid a 125 ms hitch for it, and the mesh is only a per-tier approximation of this
  * function so the two would disagree anyway.
@@ -559,7 +600,7 @@ export function marchRay(ox, oy, oz, dx, dy, dz, maxT) {
   if (!(far > 0)) return null;
 
   let prevT = 0;
-  let prevD = oy - heightAt(ox, oz);
+  let prevD = oy - surfaceAt(ox, oz);
   if (prevD <= 0) return 0;
 
   let t = 0;
@@ -570,16 +611,16 @@ export function marchRay(ox, oy, oz, dx, dy, dz, maxT) {
     t = prevT + step;
     if (t >= far) {
       // Test the endpoint itself so a hit in the last partial step is not missed.
-      const dEnd = (oy + dy * far) - heightAt(ox + dx * far, oz + dz * far);
+      const dEnd = (oy + dy * far) - surfaceAt(ox + dx * far, oz + dz * far);
       if (dEnd >= 0) return null;
       t = far;
     }
-    const d = (oy + dy * t) - heightAt(ox + dx * t, oz + dz * t);
+    const d = (oy + dy * t) - surfaceAt(ox + dx * t, oz + dz * t);
     if (d < 0) {
       let lo = prevT, hi = t;
       for (let k = 0; k < BISECT_ITERS; k++) {
         const mid = (lo + hi) * 0.5;
-        const dm = (oy + dy * mid) - heightAt(ox + dx * mid, oz + dz * mid);
+        const dm = (oy + dy * mid) - surfaceAt(ox + dx * mid, oz + dz * mid);
         if (dm < 0) hi = mid; else lo = mid;
       }
       return hi;
@@ -642,6 +683,7 @@ export class Terrain {
     // scope already installed the sampler, because heightAt() must be correct from the
     // first call and another system's constructor may beat init() to it.
     installRoadBase();
+    installIceBase();
     // Force the spline elevation table now, at boot, so no gameplay frame ever pays the
     // one-off cost inside a heightAt(). Roads.init() calls this again and it early-outs.
     ensureRoadElevations();
@@ -651,8 +693,14 @@ export class Terrain {
 
   // --- the CONTRACT interface, forwarded ------------------------------------
   heightAt(x, z) { return heightAt(x, z); }
+  /** Contract C9: the bed or the ice over it; movers stand on this. */
+  surfaceAt(x, z) { return surfaceAt(x, z); }
+  /** Contract C9: the ice level under (x, z), or -Infinity. */
+  iceLevelAt(x, z) { return iceLevelAt(x, z); }
   slopeAt(x, z) { return slopeAt(x, z); }
   normalAt(x, z, out) { return normalAt(x, z, out); }
+  /** The surface's normal: level on the ice. */
+  surfaceNormalAt(x, z, out) { return surfaceNormalAt(x, z, out); }
   regionAt(x, z) { return regionAt(x, z); }
   marchRay(ox, oy, oz, dx, dy, dz, maxT) { return marchRay(ox, oy, oz, dx, dy, dz, maxT); }
 

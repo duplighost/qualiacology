@@ -136,6 +136,23 @@ export function dressHoldfastKeep(k, api) {
       doorwayWall(k, api, 'x', -14.3, -13.8, -4.7, -9, floor, 5.98);
       const lx = 3.9, lz = -5.0;
       lantern(k, lx, api.padY + floor + 2.9, lz, 0, true);
+      if (level === 0) {
+        // THE BREAKER'S LIGHT. Alex: "the castle breaker needs to be more lit up and visible
+        // when you walk in." refuge.js hangs the keep's board at local (-4.67, -18.18) on this
+        // doorway wall, facing +X into the hall, and by its own design the housing is the
+        // darkest thing on the wall — so nothing on the board gets brighter. The WALL does:
+        // a bracket lantern on the hall side a metre along from it (the matching layout lamp
+        // 'keep-breaker-lantern' is what holdfast-life borrows a rover for), and a stone hood
+        // over the recess so it reads as a made thing from the arch, 17 m away, before the
+        // board's own hood resolves.
+        const by = api.padY + floor;
+        lantern(k, -3.95, by + 2.75, -17.0, Math.PI / 2, true);
+        k.solid.box(0.62, 0.09, 0.09, -4.23, by + 3.17, -17.0, P.edge);   // the bracket, back to the wall
+        k.solid.box(0.18, 0.30, 0.18, -4.44, by + 3.02, -17.0, P.iron);   // its wall plate
+        // the hood: a lintel proud of the wall over the board, chest-to-head height clear
+        solid(k, api, 0.55, 0.22, 1.5, -4.38, by + 2.12, -18.18, P.edge, 0, 'wall', false);
+        k.solid.box(0.42, 0.10, 1.62, -4.44, by + 2.29, -18.18, P.darkStone);
+      }
       k.cloth.box(4.6, 0.03, 6.0, -0.1, api.padY + floor + 0.025, -17.8, level % 2 ? P.purple : P.cloth);
       if (level === 0 || level === 2 || level === 4) {
         solid({ solid: k.cloth }, api, 2.1, 0.16, 5.4, 0.2, api.padY + floor + 0.90, -19, P.cutWood, 0, 'wood');

@@ -543,6 +543,18 @@ const DREAD = {
   'dealer-rack': { n: 'dr_dealerrack', v: 2, gain: .64, bus: 'world', send: .10, occl: true, pri: 1, prop: 0, rlo: .98, rhi: 1.02, threat: false },
   'dealer-reload': { n: 'dr_dealerreload', v: 2, gain: .65, bus: 'world', send: .10, occl: true, pri: 1, prop: 0, rlo: .98, rhi: 1.02, threat: false },
   'dealer-shot': { n: 'dr_dealershot', v: 2, gain: .88, bus: 'creatures', send: .26, occl: true, pri: 1, prop: 0, rlo: .98, rhi: 1.02, threat: true },
+  // C10. THE OASIS: soft surf swells from a shore the county does not have. Far, filtered,
+  // never a threat — it is a lie, and a lie is quiet.
+  shore:    { n: 'dr_shore',    v: 3, gain: 0.60, bus: 'world',     send: 0.45, occl: true,  pri: 3, prop: 60, rlo: 0.94, rhi: 1.06, threat: false },
+  // THE LAUGHTER: short breathed bursts, pitched up, from a figure in warm light. Creatures
+  // bus because it comes from a body; not a threat, because the figures are not there.
+  giggle:   { n: 'dr_giggle',   v: 3, gain: 0.52, bus: 'creatures', send: 0.20, occl: true,  pri: 2, prop: 40, rlo: 0.96, rhi: 1.10, threat: false },
+  // THE KNOCK: three knuckles on the refuge door, 0.55 s apart. Wood, dry, close, and the
+  // hush after it is the beat (refuge.js).
+  knock:    { n: 'dr_knock',    v: 2, gain: 0.62, bus: 'world',     send: 0.18, occl: true,  pri: 2, prop: 0,  rlo: 0.96, rhi: 1.04, threat: false, cls: CUE_WORLD },
+  // THE CAN: a gas can's metal handle clacking as it is lifted (gas.js _take). Your own hand,
+  // so world bus, dry, never occluded — it is happening at the end of your arm.
+  can:      { n: 'dr_can',      v: 2, gain: 0.40, bus: 'world',     send: 0.08, occl: false, pri: 3, prop: 0,  rlo: 0.95, rhi: 1.06, threat: false, cls: CUE_WORLD },
 };
 const DREAD_ALIAS = {
   'lantern-gone': 'lanternGone', lanterngone: 'lanternGone', snap: 'branch',
@@ -635,6 +647,7 @@ export class Audio {
       cueThreat: 0, cueWorld: 0, cueFlavour: 0, threatDucks: 0,
     };
     this._cueByName = Object.create(null);
+    this._threatUntil = 0;         // audio seconds until which a CUE_THREAT voice is still sounding
 
     this.rng = ctx.rng.fork('audio');
     this.guns = new GunAudio(ctx, this);
@@ -1163,7 +1176,9 @@ export class Audio {
     on('player:hurt', (p) => this.bed.hurt(p));
     on('player:died', () => this.bed.hurt({ amount: 100, fatal: true }));
     on('enemy:spawned', (p) => this.earshot.attach(p.e || p));
-    on('enemy:killed', (p) => this.earshot.detach(p.e || p, true));
+    on('enemy:killed', (p) => { this.earshot.detach(p.e || p, true); this.bed.onKill(); });
+    // C12: the director is about to put a body inside 40 m. The crickets stop first.
+    on('director:arriving', (p) => this.bed.onArriving(p));
     on('enemy:hurt', (p) => this.earshot.hurt(p.e || p, p));
     on('enemy:telegraph', (p) => this.earshot.telegraph(p.e || p, p.kind));
     on('phase:changed', (p) => { this.bed.onPhase(p.phase, p.prev); this.county.onPhase(p.phase, p.prev); });
@@ -1325,8 +1340,12 @@ export class Audio {
     // is requested: a cue that was refused a voice was not heard, and a triage
     // built on intentions rather than on plays would be measuring the wrong mix.
     const cls = o.cls || CUE_WORLD;
-    if (cls === CUE_THREAT) this._stats.cueThreat++;
-    else if (cls === CUE_FLAVOUR) this._stats.cueFlavour++;
+    if (cls === CUE_THREAT) {
+      this._stats.cueThreat++;
+      // a hazard voice is up until the latest threat cue has provably finished (bed.js's
+      // ice creak refuses to land on top of one)
+      if (v.until > this._threatUntil) this._threatUntil = v.until;
+    } else if (cls === CUE_FLAVOUR) this._stats.cueFlavour++;
     else this._stats.cueWorld++;
     if (o._name) this._cueByName[o._name] = (this._cueByName[o._name] | 0) + 1;
     return v;
@@ -1345,6 +1364,9 @@ export class Audio {
   }
 
   has(name) { return !!this.buf[name]; }
+
+  /** True while any THREAT-class cue (a strike tell, damage, a bark) is still sounding. */
+  threatVoiceUp() { return this.now < this._threatUntil; }
 
   /* ------------------------------------------------------- the dread beat -- */
 
@@ -1503,13 +1525,13 @@ export class Audio {
     s.y = (typeof y === 'number' && isFinite(y)) ? y : (cam ? cam.position.y : 0);
     s.z = (typeof z === 'number' && isFinite(z)) ? z : (cam ? cam.position.z : 0);
     s.bus = 'world';
-    s.gain = bell ? 0.85 : claim ? 0.62 : 0.50;
+    s.gain = bell ? 0.55 : claim ? 0.62 : 0.50;       // bell 0.85 on a 0.90 bake was the peak he heard (D11)
     // The mouth: a small per-place shift of rate and of the formant emphasis.
     // Same name, same mouth, every time you walk back into it.
     s.rate = bell ? 1 : 0.93 + ((h >>> 8) % 17) / 17 * 0.15;
     s.filterHz = bell ? 520 : 900 + ((h >>> 13) % 11) * 55;
     s.toneDb = bell ? 0 : 2.5;
-    s.send = bell ? 0.55 : 0.42;
+    s.send = bell ? 0.40 : 0.42;                       // the longer hum carries its own tail now
     // It is a real place in a real forest: occluded behind the barn wall, ray
     // reserved, and delayed by the air only when it is genuinely far off.
     s.occl = true;
@@ -1852,8 +1874,9 @@ export class Audio {
 
   /**
    * Player foley that is not the bed and not the gun: the boots, the gear, the
-   * body. Four surfaces so the ground under you is audible before it is
-   * visible — needle duff, gravel, asphalt, water.
+   * body. Five surfaces so the ground under you is audible before it is
+   * visible — needle duff, gravel, asphalt, water, and ice (D15: the frozen
+   * reservoir and the four road pools; bed.js picks it from terrain.iceLevelAt).
    */
   _bakeFoley() {
     const sr = this.sr;
@@ -1861,10 +1884,13 @@ export class Audio {
     const rn = () => r.next();
     const N = (s) => Math.round(s * sr);
     const SURF = {
-      duff: { hp: 300, lp: 3600, count: 22, span: 0.085, amp: 0.7, thump: 128 },
-      gravel: { hp: 900, lp: 9000, count: 26, span: 0.070, amp: 0.9, thump: 168 },
-      asphalt: { hp: 600, lp: 6200, count: 10, span: 0.040, amp: 0.8, thump: 148 },
-      water: { hp: 250, lp: 5200, count: 30, span: 0.130, amp: 0.85, thump: 96 },
+      duff: { hp: 300, lp: 3600, count: 22, span: 0.085, amp: 0.7, thump: 128, peak: 0.9 },
+      gravel: { hp: 900, lp: 9000, count: 26, span: 0.070, amp: 0.9, thump: 168, peak: 0.9 },
+      asphalt: { hp: 600, lp: 6200, count: 10, span: 0.040, amp: 0.8, thump: 148, peak: 0.9 },
+      water: { hp: 250, lp: 5200, count: 30, span: 0.130, amp: 0.85, thump: 96, peak: 0.9 },
+      // thin, hard, a little ring; quieter than gravel (peak 0.7) because ice is a surface
+      // you notice by what it does NOT do — it does not crunch
+      ice: { hp: 420, lp: 4800, count: 12, span: 0.045, amp: 0.72, thump: 104, peak: 0.7, ring: 1900 },
     };
     for (const k in SURF) {
       const S = SURF[k];
@@ -1875,10 +1901,34 @@ export class Audio {
           hp: S.hp, lp: S.lp, amp: S.amp, decay: 2.1,
         });
         damped(b, sr, S.thump * (0.92 + rn() * 0.18), 0.026, 0.30);
+        if (S.ring) damped(b, sr, S.ring * (0.95 + rn() * 0.1), 0.012, 0.12, 0, 0.004);   // the sheet answering the boot
         biquad(b, sr, 'hp', 90, 0.7);
         fadeOut(b, sr, 0.02);
-        this.reg('step_' + k + v, [normalizeTo(b, 0.9)]);
+        this.reg('step_' + k + v, [normalizeTo(b, S.peak)]);
       }
+    }
+    // THE THIN-ICE CREAK (bed.js plays one every 9-22 s while you move on ice): 0.5-0.8 s of
+    // filtered noise that swells under a low groan and ends on a click — the sheet taking
+    // your weight and letting it know. Quiet by bake (0.55 peak); informative, not loud.
+    for (let v = 0; v < 3; v++) {
+      const len = 0.5 + v * 0.15;
+      const b = new Float32Array(N(len + 0.06));
+      const n = new Float32Array(N(len));
+      noiseFill(n, rn);
+      biquad(n, sr, 'hp', 180, 0.7);
+      biquad(n, sr, 'lp', 900, 0.7, 0, 2);
+      for (let i = 0; i < n.length; i++) n[i] *= Math.pow(i / n.length, 1.7);   // the ramp: stress building
+      mixInto(b, n, 0.8);
+      sweepSine(b, sr, 88 + v * 9, 142 + v * 12, len, len * 0.9, 0.35);       // the groan rises with it
+      const click = new Float32Array(N(0.012));
+      noiseFill(click, rn);
+      biquad(click, sr, 'bp', 1400 + v * 200, 1.4);
+      envAD(click, sr, 0.0004, 0.003);
+      mixInto(b, click, 0.9, N(len - 0.004));                                // ...and gives
+      damped(b, sr, 620 + v * 40, 0.010, 0.25, 0, len - 0.003);
+      biquad(b, sr, 'hp', 70, 0.7);
+      fadeIn(b, sr, 0.03); fadeOut(b, sr, 0.03);
+      this.reg('ice_creak' + v, [normalizeTo(b, 0.55)]);
     }
     // heel — the leading transient that makes a step land rather than smear
     for (let v = 0; v < 3; v++) {
@@ -2537,6 +2587,103 @@ export class Audio {
     // own last footstep used (bed.lastStepBuffer()), because a copy of you is a
     // far stronger idea than a stranger's step, and the copy has to be exact.
 
+    // ---- SHORE (C10): two or three soft surf swells over 3.4 s. Pink noise in a low
+    //      band with a slow 0.3 Hz swell, and a little breaking hiss on each crest. Baked
+    //      quiet and dull because it is a mirage: the sea is not there.
+    for (let v = 0; v < 3; v++) {
+      const b = new Float32Array(N(3.4));
+      pinkFill(b, rn);
+      biquad(b, sr, 'hp', 120, 0.7);
+      biquad(b, sr, 'lp', 1100 + v * 120, 0.7, 0, 2);
+      const rate = 0.28 + v * 0.03, ph = rn() * Math.PI * 2;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        const sw = 0.5 + 0.5 * Math.sin(2 * Math.PI * rate * t + ph);
+        b[i] *= 0.08 + 0.92 * sw * sw * sw;      // cubed: a swell has a long trough and a short crest
+      }
+      // the hiss on the crest: a hundred short grains where the swell is high
+      const hiss = new Float32Array(b.length);
+      grains(hiss, sr, rn, { count: 90, from: 0, span: 3.2, len: [0.004, 0.02], hp: 900, lp: 2600, amp: 0.6, decay: 0.0 });
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        const sw = 0.5 + 0.5 * Math.sin(2 * Math.PI * rate * t + ph + 0.4);
+        hiss[i] *= sw * sw * sw * sw;
+      }
+      mixInto(b, hiss, 0.35);
+      biquad(b, sr, 'lp', 2400, 0.7);
+      fadeIn(b, sr, 0.25); fadeOut(b, sr, 0.35);
+      reg('dr_shore' + v, [normalizeTo(b, 0.70)]);
+    }
+
+    // ---- GIGGLE (C10): breathed laughter, four to six 'h' pulses at 6-7 a second with a
+    //      thin voice under the breath, pitched up. The whisper mouth's shape (two formant
+    //      bands on noise) with the formants raised: a small throat, not a man's.
+    for (let v = 0; v < 3; v++) {
+      const pulses = 4 + (v % 3), rateHz = 5.8 + v * 0.55;
+      const len = pulses / rateHz + 0.12;
+      const b = new Float32Array(N(len));
+      const src = new Float32Array(b.length); noiseFill(src, rn);
+      const f1 = new Float32Array(b.length); f1.set(src);
+      const f2 = new Float32Array(b.length); f2.set(src);
+      biquad(f1, sr, 'bp', 880 + v * 60, 5.0); biquad(f1, sr, 'bp', 880 + v * 60, 5.0);
+      biquad(f2, sr, 'bp', 2250 + v * 90, 4.5); biquad(f2, sr, 'bp', 2250 + v * 90, 4.5);
+      const voice = new Float32Array(b.length);
+      const fv = 360 + v * 40;                     // the thin voice under the breath
+      for (let h = 1; h <= 4; h++) sweepSine(voice, sr, fv * h * 1.06, fv * h * 0.94, len, len, 0.5 / h);
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        const ph = (t * rateHz) % 1;               // one 'ha' per cycle: a fast in, a slower out
+        const k = t * rateHz;
+        const gate = k < pulses ? Math.pow(Math.sin(Math.PI * Math.min(1, ph / 0.62)), 1.4) * (1 - 0.13 * (k | 0)) : 0;
+        b[i] = (f1[i] + f2[i] * 0.7) * gate * 0.85 + voice[i] * gate * gate * 0.30;
+      }
+      biquad(b, sr, 'hp', 240, 0.7);
+      biquad(b, sr, 'lp', 2600, 0.7, 0, 2);
+      fadeOut(b, sr, 0.06);
+      reg('dr_giggle' + v, [normalizeTo(b, 0.72)]);
+    }
+
+    // ---- KNOCK (C10): three knuckles on a door, 0.55 s apart. Each is a short burst on
+    //      the panel's two resonances; the third is a shade softer, as a hand is.
+    for (let v = 0; v < 2; v++) {
+      const b = new Float32Array(N(1.45));
+      for (let k = 0; k < 3; k++) {
+        const at = 0.02 + k * 0.55, amp = k === 2 ? 0.82 : 1.0;
+        const n = new Float32Array(N(0.07));
+        noiseFill(n, rn);
+        biquad(n, sr, 'bp', 820 + v * 90, 1.1);
+        envAD(n, sr, 0.0008, 0.011);
+        mixInto(b, n, 0.6 * amp, N(at));
+        damped(b, sr, 172 + v * 14, 0.040, 0.55 * amp, 0, at);        // the panel
+        damped(b, sr, 415 + v * 30, 0.018, 0.30 * amp, 0.4, at);       // the stile
+        damped(b, sr, 1180 + v * 60, 0.006, 0.18 * amp, 0, at);        // the knuckle itself
+      }
+      biquad(b, sr, 'hp', 90, 0.7);
+      fadeOut(b, sr, 0.05);
+      reg('dr_knock' + v, [normalizeTo(b, 0.86)]);
+    }
+
+    // ---- CAN (C10): the handle of a jerry can clacking against its neck as it is lifted.
+    //      Two metal pings, a small body, and the click of the latch bar.
+    for (let v = 0; v < 2; v++) {
+      const b = new Float32Array(N(0.32));
+      const n = new Float32Array(N(0.02));
+      noiseFill(n, rn);
+      biquad(n, sr, 'bp', 2400, 1.2);
+      envAD(n, sr, 0.0004, 0.004);
+      mixInto(b, n, 0.7);
+      damped(b, sr, 2060 + v * 140, 0.014, 0.6, 0, 0.002);
+      damped(b, sr, 3300 + v * 200, 0.009, 0.32, 0.5, 0.002);
+      damped(b, sr, 270 + v * 20, 0.035, 0.40, 0, 0.003);               // the can's body
+      // the second clack, the handle settling
+      mixInto(b, n, 0.45, N(0.095 + v * 0.02));
+      damped(b, sr, 2060 + v * 140, 0.011, 0.38, 0.3, 0.097 + v * 0.02);
+      damped(b, sr, 270 + v * 20, 0.028, 0.26, 0, 0.098 + v * 0.02);
+      biquad(b, sr, 'hp', 150, 0.7);
+      fadeOut(b, sr, 0.03);
+      reg('dr_can' + v, [normalizeTo(b, 0.80)]);
+    }
+
     this._bakeExploration();
     this._verifyDread();
   }
@@ -2861,24 +3008,29 @@ export class Audio {
     // the law." So it is the only thing in this lane that is allowed to be a
     // pitched, ringing, beautiful object — five inharmonic partials off a real
     // bell's ratios, with a strike transient and a hum that outlives all of it.
+    // D11 (Alex, 2026-09-16: the bells peak the audio and the strike is annoying): the hum
+    // rings 1.5x longer, the strike is lower, slower and a third of what it was, and the
+    // peak is 0.62 so it sits under the master compressor instead of clamping it.
     {
-      const b = new Float32Array(N(4.0));
+      const TAU_X = 1.5;
+      const b = new Float32Array(N(6.0));               // the 5.1 s hum needs the room
       const f = 262;                                     // the prime
       const P = [[0.500, 0.55, 3.4], [1.000, 1.00, 2.6], [1.183, 0.42, 1.9],
                  [1.506, 0.30, 1.4], [2.000, 0.26, 1.0], [2.514, 0.14, 0.6]];
       for (let i = 0; i < P.length; i++) {
-        damped(b, sr, f * P[i][0], P[i][2], P[i][1]);
+        damped(b, sr, f * P[i][0], P[i][2] * TAU_X, P[i][1]);
         // a second, cent-detuned partner per partial IS the beating of a bell
-        damped(b, sr, f * P[i][0] * 1.0018, P[i][2] * 0.92, P[i][1] * 0.55, 1.1);
+        damped(b, sr, f * P[i][0] * 1.0018, P[i][2] * TAU_X * 0.92, P[i][1] * 0.55, 1.1);
       }
       const strike = new Float32Array(N(0.05));
       noiseFill(strike, rn);
-      biquad(strike, sr, 'bp', 2100, 1.0);
-      envAD(strike, sr, 0.0008, 0.010);
-      mixInto(b, strike, 0.35);
+      biquad(strike, sr, 'bp', 900, 1.0);              // 2100 was a click; 900 is a clapper
+      envAD(strike, sr, 0.003, 0.010);                 // 3 ms in: a clapper lands, it does not snap
+      mixInto(b, strike, 0.12);
       biquad(b, sr, 'hp', 110, 0.7);
+      fadeIn(b, sr, 0.008);
       fadeOut(b, sr, 0.35);
-      reg('wh_bell', [normalizeTo(b, 0.90)]);
+      reg('wh_bell', [normalizeTo(b, 0.62)]);
     }
   }
 

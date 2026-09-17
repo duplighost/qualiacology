@@ -2,8 +2,10 @@
 import * as THREE from 'three';
 import { HOLDFAST_TOWN as TOWN } from './holdfast-town-layout.js';
 import { BOSSES, bossMapPoint } from './boss-catalog.js';
-import { STOCK } from './dealer.js';
+import { STOCK, OWNED_LINE, AMMO_FULL_LINE, bulbLine } from './dealer.js';
 import { PAINTS } from '../vehicle/paint.js';
+import { ShopMenu } from '../ui/shop-menu.js';
+import { readingTime, REST_AFTER_S } from '../dialogue/lines.js';
 import { CASE_SITE } from './climbs-and-caches.js';
 import { MAJOR_BY_ID } from './placedata.js';
 import { CFG } from '../config.js';
@@ -69,22 +71,33 @@ export class HoldfastLife {
   static id='holdfast-life';
   constructor(ctx){
     this.ctx=ctx;this.people=[];this.time=0;this.away=0;this.epoch=0;this.target='';
-    this.hold=0;this.useLock=false;this.tuneLock=false;this.offer=0;this.chat=null;
+    this.useLock=false;this.chat=null;this.menu=null;
     this.off=[];this.shotAt=new Map();this.signs=[];this.lamps=new Map();this.lightAt=0;
+    // D7: the four counters share the one shop menu. Row objects are made once per list and
+    // rewritten in place at the counter; the spec is the menu's feed (see ui/shop-menu.js).
+    this._rowsArms=STOCK.map(s=>({id:s.id,name:s.name,price:s.price,line:s.line,owned:false,full:false,unavailable:false,tag:'',note:'',item:!!s.item,ammo:!!s.ammo}));
+    this._rowsPaint=PAINTS.map(p=>({id:p.id,name:p.name,price:p.price,line:p.line,owned:false,full:false,unavailable:false,tag:'',note:'',paint:true,have:false}));
+    this._rowsLead=[{id:'lead',name:'A LEAD ON A SEALED CASE',price:CASE_LEAD_PRICE,line:'',owned:false,full:false,unavailable:false,tag:'',note:'NOTHING LEFT TO FIND',lead:null}];
+    this._spec={key:'',title:'',rank:9,cash:0,x:0,y:0,z:0,offers:this._rowsArms,buy:o=>this._buy(o)};
   }
   _sys(id){return this.ctx.systems.get(id);}
   _frame(){return this._sys('places')?.nodes.get('holdfast');}
   world(x,z,y=0){const f=this._frame(),yaw=f?.yaw||0,cy=Math.cos(yaw),sy=Math.sin(yaw);return {x:(f?.def.x||0)+x*cy+z*sy,y:(f?.padY||0)+y,z:(f?.def.z||0)-x*sy+z*cy};}
   local(x,z){const f=this._frame(),yaw=f?.yaw||0,dx=x-(f?.def.x||0),dz=z-(f?.def.z||0);return{x:dx*Math.cos(yaw)-dz*Math.sin(yaw),z:dx*Math.sin(yaw)+dz*Math.cos(yaw)};}
+  /** world() into a caller's vector (x/z only): the walkers' per-step goal without an allocation. */
+  _worldInto(out,x,z){const f=this._frame(),yaw=f?.yaw||0,cy=Math.cos(yaw),sy=Math.sin(yaw);out.x=(f?.def.x||0)+x*cy+z*sy;out.z=(f?.def.z||0)-x*sy+z*cy;return out;}
   contains(x,z,padding=0){const p=this.local(x,z),b=TOWN.bounds;return p.x>b.minX-padding&&p.x<b.maxX+padding&&p.z>b.minZ-padding&&p.z<b.maxZ+padding;}
   async init(){
     this._sys('progress')?.flag('gate-hostile:holdfast',0);
-    for(const r of TOWN.residents)this.people.push({...r,story:STORIES[r.id],e:null,gen:0,line:0});
-    for(const r of TOWN.elevatedResidents||[])this.people.push({...r,story:UPPER_STORIES[r.id]||['The upper watch',['We can see the road from here. Someone has to.']],e:null,gen:0,line:0});
-    for(const r of TOWN.guards||[])this.people.push({...r,guard:true,story:['The Holdfast watch',['Keep your weapon down in the streets. If something follows you here, bring it to us.']],e:null,gen:0,line:0});
-    TOWN.routes.forEach((route,i)=>this.people.push({id:'walker-'+i,x:route[0][0],z:route[0][1],y:route[0][2]||0,yaw:0,route,waypoint:1,direction:1,pause:i*.4,story:[NAMES[i%NAMES.length],['People still knock here. I like that.','Every lamp has someone who cleans the glass. That is how this place stays here.']],e:null,gen:0,line:0}));
-    for(const s of TOWN.shops)this.people.push({...s,shop:s.kind,story:[s.kind==='weapons'?(s.outside?'Fen · road armourer':'Merrit · armourer'):(s.outside?'Bo · gate mechanic':'Ari · engine keeper'),[s.kind==='weapons'?'Clean barrels. Dry rounds. Keep both that way.':'Bring the car back in one piece. Or as close as you can manage.']],e:null,gen:0,line:0});
-    this._buildUI();this._signs();
+    // D10: `line` is the read-through index (it STOPS at the end, no modulo), `restUntil`
+    // the time the person is readable again from line 0, `lineCount` how many lines the
+    // last read-through had (the special cases in _talk swap the list; every variant is 2).
+    for(const r of TOWN.residents)this.people.push({...r,story:STORIES[r.id],e:null,gen:0,line:0,restUntil:0,lineCount:0});
+    for(const r of TOWN.elevatedResidents||[])this.people.push({...r,story:UPPER_STORIES[r.id]||['The upper watch',['We can see the road from here. Someone has to.']],e:null,gen:0,line:0,restUntil:0,lineCount:0});
+    for(const r of TOWN.guards||[])this.people.push({...r,guard:true,story:['The Holdfast watch',['Keep your weapon down in the streets. If something follows you here, bring it to us.']],e:null,gen:0,line:0,restUntil:0,lineCount:0});
+    TOWN.routes.forEach((route,i)=>this.people.push({id:'walker-'+i,x:route[0][0],z:route[0][1],y:route[0][2]||0,yaw:0,route,routeY:null,waypoint:1,direction:1,pause:i*.4,story:[NAMES[i%NAMES.length],['People still knock here. I like that.','Every lamp has someone who cleans the glass. That is how this place stays here.']],e:null,gen:0,line:0,restUntil:0,lineCount:0}));
+    for(const s of TOWN.shops)this.people.push({...s,shop:s.kind,story:[s.kind==='weapons'?(s.outside?'Fen · road armourer':'Merrit · armourer'):(s.outside?'Bo · gate mechanic':'Ari · engine keeper'),[s.kind==='weapons'?'Clean barrels. Dry rounds. Keep both that way.':'Bring the car back in one piece. Or as close as you can manage.']],e:null,gen:0,line:0,restUntil:0,lineCount:0});
+    this.menu=new ShopMenu(this.ctx);this._signs();
     for(const r of this.people)if(LORE_LINES[r.id])r.story=[r.story[0],[r.story[1][0],LORE_LINES[r.id],...r.story[1].slice(1)],r.story[2]];
     const linn=this.people.find(r=>r.id==='roof-seamstress');if(linn)linn.story[1][0]='The washing hangs still. It has not moved in six years. Bring the sheets in before they freeze.';
     const aven=this.people.find(r=>r.id==='roof-baker');if(aven)aven.story[1][1]='The stone underneath the ovens stays warm. Tomas talks about the shifts. I let him.';
@@ -93,14 +106,11 @@ export class HoldfastLife {
     this.off.push(this.ctx.bus.on('gate:hostile',e=>{if(e.id==='holdfast'){this.chat=null;this._sys('audio')?.dread?.('dealer-rack',this.world(0,66).x,this.world(0,66).y+1.5,this.world(0,66).z,.3);}}));
   }
   ready(){return this.people.length>=20;}
-  _buildUI(){
-    // THE ELEVEN REWIRE: this town no longer owns a conversation card. Every spoken line in
-    // the county goes through dialogue/dialogue.js, which owns the one subtitle element, the
-    // queue, priority and overlap. The resident STORIES stay exactly where they are — they
-    // are Alex's copy and will not be recorded — and are handed over as ad-hoc lines.
-    this.shopEl=document.createElement('section');this.shopEl.id='holdfast-shop';
-    this.shopEl.style.cssText='position:fixed;right:4%;top:22%;width:310px;max-height:60vh;overflow:hidden;background:linear-gradient(135deg,#101721f2,#12131eee);color:#e4e1da;border:1px solid #8f869966;border-radius:4px;padding:22px;box-shadow:0 20px 80px #0008;font:13px/1.5 system-ui;display:none;pointer-events:none;z-index:21';document.body.append(this.shopEl);
-  }
+  // THE ELEVEN REWIRE: this town no longer owns a conversation card. Every spoken line in
+  // the county goes through dialogue/dialogue.js, which owns the one subtitle element, the
+  // queue, priority and overlap. The resident STORIES stay exactly where they are — they
+  // are Alex's copy and will not be recorded — and are handed over as ad-hoc lines.
+  // D7: nor does it own a shop card any more; ui/shop-menu.js draws the four counters.
   _signs(){
     const group=this.signGroup=new THREE.Group();group.name='holdfast-painted-signs';this.ctx.scene.add(group);
     for(const s of TOWN.signs){
@@ -114,14 +124,14 @@ export class HoldfastLife {
   }
   reset(){
     const en=this._sys('enemies'),places=this._sys('places');
-    this.epoch++;this.away=0;this.chat=null;this.target='';this.hold=0;this.offer=0;this.useLock=false;this.tuneLock=false;
+    this.epoch++;this.away=0;this.chat=null;this.target='';this.useLock=false;this.menu?.close();
     this.shotAt.clear();this._sys('progress')?.flag('gate-hostile:holdfast',0);
     // A pooled record may already belong to another person. Release only this life,
     // and return its attack token before releasing its body slot.
     const release=(e,gen)=>{if(e&&e.gen===gen){en?._uncommit(e);en?._release(e);}};
     for(const r of this.people){
       release(r.e,r.gen);r.e=null;r.gen=0;r.dead=false;
-      if(r.route){r.waypoint=1;r.direction=1;r.pause=0;}
+      if(r.route){r.waypoint=1;r.direction=1;r.pause=0;r.routeY=null;}
     }
     const cast=places?._casts.get('major:holdfast');
     if(cast)for(const c of cast.cast){
@@ -131,8 +141,24 @@ export class HoldfastLife {
     if(en?._gateAway?.holdfast)en._gateAway.holdfast.t=0;
     for(const h of this.lamps.values())this._sys('lights')?.release(h);this.lamps.clear();
   }
+  /**
+   * WHERE THE FEET GO. Residents are staged bodies: their y is written, never sampled, so
+   * an authored constant (pad + storey) put them 3 cm under the paving everywhere and a hand's
+   * width above the upper floors. Now one ray straight down through the collision world from
+   * 1.6 m over the storey hint — a standable top (deck, upper street, house floor, kerb) or the
+   * analytic ground — and the authored y stays only as the hint and the fallback.
+   */
+  _feetY(lx,lz,ly){
+    const base=(this._frame()?.padY||0)+ly+.035;   // the old constant: pad + storey, a hair over the painted apron
+    const col=this._sys('collision');if(!col||typeof col.raycast!=='function')return base;
+    const top=this.world(lx,lz,ly+1.6);_from.set(top.x,top.y,top.z);_ray.set(0,-1,0);
+    const h=col.raycast(_from,_ray,2.8,(col.MASK?.SOLID||1)|(col.MASK?.GROUND||8));
+    if(!h||h.hit===false||!Number.isFinite(h.t))return base;
+    const y=top.y-h.t+(h.ground?.035:0);   // ground: the apron sheet sits 2.5 cm over it, so keep the old lift; a real top is the top
+    return y>=base-1.235?y:base;            // never more than 1.2 m under the hint: a floor whose collider has not streamed in must not drop an upper resident to the street
+  }
   _spawn(r){
-    const p=this.world(r.x,r.z,(r.y||0)+.035),yaw=(this._frame()?.yaw||0)+(r.yaw||0)+Math.PI,en=this._sys('enemies');
+    const p=this.world(r.x,r.z,0);p.y=this._feetY(r.x,r.z,r.y||0);const yaw=(this._frame()?.yaw||0)+(r.yaw||0)+Math.PI,en=this._sys('enemies');
     r.e=en.spawn(r.guard?'marshal':'resident',p.x,p.z,{staged:true,neutral:true,initiallyNeutral:true,siteGuard:'holdfast',townGuard:!!r.guard,townCivilian:!r.guard,feetY:p.y,yaw,placementRadius:1.2});
     if(r.e){
       r.gen=r.e.gen;r.e.looted=true;r.e.townName=r.story[0];r.e.townHome={x:p.x,z:p.z};
@@ -144,7 +170,12 @@ export class HoldfastLife {
     const e=r.e;if(!e?.alive||!e.neutral)return;e.townWalk=0;if(!r.route)return;
     if(this.chat?.id===r.id || this.target===r.id){e.townWalk=0;return;}
     if(r.pause>0){r.pause-=dt;e.townWalk=0;return;}
-    const q=r.route[r.waypoint],goal=this.world(q[0],q[1],(q[2]||0)+.035),dx=goal.x-e.stagedX,dz=goal.z-e.stagedZ,d=Math.hypot(dx,dz);
+    const q=r.route[r.waypoint];
+    // The goal's height is sampled once per waypoint per visit (routes are four to six points),
+    // not a ray per walker per step; reset() drops the cache so a return re-reads the floor.
+    let gy=r.routeY?r.routeY[r.waypoint]:NaN;
+    if(gy!==gy){if(!r.routeY)r.routeY=new Array(r.route.length).fill(NaN);gy=r.routeY[r.waypoint]=this._feetY(q[0],q[1],q[2]||0);}
+    const goal=this._worldInto(_to,q[0],q[1]);goal.y=gy;const dx=goal.x-e.stagedX,dz=goal.z-e.stagedZ,d=Math.hypot(dx,dz);
     if(d<.22){r.waypoint+=r.direction;if(r.waypoint>=r.route.length||r.waypoint<0){r.direction*=-1;r.waypoint+=r.direction*2;r.pause=3+r.line%3;}return;}
     const speed=this._sys('progress').flag('gate-hostile:holdfast')?1.65:.74;
     _from.set(e.stagedX,e.stagedY+.8,e.stagedZ);_ray.set(dx/d,0,dz/d);
@@ -223,7 +254,12 @@ export class HoldfastLife {
     if(r.id==='cook'&&pr.bossCleared('underkeep'))lines=['The bowl was still full.','I put it out again. Hot, still. Whatever we ate.'];
     if(r.id==='shrinekeeper'&&pr.bossCleared('underkeep'))lines=['I remembered how.','A wick. Oil. A clean glass. We can do that much ourselves.'];
     if(this._oriana(r))return;
-    const i=r.line++%lines.length;this.chat={id:r.id,name:r.story[0],text:lines[i],until:this.time+Math.max(14,lines[i].length/15)};
+    // D10: a read-through, not a wheel. Each press is the next line; the last line is where
+    // it stops. step() keeps the prompt dark from here until restUntil, then puts `line` back
+    // to 0 — so the third press is never the first line again while the second is on screen.
+    const i=Math.min(Math.max(0,r.line|0),lines.length-1);r.line=i+1;r.lineCount=lines.length;
+    if(i===lines.length-1)r.restUntil=this.time+readingTime(lines[i])+0.35+REST_AFTER_S;   // the words leave the screen, the fade, then the rest
+    this.chat={id:r.id,name:r.story[0],text:lines[i],until:this.time+Math.max(14,lines[i].length/15)};
     this._sys('dialogue')?.say(
       {id:'holdfast.'+r.id+'.'+i,speaker:r.story[0],text:lines[i],priority:privateHint?6:4,interrupt:!privateHint},
       {speakerEntity:r.e,name:r.story[0]});
@@ -249,13 +285,27 @@ export class HoldfastLife {
    */
   _offers(r){
     const pr=this._sys('progress'),w=this._sys('weapons');
-    if(r.shop==='car'&&r.outside)return [this._caseLead(pr)];
+    if(r.shop==='car'&&r.outside)return this._caseLead(pr);
     if(r.shop==='car'){
-      const current=pr.paint();
-      return PAINTS.map(p=>({id:p.id,name:p.name,line:p.line,price:pr.ownsPaint(p.id)?0:p.price,
-        paint:true,owned:pr.ownsPaint(p.id),current:p.id===current}));
+      // A paint you have is fitted for nothing; the one on the car is FITTED and not for sale.
+      const current=pr.paint(),rows=this._rowsPaint;
+      for(let i=0;i<rows.length;i++){const o=rows[i],p=PAINTS[i];o.have=pr.ownsPaint(p.id);o.price=o.have?0:p.price;const fitted=p.id===current;o.unavailable=fitted;o.tag=fitted?'FITTED':'';o.note=fitted?'ON THE CAR NOW':'';}
+      return rows;
     }
-    return STOCK.map(s=>{if(s.item)return{...s,line:'A new light for one of the county’s roadside poles.'};const owned=w.has(s.id),bundle=CFG.weapons.defs[s.id].reserve,rounds=Math.max(0,Math.min(bundle,bundle*2-w.reserveOf(s.id)));return{...s,owned,rounds,full:owned&&rounds===0,price:owned?Math.max(1,Math.ceil(Math.max(6,Math.round(s.price*.25))*rounds/bundle)):s.price,line:owned?`${rounds} rounds · ${w.reserveOf(s.id)} in reserve`:'Weapon and a full reserve of ammunition.'};});
+    const rows=this._rowsArms;
+    for(let i=0;i<rows.length;i++){
+      const o=rows[i],s=STOCK[i];
+      if(s.item){o.line=bulbLine(this._sys('dusk-to-dawn')?.bulbs?.()??0);continue;}
+      if(s.ammo){o.full=this._ammoFull(w);o.line=o.full?AMMO_FULL_LINE:s.line;continue;}
+      o.owned=!!w?.has(s.id);o.line=o.owned?OWNED_LINE:s.line;
+    }
+    return rows;
+  }
+  /** Is every gun you own at its reserve ceiling? Then the AMMUNITION row reads FULL. */
+  _ammoFull(w){
+    const owned=w?.owned;if(!owned||!owned.length)return false;
+    for(let k=0;k<owned.length;k++){const base=CFG.weapons.defs[owned[k]];if(base&&w.reserveOf(owned[k])<base.reserve*2)return false;}
+    return true;
   }
   /** Bo's one row: the nearest case nobody has opened and nobody has told you about. */
   _caseLead(pr){
@@ -265,42 +315,38 @@ export class HoldfastLife {
       if(pr.mapStatus('case:'+site)!=='unknown')continue;
       const d=MAJOR_BY_ID[site];if(!d)continue;
       const dist=p?.pos?Math.hypot(p.pos.x-d.x,p.pos.z-d.z):0;
-      if(dist<bd){bd=dist;best={id:'case:'+site,name:d.name+' · a sealed case',x:d.x,z:d.z,kind:'place'};}
+      if(dist<bd){bd=dist;best=d;}
     }
-    return best
-      ? {id:'lead',name:'A LEAD ON A SEALED CASE',price:CASE_LEAD_PRICE,lead:best,
-         line:'Forty is the floor. This is not forty.'}
-      : {id:'lead',name:'A LEAD ON A SEALED CASE',price:CASE_LEAD_PRICE,lead:null,empty:true,
-         line:'Nothing left to find. You have been everywhere I know about.'};
+    const o=this._rowsLead[0];
+    if(best){
+      if(o.lead?.site!==best.id)o.lead={site:best.id,id:'case:'+best.id,name:best.name+' · a sealed case',x:best.x,z:best.z,kind:'place'};
+      o.unavailable=false;o.line='Forty is the floor. This is not forty.';
+    }else{o.lead=null;o.unavailable=true;o.line='Nothing left to find. You have been everywhere I know about.';}
+    return this._rowsLead;
   }
 
-  _trade(r,dt,use,tune){
-    const pr=this._sys('progress'),list=this._offers(r);if(!list.length){this._shopCard(r,[],0);return;}
-    if(tune&&!this.tuneLock){this.offer=(this.offer+1)%list.length;this.tuneLock=true;this.hold=0;}
-    this.offer%=list.length;const o=list[this.offer];
-    // A paint you already own costs nothing and is always available unless it is already on
-    // the car; a lead with nothing behind it is never for sale.
-    const can=!o.full&&!o.empty&&!o.current&&pr.cash()>=o.price;
-    this._shopCard(r,list,this.offer);
-    this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:9,x:r.e.pos.x,y:r.e.pos.y+1.5,z:r.e.pos.z,k:this.hold/.8,detail:o.full?'AMMUNITION FULL':o.empty?'NOTHING LEFT TO FIND':o.current?o.name+' · FITTED':o.name+(o.price?' · '+o.price+' COINS':' · FREE'),subdetail:can?(o.paint&&o.owned?'HOLD E TO FIT · T NEXT':'HOLD E TO BUY · T NEXT'):'T NEXT',unavailable:!can});
-    if(!use||this.useLock||!can){this.hold=0;return;}this.hold+=dt;if(this.hold<.8)return;this.hold=0;this.useLock=true;
-    if(o.paint){pr.buyPaint(o.id,o.owned?0:o.price);}
-    else if(o.lead){if(pr.spendCash(o.price,'holdfast:case-lead'))pr.learnRumour(o.lead);}
-    else if(pr.spendCash(o.price,'holdfast:'+o.id)){
-      if(o.item)this._sys('dusk-to-dawn').addBulb(1);
-      else if(o.owned)this._sys('weapons').addReserveTo(o.id,o.rounds);
-      else{this._sys('weapons').reward(o.id);pr.flag('dealer:weapon:'+o.id,true);}
-      this.ctx.bus.emit('dealer:bought',{id:o.id,price:o.price,ammo:o.owned,rounds:o.rounds||0});
-    }
-  }
-  _shopCard(r,list,chosen){
+  /**
+   * D7: AT A COUNTER. The one shop menu (ui/shop-menu.js) draws the list beside the crosshair,
+   * takes a digit or a click or the hold, and calls _buy. T is the car radio again.
+   */
+  _trade(r,dt){
+    const pr=this._sys('progress'),spec=this._spec;
     if(this.lastShopMet!==r.id){this.lastShopMet=r.id;this.ctx.bus.emit('holdfast:conversation',{id:r.id,name:r.story[0],text:r.story[1][0],final:true});}
-    const key=r.id+':'+chosen+':'+this._sys('progress').cash()+':'+list.map(o=>o.id+o.rounds+o.price+(o.current?'*':'')).join(',');
-    if(key!==this.cardKey){this.cardKey=key;this.shopEl.replaceChildren();const title=document.createElement('h3');title.style.cssText='font:22px Georgia;margin:0 0 6px';title.textContent=r.shop==='car'?(r.outside?'What is out there':'Paint'):'Arms & ammunition';const sub=document.createElement('div');sub.style.cssText='color:#a7a8bc;font-size:11px;letter-spacing:.1em;margin-bottom:18px';sub.textContent=r.story[0]+' · '+this._sys('progress').cash()+' COINS';this.shopEl.append(title,sub);
-      const greeting=document.createElement('div');greeting.textContent=r.story[1][0];greeting.style.cssText='font:14px/1.5 Georgia;color:#cec8be;margin:8px 0 14px';this.shopEl.append(greeting);
-      list.forEach((o,i)=>{const row=document.createElement('div');row.style.cssText='padding:9px 11px;margin:3px 0;border-left:2px solid '+(i===chosen?'#cec7e9':'transparent')+';background:'+(i===chosen?'#77738b33':'transparent')+';color:'+(i===chosen?'#f0edf5':'#949ba7');row.textContent=o.name+' · '+(o.full?'full':o.current?'fitted':o.empty?'—':o.price?o.price:'free');this.shopEl.append(row);if(i===chosen){const line=document.createElement('div');line.style.cssText='font-size:12px;color:#bbb8c9;padding:0 11px 10px';line.textContent=o.line;this.shopEl.append(line);}});
-      const foot=document.createElement('div');foot.style.cssText='border-top:1px solid #85809144;margin-top:16px;padding-top:13px;color:#bab5cc;font-size:11px';foot.textContent=list.length?'T  Browse     Hold E  Buy':'Nothing tonight. Bring it back when you need something.';this.shopEl.append(foot);
-    }this.shopEl.style.display='block';
+    spec.key=r.id;spec.title=r.shop==='car'?(r.outside?'What is out there':'Paint'):'Arms & ammunition';
+    spec.offers=this._offers(r);spec.cash=pr.cash();spec.x=r.e.pos.x;spec.y=r.e.pos.y+1.5;spec.z=r.e.pos.z;
+    if(!this.menu)this.menu=new ShopMenu(this.ctx);
+    this.menu.show(spec,dt);
+  }
+  /** One purchase from the menu. The purse (progress.spendCash) makes the one sound of it. */
+  _buy(o){
+    const pr=this._sys('progress');
+    if(o.paint){pr.buyPaint(o.id,o.have?0:o.price);return;}
+    if(o.lead!==undefined){if(o.lead&&pr.spendCash(o.price,'holdfast:case-lead'))pr.learnRumour(o.lead);return;}
+    const w=this._sys('weapons');
+    if(o.item){if(pr.spendCash(o.price,'holdfast:'+o.id)){this._sys('dusk-to-dawn')?.addBulb?.(1);this.ctx.bus.emit('dealer:bought',{id:o.id,price:o.price,ammo:false,rounds:0});}return;}
+    if(o.ammo){if(this._ammoFull(w))return;if(pr.spendCash(o.price,'holdfast:ammo')){const rounds=w.addReserveAll(1);this.ctx.bus.emit('dealer:bought',{id:'ammo',price:o.price,ammo:true,rounds});}return;}
+    if(w.has(o.id))return;   // belt and braces under the greyed row: a gun you own is never sold twice
+    if(pr.spendCash(o.price,'holdfast:'+o.id)){w.reward(o.id);pr.flag('dealer:weapon:'+o.id,true);this.ctx.bus.emit('dealer:bought',{id:o.id,price:o.price,ammo:false,rounds:0});}
   }
   step(dt){
     if(!this.ctx.playing||this.ctx.paused)return;this.time+=dt;const p=this._sys('player'),en=this._sys('enemies');
@@ -313,15 +359,26 @@ export class HoldfastLife {
       if(!r.e&&!r.dead&&near)this._spawn(r);
       if(r.e?.alive)this._walk(r,dt);
     }
+    // C20: the kept-blackout bell is audio/late-bell.js's alone now (three strikes at the start,
+    // one when the lamps return, one on coming home). Hale rings by hand, not every 3.4 s.
     this._protect(dt);this._light();this._addresses();
-    if(this.ctx.shared.holdfastBlackout&&this.time>(this.nextBlackoutBell||0)){this.nextBlackoutBell=this.time+3.4;const at=this.world(31,-48,9);this._sys('audio')?.whisper('bell','Hale',at.x,at.y,at.z);this.ctx.bus.emit('holdfast:bell',{...at,reason:'kept'});}
-    const use=this.ctx.input.held('use'),tune=this.ctx.input.held('radiotune');if(!use)this.useLock=false;if(!tune)this.tuneLock=false;
-    if(this._insideGate(use)){this.target='';this.chat=null;this.shopEl.style.display='none';return;}
+    const use=this.ctx.input.held('use');if(!use)this.useLock=false;
+    if(this._insideGate(use)){this.target='';this.chat=null;this.menu?.close();return;}
     let target=null,best=3.3;const cam=this._sys('camera');
     if(!p.dead&&!this.ctx.shared.inCar&&!hostile)for(const r of this.people){const e=r.e;if(!e?.alive||e.gen!==r.gen)continue;const dx=e.pos.x-p.pos.x,dz=e.pos.z-p.pos.z,d=Math.hypot(dx,dz);if(d<best&&Math.abs(e.pos.y-p.pos.y)<1.7&&(-Math.sin(cam.yaw)*dx-Math.cos(cam.yaw)*dz)/Math.max(d,.001)>.64&&this._sight(p.pos,e.pos)){target=r;best=d;}}
-    if(this.target!==target?.id){this.hold=0;this.offer=0;this.cardKey='';}this.target=target?.id||'';this.shopEl.style.display='none';
-    if(target?.shop){this.chat=null;target.e.stagedYaw=faceYaw(target.e.pos.x,target.e.pos.z,p.pos.x,p.pos.z);this._trade(target,dt,use,tune);}
-    else if(target){const e=target.e;this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:9,x:e.pos.x,y:e.pos.y+1.6,z:e.pos.z,k:0,detail:target.story[0],subdetail:this.chat?.id===target.id?'E · LISTEN':'E · TALK',unavailable:false});if(use&&!this.useLock){this.useLock=true;this._talk(target);}}
+    this.target=target?.id||'';
+    if(!target?.shop)this.menu?.close();
+    if(target?.shop){this.chat=null;target.e.stagedYaw=faceYaw(target.e.pos.x,target.e.pos.z,p.pos.x,p.pos.z);this._trade(target,dt);}
+    else if(target){
+      // D10: after the last line the prompt goes DARK — nothing emitted, no cap, no words —
+      // until the rest is over; then the person is readable again from the first line.
+      const len=target.lineCount||target.story[1].length;let done=target.line>=len;
+      if(done&&this.time>=(target.restUntil||0)){target.line=0;done=false;if(this.chat?.id===target.id)this.chat=null;}   // the chat's 14 s floor can outlive a short last line's rest: TALK, not LISTEN, when they are ready again
+      if(!done){
+        const e=target.e;this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:9,x:e.pos.x,y:e.pos.y+1.6,z:e.pos.z,k:0,detail:target.story[0],subdetail:this.chat?.id===target.id?'E · LISTEN':'E · TALK',unavailable:false});
+        if(use&&!this.useLock){this.useLock=true;this._talk(target);}
+      }
+    }
     if(this.chat){const speaker=this.people.find(r=>r.id===this.chat.id)?.e;if(this.time>this.chat.until||p.dead||hostile||!speaker?.alive||Math.hypot(speaker.pos.x-p.pos.x,speaker.pos.z-p.pos.z)>8)this.chat=null;}
   }
   present(){
@@ -330,7 +387,7 @@ export class HoldfastLife {
     const level=this.ctx.shared.holdfastBlackout?0:(this.ctx.shared.holdfastRelight??1),places=this._sys('places'),n=places?.nodes.get('holdfast');
     if(n?.glow){n.glow.visible=level>0;n.glow.material.opacity*=level;}
     for(const group of places?.bodies.values()||[])for(const b of group)if(b.id==='holdfast')b.group.traverse(o=>{if(o.isMesh&&o.name.includes('glow')){o.visible=level>0;o.material.opacity=level;}});
-    if(!active||!this.target)this.shopEl.style.display='none';
+    this.menu?.present();
     void active;   // the subtitle is dialogue/dialogue.js's now, card and all
   }
   _addresses(){
@@ -339,5 +396,5 @@ export class HoldfastLife {
     if(address?.id!==this.address){this.address=address?.id||'';if(address)this.ctx.bus.emit('holdfast:address',{id:address.id,name:address.name});}
   }
   state(){return{residents:this.people.map(r=>({id:r.id,alive:!!r.e?.alive,dead:!!r.dead,pos:r.e?.pos.toArray(),shop:r.shop||null,walking:!!r.route})),hostile:!!this._sys('progress').flag('gate-hostile:holdfast'),chat:this.chat,target:this.target,epoch:this.epoch};}
-  dispose(){this.off.forEach(f=>f?.());for(const h of this.lamps.values())this._sys('lights')?.release(h);this.shopEl?.remove();for(const s of this.signs){s.geometry.dispose();s.material.map.dispose();s.material.dispose();}this.signGroup?.removeFromParent();}
+  dispose(){this.off.forEach(f=>f?.());for(const h of this.lamps.values())this._sys('lights')?.release(h);this.menu?.dispose();for(const s of this.signs){s.geometry.dispose();s.material.map.dispose();s.material.dispose();}this.signGroup?.removeFromParent();}
 }

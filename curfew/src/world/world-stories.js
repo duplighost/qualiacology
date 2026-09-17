@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Kit, C } from './sites.js';
 import { MASK } from './collision.js';
-import { mountSignBoard } from './sign-mount.js';
+import { mountSignBoard, reseatFace } from './sign-mount.js';
 import { projectPlaceSurfaceUVs } from './place-surfaces.js';
 import { heightAt, addFlat } from './terrain.js';
 import { SINKHOLE, LOST_DRIVE } from './world-scars.js';
@@ -14,6 +14,22 @@ import { reservoirContains } from './lore-reservoir.js';
 
 const XMAS={x:-20,z:300,yaw:1.782};
 const WOOD=[.105,.077,.052],IRON=[.067,.079,.075],PAPER=[.28,.265,.215];
+// THE COUNTY'S WRITING: the placards hung on a site's own walls, in that site's local frame
+// (x, y above the pad, z, yaw), painted by _sign. A table rather than a run of calls so
+// tests/sign-clearance.mjs can hang every one against its site's real geometry and say which
+// is inside a wall. Both station placards are fixed to solid masonry above the openings; a
+// static notice across the door used to float in the passage when the leaf swung.
+export const COUNTY_WRITING=Object.freeze([
+ {id:'assembly-3',siteId:'filling-station',x:-13.6,y:3.32,z:-3.235,yaw:Math.PI,lines:['ASSEMBLY POINT 3 · AWAIT TRANSPORT','TRANSPORT DEPARTS AT FIRST LIGHT'],w:2.4,h:.42},
+ {id:'relief-driver',siteId:'filling-station',x:-11.95,y:1.72,z:-3.235,yaw:Math.PI,lines:['SERVICE 17 · RELIEF DRIVER','REPORT TO ASSEMBLY POINT 3','COLLECT WAITING PASSENGERS','TRANSPORT DEPARTS AT FIRST LIGHT'],w:.36,h:.5},
+ {id:'county-seal',siteId:'filling-station',x:-10.5,y:3.24,z:-3.25,yaw:Math.PI,lines:['COUNTY OF MERIDIAN · EST. 1841'],w:2,h:.5},
+ {id:'barn-morning',siteId:'jackfield',x:0,y:2.15,z:6.235,yaw:0,lines:['DO YOU REMEMBER MORNING'],w:8,h:.9},
+ {id:'school-erased',siteId:'holdfast',x:57.265,y:3.5,z:35,yaw:-Math.PI/2,lines:['MORNING IS SOMETHING WE TELL CHILDREN'],w:3.8,h:.8},
+ {id:'fridge',siteId:'avery-house',x:26.86,y:4.7,z:6.912,yaw:0,lines:['Gone for gas. Back by morning. Love you.'],w:.62,h:.34},
+ {id:'bedroom',siteId:'avery-house',x:-26.9,y:9.1,z:-15.857,yaw:0,lines:["It’ll look better in the morning — Mom"],w:.74,h:.32},
+ {id:'mirror',siteId:'avery-house',x:-2.143,y:8.9,z:-7,yaw:-Math.PI/2,lines:['still dark out'],w:.6,h:.3},
+ {id:'seventh-portal',siteId:'black-rib',x:11.1984,y:1.9,z:-16.1063,yaw:Math.PI+.108,lines:['OPEN IT AGAIN'],w:1.2,h:.7},
+]);
 const up=new THREE.Vector3(0,1,0),dir=new THREE.Vector3(),quat=new THREE.Quaternion();
 function member(k,a,b,r,c=WOOD){dir.set(b[0]-a[0],b[1]-a[1],b[2]-a[2]);const len=dir.length();quat.setFromUnitVectors(up,dir.normalize());const g=new THREE.CylinderGeometry(r,r*1.13,len,7);g.applyQuaternion(quat);g.translate((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);k.push(g,c);}
 function cable(k,points,r=.027,c=[.027,.029,.025]){const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));k.push(new THREE.TubeGeometry(curve,Math.max(12,points.length*8),r,5,false),c);}
@@ -36,6 +52,11 @@ export class WorldStories {
  }
  ready(){return this.readyState;}
  _sitePoint(id,x,y,z,yaw=0){const n=this._sys('places')?.nodes.get(id);if(!n)return null;const a=n.yaw||0,c=Math.cos(a),s=Math.sin(a);return{x:n.def.x+x*c+z*s,y:n.padY+y,z:n.def.z-x*s+z*c,yaw:a+yaw};}
+ // the site's RESIDENT meshes (the landmark node, and the body group when its chunk is in),
+ // world matrices brought up to date, for reseating a wall-hung face at build
+ _siteMeshes(id){const places=this._sys('places'),out=[];const n=places?.nodes?.get(id);if(n?.node){n.node.updateWorldMatrix(true,true);out.push(n.node);}
+  if(places?.bodies)for(const list of places.bodies.values())for(const b of list)if(b?.kind==='major'&&b.id===id&&b.group){b.group.updateWorldMatrix(true,true);out.push(b.group);}
+  return out;}
  _paper(root,p,record){
   if(typeof document==='undefined')return;
   const canvas=document.createElement('canvas');canvas.width=640;canvas.height=768;const c=canvas.getContext('2d');c.fillStyle='#4a4535';c.fillRect(0,0,640,768);c.fillStyle='#060402';
@@ -48,24 +69,17 @@ export class WorldStories {
  }
  _siteRecords(){
   for(const r of SITE_RECORDS){const p=this._sitePoint(r.siteId,r.x,r.y,r.z,r.yaw);if(!p)continue;const pad=this._sys('places').nodes.get(r.siteId).padY,ground=heightAt(p.x,p.z);if(r.ground)p.y+=ground-pad;const floor=r.ground?ground:pad+(r.floor||0),root=this._group('record-'+r.siteId,p.x,p.z),k=new Kit();
+   // a 'wall' record trusts masonry 0.012 m behind it: seat it on the wall that is resident
+   if(r.mount==='wall')reseatFace(p,this._siteMeshes(r.siteId),.012);
    if(r.mount==='desk'){k.box(.9,.08,1.05,p.x,p.y-.055,p.z,WOOD,p.yaw);for(const side of[-1,1]){const dx=side*.31*Math.cos(p.yaw),dz=-side*.31*Math.sin(p.yaw),h=p.y-floor-.1;k.box(.065,h,.065,p.x+dx,floor+h/2,p.z+dz,IRON);}}
    if(r.mount==='board')this._board(k,{...p,w:r.w||.64,h:r.h||.77},floor);
    this._mesh(k,root);this._paper(root,p,r);this.targets.push({...r,...p,kind:'read',hand:SITE_HANDS[r.siteId],title:'READ · '+r.title});
   }
  }
  _appendix(){
-  const put=(siteId,x,y,z,yaw,lines,{w=2.1,h=.9,small=true,id}={})=>{const p=this._sitePoint(siteId,x,y,z,yaw);if(!p)return;const root=this._group('county-writing-'+(id||siteId),p.x,p.z);this._sign(root,{...p,w,h,lines,small});this.targets.push({id:'writing:'+(id||siteId+':'+this.targets.length),kind:'read',...p,title:'READ THE WRITING',siteId,text:lines.join('\n')});};
-  // Both placards are fixed to solid masonry above the openings. A static
-  // notice across the door used to float in the passage when the leaf swung.
-  put('filling-station',-13.6,3.32,-3.235,Math.PI,['ASSEMBLY POINT 3 · AWAIT TRANSPORT','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:2.4,h:.42,id:'assembly-3'});
-  put('filling-station',-11.95,1.72,-3.235,Math.PI,['SERVICE 17 · RELIEF DRIVER','REPORT TO ASSEMBLY POINT 3','COLLECT WAITING PASSENGERS','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:.36,h:.5,id:'relief-driver'});
-  put('filling-station',-10.5,3.24,-3.25,Math.PI,['COUNTY OF MERIDIAN · EST. 1841'],{w:2,h:.5,id:'county-seal'});
-  put('jackfield',0,2.15,6.235,0,['DO YOU REMEMBER MORNING'],{w:8,h:.9,id:'barn-morning'});
-  put('holdfast',57.265,3.5,35,-Math.PI/2,['MORNING IS SOMETHING WE TELL CHILDREN'],{w:3.8,h:.8,id:'school-erased'});
-  put('avery-house',26.86,4.7,6.912,0,['Gone for gas. Back by morning. Love you.'],{w:.62,h:.34,id:'fridge'});
-  put('avery-house',-26.9,9.1,-15.857,0,["It’ll look better in the morning — Mom"],{w:.74,h:.32,id:'bedroom'});
-  put('avery-house',-2.143,8.9,-7,-Math.PI/2,['still dark out'],{w:.6,h:.3,id:'mirror'});
-  put('black-rib',11.1984,1.9,-16.1063,Math.PI+.108,['OPEN IT AGAIN'],{w:1.2,h:.7,id:'seventh-portal'});
+  // The placards on the county's own walls: the COUNTY_WRITING table, each reseated on the
+  // wall that is actually resident before it is hung (see reseatFace).
+  for(const wr of COUNTY_WRITING){const p=this._sitePoint(wr.siteId,wr.x,wr.y,wr.z,wr.yaw);if(!p)continue;reseatFace(p,this._siteMeshes(wr.siteId),.012);const root=this._group('county-writing-'+wr.id,p.x,p.z);this._sign(root,{...p,w:wr.w??2.1,h:wr.h??.9,lines:wr.lines,small:true});this.targets.push({id:'writing:'+wr.id,kind:'read',...p,title:'READ THE WRITING',siteId:wr.siteId,text:wr.lines.join('\n')});}
   // Four contracts in stone: three repeated eastward promises, one deliberate reversal.
   const epitaphs=[['WE SHALL RISE','TO MEET IT'],['UNTIL THE MORNING'],['ASLEEP, AWAITING','THE DAWN'],['FACING THE OTHER WAY','ON PURPOSE']];
   for(let i=0;i<4;i++){const p=this._sitePoint('garden-of-rest',-19.6,0,-10+i*4.3);if(!p)continue;const y=heightAt(p.x,p.z),yaw=i===3?-Math.PI/2:Math.PI/2,root=this._group('morning-headstone-'+i,p.x,p.z),k=new Kit();k.box(.82,1.1,.20,p.x,y+.55,p.z,C.stone,yaw);k.box(1,.16,.46,p.x,y+.08,p.z,C.stone,yaw);this._mesh(k,root,this.materials.stone);this._sign(root,{x:p.x+Math.sin(yaw)*.108,y:y+.68,z:p.z+Math.cos(yaw)*.108,yaw,w:.75,h:.58,lines:epitaphs[i],small:true});}

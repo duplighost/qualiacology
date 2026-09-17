@@ -527,7 +527,8 @@ function cashier(k, people, api, x, z, yaw) {
   k.solid.box(0.39,0.20,0.26,px+cy*0.37,g+1.08,pz-sy*0.37,C.metal,yaw);
   // Warm glass lantern above the counter: a distinct destination for both eye and torch.
   k.solid.cyl(0.06,0.06,2.55,8,px-cy*0.79,g+1.275,pz+sy*0.79,C.metal);
-  k.glow.cyl(0.13,0.13,0.34,9,px-cy*0.79,g+2.44,pz+sy*0.79,[1,0.78,0.48]);
+  k.glow.cyl(0.13,0.13,0.34,9,px-cy*0.79,g+2.44,pz+sy*0.79,[0.6,0.47,0.29]);
+  bulb(k.glow,px-cy*0.79,g+2.44,pz+sy*0.79,0.045);   // D18: the filament, the one thing that blooms
   api.emit({kind:'obb',x:px,z:pz,halfX:0.85,halfZ:0.33,yaw,y0:g,y1:g+0.99,tag:'wood'});
   return {x:px+sy*0.45,z:pz+cy*0.45,y:g};
 }
@@ -765,6 +766,66 @@ function glowColumn(k, x, y, z, r, h, gain) {
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
   g.translate(x, y, z);
   k.parts.push(g);
+  return g;
+}
+
+/**
+ * D18: THE BULB. A small sphere on the GLOW kit whose vertex colour is BULB_HDR, over post.js's
+ * 1.05 bloom threshold (GLOW.lamp's luma 0.73 x 2.2 = 1.6), so UnrealBloom draws a real bulb
+ * where before every lamp in the county sat at HDR 1.0 and bloomed nothing. The panes and
+ * columns round it stay under the threshold: the halo is airlight's, the core is this.
+ * airlight normalises a cluster by its peak, so its volume is unchanged by the number.
+ */
+const BULB_HDR = 2.2;
+function bulb(k, x, y, z, r) {
+  const g = new THREE.SphereGeometry(r, 8, 6);
+  g.translate(x, y, z);
+  const n = g.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  for (let i = 0; i < n * 3; i++) c[i] = BULB_HDR;
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  k.parts.push(g);
+  return g;
+}
+
+/**
+ * A SECTOR SLAB on the solid kit: an annulus r0..r1 from angle a0 to a1 (x = r cos a,
+ * z = r sin a, the same convention every spiral in this file uses), y0..y1 thick, closed on
+ * all six sides so it reads from below and from its ends. Indexed with position/normal/uv so
+ * it merges with the BoxGeometry parts round it; `segs` radial planks, alternating shade so
+ * a ring reads as boards laid round a trunk rather than as one disc. Build time only.
+ */
+function sectorSlab(kit, r0, r1, y0, y1, a0, a1, segs, col) {
+  const pos = [], nrm = [], uv = [], idx = [], cs = [];
+  const dark = [col[0] * 0.82, col[1] * 0.82, col[2] * 0.84];
+  // four corners, an outward normal; the winding is fixed so (b-a)x(c-a) agrees with n
+  const quad = (a, b, c, d, n, tint) => {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    const gx = uy * vz - uz * vy, gy = uz * vx - ux * vz, gz = ux * vy - uy * vx;
+    const order = gx * n[0] + gy * n[1] + gz * n[2] >= 0 ? [a, b, c, d] : [a, d, c, b];
+    const s = pos.length / 3;
+    for (const p of order) { pos.push(p[0], p[1], p[2]); nrm.push(n[0], n[1], n[2]); uv.push(p[0] * 0.25 + p[1] * 0.1, p[2] * 0.25); cs.push(tint[0], tint[1], tint[2]); }
+    idx.push(s, s + 1, s + 2, s, s + 2, s + 3);
+  };
+  const P = (r, a, y) => [r * Math.cos(a), y, r * Math.sin(a)];
+  for (let i = 0; i < segs; i++) {
+    const ta = a0 + (a1 - a0) * i / segs, tb = a0 + (a1 - a0) * (i + 1) / segs, tm = (ta + tb) * 0.5;
+    const tint = i & 1 ? dark : col;
+    quad(P(r0, ta, y1), P(r1, ta, y1), P(r1, tb, y1), P(r0, tb, y1), [0, 1, 0], tint);
+    quad(P(r0, ta, y0), P(r1, ta, y0), P(r1, tb, y0), P(r0, tb, y0), [0, -1, 0], dark);
+    quad(P(r1, ta, y0), P(r1, tb, y0), P(r1, tb, y1), P(r1, ta, y1), [Math.cos(tm), 0, Math.sin(tm)], dark);
+    quad(P(r0, ta, y0), P(r0, tb, y0), P(r0, tb, y1), P(r0, ta, y1), [-Math.cos(tm), 0, -Math.sin(tm)], dark);
+  }
+  quad(P(r0, a0, y0), P(r1, a0, y0), P(r1, a0, y1), P(r0, a0, y1), [Math.sin(a0), 0, -Math.cos(a0)], dark);
+  quad(P(r0, a1, y0), P(r1, a1, y0), P(r1, a1, y1), P(r0, a1, y1), [-Math.sin(a1), 0, Math.cos(a1)], dark);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cs, 3));
+  g.setIndex(idx);
+  kit.parts.push(g);
   return g;
 }
 
@@ -2832,8 +2893,17 @@ BUILDERS['great-tree'] = {
     for (let band = 0; band < 11; band++) k.solid.tube(1.82 + band * 0.16,
       1.96 + band * 0.18, 0.38, 11, 0, api.padY + 3.3 + band * 4.25, 0,
       band & 1 ? C.rust : barkDark);
-    api.emit({ kind: 'circle', x: 0, z: 0, r: 1.55,
-      y0: api.padY - 1.2, y1: api.padY + H, tag: 'tree' });
+    // THE TRUNK IS SOLID TO ITS SKIN. One r 1.55 circle sat inside a trunk drawn 4.25 m
+    // across at the foot, so the player, every dealer and every round went 2.7 m into the
+    // visible bark and the stair was climbed inside a back-face-culled cylinder. A stack of
+    // 'tree' circles follows the drawn taper r(y) = 4.25 - (y + 0.8) / 54 * 2.45, each band
+    // at the radius of its own foot so no band is ever thinner than the bark it stands in.
+    // 'tree' is NON_CLIMB and outside crush(); default mask blocks bodies, shots and sight.
+    for (const [y0, y1] of [[-1.2, 8], [8, 16], [16, 24], [24, 32], [32, 40], [40, H]]) {
+      const rr = 4.25 - (Math.max(y0, -0.8) + 0.8) / H * 2.45 + 0.02;
+      api.emit({ kind: 'circle', x: 0, z: 0, r: rr,
+        y0: api.padY + y0, y1: api.padY + y1, tag: 'tree' });
+    }
     // Overlapping, gnarled low-poly masses: a spreading crown rather than one sphere.
     const blobs = [[0,27,0,9.6],[-7.8,28,1.8,7.2],[7.6,29,-1.4,7.0],
       [-2.8,34,-7.2,7.0],[3.4,35,7.0,7.2],[-8.2,37,-3.2,6.2],
@@ -2869,65 +2939,113 @@ BUILDERS['great-tree'] = {
   },
   body(api) {
     const k = kits(), bark = [0.090, 0.058, 0.037];
-    // Thirty walkable spiral treads: 0.42 m per tread, five metres headroom per turn.
-    const N = 30, perTurn = 12, r = 3.25;
+    const Y = api.padY;
+    /* THE STAIR IS OUTSIDE THE TRUNK. The old spiral ran at r 3.25 with treads reaching in
+     * to r 1.47, inside a trunk drawn 4.2 m across at the foot: you climbed through the bark
+     * and, standing inside a back-face-culled cylinder, saw the switch through the wall.
+     * Thirty treads at r 6.0, 20 degrees apart (perTurn 18: 1.67 turns), 0.42 m a tread, so
+     * the top lands at 12.6 m under a 12.9 m deck with 7.56 m of headroom per turn. Each
+     * tread is 3.4 m radial (r 4.3..7.7: clear of the trunk's 4.27 m collider at the foot)
+     * by 2.5 m tangential, so at the outer edge, where 20 degrees is 2.69 m, the gap between
+     * treads is 0.19 m under a 0.72 m capsule. A handrail at HR: posts every second tread and
+     * a pitched chord of rail between, with one collider band per chord so a body cannot
+     * squeeze between two posts and off the edge. */
+    const N = 30, perTurn = 18, R = 6.0, RISE = 0.42, HR = 7.95;
+    const TR = 1.70, TT = 1.25;                       // half radial length, half tangential depth
+    const A0 = Math.PI * 0.5, DA = TAU / perTurn;     // the mouth is at (0, +6): the approach side
+    const railEmit = (a0, y0, a1, y1) => {
+      // a chord of rail from (a0, y0) to (a1, y1) at HR: a box pitched about its own X
+      // (rotation order Z, X, Y: rz, then rx pitches local Z, then ry yaws it tangential)
+      const am = (a0 + a1) * 0.5, chord = 2 * HR * Math.sin((a1 - a0) * 0.5);
+      const rm = HR * Math.cos((a1 - a0) * 0.5), len = Math.hypot(chord, y1 - y0);
+      const mx = Math.cos(am) * rm, mz = Math.sin(am) * rm, my = (y0 + y1) * 0.5;
+      k.solid.box(0.08, 0.08, len, mx, my + 1.02, mz, C.rust, -am, -Math.atan2(y1 - y0, chord), 0);
+      api.emit({ kind: 'obb', x: mx, z: mz, halfX: 0.10, halfZ: chord * 0.5 + 0.06, yaw: -am,
+        y0: y0 + 0.40, y1: y1 + 1.10, tag: 'metal', climbable: false, breakable: false });
+    };
     for (let i = 0; i < N; i++) {
-      const a = Math.PI * 0.5 + i * TAU / perTurn, top = 0.42 * (i + 1);
-      const x = Math.cos(a) * r, z = Math.sin(a) * r, yaw = -a;
-      // At 3.25 m radius adjacent 30-degree centres are 1.68 m apart. The former
-      // 1.05 m tangential depth left a 0.63 m hole between every tread: visually a spiral,
-      // physically a fall on tread three. A 1.90 m tread overlaps its neighbours enough
-      // for the 0.72 m capsule while still leaving the stair visibly open.
-      k.solid.box(3.55, 0.20, 1.90, x, api.padY + top - 0.10, z,
-        i % 3 ? C.plank : bark, yaw);
-      api.emit({ kind: 'obb', x, z, halfX: 1.78, halfZ: 0.95, yaw,
-        y0: api.padY + top - 0.20, y1: api.padY + top,
-        tag: 'wood', standable: true, climbable: false });
-      const hr = 4.60;
-      if ((i & 1) === 0) k.solid.box(0.10, 1.0, 0.10, Math.cos(a) * hr,
-        api.padY + top + 0.5, Math.sin(a) * hr, C.rust);
+      const a = A0 + i * DA, top = RISE * (i + 1);
+      const x = Math.cos(a) * R, z = Math.sin(a) * R, yaw = -a;
+      k.solid.box(TR * 2, 0.20, TT * 2, x, Y + top - 0.10, z, i % 3 ? C.plank : bark, yaw);
+      // two carrier beams under each tread, so the underside reads as built
+      k.solid.box(TR * 2 - 0.3, 0.14, 0.12, x, Y + top - 0.27, z, bark, yaw);
+      api.emit({ kind: 'obb', x, z, halfX: TR, halfZ: TT, yaw,
+        y0: Y + top - 0.20, y1: Y + top, tag: 'wood', standable: true, climbable: false });
+      if ((i & 1) === 0) {
+        k.solid.box(0.10, 1.05, 0.10, Math.cos(a) * HR, Y + top + 0.52, Math.sin(a) * HR, C.rust);
+        if (i + 2 < N) railEmit(a, Y + top, a + 2 * DA, Y + top + 2 * RISE);
+      }
     }
     const deckY = 12.9;
-    // A horseshoe deck, with the west/south-west stairwell genuinely open. The former full
-    // cylinder was a ceiling over the final five treads: at 10.5 m the player's head met
-    // its 12.48 m underside and the otherwise walkable spiral threw them back to ground.
-    // Three planked wings retain a substantial treehouse floor around the claim while the
-    // 12.6 m bridge gives the last tread a single ordinary step onto it.
-    const deckSlabs = [[2.55, 0, 6.30, 11.0], [-3.25, 4.55, 5.30, 2.0], [-3.25, -4.55, 5.30, 2.0]];
-    for (const [x, z, w, d] of deckSlabs) {
-      k.solid.box(w, 0.42, d, x, api.padY + deckY - 0.21, z, C.plank);
-      api.emit({ kind: 'obb', x, z, halfX: w * 0.5, halfZ: d * 0.5, yaw: 0,
-        y0: api.padY + deckY - 0.42, y1: api.padY + deckY,
-        tag: 'wood', standable: true, climbable: false });
+    /* THE DECK IS A RING. An annulus r 3.7..9.0 round the trunk (drawn r 3.63 at this
+     * height, collider 3.85) over 238 degrees, from the last tread's edge at A_RING0 round
+     * to A_RING1, leaving the stairwell open where the treads under it would have less than
+     * 2.4 m of headroom (the old horseshoe put a 12.48 m ceiling over tread 25). One merged
+     * sector slab to draw (alternating plank shades so it reads as boards, not a disc), one
+     * obb per 12 degrees to stand on. A rail at RR round the outside with the same chord
+     * bands as the stair's. The last tread (a 310 deg, 12.6 m) steps onto a landing tongue
+     * at 12.75 and the tongue onto the ring at 12.9: two ordinary steps, no bridge to fall off. */
+    const R0 = 3.7, R1 = 9.0, RR = 8.85, THICK = 0.42;
+    const A_LAST = A0 + (N - 1) * DA;                    // 310 deg
+    const A_RING0 = A_LAST + 0.24, A_RING1 = A_LAST + 0.24 + 238 * Math.PI / 180;
+    sectorSlab(k.solid, R0, R1, Y + deckY - THICK, Y + deckY, A_RING0, A_RING1, 40, C.plank);
+    {
+      const segs = 20, da = (A_RING1 - A_RING0) / segs, rm = (R0 + R1) * 0.5;
+      for (let i = 0; i < segs; i++) {
+        const am = A_RING0 + (i + 0.5) * da;
+        api.emit({ kind: 'obb', x: Math.cos(am) * rm, z: Math.sin(am) * rm,
+          halfX: (R1 - R0) * 0.5, halfZ: R1 * Math.sin(da * 0.5) + 0.15, yaw: -am,
+          y0: Y + deckY - THICK, y1: Y + deckY, tag: 'wood', standable: true, climbable: false });
+        // the rail: a post at each segment end and a chord between, one band each
+        const ap = A_RING0 + i * da;
+        k.solid.box(0.12, 1.15, 0.12, Math.cos(ap) * RR, Y + deckY + 0.575, Math.sin(ap) * RR, C.wood);
+        const cm = RR * Math.cos(da * 0.5), chord = 2 * RR * Math.sin(da * 0.5);
+        for (const h of [0.55, 1.05]) k.solid.box(0.08, 0.10, chord + 0.04, Math.cos(am) * cm, Y + deckY + h, Math.sin(am) * cm, C.wood, -am);
+        api.emit({ kind: 'obb', x: Math.cos(am) * cm, z: Math.sin(am) * cm, halfX: 0.08, halfZ: chord * 0.5 + 0.06, yaw: -am,
+          y0: Y + deckY + 0.45, y1: Y + deckY + 1.15, tag: 'metal', climbable: false, breakable: false });
+      }
+      k.solid.box(0.12, 1.15, 0.12, Math.cos(A_RING1) * RR, Y + deckY + 0.575, Math.sin(A_RING1) * RR, C.wood);
     }
-    k.solid.box(3.40, 0.24, 1.35, 0, api.padY + 12.48, -2.65, C.rust);
-    api.emit({ kind: 'obb', x: 0, z: -2.65, halfX: 1.70, halfZ: 0.675, yaw: 0,
-      y0: api.padY + 12.36, y1: api.padY + 12.60,
-      tag: 'wood', standable: true, climbable: false });
-    for (let i = 0; i < 12; i++) {
-      const a = i / 12 * TAU, x = Math.cos(a) * 5.25, z = Math.sin(a) * 5.25;
-      k.solid.box(0.14, 1.15, 0.14, x, api.padY + deckY + 0.57, z, C.wood);
-      if (i % 3) k.solid.box(2.75, 0.12, 0.12, Math.cos(a - TAU / 24) * 5.15,
-        api.padY + deckY + 0.95, Math.sin(a - TAU / 24) * 5.15, C.wood, -a);
+    {
+      // the landing tongue: the last tread's tangential edge to the ring's start, a half step up
+      const at = A_LAST + 0.12 + 0.06, tx = Math.cos(at) * R, tz = Math.sin(at) * R;
+      k.solid.box(TR * 2, 0.24, 1.6, tx, Y + 12.75 - 0.12, tz, C.rust, -at);
+      api.emit({ kind: 'obb', x: tx, z: tz, halfX: TR, halfZ: 0.80, yaw: -at,
+        y0: Y + 12.51, y1: Y + 12.75, tag: 'wood', standable: true, climbable: false });
     }
-    // The visible payoff is an open supply cage around the real completion fixture.
-    // Keep it on the east shoulder with the fixture rather than buried in the trunk's
-    // visible taper. There is still more than a metre of deck in front of the panel and
-    // broad standing room to either side of it.
+    /* THE SUPPLY CAGE stands BEHIND the fixture (places.js FIXTURE_FACE 'great-tree' faces
+     * the plate at the trunk, -X, with 3.6 m of ring in front of it), so the black backboard
+     * is what the cage frames and the lamp in it lights the switch from behind. Posts and the
+     * crate collide; the lamp is a bulb core over a short column, the one thing up here
+     * that blooms, read from the yard through the rail. */
     const claimX = +api.site.claim.dx, claimZ = +api.site.claim.dz;
+    const cageX = claimX + 0.75, cageZ = claimZ, CR = 0.50;
     for (let i = 0; i < 6; i++) {
-      const a = i / 6 * TAU, x = claimX + Math.cos(a) * 0.82, z = claimZ + Math.sin(a) * 0.82;
-      k.solid.cyl(0.06, 0.06, 2.1, 6, x, api.padY + deckY + 1.05, z, C.rust);
+      const a = i / 6 * TAU, x = cageX + Math.cos(a) * CR, z = cageZ + Math.sin(a) * CR;
+      k.solid.cyl(0.05, 0.05, 2.1, 6, x, Y + deckY + 1.05, z, C.rust);
+      api.emit({ kind: 'circle', x, z, r: 0.06, y0: Y + deckY, y1: Y + deckY + 2.1,
+        tag: 'metal', climbable: false, breakable: false });
     }
-    k.solid.tube(0.82, 0.82, 0.10, 12, claimX, api.padY + deckY + 2.05, claimZ, C.rust);
-    k.solid.box(1.25, 0.58, 0.76, claimX, api.padY + deckY + 0.34, claimZ, C.dark);
-    k.glow.cyl(0.11, 0.11, 1.5, 7, claimX, api.padY + deckY + 1.05, claimZ, [1,1,1]);
-    // Root flare and an abandoned lookout camp make the foot a place too.
+    k.solid.tube(CR, CR, 0.10, 12, cageX, Y + deckY + 2.05, cageZ, C.rust);
+    k.solid.box(0.80, 0.58, 0.66, cageX, Y + deckY + 0.34, cageZ, C.dark);
+    api.emit({ kind: 'obb', x: cageX, z: cageZ, halfX: 0.40, halfZ: 0.33, yaw: 0,
+      y0: Y + deckY, y1: Y + deckY + 0.63, tag: 'metal', standable: false, breakable: false });
+    k.solid.cyl(0.03, 0.03, 0.85, 6, cageX, Y + deckY + 1.06, cageZ, C.metal);
+    glowColumn(k.glow, cageX, Y + deckY + 1.45, cageZ, 0.16, 0.55, 0.5);
+    bulb(k.glow, cageX, Y + deckY + 1.52, cageZ, 0.06);
+    /* THE ROOT FLARE: eight buttress roots out of the foot, each with its own obb so the foot
+     * of the trunk is a thing you climb over, not walk through. The two under the stair's
+     * first treads (65..155 degrees) are left out: a root topping at 1.0 m through tread 0
+     * at 0.42 m was a step-up in the mouth of the stair. Lean 0.06 keeps the drawn top
+     * within 0.1 m of the flat collider top along the visible 1.4 m stub. */
     for (let i = 0; i < 8; i++) {
-      const a = i / 8 * TAU + 0.2;
-      k.solid.box(7.8, 0.9, 1.2, Math.cos(a) * 2.2, api.padY + 0.36,
-        Math.sin(a) * 2.2, bark, -a, 0, 0.11);
+      const a = i / 8 * TAU + 0.2, deg = (a * 180 / Math.PI) % 360;
+      if (deg > 65 && deg < 155) continue;
+      k.solid.box(7.0, 0.9, 1.2, Math.cos(a) * 2.2, Y + 0.36, Math.sin(a) * 2.2, bark, -a, 0, 0.06);
+      api.emit({ kind: 'obb', x: Math.cos(a) * 2.2, z: Math.sin(a) * 2.2, halfX: 3.5, halfZ: 0.6, yaw: -a,
+        y0: Y - 0.1, y1: Y + 1.0, tag: 'wood', standable: true });
     }
+    // and an abandoned lookout camp makes the foot a place too
     for (const [x,z] of [[-9,8],[-7.2,9.2],[-10.2,5.7]]) {
       k.solid.box(1.4, 0.75, 1.0, x, api.padY + 0.38, z, C.wood, 0.2);
       api.emit({ kind:'obb', x, z, halfX:0.7, halfZ:0.5, yaw:0.2,
@@ -3509,10 +3627,13 @@ export const MINOR_BUILDERS = {
     // the face block, shrinking as the poster ages
     const fs = 0.44 * (1 - 0.55 * age);
     k.solid.quad(fs, fs * 1.15, 0, api.padY + 1.56, 0.04, C.dark, 0);
-    // curled corners: two small quads leaning off the board
+    // curled corners: two small quads leaning off the board, at the paper's outer bottom
+    // corners. MEASURED (tests/sign-clearance.mjs): at x +-0.40, 0.22 wide, they stood in
+    // front of signage.js's painted overlay (0.06 out) and covered its corners; at +-0.49 they
+    // are the corner itself peeling past the paper's edge, and the words stay clear.
     if (age > 0.3) {
       for (const sx of [-1, 1]) {
-        k.solid.quad(0.22, 0.22, sx * 0.40, api.padY + 1.16, 0.08, paper, 0, -sx * 0.9 * age);
+        k.solid.quad(0.14, 0.18, sx * 0.49, api.padY + 1.14, 0.075, paper, 0, -sx * 0.9 * age);
       }
     }
     k.solid.close(0, 0, 0.8, paper);
@@ -3735,6 +3856,7 @@ export function majorApproach(api) {
   k.solid.box(0.18, 2.15, 0.18, x, gy + h - 3.82, z, C.metal);
   k.glow.pane(0.42, 0.62, x, gy + h - 2.0, z + 0.61, PANE_LAMP, 0, 0, 6, 7);
   glowColumn(k.glow, x, gy + h - 2.25, z + 0.58, 0.32, 1.15, 0.55);
+  bulb(k.glow, x, gy + h - 2.0, z + 0.58, 0.05);       // D18: the cage lamp's bulb core
 
   // Paired low lamps draw a traversable lane from the frame into the actual site. They do
   // not pretend to be completion fixtures; they make the route to the real one readable.
@@ -4002,7 +4124,7 @@ export { C as SITE_COLOURS };
 // dress-interiors.js, staged.js) build with exactly these helpers so a prop authored in a
 // lane's own file is indistinguishable from one authored here. Nothing below is new code.
 export {
-  C, Kit, kits, groundY, shell, gableFloor, glowColumn, sash, lattice, yardWall,
+  C, Kit, kits, groundY, shell, gableFloor, glowColumn, bulb, BULB_HDR, sash, lattice, yardWall,
   PANE_WINDOW, PANE_TUBE, PANE_SIGN, PANE_ROSE, PANE_LAMP, recordPane,
 };
 export default BUILDERS;

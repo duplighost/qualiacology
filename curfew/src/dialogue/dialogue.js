@@ -81,6 +81,11 @@ export class Dialogue {
    *   x, y, z         a fixed world point
    *   anchor          'radio' | 'car' — non-positional, always audible
    *   name            override the eyebrow (a resident's own name)
+   *   again           D10: replay ON REQUEST. A `once` line already said, or one inside its
+   *                   cooldown, is refused by default so it cannot be farmed; a caller whose
+   *                   person is being READ THROUGH a second time (the player pressed E again
+   *                   after the rest) passes again:true and the line plays. It does not touch
+   *                   the once memory or the cooldown: the first pass still marks them.
    */
   say(idOrSpec, opts = {}) {
     const id = typeof idOrSpec === 'string' ? idOrSpec : (idOrSpec && idOrSpec.id) || '';
@@ -88,8 +93,8 @@ export class Dialogue {
     if (!line || !line.text) return false;
 
     const pr = this._sys('progress');
-    if (line.once && id && pr?.saidOnce?.(id)) return false;
-    if (id && (this._cool.get(id) || 0) > this.time) return false;
+    if (line.once && id && !opts.again && pr?.saidOnce?.(id)) return false;
+    if (id && !opts.again && (this._cool.get(id) || 0) > this.time) return false;
     if (typeof line.when === 'function') { try { if (!line.when(this.ctx)) return false; } catch (e) { void e; return false; } }
 
     // AUDIBILITY IS A GATE, NOT A VOLUME. A line spoken sixty metres away did not happen: it

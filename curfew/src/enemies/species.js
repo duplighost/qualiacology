@@ -446,14 +446,20 @@ SPECIES.resident = { ...SPECIES.warden, id:'resident', form:FORM.HUMAN, human:tr
   hp:100, dmg:10, height:1.8, radius:.32, mass:76, speed:3.6, xp:0, countsAs:0,
   strikeRange:1.2, engage:[0,1.5], standoff:0, deathNoise:14 };
 SPECIES.cashier = { ...SPECIES.resident, id:'cashier' };
-// THE THREE COMPANIONS (the Eleven rewire). A resident's brain — neutral, civilian, no
-// headcount, no XP — in three authored bodies. The SPECIES ID IS THE buildHuman STYLE
-// (bodies.js buildBody), so art/people.js's greer/roan/sheet cuts are reached by nothing more
-// than spawning one. `fixedVariant` pins the face, skin and hair so a companion you recruited
-// last night is the same person tonight. world/companions.js owns the following.
+// THE THREE FIXED FACES (D16, 2026-09-17: the follower system is gone; these stay). A
+// resident's brain — neutral, civilian, no headcount, no XP — in three authored bodies. The
+// SPECIES ID IS THE buildHuman STYLE (bodies.js buildBody), so art/people.js's greer/roan/sheet
+// cuts are reached by nothing more than spawning one. `fixedVariant` pins the face, skin and
+// hair so the same person stands in the same hamlet every night. world/hamlet-life.js places them.
 SPECIES.greer = { ...SPECIES.resident, id:'greer', height:1.84, fixedVariant:6, speed:3.8 };
 SPECIES.roan  = { ...SPECIES.resident, id:'roan',  height:1.86, fixedVariant:3, speed:3.6 };
 SPECIES.sheet = { ...SPECIES.resident, id:'sheet', height:1.80, fixedVariant:9, speed:3.5 };
+// C15 (2026-09-17). THE HAMLET GUARDS. A resident's brain in a body that carries a rifle
+// (art/people.js gives the 'hamlet-guard' style the gun; world/hamlet-life.js fires it through
+// the shared protect loop). Neutral, no headcount, no XP, and it NEVER turns on you: a stray
+// hit only stops it shooting for twelve seconds (enemies.js damage(), townFear). 180 hp so a
+// wave's stray bites do not empty a hamlet's line before the third wave.
+SPECIES['hamlet-guard'] = { ...SPECIES.resident, id:'hamlet-guard', hp:180 };
 SPECIES.sentry = { ...SPECIES.poacher, id:'sentry', human:true, hp:180, xp:90, countsAs:0 };
 // ROUND 22. ALEX, 2026-09-10: "The dog-caller. The voice in the woods calling a name all game
 // is a person. Biggest light in the county, hunts you with the pack. Kill him and the hounds
@@ -482,6 +488,39 @@ SPECIES.candle = { ...SPECIES.pallbearer, id:'candle', form:FORM.ORDINARY, xp:60
 SPECIES.drowned = { ...SPECIES.pallbearer, id:'drowned', xp:150, hp:260, dmg:32,
   height:2.08, radius:.48, mass:210, speed:2.5, deathNoise:12,
   eye:0x9eaaa1, cloth:0x0c1616, skin:0x22322d, bone:0x777367 };
+/* ---------------------------------------------------------------- TREANT --
+   D14 / C15 (2026-09-17). A tree that was flora until you were close, then uprooted. The
+   dread lane's 'uproot' jump beat claims a real trunk (flora.claimTrunk), retires its
+   collider and spawns one of these where the tree stood; nothing else places it.
+
+   PRESSURE-OWNED so it pays XP, and DELIBERATELY NOT IN THE DIRECTOR'S ROSTER — the same
+   arrangement as the Warden: director.js _pick only draws from its own table, so a walking
+   tree never turns up on the road outside the Filling Station.
+
+   THE SHAPE is the hunter's FORM.GAUNT — arms too long, no face — so it costs no new
+   geometry set and no program (bodies.js welds one set per FORM), at 2.6 m and in bark
+   values: cloth at the moth's bark 0x0d0c0a, the darkest thing in the roster, so it reads
+   as a trunk until it moves. burst 1e9: it never pauses, it simply keeps coming.
+   speed 3.9 < WALK 4.35 (validate() below): a tree that outruns you is a wall, and the
+   project's law is that a thing slower than you is a thing you choose to fight. engage
+   [0, 4]: it only ever swings from arm's reach; the 0.55 s telegraph is the second-longest
+   in the roster because 34 damage from a thing that was scenery a moment ago has to be
+   watched coming. */
+SPECIES.treant = {
+  id: 'treant', form: FORM.GAUNT, owner: OWNER.PRESSURE, xp: 110,
+  phases: ALL_PHASES,
+  hp: 220, dmg: 34, radius: 0.55, height: 2.60, mass: 340,
+  speed: 3.90,                            // < WALK 4.35, checked in validate()
+  burst: 1e9, pause: 0,
+  engage: [0, 4], standoff: 2.6,
+  telegraph: 0.550, attack: 0.420, strikeAt: 0.200, recover: 1.100,
+  strikeRange: 2.80,
+  notice: 14, memAlert: 10.0,             // it is rooted: it notices you late and forgets you soon
+  litNotice: 0.6,
+  deathNoise: 22,
+  countsAs: 1,
+  eye: 0xc8a870, cloth: 0x0d0c0a, skin: 0x1a140f, bone: 0x2a2318,
+};
 export const ROSTER = Object.keys(SPECIES);
 
 /* Pool sizes. Allocated at boot; spawn() never allocates. Since round 6 the
@@ -510,7 +549,14 @@ export const POOL = Object.freeze({
   // placed nobody, which is exactly the failure round 7 measured at the second FETCH
   // graveyard. A slot is a body record and a merged mesh at boot: no light, no material and
   // no program.
-  warden: 6, resident: 52, cashier: 2, sentry: 9, marshal: 8, marrow:4,
+  // D16 / C15 (2026-09-17): 52 -> 66. The three hamlets are villages of 7-8 people each now
+  // (hamlet-life.js), 24 more residents than the four-a-hamlet casts, and a resident pool
+  // that runs dry places NOBODY, silently — the round-7 empty-graveyard failure again, this
+  // time at the Holdfast gate. A slot is a body record and a merged mesh at boot.
+  warden: 6, resident: 66, cashier: 2, sentry: 9, marshal: 8, marrow:4,
+  // C15: three rifles per hamlet; two treants, because the uproot beat is one tree at a time
+  // and a corpse holds its slot for a minute.
+  'hamlet-guard': 9, treant: 2,
   // ROUND 18. Six moths, because a swarm is not what was asked for — "a freaky horror moth"
   // is one thing on one trunk. Four spiders: interior-horror places at most one per room and
   // the county has thirteen rooms, but only the ones you are inside are ever alive at once.
@@ -572,6 +618,10 @@ export function validate() {
   }
   if (!(SPECIES.runner.speed < CFG.player.tacSprint.speed)) {
     bad.push('runner cruise must stay under tac-sprint so the verb still answers it');
+  }
+  // C15. The treant: a tree you can always walk away from. WALK is the player's plain walk.
+  if (!(SPECIES.treant.speed < CFG.player.WALK)) {
+    bad.push('treant must stay under WALK: a tree that outruns you is a wall, not an animal');
   }
   return bad;
 }

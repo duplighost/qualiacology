@@ -13,7 +13,8 @@
 //      surface you walk onto instead. VANTA required an explicit supportsPlayer flag
 //      (colliderBlocksPlayer 1551-1578) and low props there read as knee-high glass.
 //
-// Ground is ALWAYS terrain.heightAt. Never a collider, never a mesh raycast. Colliders only
+// Ground is ALWAYS the terrain field: surfaceAt (the bed, or the ice sheet over it; contract
+// C9) where the terrain has one, else heightAt. Never a collider, never a mesh raycast. Colliders only
 // ever ADD a standable top above the ground.
 //
 // This module imports no renderer and no three: it is pure math over typed arrays, so
@@ -390,6 +391,8 @@ export class Collision {
     };
 
     this._terrainSys = null;
+
+    this._floorFn = null;   // bound in _terrain(): surfaceAt or heightAt
   }
 
   // -------------------------------------------------------------------------
@@ -421,24 +424,36 @@ export class Collision {
   _terrain() {
     if (this._terrainSys) return this._terrainSys;
     const s = this.ctx && this.ctx.systems && this.ctx.systems.get('terrain');
-    if (s) this._terrainSys = s;
+    if (s) {
+      this._terrainSys = s;
+      // Bound once, at capture: the floor is surfaceAt (bed or ice, contract C9) when the
+      // terrain has one, and the bed alone for a fixture that only carries heightAt. One
+      // property test here instead of one per groundHeight() call.
+      this._floorFn = typeof s.surfaceAt === 'function'
+        ? (x, z) => s.surfaceAt(x, z)
+        : (x, z) => s.heightAt(x, z);
+    }
     return s || null;
   }
 
+  // THE FLOOR. The player, the solver's support fallback, mantles and descents all come
+  // through here, so the ice is one change: max(bed, ice) is what the feet meet.
   groundHeight(x, z) {
     const t = this._terrain();
     if (!t) { this._tel.noTerrain++; return 0; }
-    return t.heightAt(x, z);
+    return this._floorFn(x, z);
   }
 
   // Central-difference terrain gradient. VANTA samples at 0.32 m (:227) — small enough to
   // follow a bank, wide enough that the detail octave does not make every step a cliff.
+  // Sampled on the same floor the feet stand on: the ice is level however steep the drowned
+  // bed under it is, so nobody slides on a sheet because of a bank they cannot touch.
   _gradient(x, z) {
     const t = this._terrain();
     if (!t) { this._gx = 0; this._gz = 0; return; }
-    const h = TERRAIN_SAMPLE, inv = 1 / (2 * h);
-    this._gx = (t.heightAt(x + h, z) - t.heightAt(x - h, z)) * inv;
-    this._gz = (t.heightAt(x, z + h) - t.heightAt(x, z - h)) * inv;
+    const h = TERRAIN_SAMPLE, inv = 1 / (2 * h), f = this._floorFn;
+    this._gx = (f(x + h, z) - f(x - h, z)) * inv;
+    this._gz = (f(x, z + h) - f(x, z - h)) * inv;
   }
 
   _terrainNormalY(x, z) {

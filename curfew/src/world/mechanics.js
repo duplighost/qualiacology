@@ -10,16 +10,16 @@
 //   a boss, or a sealed case — pinned on the map. Never charged when there is nothing new
 //   to see, which is the only rule that makes it worth buying twice.
 //
-// T steps the list and E buys what is showing. T is the tune key, which does nothing on
-// foot, so this costs no new binding and the grammar ("T moves along a list of things, E
-// takes the one you are on") is the one the car radio already taught.
+// D7. The list is the one shop menu (ui/shop-menu.js): the digit picks a row, a click buys
+// it outright, the hold on E buys it the way a claim is claimed. T is the car radio and
+// nothing else. The old aside on the right (vehicle/workshop-card.js) is gone with it.
 //
 // And: "if you kill one of them, just have them respawn when you're not around. And don't
 // make them aggro at you forever if you anger one and leave." Both below. A dead keeper is
 // remembered with the TIME it died rather than as a permanent flag, and it comes back once
 // enough of the night has passed and the player is nowhere near the tower.
 
-import { WorkshopCard } from '../vehicle/workshop-card.js';
+import { ShopMenu } from '../ui/shop-menu.js';
 import { BOSSES, bossMapPoint } from './boss-catalog.js';
 import { CASE_SITE } from './climbs-and-caches.js';
 import { MAJOR_BY_ID } from './placedata.js';
@@ -35,15 +35,23 @@ const RESPAWN_AWAY = 190;
 const GAS_PRICE = 100;
 const LOOK_PRICE = 60;
 const LOOK_RANGE = 1500;
+// How often the Look's two rows are re-read from the map while you stand there: the list
+// only changes when you buy it or learn a pin, and a rebuild allocates the point list.
+const OFFERS_REFRESH_S = 1;
 
 export class Mechanics {
   static id='mechanics';
-  constructor(ctx){this.ctx=ctx;this.keepers=new Map();this.clock=0;this.hold=0;this.target='';this.release=false;
-    // ROUND 18: which offer the keeper is showing, and the T edge that steps it on.
-    this.offer=0;this.tuneRelease=false;this.offers=[];}
+  constructor(ctx){this.ctx=ctx;this.keepers=new Map();this.clock=0;this.target='';this.release=false;
+    // D7: the two rows, made once and rewritten in place; the spec is the menu's feed.
+    this.offers=[
+      {kind:'gas',id:'gas',name:'GAS CAN',line:'One can. It fills the car.',price:GAS_PRICE,owned:false,full:false,unavailable:false,tag:'',note:''},
+      {kind:'look',id:'look',name:'A LOOK FROM THE TOP',line:'',price:LOOK_PRICE,points:[],owned:false,full:false,unavailable:false,tag:'',note:'NOTHING NEW FROM UP HERE'},
+    ];
+    this.spec={key:'',title:'The keeper',rank:6,cash:0,x:0,y:0,z:0,offers:this.offers,buy:o=>this._buy(o)};
+    this.offersAt=-Infinity;this.menu=null;}
   _sys(id){return this.ctx.systems.get(id);}
   async init(){
-    this.card=new WorkshopCard();
+    this.menu=new ShopMenu(this.ctx);
     // THE ELEVEN REWIRE: this file no longer fetches, decodes or plays a single byte. Every
     // keeper line is a request to dialogue/dialogue.js, which owns the recordings, the
     // subtitles, the cooldowns and who is allowed to talk over whom. The old loader threw on
@@ -56,7 +64,7 @@ export class Mechanics {
       this._sys('progress').flag(id+':dead',Math.max(1,Math.round(this.clock)));
     });
   }
-  ready(){return !!this.card;}
+  ready(){return !!this.menu;}
   /** One line, from this keeper, through the one system that owns spoken lines. */
   _voice(id,k){
     if(!k?.e?.alive)return;
@@ -112,23 +120,35 @@ export class Mechanics {
     return near.length?near:out.slice(0,2);
   }
 
-  /** The list this keeper is offering, rebuilt each frame it is in focus. */
+  /** The list this keeper is offering: the Look's rows re-read from the map once a second. */
   _buildOffers(pr,tower){
-    const out=this.offers;out.length=0;
-    out.push({kind:'gas',name:'GAS CAN',line:'One can. It fills the car.',price:GAS_PRICE});
-    const look=this._lookPoints(pr,tower?tower.x:0,tower?tower.z:0);
-    out.push({kind:'look',name:'A LOOK FROM THE TOP',price:LOOK_PRICE,points:look,
-      line:look.length
-        ?'Two things worth the climb. '+look.map(p=>p.name).join(', ')+'.'
-        :'Nothing new from up here.'});
-    return out;
+    if(this.clock-this.offersAt<OFFERS_REFRESH_S)return this.offers;
+    this.offersAt=this.clock;
+    const look=this.offers[1];
+    look.points=this._lookPoints(pr,tower?tower.x:0,tower?tower.z:0);
+    look.unavailable=!look.points.length;
+    look.line=look.points.length
+      ?'Two things worth the climb. '+look.points.map(p=>p.name).join(', ')+'.'
+      :'Nothing new from up here.';
+    return this.offers;
+  }
+
+  /** One purchase, from the menu, only when the row could be bought and the purse covered it. */
+  _buy(o){
+    const pr=this._sys('progress'),k=this.keepers.get(this.target);
+    if(o.kind==='gas'){
+      if(pr.spendCash(o.price,'keeper:gas')){pr.addGas(1);this._voice('keeper.gas',k);}
+    }else if(o.kind==='look'){
+      if(!o.points.length)return;
+      if(pr.spendCash(o.price,'keeper:look')){for(const pt of o.points)pr.learnRumour(pt);this._voice('keeper.look',k);}
+      this.offersAt=-Infinity;   // what you just bought is no longer new: re-read the map now
+    }
   }
 
   step(dt){
-    if(!this.ctx.playing||this.ctx.paused){this.card?.hide();return;}this.clock+=dt;
+    if(!this.ctx.playing||this.ctx.paused){this.menu?.close();return;}this.clock+=dt;
     const p=this._sys('player'),en=this._sys('enemies'),pr=this._sys('progress'),wild=this._sys('wilds');
     const use=this.ctx.input.held('use');if(!use)this.release=false;
-    const tune=this.ctx.input.held('radiotune');if(!tune)this.tuneRelease=false;
     let target=null,targetTower=null,nearest=Infinity;
     const towers=wild.lookouts();
     for(let i=0;i<towers.length;i++){
@@ -156,43 +176,20 @@ export class Mechanics {
         if(dot>.60&&this._sys('collision').segmentClear(p.pos.x,p.eyeY,p.pos.z,pos.x,pos.y+1.5,pos.z)){nearest=d;target=k;targetTower=t;}
       }
     }
-    if(!target||p.dead||this.ctx.shared.inCar){this.card?.hide();this.hold=0;this.target='';return;}
-    if(this.target!==target.id){this.target=target.id;this.hold=0;this.offer=0;}
+    if(!target||p.dead||this.ctx.shared.inCar){this.menu?.close();this.target='';return;}
+    if(this.target!==target.id){this.target=target.id;this.offersAt=-Infinity;}
 
-    const list=this._buildOffers(pr,targetTower);
-    const e=target.e;
-    // T steps the list on. The edge is taken here so holding T does not spin through it.
-    if(tune&&!this.tuneRelease&&list.length>1){
-      this.tuneRelease=true;this.offer=(this.offer+1)%list.length;this.hold=0;
-    }
-    if(this.offer>=list.length)this.offer=0;
-    const o=list[this.offer],cash=pr.cash();
-    // A LOOK with nothing to show is not for sale at any price. It is the one offer in the
-    // county that can refuse your money, and it is the reason it stays worth buying.
-    const empty=o.kind==='look'&&!o.points.length;
-    const can=!empty&&cash>=o.price;
-    this.card?.show(list,this.offer,cash,pr.gas());
-    const more=list.length>1?' · T · NEXT':'';
-    this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:6,x:e.pos.x,y:e.pos.y+1.38,z:e.pos.z,k:this.hold/1.1,
-      detail:empty?'A LOOK FROM THE TOP':o.name+' · '+o.price+' COINS',
-      subdetail:empty?'NOTHING NEW FROM UP HERE'
-        :(can?'HOLD E TO BUY':'YOU HAVE '+cash+' · NEED '+(o.price-cash))+more,
-      unavailable:!can});
+    const list=this._buildOffers(pr,targetTower),e=target.e,spec=this.spec;
+    spec.key=target.id;spec.cash=pr.cash();spec.x=e.pos.x;spec.y=e.pos.y+1.38;spec.z=e.pos.z;
+    if(!this.menu)this.menu=new ShopMenu(this.ctx);
+    this.menu.show(spec,dt);
     // A SILENT REFUSAL is indistinguishable from a game that is not listening. Pressing E on
     // a Look with nothing behind it gets you the keeper saying so, once a cooldown.
-    if(empty&&use&&!this.release){this.release=true;this._voice('keeper.nothing',target);}
-    if(!use||this.release||!can){this.hold=0;return;}
-    this.hold+=dt;
-    if(this.hold<1.1)return;
-    this.release=true;this.hold=0;
-    if(o.kind==='gas'){
-      if(pr.spendCash(o.price,'keeper:gas')){pr.addGas(1);this._voice('keeper.gas',target);}
-    }else if(o.kind==='look'){
-      if(pr.spendCash(o.price,'keeper:look')){for(const pt of o.points)pr.learnRumour(pt);this._voice('keeper.look',target);}
-    }
+    const o=list[this.menu.row];
+    if(o&&o.kind==='look'&&o.unavailable&&use&&!this.release){this.release=true;this._voice('keeper.nothing',target);}
   }
   state(){return{keepers:[...this.keepers.values()].map(k=>({id:k.id,alive:!!k.e?.alive,position:k.e?.pos.toArray()})),
-    offer:this.offer,offers:this.offers.map(o=>({name:o.name,price:o.price,points:o.points?o.points.length:0}))};}
-  present(){if(!this.ctx.playing||this.ctx.paused||this.ctx.shared.inCar)this.card?.hide();}
-  dispose(){this.off?.();this.card?.dispose();}
+    offer:this.menu?this.menu.row:0,offers:this.offers.map(o=>({name:o.name,price:o.price,points:o.points?o.points.length:0}))};}
+  present(){this.menu?.present();}
+  dispose(){this.off?.();this.menu?.dispose();}
 }

@@ -93,6 +93,10 @@ const SUBTRACTION_SOUND = 'withdraw';
 // 5's subtraction bible: the dog stops answering, the insects cut, your own reverb shortens.
 const SUBTRACTION_HUSH_S = 3.2;
 
+// What a row tells dread's prop beyond WHERE: reused record, written per activation. `candle`
+// and `two` are the window candles (horror 16); `dying` is the parked headlight (horror 17).
+const _propOpts = { candle: false, two: false, dying: false };
+
 /* ---------------------------------------------------------------------------
  * THE STARTER POOL — 20 rows, JSON-shaped exactly as donors/offseason/README.md:404-415
  * defines a wrongness event, re-authored for a county of forest and back roads.
@@ -136,9 +140,11 @@ export const EVENT_POOL = Object.freeze([
     cooldown: 3, oneShot: false, tell: true, prop: 'lantern',
   },
   {
+    // horror 17: `dying` — dread's lantern starts to die the moment you have watched it
+    // 1.5 s, over CFG.setpieces.dying.fadeS, and is allowed to stop at the floor.
     id: 'one_headlight_parked', cost: 3, tags: ['visual'], family: 'one_headlight',
     escalatesTo: null, placement: { regions: null, minPhase: 5, surface: 'place' },
-    cooldown: 4, oneShot: true, tell: true, prop: 'lantern',
+    cooldown: 4, oneShot: true, tell: true, prop: 'lantern', dying: true,
   },
 
   // --- the three figures family. Eyes, never bodies: law 1. ----------------
@@ -169,15 +175,18 @@ export const EVENT_POOL = Object.freeze([
     escalatesTo: null, placement: { regions: null, minPhase: 3, surface: 'road' },
     cooldown: 3, oneShot: false, tell: false, prop: 'lantern',
   },
+  // D14: cooldowns 1 -> 3 and 2 -> 4 cycles. trunk_socket was the cheapest, shortest row in the
+  // pool, so it was the one the budget could always afford, on top of fx's glint pool and
+  // dread's own eyes beat: three systems painting eyes on trunks with no shared budget.
   {
     id: 'trunk_socket', cost: 1, tags: ['visual'], family: 'watched',
     escalatesTo: 'trunk_socket_pair', placement: { regions: ['pines', 'marsh'], minPhase: 0, surface: 'trunk' },
-    cooldown: 1, oneShot: false, tell: true, prop: 'eyes',
+    cooldown: 3, oneShot: false, tell: true, prop: 'eyes',
   },
   {
     id: 'trunk_socket_pair', cost: 2, tags: ['visual'], family: 'watched',
     escalatesTo: null, placement: { regions: ['pines', 'marsh'], minPhase: 3, surface: 'trunk' },
-    cooldown: 2, oneShot: false, tell: true, prop: 'eyes',
+    cooldown: 4, oneShot: false, tell: true, prop: 'eyes',
   },
   {
     id: 'dog_stops_answering', cost: 1, tags: ['audio'], family: 'subtraction',
@@ -203,6 +212,22 @@ export const EVENT_POOL = Object.freeze([
     id: 'lantern_where_you_slept', cost: 3, tags: ['visual'], family: 'lantern',
     escalatesTo: null, placement: { regions: null, minPhase: 5, surface: 'place' },
     cooldown: 4, oneShot: true, tell: true, prop: 'lantern',
+  },
+
+  // --- horror 16: the ordinary dead who held candles. -----------------------
+  // A small warm light at window height on an UNCLAIMED major (a claimed place's lit windows
+  // are the reward, so dread's candleOk refuses those). `candle` makes dread's lantern a
+  // candle: 9 cd, 0xffc98e, pad + 2.3 m, gone when you close on it or have watched it 4 s.
+  // One candle; two on escalation; never three.
+  {
+    id: 'candle_in_window', cost: 1, tags: ['visual'], family: 'candle',
+    escalatesTo: 'candles_two_windows', placement: { regions: null, minPhase: 0, surface: 'place' },
+    cooldown: 2, oneShot: false, tell: false, prop: 'lantern', candle: true,
+  },
+  {
+    id: 'candles_two_windows', cost: 3, tags: ['visual'], family: 'candle',
+    escalatesTo: null, placement: { regions: null, minPhase: 2, surface: 'place' },
+    cooldown: 4, oneShot: true, tell: false, prop: 'lantern', candle: true, two: true,
   },
   {
     id: 'bird_facing_inland', cost: 1, tags: ['animal'], family: 'fauna_wrong',
@@ -348,6 +373,8 @@ export function createAuditor(ctx, dread) {
     if (last !== undefined && cycle - last < row.cooldown) { stats.refusedByCooldown++; return false; }
     const regs = row.placement.regions;
     if (regs && regs.indexOf(region) < 0) return false;
+    // horror 16: a candle needs an unclaimed major in reach; dread knows which those are.
+    if (row.candle && typeof dread.candleOk === 'function' && !dread.candleOk()) return false;
     return true;
   }
 
@@ -447,7 +474,13 @@ export function createAuditor(ctx, dread) {
     slot.live = true;
     // The commission. dread owns every mesh and every borrowed light; if it cannot make this
     // one real right now it says so, and the event is audible only rather than absent.
-    if (slot.prop) slot.handle = dread.commission(slot.prop, slot.x, slot.y, slot.z, slot.id);
+    if (slot.prop) {
+      const row = BY_ID.get(slot.id);
+      _propOpts.candle = !!(row && row.candle);
+      _propOpts.two = !!(row && row.two);
+      _propOpts.dying = !!(row && row.dying);
+      slot.handle = dread.commission(slot.prop, slot.x, slot.y, slot.z, slot.id, _propOpts);
+    }
 
     // IT ANSWERS THROUGH dread.answer, and for two reasons. First, the payload: `dread:beat`
     // is `{kind, x, y, z, gain}` on EVERY path in this lane, and this emitter used to send a

@@ -112,7 +112,7 @@ export class PauseMenu {
     // the bell rings?" The one small bell he is hearing IS the bank — progress.bank() rings it
     // and nothing else does — and the county's curfew bell is a different sound that banks
     // nothing. Said once, plainly, on the page that already explains the night.
-    const xpNote=el('p','','Experience is carried, not kept. What you earn out in the county is a light on you, and it is dropped where you fall. Standing anywhere lit banks all of it: a destination you claimed, a woodland crown you paid for, a road lamp you brought back, a rest with the door shut. One small bell rings the moment it banks, and that bell is the only thing that means it — the county tolling the hour is not it. A whole cycle survived before banking pays a quarter more, and levels are made of banked experience alone.');
+    const xpNote=el('p','','Experience is carried, not kept. What you earn out in the county is a light on you, and it is dropped where you fall. Standing anywhere lit banks all of it: a destination you claimed, a woodland crown you paid for, a road lamp you brought back, a rest with the door shut. A small bell rings when it banks, and that bell is the only thing that means it — the county tolling the hour is not it. A whole cycle survived before banking pays a quarter more, and levels are made of banked experience alone.');
     xpNote.style.cssText='color:#aabcc9;line-height:1.65;font-size:14px;margin-top:18px';this.journeyPage.append(xpNote);
   }
   selectPerk(id){

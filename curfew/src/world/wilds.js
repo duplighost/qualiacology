@@ -123,6 +123,13 @@ const VARIANTS = Object.freeze({
   wreck: ['car', 'drums', 'deadfall'],
   camp: ['cabin', 'tent', 'barn', 'farm'],
 });
+// D14: THE CLEARINGS WITH A JOB. Three new variants — a hunters' hide ring, a burnt-out
+// homestead, a felling yard — dealt ONLY to the sites beyond BASE_COUNTS, so the first 114
+// deals, their ids, yaws, caches and flights are exactly what every save already holds.
+// A variant added to VARIANTS above would rotate the base deal and renumber the county.
+const EXTRA_VARIANTS = Object.freeze({ ruin: ['hide', 'burnt'], camp: ['timber'] });
+const BASE_COUNTS = Object.freeze({ tower: 13, stand: 27, ruin: 18, wreck: 28, camp: 28 });
+const EXTRA_PAD = Object.freeze({ hide: 16, burnt: 18, timber: 14 });
 
 // One low-cost neutral surface family for all merged wilderness bodies. Vertex colour still
 // names the material (stone, timber, iron, water); this merely supplies the dirt, pits and broad
@@ -481,7 +488,10 @@ export function planWilds(seed, opts) {
   for (let q = 0; q < order.length; q++) {
     const kind = order[q];
     let n = 0;
-    while (n < W.counts[kind] && cursor < kept.length) {
+    // The BASE quota: what the county was dealt before D14. Anything W.counts asks for
+    // beyond it is dealt in the second pass below, after these ids are fixed.
+    const quota = Math.min(W.counts[kind], BASE_COUNTS[kind]);
+    while (n < quota && cursor < kept.length) {
       const i = cursor++;
       if (taken[i]) continue;
       let variant = kind;
@@ -524,8 +534,10 @@ export function planWilds(seed, opts) {
   const hub = MAJOR_BY_ID['filling-station'];
   let encounter = null, encounterD2 = -1;
   let enemyBarns = 0, enemyFarms = 0;
-  for (let i = 0; i < sites.length; i++) {
-    const s = sites[i];
+  /** Everything a site record carries beyond its deal: id, ground, yaw, pad, cache, the
+   *  climb numbers and the runtime fields. `i` is the site's index in `sites`, which is
+   *  its id and the seed of its own draws — so a site keeps its numbers for ever. */
+  const initSite = (s, i) => {
     const r = new Rng(((seed ^ (i * 2654435761)) >>> 0) || 7);
     s.id = 'w' + i;
     s.y = heightAt(s.x, s.z);
@@ -553,11 +565,13 @@ export function planWilds(seed, opts) {
       s.yaw = -Math.PI * 0.5 - bestA; // local -Z doorway points toward the road
     }
     if (s.variant === 'barn' || s.variant === 'farm') s.pad = 14;
+    if (EXTRA_PAD[s.variant]) s.pad = EXTRA_PAD[s.variant];    // D14: a clearing is a clearing
     s.cache = r.next() < W.cacheChance[s.kind];
     // A new place whose only prize is scenery is another empty staircase. The authored
     // farms, barns and waterholes always hold a cache; it is both a useful supply box on
     // foot and a light smashable for the car (cacheParts / world:broke below).
     if (s.variant === 'barn' || s.variant === 'farm' || s.variant === 'pond' || s.variant === 'stream') s.cache = true;
+    if (EXTRA_PAD[s.variant]) s.cache = true;                  // D14: each new clearing has a job and a prize
     s.flights = s.kind === 'tower' ? W.tower.flights[0] + Math.floor(r.next() * (W.tower.flights[1] - W.tower.flights[0] + 1)) : 0;
     s.h = s.kind === 'tower' ? s.flights * FLIGHT_RISE
       : s.kind === 'stand' ? Math.round(lerp(W.stand.height[0], W.stand.height[1], r.next()) / RUNG_RISE) * RUNG_RISE
@@ -588,6 +602,7 @@ export function planWilds(seed, opts) {
     if (s.variant === 'barn' && enemyBarns++ === 0) s.eventKind = 'standing';
     if (s.variant === 'farm' && enemyFarms++ === 0) s.eventKind = 'hound';
     s.eventDone = false;
+    s.platHalfX = 0; s.platHalfZ = 0;   // filled by a builder with a platform (tower, stand, hide)
     s.eventLive = false; s.eventPrev = 0; s.eventCurr = 0;
     s.eventRetry = 0; s.eventTries = 0; s.eventSpawned = false;
     s.eventVisit = false; s.eventAway = 0;
@@ -613,7 +628,10 @@ export function planWilds(seed, opts) {
       const p = pondProfileAt(s.x, s.z);
       s.pondFloorY = p.lo; s.pondRelief = p.relief; s.waterY = p.hi + WATER_LIFT;
     } else { s.pondFloorY = 0; s.pondRelief = 0; s.waterY = 0; }
-
+  };
+  for (let i = 0; i < sites.length; i++) {
+    const s = sites[i];
+    initSite(s, i);
     // Exactly one far-woods deadfall becomes the authored track encounter. Choosing the
     // farthest qualifying record is deterministic and makes it a discovery, not a spawn
     // lottery. It keeps the site's stable id and quota; only its authored contents change.
@@ -627,6 +645,66 @@ export function planWilds(seed, opts) {
     encounter.encounter = 'tracks';
     encounter.cache = true;
     encounter.pad = 24;             // prints, reveal tree and prize share one clear glade
+  }
+
+  // D14: THE SECOND PASS. W.counts beyond BASE_COUNTS is dealt from a fresh candidate walk
+  // over the same cells (the rng stream simply continues past the base draws, so nothing
+  // above moves): a cell is 280 m and two sites 110 m apart fit in one, and every candidate
+  // obeys the same road / major / slope / water / separation laws as the first 114 — the
+  // separation is tested against every base site and every earlier extra. The extras get
+  // the new clearing variants and ids that continue AFTER the base ids, in their own
+  // spatial order, so w0..w113 are untouched in every save.
+  let extraTotal = 0;
+  for (let q = 0; q < order.length; q++) extraTotal += Math.max(0, (W.counts[order[q]] | 0) - BASE_COUNTS[order[q]]);
+  if (extraTotal > 0) {
+    const clearOf = (x, z, list) => {
+      for (let i = 0; i < list.length; i++) {
+        const dx = x - list[i].x, dz = z - list[i].z;
+        if (dx * dx + dz * dz < sep2) return false;
+      }
+      return true;
+    };
+    const kept2 = [];
+    for (let cz = -N; cz < N; cz++) {
+      for (let cx = -N; cx < N; cx++) {
+        const mx = (cx + 0.5) * cell, mz = (cz + 0.5) * cell;
+        if (Math.hypot(mx, mz) > R) continue;
+        for (let k = 0; k < 10; k++) {
+          const x = (cx + 0.02 + 0.96 * rng.next()) * cell;
+          const z = (cz + 0.02 + 0.96 * rng.next()) * cell;
+          if (!fits(x, z)) continue;
+          if (rejectOverlap && (!clearOf(x, z, sites) || !clearOf(x, z, kept2))) continue;
+          kept2.push({ cx, cz, x, z });
+          break;
+        }
+      }
+    }
+    for (let i = kept2.length - 1; i > 0; i--) {
+      const j = Math.floor(rng.next() * (i + 1));
+      const t = kept2[i]; kept2[i] = kept2[j]; kept2[j] = t;
+    }
+    const extras = [];
+    const vcount2 = { stand: 0, ruin: 0, wreck: 0, camp: 0 };
+    let cursor2 = 0;
+    for (let q = 0; q < order.length; q++) {
+      const kind = order[q];
+      const want = Math.max(0, (W.counts[kind] | 0) - BASE_COUNTS[kind]);
+      const list = EXTRA_VARIANTS[kind] || VARIANTS[kind];
+      let n = 0;
+      while (n < want && cursor2 < kept2.length) {
+        const c = kept2[cursor2++];
+        const variant = list[vcount2[kind] % list.length];
+        vcount2[kind]++;
+        extras.push({ kind, variant, cx: c.cx, cz: c.cz, x: c.x, z: c.z });
+        n++;
+      }
+    }
+    extras.sort((a, b) => (a.cz - b.cz) || (a.cx - b.cx));
+    for (let j = 0; j < extras.length; j++) {
+      const s = extras[j];
+      sites.push(s);
+      initSite(s, sites.length - 1);
+    }
   }
   return sites;
 }
@@ -1883,6 +1961,197 @@ function buildRuin(api) {
     }
     if (site.cache) cache = cacheParts(api, -5.7, groundY(api, -5.7, 2.6), 2.6, -0.25);
     if (cache) { site.cacheX = api.wx(-5.7, 2.6); site.cacheZ = api.wz(-5.7, 2.6); site.cacheY = groundY(api, -5.7, 2.6); }
+  } else if (site.variant === 'hide') {
+    /* D14. THE HUNTERS' HIDE. Four brush blinds in a ring around the place the kill was
+     * dressed: a gut pile, the hoist beam with its chain and hook, a salt block, and a
+     * trail camera on a post pointed at the pile. The high seat at the site's origin is
+     * the job — seven rungs up (the stand's rung law) to a plank platform that looks over
+     * the whole ring and pays the climb like a stand's. The cache is behind the wall of
+     * the blind the camera watches. No light: the camera's eye is one glow dot. */
+    const gy = api.padY;
+    const PZ = 4.6;                                   // the pile, in front of the seat
+    const pileY = groundY(api, 0, PZ);
+    solid.at(new THREE.IcosahedronGeometry(0.9, 1).scale(1.3, 0.38, 1.0), [0.052, 0.030, 0.026], 0, pileY + 0.10, PZ, r.range(0, TAU), 0, 0);
+    solid.at(new THREE.IcosahedronGeometry(0.55, 1).scale(1.2, 0.45, 1.0), [0.070, 0.026, 0.024], 0.5, pileY + 0.20, PZ - 0.3, r.range(0, TAU), 0, 0);
+    for (let i = 0; i < 6; i++) {                     // ribs, out of it
+      const a = r.range(0, TAU), rr = r.range(0.4, 1.2);
+      solid.strut(Math.cos(a) * rr, pileY + 0.04, PZ + Math.sin(a) * rr,
+        Math.cos(a) * (rr + 0.6), pileY + 0.10 + r.range(0, 0.22), PZ + Math.sin(a) * (rr + 0.6), 0.026, 4, C.paper);
+    }
+    api.emit({ kind: 'circle', x: 0, z: PZ, r: 1.1, y0: pileY - 0.2, y1: pileY + 0.40, tag: 'earth', standable: true, breakable: false });
+    // the hoist: two posts, a beam, the chain and the hook still on it
+    const HZ = PZ + 3.0;
+    let beamY = -Infinity;
+    for (const sx of [-1.6, 1.6]) {
+      const pg = groundY(api, sx, HZ);
+      solid.cyl(0.09, 0.11, 3.9, 6, sx, pg + 1.75, HZ, C.wood);
+      api.emit({ kind: 'circle', x: sx, z: HZ, r: 0.14, y0: pg - 0.3, y1: pg + 3.6, tag: 'wood', climbable: false });
+      if (pg > beamY) beamY = pg;
+    }
+    beamY += 3.5;
+    solid.strut(-1.8, beamY, HZ, 1.8, beamY, HZ, 0.07, 5, C.wood);
+    solid.strut(0, beamY - 0.05, HZ, 0.05, beamY - 1.9, HZ - 0.05, 0.018, 4, C.metal);
+    solid.box(0.10, 0.24, 0.04, 0.05, beamY - 2.02, HZ - 0.05, C.metal, 0.4);
+    // four blinds on the ring, slat walls toward the pile, brush laid over each frame
+    const blindR = 5.5;
+    for (let i = 0; i < 4; i++) {
+      const a = (i + 0.5) * Math.PI * 0.5 + r.range(-0.12, 0.12);
+      const bx = Math.cos(a) * blindR, bz = PZ + Math.sin(a) * blindR;
+      const bg = groundY(api, bx, bz);
+      const tx = -Math.sin(a), tz = Math.cos(a);          // the wall runs along the ring
+      const yawB = Math.atan2(-tz, tx);
+      for (let s = 0; s < 5; s++) {
+        solid.box(2.0, 0.15, 0.05, bx, bg + 0.22 + s * 0.24, bz, s & 1 ? WF.timber : WF.timberAlt, yawB);
+      }
+      for (const e of [-0.95, 0.95]) {
+        const px = bx + tx * e, pz = bz + tz * e;
+        solid.cyl(0.05, 0.06, 1.5, 5, px, groundY(api, px, pz) + 0.7, pz, C.wood);
+      }
+      api.emit({ kind: 'obb', x: bx, z: bz, halfX: 1.0, halfZ: 0.08, yaw: yawB, y0: bg - 0.3, y1: bg + 1.28, tag: 'wood', breakable: false });
+      for (let b = 0; b < 5; b++) {
+        const e = -0.9 + b * 0.45;
+        const px = bx + tx * e, pz = bz + tz * e;
+        solid.strut(px, bg + 1.2, pz, px + Math.cos(a) * 1.1 + r.range(-0.2, 0.2), bg + 0.15,
+          pz + Math.sin(a) * 1.1 + r.range(-0.2, 0.2), 0.03, 4, b & 1 ? WF.timberAlt : WF.char);
+      }
+      if (i === 0) {                                    // the watched blind keeps the cache
+        const cx2 = bx + Math.cos(a) * 0.75, cz2 = bz + Math.sin(a) * 0.75;
+        const cg = groundY(api, cx2, cz2);
+        cache = cacheParts(api, cx2, cg, cz2, yawB);
+        site.cacheX = api.wx(cx2, cz2); site.cacheZ = api.wz(cx2, cz2); site.cacheY = cg;
+      }
+    }
+    // the trail camera, strapped to a post west of the pile, its eye on it
+    const camX = -4.2, camZ = PZ, camG = groundY(api, camX, camZ);
+    solid.cyl(0.06, 0.07, 1.8, 6, camX, camG + 0.85, camZ, C.wood);
+    solid.box(0.12, 0.18, 0.10, camX, camG + 1.42, camZ, WF.char, 0);
+    solid.box(0.14, 0.03, 0.12, camX, camG + 1.42, camZ, C.slate, 0);   // the strap
+    glow.box(0.03, 0.03, 0.03, camX + 0.07, camG + 1.44, camZ, [0.95, 0.10, 0.05], 0);
+    api.emit({ kind: 'circle', x: camX, z: camZ, r: 0.09, y0: camG - 0.2, y1: camG + 1.7, tag: 'wood', climbable: false, breakable: false });
+    // a salt block on a stump, and the brass the last hunter left by the ladder
+    const saltG = groundY(api, 2.3, PZ - 2.2);
+    solid.cyl(0.28, 0.32, 0.42, 7, 2.3, saltG + 0.21, PZ - 2.2, C.wood);
+    solid.box(0.30, 0.28, 0.30, 2.3, saltG + 0.56, PZ - 2.2, [0.42, 0.40, 0.36], 0.3);
+    api.emit({ kind: 'circle', x: 2.3, z: PZ - 2.2, r: 0.30, y0: saltG - 0.2, y1: saltG + 0.42, tag: 'wood', standable: true, breakable: false });
+    for (let i = 0; i < 4; i++) solid.cyl(0.012, 0.012, 0.05, 5, r.range(-0.6, 0.6), gy + 0.03, -1.2 + r.range(-0.3, 0.3), C.metal, 0, 0, r.range(0, TAU));
+    // the high seat: four posts, seven rungs, a plank platform, rails, the rifle board
+    const hw = 0.75, n0 = 7;
+    const H = gy + n0 * RUNG_RISE;
+    let z0 = -hw - n0 * RUNG_RUN;
+    let g0 = Math.min(groundY(api, 0, z0), groundY(api, 0, z0 - 0.5), groundY(api, 0, z0 - 1.0));
+    let n = Math.max(n0, Math.ceil((H - g0) / RUNG_RISE - 1e-6));
+    z0 = -hw - n * RUNG_RUN;
+    g0 = Math.min(g0, groundY(api, 0, z0), groundY(api, 0, z0 - 0.5), groundY(api, 0, z0 - 1.0));
+    n = Math.max(n, Math.ceil((H - g0) / RUNG_RISE - 1e-6));
+    z0 = -hw - n * RUNG_RUN;
+    const rise = (H - g0) / n;
+    site.topY = H; site.baseY = g0;
+    for (let i = 0; i < 4; i++) {
+      const sx = (i & 1) ? 1 : -1, sz = (i & 2) ? 1 : -1;
+      const px = sx * (hw - 0.12), pz = sz * (hw - 0.12);
+      const g = groundY(api, px, pz) - 0.4;
+      solid.strut(px, g, pz, px, H + 0.35, pz, 0.09, 6, C.wood);
+      api.emit({ kind: 'circle', x: px, z: pz, r: 0.20, y0: g, y1: H, tag: 'wood' });
+    }
+    solid.box(hw * 2, 0.12, hw * 2, 0, H - 0.06, 0, C.plank, 0);
+    api.emit({ kind: 'obb', x: 0, z: 0, halfX: hw, halfZ: hw, yaw: 0, y0: H - 0.30, y1: H, tag: 'wood', standable: true });
+    const seatRail = (x, z, hx, hz) => {
+      api.emit({ kind: 'obb', x, z, halfX: hx, halfZ: hz, yaw: 0, y0: H - 0.2, y1: H + RAIL_H, tag: 'wood' });
+      solid.box(hx * 2 + 0.06, 0.05, hz * 2 + 0.06, x, H + RAIL_H, z, C.wood, 0);
+      solid.box(hx * 2 + 0.06, 0.04, hz * 2 + 0.06, x, H + RAIL_H * 0.55, z, C.wood, 0);
+    };
+    seatRail(0, hw, hw, 0.03);
+    seatRail(-hw, 0, 0.03, hw);
+    seatRail(hw, 0, 0.03, hw);
+    seatRail(-(hw + 0.7) * 0.5, -hw, (hw - 0.7) * 0.5, 0.03);
+    seatRail((hw + 0.7) * 0.5, -hw, (hw - 0.7) * 0.5, 0.03);
+    solid.box(hw * 2, 0.40, 0.06, 0, H + 0.55, hw + 0.05, C.plank, 0);      // the rifle board, toward the pile
+    for (const sx of [-1, 1]) solid.strut(sx * 0.40, g0 + 0.1, z0, sx * 0.40, H + 0.05, -hw, 0.045, 4, C.wood);
+    for (let k = 1; k < n; k++) {
+      const top = g0 + k * rise;
+      const z = -hw - (n - k) * RUNG_RUN;
+      solid.box(0.74, 0.07, 0.14, 0, top - 0.035, z, C.wood, 0);
+      api.emit({ kind: 'obb', x: 0, z, halfX: 0.37, halfZ: 0.07, yaw: 0, y0: top - 0.16, y1: top, tag: 'wood', standable: true });
+    }
+    site.platHalfX = hw; site.platHalfZ = hw;
+    site.parkourRoute = {
+      kind: 'hide-seat', space: 'local',
+      approach: { x: 0, z: z0 - 1.5, y: groundY(api, 0, z0 - 1.5) },
+      target: { x: 0, z: 0, y: H },
+    };
+  } else if (site.variant === 'burnt') {
+    /* D14. THE BURN. A house went up here and a tin-roof shed did not. The slab is still
+     * there under the ash and the chimney stack stands; whoever came back after put what
+     * they could save in the shed. The chimney is the job: four rubble steps up its back,
+     * a pull onto the cap, and the clearing is yours to look over. */
+    const gy = api.padY;
+    solid.cyl(7.6, 8.4, 0.05, 28, 0, gy + 0.012, 0, [0.026, 0.025, 0.024]);   // the ash
+    solid.box(7.2, 0.26, 5.4, 0, gy + 0.12, 0, WF.char, 0);                   // the slab
+    api.emit({ kind: 'obb', x: 0, z: 0, halfX: 3.6, halfZ: 2.7, yaw: 0, y0: gy - 0.3, y1: gy + 0.25, tag: 'concrete', standable: true, breakable: false });
+    // what is left of the frame: charred joists down across the slab, two studs still up
+    for (let i = 0; i < 7; i++) {
+      const x0 = r.range(-3.2, 3.2), z0 = r.range(-2.4, 2.4), a = r.range(0, TAU), len = r.range(2.0, 3.8);
+      solid.strut(x0, gy + 0.32, z0, x0 + Math.cos(a) * len, gy + 0.36 + r.range(0, 0.5), z0 + Math.sin(a) * len, 0.07, 4, WF.char);
+    }
+    for (const [px, pz] of [[3.4, -2.5], [3.4, 2.5]]) {
+      solid.strut(px, gy + 0.25, pz, px + r.range(-0.15, 0.15), gy + r.range(1.6, 2.6), pz + r.range(-0.15, 0.15), 0.08, 5, WF.char);
+      api.emit({ kind: 'circle', x: px, z: pz, r: 0.12, y0: gy, y1: gy + 1.6, tag: 'wood', climbable: false, breakable: false });
+    }
+    // the chimney: the stack, its hearth mouth on the slab side, the cap you stand on
+    const chx = -2.4, chz = 0.4, ch = 3.7;
+    solid.box(1.3, ch, 1.3, chx, gy + ch * 0.5, chz, WF.brick, 0);
+    for (let y = 0.5; y < ch; y += 0.5) solid.box(1.32, 0.05, 1.32, chx, gy + y, chz, WF.mortar, 0);
+    solid.box(0.2, 1.0, 0.9, chx + 0.6, gy + 0.72, chz, C.dark, 0);
+    api.emit({ kind: 'obb', x: chx, z: chz, halfX: 0.65, halfZ: 0.65, yaw: 0, y0: gy - 0.4, y1: gy + ch, tag: 'wall' });
+    solid.box(1.5, 0.18, 1.5, chx, gy + ch + 0.09, chz, WF.stoneAlt, 0);
+    api.emit({ kind: 'obb', x: chx, z: chz, halfX: 0.75, halfZ: 0.75, yaw: 0, y0: gy + ch - 0.1, y1: gy + ch + 0.18, tag: 'stone', standable: true });
+    // four rubble steps up the back of the stack, each a 0.50 rise (under STEP_UP), and
+    // from the last the cap is a pull of 1.88 m: the mantle, inside its reach
+    for (let i = 0; i < 4; i++) {
+      const top = 0.5 * (i + 1), bx = chx - 1.15, bz = chz - 2.25 + i * 0.85;
+      solid.box(1.0, top, 0.8, bx, gy + top * 0.5, bz, i & 1 ? WF.stoneAlt : WF.brick, 0);
+      solid.box(1.02, 0.05, 0.82, bx, gy + top - 0.025, bz, WF.mortar, 0);
+      api.emit({ kind: 'obb', x: bx, z: bz, halfX: 0.5, halfZ: 0.4, yaw: 0, y0: gy - 0.2, y1: gy + top, tag: 'stone', standable: true });
+    }
+    site.parkourRoute = {
+      kind: 'burnt-chimney', space: 'local',
+      approach: { x: chx - 1.15, z: chz - 3.4, y: groundY(api, chx - 1.15, chz - 3.4) },
+      target: { x: chx - 1.15, z: chz + 0.3, y: gy + 2.0 },
+      crown: { x: chx, z: chz, y: gy + ch + 0.18 },
+    };
+    // the iron that does not burn: a bathtub, a bed frame, the stove and its pipe
+    const tubG = groundY(api, 1.6, -3.9);
+    solid.box(1.5, 0.12, 0.7, 1.6, tubG + 0.10, -3.9, WF.iron, 0.2);
+    for (const side of [-1, 1]) solid.box(1.5, 0.5, 0.06, 1.6 + Math.sin(0.2) * side * 0.35, tubG + 0.32, -3.9 + Math.cos(0.2) * side * 0.35, WF.iron, 0.2);
+    for (const end of [-1, 1]) solid.box(0.06, 0.5, 0.7, 1.6 + Math.cos(0.2) * end * 0.75, tubG + 0.32, -3.9 - Math.sin(0.2) * end * 0.75, WF.iron, 0.2);
+    api.emit({ kind: 'obb', x: 1.6, z: -3.9, halfX: 0.75, halfZ: 0.35, yaw: 0.2, y0: tubG - 0.2, y1: tubG + 0.55, tag: 'metal', standable: true, breakable: false });
+    for (const [px, pz] of [[0.4, 0.5], [0.4, 2.2], [2.2, 0.5], [2.2, 2.2]]) solid.strut(px, gy + 0.25, pz, px, gy + 0.85, pz, 0.025, 4, WF.iron);
+    solid.strut(0.4, gy + 0.72, 0.5, 2.2, gy + 0.72, 0.5, 0.02, 4, WF.iron);
+    solid.strut(0.4, gy + 0.72, 2.2, 2.2, gy + 0.72, 2.2, 0.02, 4, WF.iron);
+    solid.strut(0.4, gy + 0.72, 0.5, 0.4, gy + 0.72, 2.2, 0.02, 4, WF.iron);
+    solid.strut(2.2, gy + 0.72, 0.5, 2.2, gy + 0.72, 2.2, 0.02, 4, WF.iron);
+    solid.box(0.6, 0.8, 0.6, -0.8, gy + 0.65, -1.6, WF.iron, 0.1);
+    solid.cyl(0.07, 0.07, 1.6, 6, -0.8, gy + 1.8, -1.6, WF.rustDark);
+    api.emit({ kind: 'obb', x: -0.8, z: -1.6, halfX: 0.3, halfZ: 0.3, yaw: 0.1, y0: gy, y1: gy + 1.05, tag: 'metal', standable: true, breakable: false });
+    // the shed that stood: three board walls, a tin roof on posts, open toward the slab
+    const SX = 3.9, SZ = 3.9, sw = 1.3, sd = 1.1, sh = 2.2;
+    const sg = Math.min(groundY(api, SX - sw, SZ - sd), groundY(api, SX + sw, SZ - sd), groundY(api, SX - sw, SZ + sd), groundY(api, SX + sw, SZ + sd), gy) - 0.4;
+    const shedWall = (x, z, w, d) => {
+      const courses = 6, cH = (gy + sh - sg) / courses;
+      for (let i = 0; i < courses; i++) solid.box(w, cH, d, x, sg + cH * (i + 0.5), z, i & 1 ? WF.timber : WF.timberAlt, 0);
+      api.emit({ kind: 'obb', x, z, halfX: w * 0.5, halfZ: d * 0.5, yaw: 0, y0: sg, y1: gy + sh, tag: 'wall' });
+    };
+    shedWall(SX, SZ + sd, sw * 2, 0.08);
+    shedWall(SX - sw, SZ, 0.08, sd * 2);
+    shedWall(SX + sw, SZ, 0.08, sd * 2);
+    for (const x of [SX - sw - 0.05, SX + sw + 0.05]) for (const z of [SZ - sd - 0.05, SZ + sd + 0.05]) solid.box(0.12, sh + 0.1, 0.12, x, gy + sh * 0.5, z, WF.timber);
+    solid.box(sw * 2 + 0.5, 0.05, sd * 2 + 0.5, SX, gy + sh + 0.12, SZ, WF.iron, 0, 0.06, 0);
+    for (let i = 0; i < 7; i++) solid.box(0.06, 0.04, sd * 2 + 0.5, SX - sw - 0.2 + i * (sw * 2 + 0.4) / 6, gy + sh + 0.15, SZ, WF.rustDark, 0, 0.06, 0);
+    api.emit({ kind: 'obb', x: SX, z: SZ, halfX: sw + 0.25, halfZ: sd + 0.25, yaw: 0, y0: gy + sh + 0.02, y1: gy + sh + 0.24, tag: 'metal', climbable: false, breakable: false });
+    solid.box(sw * 2 - 0.2, 0.05, 0.4, SX, gy + 1.25, SZ + sd - 0.25, WF.timberAlt, 0);   // the shelf
+    solid.box(0.32, 0.26, 0.20, SX - 0.6, gy + 1.41, SZ + sd - 0.25, WF.rust, 0.2);          // a tin on it
+    cache = cacheParts(api, SX + 0.3, groundY(api, SX + 0.3, SZ + 0.2), SZ + 0.2, 0.1);
+    site.cacheX = api.wx(SX + 0.3, SZ + 0.2); site.cacheZ = api.wz(SX + 0.3, SZ + 0.2); site.cacheY = groundY(api, SX + 0.3, SZ + 0.2);
   } else {
     // One continuous creek skin sampled on a 29 x 5 grid. The old seven flat quads could
     // hover 0.8 m above a low bank or vanish into a high one; every vertex now follows the
@@ -2129,6 +2398,13 @@ function buildWreck(api) {
       y0: gy - 0.2, y1: gy + 0.83, tag: 'vehicle' });
     api.emit({ kind: 'obb', x: cabin.x, z: cabin.z, halfX: 1.05, halfZ: 0.85, yaw,
       y0: gy + 0.77, y1: gy + 1.48, tag: 'vehicle', climbable: false });
+    // D13 (C16): a can of gas beside every dead car. On the side away from the fallen door
+    // and the cache, 0.9 m clear of the shell's corner so gas.js's TAKE ray is never inside
+    // the vehicle collider. gas.js draws it, prompts it and flags it: 'gas:wild:<id>'.
+    const can = put(-3.0, -1.3);
+    if (typeof api.registerGasCan === 'function') {
+      api.registerGasCan(can.x, can.z, groundY(api, can.x, can.z), 'gas:wild:' + site.id, yaw + Math.PI * 0.5);
+    }
     const wreckApproach = put(-3.25, 0);
     site.parkourRoute = {
       kind: 'wreck-car', space: 'local', yaw,
@@ -2533,6 +2809,80 @@ function buildCamp(api) {
     site.eventX = api.wx(7.0, 1.2); site.eventZ = api.wz(7.0, 1.2); site.eventYaw = site.yaw - Math.PI * 0.5;
     cache = cacheParts(api, 1.4, groundY(api, 1.4, 2.6), 2.6, -0.2);
     site.cacheX = api.wx(1.4, 2.6); site.cacheZ = api.wz(1.4, 2.6); site.cacheY = groundY(api, 1.4, 2.6);
+  } else if (site.variant === 'timber') {
+    /* D14. THE FELLING YARD. Somebody was clearing this ground when the clocks fell back
+     * and left the job: a wall of stacked logs you go up tier by tier from the front
+     * (three 0.50 m steps, every one under STEP_UP), the bucking trestles with a trunk
+     * still across them, split rounds, a field of fresh stumps, the tools, and the tarp
+     * awning off the back of the stack where the cache is. */
+    const gy = api.padY;
+    const LR = 0.25, L = 6.0;
+    // three tiers of logs along X, each one row shorter than the tier under it and set
+    // back from -Z: the front face is a stair and the back face is a wall
+    const rows = [[-0.9, -0.4, 0.1, 0.6, 1.1], [-0.4, 0.1, 0.6, 1.1], [0.1, 0.6, 1.1]];
+    for (let t = 0; t < rows.length; t++) {
+      const y = gy + LR + t * LR * 2;
+      for (let j = 0; j < rows[t].length; j++) {
+        const z = rows[t][j], len = L - r.range(0, 0.9), ox = r.range(-0.3, 0.3);
+        const col = (t + j) & 1 ? WF.timber : WF.timberAlt;
+        solid.cyl(LR, LR, len, 8, ox, y, z, col, 0, 0, Math.PI * 0.5);
+        for (const e of [-1, 1]) solid.cyl(LR * 0.93, LR * 0.93, 0.05, 8, ox + e * len * 0.5, y, z, C.plank, 0, 0, Math.PI * 0.5);
+      }
+      const z0 = rows[t][0] - LR, z1 = rows[t][rows[t].length - 1] + LR;
+      api.emit({ kind: 'obb', x: 0, z: (z0 + z1) * 0.5, halfX: L * 0.5, halfZ: (z1 - z0) * 0.5, yaw: 0,
+        y0: gy - 0.2 + t * LR * 2, y1: gy + (t + 1) * LR * 2, tag: 'log', standable: true, breakable: false });
+    }
+    site.parkourRoute = {
+      kind: 'log-stack', space: 'local',
+      approach: { x: 0, z: -2.6, y: groundY(api, 0, -2.6) },
+      target: { x: 0, z: 0.6, y: gy + 1.5 },
+    };
+    // the bucking trestles and the trunk still across them
+    const TZ = -3.6;
+    for (const tx of [-1.6, 1.6]) {
+      const tg = groundY(api, tx, TZ);
+      solid.strut(tx - 0.45, tg, TZ - 0.45, tx + 0.45, tg + 0.95, TZ + 0.45, 0.05, 4, C.wood);
+      solid.strut(tx + 0.45, tg, TZ - 0.45, tx - 0.45, tg + 0.95, TZ + 0.45, 0.05, 4, C.wood);
+      solid.strut(tx, tg + 0.35, TZ - 0.5, tx, tg + 0.35, TZ + 0.5, 0.035, 4, C.wood);
+      api.emit({ kind: 'obb', x: tx, z: TZ, halfX: 0.5, halfZ: 0.5, yaw: 0, y0: tg - 0.2, y1: tg + 0.75, tag: 'wood', breakable: false });
+    }
+    const trunkY = Math.max(groundY(api, -1.6, TZ), groundY(api, 1.6, TZ)) + 1.05;
+    solid.cyl(0.32, 0.36, 4.8, 9, 0.2, trunkY, TZ, WF.timber, 0, 0, Math.PI * 0.5);
+    for (let i = 0; i < 3; i++) solid.box(0.06, 0.74, 0.30, -1.2 + i * 0.9, trunkY, TZ, C.dark, 0);   // the saw cuts
+    api.emit({ kind: 'obb', x: 0.2, z: TZ, halfX: 2.4, halfZ: 0.34, yaw: 0, y0: trunkY - 0.34, y1: trunkY + 0.34, tag: 'log', standable: true, breakable: false });
+    // split rounds, stacked where they were cut
+    for (let i = 0; i < 9; i++) {
+      const lx = 3.7 + (i % 3) * 0.62, lz = -1.9 + Math.floor(i / 3) * 0.62, tier = i >= 6 ? 1 : 0;
+      const rg = groundY(api, lx, lz);
+      solid.cyl(0.28, 0.29, 0.46, 8, lx, rg + 0.23 + tier * 0.46, lz, i & 1 ? WF.timber : WF.timberAlt);
+      solid.cyl(0.26, 0.26, 0.03, 8, lx, rg + 0.47 + tier * 0.46, lz, C.plank);
+      if (!tier) api.emit({ kind: 'circle', x: lx, z: lz, r: 0.30, y0: rg - 0.2, y1: rg + 0.47, tag: 'wood', standable: true, breakable: false });
+    }
+    // the stumps of what came down, fresh, ringing the yard
+    for (let i = 0; i < 7; i++) {
+      const a = i * TAU / 7 + 0.3, rr = 5.2 + (i % 3) * 0.6;
+      const sx = Math.cos(a) * rr, sz = Math.sin(a) * rr, sg = groundY(api, sx, sz), sr = 0.26 + (i % 2) * 0.09;
+      solid.cyl(sr, sr * 1.15, 0.42, 7, sx, sg + 0.21, sz, C.wood, r.range(0, TAU));
+      solid.cyl(sr * 0.96, sr * 0.96, 0.03, 7, sx, sg + 0.42, sz, C.plank);
+      api.emit({ kind: 'circle', x: sx, z: sz, r: sr + 0.04, y0: sg - 0.2, y1: sg + 0.42, tag: 'wood', standable: true, breakable: false });
+    }
+    // the tarp awning off the back of the stack, and the tools under it
+    for (const px of [-1.3, 1.3]) {
+      const pg = groundY(api, px, 3.4);
+      solid.cyl(0.05, 0.06, 1.9, 5, px, pg + 0.95, 3.4, C.wood);
+      api.emit({ kind: 'circle', x: px, z: 3.4, r: 0.08, y0: pg - 0.2, y1: pg + 1.8, tag: 'wood', climbable: false, breakable: false });
+    }
+    solid.strut(-1.35, gy + 1.78, 3.4, 1.35, gy + 1.78, 3.4, 0.03, 4, C.wood);
+    solid.quad(3.0, 2.2, 0, gy + 1.64, 2.4, C.slate, 0, -Math.PI * 0.5 + 0.075);
+    api.emit({ kind: 'obb', x: 0, z: 2.4, halfX: 1.5, halfZ: 1.1, yaw: 0, y0: gy + 1.52, y1: gy + 1.76, tag: 'cloth', climbable: false, breakable: false });
+    const blockG = groundY(api, -1.3, 2.4);
+    solid.cyl(0.30, 0.33, 0.50, 7, -1.3, blockG + 0.25, 2.4, C.wood);
+    api.emit({ kind: 'circle', x: -1.3, z: 2.4, r: 0.34, y0: blockG - 0.2, y1: blockG + 0.50, tag: 'wood', standable: true, breakable: false });
+    solid.strut(-1.3, blockG + 0.5, 2.4, -1.3 + 0.55, blockG + 1.05, 2.4 + 0.25, 0.022, 4, C.wood);   // the axe, sunk in the block
+    solid.box(0.18, 0.09, 0.05, -1.3, blockG + 0.54, 2.4, C.metal, 0.4);
+    solid.box(0.045, 0.95, 0.16, 1.2, gy + 0.55, 3.25, C.metal, 0, 0, 0.35);                          // a bucksaw leaning on the pole
+    cache = cacheParts(api, 0.4, groundY(api, 0.4, 2.5), 2.5, 0.15);
+    site.cacheX = api.wx(0.4, 2.5); site.cacheZ = api.wz(0.4, 2.5); site.cacheY = groundY(api, 0.4, 2.5);
   } else {
     // the tent: an A-frame of dark canvas, a ridge pole, a cold ring of stones, a log
     const w = 1.3, len = 2.6, h = 1.5;
@@ -2604,6 +2954,9 @@ export class Wilds {
     this._towers = [];
     this._eventSites = [];           // fourteen authored movers; present() need not scan 114 sites
     this._wreckCars = [];            // dead cars only; E and present() never scan every wild
+    // D13 (C16): the cans of gas the builders register beside dead cars, world frame,
+    // one row per flag. gas.js reads gasCans() like places.gasCans() and places the can.
+    this._gasCans = [];
     this._encounterSite = null;
     this._notes = [];
     this._stats = { sites: 0, resident: 0, built: 0, disposed: 0, found: 0, climbed: 0, caches: 0, takes: 0, colliders: 0, events: 0, eventRefused: 0, encounters: 0, encounterCancelled: 0, treeHits: 0, treeMisses: 0 };
@@ -2643,7 +2996,12 @@ export class Wilds {
     this._wreckCars.length = 0;
     for (let i = 0; i < sites.length; i++) {
       const s = sites[i];
-      this._cellMap.set((s.cx + 1000) * 4096 + (s.cz + 1000), s);
+      // D14: a cell can hold a base site AND an extra (two sites 110 m apart in 280 m), so
+      // the pad lookup keeps a short list per cell, not one record.
+      const cellKey = (s.cx + 1000) * 4096 + (s.cz + 1000);
+      let cellList = this._cellMap.get(cellKey);
+      if (!cellList) { cellList = []; this._cellMap.set(cellKey, cellList); }
+      cellList.push(s);
       let arr = this._byChunk.get(s.chunk);
       if (!arr) { arr = []; this._byChunk.set(s.chunk, arr); }
       arr.push(s);
@@ -2665,13 +3023,16 @@ export class Wilds {
     const cx = Math.floor(x / cell), cz = Math.floor(z / cell);
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
-        const s = this._cellMap.get((cx + dx + 1000) * 4096 + (cz + dz + 1000));
-        if (!s) continue;
-        const ex = x - s.x, ez = z - s.z;
-        if (ex * ex + ez * ez < s.pad * s.pad) return true;
-        if (s.pad2R > 0) {
-          const fx = x - s.pad2X, fz = z - s.pad2Z;
-          if (fx * fx + fz * fz < s.pad2R * s.pad2R) return true;
+        const list = this._cellMap.get((cx + dx + 1000) * 4096 + (cz + dz + 1000));
+        if (!list) continue;
+        for (let i = 0; i < list.length; i++) {
+          const s = list[i];
+          const ex = x - s.x, ez = z - s.z;
+          if (ex * ex + ez * ez < s.pad * s.pad) return true;
+          if (s.pad2R > 0) {
+            const fx = x - s.pad2X, fz = z - s.pad2Z;
+            if (fx * fx + fz * fz < s.pad2R * s.pad2R) return true;
+          }
         }
       }
     }
@@ -2777,6 +3138,7 @@ export class Wilds {
     if (!canCollide) this._note('collision.addCollider missing: ' + site.id + ' is walk-through');
     const hAt = (terrain && terrain.heightAt) ? (x, z) => terrain.heightAt(x, z) : (x, z) => heightAt(x, z);
     const stats = this._stats;
+    const self = this;
     return {
       site,
       padY: site.y,
@@ -2785,6 +3147,12 @@ export class Wilds {
       heightAt: hAt,
       wx(lx, lz) { return ox + lx * cy + lz * sy; },
       wz(lx, lz) { return oz - lx * sy + lz * cy; },
+      // D13 (C16): a builder puts a can of gas down in its own frame; the world point and
+      // the flag go to gas.js through gasCans(). Re-registering (a rebuild after streaming
+      // out) updates the row instead of adding a twin, so the list only ever grows by cans.
+      registerGasCan(lx, lz, wy, flag, yaw) {
+        self._registerGasCan(ox + lx * cy + lz * sy, oz - lx * sy + lz * cy, wy, flag, site.yaw + (+yaw || 0));
+      },
       emit(shape) {
         if (!canCollide || !shape) return -1;
         const lx = +shape.x || 0, lz = +shape.z || 0;
@@ -2807,6 +3175,22 @@ export class Wilds {
       },
     };
   }
+
+  _registerGasCan(x, z, y, flag, yaw) {
+    const list = this._gasCans;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (c.flag !== flag) continue;
+      c.x = x; c.z = z; c.y = y; c.yaw = yaw;
+      return c;
+    }
+    const c = { x, z, y, flag, yaw };
+    list.push(c);
+    return c;
+  }
+
+  /** The cans registered so far, world frame: { x, z, y, flag, yaw }. gas.js's list. */
+  gasCans() { return this._gasCans; }
 
   _build(site) {
     if (site.rec) return site.rec;
@@ -3087,6 +3471,13 @@ export class Wilds {
           _climbP.id = s.id;
           this.ctx.bus.emit('wild:climbed', _climbP);
           this._xp(W.xp.climbed, s.x, s.topY + 1.0, s.z, 'climb');
+          // D14: a tower is a lookout in fact. From the platform the three nearest
+          // untaken forest digs inside 150 m go on the map (scavenging.revealNear pins
+          // them through progress.learnRumour). Once, with the climb; never for a stand.
+          if (s.kind === 'tower') {
+            const scav = this._sys('scavenging');
+            if (scav && typeof scav.revealNear === 'function') scav.revealNear(s.x, s.z, 150, 3);
+          }
         }
       }
 

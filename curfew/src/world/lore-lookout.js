@@ -27,9 +27,15 @@ export class LoreLookout {
     this.mat.name='lookout-horizon';this.mat.color.setHex(0xe8ba78);this.mat.opacity=.85;
     const tree=MAJOR_BY_ID['great-tree'],rec=places.nodes?.get(tree.id),base=rec?.padY||this._sys('terrain')?.heightAt?.(tree.x,tree.z)||0;
     this.deckY=base+(tree.claim?.dy||12.9);
+    // The deck lamp stands at the tree's CLAIM POINT (placedata great-tree claim.dx/dz),
+    // turned by the node's road-facing yaw the way places.js turns the fixture: the two can
+    // never disagree about where the lookout's own lamp is. The old literal (+4.2, +0.6)
+    // was the previous claim point, unrotated.
+    const cy=Math.cos(rec?.yaw||0),sy=Math.sin(rec?.yaw||0),cdx=+(tree.claim?.dx||0),cdz=+(tree.claim?.dz||0);
+    const lampX=tree.x+cdx*cy+cdz*sy,lampZ=tree.z-cdx*sy+cdz*cy;
     for(const d of MAJORS){
       const mesh=new THREE.Mesh(this.geo,this.mat);mesh.name='lookout-light:'+d.id;mesh.visible=false;
-      if(d.id===tree.id){mesh.position.set(tree.x+4.2,this.deckY+1.15,tree.z+.6);mesh.scale.setScalar(.065);}
+      if(d.id===tree.id){mesh.position.set(lampX,this.deckY+1.15,lampZ);mesh.scale.setScalar(.065);}
       else{
         const dx=d.x-tree.x,dz=d.z-tree.z,dist=Math.hypot(dx,dz),r=Math.min(640,dist);
         const realY=(places.nodes?.get(d.id)?.padY||0)+(d.claim?.dy||7);

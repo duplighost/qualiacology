@@ -438,6 +438,11 @@ const DUSK_MUL = { hound: 0.8, pallbearer: 0.7, poacher: 1.8, hunter: 0.0, marro
 // ROUND 22: lane G rings wind chimes on the bearing an order will arrive from, before the
 // body exists. One reused payload; read the numbers, never keep the object.
 const _order = { species: '', bearing: 0, at: 0, lead: 0 };   // lead: seconds until it lands (ROUND 22: the chimes ring only for a near one)
+// C12: 'director:arriving' {x, z, inS} — once per composition, the moment an order is about to
+// put a body inside ARRIVE_NEAR_M of the player. One reused payload. audio/bed.js cuts the
+// crickets on it: "if the crickets stop, something is coming, every single time".
+const _arriving = { x: 0, z: 0, inS: 0 };
+const ARRIVE_NEAR_M = 40;      // m: inside this "something is coming" is seconds away, not minutes
 
 /* ------------------------------------------------------------- module scratch -- */
 
@@ -464,6 +469,8 @@ export class Director {
     /* ---- cadence and permits ---- */
     this._t = 0;
     this._sinceSpawn = GAP_S;      // the first order may go immediately
+    this._compSerial = 0;          // C12: which composition the queue holds; every roll bumps it
+    this._arrivingSerial = -1;     // C12: the composition 'director:arriving' was last emitted for
     this._silenceT = 0;            // protected silence after a clear
     this._stingerT = 0;            // 3.2 s of nothing after a dread stinger
     this._sinceContact = 0;
@@ -1786,6 +1793,7 @@ export class Director {
     // silence). It bypasses the composition roll and the target — never the spawn laws.
     if (this._sinceContact >= PITY_S && this._orderCount === 0 && this._pressurePermit()) {
       this._sinceContact = 0;
+      this._compSerial++;
       this._enqueue(this._pick(true), this._sectorBearing(), 0);
       return;
     }
@@ -1803,6 +1811,7 @@ export class Director {
     let budget = Math.max(1, (target - this.head) * 1.35);
     const firstBudget = budget * 0.74;
     const bearing = this._sectorBearing();
+    this._compSerial++;
     let at = 0, guard = 24, spentFirst = 0;
     while (budget >= 1 && guard-- > 0 && this._orderCount < ORDER_POOL) {
       const sp = this._pick(false);
@@ -1939,6 +1948,19 @@ export class Director {
         o.bearing += (this._rng().next() - 0.5) * 0.45 * Math.min(4, o.tries + 1);
         this._failOrder(o, 0.35);
         return;
+      }
+      // C12: a body is about to rise inside ARRIVE_NEAR_M. Said once per composition, BEFORE the
+      // spawn, so the bed can cut the crickets while it is still true that nothing is there.
+      {
+        const ddx = _placed.x - this._px, ddz = _placed.z - this._pz;
+        if (ddx * ddx + ddz * ddz < ARRIVE_NEAR_M * ARRIVE_NEAR_M && this._arrivingSerial !== this._compSerial) {
+          this._arrivingSerial = this._compSerial;
+          _arriving.x = _placed.x; _arriving.z = _placed.z;
+          // seconds until it is on its feet: the pallbearer climbs out of its grave (species.js
+          // riseTime 1.40); everything else steps out from behind a trunk (enemies.js QUICK_RISE_S)
+          _arriving.inS = o.species === 'pallbearer' ? 1.4 : 0.22;
+          this.ctx.bus.emit('director:arriving', _arriving);
+        }
       }
       // ROUND 22: lane G's wind chimes ring on the bearing as the body is PLACED. "They ring before
       // the hounds come" is the seconds it takes them to close from the placement band, not the

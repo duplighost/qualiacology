@@ -1779,6 +1779,9 @@ export class Viewmodel {
 }
 
 // vigil viewmodel.js:236 — which reload beats shove the gun, and how hard.
-const RELOAD_JOLT = { contact: 0.18, seat: 0.5, boltrelease: 0.85, drop: 0.1 };
+// 'active' (D2) is the active-reload hit landing in the hands: a shade more than the seat,
+// so a hit is felt and not only heard. 'shell' is one shell thumbed into the shotgun's tube
+// (weapon.js _startTubeReload), lighter than a magazine seating and repeated per shell.
+const RELOAD_JOLT = { contact: 0.18, seat: 0.5, boltrelease: 0.85, drop: 0.1, active: 0.6, shell: 0.3 };
 
 export default Viewmodel;

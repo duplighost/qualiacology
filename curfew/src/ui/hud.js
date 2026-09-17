@@ -336,11 +336,13 @@ const CONTROLS = [
   ['Fire', 'Left mouse'],
   ['Aim', 'Right mouse'],
   ['Melee', 'V or middle mouse'],
-  ['Reload / raise weapon', 'Tap R'],
-  ['Lower weapon · run faster', 'Hold R'],
+  // D1/D2: R is reload and the active-reload attempt, nothing else; lowering is X's toggle
+  // (a click, aim, melee or R raises it too). The window on the reload arc is base now.
+  ['Reload / press again at the click', 'R'],
+  ['Lower or raise weapon · run faster', 'X'],
   // Round 5 lane F (the gun) adds a second weapon and Q swaps; round 6 lane D1 adds the
-  // digits. Same round, same card.
-  ['Swap weapon', 'Q or 1 / 2'],
+  // digits; D6 adds the wheel and slots 3-4. Same card. tests/pause.mjs greps the label.
+  ['Swap weapon', 'Q, wheel, or 1-4'],
   ['Sprint', 'Shift'],
   ['Hard sprint', 'Double-tap Shift'],
   ['Crouch and slide', 'Ctrl or C'],
@@ -355,8 +357,11 @@ const CONTROLS = [
   // playtest: "I have no idea how you finish places."
   ['Use, get in the car', 'E'],
   ['Claim a place', 'hold E'],
-  ['Horn / radio', 'H / T'],
-  ['Locate car', 'L or car icon'],
+  // D5: H is the car's one key. At the wheel it is the horn; on foot the car answers from
+  // where it is (a honk, a headlamp flash, the bearing on the reticle). KeyL is unbound.
+  ['Horn · call the car from outside', 'H'],
+  ['Radio (driving)', 'T'],
+  ['Find the car', 'H on foot, or the car icon'],
   ['Torch', 'F'],
   // ROUND 7. Alex, fifth playtest: "I don't know if there's a map or conquered destinations
   // or something." There is, and it is behind this key, and the card that says so is the one
@@ -741,9 +746,16 @@ export class Hud {
     this.inCar = false;
     this.ammo = -1; this.reserve = -1; this.mag = 1; this.weaponId = '';
     this.reloadFrac = -1; this._ammoDirty = true; this._ammoLabel = '';
-    // HANDS 0 'Active': where the window sits on the reload arc, and whether the one attempt
-    // has been spent. Both -1 / false whenever no node has put a window on this reload.
-    this.winA = -1; this.winB = -1; this.winUsed = false;
+    // The active-reload window (base since D2): where it sits on the reload arc, whether the
+    // one attempt has been spent, and whether it HIT (the band goes gold instead of dim).
+    this.winA = -1; this.winB = -1; this.winUsed = false; this.winHit = false;
+    // C21: the stance and the states weapon.js exposes. lowerT 0..1 dims and slashes the box
+    // (X's toggle, and the shop's low-ready); primed is hands_1's warm glimmer; dryFlash is
+    // the 0.3 s flash on a dry click. arsenal is one mark per owned gun (slot digit), the
+    // held one bright — a pooled array of ids, never rebuilt per frame.
+    this.lowered = false; this.lowerT = 0; this.primed = false; this._primedQ = -1;
+    this.dryFlash = 0; this.heldId = '';
+    this._arsenal = ['', '', '', '', '', '']; this._arsenalN = 0;
     this.hp = CFG.player.health.max;
     this.hpMax = CFG.player.health.max;     // the body's own maximum; see _readHpMax()
     this.hpShown = CFG.player.health.max;   // lags hp by READOUT_LEAD_S
@@ -896,7 +908,7 @@ export class Hud {
     carButton.hidden = true;      // ROUND 13: no car, no button (see _setLocatorDisabled)
     carButton.setAttribute('aria-label', 'Locate car');
     carButton.setAttribute('aria-pressed', 'false');
-    carButton.setAttribute('aria-keyshortcuts', 'L');
+    carButton.setAttribute('aria-keyshortcuts', 'H');
     const carBody = document.createElement('span');
     carBody.className = 'car-body';
     carBody.setAttribute('aria-hidden', 'true');
@@ -904,11 +916,13 @@ export class Hud {
     carNeedle.className = 'car-needle';
     carNeedle.setAttribute('aria-hidden', 'true');
     // Alex had to ask whether a keyboard button existed. A hidden binding is no binding:
-    // the live car icon now carries the same L printed by the pause card.
+    // the live car icon carries the same key the pause card prints. D5: H, the horn — on
+    // foot it calls the car (round 8 chose L only because this icon is unreachable under
+    // pointer lock, and L meant nothing).
     const carKey = document.createElement('span');
     carKey.className = 'car-key';
     carKey.setAttribute('aria-hidden', 'true');
-    carKey.textContent = 'L';
+    carKey.textContent = 'H';
     carButton.appendChild(carNeedle);
     carButton.appendChild(carBody);
     carButton.appendChild(carKey);
@@ -1309,7 +1323,7 @@ export class Hud {
     pauseCar.hidden = true;
     pauseCar.setAttribute('aria-label', 'Locate car and return to game');
     pauseCar.setAttribute('aria-pressed', 'false');
-    pauseCar.setAttribute('aria-keyshortcuts', 'L');
+    pauseCar.setAttribute('aria-keyshortcuts', 'H');
     const pauseCarBody = el('span', 'car-body');
     pauseCarBody.setAttribute('aria-hidden', 'true');
     pauseCar.appendChild(pauseCarBody);
@@ -2432,7 +2446,13 @@ export class Hud {
     }
   }
 
-  /** The icon button is the whole request: one press arms one temporary car bearing. */
+  /**
+   * The icon button is the whole request: one press arms one temporary car bearing. Every
+   * path lands here — the H key on foot, the live icon, the pause card's car — so this is
+   * also where the car is TOLD (C8 'car:locate', no payload): vehicle/car.js answers with
+   * a positional honk from where it is and a headlamp flash. Emitted after arming, so a
+   * listener that reads the HUD's locator state sees it armed.
+   */
   _locateCar() {
     const car = this.ctx.systems.get('car');
     const inCar = !!(this.ctx.shared && this.ctx.shared.inCar);
@@ -2441,6 +2461,7 @@ export class Hud {
     this._setLocatorActive(true);
     this._dirty = true;
     this._miniDirty = true;
+    if (this.ctx.bus && typeof this.ctx.bus.emit === 'function') this.ctx.bus.emit('car:locate');
     return true;
   }
 
@@ -2749,15 +2770,29 @@ export class Hud {
     g.lineTo(W - 12, H - 2); g.lineTo(4, H - 2); g.lineTo(4, 18); g.closePath(); g.fill();
     g.strokeStyle = 'rgba(198,214,234,0.30)'; g.lineWidth = 1; g.stroke();
 
+    // C21, hands_1 'Primed': a warm glimmer while every round is the strong one. A slow
+    // breath (3.2 rad/s) on a gold wash inside the box plus a gold inner rule, so it reads
+    // as the box being LIT, not as a warning. Ticks and the count go gold below.
+    const primedA = this.primed ? 0.55 + 0.45 * Math.sin((this.ctx.time && this.ctx.time.t || 0) * 3.2) : 0;
+    if (primedA > 0) {
+      g.fillStyle = 'rgba(240,200,120,' + (0.06 + 0.10 * primedA).toFixed(3) + ')';
+      g.beginPath(); g.moveTo(18, 3); g.lineTo(W - 2, 3); g.lineTo(W - 2, H - 10);
+      g.lineTo(W - 12, H - 2); g.lineTo(4, H - 2); g.lineTo(4, 18); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(255,214,120,' + (0.35 + 0.45 * primedA).toFixed(3) + ')'; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(19, 5); g.lineTo(W - 4, 5); g.lineTo(W - 4, H - 11);
+      g.lineTo(W - 13, H - 4); g.lineTo(6, H - 4); g.lineTo(6, 19); g.closePath(); g.stroke();
+    }
+    const gold = primedA > 0;
+
     // A cartridge silhouette makes the two numbers ammunition before either is read.
-    g.strokeStyle = INK; g.lineWidth = 1.3; g.globalAlpha = this.ammo <= 0 ? 0.42 : 0.78;
+    g.strokeStyle = gold ? 'rgba(255,226,160,0.98)' : INK; g.lineWidth = 1.3; g.globalAlpha = this.ammo <= 0 ? 0.42 : 0.78;
     g.beginPath(); g.roundRect(13, 17, 8, 25, 3); g.stroke();
     g.beginPath(); g.moveTo(13, 22); g.lineTo(21, 22); g.stroke();
     g.globalAlpha = 1;
 
     g.textBaseline = 'alphabetic'; g.textAlign = 'left';
     g.font = '700 30px ui-monospace, Consolas, monospace';
-    g.fillStyle = this.ammo <= 0 ? 'rgba(232,238,248,0.98)' : INK;
+    g.fillStyle = this.ammo <= 0 ? 'rgba(232,238,248,0.98)' : gold ? 'rgba(255,226,160,0.98)' : INK;
     g.fillText(String(Math.max(0, this.ammo)), 31, 39);
     g.font = '500 12px ui-monospace, Consolas, monospace';
     g.fillStyle = 'rgba(201,214,232,0.68)';
@@ -2766,17 +2801,18 @@ export class Hud {
     const segments = 8;
     const live = Math.ceil(clamp01(this.ammo / Math.max(1, this.mag)) * segments);
     for (let i = 0; i < segments; i++) {
-      g.fillStyle = i < live ? 'rgba(218,229,244,0.78)' : 'rgba(95,112,136,0.20)';
+      g.fillStyle = i < live ? (gold ? 'rgba(255,218,140,0.92)' : 'rgba(218,229,244,0.78)') : 'rgba(95,112,136,0.20)';
       g.fillRect(31 + i * 12, 48, 8, i < live ? 3 : 2);
     }
     if (this.reloadFrac >= 0) {
       // THE WINDOW FIRST, UNDER the sweep: a fatter, warmer band sitting on the arc where the
-      // moment is, so the white hand runs visibly toward it. Drawn only while the node has
-      // put a window on this reload, and dimmed once the one attempt has been spent — a band
-      // still lit after you have taken your shot is a target that lies.
+      // moment is, so the white hand runs visibly toward it. Base on every reload since D2.
+      // Spent and HIT: the band goes bright gold for the rest of the reload (the click was
+      // taken). Spent and missed: dimmed — a band still lit after your one press is a
+      // target that lies.
       if (this.winB > this.winA) {
-        g.strokeStyle = this.winUsed ? 'rgba(240,212,154,0.22)' : 'rgba(240,212,154,0.85)';
-        g.lineWidth = 4;
+        g.strokeStyle = this.winUsed ? (this.winHit ? 'rgba(255,214,120,0.98)' : 'rgba(240,212,154,0.22)') : 'rgba(240,212,154,0.85)';
+        g.lineWidth = this.winUsed && this.winHit ? 5 : 4;
         g.beginPath();
         g.arc(17, 29.5, 14, -Math.PI * 0.5 + TAU * this.winA, -Math.PI * 0.5 + TAU * this.winB);
         g.stroke();
@@ -2784,9 +2820,55 @@ export class Hud {
       g.strokeStyle = 'rgba(232,238,248,0.92)'; g.lineWidth = 2;
       g.beginPath(); g.arc(17, 29.5, 14, -Math.PI * 0.5, -Math.PI * 0.5 + TAU * this.reloadFrac); g.stroke();
     }
+
+    // C21, the arsenal strip: one mark per owned gun with its slot digit (1-4 are the keys,
+    // weapon.js slot(n) is owned[n]), the held one bright, in the box's top-right corner
+    // above the count. No words: a second mark appearing when a gun is bought is the whole
+    // lesson. Right-aligned so one gun and four sit on the same edge.
+    if (this._arsenalN > 0) {
+      const mw = 11, mh = 9, gap = 3, y = 6;
+      let x = W - 6 - mw;
+      g.font = '700 8px ui-monospace, Consolas, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      for (let i = this._arsenalN - 1; i >= 0; i--) {
+        const held = this._arsenal[i] === this.heldId && this.heldId !== '';
+        g.beginPath(); g.roundRect(x, y, mw, mh, 2);
+        if (held) {
+          g.fillStyle = gold ? 'rgba(255,226,160,0.96)' : 'rgba(232,238,248,0.94)'; g.fill();
+          g.fillStyle = 'rgba(6,9,14,0.95)';
+        } else {
+          g.strokeStyle = 'rgba(198,214,234,0.42)'; g.lineWidth = 1; g.stroke();
+          g.fillStyle = 'rgba(201,214,232,0.58)';
+        }
+        g.fillText(String(i + 1), x + mw * 0.5, y + mh * 0.5 + 0.5);
+        x -= mw + gap;
+      }
+      g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    }
+
+    // C21, the dry click: a pale wash over the whole box for 0.3 s, fading with weapon.js's
+    // dryFlashT, so an empty gun answers a pull on the instrument as well as in the hands.
+    if (this.dryFlash > 0) {
+      g.fillStyle = 'rgba(232,238,248,' + (0.42 * this.dryFlash).toFixed(3) + ')';
+      g.beginPath(); g.moveTo(18, 3); g.lineTo(W - 2, 3); g.lineTo(W - 2, H - 10);
+      g.lineTo(W - 12, H - 2); g.lineTo(4, H - 2); g.lineTo(4, 18); g.closePath(); g.fill();
+    }
+
+    // C21, the stance: LOWERED dims the box and puts a slash through the cartridge, scaled
+    // by lowerT so the quarter-second of travel is drawn as travel. An instrument that
+    // goes dark says "not ready" before a swallowed click has to.
+    if (this.lowerT > 0.001) {
+      const k = this.lowerT;
+      g.fillStyle = 'rgba(4,7,11,' + (0.52 * k).toFixed(3) + ')';
+      g.beginPath(); g.moveTo(18, 3); g.lineTo(W - 2, 3); g.lineTo(W - 2, H - 10);
+      g.lineTo(W - 12, H - 2); g.lineTo(4, H - 2); g.lineTo(4, 18); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(232,238,248,' + (0.30 + 0.55 * k).toFixed(3) + ')'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(9, 45); g.lineTo(9 + 17 * k, 45 - 31 * k); g.stroke();
+    }
     const label = (this.weaponId || 'Weapon') + ': ' + Math.max(0, this.ammo)
       + ' in magazine, ' + Math.max(0, this.reserve) + ' reserve'
-      + (this.reloadFrac >= 0 ? ', reloading' : '');
+      + (this.reloadFrac >= 0 ? ', reloading' : '')
+      + (this.lowered ? ', lowered' : '') + (this.primed ? ', primed' : '')
+      + (this._arsenalN > 1 ? ', ' + this._arsenalN + ' guns' : '');
     if (label !== this._ammoLabel && this.ammoCanvas) {
       this._ammoLabel = label;
       this.ammoCanvas.setAttribute('aria-label', label);
@@ -2833,9 +2915,13 @@ export class Hud {
       inp.unlockedPlay = false;
       if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock();
     }
-    // KeyL is not a private HUD listener. It is the canonical carlocate action, latched by
-    // engine/input.js and consumed here on the same fixed-step edge as torch/menu.
-    if (inp && inp.pressed && inp.pressed('carlocate') && !this.paused && this.ctx.playing) {
+    // D5: H ON FOOT calls the car. 'horn' is the canonical input action (engine/input.js
+    // KeyH), read by car.js only while seated, so out of the car the same edge is free and
+    // means the same thing — the car's voice. 'carlocate' stays as the action the icon and
+    // the test door press (KeyL is unbound). Consumed here on the same fixed-step edge as
+    // torch/menu; never a private key listener.
+    if (inp && inp.pressed && !this.paused && this.ctx.playing
+      && (inp.pressed('carlocate') || (inp.pressed('horn') && !(this.ctx.shared && this.ctx.shared.inCar)))) {
       this._locateCar();
     }
 
@@ -2959,6 +3045,8 @@ export class Hud {
       if (this.ammo !== 0 || this.reserve !== 0 || this.weaponId) {
         this.ammo = 0; this.reserve = 0; this.mag = 1; this.weaponId = '';
         this.reloadFrac = -1; this._ammoDirty = true;
+        this.lowered = false; this.lowerT = 0; this.primed = false; this.dryFlash = 0;
+        this.heldId = ''; this._arsenalN = 0; this.winHit = false;
       }
       return;
     }
@@ -2987,14 +3075,45 @@ export class Hud {
       winA = clamp01(r.activeFrom / dur); winB = clamp01(r.activeTo / dur);
     }
     const used = !!(r && r.activeUsed);
+    const hit = !!(r && r.activeHit);
     if (ammo !== this.ammo || reserve !== this.reserve || mag !== this.mag
       || weaponId !== this.weaponId || Math.abs(reload - this.reloadFrac) > 0.01
-      || winA !== this.winA || winB !== this.winB || used !== this.winUsed) {
+      || winA !== this.winA || winB !== this.winB || used !== this.winUsed || hit !== this.winHit) {
       this.ammo = ammo; this.reserve = reserve; this.mag = mag;
       this.weaponId = weaponId; this.reloadFrac = reload;
-      this.winA = winA; this.winB = winB; this.winUsed = used;
+      this.winA = winA; this.winB = winB; this.winUsed = used; this.winHit = hit;
       this._ammoDirty = true;
     }
+    // C21. The stance: lowerT runs 0..1 over a quarter second, so it is quantised to 1/25
+    // steps before it counts as a change — ~7 repaints per lower, not 15.
+    const lowered = !!w.lowered;
+    const lowerT = typeof w.lowerT === 'number' ? clamp01(w.lowerT) : (lowered ? 1 : 0);
+    if (lowered !== this.lowered || Math.abs(lowerT - this.lowerT) > 0.04 || (lowerT !== this.lowerT && (lowerT === 0 || lowerT === 1))) {
+      this.lowered = lowered; this.lowerT = lowerT; this._ammoDirty = true;
+    }
+    // The primed glimmer breathes, so while primed the box repaints at 20 Hz on the clock's
+    // phase; the instant it is spent (a new reload) it repaints once and rests.
+    const primed = !!w.primed;
+    if (primed !== this.primed) { this.primed = primed; this._primedQ = -1; this._ammoDirty = true; }
+    if (primed) {
+      const q = Math.floor((this.ctx.time && this.ctx.time.t || 0) * 20);
+      if (q !== this._primedQ) { this._primedQ = q; this._ammoDirty = true; }
+    }
+    // The dry-click flash: 0.3 s, decaying in weapon.js; repainted in 1/30 s steps.
+    const dryFlash = typeof w.dryFlashT === 'number' && w.dryFlashT > 0 ? Math.min(1, w.dryFlashT / 0.3) : 0;
+    if (Math.abs(dryFlash - this.dryFlash) > 0.03 || (dryFlash === 0 && this.dryFlash !== 0)) {
+      this.dryFlash = dryFlash; this._ammoDirty = true;
+    }
+    // The arsenal: owned ids in slot order (weapon.js slot(n) is owned[n]) and the held id.
+    // Compared element by element against the pooled copy; nothing is allocated.
+    const owned = w.owned, heldId = w.def && w.def.id ? String(w.def.id) : '';
+    const n = owned && owned.length ? Math.min(owned.length, this._arsenal.length) : 0;
+    let changed = n !== this._arsenalN || heldId !== this.heldId;
+    for (let i = 0; i < n; i++) {
+      const id = owned[i] == null ? '' : String(owned[i]);
+      if (id !== this._arsenal[i]) { this._arsenal[i] = id; changed = true; }
+    }
+    if (changed) { this._arsenalN = n; this.heldId = heldId; this._ammoDirty = true; }
     this.conePx = this._conePx(this.cone);
   }
 
@@ -3467,8 +3586,12 @@ export class Hud {
       ammo: {
         weapon: this.weaponId, magazine: this.ammo, reserve: this.reserve, cap: this.mag,
         reloading: this.reloadFrac >= 0, reloadFrac: +Math.max(0, this.reloadFrac).toFixed(3),
-        // HANDS 0's window, as it is DRAWN. -1/-1 means the arc carries no band.
-        winA: +this.winA.toFixed(3), winB: +this.winB.toFixed(3), winUsed: this.winUsed,
+        // The reload window, as it is DRAWN. -1/-1 means the arc carries no band.
+        winA: +this.winA.toFixed(3), winB: +this.winB.toFixed(3), winUsed: this.winUsed, winHit: this.winHit,
+        // C21: the stance and the arsenal, as painted.
+        lowered: this.lowered, lowerT: +this.lowerT.toFixed(3), primed: this.primed,
+        dryFlash: +this.dryFlash.toFixed(3), held: this.heldId,
+        arsenal: this._arsenal.slice(0, this._arsenalN),
       },
       minimap: {
         visible: !!(this.chrome && !this.chrome.hidden), paints: this._miniPaints,

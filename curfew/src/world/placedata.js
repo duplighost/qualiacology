@@ -497,10 +497,12 @@ export const MAJORS = Object.freeze([
     flat: { radius: 52, blend: 0.62 },
     approach: { x: 0, z: 31, w: 15, h: 11.8, style: 'great-tree', routeX: 0, routeZ: 20 },
     discoverR: 32, nearR: 120, horizon: true,
-    // Out on the deck's east shoulder, clear of the trunk and close enough to the edge
-    // that its high lamp reads from the yard below. The original x=2.4 position was
-    // inside the trunk's visible taper and the deck lip hid the glint from the ground.
-    claim: { how: 'touch', dx: 4.2, dy: 12.9, dz: 0.6, r: 2.6 },
+    // On the crown deck's ring (r 3.7..9.0 round the trunk), 1.4 m inside the outer rail on
+    // the east side. places.js FIXTURE_FACE turns the plate to face the trunk (-X), so the
+    // stair delivers you to its front with 3.6 m of boards before the bark, and its lamp
+    // still reads from the yard through the rail. lore-lookout.js and lore-records.js read
+    // this point; sites.js's cage stands 0.75 m behind it.
+    claim: { how: 'touch', dx: 7.6, dy: 12.9, dz: 0.6, r: 2.6 },
     xpFind: 40, xpClaim: 220, startClaimed: false,
   },
   {

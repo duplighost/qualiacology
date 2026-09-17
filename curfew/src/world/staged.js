@@ -1037,6 +1037,12 @@ export const STAGED_BUILDERS = {
     // the dead one, dark
     const dp = put(2.16, -0.60);
     k.solid.box(0.34, 0.26, 0.10, dp.x, gy + 0.74, dp.z, shade(C.dark, 0.8), yaw + Math.PI * 0.5);
+    // D13 / C16: a gas can set down behind the car, clear of its 2.2 m collider, on the side
+    // the verge sees. The occupant never got to use it. places' minor api owns the flag.
+    {
+      const g = put(-2.75, 0.8);
+      api.registerGasCan?.(g.x, g.z, gy, undefined, yaw + Math.PI * 0.5);
+    }
 
     // the track it pulled onto, and what is lying on it
     for (let i = 0; i < 5; i++) {

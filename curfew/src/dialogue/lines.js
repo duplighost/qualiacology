@@ -191,4 +191,13 @@ export function readingTime(text) {
   return Math.max(2.4, (text ? text.length : 0) / 16);
 }
 
+/**
+ * D10: THE REST AFTER THE LAST LINE. A person who has said everything goes dark — no prompt
+ * at all — for the last line's reading time, the 0.35 s fade, and this; then the conversation
+ * is readable again from the first line. Eight seconds: long enough that nobody re-triggers by
+ * accident while the words are still fading, short enough that walking away and back finds
+ * them ready. The rhythm lives here with readingTime so every mouth in the county keeps it.
+ */
+export const REST_AFTER_S = 8;
+
 export default LINES;

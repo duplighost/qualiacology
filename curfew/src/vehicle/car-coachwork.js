@@ -243,7 +243,10 @@ export function buildCoachwork(spec){
     // 1.4 Hz in the corner of the windscreen for the whole of a long limp home, which is the
     // visual half of what Alex heard as nagging. 1.6 rad/s is a slow swell you notice and
     // then live with, and the colour still carries the difference between bad and finished.
-    setCondition(t,time=0){conditionNeedle.rotation.z=(1.17-1.34*clamp(t))*Math.PI-Math.PI/2;warning.visible=t<.45;warnMat.color.setHex(t<.2?0xff381e:0xe69b2c);warning.scale.setScalar(t<.2?.94+Math.sin(time*1.6)*.10:1);},
+    // D12: it breathes ONLY inside the failure window (`failing`: car.js _stepFailureWindow,
+    // wear 0.92 to the stall, ~35 s), where the swell is bounded, and it KICKS with each
+    // cough (`kick` 1 -> 0 over 0.45 s). Under 0.20 it is red and still: bad, not finished.
+    setCondition(t,time=0,kick=0,failing=false){conditionNeedle.rotation.z=(1.17-1.34*clamp(t))*Math.PI-Math.PI/2;warning.visible=t<.45;warnMat.color.setHex(t<.2?0xff381e:0xe69b2c);warning.scale.setScalar((failing?.94+Math.sin(time*1.6)*.10:1)+clamp(kick)*.36);},
     setMotion(speed,boost,boosting,time,shield=3){speedNeedle.rotation.z=(1.17-1.34*clamp(Math.abs(speed)/42))*Math.PI-Math.PI/2;fittings.animate(boost,boosting,time,shield);},
     /** FUNERAL PEAL: the bell under the bumper brightens while the horn is held. */
     setPealCharge(k){fittings.pealCharge(k);},
@@ -253,7 +256,8 @@ export function buildCoachwork(spec){
     /** The pour's receipt: a warm sheen over enamel and chrome, 0..1. */
     setGlimmer(k){surfaces.glimmer?.(k);},
     setDoor(t){door.rotation.y=-clamp(t)*openMax;},
-    setCabin(level){warm.emissiveIntensity=.12+clamp(level)*.60;},
+    /** `dim` 0..1 takes that much off the whole strip, base included (HORROR 4: the roof beat). */
+    setCabin(level,dim=0){warm.emissiveIntensity=(.12+clamp(level)*.60)*(1-clamp(dim));},
     dispose(){geometries.forEach(g=>g.dispose());extraMaterials.forEach(m=>m.dispose());surfaces.dispose();root.removeFromParent();},
   };
 }

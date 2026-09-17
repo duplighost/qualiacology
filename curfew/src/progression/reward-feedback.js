@@ -2,13 +2,17 @@ import * as THREE from 'three';
 
 const STYLE=`
 #reward-receipt{position:fixed;top:19%;left:50%;transform:translate(-50%,12px);width:min(620px,75vw);padding:20px 28px 22px;box-sizing:border-box;text-align:center;background:linear-gradient(90deg,#08101900,#081019ec 14%,#081019ec 86%,#08101900);border-top:1px solid #d2bd7855;color:#eef1e7;pointer-events:none;opacity:0;transition:opacity .25s,transform .25s;z-index:22;font-family:Segoe UI,Arial,sans-serif}
-#reward-receipt.show{opacity:1;transform:translate(-50%,0)}#reward-receipt .reward-title{font-size:23px;font-weight:500;letter-spacing:.045em}#reward-receipt .reward-items{display:flex;justify-content:center;gap:28px;margin-top:13px;flex-wrap:wrap;font:600 17px/1.5 Consolas,monospace}#reward-receipt .reward-items span{animation:receipt-in .4s both}#reward-receipt .reward-items .coins{color:#f0d17d}#reward-receipt .reward-items .xp{color:#a6e0e9}#reward-receipt .reward-detail{color:#b7c5c6;font-size:13px;line-height:1.55;margin-top:10px;white-space:pre-line}#reward-receipt .finish{color:#e6c4e9;border:1px solid #c0a3c35c;padding:6px 12px;font:14px/1.4 Segoe UI,Arial,sans-serif}#reward-receipt .reward-items .part{color:#d6dbe0;border:1px solid #9aa4ad5c;padding:6px 12px;font:14px/1.4 Segoe UI,Arial,sans-serif}
+#reward-receipt.show{opacity:1;transform:translate(-50%,0)}#reward-receipt .reward-title{font-size:23px;font-weight:500;letter-spacing:.045em}#reward-receipt .reward-items{display:flex;justify-content:center;gap:28px;margin-top:13px;flex-wrap:wrap;font:600 17px/1.5 Consolas,monospace}#reward-receipt .reward-items span{animation:receipt-in .4s both}#reward-receipt .reward-items .coins{color:#f0d17d}#reward-receipt .reward-items .xp{color:#a6e0e9}#reward-receipt .reward-detail{color:#b7c5c6;font-size:13px;line-height:1.55;margin-top:10px;white-space:pre-line}#reward-receipt .finish{color:#e6c4e9;border:1px solid #c0a3c35c;padding:6px 12px;font:14px/1.4 Segoe UI,Arial,sans-serif}#reward-receipt .reward-items .part{color:#d6dbe0;border:1px solid #9aa4ad5c;padding:6px 12px;font:14px/1.4 Segoe UI,Arial,sans-serif}#reward-receipt .reward-items .gas{color:#f0b47d}
 @keyframes receipt-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
 `;
 const make=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls||'';if(text!==undefined)el.textContent=text;return el;};
 export class RewardFeedback{
  static id='reward-feedback';
- constructor(ctx){this.ctx=ctx;this.off=[];this.queue=[];this.active=null;this.tokens=[];this.time=0;this.tone=0;}
+ // D11: one ui tone per receipt, and none when receipts arrive on top of each other. The
+ // world-bus xp_gain from progress already answered the pickup; the receipt's tone is the
+ // card sliding in, not a second payment. Two timestamps: when this receipt started and
+ // when the one before it did.
+ constructor(ctx){this.ctx=ctx;this.off=[];this.queue=[];this.active=null;this.tokens=[];this.time=0;this.tone=0;this.lastStartAt=-1e9;this.prevStartAt=-1e9;}
  _sys(id){return this.ctx.systems.get(id);}
  init(){
   this.style=make('style');this.style.textContent=STYLE;document.head.append(this.style);this.panel=make('div');this.panel.id='reward-receipt';this.panel.setAttribute('role','status');this.panel.setAttribute('aria-live','polite');document.body.append(this.panel);
@@ -55,12 +59,15 @@ export class RewardFeedback{
  _start(p){
   this.active=p;this.panel.replaceChildren(make('div','reward-title',p.title||'Supplies found'));const items=make('div','reward-items');
   const add=(cls,text)=>{const node=make('span',cls,text);node.style.animationDelay=items.childElementCount*.22+'s';items.append(node);};
-  if(p.cash>0)add('coins','◉  +'+p.cash+' COINS');if(p.xp>0)add('xp','◆  +'+p.xp+' XP');if(p.ammo>0)add('ammo','▰  +'+p.ammo+' AMMO');if(p.bulbs>0)add('coins','☼  +'+p.bulbs+' BULB'+(p.bulbs===1?'':'S'));if(p.finish)add('finish',p.finish+' · WEAPON FINISH');if(p.part)add('part',p.part+' · CAR PART');this.panel.append(items,make('div','reward-detail',p.detail||'Added to your inventory.'));this.panel.classList.add('show');p.nextTone=0;
+  if(p.cash>0)add('coins','◉  +'+p.cash+' COINS');if(p.xp>0)add('xp','◆  +'+p.xp+' XP');if(p.ammo>0)add('ammo','▰  +'+p.ammo+' AMMO');if(p.bulbs>0)add('coins','☼  +'+p.bulbs+' BULB'+(p.bulbs===1?'':'S'));if(p.gas>0)add('gas','▮  +'+p.gas+' GAS');if(p.finish)add('finish',p.finish+' · WEAPON FINISH');if(p.part)add('part',p.part+' · CAR PART');this.panel.append(items,make('div','reward-detail',p.detail||'Added to your inventory.'));this.panel.classList.add('show');p.nextTone=0;
  }
  step(dt){
   if(!this.ctx.playing||this.ctx.paused){this.panel.style.visibility='hidden';return;}this.panel.style.visibility='';this.time+=dt;
-  if(this.active){const p=this.active;p.age+=dt;if(!p.quiet&&p.nextTone<3&&p.age>.5+p.nextTone*.42){this._sys('progress')?._chimeUI?.('xp_gain',1.04+p.nextTone*.17,p.boss?.28:.18);p.nextTone++;}if(p.age>p.life-.5)this.panel.classList.remove('show');if(p.age>=p.life)this.active=null;}
-  if(!this.active&&this.queue.length)this._start(this.queue.shift());
+  // D11: ONE tone, 0.5 s in (the card is on screen by then), and none at all when the
+  // previous receipt started under 3 s ago — three ascending copies per receipt, times a
+  // queue, was "the little melody that plays too many times".
+  if(this.active){const p=this.active;p.age+=dt;if(!p.quiet&&p.nextTone<1&&p.age>.5&&p.age<p.life){p.nextTone=1;if(this.lastStartAt-this.prevStartAt>=3)this._sys('progress')?._chimeUI?.('xp_gain',1.12,p.boss?.24:.14);}if(p.age>p.life-.5)this.panel.classList.remove('show');if(p.age>=p.life)this.active=null;}
+  if(!this.active&&this.queue.length){this.prevStartAt=this.lastStartAt;this.lastStartAt=this.time;this._start(this.queue.shift());}
   const camera=this.ctx.camera;if(!camera)return;camera.getWorldDirection(this.aim);this.point.copy(camera.position).addScaledVector(this.aim,1.7);this.right.setFromMatrixColumn(camera.matrixWorld,0);this.point.addScaledVector(this.right,-1.1);this.point.y+=.38;const counts=[0,0,0,0];
   // A PART goes to the CAR, not to your hands: it is the thing being fitted. Recomputed every
   // step so a car that is rolling is still the target. No car within 150 m and it flies to

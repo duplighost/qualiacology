@@ -15,6 +15,9 @@ export class CarriedLightAuditor {
     this.ctx=ctx; this.dread=dread; this.root=new THREE.Group(); this.root.name='the-auditor';
     this.root.visible=false; dread.root.add(this.root); this.off=[]; this.geos=[]; this.mats=[];
     this.tier=0; this.seenTier=0; this.search=0; this.closing=0; this.seen=false; this.count=0;
+    // horror 14: it is HEARD counting. Three dry footfalls at the table on arrival, then the
+    // room goes quiet (the count is the silence); one footfall every 25 s while it sits.
+    this.stepsLeft=0; this.stepT=0; this.seatT=0; this.ducked=false;
     const material=color=>{const m=dread.matBase.clone();m.color.setHex(color);this.mats.push(m);return m;};
     const dark=material(0x0b1012), wood=material(0x28221e), pale=material(0x676859), paper=material(0xb8ae8d);
     const add=(geo,mat,parent=this.root)=>{this.geos.push(geo);const mesh=new THREE.Mesh(geo,mat);parent.add(mesh);return mesh;};
@@ -37,10 +40,30 @@ export class CarriedLightAuditor {
     add(box(.235,.012,.32,.118,0,0),paper,this.cover);
     this.off.push(ctx.bus.on('xp:banked',()=>this.close()));
     this.off.push(ctx.bus.on('player:died',()=>this.close()));
-    this.off.push(ctx.bus.on('save:loaded',()=>{this.root.visible=false;this.tier=0;this.seenTier=0;this.search=0;}));
+    this.off.push(ctx.bus.on('save:loaded',()=>{this.root.visible=false;this.tier=0;this.seenTier=0;this.search=0;this._duck(1);}));
   }
   _sys(id){return this.ctx.systems?.get(id);}
-  close(){this.seenTier=0;this.tier=0;if(this.root.visible)this.closing=1.25;}
+  close(){
+    this.seenTier=0;this.tier=0;
+    if(this.root.visible&&!this.closing){
+      this.closing=1.25;
+      // horror 14: the book shuts and the chair goes; 'withdraw' from the table is the edge of it.
+      const p=this.root.position;this.dread.answer('withdraw',p.x,p.y+1.0,p.z,.5);
+      this._duck(1);
+    }
+  }
+  _footfall(){const p=this.root.position;this.dread.answer('footfall',p.x,p.y+.1,p.z,.35);}
+  // The room's own music comes down to k while it sits in a REFUGE room (audio.refugeMusic
+  // owns that bus; a yard or a campfire has no room music to duck). 1 restores. Never on a
+  // system that has not shipped the door.
+  _duck(k){
+    const rm=this._sys('audio')?.refugeMusic;
+    if(!rm||typeof rm.duck!=='function')return;
+    if(k<1&&!(this.site&&String(this.site).endsWith(':refuge')))return;
+    const want=k<1;
+    if(want===this.ducked)return;
+    rm.duck(k);this.ducked=want;
+  }
   _site(pos){
     const places=this._sys('places'), terrain=this._sys('terrain'), col=this._sys('collision');
     const candidates=[];
@@ -77,11 +100,24 @@ export class CarriedLightAuditor {
         this.root.position.set(site.x,site.y,site.z);this.root.rotation.y=site.yaw;
         this.root.visible=true;this.site=site.id;this.tier=tier;this.seenTier=tier;this.seen=false;this.closing=0;
         this.cover.rotation.z=0;
+        this.stepsLeft=3;this.stepT=0;this.seatT=0;this._duck(.35);
       }}
     }
     if(!this.root.visible)return;
     if(!this.closing&&tier===0)this.close();
     this.count+=dt;
+    if(!this.closing){
+      if(this.stepsLeft>0){
+        this.stepT-=dt;
+        if(this.stepT<=0){
+          this._footfall();this.stepsLeft--;this.stepT=.9;
+          if(this.stepsLeft===0)this.dread.hush(3.2,this.root.position.x,this.root.position.z);
+        }
+      }else{
+        this.seatT+=dt;
+        if(this.seatT>=25){this.seatT=0;this._footfall();}
+      }
+    }
     for(const hand of this.hands)hand.position.y=Math.max(0,Math.sin(this.count*1.8+hand.userData.side*.6))*.012;
     if(!this.seen&&this.dread.watching(this.root.position.x,this.root.position.y+1.6,this.root.position.z,.82,85)){
       this.seen=true;this.ctx.bus.emit('lore:sighting',{species:'auditor'});
@@ -92,7 +128,7 @@ export class CarriedLightAuditor {
       for(const m of this.mats)m.opacity=Math.min(1,this.closing/.35);
       if(this.closing<=0){this.root.visible=false;for(const m of this.mats)m.opacity=1;}
     }else if(Math.hypot(pos.x-this.root.position.x,pos.z-this.root.position.z)>150){
-      this.root.visible=false;this.seenTier=0;this.search=3;
+      this.root.visible=false;this.seenTier=0;this.search=3;this._duck(1);
     }
   }
   state(){return{visible:this.root.visible,tier:this.tier,site:this.site||null,closing:this.closing>0};}

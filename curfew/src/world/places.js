@@ -414,6 +414,10 @@ const FIXTURE_FACE = Object.freeze({
   'relay': [0,-1],               // the actual cabinet face, approached from its raised slab
   'garden-of-rest': [0, -1],      // the lamp in front of the far mausoleum's door: face the graves
   'avery-house': [1, 0],          // the basement fuse box is approached from the boiler room's west side
+  // The crown deck is an annulus round the trunk and the stair delivers you onto it from
+  // the trunk side; the plate faces the trunk so there are three metres of deck in front
+  // of it and the yard lamp hangs over the boards you stand on, not over the drop.
+  'great-tree': [-1, 0],
 });
 // The beat's ripple: the site's lamps ignite outward from the fixture over RIPPLE_S, each
 // vertex of the merged glow geometry fading in over RIPPLE_EDGE once its turn comes. Per-
@@ -548,6 +552,10 @@ const FX_BRASS = [0.40, 0.29, 0.11];      // the lever's blade and knob
 // the one pale thing on the fixture. This is a SHAPE fix, not a brightness fix: nothing here
 // gets brighter, the background gets darker.
 const FX_BOARD = [0.010, 0.010, 0.012];   // the backboard and its cheeks: matte, nearly black
+// D18: a bulb bead's vertex colour. 2.2 x GLOW.lamp's luma 0.73 = 1.6, over post.js's 1.05
+// bloom threshold; the glint's breath scales it through the material opacity, so the bulb
+// blooms at the peak of the breath and rests at its trough, which is what a pilot does.
+const BULB_HDR = 2.2;
 
 function fxColour(geo, r, g, b) {
   const n = geo.attributes.position.count;
@@ -629,7 +637,12 @@ function fixtureGlint(y, sc = 1) {
   // to nothing at its top, ~15 x 23 px at 30 m.
   const bead = new THREE.SphereGeometry(0.11 * sc, 10, 7);
   bead.translate(0, y, 0);
-  parts.push(fxColour(bead, 1, 1, 1));
+  // D18: the bead is an HDR CORE. matGlow is additive and unlit, so a vertex colour of 1.0
+  // times GLOW.lamp lands at HDR 1.0 — under UnrealBloom's 1.05 threshold, which is why no
+  // lamp in the county ever bloomed and every one read as a soft smudge. BULB_HDR puts the
+  // 0.11 m bead over the threshold (luma 0.73 x 2.2 = 1.6) so bloom draws a real bulb; the
+  // halo column stays under it, and airlight normalises by the peak so its volume is unchanged.
+  parts.push(fxColour(bead, BULB_HDR, BULB_HDR, BULB_HDR));
   const h = 0.90 * sc, r = 0.30 * sc;
   const halo = new THREE.CylinderGeometry(r * 0.35, r, h, 8, 1, true);
   halo.translate(0, h * 0.5, 0);
@@ -916,7 +929,14 @@ export class Places {
       ctx.bus.on('chunk:built', (p) => { if (p) this.buildChunk(p.cx, p.cz, p.id); });
       ctx.bus.on('chunk:disposed', (p) => { if (p) this.disposeChunk(p.id); });
       ctx.bus.on('weapon:hit', (p) => { if (p) this._onShot(p); });
-      ctx.bus.on('phase:changed', () => { this._bellClockSeen = true; this._ringBells(); });
+      // D11: the FIRST phase:changed is clock.js's boot announcement (clock.js `_announced`),
+      // and a claimed bell tower ringing the moment a save loads is a bell nobody rang. The
+      // clock takes over from the dt countdown on that event; the tower only answers the next.
+      ctx.bus.on('phase:changed', () => {
+        const first = !this._bellClockSeen;
+        this._bellClockSeen = true;
+        if (!first) this._ringBells();
+      });
       // The save's claimed/found lists are restored into progress's OWN Sets, and progress
       // inits AFTER us, so ours were still empty at that point: a returning save came back
       // with the county forgotten - claimed scenery dark, discovered places undiscovered,
@@ -2129,6 +2149,25 @@ export class Places {
           Number.isFinite(ly) ? ly : padY,
           m.z - lx * sy + lz * cy);
       },
+      /**
+       * D13 / C16: a GAS CAN beside a minor's dead car — the jam's open-boot shell, the
+       * headlight car. The mirror of the major api's registerGasCan: local -> world with
+       * this minor's frame, deduped by flag (a minor rebuilds every time its chunk streams
+       * in), handed to world/gas.js through places.gasCans(). The flag defaults to the
+       * minor's own identity so a taken can stays taken across chunk rebuilds and reloads.
+       */
+      registerGasCan: (lx, lz, wy, flag, yaw) => {
+        const key = flag || ('gas:minor:' + m.kind + ':' + m.i);
+        for (let i = 0; i < this._gasCans.length; i++) {
+          if (this._gasCans[i].flag === key) { this._gasCans[i].y = wy; return; }
+        }
+        this._gasCans.push({
+          x: m.x + lx * cy + lz * sy,
+          z: m.z - lx * sy + lz * cy,
+          y: Number.isFinite(wy) ? wy : padY, flag: key, site: 'minor:' + m.kind + ':' + m.i,
+          yaw: (yaw || 0) + m.yaw,
+        });
+      },
     };
     let k = null;
     try { k = B(api); } catch (e) { this._note('minor ' + m.kind + ' threw: ' + e.message); return null; }
@@ -3312,18 +3351,29 @@ export class Places {
     return { geo, base, off, t: -1, rec };
   }
 
+  /** The SHOT path: the bell swings, the county hears it (a lure) and the whisper plays. */
   _ring(rec) {
-    rec.bellT = 0;
+    this._swing(rec);
     _noisePayload.x = rec.def.x; _noisePayload.z = rec.def.z;
     _noisePayload.radius = 260; _noisePayload.source = 'bell';
     this.ctx.bus.emit('noise', _noisePayload);
     this._whisperQ.push('~' + rec.def.id);   // '~' = the bell
   }
 
+  /**
+   * D11: the PHASE path. A claimed tower swings its bell on the hour and says nothing — no
+   * whisper, no 'noise' lure. county.js owns the hour's toll (one church, dusk 1 / black 3 /
+   * dawn 1); a second bell from the tower every 3.5 minutes was the peal Alex reported, and
+   * its 260 m noise event was calling the county to the one place he had just made safe.
+   */
+  _swing(rec) {
+    rec.bellT = 0;
+  }
+
   _ringBells() {
     for (const rec of this.nodes.values()) {
       if (rec.moving && this.claimed.has(rec.def.id)) {
-        for (const mv of rec.moving) if (mv.role === 'bell') this._ring(rec);
+        for (const mv of rec.moving) if (mv.role === 'bell') this._swing(rec);
       }
     }
   }

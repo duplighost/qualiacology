@@ -21,8 +21,11 @@
 // THE FALSE DAWN. The county has no hours: its clock is a 14 minute cycle dusk | night |
 // black | dawn (world/clock.js). Every "6 AM" in the spec fires at the START of the 'dawn'
 // phase — the alarms, the coffee, the rooster, the chorus — and that is the morning that never
-// comes. "On the hour" for the bells is every phase change (one toll at dusk, two at night,
-// three at the black hour, four at the false dawn) plus one lone toll every 210 s.
+// comes. "On the hour" for the bells is every phase change, from ONE church: one toll at dusk,
+// none in deep night, three at the black hour, one at the false dawn (CFG.audio.county.tolls).
+// The lone 210 s toll is off (bellEveryS 0) and nothing can queue more than four tolls a
+// minute. Alex, 2026-09-16: the bells "keep going off" and "peak the audio" — they were 20
+// strikes a cycle from two churches at 0.90 peak with a bright click on the strike.
 //
 // THE MIX LAW (audio.js): everything on the world bus is 4th-order lowpassed at 1.6 kHz and
 // 2.5-5.5 kHz belongs to the threat cues alone. So nothing here is baked bright: the alarm is
@@ -75,8 +78,20 @@ const DC_COOLDOWN_S = K.dogcallerCooldownS !== undefined ? K.dogcallerCooldownS 
 // bell (places._ring) is a different mechanic and is left alone.
 const BELL_KINDS = { chapel: 1, steeple: 1, tower: 1, cathedral: 1, 'bell-vault': 1 };
 const BELL_HEIGHT = 12;                   // a steeple's bell is up in the air, not on the step
-const TOLL_GAP_S = 2.6;                   // a sexton's pull; faster is an alarm, slower is a funeral
-const TOLLS = { dusk: 1, night: 2, black: 3, dawn: 4 };
+const TOLL_GAP_S = 3.6;                   // a sexton's pull with the hum let ring; consecutive strikes no longer stack at full hum
+const TOLLS_DEFAULT = { dusk: 1, night: 0, black: 3, dawn: 1 };
+const TOLLS = K.tolls ? {                 // per phase change, one church (D11); config with the literal fallback
+  dusk: K.tolls.dusk !== undefined ? K.tolls.dusk : TOLLS_DEFAULT.dusk,
+  night: K.tolls.night !== undefined ? K.tolls.night : TOLLS_DEFAULT.night,
+  black: K.tolls.black !== undefined ? K.tolls.black : TOLLS_DEFAULT.black,
+  dawn: K.tolls.dawn !== undefined ? K.tolls.dawn : TOLLS_DEFAULT.dawn,
+} : TOLLS_DEFAULT;
+const MAX_TOLLS_PER_MIN = 4;              // no caller, present or future, can peal: four strikes in any 60 s
+const XING_NEAR_M = 200;                  // the crossing starts ringing when you come this close
+const XING_ON_S = K.xingOnS !== undefined ? K.xingOnS : 20;     // ...rings this long...
+const XING_OFF_S = K.xingOffS !== undefined ? K.xingOffS : 90;  // ...then rests; rings again only if you stayed
+const TRUCK_PLAYS_MAX = K.truckPlaysPerNight !== undefined ? K.truckPlaysPerNight : 2;   // twice a night, then it is gone
+const TRUCK_GAP_S = [90, 210];            // between the two plays: a truck that moved on, not a loop
 // Dwellings for the false dawn: majors with a door (placedata kinds) and the wilds' homesteads.
 const DWELLING_KINDS = { manor: 1, avery: 1, station: 1, holdfast: 1, barn: 1 };
 const HOMESTEAD_VARIANTS = { cabin: 1, barn: 1, farm: 1 };
@@ -154,6 +169,11 @@ export class County {
     this._bellT = BELL_EVERY_S * 0.5;       // the first lone toll comes early, then on the count
     this._tolls = new Array(12);
     for (let i = 0; i < this._tolls.length; i++) this._tolls[i] = { live: false, at: 0, site: null };
+    // MAX_TOLLS_PER_MIN: the last four scheduled strike times (county seconds). When all four
+    // fall inside the last minute, the next one is refused. Fixed ring, no allocation.
+    this._recentTolls = new Float64Array(MAX_TOLLS_PER_MIN).fill(-1e9);
+    this._recentI = 0;
+    this._t = 0;                            // county seconds, accumulated in step (dt-scoped, testable)
 
     // the false dawn
     this._dwellings = null;                 // [{x, z, farm}] resolved at the first dawn
@@ -173,7 +193,7 @@ export class County {
     this._orderSeen = false;
 
     // the truck
-    this._truck = { on: false, route: null, seg: 0, frac: 0, dir: 1, x: 0, z: 0, next: 0, moving: true, moveT: 0 };
+    this._truck = { on: false, route: null, seg: 0, frac: 0, dir: 1, x: 0, z: 0, next: 0, moving: true, moveT: 0, plays: 0 };
 
     // the dog-caller: 0 unloaded, 1 loading, 2 ready, 3 failed
     this._dc = { state: 0, cool: 0, dead: false, calls: 0, played: 0, refused: 0 };
@@ -182,7 +202,9 @@ export class County {
     this._hum = { src: null, gain: null, pan: null };
 
     // optional siblings (lanes E and H)
-    this._xing = { on: false, x: 0, z: 0, next: 0 };
+    // mode 0 = waiting for an approach, 1 = ringing (left = seconds of ring left),
+    // 2 = resting (left = seconds of rest left)
+    this._xing = { on: false, x: 0, z: 0, next: 0, mode: 0, left: 0 };
     this._ballastCool = 0;
 
     this._n = { toll: 0, chime: 0, thunder: 0, dawn: 0, alarm: 0, coffee: 0, chorus: 0, rooster: 0,
@@ -204,24 +226,29 @@ export class County {
 
     // THE CHURCH BELL. The whisper bell's partial table (audio.js _bakeWhisper) at a lower
     // prime: a church bell is a bigger casting, so the hum is lower and outlives everything.
-    // Two sizes so the two nearest churches are told apart by ear.
+    // Two sizes so a church is told from its neighbour by ear. D11: a bell heard across a
+    // valley, not struck beside the ear — the strike is short, low and slow, the hum long and
+    // quiet. It peaks at 0.62 so a near toll sits UNDER the master compressor's -10 dB
+    // threshold (audio.js) instead of clamping it and pumping the whole county.
+    const TAU_X = 1.6;                        // every partial rings 1.6x longer: the hum outlives the strike
     const P = [[0.500, 0.55, 5.2], [1.000, 1.00, 3.6], [1.183, 0.42, 2.4],
                [1.506, 0.30, 1.7], [2.000, 0.26, 1.2], [2.514, 0.14, 0.7]];
     for (let v = 0; v < 2; v++) {
-      const b = new Float32Array(N(6.0));
+      const b = new Float32Array(N(9.0));    // the 8.3 s hum needs the room
       const f = v === 0 ? 165 : 220;
       for (let i = 0; i < P.length; i++) {
-        damped(b, sr, f * P[i][0], P[i][2], P[i][1]);
-        damped(b, sr, f * P[i][0] * 1.0016, P[i][2] * 0.92, P[i][1] * 0.55, 1.1);
+        damped(b, sr, f * P[i][0], P[i][2] * TAU_X, P[i][1]);
+        damped(b, sr, f * P[i][0] * 1.0016, P[i][2] * TAU_X * 0.92, P[i][1] * 0.55, 1.1);
       }
       const strike = new Float32Array(N(0.06));
       noiseFill(strike, rn);
-      biquad(strike, sr, 'bp', 1400, 1.0);
-      envAD(strike, sr, 0.001, 0.012);
-      mixInto(b, strike, 0.30);
+      biquad(strike, sr, 'bp', 700, 1.0);      // 1400 was the click he called annoying; 700 is the clapper's wood
+      envAD(strike, sr, 0.004, 0.012);         // 4 ms in, not 1: a clapper lands, a click does not
+      mixInto(b, strike, 0.10);                // 0.30 read as a hammer; the strike is a tenth of the bell now
       biquad(b, sr, 'hp', 70, 0.7);
+      fadeIn(b, sr, 0.008);                    // no edge on the first sample
       fadeOut(b, sr, 0.4);
-      reg('county_bell' + v, normalizeTo(b, 0.90));
+      reg('county_bell' + v, normalizeTo(b, 0.62));
     }
 
     // WIND CHIMES. Five aluminium tubes on a pentatonic-ish set, each with a cent-detuned
@@ -320,12 +347,14 @@ export class County {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     // A struck tine, rendered into a short scratch and mixed in: damped() runs to its floor
     // (nine time constants), which for seventy notes is most of a bake nobody hears.
+    // A music-box comb is a bar, not a string: its overtones sit at 2.76 and 5.4 times the
+    // fundamental, and they are what make a tine read as metal rather than as a sine.
     const tineBuf = new Float32Array(N(1.2));
     const tine = (b, f, at, amp, tau) => {
       tineBuf.fill(0);
       damped(tineBuf, sr, f, tau, amp);
-      damped(tineBuf, sr, f * 2.0, tau * 0.6, amp * 0.35, 0.3);
-      damped(tineBuf, sr, f * 3.0, tau * 0.35, amp * 0.12, 0.6);
+      damped(tineBuf, sr, f * 2.76, tau * 0.5, amp * 0.25, 0.3);
+      damped(tineBuf, sr, f * 5.4, tau * 0.25, amp * 0.08, 0.6);
       fadeOut(tineBuf, sr, 0.05);
       mixInto(b, tineBuf, 1.0, N(at));
     };
@@ -458,7 +487,7 @@ export class County {
         }
       }
       biquad(b, sr, 'hp', 120, 0.7);
-      biquad(b, sr, 'lp', 1200, 0.7);
+      biquad(b, sr, 'lp', 1500, 0.7);           // 1200 was mud at 400 m once the distance lowpass had its say
       saturate(b, 1.5, 0.5);
       fadeOut(b, sr, 0.8);
       reg('county_jingle', normalizeTo(b, 0.80));
@@ -656,10 +685,19 @@ export class County {
   /* --------------------------------------------------------------- bells -- */
 
   _enqueueToll(site, delayS) {
+    // MAX_TOLLS_PER_MIN. The ring holds the last four scheduled strike times; if the oldest of
+    // them is still inside the minute before this strike would land, this strike is refused.
+    const at = this._t + (delayS > 0 ? delayS : 0);
+    const R = this._recentTolls;
+    let oldest = Infinity;
+    for (let i = 0; i < R.length; i++) if (R[i] < oldest) oldest = R[i];
+    if (at - oldest < 60) return false;
     const q = this._tolls;
     for (let i = 0; i < q.length; i++) {
       if (q[i].live) continue;
       q[i].live = true; q[i].at = delayS; q[i].site = site;
+      R[this._recentI] = at;
+      this._recentI = (this._recentI + 1) % R.length;
       return true;
     }
     return false;
@@ -689,12 +727,12 @@ export class County {
     const s = A.spec();
     s.x = site.x; s.y = site.y; s.z = site.z;
     s.bus = 'world';
-    s.gain = 0.85;
+    s.gain = 0.55;                             // 0.85 on a 0.90 bake hit the compressor 7 dB over its knee
     s.air = false; s.lpHz = farLp(d, 4000, 700);
     s.occl = false;
     s.ref = 80; s.roll = 0.6; s.maxDist = 2000;
     s.propagate = true;
-    s.send = 0.5;
+    s.send = 0.35;                             // the hum is the tail now; a long send on top of it smeared
     s.priority = 3;
     s.cls = CUE_FLAVOUR;
     const v = A.play('county_bell' + site.size, s);
@@ -703,7 +741,7 @@ export class County {
   }
 
   _stepBells(dt) {
-    // the queue: phase tolls spaced TOLL_GAP_S apart, from up to two churches
+    // the queue: phase tolls spaced TOLL_GAP_S apart, from one church
     const q = this._tolls;
     for (let i = 0; i < q.length; i++) {
       if (!q[i].live) continue;
@@ -712,12 +750,15 @@ export class County {
       q[i].live = false;
       this._toll(q[i].site);
     }
-    // the lone toll: the county's stand-in for hours
-    this._bellT -= dt;
-    if (this._bellT <= 0) {
-      this._bellT = BELL_EVERY_S;
-      const near = this._nearestBells(1, this._scratchBells || (this._scratchBells = []));
-      if (near.length) this._enqueueToll(near[0], 0);
+    // the lone toll: the county's old stand-in for hours. OFF by config (bellEveryS 0): the
+    // hour is the phase change now. The path stays so one number brings it back.
+    if (BELL_EVERY_S > 0) {
+      this._bellT -= dt;
+      if (this._bellT <= 0) {
+        this._bellT = BELL_EVERY_S;
+        const near = this._nearestBells(1, this._scratchBells || (this._scratchBells = []));
+        if (near.length) this._enqueueToll(near[0], 0);
+      }
     }
   }
 
@@ -1006,6 +1047,7 @@ export class County {
     T.x = route[T.seg].x; T.z = route[T.seg].z;
     T.next = 2 + this.rngTruck.next() * 6;
     T.moving = true; T.moveT = TRUCK_RETHINK_S;
+    T.plays = 0;                               // a fresh night: two plays, then it is gone
     return true;
   }
 
@@ -1034,10 +1076,15 @@ export class County {
     T.next -= dt;
     if (T.next > 0) return;
     const buf = A.buf.county_jingle;
-    T.next = (buf ? buf.duration : 20) + 0.5;
+    // Not a play yet: look again in a while (the truck moves, so the hearing band comes and
+    // goes). Only a play spends one of the night's TRUCK_PLAYS_MAX and books the long gap.
+    T.next = 8;
     if (!buf) { if (!this._rest.far) { try { this.bakeRest('far'); } catch (e) { void e; } } return; }
     const d = Math.hypot(T.x - this._px, T.z - this._pz);
     if (d < TRUCK_HEAR[0] || d > TRUCK_HEAR[1]) return;   // too close to be a mystery, too far to hear
+    T.plays++;
+    T.next = TRUCK_GAP_S[0] + this.rngTruck.next() * (TRUCK_GAP_S[1] - TRUCK_GAP_S[0]);
+    if (T.plays >= TRUCK_PLAYS_MAX) T.on = false;         // this play is the last of the night
     const s = A.spec();
     s.x = T.x; s.y = this._groundY(T.x, T.z) + 2.5; s.z = T.z;
     s.bus = 'world'; s.gain = 0.55;
@@ -1145,13 +1192,36 @@ export class County {
   onCrossing(p) {
     if (!p) return;
     const X = this._xing;
-    if (p.on && typeof p.x === 'number' && typeof p.z === 'number') { X.on = true; X.x = p.x; X.z = p.z; X.next = 0; }
-    else X.on = false;
+    if (p.on && typeof p.x === 'number' && typeof p.z === 'number') {
+      // A re-announcement of the same crossing keeps its duty cycle; a new one starts fresh.
+      const same = X.on && X.x === p.x && X.z === p.z;
+      X.on = true; X.x = p.x; X.z = p.z;
+      if (!same) { X.next = 0; X.mode = 0; X.left = 0; }
+    } else { X.on = false; X.mode = 0; X.left = 0; }
   }
 
+  /**
+   * THE DUTY CYCLE (D11). A crossing that dings for as long as you can hear it is "a bell
+   * that keeps going off". It rings XING_ON_S once you come inside XING_NEAR_M, rests
+   * XING_OFF_S, and rings again only if you are still there; leave and come back and it
+   * starts over on the approach. Wrong and then giving up reads as more wrong than never
+   * stopping, and it stops the loop competing with the church.
+   */
   _stepXing(dt) {
     const X = this._xing;
     if (!X.on) return;
+    const inside = Math.hypot(X.x - this._px, X.z - this._pz) < XING_NEAR_M;
+    if (X.mode === 0) {
+      if (!inside) return;
+      X.mode = 1; X.left = XING_ON_S; X.next = 0;
+    } else if (X.mode === 2) {
+      X.left -= dt;
+      if (X.left > 0) return;
+      if (!inside) { X.mode = 0; return; }   // he left during the rest: wait for the next approach
+      X.mode = 1; X.left = XING_ON_S; X.next = 0;
+    }
+    X.left -= dt;
+    if (X.left <= 0) { X.mode = 2; X.left = XING_OFF_S; return; }
     X.next -= dt;
     if (X.next > 0) return;
     const A = this.A;
@@ -1160,8 +1230,8 @@ export class County {
     if (!buf) return;
     const s = A.spec();
     s.x = X.x; s.z = X.z; s.y = this._groundY(X.x, X.z) + 4;
-    s.bus = 'world'; s.gain = 0.5;
-    s.occl = false; s.ref = 30; s.roll = 1.0; s.maxDist = 300;
+    s.bus = 'world'; s.gain = 0.4;             // 0.5 rode over the church; it is a small bell on a post
+    s.occl = false; s.ref = 30; s.roll = 1.0; s.maxDist = 220;   // 300 m reached the next crossing's listener
     s.propagate = true; s.send = 0.4; s.priority = 3; s.cls = CUE_FLAVOUR;
     if (A.play('county_xing', s)) { this._n.xing++; if (A.bed) A.bed.onDreadBeat(); }
   }
@@ -1180,10 +1250,9 @@ export class County {
     this._phaseAnnounced = true;
     const n = firstAnnouncement ? 0 : (TOLLS[phase] || 0);
     if (n > 0) {
-      const near = this._nearestBells(2, this._scratchBells || (this._scratchBells = []));
-      for (let k = 0; k < near.length; k++) {
-        for (let i = 0; i < n; i++) this._enqueueToll(near[k], i * TOLL_GAP_S + k * 0.9);
-      }
+      // ONE church tolls per phase change, never two: two churches a beat apart is a peal.
+      const near = this._nearestBells(1, this._scratchBells || (this._scratchBells = []));
+      if (near.length) for (let i = 0; i < n; i++) this._enqueueToll(near[0], i * TOLL_GAP_S);
     }
     if (phase === 'dawn') this._startDawn();
     if (phase === 'night') { if (!this._truck.on && this.rngTruck.next() < TRUCK_CHANCE) this._truckStart(); }
@@ -1194,6 +1263,7 @@ export class County {
 
   step(dt) {
     if (!this.baked) return;
+    this._t += dt;
     this._readPlayer();
     if (this._chimeCool > 0) this._chimeCool -= dt;
     if (this._dc.cool > 0) this._dc.cool -= dt;
@@ -1223,7 +1293,9 @@ export class County {
       lastThunder: this._lastThunder,
       dawnLeft: +this._dawnLeft.toFixed(1), chorusLeft: +this._chorusLeft.toFixed(1),
       roosterSite: this._roosterSite ? this._roosterSite.id : null, roosterOn: ROOSTER_ON,
-      truck: { on: T.on, x: +T.x.toFixed(1), z: +T.z.toFixed(1), moving: T.moving, plays: this._n.truck },
+      truck: { on: T.on, x: +T.x.toFixed(1), z: +T.z.toFixed(1), moving: T.moving, plays: this._n.truck, tonight: T.plays },
+      xing: { on: this._xing.on, mode: this._xing.mode, left: +this._xing.left.toFixed(1) },
+      tolls: Object.assign({}, TOLLS), tollGapS: TOLL_GAP_S, maxTollsPerMin: MAX_TOLLS_PER_MIN, loneTollS: BELL_EVERY_S,
       dogcaller: { state: this._dc.state, dead: this._dc.dead, calls: this._dc.calls, played: this._dc.played,
         refused: this._dc.refused, loaded: !!(this.A.buf && this.A.buf.dc_call0) },
       hum: !!this._hum.src,

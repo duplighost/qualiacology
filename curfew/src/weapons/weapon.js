@@ -87,7 +87,14 @@ const EXTRA = {
     pattern: [[3.1, 0.00]],
     sustainPitch: 3.1, sustainYaw: [0.10, -0.10],
     bands: [[8, 12], [16, 7], [Infinity, 3]],   // per pellet; range 16 from CFG
-    reloadTac: 0.62, reloadEmpty: 0.94,          // per shell, tube-fed
+    // A TUBE. reloadTac/reloadEmpty are PER SHELL (0.62 s a shell; the first shell of an
+    // empty gun 0.94 s, because it also has to be chambered) and _startReload builds one
+    // 'shell' beat per round needed, so the reload is as long as the shells it puts in and
+    // an interrupted reload keeps every shell already in. Before this the two numbers were
+    // read as the WHOLE reload: six shells in 0.62 s and a HUD arc five times faster than
+    // any other gun's (Alex: "the reload circle got really fast, especially with the shotgun").
+    tube: true,
+    reloadTac: 0.62, reloadEmpty: 0.94,
     cycle: 0.44,
     surface: 'rifle',
   },
@@ -154,7 +161,22 @@ const BEATS_EMPTY = [
 ];
 
 const MAXT = 300;                 // metres a shot is allowed to travel
-const LOWER_HOLD_S=.38, LOWER_IN_S=.26, LOWER_OUT_S=.24;
+// THE LOWERED STANCE (D1). X toggles it; fire, aim, melee or R raise it, and the raising
+// press is spent on the raise (a second click fires). 0.26 s down, 0.24 s up: quicker up than
+// down, because the answer to something arriving must never be the slow half.
+const LOWER_IN_S = .26, LOWER_OUT_S = .24;
+// THE ACTIVE RELOAD, base behaviour on every reload (D2). Authored in seconds against the
+// REFERENCE choreography like the beats above and scaled per gun: 1.00-1.30 s of the 2.10 s
+// reference is the moment the magazine seats. A hit runs the rest of the reload at x1.35; a
+// miss costs nothing (the reload simply continues - there is no jam any more). ACTIVE_MIN_S
+// floors the scaled window so a short reload (the shotgun's first shell, a Steady-fast
+// carbine) is still a window a hand can find.
+const BASE_ACTIVE = Object.freeze({ from: 1.000, to: 1.300, mul: 1.35 });
+const ACTIVE_MIN_S = 0.18;
+// The tube reload's close: after the last shell the hand comes back to the grip.
+const TUBE_CLOSE_S = 0.30;
+// The tube beat sheet's capacity: the biggest tube (6) + 1 chambered + 'cancelopen', with room.
+const TUBE_BEATS_MAX = 16;
 
 /* -------------------------------------------------------------------------
    ROUND 5 (docs/NEXT.md item 3) — Alex: "This initial gun is very slow and it
@@ -191,11 +213,9 @@ const _right = new THREE.Vector3();
 const _upv = new THREE.Vector3();
 const _mdir = new THREE.Vector3();
 const _MODS = [1, 1, 1];          // scratch for _stanceMods; never escapes
-// Scratch specs for the STAT fallback paths of the HANDS perks. The hooks return their own
-// frozen module-scope objects (nodes.js ACTIVE_RELOAD / HOLD_BREATH) and those are used as
-// handed; these two exist only so the fallback cannot allocate either. Read and discarded
-// inside the same call; nothing retains them.
-const _winSpec = { from: 0, to: 0, mul: 1, jamS: 0 };
+// Scratch spec for the STAT fallback path of hold-breath. The hook returns its own frozen
+// module-scope object (nodes.js HOLD_BREATH) and that is used as handed; this exists only so
+// the fallback cannot allocate either. Read and discarded inside the same call.
 const _breathSpec = { swayMul: 1, seconds: 0 };
 
 export class Weapons {
@@ -228,8 +248,15 @@ export class Weapons {
     this._autoReload = false;      // true while the gun in the hands is empty with reserve (derived each step)
     this.grantCount = 0;
     this.swapCount = 0;
-    this.lowered=false;this.lowerT=0;this._reloadHold=0;this._reloadMode='';
-    this._lowerClock=0;this._shopLowerUntil=-Infinity;
+    this.lowered = false; this.lowerT = 0;          // D1: the stance, X's toggle (C21: the HUD reads both)
+    this._raiseEaten = false;                        // this step's fire/aim/melee press was spent raising the gun
+    this._lowerClock = 0; this._shopLowerUntil = -Infinity;
+    this._shopWas = false;                           // C7: a shop menu was open last step
+    this.primed = false;                             // D3: an active-reload hit; every round until the next reload hits harder
+    this.dryFlashT = 0;                              // C21: seconds of the HUD's dry-click flash left
+    // The shotgun's beat sheet, written in place by _startTubeReload (EXTRA.shotgun `tube`).
+    this._tubeBeats = [];
+    for (let k = 0; k < TUBE_BEATS_MAX; k++) this._tubeBeats.push(['shell', 0]);
 
     this.select('bolt');           // M0 ships with the bolt rifle selected
 
@@ -239,8 +266,8 @@ export class Weapons {
     // `sprint` is read (never written) for two HANDS verbs only: it is the button that
     // runs OUT of a reload, and the button that holds your breath while you are aimed.
     // Those two can share it because they cannot happen at once — see _input().
-    this._prev = { fire: false, aim: false, reload: false, melee: false, sprint: false, swap: false, slot1: false, slot2: false };
-    this._in = { fire: false, aim: false, reload: false, melee: false, sprint: false, swap: false, slot1: false, slot2: false };
+    this._prev = { fire: false, aim: false, reload: false, melee: false, sprint: false, swap: false, swapprev: false, slot1: false, slot2: false, slot3: false, slot4: false, lower: false };
+    this._in = { fire: false, aim: false, reload: false, melee: false, sprint: false, swap: false, swapprev: false, slot1: false, slot2: false, slot3: false, slot4: false, lower: false };
 
     // The grant. 'place:claimed' {id, xp} is places.js's own channel (CONTRACT bus vocabulary).
     // ROUND 6: the row's `reward` decides the gun; an owned gun is paid a full reserve.
@@ -281,6 +308,7 @@ export class Weapons {
       weapon: 'bolt', ox: 0, oy: 0, oz: 0, dx: 0, dy: 0, dz: 1,
       subT: 0, index: 0, tracer: false, lowAmmo: false, loud: 26,
       pellets: 1, pellet: 0, spreadDeg: 0,
+      dmgMul: 1,                 // D3: the primed magazine's multiplier; combat.resolveShot multiplies by it
     };
     this._reloadPayload = { phase: 'start', name: '', empty: false, ammo: 0, reserve: 0, credited: false };
 
@@ -386,6 +414,7 @@ export class Weapons {
       sustainYaw: extra.sustainYaw,
       bands: extra.bands,
       reloadTac: extra.reloadTac, reloadEmpty: extra.reloadEmpty,
+      tube: !!extra.tube,
       cycle: extra.cycle,
       surface: extra.surface,
       interval: 60 / base.rpm,
@@ -407,13 +436,15 @@ export class Weapons {
         owned: () => this.owned.slice(),
         has: (id) => this.has(id),
         grant: (id, opts) => this.grant(id, opts),
-        swap: () => this.swap(),
+        swap: (dir) => this.swap(dir),
         slot: (n) => this.slot(n),
         ammoState: () => this.ammoState(),
         // ROUND 6
         reward: (id) => this.reward(id),
         addReserve: (n) => this.addReserve(n),
+        addReserveAll: (frac) => this.addReserveAll(frac),
         reserveOf: (id) => this.reserveOf(id),
+        serialize: () => this.serialize(),
       };
     }
   }
@@ -473,9 +504,15 @@ export class Weapons {
     return rec ? rec.reserve : 0;
   }
 
-  /** addReserve() aimed at a specific gun, whether or not it is in the hands. */
+  /** Rounds into ONE gun's reserve, capped at twice its base: the live gun's, or its record's. */
   addReserveTo(id, n) {
-    if (this.def && this.def.id === id) return this.addReserve(n);
+    n = Math.floor(+n) || 0;
+    if (n <= 0) return 0;
+    if (this.def && this.def.id === id) {
+      const got = Math.max(0, Math.min(n, this.reserveMax - this.reserve));
+      this.reserve += got;
+      return got;
+    }
     const rec = this._rec[id], base = CFG.weapons.defs[id];
     if (!rec || !base) return 0;
     const max = base.reserve * 2;                 // the same ceiling select() gives the live gun
@@ -484,15 +521,37 @@ export class Weapons {
     return got;
   }
 
-  /** Q: cycle to the next owned weapon. */
-  swap() {
-    if (this.owned.length < 2) return false;
-    const cur = this.swapTo || this.def.id;
-    const i = this.owned.indexOf(cur);
-    return this._beginSwap(this.owned[(i + 1) % this.owned.length]);
+  /**
+   * D8: every ammo source spreads. `n` rounds into EVERY owned gun, each capped at its own
+   * ceiling; returns the total credited. Crates, caches, digs and pickups all land here, so
+   * the shotgun you are not holding is never the one gun that stays dry.
+   */
+  addReserve(n) {
+    let total = 0;
+    for (let k = 0; k < this.owned.length; k++) total += this.addReserveTo(this.owned[k], n);
+    return total;
   }
 
-  /** 1 / 2: pick a slot directly. */
+  /** D7: the shop's one AMMUNITION row. One base bundle x `frac` into every owned gun. */
+  addReserveAll(frac = 1) {
+    let total = 0;
+    for (let k = 0; k < this.owned.length; k++) {
+      const id = this.owned[k], base = CFG.weapons.defs[id];
+      if (base) total += this.addReserveTo(id, Math.round(base.reserve * frac));
+    }
+    return total;
+  }
+
+  /** Q and wheel down: the next owned weapon. Wheel up (dir -1): the previous. */
+  swap(dir = 1) {
+    if (this.owned.length < 2) return false;
+    const cur = this.swapTo || this.def.id;
+    const n = this.owned.length;
+    const i = this.owned.indexOf(cur);
+    return this._beginSwap(this.owned[(i + (dir < 0 ? -1 : 1) + n) % n]);
+  }
+
+  /** 1-4: pick a slot directly. */
   slot(n) {
     const id = this.owned[n];
     return id ? this._beginSwap(id) : false;
@@ -500,13 +559,14 @@ export class Weapons {
 
   /**
    * Start the SWAP_S lower-and-raise. Refused mid-melee, mid-swap, and for the gun already
-   * in the hands. A live reload is cancelled — PARKED when the HANDS 'Carry' node makes that
-   * legal, thrown away otherwise, exactly the sprint's rule.
+   * in the hands. A live reload is PARKED (D3: base behaviour, the next R resumes it) and a
+   * primed magazine is a magazine you put down (D3).
    */
   _beginSwap(id) {
     if (!id || !CFG.weapons.defs[id]) return false;
     if (id === this.def.id || this.melee || this.swapT >= 0) return false;
-    if (this.reloading) this._cancelReload(this._canParkReload());
+    if (this.reloading) this._cancelReload(true);
+    this.primed = false;
     this.swapTo = id;
     this.swapT = 0;
     this.swapCount++;
@@ -530,6 +590,16 @@ export class Weapons {
     this._arsenalSynced = true;
     const pl = this._sys('places');
     const pr = this._sys('progress');
+    // C2 / D9 FIRST: the save's own arsenal (progress.save.data.arsenal, written from
+    // serialize() at every flush). Owned order as bought, each gun's magazine and reserve as
+    // they were, the bolt in the hands. An older save has an empty list here and falls
+    // through to the flags and the claimed rewards below, which still grant.
+    const ars = pr && pr.save && pr.save.data ? pr.save.data.arsenal : null;
+    if (ars && Array.isArray(ars.owned)) {
+      for (let k = 0; k < ars.owned.length; k++) this.grant(ars.owned[k], { quiet: true });
+      const rec = ars.rec && typeof ars.rec === 'object' ? ars.rec : null;
+      if (rec) for (const id in rec) this._restoreRec(id, rec[id]);
+    }
     // Shop purchases and the merchant's death reward do not claim a destination.
     // Restore their saved ownership before play, with the same quiet grant path.
     for (const id of Object.keys(EXTRA)) {
@@ -547,6 +617,38 @@ export class Weapons {
       const viaProgress = !!(pr && pr.claimed && typeof pr.claimed.has === 'function' && pr.claimed.has(d.id));
       if (viaPlaces || viaProgress) this.grant(d.reward, { quiet: true });
     }
+  }
+
+  /** One gun's saved magazine/reserve back into its record, or into the hands for the held gun. */
+  _restoreRec(id, r) {
+    const base = CFG.weapons.defs[id];
+    if (!base || !this._rec[id] || !r || typeof r !== 'object' || !this.has(id)) return;
+    const ammo = clamp(Math.floor(+r.ammo) || 0, 0, base.mag + 1);
+    const reserve = clamp(Math.floor(+r.reserve) || 0, 0, base.reserve * 2);
+    const chambered = ammo > 0 && r.chambered !== false;
+    if (this.def && this.def.id === id) {
+      this.ammo = ammo; this.reserve = reserve; this.chambered = chambered;
+    } else {
+      const rec = this._rec[id];
+      rec.ammo = ammo; rec.reserve = reserve; rec.chambered = chambered;
+    }
+  }
+
+  /**
+   * C2 / D9: what the save keeps of the arsenal. progress calls this at flush time, never per
+   * step, so the allocation is fine: owned order and each gun's magazine, reserve and chambered
+   * flag, the held gun's taken from the hands. _syncArsenal reads it back on a returning save.
+   */
+  serialize() {
+    const rec = {};
+    for (let k = 0; k < this.owned.length; k++) {
+      const id = this.owned[k], r = this._rec[id];
+      if (!r) continue;
+      rec[id] = this.def && this.def.id === id
+        ? { ammo: this.ammo, reserve: this.reserve, chambered: this.chambered }
+        : { ammo: r.ammo, reserve: r.reserve, chambered: r.chambered };
+    }
+    return { owned: this.owned.slice(), rec };
   }
 
   ready() { return !!this.def && this.pulses.length > 0; }
@@ -575,9 +677,10 @@ export class Weapons {
    */
   get wantsSprintCancel() {
     const i = this._input();
-    if(this.lowered||this.lowerT>0)return false;
-    return i.fire || i.aim || this.buffered > 0
-      || (!!this.reloading && !this.reloading.auto && !this._canParkReload());
+    if (this.lowered || this.lowerT > 0) return false;
+    // D3: a reload never blocks the legs any more. Running PARKS it (the timeline in step())
+    // and the next R resumes it where it was. Fleeing is the verb in this game.
+    return i.fire || i.aim || this.buffered > 0;
   }
   ammoState() {
     return { ammo: this.ammo, reserve: this.reserve, reloading: !!this.reloading, chambered: this.chambered };
@@ -589,43 +692,44 @@ export class Weapons {
       hasTarget: !!this.melee.target, struck: this.melee.struck,
     };
   }
-  addReserve(n) {
-    const got = Math.min(n, this.reserveMax - this.reserve);
-    this.reserve += got;
-    // Ammo found for an empty gun: it reloads itself - the AUTO-RELOAD rule in step() reads
-    // ammo/reserve every step, so nothing needs arming here.
-    return got;
+  /** Fully lowered and idle: the controller pays the 1.25x travel boost while this is true. */
+  get travelReady() { return this.lowered && this.lowerT >= .999 && !this.reloading && !this.melee; }
+
+  _setLowered(on) {
+    this.lowered = !!on;
+    this.buffered = this.meleeBuffered = 0;
+    if (on && this.melee) { this.melee = null; this._pulse('melee:end'); }
+    if (on && this.reloading) this._cancelReload(true);   // D3: parked; the next R resumes it
+    this.ctx.bus.emit('weapon:stance', { lowered: this.lowered });
   }
 
-  get travelReady(){return this.lowered&&this.lowerT>=.999&&!this.reloading&&!this.melee;}
-
-  _setLowered(on){
-    this.lowered=!!on;this.buffered=this.meleeBuffered=0;
-    if(on&&this.melee){this.melee=null;this._pulse('melee:end');}
-    if(on&&this.reloading)this._cancelReload(this._canParkReload());
-    this.ctx.bus.emit('weapon:stance',{lowered:this.lowered});
-  }
-
-  _stepLowering(dt,i,pressed,released,dead){
-    this._lowerClock+=dt;
-    if(pressed&&!dead){this._reloadHold=0;this._reloadMode=this.lowered?'raise':this.reloading?'active':'reload';this._reloadOwner=this.reloading;this._reloadAt=this.reloading?.t;}
-    if(i.reload&&this._reloadMode){
-      this._reloadHold+=dt;
-      if(this._reloadHold>=LOWER_HOLD_S&&this._reloadMode!=='spent'){
-        if(!this.lowered)this._setLowered(true);
-        this._reloadMode='spent';
+  /**
+   * D1, THE STANCE. X TOGGLES lowered. While lowered, fire, aim, melee or R RAISE the gun and
+   * that press is spent on the raise: a second click fires (presses during the 0.24 s rise are
+   * buffered in step(), so the next click after the gun is up lands). R never lowers: with the
+   * gun up it reloads, and during a reload it is the active-reload attempt, resolved ON THE
+   * PRESS with the press-time sample (D2). Returns true when this press starts a reload.
+   */
+  _stepLowering(dt, i, reloadPressed, lowerPressed, raiseEdge, dead) {
+    this._lowerClock += dt;
+    this._raiseEaten = false;
+    let reloadTap = false;
+    if (!dead) {
+      if (lowerPressed) this._setLowered(!this.lowered);
+      else if (this.lowered && (raiseEdge || reloadPressed)) { this._setLowered(false); this._raiseEaten = raiseEdge; }
+      else if (reloadPressed) {
+        if (this.reloading) this._activeReloadPress(this.reloading.t);
+        else reloadTap = true;
       }
     }
-    let reloadTap=false;
-    if(released){
-      if(!dead&&this._reloadMode==='raise')this._setLowered(false);
-      else if(!dead&&this._reloadMode==='active'&&this.reloading===this._reloadOwner)this._activeReloadPress(this._reloadAt);
-      else reloadTap=!dead&&this._reloadMode==='reload';
-      this._reloadMode='';this._reloadOwner=null;this._reloadHold=0;
-    }
-    const shop=this._lowerClock<=this._shopLowerUntil&&!i.fire&&!i.aim&&!i.melee;
-    const target=this.lowered||shop;
-    this.lowerT=clamp01(this.lowerT+(target?dt/LOWER_IN_S:-dt/LOWER_OUT_S));
+    // The shop/payment prompt's low-ready (the 'prompt' listener in the constructor): the gun
+    // dips while you are paying and lifts the moment you ask for it. That first press is spent
+    // on the lift, exactly like a raise from X, so paying never turns into a shot.
+    const shopHeld = this._lowerClock <= this._shopLowerUntil;
+    const shop = shopHeld && !i.fire && !i.aim && !i.melee;
+    if (raiseEdge && !this.lowered && shopHeld && this.lowerT > .001) this._raiseEaten = true;
+    const target = this.lowered || shop;
+    this.lowerT = clamp01(this.lowerT + (target ? dt / LOWER_IN_S : -dt / LOWER_OUT_S));
     return reloadTap;
   }
 
@@ -645,17 +749,18 @@ export class Weapons {
       autoReload: this._autoReload, grantCount: this.grantCount, swapCount: this.swapCount,
       rewardCount: this.rewardCount, ammoPickups: this.ammoPickups,
       blocksSprint: this.wantsSprintCancel,
-      lowered:this.lowered,lowerT:this.lowerT,travelReady:this.travelReady,
+      lowered: this.lowered, lowerT: this.lowerT, travelReady: this.travelReady,
+      primed: this.primed, dryFlashT: this.dryFlashT,
       adsT: this.adsT, spreadDeg: this._cone(), bloom: this.bloom,
       kickPitch: this.kickPitch, kickYaw: this.kickYaw,
       shotIndex: this.shotIndex, fireClock: this.fireClock,
       sprintOutTimer: this.sprintOutTimer, fireCount: this.fireCount,
       meleeCount: this.meleeCount, loud: this.loudness,
       reloading: this.reloading && {
-        t: this.reloading.t, empty: this.reloading.empty, auto: !!this.reloading.auto,
-        rate: this.reloading.rate, jam: this.reloading.jam,
+        t: this.reloading.t, dur: this.reloading.dur, empty: this.reloading.empty, auto: !!this.reloading.auto,
+        rate: this.reloading.rate,
         from: this.reloading.activeFrom, to: this.reloading.activeTo,
-        used: this.reloading.activeUsed,
+        used: this.reloading.activeUsed, hit: this.reloading.activeHit,
       },
       parked: this._parked && { t: this._parked.t, empty: this._parked.empty },
       breathHeld: this.breathHeld, breathLeft: this.breathLeft,
@@ -735,10 +840,19 @@ export class Weapons {
     // The three arsenal keys (engine/input.js KEYMAP: KeyQ, Digit1, Digit2) are not in the
     // engine's ACTIONS list, so they arrive through held() rather than a named getter.
     o.swap = held ? i.held('swap') : !!i.swap;
+    o.swapprev = held ? i.held('swapprev') : !!i.swapprev;
     o.slot1 = held ? i.held('slot1') : !!i.slot1;
     o.slot2 = held ? i.held('slot2') : !!i.slot2;
-    if (this.ctx.shared?.inCar) {
-      o.fire = o.aim = o.reload = o.melee = o.swap = o.slot1 = o.slot2 = false;
+    o.slot3 = held ? i.held('slot3') : !!i.slot3;
+    o.slot4 = held ? i.held('slot4') : !!i.slot4;
+    o.lower = held ? i.held('lower') : !!i.lower;
+    // In the car, or with a shop menu open (C7: shop-menu.js sets ctx.shared.shopOpen on every
+    // step a menu shows and reads the fire/number edges itself), the gun hears nothing:
+    // nothing fires, nothing swaps, nothing lowers.
+    const sh = this.ctx.shared;
+    if (sh && (sh.inCar || sh.shopOpen)) {
+      o.fire = o.aim = o.reload = o.melee = o.swap = o.swapprev = o.lower = false;
+      o.slot1 = o.slot2 = o.slot3 = o.slot4 = false;
     }
     return o;
   }
@@ -799,26 +913,32 @@ export class Weapons {
     const d = this.def;
     const empty = this.ammo === 0;
     if (this.ammo >= d.mag + (this.chambered ? 1 : 0)) return;
-    const dur = empty ? d.reloadEmpty : d.reloadTac;
+    // C6: the reduce hook 'reloadSpeed' (base 1; hands_3 'Steady' installs 0.8 = 20% faster).
+    // The beats and the active window scale with the duration, so they stay on the motion.
+    const spd = this._perk('reloadSpeed', 1, d.id);
+    const speed = spd > 0 ? spd : 1;
+    if (d.tube) { this._startTubeReload(auto, empty, speed); return; }
+
+    const dur = (empty ? d.reloadEmpty : d.reloadTac) * speed;
     const ref = empty ? BEATS_REF_EMPTY : BEATS_REF_TAC;
     const scale = dur / ref;
 
-    // HANDS tier 1, 'Carry' — a parked reload comes back where it was left, beats already
-    // played and ammo already credited. Only a park of the SAME shape resumes: an empty
-    // reload does not resume into a tactical one, because they are different choreography
-    // and different durations and splicing them would credit the wrong number of rounds.
+    // D3, base behaviour: a parked reload comes back where it was left, beats already played
+    // and ammo already credited, primed if the hit was already taken. Only a park of the SAME
+    // shape resumes: an empty reload does not resume into a tactical one, because they are
+    // different choreography and different durations and splicing them would credit the
+    // wrong number of rounds.
     const park = this._parked;
-    if (park && park.empty === empty && this._canResumeReload()) {
+    if (park && park.empty === empty) {
       this._parked = null;
       this.reloading = {
         auto: auto || !!park.auto,
         empty, t: park.t, dur, scale,
-        beats: empty ? BEATS_EMPTY : BEATS_TAC,
+        beats: park.beats, beatN: park.beatN,
         bi: park.bi, credited: park.credited, cancelable: park.cancelable,
-        rate: park.rate, jam: 0,
-        activeFrom: park.activeFrom, activeTo: park.activeTo,
-        activeMul: park.activeMul, activeJamS: park.activeJamS,
-        activeUsed: park.activeUsed,
+        rate: park.rate,
+        activeFrom: park.activeFrom, activeTo: park.activeTo, activeMul: park.activeMul,
+        activeUsed: park.activeUsed, activeHit: park.activeHit,
       };
       this._emitReload('start', 'resume');
       const rp = this._pulse('reload:start');
@@ -826,87 +946,126 @@ export class Weapons {
       return;
     }
     this._parked = null;
+    this.primed = false;                 // D3: a fresh reload ends the primed magazine
 
+    const beats = empty ? BEATS_EMPTY : BEATS_TAC;
     this.reloading = {
       auto,
       empty, t: 0, dur, scale,
-      beats: empty ? BEATS_EMPTY : BEATS_TAC,
+      beats, beatN: beats.length,
       bi: 0, credited: false, cancelable: false,
-      // rate 1 and no window (activeFrom < 0) is the shipping reload exactly.
-      rate: 1, jam: 0,
-      activeFrom: -1, activeTo: -1, activeMul: 1, activeJamS: 0, activeUsed: false,
+      rate: 1,
+      activeFrom: -1, activeTo: -1, activeMul: 1, activeUsed: false, activeHit: false,
     };
-    // HANDS tier 0, 'Active'. HOOK_POINTS names _startReload() as this hook's one legal
-    // call site, and it is asked exactly once per reload: spec or null, no flag to read.
-    // The window is authored in seconds against the REFERENCE choreography, so it is
-    // scaled by dur/ref for the same reason every beat above is — a 3.10 s empty bolt
-    // reload and a 2.10 s carbine reload must put the window on the same BEAT, not on the
-    // same wall-clock second.
-    const win = this._reloadWindow();
-    if (win) {
-      const r = this.reloading;
-      r.activeFrom = win.from * scale;
-      r.activeTo = win.to * scale;
-      r.activeMul = win.mul > 0 ? win.mul : 1;
-      r.activeJamS = win.jamS > 0 ? win.jamS : 0;
-    }
+    this._setWindow(this.reloading, scale, dur);
     this._emitReload('start', '');
     const pu = this._pulse('reload:start');
     if (pu) pu.name = empty ? 'empty' : 'tac';
   }
 
   /**
-   * A reload button pressed DURING a reload is the active-reload attempt. Without the node
-   * there is no window and this is what it has always been: nothing. One attempt per
-   * reload — a mashed button must not be a free retry, or the window is not a window.
+   * The shotgun (def.tube): one 'shell' beat per round needed, each shell CREDITED the moment it
+   * goes in, so an interrupted reload keeps every shell already in and a new R simply loads the
+   * rest. The first shell of an empty gun takes reloadEmpty (it is also chambered), every other
+   * shell reloadTac, then TUBE_CLOSE_S brings the hand back. 'cancelopen' sits on the first
+   * shell: after that, the trigger or the sight cancels and fires what is in. The active window
+   * sits inside the first shell's interval. A tube reload is never parked - there is nothing
+   * to park, the shells are in the gun.
+   */
+  _startTubeReload(auto, empty, speed) {
+    const d = this.def;
+    this._parked = null;
+    this.primed = false;
+    const cap = d.mag + (empty ? 0 : 1);
+    const need = Math.max(1, Math.min(cap - this.ammo, this.reserve, TUBE_BEATS_MAX - 1));
+    const first = (empty ? d.reloadEmpty : d.reloadTac) * speed;
+    const each = d.reloadTac * speed;
+    const beats = this._tubeBeats;
+    let n = 0, t = first;
+    for (let k = 0; k < need; k++) {
+      const b = beats[n++]; b[0] = 'shell'; b[1] = t;
+      if (k === 0) { const c = beats[n++]; c[0] = 'cancelopen'; c[1] = t; }
+      t += each;
+    }
+    const dur = t - each + TUBE_CLOSE_S;
+    this.reloading = {
+      auto, empty, t: 0, dur, scale: 1,           // tube beats are authored in real seconds
+      beats, beatN: n,
+      bi: 0, credited: false, cancelable: false,
+      rate: 1,
+      activeFrom: -1, activeTo: -1, activeMul: 1, activeUsed: false, activeHit: false,
+    };
+    this._setWindow(this.reloading, first / BEATS_REF_TAC, first);
+    this._emitReload('start', '');
+    const pu = this._pulse('reload:start');
+    if (pu) pu.name = empty ? 'empty' : 'tac';
+  }
+
+  /**
+   * D2: the active window onto a reload that has just started. BASE_ACTIVE is the floor; the
+   * 'reloadWindow' hook (HOOK_POINTS names _startReload as its one call site) may only WIDEN
+   * or QUICKEN it, never shrink it, so an older node spec cannot take the base away. Scaled
+   * by `scale` like every beat, floored at ACTIVE_MIN_S wide, and kept inside `limit` (the
+   * reload, or the tube's first shell).
+   */
+  _setWindow(r, scale, limit) {
+    const spec = this._perk('reloadWindow', null, this.def.id);
+    let f = BASE_ACTIVE.from, t = BASE_ACTIVE.to, m = BASE_ACTIVE.mul;
+    if (spec && spec.to > spec.from) {
+      if (spec.from < f) f = spec.from;
+      if (spec.to > t) t = spec.to;
+      if (spec.mul > m) m = spec.mul;
+    }
+    const from = f * scale;
+    const to = Math.min(Math.max(t * scale, from + ACTIVE_MIN_S), limit - 0.02);
+    if (!(to > from)) return;                    // a reload too short for a window has none
+    r.activeFrom = from; r.activeTo = to; r.activeMul = m;
+  }
+
+  /**
+   * R pressed DURING a reload: the active-reload attempt (D2), resolved on the press with the
+   * press-time sample. One attempt per reload - a mashed button must not be a free retry, or
+   * the window is not a window. A hit runs the rest of the reload at activeMul and, when the
+   * HANDS 'Primed' stat says so (D3), makes every round until the next reload hit harder. A
+   * miss costs nothing: the reload just goes on.
    */
   _activeReloadPress(at) {
     const r = this.reloading;
     if (!r || r.activeFrom < 0 || r.activeUsed) return;
     r.activeUsed = true;
-    const time=Number.isFinite(at)?at:r.t;
-    if (time >= r.activeFrom && time <= r.activeTo) {
-      r.rate = r.activeMul;               // the REST of the reload runs faster
-      this._emitReload('beat', 'active');
-      const pu = this._pulse('reload:beat');
-      if (pu) pu.name = 'active';
-    } else {
-      r.jam = r.activeJamS;               // missed: the hands stall, and you hear it
-      this._emitReload('beat', 'jam');
-      const pu = this._pulse('reload:beat');
-      if (pu) pu.name = 'jam';
-    }
+    const time = Number.isFinite(at) ? at : r.t;
+    if (time < r.activeFrom || time > r.activeTo) return;
+    r.rate = r.activeMul;                 // the REST of the reload runs faster
+    r.activeHit = true;
+    this.primed = this._primedMul() > 1;
+    this._emitReload('beat', 'active');
+    const pu = this._pulse('reload:beat');
+    if (pu) pu.name = 'active';
   }
 
-  /**
-   * The active-reload window, or null. Hook first (that is what hands_1 installs), the
-   * stat block second, and a preallocated scratch spec for the stat path so a reload
-   * cannot allocate. Returns null when neither says anything, and null means the shipping
-   * reload with no window at all.
-   */
-  _reloadWindow() {
-    const spec = this._perk('reloadWindow', null, this.def.id);
-    if (spec && spec.to > spec.from) return spec;
+  /** D3: the HANDS 'Primed' damage multiplier (stats.primedMul, hands_1 sets 1.5); 1 with nothing owned. */
+  _primedMul() {
     const st = this._stats();
-    if (st && st.activeReload && Array.isArray(st.activeWindow)) {
-      const w = _winSpec;
-      w.from = st.activeWindow[0]; w.to = st.activeWindow[1];
-      w.mul = st.activeSpeedMul || 1; w.jamS = st.activeJamS || 0;
-      return w.to > w.from ? w : null;
-    }
-    return null;
+    const m = st ? +st.primedMul : 1;
+    return m > 0 ? m : 1;
   }
 
-  /** True while a cancelled reload would be PARKED rather than thrown away. */
-  _canResumeReload() {
-    if (this._perk('reloadResume', false, this.def.id) === true) return true;
-    const st = this._stats();
-    return !!(st && st.reloadResume);
-  }
+  /** D3: parking is base behaviour. Kept as a method because dump() and tests/weapon.mjs read it. */
+  _canResumeReload() { return true; }
 
-  /** True while THIS reload could be parked. */
+  /** True while THIS reload could be parked (a tube reload keeps its shells instead). */
   _canParkReload() {
-    return !!this.reloading && this._canResumeReload();
+    return !!this.reloading && !this.def.tube;
+  }
+
+  /** One shell into the tube (def.tube). Credited per beat, so an interrupted reload keeps it. */
+  _creditShell() {
+    const r = this.reloading;
+    if (this.reserve <= 0 || this.ammo >= this.def.mag + 1) return;
+    this.ammo++;
+    this.reserve--;
+    this.chambered = true;
+    r.credited = true;
   }
 
   _creditReload() {
@@ -921,10 +1080,11 @@ export class Weapons {
   }
 
   /**
-   * @param park true to keep the progress for a later resume (HANDS 'Carry'). Anything
-   *        that cancels a reload for a REASON OTHER than running out of it — the trigger,
-   *        the aim button, a melee swing — throws it away exactly as it always has, so
-   *        owning the node never silently changes what those three buttons mean.
+   * @param park true to keep the progress for a later resume (D3: a sprint, a swap, X).
+   *        Anything that cancels a reload for a REASON OTHER than running out of it - the
+   *        trigger, the aim button, a melee swing - throws it away, so those three buttons
+   *        mean exactly what they always meant. A tube reload is never parked (its shells
+   *        are already in the gun; see _startTubeReload).
    */
   _cancelReload(park = false) {
     const r = this.reloading;
@@ -932,15 +1092,16 @@ export class Weapons {
     if (park && this._canParkReload()) {
       this._parked = {
         auto: !!r.auto,
-        weapon: this.def.id, empty: r.empty, t: r.t, bi: r.bi,
+        weapon: this.def.id, empty: r.empty, t: r.t,
+        beats: r.beats, beatN: r.beatN, bi: r.bi,
         credited: r.credited, cancelable: r.cancelable, rate: r.rate,
-        activeFrom: r.activeFrom, activeTo: r.activeTo,
-        activeMul: r.activeMul, activeJamS: r.activeJamS, activeUsed: r.activeUsed,
+        activeFrom: r.activeFrom, activeTo: r.activeTo, activeMul: r.activeMul,
+        activeUsed: r.activeUsed, activeHit: r.activeHit,
       };
     } else {
       this._parked = null;
     }
-    this._emitReload('cancel', park && this._parked ? 'park' : '');
+    this._emitReload('cancel', this._parked ? 'park' : '');
     this.reloading = null;
     this._pulse('reload:end');
   }
@@ -1034,6 +1195,9 @@ export class Weapons {
     }
     payload.pellets = pellets;
     payload.spreadDeg = cone / DEG;
+    // D3: the primed magazine (an active-reload hit with HANDS 'Primed' owned) hits harder
+    // until the next reload. combat.resolveShot multiplies the round by this; melee never.
+    payload.dmgMul = this.primed ? this._primedMul() : 1;
     payload.ox = p.pos.x;
     payload.oy = p.eyeY !== undefined ? p.eyeY : p.pos.y + CFG.player.EYE;
     payload.oz = p.pos.z;
@@ -1151,28 +1315,51 @@ export class Weapons {
       // Finish an existing swing visually without landing an invisible cabin hit.
       if (this.melee) this.melee.struck = true;
     }
+    // C7: the step a shop menu closes, whatever is still held is not a fresh press - the click
+    // that bought something must never become the shot that follows it.
+    const shop = !!ctx.shared?.shopOpen;
+    if (shop !== this._shopWas) {
+      this._shopWas = shop;
+      if (!shop) {
+        pr.fire = i.fire; pr.aim = i.aim; pr.reload = i.reload; pr.melee = i.melee;
+        pr.swap = i.swap; pr.swapprev = i.swapprev; pr.lower = i.lower;
+        pr.slot1 = i.slot1; pr.slot2 = i.slot2; pr.slot3 = i.slot3; pr.slot4 = i.slot4;
+      }
+    }
     const firePressed = i.fire && !pr.fire;
     const aimPressed = i.aim && !pr.aim;
     const reloadPressed = i.reload && !pr.reload;
-    const reloadReleased = !i.reload && pr.reload;
     const meleePressed = i.melee && !pr.melee;
     const swapPressed = i.swap && !pr.swap;
+    const swapPrevPressed = i.swapprev && !pr.swapprev;
     const slot1Pressed = i.slot1 && !pr.slot1;
     const slot2Pressed = i.slot2 && !pr.slot2;
+    const slot3Pressed = i.slot3 && !pr.slot3;
+    const slot4Pressed = i.slot4 && !pr.slot4;
+    const lowerPressed = i.lower && !pr.lower;
     pr.fire = i.fire; pr.aim = i.aim; pr.reload = i.reload; pr.melee = i.melee;
     pr.sprint = i.sprint;   // held-state only today; kept edge-ready like the other four
-    pr.swap = i.swap; pr.slot1 = i.slot1; pr.slot2 = i.slot2;
+    pr.swap = i.swap; pr.swapprev = i.swapprev; pr.lower = i.lower;
+    pr.slot1 = i.slot1; pr.slot2 = i.slot2; pr.slot3 = i.slot3; pr.slot4 = i.slot4;
 
     const dead = !!p.dead;
-    const reloadTap=this._stepLowering(dt,i,reloadPressed,reloadReleased,dead);
-    const weaponReady=!this.lowered&&this.lowerT<=.001&&!p.scaling&&!p.scaleDescending&&!p.climb;
+    // D1: fire, aim and melee all mean "I want the gun" - any of them raises a lowered one.
+    const reloadTap = this._stepLowering(dt, i, reloadPressed, lowerPressed, firePressed || aimPressed || meleePressed, dead);
+    const handsFree = !p.scaling && !p.scaleDescending && !p.climb;
+    const weaponReady = !this.lowered && this.lowerT <= .001 && handsFree;
+    // The gun is on its way up (a raise, or the shop low-ready lifting): presses queue for it.
+    const raising = !this.lowered && this.lowerT > .001 && handsFree;
 
     // ---- the swap (ROUND 5). Lower for half of SWAP_S, change guns at the bottom, raise.
     // The def is read AFTER this so the rest of the step sees the gun that is in the hands.
+    // D6: Q and wheel down go forward, wheel up goes back, 1-4 pick a slot.
     if (!dead) {
-      if (swapPressed) this.swap();
+      if (swapPressed) this.swap(1);
+      else if (swapPrevPressed) this.swap(-1);
       else if (slot1Pressed) this.slot(0);
       else if (slot2Pressed) this.slot(1);
+      else if (slot3Pressed) this.slot(2);
+      else if (slot4Pressed) this.slot(3);
     }
     // A grant whose raise was refused (mid-melee, mid-swap) comes back here, the first step
     // the hands are free. Dropped if the player has already put that gun in their hands, or
@@ -1217,11 +1404,13 @@ export class Weapons {
     else this.sprintOutTimer = Math.max(0, this.sprintOutTimer - dt);
 
     // ---- input buffering. CORE.inputBuffer is why a pull 200 ms early still
-    // lands on the cycle instead of being eaten.
-    if(!weaponReady)this.buffered=this.meleeBuffered=0;
-    if (firePressed&&weaponReady) this.buffered = CORE.inputBuffer;
+    // lands on the cycle instead of being eaten. D1: a press while the gun is RISING queues
+    // the same way, so the click after the raising click fires the instant the gun is up;
+    // the raising press itself (_raiseEaten) never queues - it was spent on the raise.
+    if (!weaponReady && !raising) this.buffered = this.meleeBuffered = 0;
+    if (firePressed && !this._raiseEaten && (weaponReady || raising)) this.buffered = CORE.inputBuffer;
     else this.buffered = Math.max(0, this.buffered - dt);
-    if (meleePressed&&weaponReady) this.meleeBuffered = CORE.inputBuffer;
+    if (meleePressed && !this._raiseEaten && (weaponReady || raising)) this.meleeBuffered = CORE.inputBuffer;
     else this.meleeBuffered = Math.max(0, this.meleeBuffered - dt);
 
     // ---- melee: one owner, the whole timeline here. Legal from sprint and
@@ -1272,9 +1461,9 @@ export class Weapons {
       }
     }
 
-    // A tap reloads on release; holding the same key deliberately lowers instead.
-    // Active reloads retain the original press-time sample in _stepLowering.
-    if(reloadTap&&!swapping&&weaponReady)this._startReload();
+    // R reloads on the PRESS (D1: nothing else lives on R any more). A press during a reload
+    // was already the active-reload attempt inside _stepLowering; while lowered it raised.
+    if (reloadTap && !swapping && weaponReady) this._startReload();
 
     // ---- AUTO-RELOAD (ROUND 5, NEXT.md item 3). Alex: "it should automatically reload when
     // it gets to zero". DERIVED from the gun's own state every step, never armed by an edge.
@@ -1301,22 +1490,17 @@ export class Weapons {
     // a run, and a key-keyed rule would start-and-cancel every step for as long as it was held.
     this._autoReload = this.ammo === 0 && this.reserve > 0 && !this.reloading;
     if (this._autoReload && !this.melee && !p.sprinting && this.sprintOutTimer <= 0
-        && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar&&weaponReady&&!i.reload) {
+        && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar && weaponReady) {
       this._startReload(true);
     }
     if (this.reloading) {
       const r = this.reloading;
-      // HANDS: a missed active-reload JAMS — the clock stops, the beats stop, and the
-      // gun is simply not ready for activeJamS. Without the node r.jam is never set.
-      if (r.jam > 0) {
-        r.jam = Math.max(0, r.jam - dt);
-      } else {
-        r.t += dt * (r.rate || 1);
-      }
-      while (r.bi < r.beats.length && r.t >= r.beats[r.bi][1] * r.scale) {
+      r.t += dt * (r.rate || 1);          // rate > 1 after an active-reload hit (D2)
+      while (r.bi < r.beatN && r.t >= r.beats[r.bi][1] * r.scale) {
         const name = r.beats[r.bi++][0];
-        if (name === 'seat' && !r.empty) this._creditReload();
-        if (name === 'boltrelease') this._creditReload();
+        if (name === 'shell') this._creditShell();
+        else if (name === 'seat' && !r.empty) this._creditReload();
+        else if (name === 'boltrelease') this._creditReload();
         if (name === 'cancelopen') r.cancelable = true;
         this._emitReload('beat', name);
         const pu = this._pulse('reload:beat');
@@ -1327,18 +1511,15 @@ export class Weapons {
         this._parked = null;
         this.reloading = null;
         this._pulse('reload:end');
-      } else if (p.sprinting && !this.melee && (this._canParkReload() || r.auto)) {
-        // Running cancels the reload. With HANDS 'Carry' it is PARKED and comes back where it
-        // was left; without the node, an AUTO reload (the one the gun started at zero, which
-        // wantsSprintCancel deliberately does not block) is thrown away and the derived rule
-        // above starts it again the step the legs stop. A reload the PLAYER asked for is not
-        // touched here — it still blocks the sprint, exactly as it does on master.
-        // Legal at any point in the timeline — the answer to something arriving does not wait
-        // for `cancelopen`. Keyed on the player actually RUNNING (player.sprinting, the same
-        // truth the sprint-out gate reads), not on the held key: shift held while standing
-        // still is not a run, and a key-keyed rule would park and restart the reload every
-        // step for as long as it was held.
-        this._cancelReload(this._canParkReload());
+      } else if (p.sprinting && !this.melee) {
+        // D3: running PARKS the reload, whoever started it, and it comes back where it was
+        // left - an AUTO one the step the legs stop (the derived rule above), a manual one on
+        // the next R. Legal at any point in the timeline - the answer to something arriving
+        // does not wait for `cancelopen`. Keyed on the player actually RUNNING (player.sprinting,
+        // the same truth the sprint-out gate reads), not on the held key: shift held while
+        // standing still is not a run, and a key-keyed rule would park and restart the reload
+        // every step for as long as it was held.
+        this._cancelReload(true);
       } else if ((i.fire || this.buffered > 0 || aimPressed) && r.cancelable) {
         this._cancelReload();
       }
@@ -1378,6 +1559,7 @@ export class Weapons {
     const canFire = !this.reloading && !this.melee && this.sprintOutTimer <= 0
       && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar&&weaponReady;
     const wantFire = d.auto ? (i.fire || this.buffered > 0) : (this.buffered > 0);
+    if (firePressed) this.dryLatch = false;   // every CLICK clicks (the latch is per held pull)
     this.firing = false;
     if (wantFire && canFire && this.ammo > 0) {
       // A PULL THAT DOES NOT FIRE MUST COST NOTHING. This block used to clear `buffered`
@@ -1420,6 +1602,12 @@ export class Weapons {
         if (!this.dryLatch) {
           this.dryLatch = true;
           this._pulse('dry');
+          // Heard and seen. Alex, in the Avery house: "the gun looked like it was shooting but
+          // no sound and no damage" - an empty gun with an empty reserve gave a silent jolt.
+          // The click goes out as a reload beat (guns.reloadCue maps 'dry' to the dry click)
+          // and the HUD flashes the ammo box for 0.3 s (C21: dryFlashT).
+          this._emitReload('beat', 'dry');
+          this.dryFlashT = 0.3;
         }
         this.dryHeld += dt;
         if (this.dryHeld > 0.700) { this.dryHeld = 0; this._startReload(); }
@@ -1479,6 +1667,7 @@ export class Weapons {
     // ---- exposure transient. post.js reads weapons.flashEV.
     this.flashEV *= Math.pow(0.5, dt / 0.083);
     if (this.flashEV < 0.002) this.flashEV = 0;
+    if (this.dryFlashT > 0) this.dryFlashT = Math.max(0, this.dryFlashT - dt);
 
     // ---- publish. viewmodel is manifest entry 12 and steps next.
     const s = this.vmState;

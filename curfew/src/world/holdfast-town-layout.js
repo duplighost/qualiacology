@@ -19,6 +19,12 @@ export const HOLDFAST_TOWN = Object.freeze({
   ],
   lamps: [
     ...[0,6.3,12.6,18.9,25.2,31.5].map((y,i)=>({id:'keep-lantern-'+i,x:3.9,z:-5,y:y+2.9})),
+    // The breaker's own lantern: on the hall side of the x = -4.7 doorway wall, 1.2 m along
+    // from the board (refuge.js 'holdfast' anchors put it at (-4.67, -18.18)), so
+    // holdfast-life._light borrows a rover beside the board the moment you are in the keep
+    // and the darkest thing in the hall is lit by the wall around it. The fitting is in
+    // holdfast-keep.js dressHoldfastKeep, level 0.
+    {id:'keep-breaker-lantern',x:-3.9,z:-17.0,y:2.75},
     {id:'keep-roof-lantern',x:-5,z:-6,y:39.4},
     ...[-1,1].flatMap(side=>[17,53].map(z=>({id:'upper-lantern-'+side+'-'+z,x:side*44,z,y:8.52}))),
     { id: 'street-west', x: -7.8, z: 55, y: 2.05 },
@@ -121,14 +127,20 @@ export const HOLDFAST_TOWN = Object.freeze({
     { id:'keep-weaver', x:-8.7, z:-8.9, y:19.10, yaw:H },
     { id:'keep-watcher', x:-2.6, z:-9.5, y:38.0, yaw:0 },
   ],
+  // holdfast-life.js paints each as a 2.6 x 0.87 plane at (x, y || 2.3, z) facing `yaw`;
+  // holdfast-town.js builds the board behind a 'post' sign (two posts to the paving) so the
+  // painted plane is a signboard, not a sheet in the air. 'wall' = it sits on masonry already.
   signs: [
-    {x:5.8,z:61.83,y:2.55,yaw:Math.PI,text:'OPEN GATE'},
-    { x: -12.6, z: 148, yaw: 0, text: 'HOLDFAST\nEngines in the road.\nPeople in the light.' },
-    { x: -20.7, z: 31, yaw: H, text: 'MOONRISE ARMS' },
-    { x: 20.7, z: 28, yaw: -H, text: 'THE WARM ENGINE' },
-    { x: -23.7, z: 99, yaw: H, text: 'ARMS / AMMUNITION' },
-    { x: 22.7, z: 99, yaw: -H, text: 'PARTS / REPAIRS' },
-    { x: 43.2, z: -40.8, yaw: 0, text: 'SEALED BY THE WATCH\nDo not answer from below.' },
+    // on the gatehouse's splayed jamb over the crank, which runs at 45 degrees from (5.5, 63.1)
+    // to (6.5, 62.1) (MEASURED, tests/sign-clearance.mjs: at z 61.83 / y 2.55 it hung a metre
+    // off the masonry with the crank's lantern through its right-hand end)
+    {x:5.99,z:62.61,y:3.45,yaw:-Math.PI*0.75,text:'OPEN GATE',mount:'wall'},
+    { x: -12.6, z: 148, yaw: 0, text: 'HOLDFAST\nEngines in the road.\nPeople in the light.', mount: 'post' },
+    { x: -20.7, z: 31, yaw: H, text: 'MOONRISE ARMS', mount: 'post' },
+    { x: 20.7, z: 28, yaw: -H, text: 'THE WARM ENGINE', mount: 'post' },
+    { x: -23.7, z: 99, yaw: H, text: 'ARMS / AMMUNITION', mount: 'post' },
+    { x: 22.7, z: 99, yaw: -H, text: 'PARTS / REPAIRS', mount: 'post' },
+    { x: 43.2, z: -40.8, yaw: 0, text: 'SEALED BY THE WATCH\nDo not answer from below.', mount: 'post' },
   ],
 });
 

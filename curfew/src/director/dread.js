@@ -146,9 +146,80 @@ export const DREAD_TABLE = Object.freeze({
   hushBuild: 2.6,                      // the whole build, so the payoff lands in the hole it dug
   hushCollapse: 1.4,                   // the collapse IS the cut; the absence must be audible
   hushWithdraw: 1.15,                  // [fetch enemies.js:69-85] the silence is the tell
+
+  // D14 / horror 3: THE WATCHER FROM THE CAR. On foot the donor numbers above stand. At
+  // 23 m/s, 16-26 m is under a second of travel and the 8 m hush fires at highway speed, so
+  // from the car it stands on the verge 48-72 m ahead and the withdrawal is the PASSING.
+  watcherCarMin: 48, watcherCarMax: 72,
+  watcherCarLat: [3.0, 5.5],           // m off the road heading: the verge, not the lane
+  watcherCarFade: 0.12,                // s: gone the frame it leaves the cone, not a dissolve
+  // D3: the watcher withdraws under a HELD torch beam — base behaviour (was the Resolve perk).
+  // Longer than the perk's dwell was: 3.5 s of beam before it gives, and it gives as a withdrawal.
+  watcherResolveS: 3.5,
+
+  // horror 8: the mimic finishes the phrase. You stop; 0.35-0.70 s after your last step it
+  // lands ONE more, 1.6 m behind (one step closer), then a short hush. Once per arming.
+  mimicCloseMin: 0.35, mimicCloseMax: 0.70,
+  mimicCloseBehind: 1.6,
+  mimicCloseHush: 0.8,
+
+  // D14: THE HALLUCINATIONS. A rare heavy family with its own rarity budget: the oasis and
+  // the laughter share one clock (one per ~12 min, at most miragePerCycle a night), need deep
+  // cover far from any road or place, never play from the car, and are "not there" at
+  // mirageGone. A lie is allowed to be brighter than the sky; it is the only thing here that is.
+  mirageEveryS: 720, miragePerCycle: 2,
+  mirageRoadMin: 60, mirageCoverMin: 0.6, miragePlaceClear: 120,
+  mirageGone: 14,
+  oasisAheadMin: 45, oasisAheadMax: 80,  // m ahead: far enough to walk toward, near enough to read
+  oasisTtl: 150,                       // s it waits before it gives up on you
+  oasisIntensity: 34,                  // cd, borrowed: warm light on the sand
+  oasisCollapse: 0.9,                  // s the palms take to go to nothing
+  shoreEveryMin: 9, shoreEveryMax: 13, // s between surf swells while it stands
+  oasisPay: 0.30,                      // it WAS pointing at something, three times in ten
+  oasisCashMin: 30, oasisCashMax: 60, oasisXp: 40,
+  laughterAheadMin: 30, laughterAheadMax: 60,
+  laughterGone: 10,                    // m: closer than the oasis; you can nearly see faces
+  laughterTtl: 120,
+  laughterIntensity: 24,               // cd, warm
+  laughterTurn: 0.4,                   // s: every figure turns to face you...
+  laughterFade: 0.7,                   // ...and is gone
+  laughterReal: 0.25,                  // one of them was real, one time in four
+  giggleMin: 2, giggleMax: 4,          // s between giggles, from a random figure
+  giggleBehind: 2.3,                   // m: the last one, behind you (the mimic's distance)
+  figureRing: 3.2,                     // m: the five stand inside this ring
+
+  // C13: the glint that had a body. 1.5 m off the trunk, on your side of it.
+  paleFromEyesOff: 1.5,
+
+  // horror 16 / 17: a candle in an unclaimed window; a parked headlight that dies watched.
+  candleIntensity: 9, candleColour: 0xffc98e, candleY: 2.3,   // cd; warm; m above the pad (a window)
+  candleWatchS: 4,                     // s watched and it is gone
+  candleSecondOff: 4.5,                // m along the wall to the second window
+  dyingWatchS: 1.5,                    // s watched before the battery starts to go
+  dyingColour: 0xff9a5c,               // what it warms toward as it dies
+  dyingGoneGain: 0.3,
+
+  // horror 13: the pacer's one turn. Silence, 'witnessed' at the lamp it condemned, a kick,
+  // and the picture is taken for 4 s. Once per night is the species; make the one count.
+  pacerHush: 4.0, pacerKick: 0.30, pacerScripted: 0.85, pacerScriptedS: 4,
+
+  // horror 10: THE BLACK HOUR IS FELT. Beats 0.7x apart and fewer soft rolls while it lasts;
+  // post's uPulse (contrast + halation) breathes at pulseHz through the 90 s telegraph and
+  // holds at pulseBlack through the hour. C18: composed with the trailcam's pulseKick by max.
+  blackTimerMul: 0.7, blackSoftRoll: 0.62,
+  pulseTelegraph: 0.35, pulseHz: 0.8, pulseBlack: 0.15,
 });
 
 const D = DREAD_TABLE;
+
+// D14: per-kind cooldown overrides, in seconds; a kind not listed uses D.beatCooldown (22).
+// 'eyes' was the third-heaviest soft beat on a 22 s cooldown on top of two other systems
+// painting eyes on trunks; the mirages are rarer than anything else here by design.
+const KIND_COOLDOWN = Object.freeze({
+  eyes: 90,
+  oasis: 720, laughter: 720,
+  'pale-from-eyes': 240,     // C13
+});
 
 export const BEAT = Object.freeze({ none: 0, soft: 1, build: 2, stinger: 3, collapse: 4 });
 
@@ -183,6 +254,10 @@ export const BEAT_SOUNDS = Object.freeze([
   'filament-pop',  // your torch dying at the eye
   'breath-ear',    // and a breath at your ear in the dark
   'canopy-rush', 'glass-strain', 'vault-resonance', 'cable-strain',
+  // C10 (D14): the AUDIO lane's bakes for the hallucinations and the refuge knock
+  'shore',         // soft surf swells from the oasis — a shore the county does not have
+  'giggle',        // short breathed laughter from a figure in warm light
+  'knock',         // three knuckles on the refuge door (world/refuge.js answers it)
 ]);
 
 const SOUND_OK = Object.create(null);
@@ -195,11 +270,14 @@ const MENU = Object.freeze([
   { kind: 'call', w: 12, heavy: false },
   { kind: 'mimic', w: 12, heavy: false },
   { kind: 'door', w: 8, heavy: false },
-  { kind: 'eyes', w: 14, heavy: false },
+  { kind: 'eyes', w: 6, heavy: false },      // D14: was 14, and see KIND_COOLDOWN
   { kind: 'lantern', w: 8, heavy: false },
   { kind: 'watcher', w: 10, heavy: true },
   { kind: 'runner', w: 8, heavy: true },
   { kind: 'prints', w: 8, heavy: true },
+  // D14: the hallucinations. Heavy (a picture on the screen), and behind _mirageRefusal.
+  { kind: 'oasis', w: 4, heavy: true, mirage: true },
+  { kind: 'laughter', w: 4, heavy: true, mirage: true },
 ]);
 
 /* ------------------------------------------------------------- module scratch -- */
@@ -212,6 +290,9 @@ const _tree = { x: 0, z: 0, r: 0 };
 const _cand = { x: 0, y: 0, z: 0, ok: false };
 const _spot = { x: 0, y: 0, z: 0 };
 const _place = { x: 0, z: 0, radius: D.placeRadiusDefault };
+const _col = new THREE.Color();           // horror 17: the dying lantern's warming colour
+const _colA = new THREE.Color();
+const _fellOut = [];                      // C17: what collision.fellTrees retired; emptied per use
 
 export class Dread {
   static id = 'dread';
@@ -266,7 +347,7 @@ export class Dread {
       this.timers[i] = { on: false, t: 0, tag: 0, serial: 0, x: 0, y: 0, z: 0 };
     }
     this.serial = 1;
-    this.TAG = { none: 0, payoff: 1, mimic: 2, breath: 3 };
+    this.TAG = { none: 0, payoff: 1, mimic: 2, breath: 3, giggle: 4 };
 
     this.stats = {
       beats: 0, soft: 0, builds: 0, stingers: 0, collapses: 0,
@@ -291,6 +372,16 @@ export class Dread {
     this._offJump = null;
     this.lootReturn = { on: false, t: 0, age: 0, x: 0, z: 0, hushed: false, variant: 0 };
     this.lastLootReturn = -1e9;
+
+    /* ---- D14: the hallucinations' rarity budget, the mimic's close, the pacer's picture,
+            the Pale that was a glint, the tree that walked --------------------------- */
+    this.lastMirageAt = -1e9;
+    this.mirageThisCycle = 0;
+    this._lastStepAt = -1e9;               // horror 8: the clock at your last footfall
+    this._mimicClosed = false;
+    this._pacerScriptedT = 0;              // horror 13: seconds the pacer's turn owns the picture
+    this._paleE = null;                    // C13: the officer, until it is released
+    this._uprootRec = null;                // C17: the claimed trunk of the last uproot
 
     /* ---- the mimic: armed by a beat, fed by the player's own footfalls ---- */
     this.mimicT = 0;
@@ -329,6 +420,11 @@ export class Dread {
         if (p && ['crate', 'box', 'strongbox'].includes(p.tag)) this._queueLootReturn(p);
       }));
       this._offs.push(bus.on('pickup:cache', (p) => this._queueLootReturn(p)));
+      // C13: fx says a lit wrong-height pair was walked toward. horror 13: the pacer turned.
+      this._offs.push(bus.on('eyeshine:approached', (p) => this._onEyesApproached(p)));
+      this._offs.push(bus.on('pacer:turned', (p) => this._onPacerTurned(p)));
+      // The mirage budget is per night: a new dusk (never the boot announcement) resets it.
+      this._offs.push(bus.on('phase:changed', (p) => { if (p && p.phase === 'dusk' && p.prev) this.mirageThisCycle = 0; }));
     }
   }
 
@@ -454,16 +550,102 @@ export class Dread {
     this.lanternGeo = lanternGeo;
     this.lantern = {
       mesh: new THREE.Mesh(lanternGeo, this.matLantern),
+      mesh2: new THREE.Mesh(lanternGeo, this.matLantern),   // horror 16: the second window
       on: false, t: 0, ttl: 0, x: 0, y: 0, z: 0, handle: null, fade: 1, owner: null,
+      // horror 16 / 17: a candle (window height, 9 cd, warm) or a dying headlight; how long
+      // you have watched it; its own candela and colour, so present() drives either.
+      candle: false, dying: false, dyingOn: false, dyingDone: false, watchT: 0,
+      intensity: D.lanternIntensity, colour: 0xffb469,
+      second: { on: false, x: 0, y: 0, z: 0, handle: null },
     };
     this.lantern.mesh.visible = false;
     this.lantern.mesh.frustumCulled = false;
+    this.lantern.mesh2.visible = false;
+    this.lantern.mesh2.frustumCulled = false;
     this.root.add(this.lantern.mesh);
+    this.root.add(this.lantern.mesh2);
+
+    /* ---- D14: THE OASIS. Four palm cutouts, a warm disc on the sand and a flat 'water',
+            all on clones of the one base material (palms opaque-black, disc and water
+            additive): still one program. Built once, positioned per beat, collapsed to
+            nothing when you arrive. --------------------------------------------------- */
+    this.matPalm = base.clone(); this.matPalm.color.setHex(0x04040a);   // black cutouts against the glow
+    this.matSand = base.clone(); this.matSand.color.setHex(0xffb469);
+    this.matSand.blending = THREE.AdditiveBlending; this.matSand.depthWrite = false; this.matSand.opacity = 0.35;
+    this.matWater = base.clone(); this.matWater.color.setHex(0x7fb0c8);
+    this.matWater.blending = THREE.AdditiveBlending; this.matWater.depthWrite = false; this.matWater.opacity = 0.12;
+    {
+      // One palm: three tapered trunk segments leaning outward and six fronds as thin boxes.
+      // A box has both faces; the base material is FrontSide and a plane frond would be
+      // culled from behind, and DoubleSide is a second program.
+      const pp = [];
+      for (let s = 0; s < 3; s++) {
+        const seg = new THREE.CylinderGeometry(0.11 - s * 0.02, 0.16 - s * 0.02, 2.2, 6);
+        seg.translate(0, 1.1, 0);                 // foot at 0
+        seg.rotateZ(-0.10 - s * 0.06);            // leaning, more each segment
+        seg.translate(s * 0.34, s * 2.05, 0);
+        pp.push(seg);
+      }
+      const topX = 3 * 0.34 - 0.10, topY = 3 * 2.05 + 0.3;
+      for (let f = 0; f < 6; f++) {
+        const frond = new THREE.BoxGeometry(0.42, 2.6, 0.03);
+        frond.translate(0, -1.2, 0);              // hangs from its root
+        frond.rotateX(0.95);                      // droops
+        frond.rotateY(f * (TAU / 6) + 0.3);
+        frond.translate(topX, topY, 0);
+        pp.push(frond);
+      }
+      this.palmGeo = mergeGeometries(pp, false);
+      for (let i = 0; i < pp.length; i++) pp[i].dispose();
+    }
+    this.oasis = {
+      group: new THREE.Group(), palms: [], on: false, t: 0, ttl: 0, x: 0, y: 0, z: 0,
+      handle: null, collapsing: false, ct: 0, shoreT: 0, paid: false, sway: 0,
+    };
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Mesh(this.palmGeo, this.matPalm);
+      const a = i * (TAU / 4) + 0.6, r = 2.6 + (i % 2) * 1.3;
+      m.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
+      m.rotation.y = a + Math.PI;                 // leaning out, away from the water
+      const sc = 0.85 + i * 0.09;
+      m.scale.set(sc, sc, sc);
+      m.userData.sc = sc;
+      m.frustumCulled = false;
+      this.oasis.group.add(m);
+      this.oasis.palms.push(m);
+    }
+    const sandGeo = new THREE.CircleGeometry(6, 24); sandGeo.rotateX(-Math.PI / 2); sandGeo.translate(0, 0.04, 0);
+    this.sandGeo = sandGeo;
+    const sand = new THREE.Mesh(sandGeo, this.matSand); sand.frustumCulled = false; this.oasis.group.add(sand);
+    const waterGeo = new THREE.PlaneGeometry(7, 4.5); waterGeo.rotateX(-Math.PI / 2); waterGeo.translate(0, 0.07, 0);
+    this.waterGeo = waterGeo;
+    const water = new THREE.Mesh(waterGeo, this.matWater); water.frustumCulled = false; this.oasis.group.add(water);
+    this.oasis.group.visible = false;
+    this.root.add(this.oasis.group);
+
+    /* ---- D14: THE LAUGHTER. Five figures on the watcher's geometry in the Pale's porcelain
+            on ONE shared clone, so one opacity write fades all five; each sways on its own
+            phase and every one turns to face you when you get close. ------------------- */
+    this.matFigure = base.clone(); this.matFigure.color.setHex(0x7c776c);
+    this.figures = new Array(5);
+    this.figRec = new Array(5);
+    for (let i = 0; i < 5; i++) {
+      const m = new THREE.Mesh(fig, this.matFigure);
+      m.visible = false; m.frustumCulled = false;
+      this.root.add(m);
+      this.figures[i] = m;
+      this.figRec[i] = { x: 0, y: 0, z: 0, yaw0: 0, sway: 0 };
+    }
+    this.laughS = {
+      on: false, n: 0, t: 0, ttl: 0, x: 0, y: 0, z: 0, handle: null,
+      resolving: false, rt: 0, real: -1, reached: false, giggleT: 0, sway: 0,
+    };
 
     /* ---- live beat records ----------------------------------------------- */
     this.watcherS = {
       on: false, x: 0, y: 0, z: 0, t: 0, ttl: 0, observed: 0, seen: false,
       vanishing: false, vt: 0, approached: false, sway: 0,
+      car: false, beamT: 0,      // horror 3: placed from the car; D3: seconds under the torch beam
     };
     this.runnerS = {
       on: false, t: 0, dur: 1, x0: 0, z0: 0, x1: 0, z1: 0, y: 0,
@@ -945,11 +1127,11 @@ export class Dread {
    * Returns a handle (an owner token) or null when the kit is busy — and a refusal is a
    * legitimate answer, not a failure, because the alternative is two lanterns in one frame.
    */
-  commission(prop, x, y, z, owner) {
+  commission(prop, x, y, z, owner, opts) {
     let ok = false;
     if (prop === 'footprints') ok = this._startPrints(x, z);
     else if (prop === 'eyes') ok = this._startEyes(x, y, z, owner);
-    else if (prop === 'lantern') ok = this._startLantern(x, y, z, owner);
+    else if (prop === 'lantern') ok = this._startLantern(x, y, z, owner, opts);
     if (ok) { this.stats.commissions++; return { prop, owner }; }
     this.stats.commissionsRefused++;
     return null;
@@ -970,18 +1152,22 @@ export class Dread {
 
   _kindReady(kind) {
     const at = this.kindAt[kind];
-    return at === undefined || this.clock - at >= D.beatCooldown;
+    const cd = KIND_COOLDOWN[kind] !== undefined ? KIND_COOLDOWN[kind] : D.beatCooldown;
+    return at === undefined || this.clock - at >= cd;
   }
 
   _pickKind() {
     // Weighted, minus the kinds that are cooling down, minus the heavy ones if a heavy beat
     // ran recently. Three silhouettes in a row is a parade, not a haunting.
     const heavyOk = this.clock - this.lastHeavyAt > D.beatCooldown * 1.6;
+    // D14: the hallucinations answer to their own rarity budget as well as the menu's.
+    const mirageOk = this._mirageRefusal() === '';
     let total = 0;
     for (let i = 0; i < MENU.length; i++) {
       const m = MENU[i];
       if (!this._kindReady(m.kind)) continue;
       if (m.heavy && !heavyOk) continue;
+      if (m.mirage && !mirageOk) continue;
       total += m.w;
     }
     if (total <= 0) return null;
@@ -990,6 +1176,7 @@ export class Dread {
       const m = MENU[i];
       if (!this._kindReady(m.kind)) continue;
       if (m.heavy && !heavyOk) continue;
+      if (m.mirage && !mirageOk) continue;
       r -= m.w;
       if (r <= 0) return m;
     }
@@ -1023,6 +1210,8 @@ export class Dread {
       case 'watcher': ok = this._beatWatcher(); break;
       case 'runner': ok = this._beatRunner(); break;
       case 'prints': ok = this._beatPrints(); break;
+      case 'oasis': ok = this._beatOasis(); break;
+      case 'laughter': ok = this._beatLaughter(); break;
       default: ok = false;
     }
     if (ok) this._noteKind(m.kind, m.heavy);
@@ -1060,6 +1249,7 @@ export class Dread {
   _beatMimic() {
     this.mimicT = D.mimicWindow;
     this.mimicCount = 0;
+    this._mimicClosed = false;              // horror 8: one close per arming
     this._player(_pos);
     const p = this._sys('player');
     const yaw = p ? p.yaw : this._headingAhead();
@@ -1079,6 +1269,7 @@ export class Dread {
     if (this.mimicT <= 0 || this._returning()) return;
     const p = this._sys('player');
     if (p && (p.sprinting || p.tacSprinting)) return;
+    this._lastStepAt = this.clock;          // horror 8: the close is timed from this
     this.mimicCount++;
     if (this.mimicCount % D.mimicEverySteps !== 0) return;
     this._player(_pos);
@@ -1186,9 +1377,17 @@ export class Dread {
    */
   _beatWatcher() {
     if (this.watcherS.on) return false;
+    const sh = this.ctx.shared;
+    const inCar = !!(sh && sh.inCar);
     for (let a = 0; a < D.refuseRetries; a++) {
-      const d = D.watcherMin + this.rng.next() * (D.watcherMax - D.watcherMin);
-      const lat = (this.rng.next() - 0.5) * 1.6;
+      // D14 / horror 3: from the car it stands on the verge 48-72 m ahead, on a coin side;
+      // on foot the donor's 16-26 m and +-0.8 m stand. Eye sight is validated either way.
+      const d = inCar
+        ? D.watcherCarMin + this.rng.next() * (D.watcherCarMax - D.watcherCarMin)
+        : D.watcherMin + this.rng.next() * (D.watcherMax - D.watcherMin);
+      const lat = inCar
+        ? (this.rng.next() < 0.5 ? -1 : 1) * (D.watcherCarLat[0] + this.rng.next() * (D.watcherCarLat[1] - D.watcherCarLat[0]))
+        : (this.rng.next() - 0.5) * 1.6;
       const p = this._aheadPoint(d, lat);
       const v = this._validate(p.x, p.z, 0);
       if (!v.ok) { this.stats.refusedPlacement++; continue; }
@@ -1198,6 +1397,7 @@ export class Dread {
       S.on = true; S.x = v.x; S.y = v.y; S.z = v.z;
       S.t = 0; S.observed = 0; S.seen = false;
       S.vanishing = false; S.vt = 0; S.approached = false; S.sway = this.rng.next() * TAU;
+      S.car = inCar; S.beamT = 0;
       S.ttl = D.watcherTtlMin + this.rng.next() * (D.watcherTtlMax - D.watcherTtlMin);
       this.watcher.position.set(S.x, S.y, S.z);
       this.watcher.rotation.set(0, 0, 0);
@@ -1299,6 +1499,9 @@ export class Dread {
       e.on = true; e.owner = owner || null;
       e.t = 0; e.state = 0;
       e.life = D.eyesLifeMin + this.rng.next() * (D.eyesLifeMax - D.eyesLifeMin);
+      // D14: the shared eyes budget. fx's glint pool stands down for CFG.fx.eyeshine.exclusionS
+      // after this stamp (sim time, main.js ctx.time.t, the clock fx reads too).
+      { const sh = this.ctx.shared, tm = this.ctx.time; if (sh && tm) sh.eyesAt = tm.t; }
       e.sacT = 0; e.sacX = 0; e.sacY = 0; e.blink = 0;
       e.x = x; e.y = y; e.z = z;
       e.mat.opacity = 0;
@@ -1313,21 +1516,48 @@ export class Dread {
     return false;
   }
 
-  _startLantern(x, y, z, owner) {
+  /**
+   * `opts` (the Auditor's row, through commission): `candle` puts it at window height on the
+   * pad at 9 cd, warm (horror 16), `two` adds a second window along the wall, `dying` lets
+   * it start to die once you have watched it (horror 17). No opts is the road lantern.
+   */
+  _startLantern(x, y, z, owner, opts) {
     const L = this.lantern;
     if (L.on) return false;
+    const candle = !!(opts && opts.candle);
+    if (candle) y = this._groundAt(x, z) + D.candleY;
     L.on = true; L.owner = owner || null;
     L.t = 0; L.ttl = D.lanternTtl; L.fade = 1;
     L.x = x; L.y = y; L.z = z;
+    L.candle = candle; L.dying = !!(opts && opts.dying);
+    L.dyingOn = false; L.dyingDone = false; L.watchT = 0;
+    L.intensity = candle ? D.candleIntensity : D.lanternIntensity;
+    L.colour = candle ? D.candleColour : 0xffb469;
     L.mesh.position.set(x, y, z);
     L.mesh.visible = true;
     this.matLantern.opacity = 1;
     // The ONLY dynamic light this file makes exist, and it is borrowed, not created.
     const lights = this._sys('lights');
     if (lights && typeof lights.borrow === 'function') {
-      L.handle = lights.borrow('lantern', x, y, z, 0xffb469, D.lanternIntensity, 0);
+      L.handle = lights.borrow(candle ? 'candle' : 'lantern', x, y, z, L.colour, L.intensity, 0);
     }
-    this.answer('lantern', x, y, z, 0.4);
+    if (candle && opts.two) {
+      // the second window: along the wall, i.e. across the line from you to the first
+      this._player(_pos);
+      let ax = x - _pos.x, az = z - _pos.z;
+      const al = Math.hypot(ax, az) || 1;
+      ax /= al; az /= al;
+      const S2 = L.second;
+      S2.on = true;
+      S2.x = x - az * D.candleSecondOff; S2.z = z + ax * D.candleSecondOff;
+      S2.y = this._groundAt(S2.x, S2.z) + D.candleY;
+      L.mesh2.position.set(S2.x, S2.y, S2.z);
+      L.mesh2.visible = true;
+      S2.handle = lights && typeof lights.borrow === 'function'
+        ? lights.borrow('candle', S2.x, S2.y, S2.z, L.colour, L.intensity, 0) : null;
+    }
+    // a candle is set down, not swung: the handle clink, quieter, from the window
+    this.answer('lantern', x, y, z, candle ? 0.25 : 0.4);
     return true;
   }
 
@@ -1339,6 +1569,12 @@ export class Dread {
     L.handle = null;
     L.on = false; L.owner = null;
     L.mesh.visible = false;
+    const S2 = L.second;
+    if (S2.on) {
+      if (S2.handle && lights && typeof lights.release === 'function') lights.release(S2.handle);
+      S2.handle = null; S2.on = false;
+      L.mesh2.visible = false;
+    }
   }
 
   /* ================================================= build and stinger ===== */
@@ -1421,6 +1657,11 @@ export class Dread {
     // A hush whose payoff was cancelled is a bed that never comes back. Let it go with them.
     if (this.hushS) { this.hushS.on = false; this.hushS.t = 0; this.hushS.dur = 0; }
     if (this.lootReturn) this.lootReturn.on = false;
+    // D14: a mirage does not survive a death or the morning; it goes without paying.
+    if (this.oasis) this._endOasis(false);
+    if (this.laughS) this._endLaughter(false);
+    this._paleE = null;
+    this._pacerScriptedT = 0;
   }
 
   // A cache is usually simply a reward. Occasionally the woods answer only after
@@ -1477,7 +1718,11 @@ export class Dread {
     // the road does not go dead.
     const s = this._speed();
     const scale = clamp(D.speedRef / Math.max(0.001, s), D.timerScaleMin, D.timerScaleMax);
-    return base * scale;
+    // horror 10: the black hour is FELT — beats come blackTimerMul apart while it lasts. The
+    // 26 s loud gap is untouched, so the metronome law holds.
+    const sh = this.ctx.shared;
+    const black = sh && sh.phase === 'black' ? D.blackTimerMul : 1;
+    return base * scale * black;
   }
 
   /* ================================================= the step ============== */
@@ -1510,6 +1755,16 @@ export class Dread {
     this.lantern.mesh.position.set(-8, Y, 0);
     this.matLantern.opacity = 1;
     this.lantern.mesh.visible = true;
+    this.lantern.mesh2.position.set(-9, Y, 0);
+    this.lantern.mesh2.visible = true;
+    // D14: the oasis and the five figures share the program above, and are revealed too, so
+    // nothing in this kit is ever drawn for the first time in the middle of a night.
+    const O = this.oasis;
+    O.group.position.set(-20, Y, 0); O.group.visible = true;
+    for (let i = 0; i < O.palms.length; i++) { const p = O.palms[i], sc = p.userData.sc; p.scale.set(sc, sc, sc); }
+    this.matPalm.opacity = 1; this.matSand.opacity = 0.35; this.matWater.opacity = 0.12;
+    for (let i = 0; i < this.figures.length; i++) { this.figures[i].position.set(-30 - i * 1.5, Y, 0); this.figures[i].visible = true; }
+    this.matFigure.opacity = 1;
     this._warm = true;
   }
 
@@ -1520,7 +1775,9 @@ export class Dread {
     for (let i = 0; i < this.eyes.length; i++) {
       if (!this.eyes[i].on) this.eyes[i].mesh.visible = false;
     }
-    if (!this.lantern.on) this.lantern.mesh.visible = false;
+    if (!this.lantern.on) { this.lantern.mesh.visible = false; this.lantern.mesh2.visible = false; }
+    if (!this.oasis.on) this.oasis.group.visible = false;
+    if (!this.laughS.on) for (let i = 0; i < this.figures.length; i++) this.figures[i].visible = false;
   }
 
   _returning() { return !!(this.ctx.shared?.lateBellFinal || this.ctx.shared?.morningReturned); }
@@ -1562,6 +1819,32 @@ export class Dread {
 
     if (this.mimicT > 0) this.mimicT -= d;
 
+    // horror 8: THE MIMIC FINISHES THE PHRASE. You stopped; one more step lands behind you,
+    // closer than the copies were. One only: two is a stranger, one is you.
+    if (this.mimicT > 0 && !this._mimicClosed && this.mimicCount >= 2 && this._speed() < 0.3) {
+      const since = this.clock - this._lastStepAt;
+      if (since >= D.mimicCloseMin && since <= D.mimicCloseMax) {
+        this._mimicClosed = true; this.mimicT = 0;
+        const p = this._player(_pos);
+        const yaw = p ? p.yaw : 0;
+        const x = _pos.x + Math.sin(yaw) * D.mimicCloseBehind, z = _pos.z + Math.cos(yaw) * D.mimicCloseBehind;
+        this.answer('mimic', x, this._groundAt(x, z) + 0.1, z, 0.34);
+        this.hush(D.mimicCloseHush);
+      }
+    }
+    // horror 13: the pacer's turn owned the picture; give it back on time, never under a build
+    if (this._pacerScriptedT > 0) {
+      this._pacerScriptedT -= d;
+      if (this._pacerScriptedT <= 0 && !this.building) this.tension.releaseScripted();
+    }
+    // C13: the Pale that was a glint. Released (under your gaze, or close): it withdrew. A
+    // body you shot is not a withdrawal.
+    const PE = this._paleE;
+    if (PE && !PE.alive) {
+      if (!(PE.hp <= 0) && PE.pos) this.answer('withdraw', PE.pos.x, PE.pos.y + 1.4, PE.pos.z, 0.7);
+      this._paleE = null;
+    }
+
     // ROUND 13: the jump beats' running parts (the drop's landing, the blackout's return),
     // the stand-behind clock, and a forced beat from config().
     this._stepJump(d);
@@ -1581,6 +1864,7 @@ export class Dread {
       s.tag = 0;
       if (tag === this.TAG.payoff) this._resolveBuild();
       else if (tag === this.TAG.mimic) this.answer('mimic', s.x, s.y, s.z, 0.30);
+      else if (tag === this.TAG.giggle) this.answer('giggle', s.x, s.y, s.z, 0.6);   // D14: the last one, behind you
       else if (tag === this.TAG.breath) {
         // ROUND 13: the blackout's breath, at the ear, from just behind
         this._player(_pos);
@@ -1595,6 +1879,8 @@ export class Dread {
     this._stepPrints(d);
     this._stepEyes(d);
     this._stepLantern(d);
+    this._stepOasis(d);
+    this._stepLaughter(d);
     this.pacer?.step(d);
     this.ledgerKeeper?.step(d);
     this._stepLootReturn(d);
@@ -1626,7 +1912,10 @@ export class Dread {
     // THE ROLL. rand < 0.76 OR sinceLoud < 13 -> soft. Restraint is the default and the
     // build is the exception, which is the inversion that makes the build mean anything.
     const sinceLoud = this.clock - this.lastLoud;
-    if (this.rng.next() < CFG.director.dread.softRoll || sinceLoud < D.softIfSinceLoud) {
+    // horror 10: fewer soft rolls through the black hour, so more builds and more silence.
+    const sh = this.ctx.shared;
+    const softRoll = sh && sh.phase === 'black' ? D.blackSoftRoll : CFG.director.dread.softRoll;
+    if (this.rng.next() < softRoll || sinceLoud < D.softIfSinceLoud) {
       // A beat that REFUSED its placement has not happened, so it must not cost a whole
       // interval. It re-rolls in 3 s instead. Three refusals in a row was a minute and a
       // half of empty road; see D.retryAfter.
@@ -1719,6 +2008,13 @@ export class Dread {
     }
     const en = this._sys('enemies');
     if (!en || typeof en.spawn !== 'function') return 'no-enemies';
+    if (kind === 'uproot') {
+      // C17: the forest and the collider bake both have to be able to give a tree up
+      const flora = this._sys('flora');
+      if (!flora || typeof flora.claimTrunk !== 'function') return 'no-flora';
+      const col = this._sys('collision');
+      if (!col || typeof col.fellTrees !== 'function') return 'no-collision';
+    }
     if (kind === 'turn' && this.backCoverT < J.turnWalkS && !forced) return 'walk';
     if (kind === 'blackout') {
       const L = this._sys('lights');
@@ -1759,7 +2055,7 @@ export class Dread {
     let kind = force;
     if (!kind) {
       // the ready kinds, weighted; the drop is the commonest, the pack the rarest
-      const W = { turn: 6, drop: 6, blackout: 5, pack: 4 };
+      const W = { turn: 6, drop: 6, blackout: 5, pack: 4, uproot: 5 };
       let total = 0;
       for (const k in W) if (this._jumpRefusal(k, false) === '') total += W[k];
       if (total <= 0) return false;
@@ -1780,6 +2076,7 @@ export class Dread {
       case 'drop': ok = this._beatDrop(); break;
       case 'pack': ok = this._beatPack(); break;
       case 'blackout': ok = this._beatBlackout(); break;
+      case 'uproot': ok = this._beatUproot(); break;
       default: ok = false;
     }
     if (!ok) {
@@ -1876,6 +2173,64 @@ export class Dread {
     this.answer('branch', tree.x, c.y + J.dropH, tree.z, 0.9);
     this.dropS.on = true; this.dropS.e = e; this.dropS.t = 0; this.dropS.landed = false;
     this.dropS.x = ax; this.dropS.y = c.y; this.dropS.z = az;
+    return true;
+  }
+
+  /**
+   * THE UPROOT (D14, C17). A tree that was flora until you were close. The trunk two to four
+   * and a half metres off the point three metres ahead is claimed from the forest (flora hides
+   * the instance, collision retires its circle) and a treant stands where it stood — awake,
+   * facing you, the crown rushing and a branch cracking. It is under WALK, so you can always
+   * leave; what you cannot do is walk past it. The spawn comes AFTER the collider is retired,
+   * because enemies.spawn refuses ground a trunk still occupies. A refused spawn gives the
+   * forest its tree back, collider and all.
+   */
+  _beatUproot() {
+    const J = CFG.director.jump;
+    const en = this._sys('enemies');
+    const col = this._sys('collision');
+    const flora = this._sys('flora');
+    if (!en || !col || !flora || typeof flora.claimTrunk !== 'function' || typeof col.fellTrees !== 'function') return false;
+    const ahead = this._aheadPoint(3.0, 0);        // _pos is the player after this
+    const ax = ahead.x, az = ahead.z;
+    const yaw = this._headingAhead();
+    const fwx = -Math.sin(yaw), fwz = -Math.cos(yaw);
+    let tree = null;
+    if (typeof col.nearestTagged === 'function') {
+      const n = col.nearestTagged(ax, az, J.uprootTreeMax + 1.0, _TREE_TAGS);
+      if (n && n.radius >= 0.30) {
+        const d = Math.hypot(n.x - ax, n.z - az);
+        // in the band, and AHEAD of him: a tree at his heel is not a thing he walked up to
+        if (d >= J.uprootTreeMin && d <= J.uprootTreeMax && (n.x - _pos.x) * fwx + (n.z - _pos.z) * fwz > 0.8) {
+          _tree.x = n.x; _tree.z = n.z; _tree.r = n.radius;
+          tree = _tree;
+        }
+      }
+    }
+    if (!tree) return false;
+    // a trunk placement: sight to the bark, no standing test (the tree is what stands there)
+    const c = this._validate(tree.x, tree.z, 0, tree.r, true);
+    if (!c.ok) return false;
+    const rec = flora.claimTrunk(tree.x, tree.z, 1.2);
+    if (!rec) { this.stats.refusedNoTree++; return false; }
+    _fellOut.length = 0;
+    col.fellTrees(tree.x, tree.z, 0.6, _fellOut, 1);
+    // enemies' yaw convention is facing = (-sin, -cos), so facing him is this
+    const face = Math.atan2(-(_pos.x - tree.x), -(_pos.z - tree.z));
+    const e = en.spawn('treant', tree.x, tree.z, { ambush: true, ambushS: 8, riseS: 1.4, awake: true, yaw: face });
+    if (!e) {
+      if (typeof flora.restoreTrunk === 'function') flora.restoreTrunk(rec);
+      if (typeof col.restoreTree === 'function') for (let i = 0; i < _fellOut.length; i++) col.restoreTree(_fellOut[i]);
+      _fellOut.length = 0;
+      return false;
+    }
+    _fellOut.length = 0;
+    this._uprootRec = rec;
+    _spot.x = tree.x; _spot.z = tree.z; _spot.y = c.y;
+    this.answer('canopy-rush', tree.x, c.y + 6.5, tree.z, 0.9);   // the crown, letting go
+    this.answer('branch', tree.x, c.y + 2.0, tree.z, 0.8);
+    const fx = this._sys('fx');
+    if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(0.2);
     return true;
   }
 
@@ -2001,15 +2356,26 @@ export class Dread {
     }
     else S.observed = Math.max(0, S.observed - d * 2);
 
+    // D3: UNDER A HELD TORCH BEAM IT HOLDS — base behaviour now, no perk. What the beam has
+    // found does not leave when you look away and the ordinary dwell does not run; and after
+    // watcherResolveS of beam it WITHDRAWS, with the hush and the sound, exactly as it does
+    // when you close to 8 m. The beam is the torch on and the camera on it (the lore's Pale
+    // steps back from the light, but only from a light that is held on it).
+    const lights = this._sys('lights');
+    const beam = watched && !!(lights && typeof lights.torchOn === 'function' && lights.torchOn());
+    S.beamT = beam ? S.beamT + d : 0;
+
     if (!S.vanishing) {
-      // ROUND 6 (lane G): LAMP's Resolve, the hook nothing ran (NEXT.md 3). ONE read, here,
-      // at the reveal decision — nodes.js HOOK_POINTS 'resolveWatchers'. With the node owned
-      // and the torch on, what the beam has found HOLDS: it no longer leaves the instant you
-      // look away, nor once you have stared long enough. The withdrawal at 8 m and the ttl
-      // are untouched, so it is still a thing that goes, on its own terms.
-      const resolved = this._resolveWatchers();
-      // The withdrawal. Closing to 8 m is the gut punch, and it beats every other exit.
-      if (dxz < D.watcherGone) {
+      if (S.car) {
+        // horror 3: from the car the withdrawal is the PASSING. No 8 m hush at highway speed;
+        // it is gone the frame it leaves the view cone after you have seen it, or the frame
+        // the car passes it, and the fade is a cut, not a dissolve.
+        const car = this._sys('car');
+        const h = car && typeof car.heading === 'number' ? car.heading : this._headingAhead();
+        const passed = (S.x - _pos.x) * -Math.sin(h) + (S.z - _pos.z) * -Math.cos(h) < 0;
+        if ((S.seen && !watched) || passed || S.t > S.ttl) { S.vanishing = true; S.vt = 0; }
+      } else if (dxz < D.watcherGone || S.beamT > D.watcherResolveS) {
+        // The withdrawal. Closing to 8 m is the gut punch, and it beats every other exit.
         S.vanishing = true; S.vt = 0; S.approached = true;
         // [fetch enemies.js:69-85] the hush comes FIRST and it is the tell: the world stops,
         // and only then is the thing you walked up to not there any more.
@@ -2017,35 +2383,21 @@ export class Dread {
         this.answer('withdraw', S.x, S.y + 1.4, S.z, 1);
         const fx = this._sys('fx');
         if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(0.05);
-      } else if (!resolved && S.seen && !watched && S.observed <= 0) {
+      } else if (!beam && S.seen && !watched && S.observed <= 0) {
         // [marrow entity.js:388-391] the starer is gone the instant you look away.
         S.vanishing = true; S.vt = 0;
-      } else if ((!resolved && S.observed > D.watcherDwell + dxz * 0.04) || S.t > S.ttl) {
+      } else if ((!beam && S.observed > D.watcherDwell + dxz * 0.04) || S.t > S.ttl) {
         S.vanishing = true; S.vt = 0;
       }
     }
     if (S.vanishing) {
       S.vt += d;
-      if (S.vt > D.watcherFade + 0.07) {
+      if (S.vt > (S.car ? D.watcherCarFade : D.watcherFade) + 0.07) {
         S.on = false;
         this.watcher.visible = false;
       }
     }
     S.sway += d * 0.9;
-  }
-
-  /**
-   * ROUND 6 (lane G): the one read of 'resolveWatchers'. The hook runs whenever a watcher is
-   * stepped, so progress.hookReport() counts it; the ANSWER is only yes with the torch on,
-   * because the node is "what the BEAM finds". Lazy sibling reads, nothing retained.
-   */
-  _resolveWatchers() {
-    const prog = this._sys('progress');
-    if (!prog || typeof prog.perk !== 'function') return false;
-    const yes = prog.perk('resolveWatchers', false) === true;
-    if (!yes) return false;
-    const lights = this._sys('lights');
-    return !!(lights && typeof lights.torchOn === 'function' && lights.torchOn());
   }
 
   _stepRunner(d) {
@@ -2123,12 +2475,42 @@ export class Dread {
     L.t += d;
     this._player(_pos);
     const dxz = Math.hypot(_pos.x - L.x, _pos.z - L.z);
+    // horror 16 / 17: the candle and the dying headlight both care whether you are LOOKING.
+    if (L.candle || L.dying) {
+      const watched = this.watching(L.x, L.y, L.z, 0.86, 120);
+      L.watchT = watched ? L.watchT + d : Math.max(0, L.watchT - d * 2);
+    }
+    if (L.dying && !L.dyingOn && L.watchT > D.dyingWatchS) {
+      // "They were waiting for someone to see them and then they were allowed to stop." The
+      // fade starts on being watched, never on a timer, and it is given the time to finish.
+      L.dyingOn = true;
+      const F = CFG.setpieces && CFG.setpieces.dying;
+      L.ttl = Math.max(L.ttl, L.t + ((F && F.fadeS) || 90) + 4);
+    }
+    if (L.dyingOn && !L.dyingDone) {
+      const F = CFG.setpieces && CFG.setpieces.dying;
+      const fadeS = (F && F.fadeS) || 90;
+      const floor = F && typeof F.floor === 'number' ? F.floor : 0.15;
+      L.fade = Math.max(floor, L.fade - d * (1 - floor) / fadeS);
+      // it warms as it dies: the lamp's colour toward dyingColour by how far down it is
+      _col.setHex(L.colour); _colA.setHex(D.dyingColour);
+      _col.lerp(_colA, clamp01((1 - L.fade) / (1 - floor)));
+      if (L.handle && typeof L.handle.setColour === 'function') L.handle.setColour(_col);
+      if (L.fade <= floor + 1e-6) {
+        L.dyingDone = true;
+        this.answer('lantern-gone', L.x, L.y, L.z, D.dyingGoneGain);
+        this._endLantern();
+        return;
+      }
+    }
+    // horror 16: a candle you have watched candleWatchS is gone, like one you walked up to
+    const candleDone = L.candle && L.watchT > D.candleWatchS;
     // ...and it is not there when you arrive.
-    if (dxz < D.lanternGone || L.t > L.ttl) {
+    if (dxz < D.lanternGone || L.t > L.ttl || candleDone) {
       L.fade -= d / D.lanternFade;
-      if (L.handle) L.handle.setIntensity(Math.max(0, D.lanternIntensity * L.fade));
+      if (L.handle) L.handle.setIntensity(Math.max(0, L.intensity * L.fade));
       if (L.fade <= 0) {
-        if (dxz < D.lanternGone) this.answer('lantern-gone', L.x, L.y, L.z, 0.5);
+        if (dxz < D.lanternGone || candleDone) this.answer('lantern-gone', L.x, L.y, L.z, 0.5);
         this._endLantern();
       }
     }
@@ -2145,15 +2527,68 @@ export class Dread {
     const a = alpha === undefined ? 1 : alpha;
     this.tension.apply();
 
+    // horror 10 + C18: THE BLACK HOUR IS FELT. clock.telegraph (the last 90 s of night) breathes
+    // post's uPulse — contrast and halation — at pulseHz; the hour itself holds pulseBlack.
+    // The trailcam's flash kick (ctx.shared.pulseKick, the SITES lane) composes by max, so
+    // neither hides the other. uPulse had no caller before this; it costs no program.
+    const post = this._sys('post');
+    if (post && typeof post.setPulse === 'function') {
+      const sh = this.ctx.shared;
+      const clk = this._sys('clock');
+      const tele = clk && typeof clk.telegraph === 'number' ? clk.telegraph : 0;
+      let pulse = 0;
+      if (sh && sh.phase === 'black') pulse = D.pulseBlack;
+      else if (tele > 0) pulse = tele * D.pulseTelegraph * (0.5 + 0.5 * Math.sin(this.clock * TAU * D.pulseHz));
+      const kick = sh && typeof sh.pulseKick === 'number' ? sh.pulseKick : 0;
+      post.setPulse(pulse > kick ? pulse : kick);
+    }
+
     const S = this.watcherS;
     if (S.on) {
       // It breathes very slightly, so it is not a decal — but it never steps toward you.
       this.watcher.position.set(S.x, S.y + Math.sin(S.sway) * 0.006, S.z);
       this._player(_pos);
       this.watcher.rotation.y = Math.atan2(_pos.x - S.x, _pos.z - S.z);
-      this.matWatcher.opacity = S.vanishing ? Math.max(0, 1 - S.vt / D.watcherFade) : 1;
+      this.matWatcher.opacity = S.vanishing ? Math.max(0, 1 - S.vt / (S.car ? D.watcherCarFade : D.watcherFade)) : 1;
       this.matFace.opacity = this.matWatcher.opacity;
       this.watcher.visible = this.matWatcher.opacity > 0.002;
+    }
+
+    // D14: THE OASIS. The palms sway, the glow breathes; collapsing, they go to nothing.
+    const O = this.oasis;
+    if (O.on) {
+      const k = O.collapsing ? Math.max(0, 1 - O.ct / D.oasisCollapse) : 1;
+      for (let i = 0; i < O.palms.length; i++) {
+        const p = O.palms[i];
+        const sc = p.userData.sc * k;
+        p.scale.set(sc, sc, sc);
+        p.rotation.z = Math.sin(O.sway * 0.7 + i * 1.3) * 0.03;
+      }
+      const breathe = 0.9 + 0.1 * Math.sin(O.sway * 0.9);
+      this.matSand.opacity = 0.35 * k * breathe;
+      this.matWater.opacity = 0.12 * k * (0.85 + 0.15 * Math.sin(O.sway * 1.7 + 1));
+      if (O.handle) O.handle.setIntensity(D.oasisIntensity * k * breathe);
+      O.group.visible = k > 0.002;
+    }
+
+    // D14: THE LAUGHTER. Five figures swaying; resolving, every one turns to face you over
+    // laughterTurn, then they fade over laughterFade and the light goes with them.
+    const G = this.laughS;
+    if (G.on) {
+      this._player(_pos);
+      const turnK = G.resolving ? clamp01(G.rt / D.laughterTurn) : 0;
+      for (let i = 0; i < G.n; i++) {
+        const r = this.figRec[i], m = this.figures[i];
+        const toYou = Math.atan2(_pos.x - r.x, _pos.z - r.z);
+        let dy = toYou - r.yaw0;
+        while (dy > Math.PI) dy -= TAU;
+        while (dy < -Math.PI) dy += TAU;
+        m.rotation.y = r.yaw0 + dy * turnK;
+        m.position.set(r.x, r.y + Math.sin(G.sway * 1.1 + r.sway) * 0.008, r.z);
+      }
+      const fadeK = G.resolving ? clamp01(1 - Math.max(0, G.rt - D.laughterTurn) / D.laughterFade) : 1;
+      this.matFigure.opacity = fadeK;
+      if (G.handle) G.handle.setIntensity(D.laughterIntensity * fadeK * (0.92 + 0.08 * Math.sin(G.sway * 1.3)));
     }
 
     const R = this.runnerS;
@@ -2194,10 +2629,317 @@ export class Dread {
     const L = this.lantern;
     if (L.on) {
       // A lantern is never steady. Two non-harmonic terms so it never reads as a sine.
+      // L.fade carries the road lantern's going, the dying headlight's long decline and the
+      // candle's end alike, so one write drives all three.
       const flick = 0.86 + 0.10 * Math.sin(L.t * 7.3) + 0.06 * Math.sin(L.t * 3.1 + 1.7);
       this.matLantern.opacity = clamp01(flick * L.fade);
-      if (L.handle && L.fade >= 1) L.handle.setIntensity(D.lanternIntensity * flick);
+      if (L.handle) L.handle.setIntensity(Math.max(0, L.intensity * flick * L.fade));
+      if (L.second.on && L.second.handle) {
+        L.second.handle.setIntensity(Math.max(0, L.intensity * (0.86 + 0.10 * Math.sin(L.t * 6.1 + 2.3)) * L.fade));
+      }
     }
+  }
+
+  /* =========================================== D14: THE HALLUCINATIONS ===== */
+
+  /** The mirage family's own gate, over the menu's. '' when one may play, else the reason. */
+  _mirageRefusal() {
+    const sh = this.ctx.shared;
+    if (sh && sh.inCar) return 'in-car';                       // never from the car
+    if (this.oasis.on || this.laughS.on) return 'busy';
+    if (this.clock - this.lastMirageAt < D.mirageEveryS) return 'cooldown';
+    if (this.mirageThisCycle >= D.miragePerCycle) return 'cycle';
+    const region = this.regionKey();
+    if (region !== 'pines' && region !== 'ridge' && region !== 'marsh') return 'region';
+    this._player(_pos);
+    const roads = this._sys('roads');
+    if (roads && typeof roads.roadDistance === 'function' && roads.roadDistance(_pos.x, _pos.z) < D.mirageRoadMin) return 'road';
+    const flora = this._sys('flora');
+    const cover = flora && typeof flora.coverAt === 'function' ? flora.coverAt(_pos.x, _pos.z) : 0;
+    if (cover < D.mirageCoverMin) return 'cover';
+    if (this._hasNearbyPlace(D.miragePlaceClear)) return 'place';
+    return '';
+  }
+
+  _noteMirage() {
+    this.lastMirageAt = this.clock;
+    this.mirageThisCycle++;
+  }
+
+  /**
+   * THE OASIS. A beach with palms and warm light, 45-80 m ahead in the pines, with surf you
+   * can hear. Walk to it: at mirageGone the palms go to nothing, the light goes out, the
+   * county holds its breath — and three times in ten the sand pays. It WAS pointing at
+   * something.
+   */
+  _beatOasis() {
+    for (let a = 0; a < D.refuseRetries; a++) {
+      const d = D.oasisAheadMin + this.rng.next() * (D.oasisAheadMax - D.oasisAheadMin);
+      const lat = (this.rng.next() - 0.5) * 12;
+      const p = this._aheadPoint(d, lat);
+      const v = this._validate(p.x, p.z, 3.0);          // 3 m clear each side: a clearing
+      if (!v.ok) { this.stats.refusedPlacement++; continue; }
+      return this._startOasis(v.x, v.y, v.z);
+    }
+    return false;
+  }
+
+  _startOasis(x, y, z) {
+    const O = this.oasis;
+    if (O.on) return false;
+    O.on = true; O.t = 0; O.ttl = D.oasisTtl; O.x = x; O.y = y; O.z = z;
+    O.collapsing = false; O.ct = 0; O.paid = false; O.sway = this.rng.next() * TAU;
+    O.shoreT = D.shoreEveryMin + this.rng.next() * (D.shoreEveryMax - D.shoreEveryMin);
+    O.group.position.set(x, y, z);
+    O.group.rotation.y = this.rng.next() * TAU;
+    for (let i = 0; i < O.palms.length; i++) { const p = O.palms[i], sc = p.userData.sc; p.scale.set(sc, sc, sc); }
+    this.matSand.opacity = 0.35; this.matWater.opacity = 0.12;
+    O.group.visible = true;
+    // borrowed, never created; a mirage that gets no rover (32 logical taken) still glows
+    const lights = this._sys('lights');
+    O.handle = lights && typeof lights.borrow === 'function'
+      ? lights.borrow('mirage', x, y + 2.5, z, 0xffc27a, D.oasisIntensity, 0) : null;
+    this.answer('shore', x, y + 1.0, z, 0.7);
+    this._noteMirage();
+    return true;
+  }
+
+  _stepOasis(d) {
+    const O = this.oasis;
+    if (!O.on) return;
+    O.t += d; O.sway += d;
+    this._player(_pos);
+    const dxz = Math.hypot(_pos.x - O.x, _pos.z - O.z);
+    const sh = this.ctx.shared;
+    if (!O.collapsing) {
+      O.shoreT -= d;
+      if (O.shoreT <= 0) {
+        O.shoreT = D.shoreEveryMin + this.rng.next() * (D.shoreEveryMax - D.shoreEveryMin);
+        this.answer('shore', O.x, O.y + 1.0, O.z, 0.6);
+      }
+      // gone when you arrive; abandoned if you drive off or it waited long enough
+      if (dxz < D.mirageGone) this._collapseOasis(true);
+      else if (O.t > O.ttl || (sh && sh.inCar)) this._collapseOasis(false);
+      return;
+    }
+    O.ct += d;
+    if (O.ct >= D.oasisCollapse) this._endOasis(O.paid);
+  }
+
+  _collapseOasis(reached) {
+    const O = this.oasis;
+    O.collapsing = true; O.ct = 0;
+    // the hush first, then the sound of it leaving — the watcher's grammar
+    this.hush(D.hushWithdraw);
+    this.answer('withdraw', O.x, O.y + 1.2, O.z, 0.8);
+    O.paid = reached && this.rng.next() < D.oasisPay;
+  }
+
+  _endOasis(pay) {
+    const O = this.oasis;
+    if (!O.on) return;
+    const lights = this._sys('lights');
+    if (O.handle && lights && typeof lights.release === 'function') lights.release(O.handle);
+    O.handle = null; O.on = false; O.collapsing = false;
+    O.group.visible = false;
+    if (!pay) return;
+    // the exact calls scavenging.js makes for a dig, so the ledger and the receipt agree
+    const prog = this._sys('progress');
+    const cashN = D.oasisCashMin + Math.floor(this.rng.next() * (D.oasisCashMax - D.oasisCashMin + 1));
+    const cash = prog && typeof prog.payCash === 'function' ? prog.payCash(cashN, O.x, O.y + 0.4, O.z, 'mirage') : 0;
+    const xp = prog && typeof prog.award === 'function' ? prog.award(D.oasisXp, O.x, O.y + 0.4, O.z, 'mirage') : 0;
+    const bus = this.ctx.bus;
+    if (bus) {
+      bus.emit('reward:bundle', {
+        title: 'Something under the sand', cash: cash || 0, xp: xp || 0, ammo: 0, bulbs: 0,
+        detail: 'It was pointing at this.', x: O.x, y: O.y + 0.7, z: O.z,
+      });
+    }
+    const fx = this._sys('fx');
+    if (fx && typeof fx.reward === 'function') fx.reward(O.x, O.y, O.z, cash || 1);
+  }
+
+  /**
+   * THE LAUGHTER. Five pale figures in warm light, 30-60 m ahead, laughing every few seconds.
+   * At laughterGone every one of them turns to face you and they are gone; the last giggle is
+   * behind you. One time in four one of them was real, and it is still standing there.
+   */
+  _beatLaughter() {
+    for (let a = 0; a < D.refuseRetries; a++) {
+      const d = D.laughterAheadMin + this.rng.next() * (D.laughterAheadMax - D.laughterAheadMin);
+      const lat = (this.rng.next() - 0.5) * 8;
+      const p = this._aheadPoint(d, lat);
+      const v = this._validate(p.x, p.z, 4.0);          // 4 m clear each side: a lit clearing
+      if (!v.ok) { this.stats.refusedPlacement++; continue; }
+      return this._startLaughter(v.x, v.y, v.z);
+    }
+    return false;
+  }
+
+  _startLaughter(x, y, z) {
+    const G = this.laughS;
+    if (G.on) return false;
+    const col = this._sys('collision');
+    let placed = 0;
+    for (let i = 0; i < this.figures.length; i++) {
+      // each on its own spot inside the ring, on ground a body could stand on
+      let fx = x, fz = z, ok = false;
+      for (let t = 0; t < 4 && !ok; t++) {
+        const a = this.rng.next() * TAU, r = 0.8 + this.rng.next() * D.figureRing;
+        fx = x + Math.sin(a) * r; fz = z + Math.cos(a) * r;
+        ok = !(col && typeof col.canOccupy === 'function') || col.canOccupy(fx, fz, 0.34, 1.9);
+      }
+      if (!ok) continue;
+      const r = this.figRec[placed];
+      r.x = fx; r.z = fz; r.y = this._groundAt(fx, fz);
+      r.yaw0 = this.rng.next() * TAU; r.sway = this.rng.next() * TAU;
+      placed++;
+    }
+    if (placed < 3) { this.stats.refusedPlacement++; return false; }
+    G.on = true; G.n = placed; G.t = 0; G.ttl = D.laughterTtl; G.x = x; G.y = y; G.z = z;
+    G.resolving = false; G.rt = 0; G.real = -1; G.reached = false; G.sway = 0;
+    G.giggleT = 0.6 + this.rng.next() * 1.2;
+    // the real one is chosen now: the farthest figure from you, one time in four
+    if (this.rng.next() < D.laughterReal) {
+      this._player(_pos);
+      let far = -1, fd = -1;
+      for (let i = 0; i < placed; i++) {
+        const r = this.figRec[i];
+        const dd = Math.hypot(r.x - _pos.x, r.z - _pos.z);
+        if (dd > fd) { fd = dd; far = i; }
+      }
+      G.real = far;
+    }
+    this.matFigure.opacity = 1;
+    for (let i = 0; i < this.figures.length; i++) {
+      const m = this.figures[i], r = this.figRec[i];
+      if (i < placed) { m.position.set(r.x, r.y, r.z); m.rotation.set(0, r.yaw0, 0); m.visible = true; }
+      else m.visible = false;
+    }
+    const lights = this._sys('lights');
+    G.handle = lights && typeof lights.borrow === 'function'
+      ? lights.borrow('mirage', x, y + 2.2, z, 0xffc27a, D.laughterIntensity, 0) : null;
+    this.answer('giggle', x, y + 1.5, z, 0.55);
+    this._noteMirage();
+    return true;
+  }
+
+  _stepLaughter(d) {
+    const G = this.laughS;
+    if (!G.on) return;
+    G.t += d; G.sway += d;
+    this._player(_pos);
+    const dxz = Math.hypot(_pos.x - G.x, _pos.z - G.z);
+    const sh = this.ctx.shared;
+    if (!G.resolving) {
+      G.giggleT -= d;
+      if (G.giggleT <= 0) {
+        G.giggleT = D.giggleMin + this.rng.next() * (D.giggleMax - D.giggleMin);
+        const r = this.figRec[Math.floor(this.rng.next() * G.n)];
+        this.answer('giggle', r.x, r.y + 1.5, r.z, 0.5);
+      }
+      if (dxz < D.laughterGone) this._resolveLaughter(true);
+      else if (G.t > G.ttl || (sh && sh.inCar)) this._resolveLaughter(false);
+      return;
+    }
+    G.rt += d;
+    if (G.rt >= D.laughterTurn + D.laughterFade) this._endLaughter(G.reached);
+  }
+
+  _resolveLaughter(reached) {
+    const G = this.laughS;
+    G.resolving = true; G.rt = 0; G.reached = reached;
+    this.hush(D.hushWithdraw);
+    this.answer('withdraw', G.x, G.y + 1.2, G.z, 0.8);
+    if (reached) {
+      // the last giggle is BEHIND you, once they have gone (_pos is the player: _stepLaughter)
+      const cam = this._sys('camera');
+      const p = this._sys('player');
+      const yaw = cam ? cam.yaw : (p ? p.yaw : 0);
+      const x = _pos.x + Math.sin(yaw) * D.giggleBehind, z = _pos.z + Math.cos(yaw) * D.giggleBehind;
+      this._after(this.TAG.giggle, D.laughterTurn + D.laughterFade + 0.35, x, _pos.y + 1.5, z);
+    }
+  }
+
+  _endLaughter(reached) {
+    const G = this.laughS;
+    if (!G.on) return;
+    const lights = this._sys('lights');
+    if (G.handle && lights && typeof lights.release === 'function') lights.release(G.handle);
+    G.handle = null; G.on = false; G.resolving = false;
+    for (let i = 0; i < this.figures.length; i++) this.figures[i].visible = false;
+    if (reached && G.real >= 0) {
+      // one of them was real: a Pale, staged, where the farthest figure stood. It freezes
+      // when looked at; it is dread-owned and costs no headcount.
+      const en = this._sys('enemies');
+      const r = this.figRec[G.real];
+      if (en && typeof en.spawn === 'function') en.spawn('pale', r.x, r.z, { staged: true });
+    }
+    G.real = -1;
+  }
+
+  /* ======================================= C13: THE GLINT THAT HAD A BODY ===== */
+
+  /**
+   * fx says a wrong-height pair, lit and walked toward, is close. The lore's Pale IS the
+   * eyeshine at the wrong height, so under the permit and a 240 s cooldown it gets its body:
+   * a Pale 1.5 m off the trunk on your side, awake — it freezes under your gaze and is
+   * released at 12 m or after 1.5 s of it — and the glint dies the same frame.
+   */
+  _onEyesApproached(p) {
+    if (!p || !this.enabled || this._returning()) return;
+    const sh = this.ctx.shared;
+    if (sh && sh.inCar) return;                         // a glint from the car is a glint
+    if (!this.permitOk()) return;
+    if (!this._kindReady('pale-from-eyes')) return;
+    const en = this._sys('enemies');
+    if (!en || typeof en.spawn !== 'function') return;
+    this._player(_pos);
+    const dx = _pos.x - p.x, dz = _pos.z - p.z;
+    const dl = Math.hypot(dx, dz) || 1;
+    const x = p.x + (dx / dl) * D.paleFromEyesOff, z = p.z + (dz / dl) * D.paleFromEyesOff;
+    const c = this._validate(x, z, 0, 0, true);
+    if (!c.ok) { this.stats.refusedPlacement++; return; }
+    const e = en.spawn('pale', x, z, { awake: true });
+    if (!e) return;
+    this._noteKind('pale-from-eyes', false);
+    this._paleE = e;
+    // the glint and the body never share a frame
+    const fx = this._sys('fx');
+    if (fx && typeof fx.killEyeshineNear === 'function') fx.killEyeshineNear(p.x, p.z);
+  }
+
+  /* ============================================ horror 13: THE PACER'S TURN ===== */
+
+  /**
+   * The pacer turned, once a night, and condemned a road light (dusk-to-dawn.warnVisiblePole
+   * starts that pole's flicker). Silence for pacerHush, 'witnessed' from the lamp, a kick on
+   * the bus, and the picture is taken for pacerScriptedS — never over a build, which owns it.
+   */
+  _onPacerTurned(p) {
+    if (!p || !this.enabled || this._returning()) return;
+    this.hush(D.pacerHush);
+    const d2d = this._sys('dusk-to-dawn');
+    const pole = d2d && d2d.poles && typeof p.lamp === 'number' ? d2d.poles[p.lamp] : null;
+    const x = pole ? pole.hx : p.x, z = pole ? pole.hz : p.z;
+    const y = pole ? pole.headY : this._groundAt(x, z) + 1.7;
+    this.answer('witnessed', x, y, z, 0.9);
+    this.tension.addKick(D.pacerKick);
+    if (!this.building) {
+      this.tension.takeScripted(D.pacerScripted);
+      this._pacerScriptedT = D.pacerScriptedS;
+    }
+  }
+
+  /** horror 16: is there an UNCLAIMED, un-hub major in the Auditor's reach for a candle. */
+  candleOk() {
+    const places = this._sys('places');
+    if (!places || typeof places.nearestMajor !== 'function') return false;
+    if (!this._nearPlace(74 * 2.5)) return false;      // the Auditor's placeRadiusMax x 'place' reach
+    const m = places.nearestMajor(_pos.x, _pos.z);      // _nearPlace just read it: same answer
+    if (!m || !m.def || m.def.hub) return false;
+    if (typeof places.isClaimed === 'function' && places.isClaimed(m.def.id)) return false;
+    return true;
   }
 
   /* ================================================= the surface =========== */
@@ -2210,8 +2952,9 @@ export class Dread {
       // Auditor law 1 forbids body props, and dread-road-placement.mjs pins all five road
       // rows to prints/lanterns. Only this narrow door may place one beyond the current bend.
       solvePlacement: (s, a, b, r) => self.solvePlacement(s, a, b, r, s === 'road'),
-      commission: (p, x, y, z, o) => self.commission(p, x, y, z, o),
+      commission: (p, x, y, z, o, opts) => self.commission(p, x, y, z, o, opts),
       decommission: (h) => self.decommission(h),
+      candleOk: () => self.candleOk(),      // horror 16: an unclaimed major in reach
       watching: (x, y, z, c, r) => self.watching(x, y, z, c, r),
       tell: (x, y, z) => self.tell(x, y, z),
       answer: (k, x, y, z, g) => self.answer(k, x, y, z, g),
@@ -2240,6 +2983,9 @@ export class Dread {
       lantern: this.lantern.on,
       lootReturn: !!(this.lootReturn && this.lootReturn.on),
       hush: this.hushS.on,
+      // D14
+      oasis: this.oasis.on, laughter: this.laughS.on, mirages: this.mirageThisCycle,
+      pale: !!this._paleE,
       // ROUND 13
       jump: { last: this.lastJump, backCoverT: +this.backCoverT.toFixed(2), blackout: this.blackoutS.on,
         drop: this.dropS.on, jumps: this.stats.jumps },
@@ -2275,6 +3021,8 @@ export class Dread {
     this.lastLoud = -1e9; this.quietUntil = -1e9;
     this.lastBeat = BEAT.none; this.lastBeatAt = -1e9; this.lastKind = '';
     this.lastHeavyAt = -1e9;
+    this.lastMirageAt = -1e9; this.mirageThisCycle = 0;
+    this._mimicClosed = false; this._lastStepAt = -1e9;
     for (const k in this.kindAt) delete this.kindAt[k];
     this.watcherS.on = false;
     this.runnerS.on = false;
@@ -2310,6 +3058,14 @@ export class Dread {
     if (this.matPrint) this.matPrint.dispose();
     if (this.matLantern) this.matLantern.dispose();
     for (let i = 0; i < this.eyes.length; i++) this.eyes[i].mat.dispose();
+    // D14
+    if (this.palmGeo) this.palmGeo.dispose();
+    if (this.sandGeo) this.sandGeo.dispose();
+    if (this.waterGeo) this.waterGeo.dispose();
+    if (this.matPalm) this.matPalm.dispose();
+    if (this.matSand) this.matSand.dispose();
+    if (this.matWater) this.matWater.dispose();
+    if (this.matFigure) this.matFigure.dispose();
   }
 }
 
