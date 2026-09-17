@@ -53,9 +53,24 @@ export const LINES = Object.freeze({
     file: 'answerphone-saved.wav',
     priority: 9, once: true, interrupt: false, next: 'radio.opening',
   },
+  // ALEX, 2026-09-16: "the subtitles for that first part are wrong" — and then he typed out
+  // what is actually on the tape. It had been the Zira script the recording replaced on
+  // 2026-09-15, and the session that swapped the wav said so in its own commit: "The subtitle
+  // is still the previous script. I cannot listen to a wav." Nor can I. MEASURED: the file is
+  // 14.53 s, which is about forty words of speech, against nineteen on screen — so for fifteen
+  // seconds the opening showed roughly half of a different message.
+  //
+  // AND THE LINE IS THE TUTORIAL. The truck is on empty (world/opening.js starts it at zero
+  // gas), the red cans are on the shelf (the bay rack), fill it up and come get me — every
+  // verb of the first ten minutes, said by somebody who is not coming back, and none of it
+  // was reaching the screen.
+  //
+  // NOT 'radio'. A radio does not know your name and does not leave you a message; the last
+  // round's own note said as much and then left the eyebrow saying radio anyway. The machine
+  // announces it, and this is the thing the machine kept.
   'radio.opening': {
-    speaker: 'radio',
-    text: 'Oriana. If it gets light before the bell, it is not morning. Stay off the road until you hear it.',
+    speaker: 'saved message',
+    text: 'Oriana, it’s me. I took the car. The truck’s on empty — red cans are on the shelf if you need it. If I’m not back by morning, fill it up and come get me. I’ll be back by morning. Promise.',
     file: 'radio-opening.wav',
     priority: 9, once: true, interrupt: false,
   },
