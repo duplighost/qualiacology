@@ -70,6 +70,25 @@ const SCARE_WAIT = 0.65;        // s of nothing after the shutter is fully up
 //      back as it leaves, so the room you were safe in goes with it.
 const SCARE_PATIENCE = 7.0;     // s it will wait for the doorway to be in front of you
 const SCARE_FACE = -0.05;       // dot of camera forward to the doorway: the forward half
+// ALEX, 2026-09-16: "you can exit the door before ever seeing the jump scare."
+//
+// He is right, and waiting for his eyes is what made it possible. MEASURED: the bay is 9.6 m
+// deep and the night starts 8.34 m back from the opening, so a player who walks out while
+// looking at the car, the rack or the floor covers the whole distance without the facing gate
+// ever passing — and once they are through it, the doorway is BEHIND them and the drop lands
+// at their back.
+//
+// So walking out is the trigger. Inside SCARE_DOOR_NEAR of the opening you are leaving by it,
+// whatever you happen to be looking at, and the thing drops into the gap you are walking
+// toward with the width of the bay still in front of you. That is 2.8 m of floor from the
+// spawn, and a sprint covers it in under half a second — which is the point: it is between
+// you and the way out before you get there.
+//
+// AND IT NEVER SPEAKS TO YOUR BACK. If you are already out on the forecourt it holds, patience
+// and all, until the mouth of the garage is properly in front of you again. A scare you were
+// facing away from did not happen, and it only gets to happen once.
+const SCARE_DOOR_NEAR = 5.5;    // m from the opening, inside the bay: you are on your way out
+const SCARE_OUT_FACE = 0.50;    // and from outside it wants the mouth squarely in front of you
 const SCARE_DROP = 0.08;        // the fall into the doorway
 const SCARE_LUNGE = 0.46;       // when it comes at you, once, inside the hold
 const SCARE_LUNGE_S = 0.16;     // and how long that takes
@@ -341,7 +360,7 @@ export class GarageOpening {
       // reaching the top is the same frame the beat is declared over.
       if (this._doneT !== undefined && this._scareT < 0 && this._scareBody) {
         this._doneT += dt;
-        if (this._doneT >= SCARE_WAIT) this._beginScare();
+        if (this._doneT >= SCARE_WAIT) this._beginScare(dt);
       }
       // _stepScare owns the bay lamp for as long as it is running, so it runs AFTER the
       // _bayOn(BAY_DIM) above and its write is the one that lands.
@@ -503,23 +522,34 @@ export class GarageOpening {
     } catch (e) { void e; }                                    // no body, no scare, no crash
   }
 
-  /** Start it, once, a beat after the shutter locks — and once you are facing the door. */
-  _beginScare() {
+  /** Start it, once: on your way out of the bay, or when the opening is in front of you. */
+  _beginScare(dt) {
     if (!this._scareBody || this._scareT >= 0) return;
     const p = this._sys('player');
     // The doorway, in WORLD, for the sound and the reach test.
     const dx = this.wx(BAY.x, BAY.z - BAY.d * 0.5), dz = this.wz(BAY.x, BAY.z - BAY.d * 0.5);
     // If nobody is in the bay to be frightened, spend it later rather than on an empty room.
     if (!p?.pos || Math.hypot(p.pos.x - dx, p.pos.z - dz) > SCARE_REACH) return;
-    // ARE YOU LOOKING THAT WAY? Past SCARE_PATIENCE it goes anyway, because a player who
-    // never turns round still has to be able to finish the night.
-    this._scareWait = (this._scareWait || 0) + ((this.ctx.time && this.ctx.time.dt) || 1 / 60);
-    if (this._scareWait < SCARE_PATIENCE) {
-      const cam = this._sys('camera');
-      const ax = dx - p.pos.x, az = dz - p.pos.z, d = Math.hypot(ax, az) || 1;
-      const dot = cam ? (ax * -Math.sin(cam.yaw) + az * -Math.cos(cam.yaw)) / d : 1;
-      if (dot < SCARE_FACE) return;
-    }
+    this._scareWait = (this._scareWait || 0) + (dt > 0 ? dt : 1 / 60);
+
+    // Where the body is standing, in the bay's own frame, and how far that is from the gap.
+    _scarePt.set(p.pos.x, 0, p.pos.z);
+    this.root.worldToLocal(_scarePt);
+    const inBay = _scarePt.z > SCARE_Z_LOCAL - 0.35
+      && _scarePt.z < BAY.z + BAY.d * 0.5 + 0.6
+      && Math.abs(_scarePt.x - BAY.x) < BAY.w * 0.5 + 0.6;
+    const toDoor = Math.hypot(BAY.x - _scarePt.x, SCARE_Z_LOCAL - _scarePt.z);
+
+    const cam = this._sys('camera');
+    const ax = dx - p.pos.x, az = dz - p.pos.z, d = Math.hypot(ax, az) || 1;
+    const dot = cam ? (ax * -Math.sin(cam.yaw) + az * -Math.cos(cam.yaw)) / d : 1;
+
+    // Inside: you are leaving by it, or you are looking at it, or you have stood there long
+    // enough. Outside: only with the mouth squarely in front of you, so it is never at a back.
+    const go = inBay
+      ? (toDoor <= SCARE_DOOR_NEAR || dot >= SCARE_FACE || this._scareWait >= SCARE_PATIENCE)
+      : dot >= SCARE_OUT_FACE;
+    if (!go) return;
     this._scareT = 0;
     this._scareX = dx; this._scareZ = dz;
     this._sys('progress')?.flag(SCARE_FLAG, 1);
