@@ -254,7 +254,15 @@ export class GarageOpening {
     // The LEFT wall, facing +X across the bay. On the back wall it was directly behind the
     // player's start and the beat happened out of frame; here the clock and the shutter mouth
     // are both reachable with one turn of the head, and neither needs the camera taken.
-    m.position.set(BAY.x - BAY.w * 0.5 + 0.22, this.padY + 2.45, BAY.z - 1.20);
+    // PROUD OF THE CORRUGATION. ALEX, 2026-09-18: "clock in the garage is covered by one of
+    // the vertical things on the wall." dress-station.js serviceBay hangs 18 ribs down each
+    // side wall, 0.08 x 0.075, centred 0.20 m in from the wall plane — so they occupy the
+    // band 0.16 .. 0.24, and this face sat at 0.22, INSIDE it. MEASURED: rib spacing is
+    // (9.6 - 0.56) / 17 = 0.532 m and the nearest rib stands 0.129 m off the clock's centre,
+    // straight down the dial. The face is 0.60 across and the gap between two ribs is 0.53,
+    // so it cannot be tucked between them at any z: it has to come off the wall. 0.30 clears
+    // the rib faces by 0.06, which is a clock on a bracket over corrugated iron.
+    m.position.set(BAY.x - BAY.w * 0.5 + 0.30, this.padY + 2.45, BAY.z - 1.20);
     m.rotation.y = Math.PI * 0.5;
     this.root.add(m);
     this.clockMesh = m;
