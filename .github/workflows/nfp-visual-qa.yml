@@ -52,7 +52,7 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
         run: |
           set -euo pipefail
-          cat > /tmp/nfp-render.mjs <<'NODE'
+          cat > nfp-render.mjs <<'NODE'
           import { chromium } from 'playwright-core';
           import { writeFile, stat } from 'node:fs/promises';
 
@@ -111,7 +111,7 @@ jobs:
             throw new Error('One or more authored views failed runtime readiness checks.');
           }
           NODE
-          timeout --signal=TERM --kill-after=10s 420s node /tmp/nfp-render.mjs | tee nfp-artifact/qa/harness.log
+          timeout --signal=TERM --kill-after=10s 420s node ./nfp-render.mjs | tee nfp-artifact/qa/harness.log
           cp /tmp/nfp-http.log nfp-artifact/qa/http.log
 
       - name: Assemble offline package
