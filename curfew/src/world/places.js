@@ -62,6 +62,7 @@ import {
   FIXED_MINORS,   // ROUND 22, lane H: the authored set pieces, appended after both walks
 } from './placedata.js';
 import { BUILDERS, MINOR_BUILDERS, apron, majorApproach, GLOW } from './sites.js';
+import { SNOW_FIELD_GLSL } from './snow-field.js';
 import {
   createPlaceSurfaceLibrary, disposePlaceSurfaceLibrary, placeSurfaceFor, placeBumpFor, projectPlaceSurfaceUVs,
 } from './place-surfaces.js';
@@ -109,18 +110,26 @@ function _installPlaceSnow(mat, uni, cacheKey) {
 
     shader.vertexShader = shader.vertexShader.replace(
       '#include <common>',
-      '#include <common>\nvarying float vWxUp;'
+      '#include <common>\nvarying float vWxUp;\nvarying vec2 vWxPos;'
     );
     shader.vertexShader = shader.vertexShader.replace(
       '#include <uv_vertex>',
-      '#include <uv_vertex>\nvWxUp = normalize( mat3( modelMatrix ) * normal ).y;'
+      ['#include <uv_vertex>',
+        'vWxUp = normalize( mat3( modelMatrix ) * normal ).y;',
+        // ROUND 23: the world footprint of this fragment, so a yard and the county floor it
+        // is cut into drift the SAME way and the seam between them is not a change of
+        // weather. A place node carries its own position and yaw, so this has to come off
+        // the model matrix and cannot be read from the local position.
+        'vWxPos = ( modelMatrix * vec4( position, 1.0 ) ).xz;'].join('\n')
     );
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <common>',
       ['#include <common>',
         'uniform vec2 uWeather;',
         'uniform vec3 uSnowCol;',
-        'varying float vWxUp;'].join('\n')
+        'varying float vWxUp;',
+        'varying vec2 vWxPos;',
+        SNOW_FIELD_GLSL].join('\n')
     );
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <color_fragment>',
@@ -132,8 +141,13 @@ function _installPlaceSnow(mat, uni, cacheKey) {
         // made surfaces of a place hold a little less snow than the field around them. That
         // difference is what keeps a destination legible in a white county instead of
         // dissolving into it.
+        //
+        // ROUND 23: and the same drift the county floor gets, at 0.82 of its weight, instead
+        // of a flat 0.82 wash. A 110 m yard disc taking one even tint was the single biggest
+        // sheet of flat snow in the game.
         '    float wUp = smoothstep( 0.58, 0.94, vWxUp );',
-        '    diffuseColor.rgb = mix( diffuseColor.rgb, uSnowCol, clamp( wSnow * wUp * 0.82, 0.0, 1.0 ) );',
+        '    vec4 wS = countySnow( vWxPos, wSnow, -0.06, wUp );',
+        '    diffuseColor.rgb = mix( diffuseColor.rgb, countySnowColour( uSnowCol, wS.y ), clamp( wS.x * 0.82, 0.0, 1.0 ) );',
         '  }',
         '}'].join('\n')
     );
@@ -147,7 +161,7 @@ function _installPlaceSnow(mat, uni, cacheKey) {
     }
     mat.userData.wxShaderPatched = {
       up: shader.vertexShader.indexOf('vWxUp = normalize') > -1,
-      snow: shader.fragmentShader.indexOf('mix( diffuseColor.rgb, uSnowCol') > -1,
+      snow: shader.fragmentShader.indexOf('countySnowColour( uSnowCol, wS.y )') > -1,
     };
   };
   mat.customProgramCacheKey = () => cacheKey;
@@ -1268,9 +1282,9 @@ export class Places {
       uWeather: { value: new THREE.Vector2(0, 0) },
       uSnowCol: { value: new THREE.Color().setRGB(WX_SNOW[0], WX_SNOW[1], WX_SNOW[2], THREE.LinearSRGBColorSpace) },
     };
-    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-1');
-    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-1');
-    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-1');
+    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-2');
+    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-2');
+    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-2');
 
     this.matGlow = new THREE.MeshBasicMaterial({
       vertexColors: true, fog: false, transparent: true, opacity: 1,

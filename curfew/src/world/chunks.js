@@ -45,6 +45,7 @@ import { buildChunkData, TIERS, MAX_CHUNK_SEG } from './chunk-worker.js';
 import { groundDetail, frostAt, heightAt, normalAt, flats, flatCount } from './terrain.js';
 import { sinkholeDepthAt } from './world-scars.js';
 import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
+import { SNOW_FIELD_GLSL } from './snow-field.js';
 import { loadScannedSurface } from './scanned-materials.js';
 import { preloadPlaceSurfaceLibrary } from './place-surfaces.js';
 import {readableSurface} from '../art/surface-light.js';
@@ -1391,6 +1392,7 @@ export class Chunks {
           'uniform vec2 uWetPar;',
           'varying float vGroundUp;',
           SURFACE_RELIEF_GLSL,
+          SNOW_FIELD_GLSL,
         ].join('\n')
       );
 
@@ -1404,6 +1406,10 @@ export class Chunks {
           // where three applies the vertex colour, so at THIS point diffuseColor is still
           // plain white and a snow mix against it would come out as ground x snow.
           'float gTerr = 0.0, gNearF = 0.0, gUpF = 0.0, gRelief = 0.0;',
+          // ROUND 23 — what the snow block below leaves for the roughness and the normal,
+          // which three runs after <color_fragment>. Cover, how packed the crest is, and
+          // the snow's own surface height in metres.
+          'float wCoverF = 0.0, wCrestF = 0.0, wReliefF = 0.0;',
           '{',
           // Layer A is the grit, read straight. Layer B is the mottle, read with the world
           // axes SWAPPED (a quarter turn) and offset, so the two tilings never line up.
@@ -1456,12 +1462,20 @@ export class Chunks {
           // reads as depth. The grit decides where it sticks FIRST: at a thin cover the low
           // spots fill and the high ones stay bare, so an arriving fall is patchy and a
           // settled one is complete.
+          //
+          // ROUND 23 — and that was ALL it did: one lerp to one flat colour over 64 km^2,
+          // with the relief faded out underneath it, which is what Alex saw and called
+          // awful. countySnow() (snow-field.js) answers with a drift instead of a switch:
+          // a cover with a real edge, a tone that never rises above uSnowCol but drops to
+          // 0.72 of it and goes blue in the lee, and a HEIGHT that goes to the normal below
+          // so lying snow has a surface of its own. The grit still biases where it sticks.
           '  float wSnow = uWeather.x;',
           '  if ( wSnow > 0.001 ) {',
-          '    float wUp = smoothstep( 0.50, 0.88, vGroundUp );',
-          '    float wFill = smoothstep( -0.75, 0.75, wSnow * 2.0 - 1.0 - gTerr * 0.6 );',
-          '    float wK = clamp( wSnow * wUp * ( 0.30 + 0.70 * wFill ), 0.0, 1.0 );',
-          '    diffuseColor.rgb = mix( diffuseColor.rgb, uSnowCol, wK );',
+          '    float wUp = smoothstep( 0.46, 0.86, vGroundUp );',
+          '    vec4 wS = countySnow( vGroundD.xy, wSnow, gTerr * 0.17, wUp );',
+          '    float wK = wS.x;',
+          '    diffuseColor.rgb = mix( diffuseColor.rgb, countySnowColour( uSnowCol, wS.y ), wK );',
+          '    wCoverF = wK; wCrestF = wS.z; wReliefF = wS.w * gNearF;',
           '  }',
           // RAIN. Darker, and leaning toward the sky it is reflecting — the same reason the
           // road has a wet crown down its middle. The sheen rides gUpF, the raised half of
@@ -1478,14 +1492,18 @@ export class Chunks {
         ].join('\n')
       );
 
-      // The same grains now bend actual light. Snow fills the small gaps while
-      // leaving terrain-scale normals intact, so its accumulation looks smooth.
+      // The same grains now bend actual light. Snow fills the small gaps in the soil —
+      // ROUND 23: and then has a surface of its own, so the ground CHANGES substance under
+      // a cover instead of losing its relief and going flat, which is what the old
+      // `gRelief * (1.0 - uWeather.x * 0.84)` did and why deep snow looked like paint.
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <normal_fragment_maps>',
-        '#include <normal_fragment_maps>\nnormal = countyReliefNormal(-vViewPosition, normal, gRelief * (1.0 - uWeather.x * 0.84));'
+        '#include <normal_fragment_maps>\nnormal = countyReliefNormal(-vViewPosition, normal, mix(gRelief, wReliefF, wCoverF));'
       );
+      // ROUND 23: and snow is not soil's roughness either. Powder is matte; the packed
+      // windward crest is not, and that difference is the only specular a night field has.
       shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',
-        '#include <roughnessmap_fragment>\nfloat soilWet=uWeather.y*(1.0-uWeather.x)*smoothstep(.35,.92,vGroundUp);\nroughnessFactor=mix(.94,.29,soilWet*(.55+.45*smoothstep(-.25,.4,gTerr)));');
+        '#include <roughnessmap_fragment>\nfloat soilWet=uWeather.y*(1.0-uWeather.x)*smoothstep(.35,.92,vGroundUp);\nroughnessFactor=mix(.94,.29,soilWet*(.55+.45*smoothstep(-.25,.4,gTerr)));\nroughnessFactor=mix(roughnessFactor,mix(.93,.62,wCrestF),wCoverF);');
 
       // A SELF-CHECK THAT SURVIVES THE SESSION. Both of these replacements are string
       // matches against three's own chunk names, and a silent miss is not a crash — it is a
@@ -1499,14 +1517,14 @@ export class Chunks {
         // ROUND 21: and the same guarantee for weather. A missed match here is a county that
         // never goes white however hard it snows, with nothing on screen to say why.
         up: shader.vertexShader.indexOf('vGroundUp = normalize') > -1,
-        weather: shader.fragmentShader.indexOf('mix( diffuseColor.rgb, uSnowCol, wK )') > -1,
+        weather: shader.fragmentShader.indexOf('countySnowColour( uSnowCol, wS.y ), wK )') > -1,
         relief: shader.fragmentShader.indexOf('normal = countyReliefNormal') > -1,
       };
     };
     // ROUND 21: bumped to -2. The cache key is what stops three compiling a second program
     // per material variant, and it has to change when the SOURCE changes or a warm cache
     // from an earlier build could hand this material the pre-weather program.
-    mat.customProgramCacheKey = () => 'curfew-ground-relief-3';
+    mat.customProgramCacheKey = () => 'curfew-ground-relief-4';
     mat.needsUpdate = true;
   }
 

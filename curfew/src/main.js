@@ -94,6 +94,8 @@ import * as loreProcessionMod from './world/lore-procession.js';
 import * as loreLedgerMod from './lore/ledger.js';
 import * as rewardFeedbackMod from './progression/reward-feedback.js';
 import * as firstLightMod from './world/first-light.js';
+// NOT a system: no static id, no manifest row. Constructed only under ?dev=1 (see DEV_MODE).
+import { DevTravel } from './ui/dev-travel.js';
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -192,6 +194,10 @@ const params = new URLSearchParams(location.search);
 // donor: eaten-path/src/main.js:12 — exactly '1', so tests/interp.mjs's '?test=0' still
 // gets the real rAF loop it needs to measure.
 const TEST_MODE = params.get('test') === '1';
+// ?dev=1 — Alex's playtest panel on the pause card (src/ui/dev-travel.js). Exactly '1', the
+// way TEST_MODE is, so nothing turns it on by accident. Absent, nothing is constructed and no
+// DOM, listener or frame cost exists: the shipped game cannot tell this file is here.
+const DEV_MODE = params.get('dev') === '1';
 const SEED = Number(params.get('seed')) || 1337;
 
 const $ = (id) => document.getElementById(id);
@@ -368,6 +374,7 @@ function pickClass(mod, id) {
 let stepList = [];
 let presentList = [];
 let sysList = [];
+let devTravel = null;   // ?dev=1 only; see DEV_MODE
 
 function buildLists() {
   sysList = [];
@@ -649,6 +656,36 @@ async function boot() {
   if (notReady.length) {
     throw new Error('ready() returned false for: ' + notReady.join(', ') +
       ' — the system is constructed but not wired. Check its ready() for what it demands.');
+  }
+
+  /* ---------------------------------------------------------------- resize --
+   * EVERY SYSTEM WITH AN onResize GETS THE SIZE. gfx.resize() updates the world camera's
+   * aspect and fans the drawing-buffer size to its own subscribers, and until now the only
+   * subscriber in the game was post.js. weapons.onResize and viewmodel.onResize both
+   * EXISTED and neither was ever called by anything (ALEX, 2026-09-18: "the guns look
+   * terrible. they're like, both stretched and ugly. sometimes it feels like the whole game
+   * looks stretched").
+   *
+   * The viewmodel draws on its OWN PerspectiveCamera, and that camera's aspect was whatever
+   * the canvas measured in its constructor, at boot, behind the title shell — and it never
+   * changed again. So the world camera tracked the window and the gun camera did not: every
+   * window that is not the shape it booted at draws a correctly-proportioned county with a
+   * gun stretched across it, and no amount of modelling can fix a gun that is being drawn
+   * through the wrong lens.
+   *
+   * onResize fires immediately with the current size, so this also corrects the boot value
+   * on the spot rather than waiting for the first window change. */
+  const gfxSys = ctx.systems.get('gfx');
+  if (gfxSys && typeof gfxSys.onResize === 'function') {
+    for (const [id, sys] of ctx.systems) {
+      if (id === 'gfx' || typeof sys.onResize !== 'function') continue;
+      gfxSys.onResize((w, h) => { try { sys.onResize(w, h); } catch (e) { void e; } });
+    }
+  }
+
+  // The playtest panel, and only when the URL asked for it.
+  if (DEV_MODE) {
+    try { devTravel = new DevTravel(ctx); devTravel.init(); } catch (e) { console.warn('[dev] travel panel:', e); }
   }
 
   // Fixed steps BEFORE the compile, so the first ring of ground AND FLORA exists to be

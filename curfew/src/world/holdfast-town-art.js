@@ -62,20 +62,154 @@ export function banner(k, x, y, z, w, h, yaw, phases = false) {
   }
 }
 
+/* --------------------------------------------------------------------------- *
+ * SNOW ON A LEDGE.
+ *
+ * winterline/src/snow.js, the line the whole file is built on: "A box of snow reads as a
+ * box... The one place a slab is right is snow lying on a ledge, and that stays a slab."
+ * Every cap in this town is exactly that case — a roof, a sill, a parapet, a string course
+ * — so the slab stays. What it never had was the two things that make a slab read as snow
+ * and not as a painted plane, and Alex named the result on 2026-09-18: "those piles are
+ * like, terrible."
+ *
+ *   IT HAD NO THICKNESS. It was a PlaneGeometry whose mound fell to zero at the rim, so
+ *   the edge you actually look at from the street — the one against the dark slate — was
+ *   a zero-height line. Snow settles 15 cm deep and you can SEE the 15 cm. The cap now
+ *   keeps 30% of its depth out at the rim and closes with a vertical skirt down to the
+ *   surface it sits on, shaded like the underside it is.
+ *
+ *   ITS EDGE WAS A RULED LINE. Four straight sides, to the millimetre, on eight hundred
+ *   caps. The rim now wanders, more at the corners than the middles, so no two caps in a
+ *   row end on the same line.
+ *
+ * The tone follows snow-field.js rather than a flat multiply: the crest is EXACTLY the
+ * county's snow albedo and never brighter (the night-value law is not bent here — this is
+ * masonry-scale snow under lantern light), and the form is in the dark half, which drops to
+ * 0.70 and turns BLUE the way a snow shadow does.
+ * --------------------------------------------------------------------------- */
 export function snowCap(k, x, y, z, w, d, yaw=0, depth=.16, seed=1, profile=null) {
-  const nx=Math.max(3,Math.ceil(w/.36)),nz=Math.max(3,Math.ceil(d/.28)),geo=new THREE.PlaneGeometry(w,d,nx,nz);
-  geo.rotateX(-Math.PI/2);const p=geo.attributes.position,cs=[];
-  for(let i=0;i<p.count;i++){
-    const px=p.getX(i),pz=p.getZ(i),u=px/(w/2),v=pz/(d/2);
-    const edge=Math.max(Math.abs(u),Math.abs(v));
-    const grain=.5+.5*Math.sin(px*5.2+pz*3.7+seed)*Math.sin(px*1.91-pz*5.3+seed*2);
-    const mound=Math.pow(Math.max(0,1-edge*edge),.7)*depth*(.72+grain*.28);
-    p.setZ(i,pz*(1+.07*Math.sin(px*3.1+seed)));
-    p.setY(i,(profile?profile(px,p.getZ(i)):0)+.045+mound);
-    const shade=.78+grain*.15+(1-edge)*.07;cs.push(.30*shade,.335*shade,.37*shade);
+  const nx=Math.max(3,Math.ceil(w/.36)),nz=Math.max(3,Math.ceil(d/.28)),gx=nx+1,gz=nz+1;
+  const RIM=.30;                       // the fraction of the depth the rim keeps: the slab's edge
+  // `uv` is not decoration: every other part in this kit is a Plane/Box/Cylinder and
+  // mergeGeometries drops the WHOLE channel if one member's attribute set differs.
+  const pos=[],cs=[],uv=[],idx=[];
+  // Two grains at different scales and angles, both well under the grid's Nyquist so the
+  // surface never moires: one about a metre across, one about seventy centimetres.
+  const coarse=(a,b)=>.5+.5*Math.sin(a*5.2+b*3.7+seed)*Math.sin(a*1.91-b*5.3+seed*2);
+  const fine=(a,b)=>.5+.5*Math.sin(a*7.4+b*5.9+seed*3.1)*Math.sin(a*5.1-b*8.3+seed*1.3);
+  const tint=(shade,k2)=>{
+    const t=Math.max(.62,Math.min(1,shade))*k2,s=1-t;
+    cs.push(.330*(t-s*.18),.345*t,.385*(t+s*.34));
+  };
+  const top=[];                        // one entry per grid vertex: px, pz, y, base, shade
+  for(let j=0;j<gz;j++)for(let i=0;i<gx;i++){
+    const u=i/nx*2-1,v=j/nz*2-1,edge=Math.max(Math.abs(u),Math.abs(v));
+    const wob=1+.055*Math.sin((u*5.1+v*7.3)*1.9+seed)*edge*edge;
+    const px=u*w/2*wob,pz=v*d/2*wob,g=coarse(px,pz),f=fine(px,pz);
+    const dome=Math.pow(Math.max(0,1-edge*edge),.7);
+    const mound=depth*(RIM+(1-RIM)*dome)*(.74+g*.26)+(f-.5)*depth*.26;
+    const base=profile?profile(px,pz):0;
+    top.push({px,pz,y:base+.045+mound,base,shade:.70+g*.20+f*.10+dome*.06,u:i/nx,v:j/nz});
   }
+  for(const t of top){pos.push(t.px,t.y,t.pz);uv.push(t.u,t.v);tint(t.shade,1);}
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
+    const a=j*gx+i,b=a+1,c=a+gx,e=c+1;idx.push(a,c,b,b,c,e);
+  }
+  // THE SKIRT. Walk the rim once — front, right, back, left — and drop a wall from it to
+  // whatever it is lying on. Wound outward; the underside of settled snow sees no sky.
+  const ring=[];
+  for(let i=0;i<gx;i++)ring.push(i);
+  for(let j=1;j<gz;j++)ring.push(j*gx+nx);
+  for(let i=nx-1;i>=0;i--)ring.push(nz*gx+i);
+  for(let j=gz-2;j>=1;j--)ring.push(j*gx);
+  const skirt0=top.length;
+  for(const r of ring){const t=top[r];pos.push(t.px,t.base,t.pz);uv.push(t.u,t.v);tint(t.shade,.60);}
+  for(let s=0;s<ring.length;s++){
+    const s2=(s+1)%ring.length;
+    idx.push(ring[s],ring[s2],skirt0+s, ring[s2],skirt0+s2,skirt0+s);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  geo.setIndex(idx);
   geo.computeVertexNormals();k.cloth.at(geo,P.snow,x,y,z,yaw);
   geo.setAttribute('color',new THREE.Float32BufferAttribute(cs,3));
+}
+
+/* --------------------------------------------------------------------------- *
+ * A DRIFT ALONG THE KERB — the one piece of snow in this game you walk INTO.
+ *
+ * ALEX, 2026-09-18: "some things like the kind of piles of snow people stand right through."
+ * These are them. Every path in the foretown had a snowCap laid down each verge — a flat
+ * domed sheet, 20 cm at its highest, with NO COLLIDER, so you stood in the middle of it
+ * with your boots at the bottom of a snow bank. That is the working-but-wrong failure the
+ * slag heaps in sites.js already have a note about: drawing and colliding are separate here
+ * and a pile that only draws is a pile that is not there.
+ *
+ * SHAPE, from winterline/src/snow.js's snowBank: a run of overlapping FLATTENED DOMES of
+ * varied height and width, thrown off-centre toward the thing that stopped them (here the
+ * kerb, the way a plough's ridge sits off-centre), with a crest dome every few segments and
+ * a thin refrozen crust slab on some of them. Four tints in rotation so two neighbouring
+ * lobes never merge into one blob. Each dome is sunk so its rim is under the ground: a drift
+ * has no visible base.
+ *
+ * COLLIDER, and why THIS one and not the caps on the roofs: winterline's own rule is "a
+ * drift you have to walk round is a wall", and it gives its banks nothing. But its banks are
+ * beside a road you drive down. This is a footpath in a walled town, the drift tops out at
+ * 0.32 m — well inside the player's STEP_UP of 0.52 — so ONE standable obb per segment makes
+ * it something you walk UP and over, never something that stops you. The obb's top is the
+ * drift's own highest point, measured, never a guess: a collider taller than its snow is the
+ * same bug the other way round. `tag: 'snow'` is not in NON_PHYSICAL_TAGS (note 'verge' is,
+ * which is why this is not called one), and at 7 m long the shape is far outside both the
+ * crush and the break-open size gates, so no car and no buttstroke can delete it.
+ * --------------------------------------------------------------------------- */
+// Rounded snow lit from the side reads a stop brighter than the same snow on a flat ledge
+// (winterline/src/snow.js), so the drifted tints sit BELOW snowCap's crest, not at it.
+const DRIFT_TINTS = [0.74, 0.83, 0.89, 0.95].map(t =>
+  [0.330 * (t - (1 - t) * 0.18), 0.345 * t, 0.385 * (t + (1 - t) * 0.34)]);
+const driftRng = seed => k2 => {
+  let n = Math.imul(seed + k2 * 911, 2246822519) ^ Math.imul(k2 - 104729, 3266489917);
+  return ((n ^ (n >>> 15)) >>> 0) / 4294967296;
+};
+export function snowDrift(k, api, x, g, z, width, length, yaw, seed) {
+  const at = driftRng(Math.round(seed * 37 + x * 3 + z * 7));
+  // Along the run is (sin yaw, cos yaw); across it is (cos yaw, -sin yaw). Same frame
+  // bakePaths lays the kerb in, so the drift cannot end up on the wrong side of it.
+  const ay = Math.sin(yaw), az = Math.cos(yaw), bx = Math.cos(yaw), bz = -Math.sin(yaw);
+  const place = (u, v) => [x + ay * u + bx * v, z + az * u + bz * v];
+  const n = Math.max(2, Math.round(length / 2.5));
+  let top = 0;
+  const dome = (u, v, w2, h2, d2, tone, spin) => {
+    // 9 x 3 on a half-sphere is 45 triangles. A lobe of snow has no silhouette detail worth
+    // more than that, and there are several hundred of these: the whole run has to come in
+    // under the flat sheet it replaces.
+    const geo = new THREE.SphereGeometry(1, 9, 3, 0, Math.PI * 2, 0, Math.PI * 0.5);
+    geo.scale(w2 * 0.5, h2, d2 * 0.5);
+    const [px, pz] = place(u, v);
+    // Sunk by a tenth of its height: the rim of a dome is a circle and a drift has no rim.
+    k.cloth.at(geo, DRIFT_TINTS[tone & 3], px, g - h2 * 0.10, pz, yaw + spin);
+    if (h2 * 0.90 > top) top = h2 * 0.90;
+  };
+  for (let i = 0; i < n; i++) {
+    const u = -length / 2 + (i + 0.5) * (length / n);
+    // 0.15 .. 0.35 m, so the obb below tops out at 0.315 — under the player's STEP_UP of
+    // 0.52 AND under the 0.34 m band car.js:2363 ignores as a kerb, so a drift beside the
+    // foretown path is something both of them ride over rather than something that stops them.
+    const h2 = 0.265 * (0.58 + at(i) * 0.74);
+    const w2 = width * (0.70 + at(i + 40) * 0.62);
+    const run = length / n * (1.10 + at(i + 80) * 0.55);
+    // Thrown against the kerb: the mass sits inboard and the tail feathers out.
+    dome(u, (width - w2) * 0.22, w2, h2, run, i + (at(i + 120) > 0.5 ? 1 : 0), (at(i + 160) - 0.5) * 0.5);
+    if (at(i + 200) > 0.46) {                              // the crest the wind left on it
+      dome(u + run * 0.16, -width * 0.10, w2 * 0.60, h2 * 0.66, run * 0.62, i + 2, (at(i + 240) - 0.5) * 0.9);
+    }
+    if (at(i + 280) > 0.58) {                              // slid, then froze again: a crust
+      const [cx, cz] = place(u - run * 0.12, width * 0.30);
+      k.cloth.box(w2 * 0.46, 0.05, run * 0.54, cx, g + h2 * 0.30, cz, DRIFT_TINTS[3], yaw + (at(i + 320) - 0.5) * 0.6);
+    }
+  }
+  api.emit({ kind: 'obb', x, z, halfX: width * 0.46, halfZ: length * 0.5, yaw,
+    y0: g - 0.30, y1: g + top, tag: 'snow', standable: true });
 }
 
 export function stucco(k, w,h,d,x,y,z,col,yaw=0,seed=1) {
@@ -241,7 +375,7 @@ export function bakePaths(k, api) {
       const t=(i+.5)/n,x=r.a[0]+dx*t+Math.cos(yaw)*(r.width/2+.43)*side,z=r.a[1]+dz*t-Math.sin(yaw)*(r.width/2+.43)*side;
       if(runs.some(other=>other!==r&&distance(x,z,other)<.55))continue;
       if(x>40&&x<50&&z>-49&&z<-34)continue;
-      snowCap(k,x,groundY(api,x,z)+ON_APRON+.08,z,1.1,length/n+.3,yaw,.12,i+side*7);
+      snowDrift(k,api,x,groundY(api,x,z)+ON_APRON,z,1.24,length/n+.3,yaw,i*11+side*7);
     }
   }
   // Kerbs stop before another path joins them; they never run through junctions.
