@@ -49,8 +49,10 @@ export const DESTINATION_REFUGES = Object.freeze([
   { id: 'mourning-glasshouse', x: -27, z: -15, w: 7, d: 6.5, yaw: 0, type: 'keeper', roof: 3.4 },
   // The vault's claim is out at (16, -34); the sacristy is on the other side of the yard.
   { id: 'choir-vault', x: -28, z: -17, w: 7, d: 6.5, yaw: 0, type: 'sacristy', roof: 3.4 },
-  // The quarry's claim is 46 m out on the east bench; this is the weigh hut at the gate.
-  { id: 'red-quarry', x: -31, z: -17, w: 7, d: 6.5, yaw: 0, type: 'weigh', roof: 3.4 },
+  // The quarry is a pit now (world-scars.js QUARRY_PIT) and its pad is the pit FLOOR: the weigh
+  // office stands on the floor 15 m west of the stair's foot, clear of the benches (the west
+  // face is at x -28), the skip road and the sump, its door to the working floor.
+  { id: 'red-quarry', x: -15, z: -6, w: 7, d: 6.5, yaw: 0, type: 'weigh', roof: 3.4 },
 ]);
 
 const timber = [0.12,0.082,0.047], trim=[0.20,0.18,0.14], metal=[0.045,0.05,0.047];

@@ -66,6 +66,7 @@
 import { STAGED_KINDS } from './staged.js';
 import { STATION_PYLON } from './opening-layout.js';
 import { SETPIECE_KINDS } from './setpieces.js';   // ROUND 22, lane H: the rationed set pieces
+import { QUARRY_PIT } from './world-scars.js';    // r3: the Red Quarry's pit frame
 
 export const REGION_TINT = Object.freeze({
   pines: 0x63d08a,    // cold green
@@ -541,14 +542,20 @@ export const MAJORS = Object.freeze([
     claim: { how: 'touch', dx: 16, dy: 5.2, dz: -34, r: 2.6 },
     xpFind: 70, xpClaim: 400, startClaimed: false,
   },
+  // ROUND r3: a real pit. world-scars.js QUARRY_PIT carves the ground 14 m down under the
+  // pad (so rec.padY IS the quarry floor and every pad-relative number below is on it); the
+  // yaw is pinned to the carve's, not re-derived from the road, and clearR takes the trees off
+  // the coping's far corners (the carve reaches 81 m). The claim is the switch at the foot of
+  // the derrick, on the floor, facing out toward the south-east wall so the one who throws it
+  // looks back across the pit as the lamps come on.
   {
     id: 'red-quarry', name: 'The Red Quarry',
-    x: 820.3, z: -2954.3, region: 'works', terrainRegion: 'pines', kind: 'red-quarry',
-    lit: false, hub: false, clearR: 82,
+    x: QUARRY_PIT.x, z: QUARRY_PIT.z, yaw: QUARRY_PIT.yaw, region: 'works', terrainRegion: 'pines', kind: 'red-quarry', apronSurface: true,
+    lit: false, hub: false, clearR: 90,
     flat: { radius: 116, blend: 0.72 }, apronCol: [0.054, 0.043, 0.037],
     approach: { x: 0, z: 32, w: 18, h: 28, style: 'red-quarry', existing: true },
     discoverR: 44, nearR: 140, horizon: true,
-    claim: { how: 'touch', dx: 26, dy: 7.2, dz: -38, r: 2.6 },
+    claim: { how: 'touch', dx: 22.5, dy: 0, dz: -37.5, r: 2.6 },
     xpFind: 75, xpClaim: 420, startClaimed: false,
   },
   // ROUND 22 — MORNING. Alex: "Green highway sign: MORNING — 40. It's a town. It's the far end

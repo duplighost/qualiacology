@@ -35,12 +35,30 @@ const SKIN_DIRECT = THREE.ShaderChunk.lights_physical_pars_fragment
     + '\treflectedLight.directDiffuse += wrapNL * directLight.color * terminator * BRDF_Lambert( material.diffuseColor );');
 // Loud failure at import, not a silent fall-through to plain Lambert when three moves a line.
 if (!SKIN_DIRECT.includes('dotNLraw') || !SKIN_DIRECT.includes('wrapNL')) throw new Error('skinSurface: RE_Direct_Physical no longer matches; re-read vendor/three.module.min.js');
+// THE MOUTH (R3). A face opens its mouth in this program, not with a second mesh: each vertex
+// carries `jawW` (0 = still, 1 = the lower lip and chin), and uJaw swings that share of it about
+// the hinge in the head's own y-z plane, normal with it. Per-material uniforms on the shared
+// program: three keeps a uniforms object per material, so each person's mouth is its own.
+// EVERY mesh drawn with this material must carry jawW (people.js gives the hands zeros).
+const JAW_ANCHORS = ['#include <common>', '#include <beginnormal_vertex>', '#include <begin_vertex>'];
+if (!JAW_ANCHORS.every(a => THREE.ShaderLib.physical.vertexShader.includes(a))) throw new Error('skinSurface: meshphysical_vert no longer has the jaw anchors; re-read vendor/three.module.min.js');
+const JAW_PARS = '#include <common>\nattribute float jawW;\nuniform float uJaw;\nuniform vec3 uJawHinge;';
+const JAW_NORMAL = '#include <beginnormal_vertex>\n\tfloat jawA = uJaw * jawW;\n\tmat2 jawR = mat2( cos( jawA ), sin( jawA ), -sin( jawA ), cos( jawA ) );\n\tobjectNormal.yz = jawR * objectNormal.yz;';
+const JAW_BEGIN = '#include <begin_vertex>\n\ttransformed.yz = uJawHinge.yz + jawR * ( transformed.yz - uJawHinge.yz );';
 export function skinSurface(material){
+  material.userData.jaw = { value: 0 };
+  material.userData.jawHinge = { value: new THREE.Vector3() };
   material.onBeforeCompile=shader=>{
+    shader.uniforms.uJaw = material.userData.jaw;
+    shader.uniforms.uJawHinge = material.userData.jawHinge;
+    shader.vertexShader=shader.vertexShader
+      .replace('#include <common>',JAW_PARS)
+      .replace('#include <beginnormal_vertex>',JAW_NORMAL)
+      .replace('#include <begin_vertex>',JAW_BEGIN);
     shader.fragmentShader=shader.fragmentShader
       .replace('#include <lights_physical_pars_fragment>',SKIN_DIRECT)
       .replace('#include <lights_fragment_begin>',LIGHTING);
   };
-  material.customProgramCacheKey=()=> 'wwpm-skin-v1';
+  material.customProgramCacheKey=()=> 'wwpm-skin-v2';
   return material;
 }

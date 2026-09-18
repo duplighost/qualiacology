@@ -87,6 +87,7 @@ import * as hamletDefenceMod from './world/hamlet-defence.js';
 import * as bossSitesMod from './world/boss-sites.js';
 import * as bossEncountersMod from './enemies/boss-encounters.js';
 import * as worldStoriesMod from './world/world-stories.js';
+import * as manorScaresMod from './world/manor-scares.js';
 import * as lateBellMod from './world/late-bell.js';
 import * as loreDeadMod from './world/lore-dead.js';
 import * as loreLookoutMod from './world/lore-lookout.js';
@@ -161,6 +162,7 @@ const SYSTEMS = [
                                     // hamlet-life (it reads the casts and tells contains()
                                     // which hamlet is under siege)
   ['world-stories', worldStoriesMod],
+  ['manor-scares', manorScaresMod],   // r3: Blackthorn's five things that move. AFTER world-stories and places (it reads the manor's pad and matPeople)
   ['lore-ledger', loreLedgerMod],
   ['lore-lookout', loreLookoutMod],
   ['lore-procession', loreProcessionMod],

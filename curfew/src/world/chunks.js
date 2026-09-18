@@ -43,7 +43,7 @@ import * as THREE from 'three';
 import { CFG } from '../config.js';
 import { buildChunkData, TIERS, MAX_CHUNK_SEG } from './chunk-worker.js';
 import { groundDetail, frostAt, heightAt, normalAt, flats, flatCount } from './terrain.js';
-import { sinkholeDepthAt } from './world-scars.js';
+import { sinkholeDepthAt, quarryDepthAt } from './world-scars.js';
 import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
 import { SNOW_FIELD_GLSL } from './snow-field.js';
 import { loadScannedSurface } from './scanned-materials.js';
@@ -948,6 +948,16 @@ export class Chunks {
           col[o] += (0.118 - col[o]) * scar;
           col[o + 1] += (0.101 - col[o + 1]) * scar;
           col[o + 2] += (0.081 - col[o + 2]) * scar;
+        }
+        // The Red Quarry's cut: wherever the pit ground shows (its floor past the made yard,
+        // and every LOD beyond the blocks), it is the red rock the headstones came out of.
+        const quarryDepth = quarryDepthAt(wx, wz);
+        if (quarryDepth > 0) {
+          let cut = Math.min(1, quarryDepth / 2);
+          cut *= cut * (3 - 2 * cut);
+          col[o] += (0.132 - col[o]) * cut;
+          col[o + 1] += (0.071 - col[o + 1]) * cut;
+          col[o + 2] += (0.052 - col[o + 2]) * cut;
         }
 
         // 2c. FROST. A MATERIAL, like the soil above it and for the same reason: it has to make

@@ -18,7 +18,14 @@ export function journeyState(ctx){
  else if(morningReady){next='Bring the car to the priory tower. Ring the day bell in the Black Hour.';target=get('places')?.nodes?.get('bell-tower')?.def;}
  else if(nearStart&&!flags['supply:opening:first-light']&&!refuge?.power){next='Open the brass-latched chest in the station yard.';target={x:-513,z:246};}
  else if(nearStart&&!refuge?.power){next='Follow the yellow cable. Restore the station power.';target=refuge&&{x:refuge.breakerWX,z:refuge.breakerWZ};}
- else if(nearStart&&!flags['journey:rested']&&!flags['opening:slept']){next='The station is lit. Shut the shelter door and rest.';target={x:-530.5,z:240.5};}
+ else if(nearStart&&!flags['journey:rested']&&!flags['opening:slept']){
+  // Over the BED, not the middle of the room: a ring hanging at waist height in an empty
+  // floor pointed at nothing. It sits over the quilt and goes when you are at the bed
+  // (`near`, first-light.js), which is the whole instruction.
+  next='The station is lit. Shut the shelter door and rest.';
+  const st=get('places')?.nodes?.get('filling-station'),c=Math.cos(st?.yaw||0),s=Math.sin(st?.yaw||0);
+  target=st?{x:st.def.x-13.3*c+2.2*s,z:st.def.z+13.3*s+2.2*c,y:st.padY+.95,near:3.2}:{x:-530.5,z:240.5};
+ }
  else if(nearStart&&lamp&&!lamp.relit){
   if(bulbs>0){next='Use your spare bulb at the dark road lamp.';target={x:lamp.x,z:lamp.z};}
   else if(!flags['supply:opening:first-light']){next='Open the brass-latched chest in the station yard for a spare bulb.';target={x:-513,z:246};}

@@ -49,6 +49,7 @@ import { projectPlaceSurfaceUVs } from './place-surfaces.js';
 import { createWaterMaterial, prepareWaterGeometry } from './water-surface.js';
 import { registerIceBody, unregisterIceBody } from './frozen-water.js';
 import { sharedIceMaterial, currentIceMaterial } from './ice-surface.js';
+import { QUARRY_PIT } from './world-scars.js';
 
 const W = CFG.wilds;
 const CHUNK = CFG.world.CHUNK;
@@ -90,6 +91,11 @@ const TRAVEL_FORD_WIDTH = 8.4;
 const TRAVEL_POOL_OFFSETS = Object.freeze([15, 18, 21, 24]);
 const TRAVEL_WATER_BUILD_R = 250;
 const TRAVEL_WATER_DROP_R = 292;
+// r3: THE RED QUARRY'S SUMP. The pit (world-scars.js QUARRY_PIT) is carved with a bowl in its
+// floor whose shore is the pool edge below; this is the sheet over it, drawn exactly as a road
+// pool is (the same surface, the same sunk water, the ONE shared ice material, no new program)
+// and held by frozen-water.js so a body stands on it. Built on the road pools' radii.
+const SUMP_ID = 'red-quarry-sump';
 // These colours preserve the authored depth classes in the geometry for offline inspection.
 // Rendered water uses water-surface.js and the live sky; the bank keeps its earth material.
 const TRAVEL_WATER_DEEP = Object.freeze([0.022, 0.135, 0.225]);
@@ -264,6 +270,10 @@ const _ammoP = { n: 0 };
 const _xpP = { amount: 0, x: 0, y: 0, z: 0, reason: '' };
 const _farmSpawnOpts = { staged: true, awake: false, yaw: 0 };
 const _treeHitDir = new THREE.Vector3();
+// The lantern sightline's wall test (_stepLanterns): scratch origin and direction, and how
+// far along the sightline a wall is looked for. Past this, a building is a few pixels.
+const _lanO = { x: 0, y: 0, z: 0 }, _lanD = { x: 0, y: 0, z: 0 };
+const LANTERN_WALL_R = 220;
 
 /** Dense height envelope under the whole level pond skin, including triangle interiors. */
 function pondProfileAt(x, z) {
@@ -2999,6 +3009,7 @@ export class Wilds {
     const sites = planWilds(this.seed);
     this.sites = sites;
     this._travelWaters = planTravelWaters(this._sys('roads'));
+    this._planSump();
     this._cellMap.clear();
     this._byChunk.clear();
     this._towers.length = 0;
@@ -3366,6 +3377,58 @@ export class Wilds {
     this._stats.resident--;
   }
 
+  /** The sump's level is the pit floor minus the sheet's depth: places has laid the pad by
+   *  now (wilds is after places in main.js), so heightAt at the site centre is the floor. */
+  _planSump() {
+    const Q = QUARRY_PIT, s = Q.sump, c = Math.cos(Q.yaw), n = Math.sin(Q.yaw);
+    const x = Q.x + s.x * c + s.z * n, z = Q.z - s.x * n + s.z * c, level = heightAt(Q.x, Q.z) - s.ice;
+    this._sump = { x, z, yaw: Q.yaw, level, rx: s.rx, rz: s.rz, rec: null };
+    registerIceBody({ id: SUMP_ID, kind: 'ellipse', x, z, yaw: Q.yaw, rx: s.rx, rz: s.rz, y: level });
+  }
+
+  _stepSump(px, pz) {
+    const s = this._sump;
+    if (!s) return;
+    const dx = px - s.x, dz = pz - s.z, d2 = dx * dx + dz * dz;
+    if (!s.rec && d2 < TRAVEL_WATER_BUILD_R * TRAVEL_WATER_BUILD_R) this._buildSump();
+    else if (s.rec && d2 > TRAVEL_WATER_DROP_R * TRAVEL_WATER_DROP_R) this._disposeSump();
+  }
+
+  _buildSump() {
+    const s = this._sump;
+    if (!s || s.rec || !this.group) return;
+    const k = new Kit();
+    travelPoolSurface(k, s.level, s.rx, s.rz);
+    const geo = k.build();
+    if (!geo) return;
+    prepareWaterGeometry(geo, { variant: 'pool' }, s.rx, s.rz, POND_RX, POND_RZ);
+    const g = new THREE.Group();
+    g.name = 'wild-sump-' + SUMP_ID;
+    g.position.set(s.x, 0, s.z);
+    g.rotation.y = s.yaw;
+    const water = new THREE.Mesh(geo, this.matWater);
+    water.name = 'travel-water-surface-' + SUMP_ID;
+    water.userData.waterSurface = true;
+    water.position.y = POOL_WATER_UNDER_ICE;
+    g.add(water);
+    const ice = new THREE.Mesh(geo, sharedIceMaterial(this.ctx));
+    ice.name = 'travel-ice-surface-' + SUMP_ID;
+    ice.userData.iceSurface = true;
+    ice.position.y = POOL_ICE_ABOVE_LEVEL;
+    ice.renderOrder = 3;
+    g.add(ice);
+    this.group.add(g);
+    s.rec = { group: g, geo };
+  }
+
+  _disposeSump() {
+    const s = this._sump;
+    if (!s || !s.rec) return;
+    this.group?.remove(s.rec.group);
+    s.rec.geo.dispose();
+    s.rec = null;
+  }
+
   _chunkGone(key) {
     const arr = this._byChunk.get(key);
     if (arr) for (let i = 0; i < arr.length; i++) if (arr[i].rec) this._dispose(arr[i]);
@@ -3540,6 +3603,7 @@ export class Wilds {
         if (d2 < waterBuild2 && budget > 0) { this._build(s); budget--; }
       } else if (d2 > waterDrop2) this._dispose(s);
     }
+    this._stepSump(px, pz);
 
     this._stepWrecks(dt, px, py, pz);
     this._stepLanterns(px, py, pz);
@@ -3773,6 +3837,14 @@ export class Wilds {
     const terrain = this._sys('terrain');
     const canMarch = !!(terrain && typeof terrain.marchRay === 'function');
     const ey = py + CFG.player.EYE;
+    // A WALL HIDES IT (round 3). The halo has no depth test so a lantern reads through the
+    // canopy, and that also drew it through every wall, roof and head between you and it: a
+    // bright dot hanging in the middle of a room, seen by three separate agents. Under a
+    // roof (fx's own test) every halo is off. Out in the open, the round-robin sightline is
+    // also cast against the colliders: leaves have none and still let it through, a trunk is
+    // stepped past, and anything else solid on the first LANTERN_WALL_R m hides it.
+    const fx = this._sys('fx');
+    const roofed = !!(fx && fx._underRoof);
     if (T.length) {
       const t = T[this._marchI % T.length];
       this._marchI = (this._marchI + 1) % 1048576;
@@ -3780,12 +3852,27 @@ export class Wilds {
       const ly = t.lanternY > 0 ? t.lanternY : t.y + t.flights * FLIGHT_RISE + 4.35;
       const dx = lx - px, dy = ly - ey, dz = lz - pz;
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      let hill = false;
+      let hill = false, wall = false;
       if (canMarch && d > 12) {
         const hit = terrain.marchRay(px, ey, pz, dx / d, dy / d, dz / d, d - 8);
         hill = typeof hit === 'number' && hit > 0.5 && hit < d - 8;
       }
+      const col = this._sys('collision');
+      if (!hill && col && typeof col.raycast === 'function' && d > 12) {
+        _lanD.x = dx / d; _lanD.y = dy / d; _lanD.z = dz / d;
+        _lanO.x = px; _lanO.y = ey; _lanO.z = pz;
+        let left = Math.min(d - 6, LANTERN_WALL_R);
+        for (let n = 0; n < 4 && left > 0.5; n++) {
+          const hit = col.raycast(_lanO, _lanD, left, col.MASK ? col.MASK.SIGHT : 4);
+          if (!hit) break;
+          if (hit.tag !== 'tree') { wall = true; break; }
+          const step = hit.t + 0.6;
+          _lanO.x += _lanD.x * step; _lanO.y += _lanD.y * step; _lanO.z += _lanD.z * step;
+          left -= step;
+        }
+      }
       t.hill = hill;
+      t.wall = wall;
     }
     for (let i = 0; i < T.length; i++) {
       const t = T[i];
@@ -3793,7 +3880,7 @@ export class Wilds {
       if (!halo) continue;
       const d = Math.sqrt(t.d2);
       const k = clamp((d - Wh.from) / (Wh.full - Wh.from), 0, 1);
-      if (k <= 0 || t.hill) { halo.visible = false; continue; }
+      if (k <= 0 || t.hill || t.wall || roofed) { halo.visible = false; continue; }
       const sc = k * Math.max(1, d / Wh.scaleAt);
       halo.scale.set(sc, sc, sc);
       halo.visible = true;
@@ -3810,7 +3897,7 @@ export class Wilds {
       }
       const m = H[k];
       m.userData.site = best;
-      if (!best || best.hill) { m.visible = false; continue; }
+      if (!best || best.hill || best.wall || roofed) { m.visible = false; continue; }
       const ly = best.lanternY > 0 ? best.lanternY : best.y + best.flights * FLIGHT_RISE + 4.35;
       const d = Math.sqrt(bd);
       const sc = Math.max(1, d / Wh.scaleAt);
@@ -3956,6 +4043,7 @@ export class Wilds {
     this._unsubs.length = 0;
     if (this.sites) for (const s of this.sites) this._dispose(s);
     for (const s of this._travelWaters) { this._dispose(s); if (s.variant === 'pool') unregisterIceBody(s.id); }
+    this._disposeSump(); if (this._sump) unregisterIceBody(SUMP_ID);
     this._travelWaters.length = 0;
     for (const m of this._horizon) this.horizonGroup.remove(m);
     this._horizon.length = 0;

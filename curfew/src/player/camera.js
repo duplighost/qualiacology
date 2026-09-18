@@ -28,7 +28,7 @@
 // the handful VIGIL had that config does not carry yet; each is cited and each is a request
 // in docs/HANDOFF.md.
 
-import { TAU, DEG, clamp, clamp01, lerp, damp, ease, Spring, Spring3 } from '../engine/math.js';
+import { TAU, DEG, clamp, clamp01, lerp, damp, ease, Spring, Spring3, sway2 } from '../engine/math.js';
 import { CFG } from '../config.js';
 
 const C = CFG.camera;
@@ -37,8 +37,17 @@ const P = CFG.player;
 // ---- numbers VIGIL had that CFG.camera does not carry yet ------------------
 const PUNCH_IMPULSE = 22;      // deg -> spring impulse scale [vigil camera.js addPunch]
 const TRAUMA_DECAY = 1.6;      // per second [vigil]
-const SHAKE_HZ = 28;           // shake clock rate [vigil]
+// THE SHAKE (r3 shooting feel). VIGIL's shake was three sines on a 28 Hz clock, which works out
+// to a smooth 4-6 Hz sway: a hit that should jolt the view rocked it like a boat. It is two
+// octaves of value noise now (9 and 21 Hz, the same sway2 the gun's hands use at 0.2 Hz), so
+// a knock reads as a knock. Amplitudes are VIGIL's.
+const SHAKE_F1 = 9, SHAKE_F2 = 21;
 const SHAKE_P = 0.09, SHAKE_Y = 0.09, SHAKE_R = 0.10;   // rotational shake amplitudes [vigil]
+// fx.addTrauma has about fifteen callers (a bite, a poacher's round, a boss's blow, the car
+// crushing something, a dread stinger) and nothing ever read fx.trauma, so being hit never moved
+// the view. It is read here now, capped, and never ADDED to our own trauma (melee's): the larger
+// of the two wins, so two sources cannot stack into a takeover.
+const FX_TRAUMA_CAP = 0.55;
 const SHAKE_ADS_CUT = 0.6;     // ADS eats most of the pitch shake so you can still aim [vigil]
 const LEAN_RAD = 0.032;        // strafe cant, ~1.83 deg [vigil camera.js lean]
 const SLIDE_LEAN_DEG = 4.5;    // slide cant [vigil]
@@ -240,7 +249,7 @@ export class PlayerCamera {
 
     stepSpring(this.punch.x, dt); stepSpring(this.punch.y, dt); stepSpring(this.punch.z, dt);
     this.trauma = Math.max(0, this.trauma - TRAUMA_DECAY * dt);
-    this.shakeT += dt * SHAKE_HZ;
+    this.shakeT += dt;                  // seconds; present() samples the noise between steps
 
     const sprinting = player ? (player.sprinting || player.tacSprinting) : false;
     const tac = player ? !!player.tacSprinting : false;
@@ -254,7 +263,8 @@ export class PlayerCamera {
     let target = lerp(CFG.render.fov, C.fovSprint + TAC_FOV_EXTRA * this.tacT, ease.outCubic(this.sprintT));
     target = lerp(target, C.fovAds, adsEase);
     target += this.fovBias;             // the car's speed term (setFovBias), same clock
-    if (wep && wep.fovPunch) target += wep.fovPunch;
+    // weapons.fovPunch is NOT on this clock: damped at fovDamp it reached the lens late and
+    // soft, which is the one thing a shot's punch must never be. present() adds it raw.
     this.fovNow = damp(this.fovNow, target, C.fovDamp, dt);
 
     // ---- lean: strafe cant + a lead into the turn ------------------------------
@@ -316,10 +326,18 @@ export class PlayerCamera {
       ? SPRINT_BOB_PITCH * DEG * Math.cos(2 * t) * amp : 0;
 
     // ---- shake: rotational only. Never translate a first-person camera for shake. ----
-    const sAmp = this.trauma * (0.4 + 0.6 * this.trauma);
-    const shP = Math.sin(this.shakeT * 1.13) * SHAKE_P * sAmp * (1 - adsT * SHAKE_ADS_CUT);
-    const shY = Math.sin(this.shakeT * 0.97 + 4.2) * SHAKE_Y * sAmp;
-    const shR = Math.sin(this.shakeT * 1.31 + 1.7) * SHAKE_R * sAmp;
+    // Our own trauma (melee) or fx's (everything that hits you), whichever is larger.
+    const fxs = this.ctx.systems.get('fx');
+    const fxT = fxs && fxs.trauma > 0 ? Math.min(FX_TRAUMA_CAP, fxs.trauma) : 0;
+    const tr = Math.max(this.trauma, fxT);
+    const sAmp = tr * (0.4 + 0.6 * tr);
+    let shP = 0, shY = 0, shR = 0;
+    if (sAmp > 1e-4) {
+      const ts = this.shakeT + a * CFG.loop.FIXED;
+      shP = sway2(ts, SHAKE_F1, SHAKE_F2, 0.75, 0.35, 71) * SHAKE_P * sAmp * (1 - adsT * SHAKE_ADS_CUT);
+      shY = sway2(ts, SHAKE_F1, SHAKE_F2, 0.75, 0.35, 113) * SHAKE_Y * sAmp;
+      shR = sway2(ts, SHAKE_F1, SHAKE_F2, 0.75, 0.35, 157) * SHAKE_R * sAmp;
+    }
 
     // ---- position: the interpolated body, plus lateral bob in view space ------
     const px = player.renderPos ? player.renderPos.x : player.pos.x;
@@ -334,7 +352,9 @@ export class PlayerCamera {
       this.punch.z.value + shR + bobRoll + this.leanSpring.value,
     );
 
-    if (cam.fov !== this.fovNow) { cam.fov = this.fovNow; cam.updateProjectionMatrix(); }
+    // The lens: the damped clock plus the shot's punch, raw (weapon.js FOV_PUNCH).
+    const fovOut = this.fovNow + (wep && wep.fovPunch ? wep.fovPunch : 0);
+    if (cam.fov !== fovOut) { cam.fov = fovOut; cam.updateProjectionMatrix(); }
   }
 
   /** For window.__CURFEW.state(). */

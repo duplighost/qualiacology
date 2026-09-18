@@ -3,16 +3,17 @@
 //
 // D16 (2026-09-17), "modern AAA visuals on these people", spent where the eye goes at
 // talking distance: a skin program with wrapped diffuse and a normal map (surface-light.js),
-// per-vertex ambient occlusion baked into the head, an indexed head with a jaw that moves
-// when the person is the one speaking, two eyeballs that lead the head and lids that close by
-// scaling, a cornea for the catchlight, alpha-tested hair cards on one material, three hamlet
-// palettes and two more cuts, breath and a weight shift, and rig.setAppearance(look) so a
-// hamlet can author a face per person without a species per person (C14).
+// per-vertex ambient occlusion baked into the head, an indexed head whose mouth moves (R3: a
+// per-vertex jaw weight in the skin program, lower lip and chin only) when the person is the
+// one speaking, two eyeballs that lead the head and lids that close by scaling, a cornea for
+// the catchlight, alpha-tested hair cards on one material, three hamlet palettes and two more
+// cuts, breath and a weight shift, and rig.setAppearance(look) so a hamlet can author a face
+// per person without a species per person (C14).
 //
-// Draw budget: 17-19 meshes per person before this file was rewritten, 17-19 after. The jaw,
-// the second eye and the cornea cost three; the neck merged into the head and the boots into
-// the shin gave three back. TWO shader programs are new (skin, hair cards); the cornea shares
-// the eye program and every human material is warmed by enemies.warmup() at boot.
+// Draw budget: 16-18 meshes per person. The second eye and the cornea cost two; the neck
+// merged into the head and the boots into the shin gave three back, and the R3 mouth took the
+// jaw's own mesh away. TWO shader programs are ours (skin, hair cards); the cornea shares the
+// eye program and every human material is warmed by enemies.warmup() at boot.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { HEADS, HEAD_INDEX } from './human-head-data.js';
@@ -22,17 +23,65 @@ import { loft, tendon, characterMaps, skinNormalMap, strandTexture } from './cha
 const cache = new Map();
 const SKIN=[[.43,.285,.205],[.19,.102,.061],[.39,.253,.177],[.46,.303,.227]];
 const HAIR=[[.097,.084,.067],[.022,.017,.013],[.038,.027,.020],[.080,.043,.021]];
-const GREY=[.30,.29,.27];                       // the grey that streaks the two older heads
+const GREY=[.15,.145,.135];                     // the grey at the two older heads' temples
 const leather=[.031,.027,.024], seam=[.025,.029,.029], WOOD=[.145,.092,.048], BRASS=[.126,.094,.041];
-// the painted lip line per donor head (raw MakeHuman y): the jaw splits here
-const LIPS=[1.631,1.632,1.632,1.636];
+// THE MOUTH (R3), measured off each donor mesh in raw MakeHuman metres: s0 is where the lips
+// part on the midline, (cx, cy) a mouth corner. Alex, 2026-09-18: "the mouths are so wide its
+// freaky ... it opens up to like all the way to the sides of there head". The old jaw was every
+// face triangle under a lip line painted 7.5 mm too high, cut ear to ear and swung as a block.
+// Now only the lower lip and the chin under it move, inside the corners, on a per-vertex weight
+// the skin program hinges (surface-light.js): the corners hold and the cheeks never move.
+const MOUTH=[{s0:1.6235,cx:.0214,cy:1.6223},{s0:1.6250,cx:.0214,cy:1.6236},{s0:1.6332,cx:.0187,cy:1.6323},{s0:1.6363,cx:.0199,cy:1.6348}];
+// Landmarks per donor head, head-local (x at the data's 1.10), measured off the mesh: the nose tip
+// [y, z], the chin's most forward point [y, z], and the eyes' height.
+const LAND=[{tip:[.149,-.150],chin:[.102,-.125],eye:.188},{tip:[.149,-.141],chin:[.113,-.132],eye:.189},
+  {tip:[.160,-.140],chin:[.113,-.123],eye:.194},{tip:[.166,-.146],chin:[.112,-.123],eye:.192}];
+const JAW_HINGE=[0,1.662-1.50,-.012];           // head-local, just in front of the ear
+const JAW_OPEN=.055;                            // rad: the lower lip drops ~8 mm at the widest
+const smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
+// How much of the jaw's swing a donor vertex takes (raw x, y, z; ny its normal's y).
+function jawWeight(v,rx,y,z,ny){
+  const M=MOUTH[v],ax=Math.abs(rx),pt=M.s0+(M.cy-M.s0)*Math.min(1,(ax/M.cx)**2);
+  let wy=y<pt?1:0;
+  // within 3 mm of the parting the lips interleave: an up-facing surface is the lower lip
+  if(Math.abs(y-pt)<.003&&ax<M.cx+.002){if(ny>.2)wy=1;else if(ny<-.2)wy=0;}
+  // stop at the corners on the lips, widen only a little across the chin
+  const d=Math.max(0,Math.min(1,(pt-y)/.012));
+  const a=M.cx*.65*(1-d)+.020*d,b=(M.cx+.003)*(1-d)+.034*d;
+  return wy*(1-smooth(a,b,ax))*(1-smooth(-.085,-.060,z))*smooth(1.574,1.596,y);
+}
+// The inside of the mouth (the bag, the inner lips, its side walls): painted dark red-black, so
+// a parted mouth reads as a dark oval and never as skin shards or the sky.
+function mouthInside(v,rx,y,z,nx,nz){
+  const M=MOUTH[v],ax=Math.abs(rx);
+  // (not the outside of the nape, which faces backwards at the same height)
+  if(y>M.s0-.025&&y<M.s0+.015&&z>-.10&&z<.03&&nz<.3&&(ax<M.cx||(ax<M.cx+.020&&nx*rx<0)))return true;
+  if(!(ax<M.cx+.003&&y>M.s0-.012&&y<M.s0+.010&&z<-.02))return false;
+  return nz>-.55||(ax<M.cx-.002&&z>-.115);
+}
 
 // PROPORTIONS (D16). Shoulders .186 -> .205 (a man's biacromial half-width at 1.80 m); the
 // forearm .27 -> .30 so the wrist sits at .79; the head group 1.424 -> 1.41 because the neck
-// showed a finger of daylight over the collar. The double 1.10 x scale (head data x 1.10,
-// group x 1.10) yields a 64 mm IPD from the donors' 52.7 mm, and a 185 mm head breadth at
-// the temples, measured: wide by a centimetre, which is what a 64 mm IPD needs to read.
+// showed a finger of daylight over the collar.
+// THE HEAD (R3): the group was (1.10, 1.10, 1.08) on top of the head data's x 1.10, a net
+// 1.21 wide by 1.10 tall: every feature 10% wider than it was tall, a squat mask 18.4 cm
+// across on a head 22 cm chin to crown. Now (1.02, 1.14, 1.10): 17.1 cm across, 22.9 cm tall
+// (7.6 heads to the body), eyes 59 mm apart and round. The data's x 1.10 stays so that every
+// head-local fit (hair, brows, caps, hats) keeps working; they all scale with the group.
 const HEAD_Y=1.41, SHOULDER_Y=1.382, ELBOW_Y=-.29, HIP_Y=.855, KNEE_Y=-.405;
+const HEAD_SCALE=[1.02,1.14,1.10];
+// THE NECK (R3). Alex: "the friendly npcs have giraffe necks (which is often successfully hid
+// with scarfs". The skeleton was right (eye to arm pivot .235, which is the joint centre, not
+// the acromion); the surface was not: an 8.5 cm tube under an 18 cm jaw, rising out of a flat
+// coat shelf, with the scarf a column to the chin. Rings are head-local [y, rx, rz, cx, cz], one
+// set per donor build (heads 0-1 are men, 2-3 women; keyed on the head, not the style, because
+// Roan wears head 3 and Tobin head 1). At the cut the neck is as wide as the head's opening, the
+// chin overhangs it in front, and the front leans ~20 degrees forward the way a neck does. The
+// back meets the donor's nape (z .019-.023 at the cut, measured) instead of standing a centimetre
+// proud of it; the top two rings run up inside the skull, hidden (painted as inside the mouth).
+const NECK=[
+  [[-.030,.058,.056,0,.004],[.010,.053,.051,0,-.006],[.050,.058,.054,0,-.020],[.086,.066,.0565,0,-.0335],[.110,.046,.043,0,-.033],[.135,.030,.030,0,-.025]],
+  [[-.030,.056,.054,0,.004],[.010,.050,.049,0,-.004],[.050,.050,.045,0,-.014],[.080,.056,.045,0,-.023],[.105,.040,.032,0,-.028],[.130,.026,.026,0,-.022]]];
 
 /* ================================================================ PALETTES ==
    One per hamlet (D16), picked by the `palette` argument. `cuts` is the torso cut per
@@ -62,7 +111,7 @@ const PALETTES={
   // its paper hat), and the one sheet is Tobin, who is his own species.
   pines:{
     coats:[[.235,.070,.048],[.255,.118,.040],[.190,.052,.058],[.220,.100,.032]],
-    scarves:[[.30,.24,.05],[.06,.20,.22],[.28,.06,.18],[.22,.22,.22]],
+    scarves:[[.30,.24,.05],[.06,.20,.22],[.28,.06,.18],[.16,.15,.13]],   // (the white one went grey in the wash: at .22 it read as a paper collar)
     trousers:[[.063,.065,.068],[.085,.075,.059],[.050,.046,.060],[.081,.076,.067]],
     cuts:['coat','jumper','coat'],apron:null,hat:true},
 };
@@ -101,13 +150,31 @@ function box(parts,x,y,z,w,h,d,c,rz=0){
   const g=new THREE.ExtrudeGeometry(shape,{depth:d-2*b,steps:1,bevelEnabled:true,bevelSize:b,bevelThickness:b,bevelSegments:3,curveSegments:1});
   g.translate(0,0,-d/2+b);g.rotateZ(rz);g.translate(x,y,z);parts.push(tint(g,c));
 }
+// A boot sole (polish): the old one was a square slab 16 x 28.5 cm, wider than the boot, and at
+// two metres every pair of feet stood on an action figure's base. This is the boot's own outline
+// (the boot ring's ellipse, rx x rz about cz), a narrower heel and a rounder toe, 4 mm in from the
+// boot, with a bevelled edge. Its underside is at `bottom`, the lowest point of the leg.
+function sole(parts,bottom,rx,rz,cz,thick,c){
+  const shape=new THREE.Shape(),b=.004,N=28;
+  for(let i=0;i<N;i++){
+    const a=i/N*Math.PI*2,t=Math.cos(a);                 // t 1 at the heel (+z), -1 at the toe
+    const w=(rx-b)*(t>0?1-.20*t*t:1-.04*t*t);
+    const x=Math.sin(a)*w,z=cz+t*(rz-b);
+    i?shape.lineTo(x,z):shape.moveTo(x,z);
+  }
+  shape.closePath();
+  const g=new THREE.ExtrudeGeometry(shape,{depth:thick-2*b,steps:1,bevelEnabled:true,bevelSize:b,bevelThickness:b,bevelSegments:2,curveSegments:1});
+  g.rotateX(Math.PI/2);                                 // the outline's y is the foot's z; the extrusion runs down
+  g.translate(0,bottom+thick-b,0);
+  parts.push(tint(g,c));
+}
 // Extract the triangles keep(a,b,c) says yes to into a compact indexed geometry.
 function subMesh(g,keep){
   const idx=g.index.array,n=g.attributes.position.count,map=new Int32Array(n).fill(-1),out=[],used=[];
   const take=j=>{if(map[j]<0){map[j]=used.length;used.push(j);}out.push(map[j]);};
   for(let t=0;t<idx.length;t+=3){const a=idx[t],b=idx[t+1],c=idx[t+2];if(!keep(a,b,c))continue;take(a);take(b);take(c);}
   const r=new THREE.BufferGeometry();
-  for(const name of ['position','normal','uv','color']){
+  for(const name of ['position','normal','uv','color','jawW']){
     const src=g.attributes[name];if(!src)continue;
     const k=src.itemSize,dst=new Float32Array(used.length*k);
     for(let i=0;i<used.length;i++)for(let q=0;q<k;q++)dst[i*k+q]=src.array[used[i]*k+q];
@@ -118,7 +185,8 @@ function subMesh(g,keep){
 // Elliptical garment cross sections: shoulders, waist, hem and compression folds.
 // Unlike stacked primitives this is a continuous sewn silhouette with irregular folds.
 function garment(parts,rings,c,seed=0,cut='plain'){
-  const g=loft(rings.map(([y,rx,rz,cz=0])=>[y,rx,rz,0,cz]),{segments:32,subdivisions:cut==='plain'?3:5,folds:.025,seed});
+  // (a sheet has 64 segments round: twelve folds on 32 were under three vertices each and never showed)
+  const g=loft(rings.map(([y,rx,rz,cz=0])=>[y,rx,rz,0,cz]),{segments:cut==='sheet'?64:32,subdivisions:cut==='plain'?3:5,folds:.025,seed});
   tint(g,c);
   const p=g.attributes.position,colors=g.attributes.color;
   for(let i=0;i<p.count;i++){
@@ -152,12 +220,25 @@ function garment(parts,rings,c,seed=0,cut='plain'){
     }else if(cut==='cuff'){
       relief+=Math.sin(y*96+a*1.5+seed)*.006*bell(y,-.073,.09);
       relief+=Math.sin(y*64-a*2)*.004*bell(y,-.248,.055);
+    }else if(cut==='scarf'){
+      // polish: wound twice round, not a smooth tube. Outward only, so the neck's clearance holds.
+      relief+=.0045*(.5+.5*Math.sin(a*1+y*190+seed))+.0015*(.5+.5*Math.sin(a*5-y*60));
     }else if(cut==='trouser'){
       relief+=Math.sin(y*75+a*2+seed)*.0075*bell(y,-.34,.08);
       relief+=front*.005*bell(x,0,.015);
     }
+    let dy=0;
+    if(cut==='sheet'){
+      // polish: a bedsheet over a man, not a marshmallow. Twelve long folds that deepen toward
+      // the hem, gathered above and below the rope, and a hem cut by hand, never level.
+      const deep=.007+.019*clamp((1.25-y)/.85,0,1);
+      // the folds only ever stand OUT from the old surface: his hands hang inside it, a trough uncovered them
+      relief+=deep*(1+Math.sin(a*12+seed+y*1.7)*.7+Math.sin(a*7-seed*.5+y*2.3)*.3)*.5*(1-bell(y,1.06,.045));
+      relief-=.012*bell(y,1.06,.05);
+      dy=(.018*Math.sin(a*5+seed)+.010*Math.sin(a*11-seed*1.3))*clamp((.46-y)/.11,0,1);
+    }
     const radius=Math.hypot(x,z)||1;
-    p.setXYZ(i,x+x/radius*relief,y,z+z/radius*relief);
+    p.setXYZ(i,x+x/radius*relief,y+dy,z+z/radius*relief);
     const wear=.93+.05*Math.sin(y*19+x*7)+.025*Math.sin(x*73+z*31)+Math.max(-.10,relief*5);
     colors.setXYZ(i,c[0]*wear,c[1]*wear,c[2]*wear);
   }
@@ -166,8 +247,8 @@ function garment(parts,rings,c,seed=0,cut='plain'){
 }
 
 /* ============================================================== THE HEAD ==
-   Indexed, vertex-painted, ambient-occluded, split at the lip line into a head and a jaw,
-   with the neck merged in. Cached per donor head (four), so the AO bake runs four times at
+   Indexed, vertex-painted, ambient-occluded, one mesh with a jaw weight per vertex, with
+   the neck merged in. Cached per donor head (four), so the AO bake runs four times at
    boot and never again. */
 
 // A few rays against the head's own mesh, once per head. Real occlusion, not curvature: the
@@ -273,57 +354,184 @@ function headGeometry(v){
     const cheeks=Math.exp(-Math.pow((Math.abs(x)-.046)/.025,2)-Math.pow((y-1.665)/.03,2))*front;
     const sockets=Math.exp(-Math.pow((Math.abs(x)-.032)/.020,2)-Math.pow((y-1.688)/.014,2))*front;
     const stubble=v<2?Math.exp(-Math.pow((y-1.632)/.022,2))*front*.10:0;
-    const lips=Math.exp(-Math.pow(x/.022,4)-Math.pow((y-LIPS[v])/.0042,2))*front;
-    const m=1-.11*sockets-stubble+.010*Math.sin(x*920+y*617+z*134);
+    const lips=Math.exp(-Math.pow(src[i*3]/(MOUTH[v].cx*1.05),4)-Math.pow((y-MOUTH[v].s0)/.0060,2))*front;
+    // polish: sockets .11 -> .20 (the eyes sat on the face like buttons), and the blood that
+    // shows at the ears and the tip of the nose in the cold
+    const m=1-.20*sockets-stubble+.010*Math.sin(x*920+y*617+z*134);
+    const L=LAND[v],cold=.10*smooth(.066,.076,Math.abs(x))*Math.exp(-Math.pow((y-1.665)/.028,2)-Math.pow(z/.035,2))
+      +.08*Math.exp(-Math.pow(x/.012,2)-Math.pow((y-1.5-L.tip[0])/.012,2))*smooth(L.tip[1]+.03,L.tip[1]+.01,z);
     const hairLine=z>-.015?1.713:1.772;
     const hair=Math.max(0,Math.min(1,(y-hairLine)/.012));
     const hc=v<2?[.07,.064,.054]:[.019,.015,.012];
-    color[i*3]=skin[0]*m*(1+cheeks*.10+lips*.08)*(1-hair)+hc[0]*hair;
-    color[i*3+1]=skin[1]*m*(1-cheeks*.055-lips*.18)*(1-hair)+hc[1]*hair;
-    color[i*3+2]=skin[2]*m*(1-lips*.11)*(1-hair)+hc[2]*hair;
+    color[i*3]=skin[0]*m*(1+cheeks*.10+lips*.08+cold)*(1-hair)+hc[0]*hair;
+    color[i*3+1]=skin[1]*m*(1-cheeks*.055-lips*.18-cold*.5)*(1-hair)+hc[1]*hair;
+    color[i*3+2]=skin[2]*m*(1-lips*.11-cold*.5)*(1-hair)+hc[2]*hair;
     // Cylindrical uv, seam at the back under the hair: 5.3 tiles round a 53 cm head at the
     // colour map's 10 tiles per metre. The old planar x*10 stretched the pores to streaks
     // on the temples, which a bump map hid and a normal map would not.
     uv[i*2]=Math.atan2(x,-z)/(Math.PI*2)*5.3;uv[i*2+1]=y*10;
     p[i*3]=x;p[i*3+1]=y-1.50;p[i*3+2]=z;
   }
-  const neckCut=[];
-  for(let i=0;i<HEAD_INDEX.length;i+=3){const a=HEAD_INDEX[i],b=HEAD_INDEX[i+1],c=HEAD_INDEX[i+2];if(p[a*3+1]>.09&&p[b*3+1]>.09&&p[c*3+1]>.09)neckCut.push(a,b,c);}
+  // THE CUT under the chin (R3): keep a triangle with any corner above CUT, then lay every kept
+  // vertex below it onto it. A flat, closed chin underside instead of 13 mm of sawtooth, which
+  // showed every time a head tipped back. (Polish: the R3 rule kept a triangle by its centre, which
+  // left a notch wherever two corners were under the line, and at the nape the neck showed
+  // through the notches as a zig-zag. Any corner above leaves the whole edge ON the line.)
+  const CUT=v<2?.086:.080,neckCut=[];
+  for(let i=0;i<HEAD_INDEX.length;i+=3){const a=HEAD_INDEX[i],b=HEAD_INDEX[i+1],c=HEAD_INDEX[i+2];if(Math.max(p[a*3+1],p[b*3+1],p[c*3+1])>CUT)neckCut.push(a,b,c);}
+  const pAO=p.slice();                          // the donor as it was, for the occlusion bake below
+  for(const j of neckCut)if(p[j*3+1]<CUT)p[j*3+1]=CUT;
   const g=new THREE.BufferGeometry();
   g.setAttribute('position',new THREE.BufferAttribute(p,3));g.setAttribute('color',new THREE.BufferAttribute(color,3));
   g.setAttribute('uv',new THREE.BufferAttribute(uv,2));g.setIndex(neckCut);g.computeVertexNormals();
   const nrm=g.attributes.normal.array;
-  const ao=bakeAO(p,nrm,neckCut);
+  // Occlusion is baked on the UNCUT donor (polish): baked on the cut head, the flattened slivers
+  // shaded their own rim, and the join under the jaw and at the nape read as a dark band.
+  const gAO=new THREE.BufferGeometry();gAO.setAttribute('position',new THREE.BufferAttribute(pAO,3));gAO.setIndex(Array.from(HEAD_INDEX));gAO.computeVertexNormals();
+  const ao=bakeAO(pAO,gAO.attributes.normal.array,HEAD_INDEX);gAO.dispose();
   for(let i=0;i<n;i++){const a=ao[i];color[i*3]*=a;color[i*3+1]*=a;color[i*3+2]*=a;}
-  // The jaw: everything on the face below the painted lip line. It swings on a hinge two
-  // centimetres above the lips at the ear line (z 0), which is where a jaw hinges.
-  const lipY=LIPS[v]-1.50,hinge=[0,lipY+.022,0];
-  const jawVert=j=>p[j*3+1]<lipY&&p[j*3+2]<-.045;
-  const jaw=subMesh(g,(a,b,c)=>jawVert(a)&&jawVert(b)&&jawVert(c));
-  jaw.translate(-hinge[0],-hinge[1],-hinge[2]);
-  const face=subMesh(g,(a,b,c)=>!(jawVert(a)&&jawVert(b)&&jawVert(c)));
+  // THE MOUTH: one weight per vertex (the skin program swings it about JAW_HINGE), and the
+  // inside of the mouth painted dark. One mesh, no seam, and a draw fewer than the old jaw.
+  const jawW=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    jawW[i]=jawWeight(v,src[i*3],src[i*3+1],src[i*3+2],nrm[i*3+1]);
+    if(mouthInside(v,src[i*3],src[i*3+1],src[i*3+2],nrm[i*3],nrm[i*3+2])){color[i*3]=.030;color[i*3+1]=.010;color[i*3+2]=.009;}
+  }
+  g.setAttribute('jawW',new THREE.BufferAttribute(jawW,1));
+  const face=subMesh(g,()=>true);          // only the vertices the kept triangles use
   // the neck, on the head so it turns with it; its uv brought to the head's tiling
-  const neck=loft([[.002,.038,.038,0,-.010],[.044,.043,.039,0,-.011],[.094,.044,.036,0,-.014],[.126,.030,.029,0,-.023]],{segments:32,subdivisions:3});
-  tint(neck,skin);
+  const neck=loft(NECK[v<2?0:1],{segments:32,subdivisions:3});
+  // Above the cut the neck only fills the opening inside the skull; where the donor's nape curves
+  // in just over the cut, the loft stood out of it by a few millimetres and showed as a ragged
+  // band. Pulled in 15% over the first 6 mm, it stays inside the head (polish).
+  {const np=neck.attributes.position;
+    for(let i=0;i<np.count;i++){const y=np.getY(i),k=1-.15*smooth(CUT,CUT+.006,y);if(k<1){const cz=-.02;np.setX(i,np.getX(i)*k);np.setZ(i,cz+(np.getZ(i)-cz)*k);}}}
+  tint(neck,skin.map(n=>n*.84));               // polish: always under a jaw and inside a collar (.93 read pale)
+  // Under the jaw the neck is in the jaw's shadow (the head bakes its own AO; the neck has none),
+  // most under the chin: without it the top of the neck was lit like a cheek and read as a roll.
+  // The top of the neck runs up inside the skull, where the only way to see it is through an
+  // open mouth: there it is the inside of the mouth, not a pale wall of skin.
+  {const np=neck.attributes.position,nc=neck.attributes.color;
+    for(let i=0;i<np.count;i++){
+      const y=np.getY(i),front=smooth(.0,-.06,np.getZ(i)),k=1-(.20+.16*front)*smooth(.040,.090,y);
+      nc.setXYZ(i,nc.getX(i)*k,nc.getY(i)*k,nc.getZ(i)*k);
+      const t=smooth(.104,.114,y);if(t>0)nc.setXYZ(i,nc.getX(i)+(.030-nc.getX(i))*t,nc.getY(i)+(.010-nc.getY(i))*t,nc.getZ(i)+(.009-nc.getZ(i))*t);}
+    // THE SEAM (polish): the head's edge is AO'd skin and the neck was flat tint, so the join read
+    // as a band (paler on the dealer's nape) even where the shapes met. The neck's top now takes
+    // the head's own colour at the same bearing, fading to its own over the 3.5 cm under the cut.
+    const rimA=[],rimC=[];
+    for(let i=0;i<n;i++)if(Math.abs(p[i*3+1]-CUT)<1e-6){rimA.push(Math.atan2(p[i*3],p[i*3+2]+.02));rimC.push(color[i*3],color[i*3+1],color[i*3+2]);}
+    if(rimA.length)for(let i=0;i<np.count;i++){
+      const y=np.getY(i),w=y<CUT?smooth(CUT-.035,CUT-.002,y):1-smooth(.088,.096,y);if(w<=0)continue;
+      const a=Math.atan2(np.getX(i),np.getZ(i)+.02);let best=0,bd=9;
+      for(let r=0;r<rimA.length;r++){let d=Math.abs(a-rimA[r]);if(d>Math.PI)d=2*Math.PI-d;if(d<bd){bd=d;best=r;}}
+      nc.setXYZ(i,nc.getX(i)+(rimC[best*3]-nc.getX(i))*w,nc.getY(i)+(rimC[best*3+1]-nc.getY(i))*w,nc.getZ(i)+(rimC[best*3+2]-nc.getZ(i))*w);
+    }}
+  neck.setAttribute('jawW',new THREE.BufferAttribute(new Float32Array(neck.attributes.position.count),1));
   const nu=neck.attributes.uv;for(let i=0;i<nu.count;i++)nu.setXY(i,nu.getX(i)*1.35,nu.getY(i)*3.33);
-  const head=mergeGeometries([face,neck],false);face.dispose();neck.dispose();g.dispose();head.computeBoundingSphere();
+  const teeth=teethGeometry(v);
+  const head=mergeGeometries([face,neck,teeth],false);face.dispose();neck.dispose();teeth.dispose();g.dispose();head.computeBoundingSphere();
   // The two older donor heads' joint centres sit inside their upper eyelids: correct the
   // eyeball to the sculpted aperture and keep the eyelid geometry.
   const eyes=data.eyes.map(([x,y,z])=>[x*1.1,y-1.5-(v<2?.0048:0),z-.002]);
-  const rec={head,jaw,hinge,eyes,nrm};
+  const rec={head,eyes,nrm,faceCount:face.attributes.position.count};
   cache.set(key,rec);return rec;
+}
+
+/* ============================================================== THE FACES ==
+   (polish) Four donor heads were four faces: Ness, Ilke, Wren, the candlekeeper and the dealer
+   had one face between them, and every hamlet had two or three identical men within 20 m. Each
+   look (variant, palette, hair, hair colour) now gets its own face from the donor: the nose
+   longer or shorter, its bridge higher or lower, the chin forward or back, the jaw wider or
+   narrower, the cheeks fuller or leaner. Pushed along the surface's own normals, a few
+   millimetres, and kept off the eyes, the lips, the hair cap and the cut under the jaw, so every
+   head-local fit (hair, brows, caps, hood, scarf) holds. Shares the donor head's colour, uv, jaw
+   weight and index; a face owns only its positions and normals. */
+function faceGeometry(v,id){
+  const key='face'+v+':'+id;if(cache.has(key))return cache.get(key);
+  const base=headGeometry(v),src=base.head,L=LAND[v],CUT=v<2?.086:.080,M=MOUTH[v];
+  const sp=src.attributes.position.array,sn=src.attributes.normal.array,pos=new Float32Array(sp),nf=base.faceCount;
+  const h=k=>hashF(id,90+k)*2-1;                 // -1..1 per feature
+  // the nose and the chin only ever grow: pulled in along their normals, the nose's wings went
+  // behind the dark nostrils and the crease under the lip folded through itself
+  const nose=.0025+.0025*h(1),drop=.0035*h(2),bridge=.0030*h(3),chin=.0025+.0025*h(4),jaw=.090*h(5),cheek=.0035*h(6);
+  const lipY=M.s0-1.50;
+  for(let i=0;i<nf;i++){
+    const x=sp[i*3],y=sp[i*3+1],z=sp[i*3+2],ax=Math.abs(x);
+    if(z>.02||y>L.eye+.01)continue;               // the back of the head, and everything from the eyes up
+    const above=smooth(CUT+.002,CUT+.016,y);      // the rim under the jaw never moves
+    const wn=Math.exp(-Math.pow(x/.013,2)-Math.pow((y-L.tip[0]+.004)/.017,2))*smooth(L.tip[1]+.045,L.tip[1]+.025,z);
+    const wd=Math.exp(-Math.pow(x/.010,2)-Math.pow((y-L.tip[0])/.010,2))*smooth(L.tip[1]+.03,L.tip[1]+.012,z);
+    const wb=Math.exp(-Math.pow(x/.007,2))*Math.exp(-Math.pow((y-(L.eye+L.tip[0])*.5-.004)/.013,2))*smooth(L.tip[1]+.05,L.tip[1]+.03,z);
+    const wc=Math.exp(-Math.pow(x/.020,2)-Math.pow((y-L.chin[0]+.004)/.013,2))*smooth(L.chin[1]+.035,L.chin[1]+.015,z)*above*(1-smooth(lipY-.020,lipY-.009,y));
+    const wk=Math.exp(-Math.pow((ax-.050)/.017,2)-Math.pow((y-.155)/.014,2))*smooth(-.02,-.045,z);
+    const along=nose*wn+bridge*wb+chin*wc+cheek*wk;
+    pos[i*3]+=sn[i*3]*along;pos[i*3+1]+=sn[i*3+1]*along-drop*wd;pos[i*3+2]+=sn[i*3+2]*along;
+    // the jaw: wider or narrower at the mandible, clear of the mouth and the fold beside the nose
+    const wj=above*(1-smooth(.100,.122,y))*smooth(.028,.046,ax)*(1-smooth(-.005,.02,z));
+    pos[i*3]+=x*jaw*wj;
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  for(const name of ['color','uv','jawW'])g.setAttribute(name,src.attributes[name]);
+  g.setIndex(src.index);g.computeVertexNormals();
+  // the neck keeps the loft's own normals (welded across its seam)
+  const gn=g.attributes.normal.array;for(let i=nf*3;i<gn.length;i++)gn[i]=sn[i];
+  g.computeBoundingSphere();
+  cache.set(key,g);return g;
+}
+
+// THE TEETH (polish). An open mouth was a black letterbox at 0.7 m. Two thin arched strips inside
+// the mouth, facing out, on the head's own mesh and program: the upper row from 1.5 mm under the
+// parting to 6 mm over it (still: jaw weight 0), the lower, dimmer row a little behind it and
+// moving with the jaw (weight 1). The arch runs 13 mm behind the upper lip's front on the midline
+// and curves back to 15 mm inside the face at the corners (measured off each donor), so a closed
+// mouth hides them and nothing of them can show through a cheek.
+const LIP_FRONT=[-.1331,-.1352,-.1334,-.1354];
+function teethGeometry(v){
+  const M=MOUTH[v],zf=LIP_FRONT[v]+.013,N=12,pos=[],col=[],jw=[],idx=[];
+  for(const [lo,hi,back,w,k] of [[-.0015,.0060,0,0,1],[-.0065,-.0006,.0025,1,.55]]){
+    const base=pos.length/3;
+    for(let c=0;c<=N;c++){
+      const xr=(c/N*2-1)*.018,z=zf+back+25*xr*xr,side=1-.55*smooth(.006,.018,Math.abs(xr));
+      // a darker seam between teeth, every ~4 mm, and the gum line darker still
+      const gap=Math.abs(Math.sin(xr*Math.PI/.0042))<.25?.72:1;
+      for(const [y,g] of [[lo,1],[hi,.55]]){
+        // (a little warm: under the blue of dusk the first grey read green in game)
+        pos.push(xr*1.10,M.s0+y-1.50,z);const t=k*side*gap*g;col.push(.23*t,.205*t,.155*t);jw.push(w);
+      }
+    }
+    for(let c=0;c<N;c++){const a=base+c*2;idx.push(a,a+2,a+1,a+1,a+2,a+3);}
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(pos.length/3*2),2));g.setAttribute('jawW',new THREE.Float32BufferAttribute(jw,1));
+  g.setIndex(idx);g.computeVertexNormals();
+  // facing out of the mouth (-z); flip the winding if it came out backwards
+  const nz=g.attributes.normal.getZ(0);
+  if(nz>0){const ix=g.index.array;for(let i=0;i<ix.length;i+=3){const t=ix[i+1];ix[i+1]=ix[i+2];ix[i+2]=t;}g.computeVertexNormals();}
+  return g;
 }
 
 /* =============================================================== THE EYES ==
    One eyeball geometry per donor head, at its own origin, shared by both eye meshes; a
    cornea shell for both eyes, black and additive, so the only thing it ever adds to the
    frame is a light's reflection: the catchlight, without an emissive. */
-function eyeGeometry(v){
-  const key='eye'+v;if(cache.has(key))return cache.get(key);
+// R3: the whites were brighter than any skin in the county (2.6x the dark head's) and read
+// as a glowing ring round a small iris, a fixed stare. Now an off-white under the skin's
+// value, shaded under the upper lid, round a full-size iris and a night-wide pupil. The radii
+// are pre-divided by the head group's (1.02, 1.14) so the iris and pupil are round in the
+// world: 11.8 mm and 5.5 mm across.
+// Iris colours (polish): brown, dark brown, hazel, grey-blue, green-grey; one per face.
+const IRIS=[[.050,.034,.020],[.030,.022,.015],[.058,.050,.028],[.040,.050,.056],[.045,.056,.036]];
+function eyeGeometry(v,iris=-1){
+  const key='eye'+v+':'+iris;if(cache.has(key))return cache.get(key);
   const parts=[];
-  oval(parts,0,0,0,.0120,.0101,.0120,[.49,.464,.418]);
-  oval(parts,0,0,-.0114,.0051,.0053,.0018,[.049+v*.010,.056,.035]);
-  oval(parts,0,0,-.0128,.0025,.0030,.001,[.008,.009,.008]);
+  oval(parts,0,0,0,.0120,.0101,.0120,[.33,.31,.28]);
+  {const sp=parts[0].attributes.position,sc=parts[0].attributes.color;
+    for(let i=0;i<sp.count;i++){const k=1-.45*smooth(.0025,.0045,sp.getY(i));sc.setXYZ(i,sc.getX(i)*k,sc.getY(i)*k,sc.getZ(i)*k);}}
+  oval(parts,0,0,-.0114,.0058,.0052,.0018,iris<0?[.049+v*.010,.056,.035]:IRIS[iris%IRIS.length]);
+  oval(parts,0,0,-.0128,.0027,.0024,.001,[.008,.009,.008]);
   const g=finish(parts);cache.set(key,g);return g;
 }
 function corneaGeometry(v){
@@ -342,18 +550,23 @@ function bandUV(g,uScale=1){
   for(let i=0;i<uv.count;i++){const vv=uv.getY(i);uv.setXY(i,uv.getX(i)*uScale,.04+.26*(vv-Math.floor(vv)));}
   return g;
 }
-function hairLineAt(v,x,y,z,seed){
-  let line=z>-.012?1.687:z>-.075?1.707:1.740;
-  if(v===0&&z<-.073)line+=.018+Math.abs(x)*.16;
-  if(v>=2&&z<-.074)line+=Math.sin(x*48+seed)*.007;
-  return y>line;
+// The hairline's height (raw donor metres) at (x, z). Polish: it was three flat steps (over the
+// ear, the temple, the brow) and head 0 receded 1.8-2.5 cm whatever his hair, so a long or tied
+// style on him read as a balding man in a wig. Now one continuous line, set 5 mm up or down per
+// person, and the old man recedes only where his hair is short enough to show it.
+function hairLineY(v,x,z,seed,style){
+  const front=smooth(-.062,-.088,z);
+  let line=1.687+.020*smooth(-.004,-.030,z)+.033*front+(hashF(seed,77)-.5)*.010*front;
+  if(v===0&&(style==='cropped'||style==='slicked'))line+=front*(.012+Math.abs(x)*.12);
+  if(v>=2)line+=Math.sin(x*48+seed)*.007*smooth(-.068,-.080,z);
+  return line;
 }
-function hairCap(v,hc,seed){
+function hairCap(v,hc,seed,style){
   const base=headGeometry(v),source=HEADS[v].positions,n=source.length/3;
-  const positions=new Float32Array(n*3),colors=new Float32Array(n*3),uv=new Float32Array(n*2),inside=new Uint8Array(n);
+  const positions=new Float32Array(n*3),colors=new Float32Array(n*3),uv=new Float32Array(n*2),inside=new Uint8Array(n),edge=new Float32Array(n);
   for(let i=0;i<n;i++){
     const x=source[i*3],y=source[i*3+1],z=source[i*3+2],a=Math.atan2(x,z+.027);
-    inside[i]=hairLineAt(v,x,y,z,seed)?1:0;
+    edge[i]=y-hairLineY(v,x,z,seed,style);inside[i]=edge[i]>0?1:0;
     const wave=.0015*Math.sin(a*17+y*93)+.0007*Math.sin(a*39-y*112);
     positions[i*3]=x*1.10*(1.035+wave*6);
     positions[i*3+1]=y-1.50+.0025+Math.max(0,y-1.73)*.025;
@@ -365,9 +578,16 @@ function hairCap(v,hc,seed){
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));
   g.setAttribute('color',new THREE.BufferAttribute(colors,3));g.setAttribute('uv',new THREE.BufferAttribute(uv,2));
   g.setIndex(Array.from(HEAD_INDEX));g.computeVertexNormals();
+  // the height over the hairline rides through subMesh in the jawW slot (it copies that one), then goes
+  const e=new Float32Array(n);for(let i=0;i<n;i++)e[i]=edge[i];g.setAttribute('jawW',new THREE.BufferAttribute(e,1));
   const cap=subMesh(g,(a,b,c)=>inside[a]&&inside[b]&&inside[c]);g.dispose();
   bandUV(cap,6);                       // six repeats of the strand columns round the head: combed
-  return {cap,positions,inside,nrm:base.nrm};
+  // THE EDGE (polish): the cap's last centimetre is mapped up into the strand texture's taper, so
+  // the alpha test breaks it into strands and the hairline feathers instead of ending on a line
+  {const cu=cap.attributes.uv,ce=cap.attributes.jawW;
+    for(let i=0;i<cu.count;i++){const d=ce.getX(i);if(d<.010)cu.setY(i,Math.max(cu.getY(i),.47+.40*(1-d/.010)));}
+    cap.deleteAttribute('jawW');}
+  return {cap,positions,inside,edge,nrm:base.nrm};
 }
 // Cards. Each is a quad bent along three segments, rooted on the displaced scalp and lit by
 // the scalp's own normal (a hair card that shades like the head under it is what makes hair
@@ -392,6 +612,21 @@ function hairCards(v,style,hc,capY,seed,scalp){
     for(let s=0;s<seeds.length;s++){const j=seeds[s];const dx=positions[j*3]-x,dy=positions[j*3+1]-y,dz=positions[j*3+2]-z;if(dx*dx+dy*dy+dz*dz<minD*minD){ok=false;break;}}
     if(ok)seeds.push(i);
   }
+  // THE HAIRLINE ROW (polish): short cards rooted just inside the edge at the brow and temples,
+  // running down the skin past it, so the hairline is soft (not for slicked, which is combed back)
+  const edgeFrom=seeds.length;
+  if(style!=='slicked'){
+    const E=scalp.edge,src=HEADS[v].positions,cand2=[];
+    for(let i=0;i<inside.length;i++)if(inside[i]&&E[i]>.006&&E[i]<.016&&src[i*3+2]<-.02&&(capY===null||positions[i*3+1]<capY-.008))cand2.push(i);
+    cand2.sort((a,b)=>hashF(a,seed+5)-hashF(b,seed+5));
+    const row=[];
+    for(const i of cand2){
+      if(row.length>=30)break;
+      let ok=true;for(const j of row){const dx=positions[j*3]-positions[i*3],dy=positions[j*3+1]-positions[i*3+1],dz=positions[j*3+2]-positions[i*3+2];if(dx*dx+dy*dy+dz*dz<.0095*.0095){ok=false;break;}}
+      if(ok)row.push(i);
+    }
+    seeds.push(...row);
+  }
   const K=3,pos=[],nor=[],uvs=[],col=[],idx=[];
   const crown=[.01,.30,.01],tie=[0,.16,.085],centre=[0,.16,0];
   for(let s=0;s<seeds.length;s++){
@@ -399,30 +634,42 @@ function hairCards(v,style,hc,capY,seed,scalp){
     let nx=nrm[i*3],ny=nrm[i*3+1],nz=nrm[i*3+2];
     const nl=Math.hypot(nx,ny,nz)||1;nx/=nl;ny/=nl;nz/=nl;
     const h1=hashF(i,seed+1),h2=hashF(i,seed+2),h3=hashF(i,seed+3);
-    let fx,fy,fz;
-    if(style==='loose'){
+    let fx,fy,fz;const edgeCard=s>=edgeFrom;
+    if(edgeCard){fx=0;fy=-1;fz=-.15;}
+    else if(style==='loose'){
       // outward from the skull's centre, then down: hair falls off the head, not through it
       let ox=px-centre[0],oz=pz-centre[2];const ol=Math.hypot(ox,oz)||1;ox/=ol;oz/=ol;
-      fx=ox;fy=-1.2;fz=oz;
-    }else if(style==='tied'){fx=tie[0]-px;fy=tie[1]-py;fz=tie[2]-pz;}
+      fx=ox;fy=-2.6;fz=oz;           // R3: 22 degrees off the head, not 40: hair falls, it does not splay
+    }else if(style==='tied'){
+      // polish: from the brow, "toward the tie" (behind and below) lies straight down the forehead,
+      // and a card hung over the eyes; hair at the front is drawn back over the crown to it
+      fx=tie[0]-px;fy=tie[1]+.14*smooth(-.01,-.07,pz)-py;fz=tie[2]-pz;}
     else if(style==='slicked'){fx=0;fy=-.35;fz=1;}
     else{fx=px-crown[0];fy=py-crown[1];fz=pz-crown[2];}
-    if(style!=='loose'){const d=fx*nx+fy*ny+fz*nz;fx-=nx*d;fy-=ny*d;fz-=nz*d;}
+    if(style!=='loose'||edgeCard){const d=fx*nx+fy*ny+fz*nz;fx-=nx*d;fy-=ny*d;fz-=nz*d;}
     let fl=Math.hypot(fx,fy,fz);if(fl<.02){fx=0;fy=-1;fz=0;fl=1;}fx/=fl;fy/=fl;fz/=fl;
     // the fringe: the hairline is at .24 and the brows at .20, so a card hanging off the front
     // gets 4-6.5 cm and stops at the brow, never over the eyes
     const fringe=pz<-.05&&py>.17;
     let len=style==='loose'?(fringe?.04+.025*h1:.12+.05*h1):style==='tied'?.07+.04*h1:style==='slicked'?.05:.045+.02*h1;
     if(style==='cropped'&&fringe)len*=.7;
-    const w=.028+.012*h2;
+    if(edgeCard)len=.018+.010*h1;
+    const w=edgeCard?.016+.008*h2:.028+.012*h2;
+    const hang=style==='loose'&&!edgeCard;
     let ax=fy*nz-fz*ny,ay=fz*nx-fx*nz,az=fx*ny-fy*nx;const al=Math.hypot(ax,ay,az)||1;ax/=al;ay/=al;az/=al;
-    // shade per card; a third of an older head's cards go grey
-    const shade=.82+.36*h3,grey=v<2&&h2<.35?.6:0;
+    // shade per card; an older head goes grey at the temples only (R3: grey anywhere at .6 was
+    // 3-14x the hair's own value and read as stripes and paper tags)
+    // polish: .45 grey on a card read as a grey tile; .10-.26, varied card to card, reads as salt
+    const shade=.82+.36*h3,grey=v<2&&h2<.35&&Math.abs(px)>.045?.10+.16*hashF(i,seed+4):0;
     const cr=(hc[0]*shade)*(1-grey)+GREY[0]*grey,cg=(hc[1]*shade)*(1-grey)+GREY[1]*grey,cb=(hc[2]*shade)*(1-grey)+GREY[2]*grey;
     const uOff=h1*3,uSpan=w/.04,base=pos.length/3;
     for(let k=0;k<=K;k++){
-      const t=k/K,lift=style==='loose'?.003+.010*t:.003+.004*t,sag=style==='loose'?len*.30*t*t:0;
-      const cx=px+fx*len*t+nx*lift,cy=py+fy*len*t+ny*lift-sag,cz=pz+fz*len*t+nz*lift;
+      const t=k/K,lift=hang?.002+.005*t:edgeCard?.0025+.0015*t:.003+.004*t,sag=hang?len*.30*t*t:0;
+      // R3: a straight card rooted tangent to a round skull stands off it at the tip (6.5 cm of
+      // card, 2 cm of air: spikes, and stray cards edge-on in the air). Every style but loose
+      // is combed along the skull instead: an arc of 9 cm radius from the root.
+      const s=len*t,along=hang?s:.09*Math.sin(s/.09),drop=hang?0:.09*(1-Math.cos(s/.09));
+      const cx=px+fx*along+nx*(lift-drop),cy=py+fy*along+ny*(lift-drop)-sag,cz=pz+fz*along+nz*(lift-drop);
       const hw=w*.5*(1-.35*t);
       pos.push(cx-ax*hw,cy-ay*hw,cz-az*hw,cx+ax*hw,cy+ay*hw,cz+az*hw);
       nor.push(nx,ny,nz,nx,ny,nz);
@@ -445,7 +692,7 @@ function hairSet(style,v,hstyle,colour,wardrobe,capY){
   const key='hair:'+style+':'+v+':'+hstyle+':'+colour+':'+wardrobe+':'+(capY===null?'-':capY.toFixed(3));
   if(cache.has(key))return cache.get(key);
   const hc=HAIR[colour&3].map(n=>n*(wardrobe===1?1.30:1)),seed=v*7+wardrobe,parts=[];
-  const scalp=hairCap(v,hc,seed);parts.push(scalp.cap);
+  const scalp=hairCap(v,hc,seed,hstyle);parts.push(scalp.cap);
   parts.push(hairCards(v,hstyle,hc,capY,seed+colour*13,scalp));
   // Brows follow each anatomical eye instead of a generic strip across the forehead.
   for(const [x,y,z] of headGeometry(v).eyes){
@@ -458,9 +705,15 @@ function hairSet(style,v,hstyle,colour,wardrobe,capY){
     for(let i=0;i<8;i++)parts.push(bandUV(tint(tendon([[Math.cos(i*.82)*.054,.223,-.005],[Math.cos(i*.82)*.062,.172,.040],[.018,.150,.080]],.0068,.0032,17,6),hc.map(n=>n*(.85+i*.045)))));
   }
   if(hstyle==='slicked'){
-    // Roan: flat to the skull, combed back, no cap; and the gold tooth at the mouth line
-    oval(parts,0,.186,.052,.086,.062,.082,HAIR[1]);bandUV(parts[parts.length-1]);
-    for(let i=0;i<7;i++)parts.push(bandUV(tint(tendon([[(i-3)*.020,.246,-.050],[(i-3)*.024,.232,.030],[(i-3)*.026,.196,.086]],.0045,.0026,14,6),HAIR[1].map(n=>n*(.82+i*.04)))));
+    // Roan: flat to the skull and combed back (the cards lie along it), and the gold tooth at
+    // the mouth line. R3: the dark oval that was his slicked mass stood 9 cm off the back of
+    // his skull like a ball; it is gone, his hair is its black instead, and the seven combed
+    // strands run ON the scalp (donor head 3, measured: top .290 on the midline falling
+    // ~3.5*x*x to the side, the back of the crown .233 at z .03), not through it and off it.
+    for(let i=0;i<7;i++){
+      const x=(i-3)*.022,top=.290-3.5*x*x;
+      parts.push(bandUV(tint(tendon([[x*.95,top-.006,-.085],[x,top+.004,-.020],[x*1.05,top-.040,.036]],.0045,.0026,14,6),HAIR[1].map(n=>n*(.82+i*.04)))));
+    }
     oval(parts,.011,.128,-.104,.0042,.0036,.0024,[.198,.154,.056]);bandUV(parts[parts.length-1]);
   }
   const g=finishIndexed(parts);cache.set(key,g);return g;
@@ -479,7 +732,9 @@ function clothing(style,variant,palette){
   const c=style==='dealer'?[.065,.088,.078]:civilian?PAL.coats[v].map(n=>n*(wardrobe===1?.88:1)):[.067,.080,.067];
   const armored=style==='marshal'||style==='dealer',scarf=PAL.scarves[(v+wardrobe)%4];
   const cut=civilian?(style==='cashier'?'apron':PAL.cuts[wardrobe]):'coat';
-  const shoulder=[.205,.214,.194,.199][v],waist=[.155,.173,.146,.154][v];
+  // R3: .7-1.4 cm in, and the sleeve head no longer puffs above the seam: padded, squared
+  // shoulders made every head look small and every neck long
+  const shoulder=[.198,.206,.184,.188][v],waist=[.155,.173,.146,.154][v];
   let capY=null;
   // A sloping shoulder seam, fitted waist and flared hem give the coat its cut.
   // The sleeve cap stays below the neck instead of forming a spherical shoulder.
@@ -487,21 +742,22 @@ function clothing(style,variant,palette){
   if(cut==='longcoat'){
     hem=.42;
     garment(torso,[[hem,.222,.146],[hem+.08,.218,.142],[.62,.210,.134],[.78,.200,.128],[.89,.188,.126],[1.01,waist+.004,.112],
-      [1.15,waist+.014,.118,-.004],[1.30,shoulder-.002,.121],[1.368,shoulder+.008,.103],
-      [1.408,shoulder-.022,.082],[1.447,.111,.065],[1.462,.055,.049]],c,variant,'longcoat');
+      [1.15,waist+.014,.118,-.004],[1.30,shoulder-.002,.121],[1.368,shoulder+.004,.106],
+      [1.415,shoulder-.024,.090],[1.448,shoulder-.075,.080,-.004],[1.470,.092,.080,-.012],[1.480,.070,.068,-.026]],c,variant,'longcoat');
     box(torso,0,.62,.128,.010,.36,.006,seam);                       // the vent
     box(torso,0,.99,-.004,.36,.040,.242,c.map(n=>n*.55));           // the belt
     box(torso,0,.99,-.132,.046,.046,.018,BRASS);
   }else if(cut==='jumper'){
     hem=.92;
     garment(torso,[[hem,.190,.122],[hem+.03,.194,.126],[1.01,waist+.010,.114],[1.15,waist+.020,.120,-.004],
-      [1.30,shoulder-.004,.122],[1.368,shoulder+.006,.104],[1.408,shoulder-.020,.084],[1.447,.108,.066],[1.475,.062,.052]],c,variant,'knit');
+      [1.30,shoulder-.004,.122],[1.368,shoulder+.004,.106],[1.415,shoulder-.024,.090],[1.448,shoulder-.075,.080,-.004],[1.470,.090,.078,-.012],[1.482,.076,.072,-.024]],c,variant,'knit');
     garment(torso,[[hem-.015,.196,.128],[hem+.02,.194,.126]],c.map(n=>n*.62),variant,'plain');             // the ribbed welt
-    garment(torso,[[1.452,.072,.064,-.010],[1.480,.077,.066,-.014],[1.506,.068,.060,-.016]],c.map(n=>n*.84),variant,'plain'); // rolled collar
+    // rolled collar, inside the scarf every civilian wears over it (it used to stand through it)
+    garment(torso,[[1.458,.078,.076,-.014],[1.478,.078,.076,-.020],[1.492,.072,.070,-.026]],c.map(n=>n*.84),variant,'plain');
   }else{
     garment(torso,[[hem,.194,.121],[hem+.065,.198,.127],[.89,.184,.125],[1.01,waist,.110],
-      [1.15,waist+.012,.117,-.004],[1.30,shoulder-.002,.121],[1.368,shoulder+.008,.103],
-      [1.408,shoulder-.022,.082],[1.447,.111,.065],[1.462,.055,.049]],c,variant,'coat');
+      [1.15,waist+.012,.117,-.004],[1.30,shoulder-.002,.121],[1.368,shoulder+.004,.106],
+      [1.415,shoulder-.024,.090],[1.448,shoulder-.075,.080,-.004],[1.470,.092,.080,-.012],[1.480,.070,.068,-.026]],c,variant,'coat');
   }
   if(cut!=='jumper'){
     // Open lapels, layered collar, working pockets and buttons have actual thickness.
@@ -512,7 +768,7 @@ function clothing(style,variant,palette){
       points.forEach(([x,y],i)=>i?lapel.lineTo(side*x,y):lapel.moveTo(side*x,y));lapel.closePath();
       const fold=new THREE.ExtrudeGeometry(lapel,{depth:.008,bevelEnabled:true,bevelSize:.004,bevelThickness:.003,bevelSegments:2,steps:1});
       const fp=fold.attributes.position;
-      for(let i=0;i<fp.count;i++){const t=Math.max(0,Math.min(1,(1.455-fp.getY(i))/.115));fp.setZ(i,fp.getZ(i)-.065-.053*t);}
+      for(let i=0;i<fp.count;i++){const t=Math.max(0,Math.min(1,(1.455-fp.getY(i))/.115));fp.setZ(i,fp.getZ(i)-.084-.034*t);}
       fold.computeVertexNormals();if(cut!=='apron'||!civilian)torso.push(tint(fold,c.map(n=>n*1.22)));else fold.dispose();
       box(torso,side*.112,pocketY,-.108,.088,.115,.016,c,side*.11);
       box(torso,side*.112,pocketY+.052,-.119,.09,.014,.020,c.map(n=>n*.68));
@@ -529,15 +785,19 @@ function clothing(style,variant,palette){
       if(!civilian)box(torso,side*.116,1.31,-.117,.009,.016,.008,[.25,.23,.18]);
     }
   }
-  garment(torso,[[1.432,.067,.059,-.010],[1.457,.066,.057,-.015],[1.478,.051,.046,-.018]],[.16,.148,.124]);   // the shirt collar
+  garment(torso,[[1.440,.074,.075,-.012],[1.464,.071,.072,-.020],[1.486,.069,.069,-.028]],[.16,.148,.124]);   // the shirt collar
   if(civilian){
     // A woven scarf (a streamer in Highwood) and individually sewn workwear break the uniform.
-    garment(torso,[[1.420,.071,.064,-.011],[1.449,.078,.065,-.016],[1.485,.067,.056,-.015],[1.507,.051,.045,-.016]],scarf,variant,'plain');
+    // R3: wrapped low and bulky round the neck, its top 1.6 cm under the chin, not a column to it;
+    // a man's a centimetre bulkier, because his thicker neck swings further inside it when he
+    // turns his head to you (measured: none of the neck crosses the wrap at any look it can take)
+    garment(torso,v<2?[[1.430,.094,.094,-.014],[1.456,.093,.093,-.020],[1.478,.091,.090,-.026],[1.494,.088,.087,-.032]]
+      :[[1.430,.086,.086,-.012],[1.456,.084,.084,-.018],[1.478,.081,.080,-.024],[1.494,.078,.077,-.030]],scarf,variant,'scarf');
     const wrap=new THREE.Shape();
     for(const [i,[x,y]] of [[-.047,1.442],[.024,1.431],[.052,1.304],[.024,1.235],[-.026,1.278]].entries())i?wrap.lineTo(x,y):wrap.moveTo(x,y);
     wrap.closePath();const hanging=new THREE.ExtrudeGeometry(wrap,{depth:.008,steps:1,bevelEnabled:true,bevelSize:.004,bevelThickness:.003,bevelSegments:2});
     const hp=hanging.attributes.position;
-    for(let i=0;i<hp.count;i++){const t=Math.max(0,Math.min(1,(1.440-hp.getY(i))/.12));hp.setZ(i,hp.getZ(i)-.082-.049*t+Math.sin(hp.getX(i)*90)*.002);}
+    for(let i=0;i<hp.count;i++){const t=Math.max(0,Math.min(1,(1.440-hp.getY(i))/.12));hp.setZ(i,hp.getZ(i)-.094-.037*t+Math.sin(hp.getX(i)*90)*.002);}
     hanging.computeVertexNormals();torso.push(tint(hanging,scarf.map(n=>n*.85)));
     if(cut==='shawl'){
       // A broad shoulder shawl tapers over the coat rather than inflating the arms.
@@ -557,7 +817,7 @@ function clothing(style,variant,palette){
     box(torso,0,1.30,-.149,.27,.024,.016,[.11,.118,.108]);
   }
   if(style==='cashier')box(torso,-.096,1.30,-.137,.032,.047,.008,[.42,.30,.09]);
-  garment(upper,[[.038,.008,.009],[.025,.033,.038],[.003,.055,.060],[-.045,.063,.061],[-.12,.060,.057],[-.25,.051,.050],[-.31,.048,.048]],c,variant,'sleeve');
+  garment(upper,[[.022,.010,.012],[.012,.036,.040],[-.004,.053,.057],[-.045,.060,.059],[-.12,.058,.055],[-.25,.050,.049],[-.31,.048,.048]],c,variant,'sleeve');
   // the forearm to -.30 (D16 proportions), the cuff band with it
   garment(fore,[[.023,.049,.049],[-.032,.052,.052],[-.125,.050,.049],[-.255,.040,.039],[-.30,.037,.037]],c,variant+1,'cuff');
   garment(fore,[[-.269,.040,.042],[-.303,.039,.040]],c.map(n=>n*.56));
@@ -567,7 +827,10 @@ function clothing(style,variant,palette){
   garment(hands,[[-.287,.026,.021],[-.309,.031,.022],[-.338,.034,.021],[-.361,.030,.020]],skin,v);
   for(let i=0;i<4;i++){
     const x=(i-1.5)*.015,y=-.357+Math.abs(i-1.5)*.004, length=.052-Math.abs(i-1.5)*.008;
-    hands.push(tint(tendon([[x,y,-.002],[x,y-length*.45,-.010],[x,y-length*.86,-.025],[x,y-length,-.026]],.0074,.0054,12,8),skin));
+    // polish: curled at rest, the little finger most (i 0) and the index least: flat fingers were
+    // half of what read as a shop dummy's hand
+    const curl=1+.30*(3-i)/3;
+    hands.push(tint(tendon([[x,y,-.002],[x,y-length*.42,-.012*curl],[x,y-length*.78,-.030*curl],[x,y-length*.90,-.039*curl]],.0074,.0054,12,8),skin));
     oval(hands,x,y-.004,.016,.008,.010,.002,skin.map(n=>n*1.07));
   }
   hands.push(tint(tendon([[.027,-.326,0],[.043,-.343,-.01],[.041,-.366,-.026]],.010,.007,12,8),skin));
@@ -576,8 +839,11 @@ function clothing(style,variant,palette){
   garment(shin,[[.025,.068,.071],[-.025,.071,.073],[-.13,.066,.074],[-.30,.054,.061],[-.37,.055,.060]],trousers,variant+1,'trouser');
   // boots live in the shin part now (one draw per leg, not two); leather is a colour here
   oval(shin,0,-.375,-.055,.077,.065,.143,leather);
-  garment(shin,[[-.310,.073,.078],[-.355,.076,.095,-.026],[-.412,.080,.142,-.05]],leather);
-  box(shin,0,-.420,-.052,.158,.025,.285,[.018,.020,.021]);
+  // the upper runs down to .428 and the sole overlaps it; the sole's underside is the leg's lowest
+  // point and lands on the model's origin standing (it was the boot oval, 1 cm above it, and the
+  // pool's foot-plane measure falls back to 0 for any rig with an empty mesh: those stood 1 cm up)
+  garment(shin,[[-.310,.073,.078],[-.355,.076,.095,-.026],[-.412,.080,.142,-.05],[-.428,.079,.141,-.05]],leather);
+  sole(shin,-.4485,.077,.139,-.050,.032,[.022,.019,.016]);       // under the boot ring (.080 x .142), 3 mm in
   for(let i=0;i<4;i++)box(shin,0,-.328-i*.016,-.107-i*.008,.069,.005,.008,[.084,.075,.060],i%2?.09:-.09);
   if(style==='sentry'||style==='cashier'||(civilian&&v===0&&wardrobe===2&&!PAL.hat)){
     garment(headwear,[[.213,.077,.084,-.018],[.240,.083,.087,-.019],[.273,.071,.073,-.024],[.299,.042,.045,-.024],[.306,.004,.004,-.024]],civilian?scarf:c,variant,'plain');
@@ -614,7 +880,7 @@ function clothing(style,variant,palette){
     // hip waders: the legs go dark and heavy from the thigh down
     garment(thigh,[[.045,.101,.110],[0,.107,.115],[-.14,.096,.104],[-.31,.079,.084],[-.41,.077,.080]],rubber,variant,'trouser');
     garment(shin,[[.030,.078,.081],[-.03,.081,.083],[-.14,.077,.085],[-.30,.066,.073],[-.37,.068,.073]],rubber,variant+1,'trouser');
-    box(shin,0,-.420,-.052,.176,.036,.300,[.022,.024,.025]);
+    sole(shin,-.4485,.080,.142,-.050,.038,[.022,.024,.025]);      // the wader's heavier sole, flush with the boot
     // gloves, and a cap with cropped hair under it
     garment(hands,[[-.280,.032,.027],[-.320,.037,.028],[-.360,.038,.026],[-.382,.032,.023]],[.056,.048,.040],v);
     // MEASURED ON THE HEAD, not guessed: the wool cap's lowest ring has to clear the brows,
@@ -639,7 +905,7 @@ function clothing(style,variant,palette){
     box(torso,0,.96,-.010,.352,.038,.226,[.048,.038,.030]);           // the belt
     box(torso,0,.96,-.126,.046,.046,.018,gold);
     // the shirt, open at the throat
-    garment(torso,[[1.30,.148,.104],[1.40,.128,.088],[1.452,.096,.062]],[.200,.192,.172],variant,'plain');
+    garment(torso,[[1.30,.148,.104],[1.40,.128,.088],[1.452,.096,.066,-.008]],[.200,.192,.172],variant,'plain');
     // the ring: one warm point, and it is him
     oval(hands,-.020,-.336,-.008,.0125,.0125,.0125,gold);
   }
@@ -650,24 +916,40 @@ function clothing(style,variant,palette){
   // taken it off since the last night the sun set and nobody in Highwood mentions it.
   if(style==='sheet'){
     const white=[.62,.60,.55],under=[.34,.33,.31],rope=[.128,.104,.064];
-    garment(torso,[[.35,.360,.300],[.52,.330,.276],[.74,.292,.244],[.98,.248,.208],[1.22,.216,.182],
-      [1.45,.190,.160],[1.56,.150,.128],[1.62,.086,.076]],white,variant,'coat');
+    // R3: the body of the sheet ends on the shoulders; the part over his head is headwear (below),
+    // so it turns when he turns to look at you. It used to stop at his nose, with his face out
+    // over the top and the eye holes cut at his chest.
+    // polish: cinched at the rope (1.06), folds and a ragged hem from the 'sheet' cut
+    garment(torso,[[.35,.360,.300],[.52,.330,.276],[.74,.292,.244],[.98,.252,.212],[1.06,.226,.190],[1.14,.224,.188],[1.22,.216,.182],
+      [1.45,.190,.160],[1.50,.165,.140],[1.535,.110,.100]],white,variant,'sheet');
     // the underside of the hem, so the sheet reads as cloth over a person and not as a cone
-    garment(torso,[[.34,.352,.294],[.40,.340,.284]],under);
-    // the rope belt, tied
-    box(torso,0,1.06,0,.430,.030,.318,rope);
-    torso.push(tint(tendon([[.062,1.048,-.156],[.086,.980,-.150],[.058,.930,-.142]],.0085,.0060,14,6),rope));
-    // the eye holes, at eye height, cut into the sheet
-    for(const side of [-1,1])oval(torso,side*.040,1.492,-.146,.0225,.0165,.0090,[.014,.013,.012]);
-    // sleeves in the same cloth, so an arm reads as an arm through the sheet
-    garment(upper,[[.042,.052,.054],[.020,.066,.070],[-.06,.068,.072],[-.19,.062,.065],[-.31,.055,.056]],white,variant,'sleeve');
+    garment(torso,[[.34,.352,.294],[.40,.340,.284]],under,variant,'sheet');
+    // the rope belt: a ring round the cinch, never through it. It was a box whose four corners
+    // stood 3 cm out of the sheet at both hips (1.46 on the sheet's ellipse, anything over 1 is out).
+    garment(torso,[[1.045,.2165,.1805],[1.052,.2235,.1875],[1.060,.2265,.1905],[1.068,.2235,.1875],[1.075,.2165,.1805]],rope,variant,'plain');
+    torso.push(tint(tendon([[.050,1.050,-.178],[.066,1.000,-.172],[.058,.930,-.166]],.0085,.0060,14,6),rope));
+    oval(torso,.046,1.058,-.182,.013,.011,.009,rope.map(n=>n*.85));                                // the knot
+    // sleeves in the same cloth, so an arm reads as an arm through the sheet (closed over the
+    // shoulder: an open tube top showed from any height)
+    garment(upper,[[.062,.012,.012],[.042,.052,.054],[.020,.066,.070],[-.06,.068,.072],[-.19,.062,.065],[-.31,.055,.056]],white,variant,'sleeve');
     garment(fore,[[.026,.058,.058],[-.06,.058,.058],[-.19,.049,.048],[-.30,.042,.042]],white,variant+1,'cuff');
+    // the hood: head-local, measured round donor head 1 (ears x .079, nose z -.141, crown .29)
+    // with 1.5-2.5 cm of cloth to spare, its skirt tucked inside the sheet's shoulders
+    garment(headwear,[[.030,.120,.115,-.030],[.080,.092,.100,-.040],[.110,.090,.110,-.045],[.150,.094,.112,-.046],
+      [.200,.092,.110,-.042],[.250,.080,.094,-.040],[.290,.058,.068,-.036],[.315,.012,.012,-.032]],white,variant,'plain');
+    // the eye holes, over his eyes (local y .189), centred on the cloth (z -.143 there)
+    // cut by hand: not a pair, one wider and a little lower than the other
+    oval(headwear,-.037,.188,-.144,.022,.014,.007,[.014,.013,.012]);
+    oval(headwear,.035,.192,-.143,.018,.016,.007,[.014,.013,.012]);
     // the flat cap, on top of the sheet, which is the joke
-    garment(headwear,[[.238,.092,.098,-.014],[.268,.096,.101,-.016],[.296,.078,.082,-.022],[.312,.034,.036,-.024]],[.092,.086,.068],variant,'plain');
-    box(headwear,0,.236,-.096,.184,.018,.062,[.070,.066,.052],.06);
+    garment(headwear,[[.258,.084,.097,-.040],[.282,.088,.100,-.040],[.306,.072,.084,-.038],[.322,.030,.034,-.036]],[.092,.086,.068],variant,'plain');
+    box(headwear,0,.258,-.132,.184,.018,.062,[.070,.066,.052],.06);
     capY=.238;
   }
-  const set={shoulder,capY,torso:finish(torso),upper:finish(upper),fore:finish(fore),thigh:finish(thigh),shin:finish(shin),headwear:finish(headwear),hands:finish(hands)};
+  const set={shoulder,capY,cut,torso:finish(torso),upper:finish(upper),fore:finish(fore),thigh:finish(thigh),shin:finish(shin),headwear:finish(headwear),hands:finish(hands)};
+  // The hands are drawn with the skin program too, and every mesh on it must carry the jaw
+  // weight: a missing attribute reads whatever generic value the last program left there.
+  set.hands.setAttribute('jawW',new THREE.BufferAttribute(new Float32Array(set.hands.attributes.position.count),1));
   cache.set(key,set);return set;
 }
 
@@ -698,9 +980,10 @@ function gunGeometry(style){
 /* ================================================================ THE RIG ==
    The one who is talking: read lazily off the debug surface, because a rig has no ctx of
    its own. Any owner with a ctx may hand over a probe instead (setSpeakerProbe). */
-let speakerProbe=null,dialogueSys=null,dialogueLookT=-9;
+let speakerProbe=null,dialogueSys=null,dialogueLookT=-9,speakingItem=null;
 export function setSpeakerProbe(fn){speakerProbe=typeof fn==='function'?fn:null;}
 function speakingRig(now){
+  speakingItem=null;
   if(speakerProbe)return speakerProbe();
   if(now-dialogueLookT>1||now<dialogueLookT){
     dialogueLookT=now;
@@ -709,16 +992,28 @@ function speakingRig(now){
   }
   const act=dialogueSys&&dialogueSys.active;
   if(!act||!act.opts)return null;
+  speakingItem=act;
   const e=act.opts.speakerEntity;
   return e?(e.built||e.human||e):null;
 }
-const _v=new THREE.Vector3(),_q=new THREE.Quaternion();
+const _v=new THREE.Vector3(),_q=new THREE.Quaternion(),_g=new THREE.Vector3(),_b=new THREE.Vector3(),_a=new THREE.Vector3();
+// THE CARRIED RIFLE (polish). At aim 0 the rifle used to hang at 45 degrees in front of the chest
+// with no hand on it: every hamlet guard between shots, every sentry on his round. Now it stands
+// at the right side the way a guard stands with one: butt on the ground by the boot, upright,
+// leaning a little forward and out, the right hand round the barrel above the forend (it slides
+// there, as a hand does, so the butt stays on the ground whatever the arm is doing). It lifts a
+// hand's width off the ground while he walks, and swings up into the old aim pose by aim .4.
+// Gun-local points: where the hand closes (the barrel just above the forend), and the butt's heel.
+const CARRY={'hamlet-guard':{grip:[0,.022,-.44],butt:[0,-.030,.34]},sentry:{grip:[0,.025,-.46],butt:[0,-.025,.31]}};
+const CARRY_X=Math.PI/2-.07,CARRY_Z=-.045;      // upright, the muzzle 4 degrees forward and 2.6 out
+const FIST=[.004,-.372,-.027];                  // hand-local: where a bar lies in the curled fingers
+const GROUND=.0040;                             // model-local: the underside of the soles, standing
 const norm12=n=>((Math.floor(n)%12)+12)%12;
 
 export function buildHuman(style='resident',variant=0,height=1.80,palette='default'){
   variant=norm12(variant);
   if(!PALETTES[palette])palette='default';
-  let v=variant%4,wardrobe=Math.floor(variant/4)%3,hairStyle=defaultHair(style,variant),hairColour=v;
+  let v=variant%4,wardrobe=Math.floor(variant/4)%3,hairStyle=defaultHair(style,variant),hairColour=style==='roan'?1:v;
   const group=new THREE.Group();group.name='human:'+style;
   group.userData.appearance=variant;
   const cloth=new THREE.MeshStandardMaterial({vertexColors:true,...characterMaps('cloth'),bumpScale:.0015,roughness:1,metalness:0});
@@ -733,28 +1028,48 @@ export function buildHuman(style='resident',variant=0,height=1.80,palette='defau
   // reflection of a light, and shares the eye's program (same defines, other uniforms).
   const cornea=new THREE.MeshPhysicalMaterial({vertexColors:true,roughness:.05,clearcoat:1,clearcoatRoughness:.05,
     transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
-  // hair cards: alphaTest .5, both sides, roughness .55 (hair is glossier than cloth, duller
-  // than skin). No cast shadow: an alpha-tested double-sided caster would be a third program.
-  const hairMat=new THREE.MeshStandardMaterial({vertexColors:true,map:strandTexture(),alphaTest:.5,side:THREE.DoubleSide,roughness:.55,metalness:0});
+  // hair cards: alphaTest .5, both sides. Roughness .85: at .55 a crown seen from behind or
+  // below caught the sky as a white sheen and a tied bun read as a glossy ball (polish, A/B'd in
+  // game). No cast shadow: an alpha-tested double-sided caster would be a third program.
+  const hairMat=new THREE.MeshStandardMaterial({vertexColors:true,map:strandTexture(),alphaTest:.5,side:THREE.DoubleSide,roughness:.85,metalness:0});
   skin.name='human-skin';cloth.name='human-clothing';eye.name='human-eyes';cornea.name='human-cornea';hairMat.name='human-hair';
   for(const m of [cloth,eye,cornea,hairMat])readableSurface(m);
   skinSurface(skin);
   const model=new THREE.Group();model.scale.setScalar(height/1.80);group.add(model);
   const mesh=(g,mat,parent=model,cast=true)=>{const m=new THREE.Mesh(g||new THREE.BufferGeometry(),mat);m.userData.sharedHuman=true;m.castShadow=cast;m.receiveShadow=false;m.visible=!!g;parent.add(m);return m;};
   let geo=clothing(style,variant,palette),H=headGeometry(v);
-  const torso=mesh(geo.torso,cloth),head=new THREE.Group();head.position.y=HEAD_Y;head.scale.set(1.10,1.10,1.08);model.add(head);
-  const face=mesh(H.head,skin,head),jaw=mesh(H.jaw,skin,head);jaw.position.set(H.hinge[0],H.hinge[1],H.hinge[2]);
+  const torso=mesh(geo.torso,cloth),head=new THREE.Group();head.position.y=HEAD_Y;head.scale.set(HEAD_SCALE[0],HEAD_SCALE[1],HEAD_SCALE[2]);model.add(head);
+  head.rotation.order='YXZ';     // R3: turn, then nod about the turned head's own axis, as a neck does
+  const face=mesh(H.head,skin,head);
+  // ONE PERSON (polish): everything the hamlet authors about someone (variant, palette, hair, its
+  // colour) names one face, one iris, one skin tone and a small shift in the value of the cloth and
+  // the hair, so two people in the same coat are still two people. Faces and hands share the skin
+  // material, so they share the tone. Material colours only: no program, no geometry per person.
+  const lookId=()=>variant+12*Math.max(0,PALETTE_NAMES.indexOf(palette))+48*Math.max(0,HAIR_STYLES.indexOf(hairStyle))+192*(hairColour&3);
+  skin.userData.jawHinge.value.set(JAW_HINGE[0],JAW_HINGE[1],JAW_HINGE[2]);
   const headwear=mesh(geo.headwear,cloth,head);
   const hair=mesh(hairSet(style,v,hairStyle,hairColour,wardrobe,geo.capY),hairMat,head,false);
   const eyeL=mesh(eyeGeometry(v),eye,head,false),eyeR=mesh(eyeGeometry(v),eye,head,false),lens=mesh(corneaGeometry(v),cornea,head,false);
+  const dressFace=()=>{
+    const id=lookId();
+    face.geometry=faceGeometry(v,id);
+    eyeL.geometry=eyeR.geometry=eyeGeometry(v,Math.floor(hashF(id,97)*IRIS.length));
+    const tone=.88+.24*hashF(id,98),warm=(hashF(id,99)-.5)*.10;
+    skin.color.setRGB(tone*(1+warm),tone,tone*(1-warm));
+    const c=.95+.10*hashF(id,100),hv=.88+.24*hashF(id,101);
+    cloth.color.setRGB(c,c,c);hairMat.color.setRGB(hv,hv,hv);
+  };
+  dressFace();
   const placeEyes=()=>{
     const e=H.eyes;eyeL.position.set(e[0][0],e[0][1],e[0][2]);eyeR.position.set(e[1][0],e[1][1],e[1][2]);
     lens.position.set((e[0][0]+e[1][0])*.5,e[0][1],e[0][2]);
   };
   placeEyes();
-  let gun=null;
+  // Tobin is under his sheet: nothing of his head shows, so nothing of it is drawn
+  if(style==='sheet')hair.visible=eyeL.visible=eyeR.visible=lens.visible=false;
+  let gun=null;const carryAt=CARRY[style==='hamlet-guard'?'hamlet-guard':'sentry'];
   if(style==='sentry'||style==='dealer'||style==='dogcaller'||style==='hamlet-guard'){   // ROUND 22 lane C: the dog-caller carries the rifle his poacher brain fires; C15: the hamlet guard
-    gun=new THREE.Group();gun.position.set(.20,1.16,-.16);model.add(gun);mesh(gunGeometry(style),cloth,gun);
+    gun=new THREE.Group();gun.position.set(.20,1.16,-.16);gun.rotation.order='ZYX';model.add(gun);mesh(gunGeometry(style),cloth,gun);
   }
   const arms=[],legs=[];
   for(let i=0;i<2;i++){
@@ -773,7 +1088,18 @@ export function buildHuman(style='resident',variant=0,height=1.80,palette='defau
   zones.forEach(z=>{z.x*=scale;z.y*=scale;z.z*=scale;z.r*=scale;});
   const countDraws=()=>{let n=0;group.traverse(o=>{if(o.isMesh&&o.visible)n++;});return n;};
   // animation state: all of it declared here, none of it allocated in animate()
-  let clock=variant*.91,lookYaw=0,lookPitch=0,eyeYaw=0,eyePitch=0,shift=0,shiftDir=1,shiftAt=6+3*hashF(variant,1),shiftN=1,jawT=0,talking=false;
+  let clock=variant*.91,lookYaw=0,lookPitch=0,eyeYaw=0,eyePitch=0,shift=0,shiftDir=1,shiftAt=6+3*hashF(variant,1),shiftN=1,jawT=0,mouth=0,talking=false;
+  // THE REST (polish). Arms hung dead straight, palms forward, fingers flat: at 1.5 m the whole
+  // cast stood to attention like shop dummies, and the forearms sank 1.5-4 cm into the coat hips.
+  // A person at rest carries the shoulder a little forward and out, the elbow soft, the palm
+  // turned to the thigh with the thumb forward. Per person and per side, so no two stand alike.
+  // (Tobin's arms are under his sheet: his stay close in.) All of it fades out as the gun comes up.
+  // (a jumper's ribbed welt flares to the hip, so its wearer's arms hang a little further out)
+  const restFor=n=>[0,1].map(i=>{
+    const h=k=>hashF(n*2+i,40+k),under=style==='sheet',out=geo.cut==='jumper'?.025:0;
+    return {x:under?.015:.045+.03*h(1),z:under?.06:.115+out+.03*h(2),e:under?.15:.24+.14*h(3),turn:1.05+.30*h(4)};
+  });
+  let rest=restFor(variant);
   // the hunting rifle's muzzle is a third of a metre further out than the service rifle's
   const muzzle=style==='hamlet-guard'?{x:.20*scale,y:1.19*scale,z:-.89*scale}:{x:.22*scale,y:1.32*scale,z:-.58*scale};
   const rig={group,gun,zones,scale:1,drawCount:0,gait:'walk',muzzle,shellMat:cloth,eyeMat:skin,contactMat:cloth,
@@ -793,17 +1119,23 @@ export function buildHuman(style='resident',variant=0,height=1.80,palette='defau
       const stand=1-move;
       torso.rotation.z=Math.sin(phase)*.013*move+shift*.010*stand;
       torso.rotation.y=Math.sin(phase)*.026*move;
-      // HEAD TRACKING (C14): yaw toward anim.lookX/Y/Z when present, clamped +-.75 / +-.35,
+      // HEAD TRACKING (C14): yaw toward anim.lookX/Y/Z when present, clamped +-.6 / -.05..+.22,
       // lerped at 6/s; the eyes lead by up to .15 rad and hold it when the neck runs out.
       let yawT=0,pitchT=0,eyeYawT=0,eyePitchT=0;
       if(a.lookX!=null&&Number.isFinite(a.lookX)){
         _v.set(a.lookX-group.position.x,a.lookY-group.position.y,a.lookZ-group.position.z);
         _q.copy(group.quaternion).invert();_v.applyQuaternion(_q);
-        _v.y-=HEAD_Y*scale;
+        // R3: from the EYES, not the neck base 27 cm under them, which tipped every head back
+        // .22 rad at 1.2 m to look down its nose at you. The head turns .6 and nods -.05..+.22,
+        // and the eyes do the rest (.15 aside, .28 down since the polish, .10 up; a crouched player
+        // at a metre was looked over): measured, that is as far as a
+        // neck this thick can go inside the scarf without any of it coming through. A crouched
+        // player is looked down at, never up at.
+        _v.y-=(HEAD_Y+H.eyes[0][1]*head.scale.y)*scale;
         const flat=Math.hypot(_v.x,_v.z)||1e-4;
         const yawRaw=Math.atan2(-_v.x,-_v.z),pitchRaw=Math.atan2(_v.y,flat);
-        yawT=Math.max(-.75,Math.min(.75,yawRaw));pitchT=Math.max(-.35,Math.min(.35,pitchRaw));
-        eyeYawT=Math.max(-.15,Math.min(.15,yawRaw-lookYaw));eyePitchT=Math.max(-.10,Math.min(.10,pitchRaw-lookPitch));
+        yawT=Math.max(-.6,Math.min(.6,yawRaw));pitchT=Math.max(-.05,Math.min(.22,pitchRaw));
+        eyeYawT=Math.max(-.15,Math.min(.15,yawRaw-lookYaw));eyePitchT=Math.max(-.28,Math.min(.10,pitchRaw-lookPitch));
       }
       const k=1-Math.exp(-6*dt);
       lookYaw+=(yawT-lookYaw)*k;lookPitch+=(pitchT-lookPitch)*k;
@@ -818,21 +1150,60 @@ export function buildHuman(style='resident',variant=0,height=1.80,palette='defau
       const lid=blinkPhase>4.56&&blinkPhase<4.70?1-Math.abs((blinkPhase-4.63)/.07):0;
       const sy=1-.88*lid;
       eyeL.scale.y=eyeR.scale.y=lens.scale.y=sy;
-      // THE JAW opens to .04 rad while this body is the one speaking, on a 2.2 Hz chew with a
-      // slower beat under it so it is not a metronome; closes over ~0.1 s when the line ends.
+      // THE MOUTH follows the words while this body is the one speaking: the subtitle is read
+      // at the line's own pace, a vowel opens it, m/b/p close it, a space or a comma lets it
+      // fall shut. No line to read (a probe) falls back to a chew with a slower beat under it.
+      // Closes over ~0.1 s when the line ends. Reads three fields, allocates nothing.
       talking=speakingRig(now)===rig;rig.talking=talking;
       jawT+=((talking?1:0)-jawT)*(1-Math.exp(-dt*10));
-      jaw.rotation.x=-.04*jawT*(.5+.5*Math.sin(clock*13.7)*(.7+.3*Math.sin(clock*5.3)));
-      if(gun){gun.rotation.x=-.80*(1-aim);gun.position.y=1.16+settle;gun.rotation.z=Math.sin(phase)*.01*move;}
+      let target=.5+.5*Math.sin(clock*13.7)*(.7+.3*Math.sin(clock*5.3));
+      const it=talking?speakingItem:null,txt=it&&it.line&&it.line.text;
+      if(txt){
+        const k=Math.min(txt.length-1,Math.floor(it.t/Math.max(.001,it.dur)*txt.length)),c=txt.charCodeAt(k)|32;
+        target=it.t>=it.dur?0:(c===97||c===101||c===105||c===121)?1:(c===111||c===117)?.8:(c===109||c===98||c===112)?0:(c===102||c===118)?.15:(c>=97&&c<=122)?.45:0;
+      }
+      mouth+=(target-mouth)*(1-Math.exp(-dt*18));
+      skin.userData.jaw.value=-JAW_OPEN*jawT*(.15+.85*mouth);
+      // the carry: 1 at aim 0, gone by aim .4 (the right arm and the rifle blend together)
+      let carry=gun?clamp(1-aim/.4,0,1):0;carry=carry*carry*(3-2*carry);
       for(let i=0;i<2;i++){
         const ph=phase+(i?Math.PI:0),s=i?1:-1;
         arms[i].pivot.position.y=SHOULDER_Y+(br*.5+.5)*.004;
-        arms[i].pivot.rotation.x=(Math.sin(ph-.16)*.32*move+aim*.80-(a.coil||0)*.8+(a.swing||0)*1.2)*(1-limp)+limp*.24;
-        arms[i].pivot.rotation.z=s*.04+(i?-.035:.62)*aim+s*limp*.20;
-        arms[i].elbow.rotation.x=.12+aim*(i?.66:.47)+Math.max(0,Math.sin(ph))*.16*move-limp*.4;
-        legs[i].pivot.rotation.x=-Math.sin(ph)*.43*move;
+        const R=rest[i],free=1-aim;
+        arms[i].pivot.rotation.x=(Math.sin(ph-.16)*.32*move+aim*.80+R.x*free-(a.coil||0)*.8+(a.swing||0)*1.2)*(1-limp)+limp*.24;
+        arms[i].pivot.rotation.z=s*(.04+(R.z-.04)*free)+(i?-.035:.62)*aim+s*limp*.20;
+        arms[i].elbow.rotation.x=.12+(R.e-.12)*free+aim*(i?.66:.47)+Math.max(0,Math.sin(ph))*.16*move-limp*.4;
+        arms[i].hand.rotation.y=s*R.turn*free;
+        if(i===1&&carry>0){
+          // the right arm comes a little forward and out to hold the rifle clear of the coat
+          arms[i].pivot.rotation.x+=(.13-arms[i].pivot.rotation.x)*carry;
+          arms[i].pivot.rotation.z+=(.145-arms[i].pivot.rotation.z)*carry;
+          // bent enough that the forearm leans off the upright barrel above the fist; more while
+          // walking, which lifts the rifle clear of the ground with the hand
+          arms[i].elbow.rotation.x+=(.34+.30*move-arms[i].elbow.rotation.x)*carry;
+          arms[i].hand.rotation.y+=(.45-arms[i].hand.rotation.y)*carry;
+        }        legs[i].pivot.rotation.x=-Math.sin(ph)*.43*move;
         legs[i].knee.rotation.x=-Math.max(0,Math.sin(ph-.35))*.64*move;
         legs[i].pivot.rotation.z=-s*.018+Math.sin(phase)*.012*move-shift*.006*stand;
+      }
+      if(gun){
+        const rx=-.80*(1-aim),rz=Math.sin(phase)*.01*move;
+        gun.position.set(.20,1.16+settle,-.16);gun.rotation.set(rx,0,rz);
+        if(carry>0){
+          // where the right fist is now, in the model's space (the arm was posed above)
+          const A=arms[1];A.hand.updateMatrix();A.elbow.updateMatrix();A.pivot.updateMatrix();
+          _v.set(FIST[0],FIST[1],FIST[2]).applyMatrix4(A.hand.matrix).applyMatrix4(A.elbow.matrix).applyMatrix4(A.pivot.matrix);
+          // the upright rifle through it, then (standing) slid along its own axis until the butt is down
+          gun.rotation.set(CARRY_X,0,CARRY_Z);gun.updateMatrix();_q.copy(gun.quaternion);
+          _g.set(carryAt.grip[0],carryAt.grip[1],carryAt.grip[2]).applyQuaternion(_q);
+          _b.set(carryAt.butt[0],carryAt.butt[1],carryAt.butt[2]).applyQuaternion(_q);
+          _a.set(0,0,-1).applyQuaternion(_q);
+          _v.sub(_g);
+          const t=(GROUND-(_v.y+_b.y))/_a.y*(1-move);
+          _v.addScaledVector(_a,t);
+          gun.position.set(.20+(_v.x-.20)*carry,1.16+settle+(_v.y-1.16-settle)*carry,-.16+(_v.z+.16)*carry);
+          gun.rotation.set(rx+(CARRY_X-rx)*carry,0,rz+(CARRY_Z-rz)*carry);
+        }
       }
     },
     // C14: a hamlet authors a face per person. Every Mesh swaps its geometry from the cached
@@ -846,12 +1217,12 @@ export function buildHuman(style='resident',variant=0,height=1.80,palette='defau
       if(look.hair&&HAIR_STYLES.includes(look.hair))hairStyle=look.hair;
       else if(look.variant!=null&&!look.hair)hairStyle=defaultHair(style,variant);
       v=variant%4;wardrobe=Math.floor(variant/4)%3;
-      hairColour=look.hairColour!=null&&Number.isFinite(look.hairColour)?(look.hairColour&3):v;
-      geo=clothing(style,variant,palette);H=headGeometry(v);
-      torso.geometry=geo.torso;face.geometry=H.head;jaw.geometry=H.jaw;jaw.position.set(H.hinge[0],H.hinge[1],H.hinge[2]);
+      hairColour=look.hairColour!=null&&Number.isFinite(look.hairColour)?(look.hairColour&3):style==='roan'?1:v;
+      geo=clothing(style,variant,palette);H=headGeometry(v);rest=restFor(variant);
+      torso.geometry=geo.torso;face.geometry=H.head;
       headwear.geometry=geo.headwear||headwear.geometry;headwear.visible=!!geo.headwear;
       hair.geometry=hairSet(style,v,hairStyle,hairColour,wardrobe,geo.capY);
-      eyeL.geometry=eyeR.geometry=eyeGeometry(v);lens.geometry=corneaGeometry(v);placeEyes();
+      lens.geometry=corneaGeometry(v);placeEyes();dressFace();
       for(let i=0;i<2;i++){
         arms[i].pivot.position.x=(i?1:-1)*geo.shoulder;
         arms[i].upper.geometry=geo.upper;arms[i].fore.geometry=geo.fore;arms[i].hand.geometry=geo.hands;
@@ -864,5 +1235,8 @@ export function buildHuman(style='resident',variant=0,height=1.80,palette='defau
     },
     dispose(){cloth.dispose();skin.dispose();eye.dispose();cornea.dispose();hairMat.dispose();}
   };
-  rig.drawCount=countDraws();rig.animate();return rig;
+  // Built with the rifle raised: the pool measures its foot plane off this first pose, and the
+  // carried rifle stands ON that plane, so it must not be in the measure (its bounding box
+  // corners reach below the butt).
+  rig.drawCount=countDraws();rig.animate(gun?{aim:1}:{});return rig;
 }

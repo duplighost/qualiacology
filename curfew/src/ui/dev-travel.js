@@ -38,17 +38,39 @@ export class DevTravel {
     const el = document.createElement('section');
     el.id = PANEL_ID;
     el.setAttribute('aria-label', 'playtest travel');
+    // FOLDED BY DEFAULT. ALEX, 2026-09-18: "i cant see the left most row of perks in dev mode
+    // to take". The pause card is full width and the perk tree starts at its left edge, so a
+    // panel docked anywhere on the card covers something. It folds to a thin upright strip in
+    // the card's own left margin (at least 3vw, 41 px at 1366, so the 22 px strip never meets
+    // the card), and opens only when clicked; the open panel has its own close. It folds
+    // again on every return to the game and after every trip, so it never covers the perk
+    // page twice.
     el.style.cssText = [
       'position:fixed', 'left:18px', 'top:18px', 'bottom:18px', 'width:268px',
       'z-index:9999', 'overflow:auto', 'padding:12px 12px 16px',
-      'background:rgba(6,9,13,.93)', 'border:1px solid #2b3543', 'border-radius:6px',
+      'background:rgba(6,9,13,.96)', 'border:1px solid #2b3543', 'border-radius:6px',
       'color:#c9d4e6', 'font:12px/1.5 Consolas,ui-monospace,monospace',
       'display:none',
     ].join(';');
     const h = document.createElement('div');
-    h.textContent = 'PLAYTEST  ·  ?dev=1';
-    h.style.cssText = 'letter-spacing:.16em;color:#8fa4c4;margin-bottom:8px';
+    h.style.cssText = 'display:flex;justify-content:space-between;align-items:center;letter-spacing:.16em;color:#8fa4c4;margin-bottom:8px';
+    const ht = document.createElement('span');
+    ht.textContent = 'PLAYTEST';
+    h.append(ht, this._btn('close', () => this._setOpen(false), true));
     el.append(h);
+
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.id = PANEL_ID + '-tab';
+    tab.textContent = 'PLAYTEST';
+    tab.style.cssText = [
+      'position:fixed', 'left:4px', 'top:50%', 'transform:translateY(-50%)', 'z-index:9999', 'display:none',
+      'writing-mode:vertical-rl', 'padding:10px 3px', 'cursor:pointer', 'letter-spacing:.2em',
+      'font:10px/1 Consolas,ui-monospace,monospace', 'color:#8fa4c4',
+      'background:rgba(6,9,13,.85)', 'border:1px solid #2b3543', 'border-radius:3px',
+    ].join(';');
+    tab.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this._setOpen(true); });
+    this.tab = tab;
 
     // The kit row: what a test usually needs before it can start.
     const kit = document.createElement('div');
@@ -74,21 +96,32 @@ export class DevTravel {
     el.append(list);
     this.list = list;
 
-    document.body.append(el);
+    document.body.append(el, tab);
     this.el = el;
+    this._open = false;
 
     // SHOWN WHEN THERE IS A CURSOR TO CLICK WITH. Not on the 'game:paused' bus event: the
     // pause card can be raised by hud.pause() without that event being emitted, and a panel
     // of buttons is useless while the pointer is locked anyway. Pointer lock is the honest
     // signal — the frames where he has a mouse are exactly the frames he can press these.
     const sync = () => {
-      const on = typeof document !== 'undefined' && !document.pointerLockElement;
-      if (on) this._refresh();
-      el.style.display = on ? 'block' : 'none';
+      this._cursor = typeof document !== 'undefined' && !document.pointerLockElement;
+      if (!this._cursor) this._open = false;
+      this._show();
     };
     this._onLock = sync;
     document.addEventListener('pointerlockchange', sync);
     sync();
+  }
+
+  _setOpen(v) { this._open = !!v; this._show(); }
+
+  _show() {
+    if (!this.el) return;
+    const open = this._cursor && this._open;
+    if (open) this._refresh();
+    this.el.style.display = open ? 'block' : 'none';
+    if (this.tab) this.tab.style.display = this._cursor && !this._open ? 'block' : 'none';
   }
 
   _btn(label, fn, small) {
@@ -145,6 +178,7 @@ export class DevTravel {
     }
     void terr;
     this._say('at ' + (r.name || r.id) + '. car alongside.');
+    this._setOpen(false);
   }
 
   _kitCar() {
@@ -183,7 +217,9 @@ export class DevTravel {
   dispose() {
     if (this._onLock) document.removeEventListener('pointerlockchange', this._onLock);
     this.el?.remove();
+    this.tab?.remove();
     this.el = null;
+    this.tab = null;
   }
 }
 

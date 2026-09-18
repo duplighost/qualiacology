@@ -253,11 +253,11 @@ export const SITE_RECORDS = Object.freeze([
     "siteId": "red-quarry",
     "title": "WORK ORDER CLIPPED TO THE CRANE CAB",
     "text": "BLOCK 1 · RED · 9m x 4m x 3m · INSCRIPTION: TO FOLLOW",
-    "x": 25.4,
-    "y": 8.21,
-    "z": -37.3,
+    "x": 13.4,
+    "y": 1.01,
+    "z": -44.85,
     "yaw": 0,
     "mount": "desk",
-    "floor": 7.2
+    "floor": 0
   }
 ]);

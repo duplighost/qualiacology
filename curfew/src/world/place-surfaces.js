@@ -114,6 +114,9 @@ const STYLE_BY_KIND = Object.freeze({
   glasshouse: 'metal',
   'bell-vault': 'mossStone',
   'red-quarry': 'naturalRock',
+  // The Cut is a hamlet in a worked stone face: cottages, terraces, kiln and gate piers are
+  // stone. With no row it fell back to timber and read as a wooden fort (round 3 critic).
+  'quarry-cut': 'stone',
 });
 
 function wrap(v, n) { return ((v % n) + n) % n; }

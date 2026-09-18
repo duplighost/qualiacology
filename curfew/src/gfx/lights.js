@@ -429,6 +429,7 @@ export class Lights {
     scene.add(torch);
     scene.add(torch.target);
     this.torch = torch;
+    this._torchShadowLive = true;   // r3: see the end of present()
 
     const H = CFG.lights.headlight;
     const head = new THREE.SpotLight(HEAD_COLOUR, 0, H.distance, H.angle,
@@ -1327,6 +1328,19 @@ export class Lights {
       // [vigil fx.js:296-301]; a persistent borrow holds whatever intensity it was given.
       if (h.ttl > 0 && isFinite(h.ttl)) v *= Math.exp(-h.age / (h.ttl * 0.4));
       light.intensity = v;
+    }
+
+    /* ---- the torch's shadow map only renders while the torch shines (r3, perf) --------
+       three re-renders a shadowed light's map every frame whatever its intensity, and the
+       spot aims along the view with an 80 m reach: a full shadow pass of the near scene every
+       frame the torch is DARK, which is most frames outdoors. castShadow stays pinned (no
+       recompile, see header); only autoUpdate follows the light, and the frame it comes back
+       on renders its map before it is seen. */
+    const tl = this.torch.intensity > 0;
+    if (tl !== this._torchShadowLive) {
+      this.torch.shadow.autoUpdate = tl;
+      if (tl) this.torch.shadow.needsUpdate = true;
+      this._torchShadowLive = tl;
     }
   }
 

@@ -180,6 +180,9 @@ export const SPECIES = {
   poacher: { id: 'gear', f: 240, press: 'breath', pf: 120, rate: 1.02 },
   watcher: { id: 'thin', f: 128, press: 'scrape', pf: 72, rate: 0.80 },
   standing: { id: 'drag', f: 118, press: 'scrape', pf: 58, rate: 0.72 },
+  // C8 (2026-09-18): the spider is a floor crawler now and gets a voice of its own, or it
+  // would fall back to the hound's pant: a fast, dry, high scrape from stems already baked.
+  spider: { id: 'thin', f: 380, press: 'scrape', pf: 240, rate: 1.55 },
 };
 const SPECIES_KEYS = Object.keys(SPECIES);
 
@@ -515,7 +518,7 @@ export class Earshot {
         id: -1, e: null, species: 'hound',
         ident: mk(IDENT_REF, 1.45),
         press: mk(PRESS_REF, 1.9),
-        rate: 1, dist: 999, rear: 0, alive: false,
+        rate: 1, dist: 999, rear: 0, alive: false, hurtAt: -1,
       });
     }
   }
@@ -600,6 +603,8 @@ export class Earshot {
     const A = this.A;
     if (!A.baked || A.silent || !e) return;
     const v = this.tracked.get(e.audioId);
+    // r3: one pain cry per body per 80 ms. A carbine burst stacked them into a chord.
+    if (v) { if (A.now - (v.hurtAt || -1) < 0.08) return; v.hurtAt = A.now; }
     const s = A.spec();
     s.x = e.x !== undefined ? e.x : (e.pos ? e.pos.x : 0);
     s.y = (e.y !== undefined ? e.y : (e.pos ? e.pos.y : 0)) + 1.0;

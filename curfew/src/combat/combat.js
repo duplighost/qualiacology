@@ -62,6 +62,10 @@ const TAG_SURFACE = Object.freeze({
   tree: 'wood', trunk: 'wood', log: 'wood', plank: 'wood', fence: 'wood',
   rock: 'stone', stone: 'stone', wall: 'stone', building: 'stone',
   metal: 'metal', vehicle: 'metal', tank: 'metal',
+  // r3 shooting feel: tags the county places that fell through to wood. A snow drift answered
+  // a round with splinters and a wooden knock; a concrete post and a gas can did too.
+  snow: 'snow', concrete: 'stone', soil: 'dirt', earth: 'dirt', cloth: 'cloth',
+  gascan: 'metal', strongbox: 'metal', mast: 'metal', glass: 'glass', stump: 'wood',
   // ROUND 7 (lane F, request 1b): the tags the crushable roadside furniture carries. Without
   // these a drum, a tyre stack and a waystone all spark and sound like WOOD when you shoot
   // them, and they are now the things most often in front of the car and the gun.
@@ -76,9 +80,22 @@ const TAG_SURFACE = Object.freeze({
 // player has consciously identified what they hit.
 const SPARK = {
   wood: 0xc09258, plank: 0xc09258, foliage: 0x7c9a5c,
-  metal: 0xfff0c8, tin: 0xfff0c8, rock: 0xd8d2c4, glass: 0xcfe4f2,
-  dirt: 0x9a8468, flesh: 0xa4222a, plate: 0xfff0c8,
+  metal: 0xfff0c8, tin: 0xfff0c8, rock: 0xd8d2c4, stone: 0xd8d2c4, glass: 0xcfe4f2,
+  dirt: 0x9a8468, flesh: 0xa4222a, plate: 0xfff0c8, snow: 0xdfe6f0, cloth: 0xb09a80,
 };
+
+// r3 SHOOTING FEEL — ONE BLAST, ONE HIT. A shotgun pull reaches this file as eight weapon:fire
+// events, and each pellet used to land on its own: eight damage calls on the same body (eight
+// pain cries, eight flinches that each cancelled the last), eight impact sounds, and EIGHT rovers
+// borrowed from the county's eight for 0.35 s, which put every lamp in sight out for a third of
+// a second on every shot. Pellets that find a body in the pool are now summed per body and land
+// once, on the last pellet of the pull (the pellets are emitted in one synchronous loop, so the
+// last one always comes). Bosses, residents and the dealer keep their own per-pellet rules.
+const AGG_SLOTS = 8;
+const ZONE_RANK = { head: 3, torso: 2, limb: 1 };
+// The kill pause, heavy guns only: the world stops for two or three frames on the round that
+// kills, longer on a head. The carbine gets none; at twelve rounds a second it would stutter.
+const KILL_STOP = { head: 0.05, other: 0.03 };
 
 const MAX_PENS = 2;                  // cinderbloom combat.js:955
 const PEN_BUDGET_CM = 50;
@@ -120,6 +137,17 @@ const _coinPayload = { n: 0, x: 0, y: 0, z: 0, reason: 'break' };
 const _back = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
+// r3: the info a round hands its target's owner, reused: it was a fresh literal on every
+// landing, in the hot path. Owners read it inside the call and keep nothing (enemies, kneeler,
+// boss-encounters, dealer and interior-horror, checked). dx/dz is the round's direction in the
+// ground plane, for a hit reaction that pushes along the shot rather than away from the point.
+const _dmgInfo = { zone: null, point: _pt, dist: 0, dx: 0, dz: 1 };
+function dmgInfo(zone, x, y, z, dist, dx, dz) {
+  _dmgInfo.zone = zone; _pt.set(x, y, z); _dmgInfo.point = _pt; _dmgInfo.dist = dist;
+  const L = Math.hypot(dx, dz) || 1;
+  _dmgInfo.dx = dx / L; _dmgInfo.dz = dz / L;
+  return _dmgInfo;
+}
 
 export class Combat {
   static id = 'combat';
@@ -160,7 +188,26 @@ export class Combat {
       kind: 'dirt', surface: 'dirt', x: 0, y: 0, z: 0,
       nx: 0, ny: 1, nz: 0, dist: 0, dmg: 0, zone: null,
       enemy: null, killed: false, deflected: false, pen: false, weapon: '',
+      // r3: the trigger pull this landing belongs to (weapons.fireCount; -1 for a swing) and
+      // the pellet, so a listener can answer ONCE per pull (the hit tick) or thin a blast out.
+      pull: -1, pellet: 0,
     };
+    this._pull = -1;               // the pull resolveShot is working on
+    this._pellet = 0;
+    this._litPull = -2;            // the last pull that already borrowed its impact light
+    // ONE BLAST, ONE HIT: the per-body sums for the pull in flight. Fixed slots, never grown.
+    this._agg = [];
+    for (let i = 0; i < AGG_SLOTS; i++) {
+      this._agg.push({
+        enemy: null, dmg: 0, zone: null, dist: 0, n: 0,
+        hit: true, t: 0, kind: 'flesh', exit: false, boss: false, colliderId: -1,
+        x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0,
+      });
+    }
+    this._aggN = 0;
+    this._aggPull = -1;
+    // Where this pull's landings fell, so the blast borrows ONE light at their middle.
+    this._blastN = 0; this._blastX = 0; this._blastY = 0; this._blastZ = 0; this._blastKind = 'dirt';
 
     // NB: 'enemies' is not in the M0 manifest at all, and in M1 it is
     // constructed AFTER combat. It MUST be read lazily at call time — VIGIL
@@ -374,6 +421,16 @@ export class Combat {
     let ox = f.ox, oy = f.oy, oz = f.oz;
     let dx = f.dx, dy = f.dy, dz = f.dz;
     this.shots++;
+    // ONE BLAST, ONE HIT (see AGG_SLOTS). A multi-pellet pull resets its sums on pellet 0.
+    const pellets = f.pellets > 1 ? f.pellets : 1;
+    const multi = pellets > 1;
+    this._pull = typeof f.pull === 'number' ? f.pull : this.shots;
+    this._pellet = f.pellet | 0;
+    if (!multi || this._pellet === 0 || this._aggPull !== this._pull) {
+      this._aggN = 0; this._aggPull = this._pull;
+      this._blastN = 0; this._blastX = 0; this._blastY = 0; this._blastZ = 0;
+      this._blastDx = f.dx; this._blastDz = f.dz;      // the blast's direction, for the bodies it lands on
+    }
 
     // HANDS tier 3, 'Through' — "the round leaves the far side". The exit COUNT is asked
     // once per shot rather than once per bounce, so a shotgun costs eight reduces and not
@@ -423,15 +480,20 @@ export class Combat {
         // while a boss record carries encounter:true and never `interior`. Testing `encounter`
         // first sent every round that landed on a resident into BossEncounters.damage, which
         // threw on k.site.anchors — a shot at a resident crashed the sim step (tests/interior-horror.mjs).
-        const owner = this._sys(h.enemy.interior ? 'interior-horror' : h.enemy.encounter ? 'boss-encounters' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+        const ownerId = h.enemy.interior ? 'interior-horror' : h.enemy.encounter ? 'boss-encounters' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies';
+        // A pellet into a body of the pool is summed and lands with the last pellet.
+        if (multi && ownerId === 'enemies' && this._aggregate(h, dmg, dist)) break;
+        const owner = this._sys(ownerId);
         const res = owner && owner.damage
-          ? owner.damage(h.enemy, dmg, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
+          ? owner.damage(h.enemy, dmg, dmgInfo(h.zone, h.x, h.y, h.z, dist, dx, dz))
           : { killed: false };
         killed = !!res.killed;
+        if (killed) this._killStop(def.id, h.zone);
       }
 
       // --- feedback. THE ONE LAW's second half: light it for >= 0.35 s.
-      this._land(h, dmg, dist, deflected, killed, pens > 0, def.id);
+      this._land(h, dmg, dist, deflected, killed, pens > 0, def.id, !multi);
+      if (multi) this._blastAdd(h);
 
       // A round does not continue through a creature into another.
       if (h.enemy) break;
@@ -461,7 +523,7 @@ export class Combat {
       _exitRec.kind = h.kind; _exitRec.x = ex; _exitRec.y = ey; _exitRec.z = ez;
       _exitRec.nx = -h.nx; _exitRec.ny = -h.ny; _exitRec.nz = -h.nz;
       _exitRec.zone = null; _exitRec.enemy = null; _exitRec.t = exit; _exitRec.exit = true;
-      this._land(_exitRec, 0, dist, false, false, true, def.id);
+      this._land(_exitRec, 0, dist, false, false, true, def.id, !multi);
 
       // 0.40 deg of deflection per surface exited, seeded so a replay repeats.
       dx += (this.penRng.next() - 0.5) * 2 * PEN_DEFLECT;
@@ -474,21 +536,98 @@ export class Combat {
 
     if (!connected) this.misses++;
 
+    // The last pellet of a blast: land the summed bodies, then light the blast once.
+    if (multi && this._pellet === pellets - 1) this._flushBlast(def);
+
     // --- tracer. The ray left the EYE; the tracer is dressing that appears to
     // leave the barrel, so it starts at an estimated muzzle, not at the origin.
+    // r3: the muzzle is where the gun IS. It was always 14 cm right and 10 cm down, so an aimed
+    // shot's tracer came in from the side of the scope instead of out of the end of the barrel.
+    // The viewmodel knows where its crown is drawn (muzzleWorld); the old estimate is kept for
+    // a build without it.
     if (f.tracer) {
       const fx = this._sys('fx');
       if (fx && fx.tracer) {
-        const cam = this._sys('camera');
-        _muzzle.set(f.ox, f.oy - 0.10, f.oz);
-        if (cam) {
-          _muzzle.x += -Math.sin(cam.yaw) * 0.55 + Math.cos(cam.yaw) * 0.14;
-          _muzzle.z += -Math.cos(cam.yaw) * 0.55 - Math.sin(cam.yaw) * 0.14;
+        const vm = this._sys('viewmodel');
+        if (!(vm && vm.muzzleWorld && vm.muzzleWorld(_muzzle, 0))) {
+          const cam = this._sys('camera');
+          _muzzle.set(f.ox, f.oy - 0.10, f.oz);
+          if (cam) {
+            _muzzle.x += -Math.sin(cam.yaw) * 0.55 + Math.cos(cam.yaw) * 0.14;
+            _muzzle.z += -Math.cos(cam.yaw) * 0.55 - Math.sin(cam.yaw) * 0.14;
+          }
         }
-        _d.set(f.dx, f.dy, f.dz);
-        fx.tracer(_muzzle, _d, Math.max((firstDist > 0 ? firstDist : 220) - 0.4, 2));
+        // Aim it from the crown at the point the round actually went, so it meets its hit.
+        const reach = firstDist > 0 ? firstDist : 220;
+        _d.set(f.ox + f.dx * reach - _muzzle.x, f.oy + f.dy * reach - _muzzle.y, f.oz + f.dz * reach - _muzzle.z);
+        const len = _d.length();
+        _d.multiplyScalar(1 / Math.max(1e-6, len));
+        fx.tracer(_muzzle, _d, Math.max(len - 0.4, 2));
       }
     }
+  }
+
+  /** Sum one pellet into its body's slot. False if every slot is taken (land it on its own). */
+  _aggregate(h, dmg, dist) {
+    let s = null;
+    for (let i = 0; i < this._aggN; i++) if (this._agg[i].enemy === h.enemy) { s = this._agg[i]; break; }
+    if (!s) {
+      if (this._aggN >= AGG_SLOTS) return false;
+      s = this._agg[this._aggN++];
+      s.enemy = h.enemy; s.dmg = 0; s.zone = null; s.dist = dist; s.n = 0;
+      s.x = h.x; s.y = h.y; s.z = h.z; s.nx = h.nx; s.ny = h.ny; s.nz = h.nz; s.t = h.t;
+    }
+    s.dmg += dmg; s.n++;
+    if (dist < s.dist) s.dist = dist;
+    if ((ZONE_RANK[h.zone] || 0) > (ZONE_RANK[s.zone] || 0)) {
+      s.zone = h.zone; s.x = h.x; s.y = h.y; s.z = h.z;    // the mark goes where the best pellet went
+    }
+    // Every pellet still throws its own blood; the body answers once.
+    const fx = this._sys('fx');
+    if (fx && fx.impact) { _pt.set(h.x, h.y, h.z); _n.set(h.nx, h.ny, h.nz); fx.impact('flesh', _pt, _n, 0.55); }
+    this._blastAdd(h);
+    return true;
+  }
+
+  _blastAdd(h) {
+    this._blastN++;
+    this._blastX += h.x; this._blastY += h.y; this._blastZ += h.z;
+    if (this._blastN === 1 || h.kind === 'flesh') this._blastKind = h.kind;
+  }
+
+  /** The last pellet: each body takes its sum once, and the blast borrows one light. */
+  _flushBlast(def) {
+    const owner = this._sys('enemies');
+    for (let i = 0; i < this._aggN; i++) {
+      const s = this._agg[i];
+      const res = owner && owner.damage
+        ? owner.damage(s.enemy, s.dmg, dmgInfo(s.zone || 'torso', s.x, s.y, s.z, s.dist, this._blastDx || 0, this._blastDz || 1))
+        : { killed: false };
+      const killed = !!(res && res.killed);
+      if (killed) this._killStop(def.id, s.zone);
+      s.kind = 'flesh'; s.exit = false;
+      this._land(s, s.dmg, s.dist, false, killed, false, def.id, false, true);
+      s.enemy = null;
+    }
+    this._aggN = 0;
+    // THE ONE LAW, once for the blast: the light sits in the middle of where it all landed,
+    // brighter for more of it, and never more than one rover.
+    if (this._blastN > 0 && this._litPull !== this._pull) {
+      this._litPull = this._pull;
+      const n = this._blastN, lights = this._sys('lights');
+      if (lights && lights.borrow) {
+        lights.borrow('impact', this._blastX / n, this._blastY / n + 0.12, this._blastZ / n,
+          SPARK[this._blastKind] ?? 0xd8d2c4, Math.min(9 * (1 + 0.25 * (n - 1)), 16), LIT_S);
+      }
+    }
+    this._blastN = 0;
+  }
+
+  /** The kill pause (KILL_STOP): heavy guns only, a little longer on a head. */
+  _killStop(weaponId, zone) {
+    if (weaponId === 'carbine' || weaponId === 'melee') return;
+    const fx = this._sys('fx');
+    if (fx && fx.hitstop) fx.hitstop(zone === 'head' ? KILL_STOP.head : KILL_STOP.other);
   }
 
   /**
@@ -496,7 +635,9 @@ export class Combat {
    * is LIT for LIT_S, and one weapon:hit on the bus. Every path into feedback
    * goes through here so there is exactly one place to break it.
    */
-  _land(h, dmg, dist, deflected, killed, pen, weaponId) {
+  // `lit` false: a pellet of a blast, whose one light _flushBlast borrows. `summed` true: the
+  // body's sum landing, whose blood every pellet already threw.
+  _land(h, dmg, dist, deflected, killed, pen, weaponId, lit = true, summed = false) {
     // An exit burst is the far side of a wallbang and carries no damage of its
     // own. Everything else that lands MUST have removed at least 1 hp.
     if (h.exit) { /* exit burst: feedback only */ }
@@ -506,6 +647,10 @@ export class Combat {
     _pt.set(h.x, h.y, h.z);
     _n.set(h.nx, h.ny, h.nz);
     _back.set(-h.nx, -h.ny, -h.nz);
+    if (summed) {
+      this._emitHit(h, dmg, dist, deflected, killed, pen, weaponId);
+      return;
+    }
 
     // Decal + sparks. fx owns the pools; we own only the decision.
     //
@@ -515,23 +660,29 @@ export class Combat {
     // (kind, point, normal, size) fed a STRING into point and a Vector3 into size, composed a
     // NaN matrix and wrote it into the shared decal InstancedMesh on every landing — silently,
     // because Vector3.copy of a string does not throw. And fx exposes no sparks() at all.
-    if (fx && fx.impact) fx.impact(h.kind, _pt, _n, deflected ? 0.7 : 1);
+    // A pellet of a blast (lit false) lands at 0.6: smaller debris, a smaller mark.
+    if (fx && fx.impact) fx.impact(h.kind, _pt, _n, (deflected ? 0.7 : 1) * (lit ? 1 : 0.6));
 
     // THE ONE LAW, made literal: borrow a rover and light the hit for 0.35 s.
     // This is not decoration — it is the reason a deflection can never read as
     // a ghost. If fx is not finished yet, the shot STILL lights what it hit.
     const lights = this._sys('lights');
-    if (lights && lights.borrow) {
+    if (lit && lights && lights.borrow) {
       lights.borrow('impact', h.x + h.nx * 0.12, h.y + h.ny * 0.12, h.z + h.nz * 0.12,
         SPARK[h.kind] ?? 0xd8d2c4, deflected ? 7 : 9, LIT_S);
     }
+    this._emitHit(h, dmg, dist, deflected, killed, pen, weaponId);
+  }
 
+  /** weapon:hit, on the one reused payload, and the lastHit record. */
+  _emitHit(h, dmg, dist, deflected, killed, pen, weaponId) {
     const p = this._hitPayload;
     p.kind = h.kind; p.surface = h.kind;
     p.x = h.x; p.y = h.y; p.z = h.z;
     p.nx = h.nx; p.ny = h.ny; p.nz = h.nz;
     p.dist = dist; p.dmg = dmg; p.zone = h.zone; p.enemy = h.enemy;
     p.killed = killed; p.deflected = deflected; p.pen = pen; p.weapon = weaponId;
+    p.pull = weaponId === 'melee' ? -1 : this._pull; p.pellet = this._pellet;
     this.ctx.bus.emit('weapon:hit', p);
 
     // Mutate the preallocated record; NEVER reassign it. (See the constructor.)

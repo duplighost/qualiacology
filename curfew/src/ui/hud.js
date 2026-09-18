@@ -93,7 +93,7 @@ import { CFG } from '../config.js';
 import { clamp, clamp01, DEG, TAU } from '../engine/math.js';
 // Pure data, no ctx, same owner (progression). The card lists every branch and every node
 // once at build time and rewrites their STATE afterwards; the names and lines never change.
-import { BRANCHES, NODES, levelFrac, xpForLevel } from '../progression/nodes.js';
+import { BRANCHES, NODES, HOLD_BREATH_S, levelFrac, xpForLevel } from '../progression/nodes.js';
 // Pure data, read-only: the majors' positions, names and region tints for the map.
 import { MAJORS, MINOR_KINDS, REGION_TINT, DEFAULT_TINT } from '../world/placedata.js';
 import { Readouts } from './readouts.js';
@@ -154,7 +154,10 @@ const PULSE_POOL = 5;
 // same family without either being labelled.
 const GRANT_LIFE = 0.62;
 const LEVEL_LIFE = 0.95;
-const CARRY_INK = '#f0d49a';    // ROUND 13: the bank's rings, in the carried pile's colour
+const CARRY_INK = '#f0d49a';
+// 2026-09-18: a perk acting rings the reticle in its branch's own tint (nodes.js BRANCHES),
+// so the torch, the gun and the blood are three different colours before they are words.
+const PERK_INK = Object.freeze(Object.fromEntries(BRANCHES.map((b) => [b.id, '#' + b.tint.toString(16).padStart(6, '0')])));    // ROUND 13: the bank's rings, in the carried pile's colour
 
 // ROUND 13: THE KEY GLYPH. Alex, seventh playtest: "We will need some way for the player to
 // know which things they can use the 'E' key on to activate. For now, we can do what many games
@@ -336,10 +339,12 @@ const CONTROLS = [
   ['Fire', 'Left mouse'],
   ['Aim', 'Right mouse'],
   ['Melee', 'V or middle mouse'],
-  // D1/D2: R is reload and the active-reload attempt, nothing else; lowering is X's toggle
-  // (a click, aim, melee or R raises it too). The window on the reload arc is base now.
+  // D2: R is reload and the active-reload attempt. 2026-09-18, Alex: "it used to lower with
+  // holding the r key and raise back up with the same holding key or by clicking." The gun
+  // lane brings the hold back (out of a fight a held R lowers; X still toggles; a click, aim,
+  // melee or R raises it). One row says both keys, in the words of the shared contract.
   ['Reload / press again at the click', 'R'],
-  ['Lower or raise weapon · run faster', 'X'],
+  ['Lower / raise the gun', 'Hold R or X'],
   // Round 5 lane F (the gun) adds a second weapon and Q swaps; round 6 lane D1 adds the
   // digits; D6 adds the wheel and slots 3-4. Same card. tests/pause.mjs greps the label.
   ['Swap weapon', 'Q, wheel, or 1-4'],
@@ -377,8 +382,13 @@ const CONTROLS = [
 // pause screen, and the corollary is that a key nobody has must not be advertised there —
 // so this row is built with the rest and stays hidden until WHEEL 3 is owned, at which point
 // the card is the one surface allowed to say what the new key does.
+// 2026-09-18: three perks are verbs you do not otherwise have, and a verb on no screen is a
+// verb that does not exist (Steady's breath was on none at all).
 const EARNED_CONTROLS = [
   { node: 'wheel_3', what: 'Nitro (driving)', how: 'Shift' },
+  { node: 'legs_1', what: 'Drop-roll', how: 'Hold C as you land' },
+  { node: 'hands_3', what: 'Hold breath (aiming)', how: 'Shift' },
+  { node: 'lamp_4', what: 'Flashburn', how: 'F off, then on' },
 ];
 
 const CSS = `
@@ -755,6 +765,9 @@ export class Hud {
     // held one bright — a pooled array of ids, never rebuilt per frame.
     this.lowered = false; this.lowerT = 0; this.primed = false; this._primedQ = -1;
     this.dryFlash = 0; this.heldId = '';
+    // hands_3 Steady's breath (0..1 left, -1 when there is nothing to draw) and hands_2 Last
+    // Round's gold wash on the ammo box: set to 1 by the refill, then run down on the clock.
+    this.breathFrac = -1; this._refillFlash = 0; this._refillQ = -1; this._refillAt = -1;
     this._arsenal = ['', '', '', '', '', '']; this._arsenalN = 0;
     this.hp = CFG.player.health.max;
     this.hpMax = CFG.player.health.max;     // the body's own maximum; see _readHpMax()
@@ -772,7 +785,7 @@ export class Hud {
     for (let i = 0; i < ARC_POOL; i++) this.arcs[i] = { live: false, rel: 0, amt: 0, t: 0 };
     this.pulses = new Array(PULSE_POOL);
     for (let i = 0; i < PULSE_POOL; i++) {
-      this.pulses[i] = { live: false, t: 0, streak: 0, kind: 'mote', life: PULSE_LIFE };
+      this.pulses[i] = { live: false, t: 0, streak: 0, kind: 'mote', life: PULSE_LIFE, ink: null };
     }
     // The pieces of the life arc that were just taken. `a` and `b` are FRACTIONS of the arc,
     // not hp, so the ghost stays where the loss happened no matter what regen does after.
@@ -1104,6 +1117,13 @@ export class Hud {
     // surface nobody can see. Every path that SHOWS the card refreshes it (pause(true), a
     // node click).
     on('node:bought', () => { this._pulse('node', GRANT_LIFE); });
+    // A perk acted. Two rings in the branch's tint (the max-health grant is blood's), and for
+    // Last Round the ammo box washes gold, because the magazine it just refilled is there.
+    on('perk:triggered', (p) => {
+      const br = p && (p.branch || (p.id === 'hpmax' ? 'blood' : ''));
+      this._pulse('perk', GRANT_LIFE, (br && PERK_INK[br]) || null);
+      if (p && p.id === 'hands_2') { this._refillFlash = 1; this._refillAt = -1; this._ammoDirty = true; }
+    });
     on('level:up', () => { this._pulse('level', LEVEL_LIFE); });
     // BLOOD 4 'Iron' just spent its once-a-cycle save. Three rings, the same as a level,
     // because it is the biggest thing the tree ever does for you and until 2026-09-09 it
@@ -1216,7 +1236,7 @@ export class Hud {
    * pack throws, so a live 'node'/'level' ring is only ever recycled by another one of its
    * own kind — the same rank idea as MARK_RANK, one pool down.
    */
-  _pulse(kind, life) {
+  _pulse(kind, life, ink) {
     const k = kind || 'mote';
     const big = k !== 'mote';
     let slot = null, oldest = -1;
@@ -1230,6 +1250,7 @@ export class Hud {
     const prog = this.ctx.systems.get('progress');
     slot.live = true; slot.t = 0; slot.kind = k;
     slot.life = life || PULSE_LIFE;
+    slot.ink = ink || null;
     slot.streak = (!big && prog) ? prog.streak : 0;
     this._dirty = true;
   }
@@ -2854,6 +2875,13 @@ export class Hud {
       g.lineTo(W - 12, H - 2); g.lineTo(4, H - 2); g.lineTo(4, 18); g.closePath(); g.fill();
     }
 
+    // hands_2 Last Round: the magazine it just filled washes gold for half a second.
+    if (this._refillFlash > 0) {
+      g.fillStyle = 'rgba(255,214,120,' + (0.38 * this._refillFlash).toFixed(3) + ')';
+      g.beginPath(); g.moveTo(18, 3); g.lineTo(W - 2, 3); g.lineTo(W - 2, H - 10);
+      g.lineTo(W - 12, H - 2); g.lineTo(4, H - 2); g.lineTo(4, 18); g.closePath(); g.fill();
+    }
+
     // C21, the stance: LOWERED dims the box and puts a slash through the cartridge, scaled
     // by lowerT so the quarter-second of travel is drawn as travel. An instrument that
     // goes dark says "not ready" before a swallowed click has to.
@@ -3105,6 +3133,23 @@ export class Hud {
     if (Math.abs(dryFlash - this.dryFlash) > 0.03 || (dryFlash === 0 && this.dryFlash !== 0)) {
       this.dryFlash = dryFlash; this._ammoDirty = true;
     }
+    // hands_3 Steady. weapon.js publishes breathLeft only once the node is owned (null
+    // otherwise); the ring shows while the breath is held or still refilling under ADS, in
+    // 1/30 steps so a draining breath repaints about thirty times, not every frame.
+    const bl = w.breathLeft;
+    const bf = (typeof bl === 'number') && (w.breathHeld || (bl < HOLD_BREATH_S - 1e-3 && this.adsT > 0.5))
+      ? clamp01(bl / HOLD_BREATH_S) : -1;
+    const bq = bf < 0 ? -1 : Math.round(bf * 30) / 30;
+    if (bq !== this.breathFrac) { this.breathFrac = bq; this._dirty = true; }
+    // hands_2 Last Round's gold wash: half a second on the clock, repainted in 1/30 steps.
+    if (this._refillFlash > 0) {
+      const t = (this.ctx.time && this.ctx.time.t) || 0;
+      if (this._refillAt < 0) this._refillAt = t;
+      const k = clamp01(1 - (t - this._refillAt) * 2), q = Math.round(k * 30);
+      if (q !== this._refillQ) { this._refillQ = q; this._ammoDirty = true; }
+      this._refillFlash = k;
+      if (k <= 0) { this._refillQ = -1; this._refillAt = -1; }
+    }
     // The arsenal: owned ids in slot order (weapon.js slot(n) is owned[n]) and the held id.
     // Compared element by element against the pooled copy; nothing is allocated.
     const owned = w.owned, heldId = w.def && w.def.id ? String(w.def.id) : '';
@@ -3346,6 +3391,19 @@ export class Hud {
       g.globalAlpha = 1;
     }
 
+    /* ---- hands_3 Steady: the breath you have left ---------------------------- */
+    // Drawn only while it matters (held, or refilling while you aim) and NOT faded by ADS,
+    // because aiming is exactly when it is read. A full circle is a full breath.
+    if (this.breathFrac >= 0 && !this.inCar) {
+      const rr = 30 * u, a0 = -Math.PI * 0.5, a1 = a0 + TAU * this.breathFrac;
+      g.lineCap = 'round';
+      g.globalAlpha = 0.35; g.strokeStyle = SHADE; g.lineWidth = 4 * u;
+      g.beginPath(); g.arc(c, c, rr, a0, a1); g.stroke();
+      g.globalAlpha = 0.85; g.strokeStyle = INK; g.lineWidth = 1.6 * u;
+      g.beginPath(); g.arc(c, c, rr, a0, a1); g.stroke();
+      g.globalAlpha = 1; g.lineCap = 'butt';
+    }
+
     /* ---- hit markers -------------------------------------------------------- */
     for (let i = 0; i < MARK_POOL; i++) if (this.marks[i].live) this._drawMark(g, c, this.marks[i], u);
 
@@ -3358,12 +3416,12 @@ export class Hud {
       if (!q.live) continue;
       const life = q.life || PULSE_LIFE;
       const t = clamp01(q.t / life);
-      const rings = (q.kind === 'level' || q.kind === 'bank') ? 3 : (q.kind === 'node' || q.kind === 'reward') ? 2 : 1;
+      const rings = (q.kind === 'level' || q.kind === 'bank') ? 3 : (q.kind === 'node' || q.kind === 'reward' || q.kind === 'perk') ? 2 : 1;
       // The grant eases OUT (fast then settling) so it reads as arriving rather than as an
       // expanding shockwave, which is what the mote's linear ring already is.
       const e = rings === 1 ? t : 1 - Math.pow(1 - t, 2.2);
       const base = rings === 1 ? 5 + 26 * t + q.streak * 1.1 : 7 + (rings === 3 ? 74 : 52) * e;
-      g.strokeStyle = q.kind === 'bank' ? CARRY_INK : INK;
+      g.strokeStyle = q.ink || (q.kind === 'bank' ? CARRY_INK : INK);
       for (let k = 0; k < rings; k++) {
         // Each ring lags the one before it by a fifth of the life, so they open in sequence.
         const lag = clamp01((t - k * 0.18) / Math.max(0.001, 1 - k * 0.18));

@@ -84,14 +84,20 @@ export class RefugeComfort {
   }
 
   build(){
-    const u=this.u,placement=bedsidePlacement(u.anchors.bag,u.spec.room);
+    // A room that brings its OWN bed (the Filling Station's, long in X) says where its bedside
+    // is: bedsidePlacement only knows refuge's bag, long in Z, and put this cabinet 0.4 m into
+    // that mattress. The anchor gives the first facing; _facing still measures it.
+    const u=this.u,bs=u.anchors.bedside;
+    const placement=bs?{x:bs.x,z:bs.z,yaw:bs.yaw||0}:bedsidePlacement(u.anchors.bag,u.spec.room);
     placement.yaw=this._facing(placement);
     // The rug lies between the cabinet and the bed, so its offset is in the GROUP's frame
-    // and has to be re-taken from whatever facing was chosen above.
-    {
+    // and has to be re-taken from whatever facing was chosen above. Beside an authored bed it
+    // is a small square where the reader stands instead, not a runner under someone's pallets.
+    if(bs){placement.rugX=0;placement.rugZ=.85;placement.rugW=.9;placement.rugD=.9;}
+    else{
       const c=Math.cos(placement.yaw),s=Math.sin(placement.yaw);
       const dx=u.anchors.bag.x-placement.x,dz=u.anchors.bag.z-placement.z;
-      placement.rugX=dx*c-dz*s;placement.rugZ=dx*s+dz*c-.02;
+      placement.rugX=dx*c-dz*s;placement.rugZ=dx*s+dz*c-.02;placement.rugW=1.2;placement.rugD=2.3;
     }
     this.placement=placement;
     this.group=new THREE.Group();this.group.name='refuge-comfort-'+u.siteId;
@@ -118,8 +124,29 @@ export class RefugeComfort {
     // A warm enamel mug and folded wool square make this somebody's bedside.
     const mug=new Kit();mug.cyl(.070,.055,.13,16,.23,.92,.15,[.24,.29,.25]);
     const mm=new THREE.Mesh(mug.build(),this.wood);this.group.add(mm);
-    const mat=new THREE.MeshStandardMaterial({color:0x9e8157,roughness:.98});this.rugMat=mat;
-    const rug=new THREE.Mesh(new THREE.BoxGeometry(1.2,.022,2.3),mat);rug.position.set(placement.rugX,.129,placement.rugZ);this.group.add(rug);
+    // A rag rug: dark wool, a darker bound edge and worn stripes, on the cabinet's own timber
+    // material. It was one flat tan box of its own, and under the bedside lamp it was the
+    // brightest thing in the room: it read as a sheet of paper on the floor.
+    const rk=new Kit(),RW=placement.rugW,RD=placement.rugD,RB=.07,EDGE=[.25,.18,.17];
+    rk.box(RW,.02,RD,0,.128,0,[.5,.25,.23]);
+    for(const sd of [-1,1]){rk.box(RW,.022,RB,0,.129,sd*(RD/2-RB/2),EDGE);rk.box(RB,.022,RD-2*RB,sd*(RW/2-RB/2),.129,0,EDGE);}
+    for(const t of (RD>1.5?[-.64,-.52,.52,.64]:[-.2,.2]))rk.box(RW-2*RB,.021,.05,0,.1285,t,[.6,.5,.3]);
+    const rug=new THREE.Mesh(rk.build(),this.wood);rug.position.set(placement.rugX,0,placement.rugZ);rug.receiveShadow=true;this.group.add(rug);
+    // THE CABINET IS SOLID. It was drawn in all twenty-one rooms with no collider, so a body
+    // walked through it. The chest-high carcass is a floor you could stand on (like the crate
+    // it replaced at the station); the board above its back edge is a thin wall.
+    const col=this.ctx.systems?.get?.('collision');
+    if(typeof col?.addCollider==='function'){
+      const wx=(x,z)=>u._wx?u._wx(x,z):x,wz=(x,z)=>u._wz?u._wz(x,z):z;
+      const yaw=(u.yaw||0)+placement.yaw,c=Math.cos(placement.yaw),s=Math.sin(placement.yaw);
+      const key='refuge-comfort:'+u.siteId;this.colKey=key;
+      col.addCollider({kind:'obb',x:wx(placement.x,placement.z),z:wz(placement.x,placement.z),halfX:.39,halfZ:.305,yaw,
+        y0:u.padY+.02,y1:u.padY+.8575,tag:'wood',standable:true,breakable:false},key);
+      // board centre, group-local (0, -0.16), into the site frame
+      const bx=placement.x-.16*s,bz=placement.z-.16*c;
+      col.addCollider({kind:'obb',x:wx(bx,bz),z:wz(bx,bz),halfX:.34,halfZ:.03,yaw,
+        y0:u.padY+.85,y1:u.padY+1.49,tag:'wood',standable:false,climbable:false,breakable:false},key);
+    }
   }
   step(){
     this.focus=-1;
@@ -159,5 +186,5 @@ export class RefugeComfort {
       if(this.bits===511){this.solved=true;pr.flag('refuge-puzzle-solved:'+u.siteId,true);pr.payCash(40,at.x,at.y,at.z,'nine-lights');this.ctx.bus.emit('refuge:puzzle',{id:u.siteId});}
     }
   }
-  dispose(){this.offLoad?.();this.group?.removeFromParent();this.group?.traverse(o=>{if(o.geometry&&o.geometry!==this.geometry)o.geometry.dispose();});this.geometry?.dispose();this.wood?.dispose();this.dark?.dispose();this.on?.dispose();this.rugMat?.dispose();}
+  dispose(){this.offLoad?.();if(this.colKey)this.ctx.systems?.get?.('collision')?.removeChunk?.(this.colKey);this.group?.removeFromParent();this.group?.traverse(o=>{if(o.geometry&&o.geometry!==this.geometry)o.geometry.dispose();});this.geometry?.dispose();this.wood?.dispose();this.dark?.dispose();this.on?.dispose();}
 }

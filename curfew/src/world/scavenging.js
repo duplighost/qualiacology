@@ -65,6 +65,14 @@ const DEEP_CAP=200;         // m of road distance that doubles the pay: xp, cash
 const CHAIN_CHANCE=.10;     // a tenth of forest digs point at a second, deeper one
 const CHAIN_CASH=1.5;       // the second one pays half again
 const _ambushOpts={feetY:0,awake:true,ambush:true,riseS:.95,pack:1};
+/* THE BOY WALKED EAST. One grave in the Garden of Rest (row 2, on the west side of the avenue)
+ * is a child's: a small stone at its head and a wooden horse at its foot. Dig it and the
+ * hollow is empty. Nine small wet prints come up one by one out of it and walk away toward
+ * the gap in the west wall and the trees (the site's local -x, which is world east), and a
+ * moment after the last one, from out there, one soft laugh. Nothing rises from this grave
+ * and it pays nothing: what it has is what you find. Saved as stage 5 like any emptied grave. */
+const CHILD_GRAVE={site:'garden-of-rest',row:2,prints:9,stride:.55,size:.62,start:.95,dur:60,treeline:20};
+const _childOpts={yaw:0,stride:CHILD_GRAVE.stride,size:CHILD_GRAVE.size,count:CHILD_GRAVE.prints,dur:CHILD_GRAVE.dur};
 /** The ambush a region's ground sends up at the third strike. Graves and authored sites
  *  carry their own species; everything else asks the terrain. */
 function regionAmbush(terr,x,z){
@@ -182,6 +190,8 @@ export class Scavenging {
           cash:38+Math.floor(rng.next()*30), xp:34,
           ambushChance:0.45, ambushSpecies:'pallbearer',
         });
+        // the child's grave: the site's local +x in world terms is where its head is
+        if(g.site===CHILD_GRAVE.site&&i===CHILD_GRAVE.row)Object.assign(this.sites.at(-1),{childGrave:true,noAmbush:true,headX:cy2,headZ:-sy2});
       }
     }
     /* ---- D14: THE FOREST SCATTER ----------------------------------------------------
@@ -282,7 +292,7 @@ export class Scavenging {
       root.add(cuts);
     }
     earth.receiveShadow=true;
-    s.node={root,chest,body,lid,contents,seam,earth,marker,excavated,cuts,collider:-1,open:s.stage>=4?1:0};this.root.add(root);
+    s.node={root,chest,body,lid,contents,seam,earth,marker,excavated,cuts,collider:-1,stake:-1,open:s.stage>=4?1:0};this.root.add(root);
     if(s.bones){
       const kit=new Kit(),rng=this.ctx.rng.fork(s.id+':bones');
       const api={scatteredBones:true,heightAt:(x,z)=>terr.heightAt(x,z)-s.y,wx:(x,z)=>s.x+x,wz:(x,z)=>s.z+z,
@@ -290,12 +300,57 @@ export class Scavenging {
       skeleton(kit,api,1.9,-.5,s.seed*6.28,rng);
       s.node.boneGeo=kit.build();root.add(new THREE.Mesh(s.node.boneGeo,this.mat));
     }
+    if(s.childGrave)this._childStone(s);
     this._appearance(s);
+  }
+  /** The small stone at the child's grave's head and the wooden horse at its foot, on the
+   *  grave's final spot (the placement pass may have moved it). Ground under each piece is
+   *  sampled; the stone is only built where a body could stand, and is a body itself. */
+  _childStone(s){
+    const col=this._sys('collision'),terr=this._sys('terrain');
+    let hx=s.headX,hz=s.headZ,sx=0,sz=0,ok=false;
+    // the head side first, then the two sides, never the side the prints walk out of
+    for(const [ax,az] of [[hx,hz],[-hz,hx],[hz,-hx]]){sx=s.x+ax*1.05;sz=s.z+az*1.05;if(col.canOccupy(sx,sz,.26,.8)){hx=ax;hz=az;ok=true;break;}}
+    if(!ok)return;
+    const k=new Kit(),gy=terr.heightAt(sx,sz)-s.y,yaw=Math.atan2(-hx,-hz),STONE=[.17,.165,.15];
+    // stone: a footing half in the ground, a slab and an arched head, facing the grave
+    k.box(.30,.12,.16,sx-s.x,gy,sz-s.z,STONE,yaw);
+    k.box(.30,.38,.075,sx-s.x,gy+.06+.19,sz-s.z,STONE,yaw);
+    const cap=new THREE.CylinderGeometry(.15,.15,.075,10,1,false,Math.PI*.5,Math.PI);   // the half on -z turns up under rotateX
+    cap.rotateX(Math.PI*.5);cap.rotateY(yaw);cap.translate(sx-s.x,gy+.06+.38,sz-s.z);k.push(cap,STONE);
+    // the horse: a wooden toy on its side at the foot of the stone, outside the mound's edge
+    const tx=sx-s.x+hx*.30+hz*.10,tz=sz-s.z+hz*.30-hx*.10,ty=terr.heightAt(s.x+tx,s.z+tz)-s.y,W=[.20,.12,.06];
+    k.box(.20,.07,.07,tx,ty+.035,tz,W,yaw+.9);
+    k.box(.05,.09,.06,tx+Math.sin(yaw+.9)*.11,ty+.045,tz+Math.cos(yaw+.9)*.11,W,yaw+.9,0,.5);
+    for(const l of[-1,1])k.box(.03,.03,.10,tx+Math.cos(yaw+.9)*.05*l,ty+.015,tz-Math.sin(yaw+.9)*.05*l,[.14,.08,.04],yaw+.9,0,Math.PI*.5);
+    s.node.childGeo=k.build();s.node.root.add(new THREE.Mesh(s.node.childGeo,this.mat));
+    col.addCollider({kind:'obb',x:sx,z:sz,halfX:.16,halfZ:.06,yaw,y0:s.y+gy-.1,y1:s.y+gy+.52,tag:'headstone',climbable:false},s.id);
+  }
+  /** The child's grave is open and it is empty. See CHILD_GRAVE. */
+  _emptyGrave(s){
+    const dread=this._sys('dread');if(!dread)return false;
+    const dx=-s.headX,dz=-s.headZ;
+    _childOpts.yaw=Math.atan2(-dx,-dz);
+    const x0=s.x+dx*CHILD_GRAVE.start,z0=s.z+dz*CHILD_GRAVE.start;
+    if(!dread.commission('footprints',x0,s.y,z0,'child-grave',_childOpts))return false;
+    const last=(CHILD_GRAVE.prints-1)*.14,far=CHILD_GRAVE.treeline,terr=this._sys('terrain');
+    const gx=s.x+dx*far,gz=s.z+dz*far;
+    dread.hush(last+4.5,s.x,s.z);
+    dread.giggleAfter(last+1.4,gx,terr.heightAt(gx,gz)+1.0,gz);
+    dread.noteLoud('grave');
+    return true;
   }
   _appearance(s){
     const n=s.node;if(!n)return;const buried=s.kind==='dig'&&s.stage<3,taken=s.stage>=4;
     n.earth.visible=buried;n.earth.scale.y=Math.max(.12,1-s.stage*.34);
-    if(n.marker){n.marker.visible=buried;n.excavated.visible=!buried;}
+    if(n.marker){n.marker.visible=buried;n.excavated.visible=!buried;
+      // The rag's stake is a thing you walk into, for as long as it is standing; digging
+      // the grave out takes the stake with it. SOLID only: a spade or a round aimed at the
+      // mound is never stopped by a 5 cm stick beside it.
+      const col=this._sys('collision');
+      if(buried&&n.stake<0)n.stake=col.addCollider({kind:'circle',x:s.x-.68,z:s.z+.29,r:.08,y0:s.y-.05,y1:s.y+.76,tag:'post',breakable:false,climbable:false,mask:col.MASK?col.MASK.SOLID:1},s.id);
+      else if(!buried&&n.stake>=0){col.removeCollider?.(n.stake);n.stake=-1;}
+    }
     if(n.cuts)n.cuts.visible=buried;
     n.chest.visible=s.stage!==5&&(!buried||s.stage>=2);n.chest.position.y=buried?-.46:0;
     n.contents.visible=!taken||n.open<.85;n.lid.rotation.x=n.open*1.92;n.seam.visible=!taken;
@@ -390,6 +445,7 @@ export class Scavenging {
     // pack of three hounds under the fields, a moth off the ridge (regionAmbush). Graves
     // keep their pallbearer at .45; the chance for everything else stays .32.
     const chance=s.ambushChance===undefined?.32:s.ambushChance;
+    if(s.childGrave&&s.stage===3){s.stage=5;this._sys('progress').flag(s.id,5);s.printsDue=this.time;this.pendingGrave=s;}
     if(s.stage===3&&s.seed<chance&&!s.noAmbush){
       const kind=s.ambushSpecies||regionAmbush(this._sys('terrain'),s.x,s.z);
       _ambushOpts.feetY=s.y;_ambushOpts.pack=kind==='hound'?3:1;
@@ -404,6 +460,9 @@ export class Scavenging {
   }
   step(dt){
     if(!this.ctx.playing||this.ctx.paused)return;this.time+=dt;
+    // the prints are dread's; if its kit is busy for a moment the grave waits, never skips
+    const pg=this.pendingGrave;
+    if(pg&&(this._emptyGrave(pg)||this.time-pg.printsDue>6))this.pendingGrave=null;
     // One shared material, one write a step: every turned patch in the county breathes
     // together, which is what makes a row of them read as the same KIND of thing.
     this.cutMat.opacity=.40+.26*(.5+.5*Math.sin(this.time*1.35));
@@ -416,7 +475,7 @@ export class Scavenging {
       // from the parent's record when it is resident and from its saved flag when not.
       if(s.parent&&!s.node&&(s.parent.node?s.parent.stage:(Number(pr.flag(s.parent.id))||0))<3)continue;
       if(d<85&&!s.node&&budget>0&&(!s.retry||this.time>s.retry)){this._build(s);budget--;}
-      if(d>165&&s.node){col.removeChunk(s.id);s.node.root.removeFromParent();s.node.boneGeo?.dispose();s.node=null;}
+      if(d>165&&s.node){col.removeChunk(s.id);s.node.root.removeFromParent();s.node.boneGeo?.dispose();s.node.childGeo?.dispose();s.node=null;}
       if(!s.node)continue;
       if(s.stage>=4&&s.node.open<1){s.node.open=Math.min(1,s.node.open+dt/.75);const u=s.node.open;s.node.lid.rotation.x=(u*u*(3-2*u))*1.92;s.node.contents.visible=u<.85;}
       if(s.node.collider>=0&&col.massOf(s.node.collider)<0)this._take(s);
@@ -537,5 +596,5 @@ export class Scavenging {
     }else this.boxHold=0;
   }
   state(){return{sites:this.sites.length,digs:this.sites.filter(s=>s.kind==='dig').length,forest:this.forestCount||0,chains:this.sites.filter(s=>s.parent).length,resident:this.sites.filter(s=>s.node).map(s=>({id:s.id,kind:s.kind,x:s.x,y:s.y,z:s.z,stage:s.stage,seed:s.seed,loot:s.loot||'',deep:s.deep||1}))};}
-  dispose(){this.off?.();this.root.removeFromParent();for(const s of this.sites){this._sys('collision').removeChunk(s.id);s.node?.boneGeo?.dispose();}Object.values(this.geos).forEach(g=>g.dispose());this.seamGeo?.dispose();this.seamMat?.dispose();this.cutGeo?.dispose();this.cutMat?.dispose();}
+  dispose(){this.off?.();this.root.removeFromParent();for(const s of this.sites){this._sys('collision').removeChunk(s.id);s.node?.boneGeo?.dispose();s.node?.childGeo?.dispose();}Object.values(this.geos).forEach(g=>g.dispose());this.seamGeo?.dispose();this.seamMat?.dispose();this.cutGeo?.dispose();this.cutMat?.dispose();}
 }

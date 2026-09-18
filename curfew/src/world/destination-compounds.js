@@ -99,6 +99,12 @@ function deck(k, api, x, z, w, d, top, col = OLD_WOOD, yaw = 0, legs = true) {
     const base = localGround(api, px, pz);
     const h = Math.max(0.35, top - base);
     k.cyl(0.13, 0.17, h, 6, px, api.padY + base + h * 0.5, pz, TAR);
+    // A deck you can walk UNDER has legs you walk into. Under a low deck the slab itself
+    // already stops you, so only these legs need a body of their own.
+    if (top - 0.18 - base >= 1.9) {
+      api.emit({ kind: 'circle', x: px, z: pz, r: 0.17, y0: api.padY + base - 0.1,
+        y1: api.padY + top - 0.18, tag: 'post' });
+    }
   }
 }
 
@@ -301,9 +307,10 @@ function plankFace(k, api, x, z, w, h, yaw = 0, boards = 12, baseOffset = 0) {
   k.box(w + 0.20, 0.30, 0.12, x, api.padY + base + 0.15, z, TAR, yaw);
 }
 
-/** Corrugated/riveted metal skin. */
-function rustFace(k, api, x, z, w, h, yaw = 0, ribs = 14) {
-  const f = frame(x, z, yaw), base = localGround(api, x, z), step = w / ribs;
+/** Corrugated/riveted metal skin. It stands on the ground unless `baseY` (local metres over
+ *  the pad) puts its foot on something else, such as the hopper it is riveted to. */
+function rustFace(k, api, x, z, w, h, yaw = 0, ribs = 14, baseY = null) {
+  const f = frame(x, z, yaw), base = baseY ?? localGround(api, x, z), step = w / ribs;
   k.box(w, h, 0.055, x, api.padY + base + h * 0.5, z, IRON, yaw);
   for (let i = 0; i <= ribs; i++) {
     const lx = -w * 0.5 + i * step, px = f.x(lx, 0), pz = f.z(lx, 0);
@@ -332,6 +339,9 @@ function openCache(k, api, x, z, yaw, family, contents) {
   const f = frame(x, z, yaw), gy = localGround(api, x, z);
   solidBox(k, api, 1.55, 0.58, 0.84, x, gy + 0.29, z, family, yaw, 'metal', false);
   k.box(1.50, 0.10, 0.78, f.x(0, 0.34), api.padY + gy + 0.96, f.z(0, 0.34), family, yaw, -0.72);
+  // the lid stands open behind the box: it is in your way at the back, not a ghost
+  api.emit({ kind: 'obb', x: f.x(0, 0.44), z: f.z(0, 0.44), halfX: 0.75, halfZ: 0.2, yaw,
+    y0: api.padY + gy + 0.58, y1: api.padY + gy + 1.24, tag: 'metal', climbable: false });
   k.box(1.30, 0.08, 0.64, x, api.padY + gy + 0.62, z, COAL, yaw);
   api.emit({ kind: 'obb', x, z, halfX: 0.65, halfZ: 0.32, yaw,
     y0: api.padY + gy + 0.58, y1: api.padY + gy + 0.66,
@@ -390,8 +400,12 @@ function weepingMine(api) {
     const px = TX + sx * 5.3, pz = TZ + sz * 4.2;
     const gy = localGround(api, px, pz);
     solidBox(S, api, 0.62, 11.5, 0.62, px, gy + 5.75, pz, OXIDE, 0, 'metal');
+    // The brace ends under the sorting deck; it used to run on up through the deck floor.
     beamBetween(S, api, [px, gy + 1, pz],
-      [TX - sx * 5.3, gy + 10.5, TZ + sz * 4.2], 0.12, IRON);
+      [TX - sx * 5.3, 7.7, TZ + sz * 4.2], 0.12, IRON);
+    // It leaves its leg lower than your head: that first stretch is in your way.
+    api.emit({ kind: 'obb', x: px - sx * 0.8, z: pz, halfX: 0.5, halfZ: 0.12, yaw: 0,
+      y0: api.padY + gy, y1: api.padY + gy + 1.9, tag: 'metal', climbable: false });
   }
   deck(S, api, TX, TZ, 12.2, 9.4, 8.2, C.metal, 0, false);
   S.box(13.4, 0.38, 0.38, TX, api.padY + 11.2, TZ - 4.4, OXIDE);
@@ -399,17 +413,33 @@ function weepingMine(api) {
   for (const x of [-15.2, -11.5, -7.8]) {
     S.cone(2.15, 4.6, 6, x, api.padY + 7.55, TZ, IRON, 0, 0, Math.PI);
     S.box(3.9, 1.0, 3.4, x, api.padY + 9.8, TZ, iColour(x));
-    rustFace(S, api, x, TZ - 1.73, 3.6, 1.9, 0, 10);
+    // The riveted face belongs on the hopper it skins. rustFace used to ground itself, so
+    // this was three 3.6 m iron walls standing on the chain-room floor with nothing behind
+    // them: the "grey wall with the copper grid" you walked straight through.
+    rustFace(S, api, x, TZ - 1.73, 3.6, 0.96, 0, 10, 9.32);
+    // The hopper and the top of its cone are one solid thing on the sorting deck.
+    api.emit({ kind: 'obb', x, z: TZ, halfX: 1.95, halfZ: 1.7, yaw: 0,
+      y0: api.padY + 8.2, y1: api.padY + 10.3, tag: 'metal', standable: true });
   }
-  // A walkable inspection stage and stair, with a bridge toward the winding house.
+  // A walkable inspection stage and its stair, with a spur walk off its east end.
+  // The stair used to stand inside the ore scaffold (its treads and posts through the
+  // steps); it climbs clear of it now, and the spur touches the stage instead of leaving
+  // a gap you had to jump.
   deck(S, api, -2.8, 5.4, 6.8, 3.2, 3.2, OLD_WOOD, 0, true);
-  steps(S, api, -4.8, 3.45, 1.5, 3.2, 0, C.rust);
-  deck(S, api, 2.2, 3.0, 5.0, 1.5, 3.2, OLD_WOOD, Math.PI * 0.5, true);
-  for (let i = 0; i < 7; i++) {
-    const x = -5.2 + i * 1.28;
-    S.box(0.05, 1.05, 0.05, x, api.padY + 3.72, 3.9, IRON);
+  steps(S, api, -2.0, 3.45, 1.5, 3.2, 0, C.rust);
+  deck(S, api, 1.35, 3.0, 5.0, 1.5, 3.2, OLD_WOOD, Math.PI * 0.5, true);
+  // The stage's rail stops either side of where the stair arrives, and at the spur.
+  // A rail you can fall through is not a rail, so each run has a body: its top bar, which
+  // stops you at the hip and still lets you see and shoot between the uprights.
+  for (const [x0, x1, posts] of [[-5.85, -2.85, [-5.8, -4.35, -2.9]], [-1.15, 0.55, [-1.1, 0.5]]]) {
+    for (const x of posts) {
+      S.box(0.05, 1.05, 0.05, x, api.padY + 3.72, 3.9, IRON);
+      api.emit({ kind: 'circle', x, z: 3.9, r: 0.04, y0: api.padY + 3.2, y1: api.padY + 4.25, tag: 'post' });
+    }
+    S.box(x1 - x0, 0.08, 0.08, (x0 + x1) * 0.5, api.padY + 4.25, 3.9, OXIDE);
+    api.emit({ kind: 'obb', x: (x0 + x1) * 0.5, z: 3.9, halfX: (x1 - x0) * 0.5, halfZ: 0.05,
+      yaw: 0, y0: api.padY + 4.17, y1: api.padY + 4.29, tag: 'metal', climbable: false });
   }
-  S.box(8.2, 0.08, 0.08, -1.35, api.padY + 4.25, 3.9, OXIDE);
 
   // Three ore skips, every panel ribbed and stained. They sit beside rather than across
   // the track so the breaker remains a straight, readable destination.
@@ -454,6 +484,11 @@ function weepingMine(api) {
       const h = Math.max(0.30, top - gy - 0.17);
       S.box(0.12, h, 0.12, mineX + sx, api.padY + gy + h * 0.5,
         z, i & 1 ? TAR : IRON);
+      // Under the high treads there is headroom, so there the posts are things you meet.
+      if (top - 0.18 - gy >= 1.9) {
+        api.emit({ kind: 'circle', x: mineX + sx, z, r: 0.085, y0: api.padY + gy,
+          y1: api.padY + gy + h, tag: 'post' });
+      }
     }
     if (i > 0) {
       const prev = mineStages[i - 1];
@@ -485,10 +520,16 @@ function weepingMine(api) {
     masonryFace(S, api, 23.70, z, d, h - 0.4, Math.PI * 0.5,
       Math.max(7, Math.round(h * 1.35)), Math.max(5, Math.round(d * 1.15)),
       [C.brick, OXIDE, GRIME, OLD_STONE]);
-    S.box(0.12, Math.min(3.4, h - 1.2), Math.max(2.4, d - 1.2), 23.35,
-      api.padY + localGround(api, 24, z) + Math.min(2.2, h * 0.34), z, IRON);
-    for (let i = 0; i < 4; i++) S.box(0.10, 0.12, 3.3, 23.24,
-      api.padY + localGround(api, 24, z) + 0.8 + i * 0.65, z, COAL);
+    // The iron door and its fire bars are fixed ON the masonry, not a hand's width in front
+    // of it with nothing holding them up, and they stop you like the wall behind them does.
+    const g24 = localGround(api, 24, z);
+    const doorH = Math.min(3.4, h - 1.2), doorY = g24 + Math.min(2.2, h * 0.34);
+    S.box(0.12, doorH, Math.max(2.4, d - 1.2), 23.61, api.padY + doorY, z, IRON);
+    for (let i = 0; i < 4; i++) S.box(0.10, 0.12, 3.3, 23.50,
+      api.padY + g24 + 0.8 + i * 0.65, z, COAL);
+    api.emit({ kind: 'obb', x: 23.585, z, halfX: 0.14, halfZ: Math.max(Math.max(2.4, d - 1.2), 3.3) * 0.5,
+      yaw: 0, y0: api.padY + g24 - 0.1, y1: api.padY + Math.max(doorY + doorH * 0.5, g24 + 2.9),
+      tag: 'metal' });
   }
 
   // The existing carbine grant still happens at the breaker. This open blasting chest is
@@ -908,6 +949,9 @@ function gallowsfen(api) {
       const px = x + edge * 2.75, gy = localGround(api, px, z);
       S.box(0.78, h * 0.66, 1.35, px, api.padY + gy + h * 0.33, z - 0.18,
         edge === side ? MORTAR : GRIME, 0, 0, edge * side * 0.05);
+      // the facing stands proud of the pier inside the arch: it stops you like the pier
+      api.emit({ kind: 'obb', x: px, z: z - 0.18, halfX: 0.39, halfZ: 0.675, yaw: 0,
+        y0: api.padY + gy - 0.2, y1: api.padY + gy + h * 0.66, tag: 'wall' });
     }
     beamBetween(S, api, [x - 2.8, h - 0.8, z - 0.6],
       [x + side * 0.7, h + (side < 0 ? 2.8 : 1.7), z - 0.6], 0.21, OXIDE, 6);
@@ -920,12 +964,20 @@ function gallowsfen(api) {
     OLD_WOOD, -0.15, true);
   steps(S, api, 9.3, -11.6, 1.45, 1.25, -0.15, MOSS_STONE);
   arch(S, api, 12.5, -11.9, 5.4, 5.8, 0.75, OLD_STONE, 0, true);
+  // The pews sit ON the chancel floor, in its own turned frame and clear of its arch and
+  // its steps. They were laid square to the site instead, and the back row stood out over
+  // the water at floor height with nothing under it.
+  const chancel = frame(12.5, -9.5, -0.15);
   for (let i = 0; i < 15; i++) {
-    const x = 9.2 + (i % 5) * 1.55, z = -8.0 + Math.floor(i / 5) * 1.3;
+    const lx = -2.6 + (i % 5) * 1.4, lz = -1.3 + Math.floor(i / 5) * 1.5;
+    const x = chancel.x(lx, lz), z = chancel.z(lx, lz), yaw = -0.15 + (i & 1) * 0.08;
     const gy = localGround(api, 12.5, -9.5) + 1.25;
     S.box(1.22, 0.46, 0.82, x, api.padY + gy + 0.23, z,
-      i % 3 === 0 ? MOSS_STONE : OLD_STONE, (i & 1) * 0.08);
-    S.box(0.78, 0.06, 0.46, x, api.padY + gy + 0.49, z, GRIME, (i & 1) * 0.08);
+      i % 3 === 0 ? MOSS_STONE : OLD_STONE, yaw);
+    S.box(0.78, 0.06, 0.46, x, api.padY + gy + 0.49, z, GRIME, yaw);
+    // a stone pew you step up onto or go round, not through
+    api.emit({ kind: 'obb', x, z, halfX: 0.61, halfZ: 0.41, yaw,
+      y0: api.padY + gy, y1: api.padY + gy + 0.49, tag: 'stone', standable: true });
   }
 
   // A punt snagged in the south aisle adds a different silhouette and a place to climb.
@@ -1335,9 +1387,12 @@ function gardenOfRest(api) {
   const dome = new THREE.SphereGeometry(4.2, 16, 7, 0, TAU, 0, Math.PI * 0.48);
   dome.scale(1, 0.60, 1); dome.translate(OX, api.padY + 6.25, OZ); S.push(dome, VERDIGRIS);
   for (let i = 0; i < 10; i++) {
-    const a = i / 10 * TAU;
-    S.box(1.15, 0.55, 0.65, OX + Math.cos(a) * 3.0, api.padY + localGround(api, OX, OZ) + 0.48,
-      OZ + Math.sin(a) * 3.0, i % 3 ? OLD_STONE : MOSS_STONE, -a);
+    const a = i / 10 * TAU, bx = OX + Math.cos(a) * 3.0, bz = OZ + Math.sin(a) * 3.0;
+    const floor = localGround(api, OX, OZ);
+    S.box(1.15, 0.55, 0.65, bx, api.padY + floor + 0.48, bz, i % 3 ? OLD_STONE : MOSS_STONE, -a);
+    // a stone bench you sit on, not wade through
+    api.emit({ kind: 'obb', x: bx, z: bz, halfX: 0.575, halfZ: 0.325, yaw: -a,
+      y0: api.padY + floor + 0.2, y1: api.padY + floor + 0.755, tag: 'stone', standable: true });
   }
 
   // Tall, varied monuments break the old copy-paste grave boxes into authored clusters.

@@ -53,9 +53,9 @@ export const DEALER_CAMPS=Object.freeze([
   {"x":-2438.3,"z":-827.6,"yaw":-1.570796,"near":"choir-vault","relief":0},
   {"x":-2472.93,"z":-820.712,"yaw":1.963495,"near":"choir-vault","relief":0},
   {"x":-2471.266,"z":-837.6,"yaw":0.981748,"near":"choir-vault","relief":0},
-  {"x":838.3,"z":-2954.3,"yaw":-1.570796,"near":"red-quarry","relief":0},
-  {"x":830.3,"z":-2939.334,"yaw":-2.552544,"near":"red-quarry","relief":0},
-  {"x":813.412,"z":-2937.67,"yaw":2.748894,"near":"red-quarry","relief":0},
+  {"x":783.032,"z":-2938.805,"yaw":2.802812,"near":"red-quarry","relief":0},
+  {"x":839.622,"z":-2918.865,"yaw":2.802812,"near":"red-quarry","relief":0},
+  {"x":770.249,"z":-2986.780,"yaw":1.232015,"near":"red-quarry","relief":0},
   {"x":-1412.26,"z":650.669,"yaw":2.159845,"near":"gallowsfen","relief":0.213},
   {"x":-1337.073,"z":450.956,"yaw":0.245437,"near":"gallowsfen","relief":0.213}
 ]);

@@ -258,6 +258,8 @@ export const BEAT_SOUNDS = Object.freeze([
   'shore',         // soft surf swells from the oasis — a shore the county does not have
   'giggle',        // short breathed laughter from a figure in warm light
   'knock',         // three knuckles on the refuge door (world/refuge.js answers it)
+  // metal dragged on metal, far down the Holdfast's sealed stair (world-stories' county moments)
+  'can',
 ]);
 
 const SOUND_OK = Object.create(null);
@@ -657,7 +659,7 @@ export class Dread {
     this.hushS = { on: false, t: 0, dur: 0, x: 0, z: 0, r: D.hushRadius };
     this.printRec = new Array(D.printCountMax);
     for (let i = 0; i < D.printCountMax; i++) {
-      this.printRec[i] = { x: 0, y: 0, z: 0, yaw: 0, appear: 0, foot: 1, landed: false };
+      this.printRec[i] = { x: 0, y: 0, z: 0, yaw: 0, appear: 0, foot: 1, landed: false, size: 1 };
     }
   }
 
@@ -1129,7 +1131,7 @@ export class Dread {
    */
   commission(prop, x, y, z, owner, opts) {
     let ok = false;
-    if (prop === 'footprints') ok = this._startPrints(x, z);
+    if (prop === 'footprints') ok = this._startPrints(x, z, opts);
     else if (prop === 'eyes') ok = this._startEyes(x, y, z, owner);
     else if (prop === 'lantern') ok = this._startLantern(x, y, z, owner, opts);
     if (ok) { this.stats.commissions++; return { prop, owner }; }
@@ -1456,17 +1458,26 @@ export class Dread {
 
   /* ------------------------------------------------------- prop starters --- */
 
-  _startPrints(x0, z0) {
+  /**
+   * `opts` (an authored commission): `yaw` the heading the prints walk (the road beats take the
+   * one ahead of you), `stride` metres a step, `size` of a print (a child's is about 0.6),
+   * `count` and `dur`. Nothing in opts is allocated or kept.
+   */
+  _startPrints(x0, z0, opts) {
     if (this.printS.on) return false;
-    const yaw = this._headingAhead();
+    const o = opts || null;
+    const yaw = o && typeof o.yaw === 'number' ? o.yaw : this._headingAhead();
+    const stride = o && o.stride > 0 ? o.stride : D.printStride;
+    const size = o && o.size > 0 ? o.size : 1;
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
     const rx = Math.cos(yaw), rz = -Math.sin(yaw);
-    const n = D.printCountMin + Math.floor(this.rng.next() * (D.printCountMax - D.printCountMin + 1));
+    const n = o && o.count > 0 ? Math.min(D.printCountMax, o.count | 0)
+      : D.printCountMin + Math.floor(this.rng.next() * (D.printCountMax - D.printCountMin + 1));
     let placed = 0;
     for (let i = 0; i < n; i++) {
-      const along = i * D.printStride;
+      const along = i * stride;
       const foot = (i % 2 === 0) ? -1 : 1;
-      const lat = foot * 0.20;
+      const lat = foot * 0.20 * size;
       const x = x0 + fx * along + rx * lat;
       const z = z0 + fz * along + rz * lat;
       const y = this._groundAt(x, z);
@@ -1474,12 +1485,12 @@ export class Dread {
       const rec = this.printRec[placed];
       rec.x = x; rec.z = z; rec.y = y + 0.035; rec.yaw = yaw;
       rec.appear = i * D.printAppear;
-      rec.foot = foot; rec.landed = false;
+      rec.foot = foot; rec.landed = false; rec.size = size;
       placed++;
     }
     if (placed < 3) { this.stats.refusedPlacement++; return false; }
     this.printS.on = true; this.printS.t = 0; this.printS.n = placed;
-    this.printS.dur = D.printDurMin + this.rng.next() * (D.printDurMax - D.printDurMin);
+    this.printS.dur = o && o.dur > 0 ? o.dur : D.printDurMin + this.rng.next() * (D.printDurMax - D.printDurMin);
     for (let i = 0; i < placed; i++) {
       const m = this.prints[i];
       const r = this.printRec[i];
@@ -1639,6 +1650,21 @@ export class Dread {
   }
 
   /* ================================================= the payoff ring ======= */
+
+  /**
+   * An AUTHORED payoff landed (world-stories' county moments, the empty grave): it is loud
+   * for the scheduler's purposes, so the 26 s loud gap and the director's post-stinger quiet
+   * hold behind it exactly as they do behind a stinger of ours. `kind` names it for the bed.
+   */
+  noteLoud(kind) {
+    this.lastLoud = this.clock;
+    this.quietUntil = Math.max(this.quietUntil, this.clock + CFG.director.dread.postLoudQuietS);
+    const bus = this.ctx.bus;
+    if (bus) bus.emit('dread:stinger', { kind: kind || 'moment' });
+  }
+
+  /** Schedule the giggle ring's one soft laugh `seconds` from now at (x, y, z). */
+  giggleAfter(seconds, x, y, z) { return this._after(this.TAG.giggle, seconds, x, y, z); }
 
   _after(tag, seconds, x, y, z) {
     for (let i = 0; i < D.timers; i++) {
@@ -2610,7 +2636,7 @@ export class Dread {
         const r = this.printRec[i];
         const local = P.t - r.appear;
         const env = local > 0 ? Math.min(1, local / 0.22) * fadeOut : 0;
-        const s = Math.max(0.001, env);
+        const s = Math.max(0.001, env) * r.size;
         this.prints[i].scale.set(s * (r.foot < 0 ? -1 : 1), s, s);
       }
     }

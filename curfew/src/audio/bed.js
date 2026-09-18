@@ -905,7 +905,14 @@ export class Bed {
     if (!A.baked || A.silent) return;
     const surf = this._surface();
     const v = (p.parity || 0) * 2 + ((this.rngStep.next() * 2) | 0);
-    const hard = p.sprint ? 1.0 : p.crouch ? 0.34 : 0.68;
+    // QUIET 1 'Soft Step' and QUIET 4 'Unheard', heard. The perks cut the step's NOISE
+    // (controller.js _emitNoise), which nothing can perceive; your own feet are the one thing
+    // that can. The same reduce, asked here: crouched with Soft Step, or anything with
+    // Unheard, plays at 0.3 (faint, never mute); running with Soft Step at 0.6.
+    const pr = this.ctx.systems && this.ctx.systems.get('progress');
+    const q = pr && typeof pr.perk === 'function' ? pr.perk('noiseRadius', 1, 'step') : 1;
+    const soft = q >= 1 ? 1 : Math.max(0.3, q);
+    const hard = (p.sprint ? 1.0 : p.crouch ? 0.34 : 0.68) * soft;
     const rate = 0.94 + this.rngStep.next() * 0.12;
     const px = p.pos ? p.pos.x : this._px, pz = p.pos ? p.pos.z : this._pz;
     const py = p.pos ? p.pos.y : this._py;

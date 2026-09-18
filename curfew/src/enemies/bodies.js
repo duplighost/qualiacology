@@ -1800,7 +1800,7 @@ export function buildBody(key, rng) {
       fore.castShadow = false;
       elbow.add(fore);
     }
-    parts.limbs.push({ pivot, elbow, base: pivot.rotation.x });
+    parts.limbs.push({ pivot, elbow, base: pivot.rotation.x, y0: pivot.position.y });
   }
 
   // legs, when the species has any
@@ -2065,9 +2065,15 @@ const ANIMATE = {
       const ph = a.gait * 1.6 + (i % 2 ? Math.PI : 0);
       const step = Math.sin(ph) * 0.52 * a.moveAmp;
       L.pivot.rotation.x = step - a.coil * 0.30;
-      // the reach: the knee lifts on the swing half and drops on the stance half
-      L.pivot.rotation.z = Math.max(0, Math.cos(ph)) * 0.34 * a.moveAmp + a.coil * 0.55;
-      if (L.elbow) L.elbow.rotation.x = -0.28 - Math.max(0, -Math.sin(ph)) * 0.62 * a.moveAmp;
+      // THE REACH, lifted straight up. Each slot is a MIRRORED PAIR welded into one geometry,
+      // so the old knee-lift (a roll about z) raised one side's leg and drove the other side's
+      // into the floor: measured 0.14 m under the foot plane mid-stride (C8, 2026-09-18, once
+      // the spider walked real floors). The pair now rises together on its swing half.
+      L.pivot.rotation.z = 0;
+      L.pivot.position.y = L.y0 + Math.max(0, Math.cos(ph)) * 0.07 * a.moveAmp + a.coil * 0.04;
+      // and the shin never swings past its resting bend toward straight down: a forward twist
+      // of the pair is taken back at the knee, or the tip would dig in on the stance half
+      if (L.elbow) L.elbow.rotation.x = -0.28 - Math.max(0, L.pivot.rotation.x) - Math.max(0, -Math.sin(ph)) * 0.62 * a.moveAmp;
     }
     // It crouches to strike and the fangs come round with the body.
     parts.shellMesh.rotation.x = -a.coil * 0.34 + a.swing * 0.72;

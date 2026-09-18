@@ -1,7 +1,10 @@
 // The mansions have grounds: two different histories, working service routes and
 // deliberately open approach lanes. All geometry merges into their existing body.
 import * as THREE from 'three';
-import { kits, groundY, GLOW, PANE_LAMP } from './sites.js';
+import { Kit, kits, groundY, GLOW, PANE_LAMP } from './sites.js';
+import { carShell } from './staged.js';
+import { projectPlaceSurfaceUVs } from './place-surfaces.js';
+import { CLOTH_GAIN } from './manor.js';
 
 const STONE = [0.123, 0.127, 0.115], DARK = [0.033, 0.039, 0.035];
 const WOOD = [0.108, 0.073, 0.048], RUST = [0.161, 0.067, 0.042];
@@ -120,8 +123,18 @@ function serviceClimb(k, a, side, style) {
     for (const sx of [-1, 1]) {
       const xx = x + sx * 0.98, gy = ground(a, xx, z), h = Math.max(0.2, top - gy - 0.18);
       k.solid.box(0.12, h, 0.12, xx, a.padY + gy + h * 0.5, z, IRON);
-      if (i > 0) beam(k, a, [xx, stages[i - 1].y - a.padY - 0.25, z + 1.14],
-        [xx, top - 0.25, z], 0.055, RUST);
+      // MEASURED 2026-09-18 (r3 walk-through census): these posts were drawn with no
+      // collider, and a walk test went 6.4 m through the scaffold's feet on the lawn.
+      a.emit({ kind: 'obb', x: xx, z, halfX: 0.07, halfZ: 0.07, yaw: 0,
+        y0: a.padY + gy, y1: a.padY + gy + h, tag: 'metal', standable: false, climbable: false });
+      if (i > 0) {
+        const lo = stages[i - 1].y - a.padY - 0.25;
+        beam(k, a, [xx, lo, z + 1.14], [xx, top - 0.25, z], 0.055, RUST);
+        // A brace low enough to walk into is a wall between its two posts. One above head
+        // height is not, and the gap under the high stages stays a place you can stand.
+        if (lo - gy < 2.1) a.emit({ kind: 'obb', x: xx, z: z + 0.57, halfX: 0.06, halfZ: 0.57,
+          yaw: 0, y0: a.padY + gy, y1: a.padY + top - 0.2, tag: 'metal', standable: false, climbable: false });
+      }
     }
     k.solid.box(2.13, 0.06, 0.07, x, a.padY + top - 0.03, z + 0.69, TRIM);
     stages.push({ x, z, y: a.padY + top });
@@ -144,6 +157,40 @@ function serviceClimb(k, a, side, style) {
     crown: { x: side * 29.6, z: endZ - 0.54, y: a.padY + end + 0.24 },
     stages,
   };
+}
+
+// THE GUESTS' CARS ARE BLACK (r3 polish). carShell() (staged.js) paints a wreck: pale
+// steel bands and grey glass. In the drive, on the brick-peel map every surface of this body
+// is drawn with, MEASURED in the critic's shots: four stacks of cardboard boxes with brick
+// showing through, the worst-looking thing at the front door. A black saloon is right for
+// the period and for a masque. So every part carShell pushed is repainted here, by what it
+// was: glass goes black, the bumpers and hubs dull chrome, the rest black paint, the tyres
+// blacker. (carShell's own colours, read 2026-09-18: glass is the blue one, the rust-dark
+// bands the warm one, old iron 0.058/0.069.) MEASURED on the first pass: black paint on the
+// brick-peel map still showed the brick at 5 m, because the torch lifts a 0.024 surface to
+// mid grey that close and the map multiplies straight through it. So the cars are built on
+// their own kit and handed to places.js as this dress's CLOTH channel (the people Lambert,
+// its fine weave at 0.6 m and no brick in it), the way manor.js hands over its upholstery:
+// one geometry, merged into the house's existing cloth mesh, no new draw and no new program.
+const PAINT = [0.024, 0.024, 0.028], SILL = [0.013, 0.013, 0.015], BLACK_GLASS = [0.007, 0.009, 0.014];
+const CHROME = [0.105, 0.105, 0.112], TYRE = [0.011, 0.011, 0.012];
+function paintBlack(k, from) {
+  const parts = k.solid.parts;
+  for (let i = from; i < parts.length; i++) {
+    const g = parts[i], c = g.attributes.color.array;
+    const r = c[0], b = c[2];
+    let to = PAINT;
+    if (Math.abs(r - CHROME[0]) < 1e-4 && Math.abs(b - CHROME[2]) < 1e-4) continue;     // a lamp rim, already chrome
+    if (b > r * 1.35) to = BLACK_GLASS;
+    else if (r > b + 0.005) to = SILL;
+    else if (Math.abs(r - 0.058) < 0.004 && Math.abs(b - 0.069) < 0.004) {
+      // old iron is the roof plate (a flat 0.10 slab), the bumpers (0.16 tall) and the hubs
+      g.computeBoundingBox();
+      const hy = g.boundingBox.max.y - g.boundingBox.min.y;
+      to = hy > 0.13 ? CHROME : PAINT;
+    } else if (Math.abs(r - 0.079) < 0.003) to = TYRE;
+    for (let j = 0; j < c.length; j += 3) { c[j] = to[0]; c[j + 1] = to[1]; c[j + 2] = to[2]; }
+  }
 }
 
 function blackthorn(api) {
@@ -184,6 +231,28 @@ function blackthorn(api) {
     sx > 0 ? -Math.PI * 0.5 : Math.PI * 0.5);
   path(k, api, [[-31.7, -3], [-34, -23], [-24, -30], [-14,-29]]);
   lamp(k, api, -10.2, -29.9, gy + 3.1);
+  // THE GUESTS' CARS, still in the drive (Vera's ledger: they stayed for breakfast). Four,
+  // parked in a staggered row east of the steps, off the approach lane (x -7..7), inside the
+  // pad's level core; carShell() lays each one on the ground under it and emits its own
+  // colliders. The yard box and the can (climbs-and-caches.js) are in among them.
+  const cars = { solid: new Kit() };
+  for (const [cx, cz] of [[10.2, 27.4], [14.4, 26.0], [18.6, 24.6], [22.8, 23.2]]) {
+    const { gy, put } = carShell(cars, api, cx, cz, 1.05, { rust: false });
+    // two headlamps on the front of the wing, clear of the bumper under them: a chrome rim
+    // 4.5 cm proud of the paint and a dark lens 5 mm proud of the rim
+    for (const side of [-1, 1]) {
+      const p = put(2.06, side * 0.6);
+      cars.solid.cyl(0.09, 0.09, 0.05, 10, p.x, gy + 0.625, p.z, CHROME, 1.05, 0, Math.PI * 0.5);
+      cars.solid.cyl(0.07, 0.07, 0.06, 10, p.x, gy + 0.625, p.z, BLACK_GLASS, 1.05, 0, Math.PI * 0.5);
+    }
+  }
+  paintBlack(cars, 0);
+  const people = cars.solid.build();
+  if (people) {
+    projectPlaceSurfaceUVs(people, 0.6);
+    const c = people.attributes.color.array;
+    for (let i = 0; i < c.length; i++) c[i] *= CLOTH_GAIN;
+  }
   // Facade trim remains shallow: it deepens the window bays without forming
   // invisible walls outside actual windows or existing door openings.
   for (const x of [-27, -20, -13, 12, 19, 27]) {
@@ -193,7 +262,7 @@ function blackthorn(api) {
         x + side * 1.23, api.padY + y + 1.28, 16.29, TRIM);
     }
   }
-  return { solid: k.solid.build(), glow: k.glow.build(), glowColour: GLOW.lamp };
+  return { solid: k.solid.build(), glow: k.glow.build(), people, glowColour: GLOW.lamp };
 }
 
 function avery(api) {

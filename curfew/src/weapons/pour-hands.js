@@ -42,7 +42,9 @@ export function buildPourRig() {
 
   const handMaterials = climbingHandMaterials();
   // The right hand, up under the can's handle, tilted so the knuckles read against the lens.
-  const hand = buildClimbingHand(1, handMaterials);
+  // No placed upper arm here: the pour holds still in the lens, and the baked forearm already
+  // runs back past the eye (measured: its elbow lands behind the lens, off the frame).
+  const hand = buildClimbingHand(1, handMaterials, { arm: false });
   // MEASURED IN FRAME, not reasoned: the first cut put the can at the bottom-right corner
   // and half of it was off-screen. In at the shoulder and up, so the whole can is in the
   // lower right third where a held object belongs.
