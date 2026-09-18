@@ -33,13 +33,47 @@ import { HAMLET_PLAN, houseDoor, houseInside } from './hamlets.js';
 import { MAJOR_BY_ID } from './placedata.js';
 
 // Which species come, per region, per wave. Existing species only; the hounds are the
-// pressure, the second body of each wave is the one that makes the guards matter.
-const WAVES = Object.freeze({
-  fen: [['hound', 'hound', 'hound'], ['drowned', 'hound', 'hound'], ['poacher', 'poacher', 'hound', 'hound', 'hound']],
-  ridge: [['hound', 'hound', 'hound'], ['poacher', 'poacher', 'hound', 'hound'], ['hunter', 'poacher', 'poacher']],
-  pines: [['hound', 'hound', 'hound', 'hound'], ['standing', 'hound', 'hound'], ['hunter', 'hound', 'hound', 'hound']],
+// pressure, and every wave carries one body that is not simply shot off the road.
+//
+// D17, RE-COSTED AGAINST THE NEW RIFLES. These tables were written when three guards did 255
+// damage a second out to 56 m and killed a wave on the frame it spawned; the player's share
+// of the fight was nothing. The rifles are support now (hamlet-life.js, THE THREE RIFLES) at
+// about sixteen damage a second between them and only inside 20 m, so these are what the
+// PLAYER is being asked to clear. Species hp from enemies/species.js: hound 55, standing 60,
+// poacher 70, hunter 140, drowned 260.
+//
+//   fen    180 -> 370 -> 510   Eelwater, boards over water; the drowned (2.5 m/s, 260 hp) is
+//                              the clock — it takes a quarter of a minute simply to arrive,
+//                              which is what makes a wave last rather than end.
+//   ridge  180 -> 305 -> 390   The Cut, open quarry floor and long sightlines: more bodies
+//                              rather than heavier ones, and the hunter last.
+//   pines  165 -> 300 -> 365   Highwood, the trees break every line: the standing (2.6 m/s)
+//                              walks in through them while the hounds are already on you.
+//
+// Every wave is more than the one before it in both hit points and bodies, which the three
+// of them were not: the fen used to fall 370 -> 305 and the pines 220 -> 170 at wave two.
+export const WAVES = Object.freeze({
+  fen: [
+    ['hound', 'hound', 'poacher'],
+    ['drowned', 'hound', 'hound'],
+    ['drowned', 'poacher', 'poacher', 'hound', 'hound'],
+  ],
+  ridge: [
+    ['hound', 'hound', 'poacher'],
+    ['poacher', 'poacher', 'hound', 'hound', 'hound'],
+    ['hunter', 'poacher', 'poacher', 'hound', 'hound'],
+  ],
+  pines: [
+    ['hound', 'hound', 'hound'],
+    ['standing', 'standing', 'hound', 'hound', 'poacher'],
+    ['hunter', 'standing', 'hound', 'hound', 'hound'],
+  ],
 });
-const WAVE_MAX_S = 25;        // the next wave comes when the last is dead, or after this
+// D17: 25 -> 38. At 25 s a wave the player was still fighting got the next one on top of it
+// and the three waves ran together into one siege-long soup. 38 is past the long end of a
+// wave (the drowned alone needs a quarter of a minute to cross the ground), so the timer is
+// what it was meant to be — the thing that stops a siege stalling, not the thing that paces it.
+const WAVE_MAX_S = 38;        // the next wave comes when the last is dead, or after this
 const WAVE_GAP_S = 2.5;       // s between a wave dying and the next: the lookout's line lands first
 const AMBUSH_S = 120;         // s of e.scripted: long enough for the whole fight, then ordinary
 const ABANDON_R = 150;        // m from the hamlet centre: further than this and you have left

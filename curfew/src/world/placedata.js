@@ -577,6 +577,17 @@ export const MAJORS = Object.freeze([
   // (tools/_hamlet-sites.mjs, the §4.I rule): a road within 40-150 m so the car reaches it,
   // no other major within 300 m, clear of every boss ground by 320 m, no lookout tower within
   // 120 m, and under 8 degrees of fall across the footprint.
+  //
+  // D17 — YOU CAN NOW DRIVE TO ONE. "A road within 40-150 m" turned out not to mean a road
+  // you could take: measured, the nearest centreline to these three centres was 120.5 m,
+  // 95.1 m and 120.2 m, with no spur off it and nothing at the roadside to say a village was
+  // there, and two of the three were not even TURNED toward a road, because places.js only
+  // looks 96 m for one. roads.js now runs a 4 m gravel track to each (HAMLET_TRACKS, off a
+  // control point of the loop or the outer ring so the junction is an exact graph fact),
+  // ending 40-52 m short of these centres. That distance is what turns each hamlet to face
+  // its own arrival, so the lookout post, the fire and the three siege attack points finally
+  // point at the road you come in on. roads.js keeps those numbers — this row is not a second
+  // copy of them; tests/hamlets.mjs holds the two files against each other.
   {
     id: 'eelwater', name: 'Eelwater',
     x: -1541, z: 363, region: 'fen', terrainRegion: 'marsh', kind: 'stilts',

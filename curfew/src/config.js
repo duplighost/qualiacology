@@ -61,6 +61,30 @@ export const CFG = {
     // Rendering targets remain separate from material/asset allocation ceilings.
     budget: {
       fpsMin: 58,
+      // THESE TWO ARE RED AND THEY ARE TELLING THE TRUTH. Left at the target on purpose.
+      //
+      // MEASURED 2026-09-17 (tests/perf.mjs, vsync off). Nobody had run this suite for an
+      // unknown number of rounds, so first: it is NOT this round's doing. The pre-round build
+      // ef68573, run from a clean worktree, was red at the same two scenes and worse on that
+      // sample: avery-house 47.1 median / 102.2 p95, gallowsfen 44.8 / 93.8, both 20 fps.
+      //
+      // Then the caution. Three runs of the SAME build on this PC disagree by up to 2x:
+      //   avery-house   28.5 median, then 48.6      (33 fps, then 20)
+      //   gallowsfen    28.7, then 22.4             (30 fps, then 42)
+      //   dense         23.6, then 35.9
+      // and one run taken while an orphaned headless Chrome from an earlier suite was still
+      // alive read 96.7 / 393.7 for the whole sweep. So a tight ceiling fitted to any single
+      // run here is a fiction, and no honest regression/improvement claim can be made from
+      // these samples either way. Kill stray chrome.exe and re-measure before believing a
+      // number (the harness reaps on a clean exit; a killed run leaks one).
+      //
+      // What IS solid: the cost is GPU, not simulation. Every system's step and present
+      // together measure 1.1 ms at gallowsfen, and airlight — the loudest suspect after its
+      // cluster cap went 28 -> 1024 — is 0.10 ms of that. 567 draws and 2.75 M triangles at
+      // 1600x900 is not a draw-call problem; it is fill, and Avery House is the worst of it.
+      //
+      // DO NOT raise these to make the suite green. The game really does run at 20 fps in at
+      // least one interior and that deserves its own lane, on a quiet machine.
       medianMax: 15,
       p95Max: 34,
       drawsMax: 1400,

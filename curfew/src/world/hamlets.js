@@ -38,6 +38,11 @@
 // belongs to. Guarded for tests/sites.mjs's stub api (emit returns -1, heightAt constant),
 // and it keeps every flat glow pane under the 2 m^2 ledger.
 
+// D17: where the gravel track to each hamlet actually runs. roads.js owns it and imports no
+// three, so this direction is safe and there is no cycle — the two lit posts at the ends of
+// the track are placed off the real polyline instead of off a second copy of the numbers.
+import { HAMLET_TRACK_BY_SITE } from './roads.js';
+
 /* ------------------------------------------------------------ the shared anatomy -- */
 // Local coordinates in each hamlet's frame (+Z toward the road). `host` is the bedroom house;
 // houseDoor()/houseInside() below turn it into the door point and the spot beside the bed.
@@ -147,6 +152,82 @@ export function makeHamletBuilders({ kits, C, GLOW, groundY }) {
     k.solid.box(0.12, h, 0.12, x, y + h * 0.5, z, col || P.post);
     k.solid.box(0.42, 0.10, 0.42, x, y + h + 0.06, z, P.iron);
     k.glow.cyl(0.24, 0.20, 0.50, 10, x, y + h - 0.28, z, LAMP);
+  };
+
+  /**
+   * D17 — THE WAY IN, at both ends of the gravel track roads.js runs to this hamlet.
+   *
+   * The problem this answers was measured, not guessed: the three hamlets sat 95-136 m off
+   * the nearest centreline with no spur, no junction and nothing at the roadside, so from a
+   * car at night there was no reason to believe a village was over there and no way to drive
+   * to it if you did. roads.js is the way to drive; this is the pair of things you SEE.
+   *
+   * One marker where the track leaves the asphalt and one where it stops at the pad: a post,
+   * a hooded lantern on top of it, and a whitewashed board under that, turned across the
+   * track so headlights coming down the road take it flat. Both go in the LANDMARK, which
+   * places.js builds once into a group that is never streamed and never culled — so they
+   * draw from the road however far out you are, which a body in a chunk would not.
+   *
+   * No words on it. Two lit posts sixty to a hundred and twenty metres apart with a gravel
+   * road between them is the whole sentence.
+   */
+  const wayIn = (k, api, lx, lz, yaw) => {
+    const g = groundY(api, lx, lz);
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const H = 5.2;
+    k.solid.box(0.17, H, 0.17, lx, g + H * 0.5, lz, P.post, yaw);
+    // the hood and the lantern under it: the same fitting as every lamp in the hamlet,
+    // one size up, so the pair reads as the village's own and not as county road furniture
+    k.solid.box(0.56, 0.12, 0.56, lx, g + H + 0.07, lz, P.iron, yaw);
+    k.glow.cyl(0.27, 0.22, 0.62, 10, lx, g + H - 0.33, lz, LAMP);
+    // THE WHITEWASHED BOARD. P.paper is the brightest albedo in this palette; square across
+    // the track, so a headlight on the road hits it flat instead of edge-on.
+    k.solid.box(1.30, 0.62, 0.07, lx + s * 0.11, g + 2.45, lz + c * 0.11, P.paper, yaw);
+    k.solid.box(1.34, 0.08, 0.10, lx + s * 0.12, g + 2.80, lz + c * 0.12, P.post, yaw);
+    for (const side of [-1, 1]) {
+      k.solid.box(1.05, 0.09, 0.09, lx + side * 0.42 * c, g + 0.72, lz - side * 0.42 * s, P.post, yaw, 0, side * 0.62);
+    }
+    api.emit({ kind: 'circle', x: lx, z: lz, r: 0.34, y0: g - 0.4, y1: g + H, tag: 'wood' });
+  };
+
+  /**
+   * Both markers for one hamlet, taken off the REAL track polyline roads.js authored (which
+   * is bowed, and by up to 7 m near the junction — a marker placed against the straight
+   * junction-to-centre chord instead landed 1.4 m from the county loop's own centreline,
+   * which is inside its asphalt). The polyline is in world coordinates; the landmark frame is
+   * the site's, so each point is rotated back into local here — the inverse of api.wx/wz,
+   * which is that same rotation transposed. A hamlet with no track builds nothing.
+   */
+  const trackMarkers = (k, api) => {
+    const pts = HAMLET_TRACK_BY_SITE[api.site.id];
+    if (!pts || pts.length < 2) return;
+    const cy = Math.cos(api.yaw), sy = Math.sin(api.yaw);
+    const local = (p) => {
+      const dx = p[0] - api.site.x, dz = p[1] - api.site.z;
+      return [dx * cy - dz * sy, dx * sy + dz * cy];
+    };
+    const OFF = 3.4;      // m off the 4 m gravel: clear of it, close enough to belong to it
+    /**
+     * A post beside the track, `along` metres from control point `i` toward control point `j`
+     * and OFF metres to one side of the line between them, turned `turn` off that heading.
+     */
+    const beside = (i, j, along, turn) => {
+      const a = local(pts[i]), b = local(pts[j]);
+      const ex = b[0] - a[0], ez = b[1] - a[1], L = Math.hypot(ex, ez) || 1;
+      const ux = ex / L, uz = ez / L;
+      // heading 0 is +Z and forward is (sin, cos), so a tangent as a heading is atan2(ux, uz)
+      const yaw = Math.atan2(ux, uz);
+      wayIn(k, api, a[0] + ux * along - Math.cos(yaw) * OFF, a[1] + uz * along + Math.sin(yaw) * OFF, yaw + turn);
+    };
+    // AT THE JUNCTION, twelve metres in off the asphalt. The reader is on the county road
+    // driving ACROSS the mouth of the track, so the board turns square to the gravel and
+    // shows a flat face to traffic coming either way. Twelve, not nought: a post 3.4 m off
+    // the track AT the mouth is 1.4-1.7 m off the county road's own centreline, which is
+    // inside its asphalt — measured, and the reason this walks in before it steps aside.
+    beside(0, 1, 12, Math.PI * 0.5);
+    // AT THE ROAD END, where you get out of the car: the board faces back up the track you
+    // came down, and the lookout post and the fire are the next things past it.
+    beside(pts.length - 1, pts.length - 2, 0, Math.PI);
   };
 
   /** The fire: a stone ring, embers, two log benches. The rover light sits over it. */
@@ -316,6 +397,7 @@ export function makeHamletBuilders({ kits, C, GLOW, groundY }) {
         k.solid.box(1.35, 0.20, 1.35, bx, y + 5.7, bz, P.iron);
         k.glow.cyl(0.46, 0.58, 0.88, 12, bx, y + 5.16, bz, LAMP);
         api.emit({ kind: 'circle', x: bx, z: bz, r: 1.1, y0: y, y1: y + 6.0, tag: 'metal' });
+        trackMarkers(k, api);   // D17: the two lit posts at the ends of the gravel track
         return { solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.lamp };
       },
       body(api) {
@@ -420,6 +502,7 @@ export function makeHamletBuilders({ kits, C, GLOW, groundY }) {
         // above and reads as a bug rather than as firelight.
         k.glow.box(1.4, 0.10, 1.4, kx, kb + 0.06, kz + 2.0, EMBER);       // firelight on the dust
         k.glow.cyl(1.35, 1.95, 1.1, 12, kx, kb + 8.4, kz, EMBER);         // the plume off the top
+        trackMarkers(k, api);   // D17: the two lit posts at the ends of the gravel track
         return { solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.ember };
       },
       body(api) {
@@ -515,6 +598,7 @@ export function makeHamletBuilders({ kits, C, GLOW, groundY }) {
             k.solid.cyl(3.4 - i * 0.7, 0.9, 3.0, 9, x, y + h - 4.2 + i * 2.5, z, P.moss);
           }
         }
+        trackMarkers(k, api);   // D17: the two lit posts at the ends of the gravel track
         return { solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.ember };
       },
       body(api) {

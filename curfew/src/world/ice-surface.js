@@ -61,31 +61,44 @@ export function createIceMaterial(sky) {
     // the light, at 1.6x because the water's silt term is a deliberate under-read and the
     // ice must sit between it and the snow on the bank.
     vec3 skyLight = mix(uHorizon, uZenith, 0.35) * 1.6;
-    // DRIFT. Snow that stayed: fine grains inside broad lobes (~0.6 m and ~4 m). It piles at
-    // the shore (depth under 0.25) and thins to nothing mid-sheet, which is where black ice is.
+    // DRIFT. Snow that stayed: fine grains inside broad lobes (~0.6 m and ~4 m).
+    //
+    // PHOTOGRAPHED 2026-09-17 at (-1360,-170), mid-sheet: the first tuning (drift from 0.40,
+    // snowK weighted almost entirely on the shore, alpha 0.55 in the middle) made the whole
+    // middle of the inlet bare dark ice over dark water, and a dark still sheet with a
+    // grazing sky in it IS WATER to the eye. Nothing said frozen. That also fought the lore,
+    // which has had it snowing lightly on this county for six years: a sheet the snow never
+    // touched is the exception out there, not the rule.
+    //
+    // So the sheet is snow-dusted by default and black ice is what the drift LEAVES: broad
+    // swept lanes, mostly mid-sheet, where the dark water reads through and the cracks live.
     float driftFine = vn2(p * 1.7 + 31.0);
     float driftBroad = vn2(p * 0.25 + 13.0);
-    float drift = smoothstep(0.40, 0.72, driftBroad * 0.55 + driftFine * 0.45);
+    float drift = smoothstep(0.28, 0.60, driftBroad * 0.55 + driftFine * 0.45);
     float shore = 1.0 - smoothstep(0.04, 0.25, depth);
-    float snowK = clamp(drift * (0.30 + 0.70 * shore) + shore * 0.45, 0.0, 1.0);
+    float snowK = clamp(drift * (0.62 + 0.38 * shore) + shore * 0.40, 0.0, 1.0);
     vec3 albedo = mix(uFrost, uSnowCol, snowK);
-    // CRACKS. Thin dark lines, refrozen pale along one lip; the drift hides them.
-    float lineA = 1.0 - smoothstep(0.0, 0.012, crackA);
-    float lineB = 1.0 - smoothstep(0.0, 0.008, crackB);
-    float bare = 1.0 - snowK * 0.85;
+    // CRACKS. Thin dark lines with a refrozen pale lip. They are the one thing on this sheet
+    // that water cannot do, so they are drawn wider than the first pass and they SURVIVE a
+    // dusting (a crack under thin snow still shows as a seam), which is why bare only halves.
+    float lineA = 1.0 - smoothstep(0.0, 0.020, crackA);
+    float lineB = 1.0 - smoothstep(0.0, 0.013, crackB);
+    float bare = 1.0 - snowK * 0.5;
     float crack = clamp(lineA + lineB * 0.6, 0.0, 1.0) * bare;
-    float lipA = 1.0 - smoothstep(0.0, 0.012, abs(vn2((p + vec2(0.08, 0.05)) * 0.35) - 0.5));
+    float lipA = 1.0 - smoothstep(0.0, 0.020, abs(vn2((p + vec2(0.08, 0.05)) * 0.35) - 0.5));
     float lip = max(0.0, lipA - lineA) * bare;
-    albedo = mix(albedo, uFrost * 0.35, crack);
-    albedo += uSnowCol * 0.5 * lip;
+    albedo = mix(albedo, uFrost * 0.22, crack);
+    albedo += uSnowCol * 0.85 * lip;
     vec3 body = skyLight * albedo;
-    // GRAZING REFLECTION: a third of the water's weight. Powder is matte, so drift kills it;
-    // rain (uWeather.y) wets the sheet and brings it back.
-    float mirror = fresnel * 0.35 * (1.0 - snowK * 0.8) * (1.0 + uWeather.y * 0.8);
+    // GRAZING REFLECTION: a quarter of the water's weight. Powder is matte, so drift kills
+    // it; rain (uWeather.y) wets the sheet and brings it back. Any more than this and the
+    // swept lanes go back to reading as open water.
+    float mirror = fresnel * 0.26 * (1.0 - snowK * 0.8) * (1.0 + uWeather.y * 0.8);
     col = mix(body, reflectedSky, clamp(mirror, 0.0, 1.0));
-    // The dark water 0.30 m below shows through the middle and never at the shore, which
-    // also hides the seam where the lowered water sheet meets the bank.
-    float alpha = mix(0.96, 0.55, smoothstep(0.1, 0.5, depth));
+    // The dark water 0.30 m below shows through the swept lanes and never at the shore, which
+    // also hides the seam where the lowered water sheet meets the bank. Held higher than the
+    // first pass so the sheet keeps its own value instead of becoming a window onto the water.
+    float alpha = mix(0.97, 0.74, smoothstep(0.1, 0.5, depth));
     // LIVE SNOW. The ground's fill curve (chunks.js), keyed on the drift grain, so a fresh
     // fall whitens the sheet as it whitens the bank and the sheet goes opaque under it.
     float wSnow = uWeather.x;

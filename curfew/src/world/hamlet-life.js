@@ -175,8 +175,15 @@ export const HAMLETS = Object.freeze({
         x: 4, z: 22, y: 0, face: [4, 60], look: { variant: 9, palette: 'pines', hair: 'tied' },
         lines: ['They do not like the pumpkins. Neither do I, any more.',
           'The trees hide us from the road. They hide the road from us too.'] },
+      // D17: moved from z 13 to z 7. The third rifle in each hamlet stands DEEP and answers
+      // only what gets past the first two — Wick is 23-26 m off Eelwater's attack points and
+      // Hesper is 38 m off The Cut's, both outside GUARD_SIGHT, but at z 13 Sif was 18.2 m
+      // off the east one and inside it, which made Highwood the one hamlet where all three
+      // rifles could answer a wave the moment it landed (measured: the three of them cleared
+      // wave 1 alone in 10.5 s here against 22 and 39 at the other two). Seven metres back
+      // puts her 23.9 m off it, and closer to the fire she talks about.
       { id: 'wood-sif', name: 'Sif', role: 'guard',
-        x: 6.5, z: 13, y: 0, face: [3, 40], look: { variant: 10, palette: 'pines', hair: 'loose' },
+        x: 6.5, z: 7, y: 0, face: [3, 40], look: { variant: 10, palette: 'pines', hair: 'loose' },
         lines: ['I was the witch. I still have the hat somewhere.',
           'Sit by the fire if you want. Just do not stand in my line.'] },
       { id: 'wood-lark', name: 'Lark · in a paper crown', role: 'plain',
@@ -201,11 +208,80 @@ const WALK_PAUSE_S = 3;       // s at each end of a route
 const FLOOR_RECHECK_S = 0.7;  // ask the collision field for the floor this often: a chunk
                               // that streams in after the person did re-floors them inside a
                               // second, and 8 probes a step at most is nothing
+/* ---------------------------------------------------------- THE THREE RIFLES (D17) --
+ *
+ * ALEX asked for "an event where you talk to one, fight off enemies, and then people are
+ * thankful". The verification pass at Eelwater got the middle third wrong: wave 1 — three
+ * hounds at 6-9 m — was dead on the wave's FIRST step, before the player could pull a
+ * trigger. That was holdfast-life._protect lifted whole: 56 m of reach, a shot every 0.8 s
+ * from each of three rifles with no phase between them, 68 damage, and never a miss. Against
+ * a 55 hp hound (enemies/species.js) one hit is one kill, so three guards deleted three
+ * hounds in one frame. 255 damage a second, out to 56 m, was the whole defence.
+ *
+ * THEY ARE VILLAGERS WITH RIFLES, NOT THE ANSWER. Every number below is picked so the
+ * player kills most of what comes and the guards stop him being surrounded:
+ *
+ *   DMG 24        a hound (55) now takes THREE hits, a poacher (70) three, a standing (60)
+ *                 three, a hunter (140) six, a drowned (260) eleven. Nothing in any of the
+ *                 three wave tables dies to one rifle, and the heavies are simply not
+ *                 something three villagers can shoot down.
+ *   SIGHT 20      was 56. The attack points are 11-19 m from the two rifles at the road end
+ *                 and 23-38 m from the third, standing deeper in, so the guards answer what
+ *                 ARRIVES and never reach out across the approach. The approach is yours.
+ *   CADENCE 1.9   was 0.8, and the phase below spreads the three of them across it, so the
+ *                 hamlet sounds like three people working bolt rifles and not one machine gun.
+ *   REACT 0.8     a target has to have been there this long before the first shot, and the
+ *                 clock restarts every time a guard loses it or is made to flinch. This is
+ *                 the whole reason wave 1 can no longer die on the frame it arrives.
+ *   HIT 0.66/0.22 hit chance at 7 m falling to 20 m. A miss still costs the round, still
+ *                 draws its tracer and still makes its noise — it goes WIDE, which is how
+ *                 you read that they are missing.
+ *   MAG 5 / 3.4   five rounds, then the rifle comes down for 3.4 s (townAim 0, so the body
+ *                 lowers it). One decrement and one compare in the hot path.
+ *
+ * Per rifle that is 5 rounds in 5 x (1.9 + its phase) + 3.4, about 0.35 shots a second; at
+ * 13 m (hit 0.46) that is 3.8 damage a second, 12 across all three and in practice less,
+ * because a guard who takes a stray swing holds fire for twelve seconds (townFear). Twelve
+ * against the old two hundred and fifty-five.
+ *
+ * MEASURED, tests/hamlets.mjs, the three rifles alone against wave 1 where it actually lands:
+ * Eelwater 22.0 s, Highwood 30.5 s, The Cut 39.3 s — against ONE STEP before. Nothing dies on
+ * the frame a wave arrives, and the player has every kill he can reach first.
+ */
 const GUARD_NEAR = 100;       // m from the hamlet: the guards only work while you are here (Holdfast rule)
-const GUARD_SIGHT = 56;       // m: holdfast-life._protect's reach
-const GUARD_CADENCE = 0.8;    // s between shots, the same rifle
-const GUARD_DMG = 68;         // per hit, the same rifle
+const GUARD_SIGHT = 20;       // m: what has arrived, not what is coming
+const GUARD_CADENCE = 1.90;   // s between shots, one rifle, before its own phase
+const GUARD_PHASE = 0.62;     // s of seeded per-guard spread on that cadence, so three rifles
+                              // never come down on the same frame
+const GUARD_REACT_S = 0.80;   // s a target must be held before the first shot of a sighting
+const GUARD_DMG = 24;         // per hit: a hound (55 hp) survives two, the drowned (260) ten
+const GUARD_HIT_NEAR = 0.66;  // hit chance at GUARD_NEAR_M or closer
+const GUARD_NEAR_M = 7;
+const GUARD_HIT_FAR = 0.22;   // ...falling to this at GUARD_SIGHT
+const GUARD_MISS_M = 1.35;    // m a missed round passes the body by, at most
+const GUARD_VOLLEY_GAP = 0.12;// s between ANY two rifles in the same hamlet. The phase alone
+                              // spreads their cadence but not their first shot — all three see
+                              // a wave arrive on the same frame — and this is what makes the
+                              // hamlet ripple instead of volley. A rifle held back here keeps
+                              // its round; it simply waits its turn.
+const GUARD_MAG = 5;          // rounds before the rifle comes down
+const GUARD_RELOAD_S = 3.4;   // s it stays down
 const GUARD_FLASH_S = 0.05;   // s of borrowed muzzle light
+
+/** A villager's hit chance at `d` metres: flat inside GUARD_NEAR_M, linear out to the edge. */
+export function guardHitChance(d) {
+  if (d <= GUARD_NEAR_M) return GUARD_HIT_NEAR;
+  if (d >= GUARD_SIGHT) return GUARD_HIT_FAR;
+  const t = (d - GUARD_NEAR_M) / (GUARD_SIGHT - GUARD_NEAR_M);
+  return GUARD_HIT_NEAR + (GUARD_HIT_FAR - GUARD_HIT_NEAR) * t;
+}
+
+/** The rifle, as numbers, so a node check can read them instead of copying them. */
+export const GUARD = Object.freeze({
+  near: GUARD_NEAR, sight: GUARD_SIGHT, cadence: GUARD_CADENCE, phase: GUARD_PHASE,
+  react: GUARD_REACT_S, dmg: GUARD_DMG, hitNear: GUARD_HIT_NEAR, nearM: GUARD_NEAR_M,
+  hitFar: GUARD_HIT_FAR, mag: GUARD_MAG, reload: GUARD_RELOAD_S,
+});
 
 // module scratch, never allocated per step: the guard ray, one world point, the prompt
 const _from = new THREE.Vector3(), _to = new THREE.Vector3(), _ray = new THREE.Vector3();
@@ -217,12 +293,15 @@ export class HamletLife {
 
   constructor(ctx) {
     this.ctx = ctx;
-    this.sites = [];          // { id, spec, plan, rec, people[], lamp, shotAt:Map }
+    this.sites = [];          // { id, spec, plan, rec, people[], lamp }
     this.time = 0;
     this.useLock = false;
     this.target = '';
     this.siege = '';          // the hamlet whose defence is live: contains() ignores it (C22)
     this._offs = [];
+    // One stream for every round the three rifles ever fire. No Math.random anywhere in src:
+    // fork() is the law, and a named fork means adding one never shifts another's sequence.
+    this._aim = ctx.rng?.fork ? ctx.rng.fork('hamlet-guard-aim') : null;
   }
 
   _sys(id) { return this.ctx.systems.get(id); }
@@ -233,12 +312,18 @@ export class HamletLife {
       const rec = places?.nodes?.get?.(id);
       if (!rec) continue;
       const site = {
-        id, spec, plan: HAMLET_PLAN[id], rec, lamp: null, shotAt: new Map(),
+        id, spec, plan: HAMLET_PLAN[id], rec, lamp: null, lastShot: -99,
         people: spec.people.map(p => ({
           ...p, e: null, gen: 0,
           read: 0, restUntil: 0, talks: 0, chain: '',   // D10: this read-through, and which chain it is
           wp: 1, dir: 1, pause: 0, goalY: 0,            // the idle walk
           floorT: 0, homeYaw: 0,
+          // THE RIFLE, per guard. `phase` is seeded ONCE, off this person's own fork, so Bram
+          // and Tam and Wick keep their own beat for ever and never fire on the same frame.
+          // Everything else is plain numbers on the person: no Map, no allocation, no lookup.
+          phase: p.role === 'guard' && this.ctx.rng?.fork
+            ? this.ctx.rng.fork('hamlet-guard:' + p.id).next() * GUARD_PHASE : 0,
+          nextShot: 0, seenT: 0, mag: GUARD_MAG, reloadT: 0,
         })),
       };
       this.sites.push(site);
@@ -306,11 +391,12 @@ export class HamletLife {
   _reset() {
     const en = this._sys('enemies');
     for (const s of this.sites) {
-      s.shotAt.clear();
       for (const p of s.people) {
         if (p.e?.alive && p.e.gen === p.gen) en?._release?.(p.e);
         p.e = null; p.read = 0; p.restUntil = 0; p.chain = ''; p.wp = 1; p.dir = 1; p.pause = 0;
+        p.nextShot = 0; p.seenT = 0; p.mag = GUARD_MAG; p.reloadT = 0;
       }
+      s.lastShot = -99;
     }
     this.target = '';
   }
@@ -403,10 +489,18 @@ export class HamletLife {
   }
 
   /**
-   * holdfast-life._protect, per hamlet. Every guard standing and neutral picks the nearest
-   * hostile within 56 m it can see, faces it, and fires every 0.8 s: a tracer, a borrowed
-   * muzzle light, 68 damage, the dealer's rifle sound. A guard hit by a stray swing is
-   * flinching (townFear, enemies.js) and holds fire until it passes.
+   * SUPPORT FIRE, per hamlet. Every guard standing and neutral picks the nearest hostile
+   * inside GUARD_SIGHT it can see and faces it. It does not shoot at it yet: the target has
+   * to have been held for GUARD_REACT_S first, and the round itself waits for this guard's
+   * own phase of the cadence. When it does fire it is a tracer, a borrowed muzzle light, the
+   * dealer's rifle sound, and 24 damage IF it hits — guardHitChance(dist) off the seeded aim
+   * stream decides, and a miss throws the tracer wide instead of doing nothing visible.
+   *
+   * Five rounds, then the rifle comes down for GUARD_RELOAD_S with townAim 0, which the body
+   * draws as lowered. A guard hit by a stray swing is flinching (townFear, enemies.js), holds
+   * fire until it passes, and has to find its target again afterwards.
+   *
+   * Nothing here allocates and nothing here can make a guard hostile.
    */
   _protect(s, dt) {
     const en = this._sys('enemies'), p = this._sys('player');
@@ -417,28 +511,52 @@ export class HamletLife {
       const g = q.e;
       if (!g?.alive || g.gen !== q.gen || !g.neutral) continue;
       g.townGuard = true; g.townAim = 0;
-      if (g.townFear > 0) continue;
+      // THE RIFLE COMES DOWN. Out of rounds is three and a half seconds of one fewer gun, and
+      // you can see which one it is, because townAim 0 is the lowered pose. The clock runs
+      // whatever else is happening, so a reload started under the last body of a wave is
+      // finished by the time the next one walks in.
+      if (q.reloadT > 0) { q.reloadT -= dt; if (q.reloadT <= 0) q.mag = GUARD_MAG; }
+      // flinching: no aim, no shot, and the sighting clock goes back to nothing
+      if (g.townFear > 0) { q.seenT = 0; continue; }
       let target = null, dist = GUARD_SIGHT;
       for (const e of en.all) {
         if (!e.alive || e.initiallyNeutral || e.neutral) continue;
         const d = Math.hypot(e.pos.x - g.pos.x, e.pos.z - g.pos.z);
         if (d < dist && this._sight(g.pos, e.pos)) { target = e; dist = d; }
       }
-      if (!target) { if (this.target !== q.id) g.stagedYaw = q.homeYaw; continue; }
-      g.stagedYaw = faceYaw(g.pos.x, g.pos.z, target.pos.x, target.pos.z); g.townAim = 1;
-      const last = s.shotAt.get(q.id) || 0;
-      if (this.time < last) continue;
-      s.shotAt.set(q.id, this.time + GUARD_CADENCE);
+      if (!target) { q.seenT = 0; if (this.target !== q.id) g.stagedYaw = q.homeYaw; continue; }
+      g.stagedYaw = faceYaw(g.pos.x, g.pos.z, target.pos.x, target.pos.z);
+      if (q.reloadT > 0) continue;              // still down: faces it, cannot answer it
+      g.townAim = 1;
+      // and it still has to be brought to bear: nothing is shot on the frame it appears, and
+      // this guard's own phase says whether it is the first of the three to get there
+      q.seenT += dt;
+      if (q.seenT < GUARD_REACT_S + q.phase) continue;
+      if (this.time < q.nextShot) continue;
+      if (this.time - s.lastShot < GUARD_VOLLEY_GAP) continue;   // wait your turn
+      s.lastShot = this.time;
+      q.nextShot = this.time + GUARD_CADENCE + q.phase;
+      if (--q.mag <= 0) q.reloadT = GUARD_RELOAD_S;
+
       const mz = g.built?.muzzle, sy = Math.sin(g.stagedYaw), cy = Math.cos(g.stagedYaw), scale = g.scale || 1;
       _from.set(g.pos.x + (mz ? mz.x * cy + mz.z * sy : 0) * scale, g.pos.y + (mz ? mz.y * scale : 1.5), g.pos.z + (mz ? -mz.x * sy + mz.z * cy : 0) * scale);
-      const dx = target.pos.x - _from.x, dy = target.pos.y + 1 - _from.y, dz = target.pos.z - _from.z;
+      let dx = target.pos.x - _from.x, dy = target.pos.y + 1 - _from.y, dz = target.pos.z - _from.z;
+      const hit = (this._aim ? this._aim.next() : 0) < guardHitChance(dist);
+      if (!hit) {
+        // WIDE. Push the round off the body by up to GUARD_MISS_M across the line of sight,
+        // and a hand's worth high or low, so the tracer visibly goes past it. Scalars only.
+        const r = this._aim ? this._aim.next() : 0.5;
+        const off = (r < 0.5 ? -1 : 1) * (0.55 + Math.abs(r * 2 - 1) * (GUARD_MISS_M - 0.55));
+        const fx = dx, fz = dz, fl = Math.hypot(fx, fz) || 0.001;
+        dx += (-fz / fl) * off; dz += (fx / fl) * off; dy += off * 0.35;
+      }
       const n = Math.hypot(dx, dy, dz) || 0.001;
       _ray.set(dx / n, dy / n, dz / n);
       this._sys('fx')?.tracer?.(_from, _ray, dist);
       this._sys('lights')?.borrow('hamlet-guard', _from.x, _from.y, _from.z, 0xffc27a, 26, GUARD_FLASH_S);
-      en.damage(target, GUARD_DMG, { zone: 'torso', point: target.pos, dist, source: 'guard' });
+      if (hit) en.damage(target, GUARD_DMG, { zone: 'torso', point: target.pos, dist, source: 'guard' });
       this._sys('audio')?.dread?.('dealer-shot', g.pos.x, g.pos.y + 1.5, g.pos.z, 0.16);
-      this.ctx.bus.emit('hamlet:guard-shot', { site: s.id, x: g.pos.x, y: g.pos.y + 1.5, z: g.pos.z, target: target.pos });
+      this.ctx.bus.emit('hamlet:guard-shot', { site: s.id, x: g.pos.x, y: g.pos.y + 1.5, z: g.pos.z, target: target.pos, hit });
     }
   }
 
@@ -587,6 +705,9 @@ export class HamletLife {
         id: s.id, lit: !!s.lamp?.inUse,
         standing: s.people.filter(q => q.e?.alive).length,
         talks: s.people.reduce((n, q) => n + q.talks, 0),
+        // D17: what the three rifles are actually doing, for a report and for the suites
+        rifles: s.people.filter(q => q.role === 'guard')
+          .map(q => ({ id: q.id, mag: q.mag, reloading: q.reloadT > 0, aiming: q.seenT > 0 })),
       })),
       target: this.target,
       siege: this.siege,
