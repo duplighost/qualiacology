@@ -3785,9 +3785,9 @@ function buildLateGameArt(v) {
                 const wet = Math.min(1, t * 1.22), g = noise(Math.floor(x * 1.7), Math.floor(z * 1.7));
                 const tide = Math.exp(-Math.pow((t - .58) * 6.2, 2)) * .17;
                 col.push(
-                    (1.06 - wet * .58) + g * .11 + tide,
-                    (.97 - wet * .54) + g * .09 + tide,
-                    (.82 - wet * .40) + g * .07 + tide
+                    (1.14 - wet * .62) + g * .10 + tide,
+                    (1.00 - wet * .58) + g * .08 + tide,
+                    (.78 - wet * .44) + g * .06 + tide
                 );
             }
         for (let j = 0; j < rows - 1; j++)
@@ -3804,7 +3804,7 @@ function buildLateGameArt(v) {
         const sandMat = m.sand.clone();
         sandMat.name = 'sand';
         sandMat.vertexColors = true;
-        sandMat.color.set(0xffffff);
+        sandMat.color.set(0xd8c7a6);
         sandMat.roughness = .86;
         const strand = new T.Mesh(g, sandMat);
         strand.name = 'the-strand';
@@ -3891,8 +3891,8 @@ const polishMaterials = function (view) {
     m.cold.color.set(0x6e8581);
     m.warm.color.set(0xd1a26b);
     m.sand = new T.MeshStandardMaterial({
-        map: view.tex('meadow_color.jpg', true), normalMap: view.tex('meadow_normal.jpg'), roughnessMap: view.tex('meadow_rough.jpg'),
-        color: 0xb0a488, roughness: .92, metalness: .02, envMapIntensity: .55
+        map: view.tex('cast_color.jpg', true), normalMap: view.tex('cast_normal.jpg'), roughnessMap: view.tex('cast_rough.jpg'),
+        color: 0xc9b696, roughness: .90, metalness: .02, envMapIntensity: .55
     });
     m.sand.name = 'wet-strand';
     m.sand.normalScale.set(.30, .30);
@@ -4097,7 +4097,7 @@ const buildSkyAndSea = function (v, Batch) {
    vec3 d=normalize(vDir);
    float y=d.y, up=clamp(y,0.,1.), band=pow(1.-up,1.55);
    vec3 zenith=mix(vec3(.118,.186,.216),vec3(.126,.152,.232),uDawn);
-   vec3 haze=mix(vec3(.372,.430,.424),vec3(.780,.520,.376),uDawn);
+   vec3 haze=mix(vec3(.372,.430,.424),vec3(.690,.452,.320),uDawn);
    vec3 c=mix(zenith,haze,band);
    float sd=dot(d,uSunDir);
    // Forward scatter, then the disc itself. Both follow the same sun vector the
@@ -4351,11 +4351,11 @@ const setDawn = function (v, strength) {
     if (dir) dir.set(IP.lerp(31, 6.5, t), IP.lerp(43, 6.2, t), IP.lerp(24, -47, t)).normalize();
     if (v.sun) {
         v.sun.color.setRGB(IP.lerp(1, 1, t), IP.lerp(.847, .706, t), IP.lerp(.659, .412, t));
-        v.sun.intensity = IP.lerp(2.9, 3.9, t);
+        v.sun.intensity = IP.lerp(2.9, 3.35, t);
     }
     if (v.ambient) {
         v.ambient.color.setRGB(IP.lerp(.545, .827, t), IP.lerp(.651, .639, t), IP.lerp(.678, .592, t));
-        v.ambient.intensity = IP.lerp(.95, 1.16, t);
+        v.ambient.intensity = IP.lerp(1.06, 1.14, t);
     }
     if (v.fill) v.fill.color.setRGB(IP.lerp(.561, .784, t), IP.lerp(.698, .612, t), IP.lerp(.749, .592, t));
     if (v.scene.fog) v.scene.fog.color.setRGB(IP.lerp(.200, .470, t), IP.lerp(.267, .330, t), IP.lerp(.259, .262, t));
@@ -4549,7 +4549,7 @@ const updatePolishedLights = function (v, dt) {
         }
         const outdoors = !!v.sim.floorAt(p.x, p.z)?.outdoors || !!s.climb;
         v.outdoorMix = IP.damp(v.outdoorMix ?? (outdoors ? 1 : 0), outdoors ? 1 : 0, 2.4, dt || 1 / 60);
-        u.uHaze.value = (0.0030 + 0.0012 * (v.dawn || 0)) * v.outdoorMix;
+        u.uHaze.value = (0.0030 - 0.0007 * (v.dawn || 0)) * v.outdoorMix;
         const projected = sun.clone().multiplyScalar(900).add(v.camera.position).project(v.camera);
         const facing = sun.dot(v.camera.getWorldDirection(new T.Vector3()));
         u.uSunScreen.value.set(projected.x * .5 + .5, projected.y * .5 + .5);
@@ -5329,7 +5329,10 @@ function updateCamera(view, dt, title = false) {
     // The last walk widens out on its own. Control is never taken away; the lens
     // simply steps back and lets the morning into the frame.
     view.finaleT = view.sim.finale ? Math.min(1, (view.finaleT || 0) + dt / 9) : 0;
-    const yaw = view.cameraYaw, pitch = climbPitch !== null ? clamp(view.cameraPitch, climbPitch - .04, climbPitch + .26) : view.cameraPitch, cp = Math.cos(pitch);
+    const yaw = view.cameraYaw;
+    // On the last walk the lens lifts to the horizon; the sunrise is the subject.
+    const basePitch = climbPitch !== null ? clamp(view.cameraPitch, climbPitch - .04, climbPitch + .26) : view.cameraPitch;
+    const pitch = IP.lerp(basePitch, .065, view.finaleT), cp = Math.cos(pitch);
     const direction = V(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp);
     const nominal = (climbDistance !== null ? climbDistance * (1 - view.climbKick * .06) : view.cameraMode ? 9.15 : 8.1) * view.zoom * (1 + view.finaleT * .62);
     const end = view.cameraPivot.clone().addScaledVector(direction, nominal);
@@ -5354,7 +5357,7 @@ function updateCamera(view, dt, title = false) {
         view.camera.position.lerp(view.cameraPivot, clamp(rise * .07, 0, .22));
     }
     // Low on the wall the shot leans up the route; high on it, down the drop.
-    const climbGaze = climbPitch !== null ? IP.lerp(.74, -.22, view.climbLook || 0) : 0;
+    const climbGaze = (climbPitch !== null ? IP.lerp(.74, -.22, view.climbLook || 0) : 0) + view.finaleT * 1.05;
     view.cameraTarget.copy(view.cameraPivot).add(V(-Math.sin(yaw) * .55, -.20 + climbGaze, -Math.cos(yaw) * .55));
     view.camera.lookAt(view.cameraTarget);
     view.camera.updateMatrixWorld();
@@ -6075,7 +6078,7 @@ function makePost(view) {
    color*=mix(vec3(.92,1.01,1.04),vec3(1.075,1.01,.94),smoothstep(.10,1.20,luma));
    float vignette=smoothstep(.95,.22,edge);
    color*=mix(mix(.88,.94,uEnding),1.,vignette);
-   color=aces(color*(uExposure+uEnding*.30));
+   color=aces(color*(uExposure+uEnding*.14));
    color=pow(color,vec3(1./2.2));
    // Grain sits mostly in the shadows, the way real stock behaves.
    float noise=fract(sin(dot(vUv*uResolution+fract(uTime)*19.,vec2(12.9898,78.233)))*43758.5453)-.5;

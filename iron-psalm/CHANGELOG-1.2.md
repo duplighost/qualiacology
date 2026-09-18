@@ -40,7 +40,10 @@ weight is gone, and you feel it in your hands rather than read it on a card.
   cuff comes off, and finishes as the strand runs out — sky, sea, sun, fog and
   grade all driven by one value.
 - No freeze and no white-out. The simulation keeps running through the ending,
-  the movement pad stays live, and the camera widens on its own.
+  the movement pad stays live, and the camera widens and lifts to the horizon on
+  its own, because the sunrise is the subject of the shot.
+- The strand is sand, not the meadow's soil map, and the dawn grade holds back
+  far enough that the range keeps its silhouette through it.
 
 ## Environments
 
