@@ -56,7 +56,14 @@ jobs:
           import { chromium } from 'playwright-core';
           import { writeFile, stat } from 'node:fs/promises';
 
-          const shots = ['hero', 'bell', 'reliquary', 'spine', 'boss', 'scale'];
+          const views = {
+            hero:       { camera:[14,10.5,291], look:[0,7,236], fov:64, player:[0,5,276] },
+            bell:       { camera:[292,83,172],  look:[181,25,49], fov:64 },
+            reliquary:  { camera:[-286,70,162], look:[-181,22,48], fov:64 },
+            spine:      { camera:[88,66,-155],  look:[0,17,-268], fov:64 },
+            boss:       { camera:[44,24,-38],   look:[0,17,-89], fov:64, boss:true },
+            scale:      { camera:[348,178,354], look:[0,24,-70], fov:59 }
+          };
           const browser = await chromium.launch({
             headless: true,
             executablePath: process.env.CHROME_PATH,
@@ -65,33 +72,54 @@ jobs:
               '--enable-webgl', '--ignore-gpu-blocklist', '--disable-background-networking'
             ]
           });
-          const report = { chrome: await browser.version(), shots: [], errors: [] };
+          const context = await browser.newContext({
+            viewport: { width: 1440, height: 900 },
+            deviceScaleFactor: 1,
+            reducedMotion: 'reduce'
+          });
+          const page = await context.newPage();
+          const messages = [];
+          page.on('console', m => messages.push({ type: m.type(), text: m.text() }));
+          page.on('pageerror', e => messages.push({ type: 'pageerror', text: String(e.stack || e) }));
+          await page.goto('http://127.0.0.1:4173/index.html?shot=hero', { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await page.waitForFunction(
+            () => window.__NFP_READY__ === true || document.body?.dataset?.ready === 'true',
+            null,
+            { timeout: 45000 }
+          );
+          await page.waitForTimeout(1800);
 
-          for (const shot of shots) {
-            const context = await browser.newContext({
-              viewport: { width: 1440, height: 900 },
-              deviceScaleFactor: 1,
-              reducedMotion: 'reduce'
-            });
-            const page = await context.newPage();
-            const messages = [];
-            page.on('console', m => messages.push({ type: m.type(), text: m.text() }));
-            page.on('pageerror', e => messages.push({ type: 'pageerror', text: String(e.stack || e) }));
-            const url = `http://127.0.0.1:4173/index.html?shot=${shot}`;
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-            await page.waitForFunction(
-              () => window.__NFP_READY__ === true || document.body?.dataset?.ready === 'true',
-              null,
-              { timeout: 45000 }
-            );
-            await page.waitForTimeout(2200);
+          const report = { chrome: await browser.version(), shots: [], messages };
+          for (const [shot, view] of Object.entries(views)) {
+            await page.evaluate(({ shot, view }) => {
+              const qa = window.__NFP_QA__;
+              const game = qa.game;
+              const c = game.render.camera;
+              const T = window.THREE;
+              game.player.model.visible = shot === 'hero';
+              if (view.player) {
+                game.player.position.set(...view.player);
+                game.player.model.position.copy(game.player.position);
+                game.player.model.rotation.y = Math.PI;
+              }
+              if (view.boss) {
+                game.debugUnlockBoss();
+                game.boss.intro = 0;
+              }
+              c.position.set(...view.camera);
+              c.lookAt(new T.Vector3(...view.look));
+              c.fov = view.fov;
+              c.updateProjectionMatrix();
+              document.body.dataset.qa = shot;
+            }, { shot, view });
+            await page.waitForTimeout(900);
             const path = `nfp-artifact/qa/${shot}.png`;
             await page.screenshot({ path, type: 'png' });
             const bytes = (await stat(path)).size;
             if (bytes < 40000) throw new Error(`${shot} screenshot suspiciously small: ${bytes}`);
             const diagnostics = await page.evaluate(() => ({
               ready: window.__NFP_READY__ === true,
-              qa: window.__NFP_QA__ || null,
+              metrics: window.__NFP_QA__?.report?.() || null,
               engine: document.querySelector('canvas')?.dataset?.engine || null,
               bodyReady: document.body?.dataset?.ready || null,
               title: document.title,
@@ -100,10 +128,10 @@ jobs:
                 return c ? { width: c.width, height: c.height } : null;
               })()
             }));
-            report.shots.push({ shot, bytes, diagnostics, messages });
-            await context.close();
+            report.shots.push({ shot, bytes, diagnostics });
           }
 
+          await context.close();
           await browser.close();
           await writeFile('nfp-artifact/qa/visual-report.json', JSON.stringify(report, null, 2));
           console.log(JSON.stringify(report, null, 2));
@@ -111,7 +139,7 @@ jobs:
             throw new Error('One or more authored views failed runtime readiness checks.');
           }
           NODE
-          timeout --signal=TERM --kill-after=10s 420s node ./nfp-render.mjs | tee nfp-artifact/qa/harness.log
+          timeout --signal=TERM --kill-after=10s 180s node ./nfp-render.mjs | tee nfp-artifact/qa/harness.log
           cp /tmp/nfp-http.log nfp-artifact/qa/http.log
 
       - name: Assemble offline package
