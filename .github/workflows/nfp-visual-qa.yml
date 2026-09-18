@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: nfp-visual-qa-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   render-and-package:
     runs-on: ubuntu-latest
@@ -38,39 +42,76 @@ jobs:
           for i in {1..30}; do curl -fsS http://127.0.0.1:4173/index.html >/dev/null && exit 0; sleep 1; done
           exit 1
 
-      - name: Render authored QA views
+      - name: Install visual harness
         shell: bash
-        run: |
-          set -euo pipefail
-          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
-          "$CHROME" --version | tee nfp-artifact/qa/chrome-version.txt
-          for shot in hero bell reliquary spine boss scale; do
-            "$CHROME" \
-              --headless=new --no-sandbox --disable-dev-shm-usage \
-              --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist \
-              --hide-scrollbars --window-size=1440,900 --virtual-time-budget=14000 \
-              --screenshot="$GITHUB_WORKSPACE/nfp-artifact/qa/${shot}.png" \
-              "http://127.0.0.1:4173/index.html?shot=${shot}" \
-              >"/tmp/nfp-${shot}.log" 2>&1
-            test -s "nfp-artifact/qa/${shot}.png"
-            bytes="$(wc -c < "nfp-artifact/qa/${shot}.png")"
-            test "$bytes" -gt 40000
-            printf '%s %s bytes\n' "$shot" "$bytes" | tee -a nfp-artifact/qa/render-sizes.txt
-          done
+        run: npm install --no-save --no-package-lock playwright-core@1.55.0
 
-      - name: Runtime readiness probe
+      - name: Render and inspect authored QA views
         shell: bash
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
         run: |
           set -euo pipefail
-          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
-          "$CHROME" \
-            --headless=new --no-sandbox --disable-dev-shm-usage \
-            --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist \
-            --virtual-time-budget=14000 --dump-dom \
-            'http://127.0.0.1:4173/index.html?shot=hero' \
-            > nfp-artifact/qa/runtime-dom.html 2> nfp-artifact/qa/runtime-stderr.log
-          grep -q 'data-ready="true"' nfp-artifact/qa/runtime-dom.html
-          grep -q 'data-engine="three.js r161"' nfp-artifact/qa/runtime-dom.html
+          cat > /tmp/nfp-render.mjs <<'NODE'
+          import { chromium } from 'playwright-core';
+          import { writeFile, stat } from 'node:fs/promises';
+
+          const shots = ['hero', 'bell', 'reliquary', 'spine', 'boss', 'scale'];
+          const browser = await chromium.launch({
+            headless: true,
+            executablePath: process.env.CHROME_PATH,
+            args: [
+              '--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader',
+              '--enable-webgl', '--ignore-gpu-blocklist', '--disable-background-networking'
+            ]
+          });
+          const report = { chrome: await browser.version(), shots: [], errors: [] };
+
+          for (const shot of shots) {
+            const context = await browser.newContext({
+              viewport: { width: 1440, height: 900 },
+              deviceScaleFactor: 1,
+              reducedMotion: 'reduce'
+            });
+            const page = await context.newPage();
+            const messages = [];
+            page.on('console', m => messages.push({ type: m.type(), text: m.text() }));
+            page.on('pageerror', e => messages.push({ type: 'pageerror', text: String(e.stack || e) }));
+            const url = `http://127.0.0.1:4173/index.html?shot=${shot}`;
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await page.waitForFunction(
+              () => window.__NFP_READY__ === true || document.body?.dataset?.ready === 'true',
+              null,
+              { timeout: 45000 }
+            );
+            await page.waitForTimeout(2200);
+            const path = `nfp-artifact/qa/${shot}.png`;
+            await page.screenshot({ path, type: 'png' });
+            const bytes = (await stat(path)).size;
+            if (bytes < 40000) throw new Error(`${shot} screenshot suspiciously small: ${bytes}`);
+            const diagnostics = await page.evaluate(() => ({
+              ready: window.__NFP_READY__ === true,
+              qa: window.__NFP_QA__ || null,
+              engine: document.querySelector('canvas')?.dataset?.engine || null,
+              bodyReady: document.body?.dataset?.ready || null,
+              title: document.title,
+              canvas: (() => {
+                const c = document.querySelector('canvas');
+                return c ? { width: c.width, height: c.height } : null;
+              })()
+            }));
+            report.shots.push({ shot, bytes, diagnostics, messages });
+            await context.close();
+          }
+
+          await browser.close();
+          await writeFile('nfp-artifact/qa/visual-report.json', JSON.stringify(report, null, 2));
+          console.log(JSON.stringify(report, null, 2));
+          if (report.shots.some(s => !s.diagnostics.ready || s.diagnostics.engine !== 'three.js r161')) {
+            throw new Error('One or more authored views failed runtime readiness checks.');
+          }
+          NODE
+          timeout --signal=TERM --kill-after=10s 420s node /tmp/nfp-render.mjs | tee nfp-artifact/qa/harness.log
           cp /tmp/nfp-http.log nfp-artifact/qa/http.log
 
       - name: Assemble offline package
