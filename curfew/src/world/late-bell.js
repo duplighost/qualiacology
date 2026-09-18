@@ -5,10 +5,16 @@ import { canRingLateBell, carriesMorning, readLastNight, trueDawnAt, LAST_NIGHT_
 
 const SAVE_KEY = 'morning:late-bell';
 const KEPT_KEY = 'morning:kept-blackout';
+// D11: the answers are spaced so no two wh_bells stack. _bell refuses a repeat inside
+// MIN_BELL_GAP_S, so the choir vault's five bells come 3.6 s apart (the county's toll gap;
+// 2.5 s would have had the guard silence every second one) and Holdfast and Morning follow.
+const MIN_BELL_GAP_S = 3;
+const HALE_GAP_S = 3.6;     // Hale's three strikes at the crypt opening: 0 / 3.6 / 7.2 s
+const HALE_STRIKES = 3;
 const ANSWERS = [
-  ['gallowsfen', 1.7], ['choir-vault', 3.2], ['choir-vault', 3.65],
-  ['choir-vault', 4.1], ['choir-vault', 4.55], ['choir-vault', 5.0],
-  ['holdfast', 6.5], ['morning', 9.0],
+  ['gallowsfen', 1.7], ['choir-vault', 3.2], ['choir-vault', 6.8],
+  ['choir-vault', 10.4], ['choir-vault', 14.0], ['choir-vault', 17.6],
+  ['holdfast', 21.2], ['morning', 24.8],
 ];
 const warm = new THREE.Color(0xffd19a);
 
@@ -17,7 +23,8 @@ export class LateBell {
   constructor(ctx) {
     this.ctx = ctx; this.last = null; this.loaded = false; this.routeLoaded = false; this.saveT = 0;
     this.answers = []; this.answerT = 0; this.blackout = 0; this.relight = 1;
-    this.cryptFlash = 0; this.cryptRover = null; this.haleT = 0;
+    this.cryptFlash = 0; this.cryptRover = null; this.haleT = 0; this.haleStrikes = 0; this.haleRung = 0;
+    this._t = 0; this._lastBellT = -1e9;
     this.title = null; this.titleT = 0; this.seatT = 0; this.returnArmed = false;
     this.offs = [];
   }
@@ -104,13 +111,20 @@ export class LateBell {
   }
   _bell(id) {
     const places = this._sys('places'), rec = places?.nodes.get(id);
-    if (!rec) return;
+    if (!rec) return false;
+    // D11: a repeat inside MIN_BELL_GAP_S is a stack, not a second bell
+    if (this._t - this._lastBellT < MIN_BELL_GAP_S) return false;
+    this._lastBellT = this._t;
     rec.bellT = 0;
     this._sys('audio')?.whisper?.('bell', rec.def.name, rec.def.x, rec.padY + 3, rec.def.z);
     this.ctx.bus.emit('morning:answer', { id, x: rec.def.x, z: rec.def.z });
+    return true;
   }
+  /** Hale's bell, by hand: the crypt opening, the lamps returning, someone coming home. */
+  _hale() { if (this._bell('holdfast')) this.haleRung++; }
   _kept() {
-    this.blackout = LAST_NIGHT_S; this.relight = 0; this.cryptFlash = 2; this.haleT = 0;
+    this.blackout = LAST_NIGHT_S; this.relight = 0; this.cryptFlash = 2;
+    this.haleT = 0; this.haleStrikes = HALE_STRIKES;
     this._publish(); this._save(true);
     this.ctx.bus.emit('morning:crypt-opened', {});
   }
@@ -136,11 +150,19 @@ export class LateBell {
     if (!this.loaded) return;
     this._revealRoute();
     this._crypt(dt);
+    this._t += dt;
     if (this.blackout > 0) {
       this.blackout = Math.max(0, this.blackout - dt);
-      this.haleT -= dt;
-      if (this.haleT <= 0) { this.haleT = 4.8; this._bell('holdfast'); }
-    } else this.relight = Math.min(1, this.relight + dt / 18);
+      // D11: three strikes when the crypt opens, then Hale's bell is silent for the blackout.
+      // His own line: "We ring ours by hand. Only when someone comes home."
+      if (this.haleStrikes > 0) {
+        this.haleT -= dt;
+        if (this.haleT <= 0) { this.haleT = HALE_GAP_S; this.haleStrikes--; this._hale(); }
+      }
+    } else if (this.relight < 1) {
+      this.relight = Math.min(1, this.relight + dt / 18);
+      if (this.relight >= 1) this._hale();       // one strike when the lamps are back
+    }
     if (this.last) {
       this.last.elapsed = Math.min(LAST_NIGHT_S, this._sys('clock').cycleT);
       this.answerT += dt;
@@ -156,7 +178,7 @@ export class LateBell {
       if (this.last.complete) {
         const inTown = this._sys('holdfast-life')?.contains(p.pos.x, p.pos.z, 0);
         if (!inTown) this.returnArmed = true;
-        if (inTown && this.returnArmed) { this._bell('holdfast'); this.returnArmed = false; }
+        if (inTown && this.returnArmed) { this._hale(); this.returnArmed = false; }
       }
     }
     this._publish();
@@ -207,7 +229,7 @@ export class LateBell {
     }
     this.dismissKey = null;
   }
-  state() { return { lastNight: this.last ? { ...this.last } : null, blackout: this.blackout, relight: this.relight, cryptFlash: this.cryptFlash, trueDawn: this.ctx.shared.trueDawn, answers: this.answers.length }; }
+  state() { return { lastNight: this.last ? { ...this.last } : null, blackout: this.blackout, relight: this.relight, cryptFlash: this.cryptFlash, trueDawn: this.ctx.shared.trueDawn, answers: this.answers.length, haleStrikes: this.haleStrikes, haleRung: this.haleRung }; }
   dispose() {
     this._save(true); this.offs.forEach(off => off?.()); this._dismissTitle();
     if (this.cryptRover) this._sys('lights')?.release(this.cryptRover);

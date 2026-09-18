@@ -634,7 +634,14 @@ export class GunAudio {
     if (!A.enabled || A.silent) return null;
     const n = String(p.name || p.phase || '').toLowerCase();
     let buf = 'magIn';
-    if (n.indexOf('out') >= 0 || n.indexOf('release') >= 0 || n.indexOf('drop') >= 0) buf = 'magOut';
+    // D2: two beats are named exactly, before the loose chain. 'active' is the hit - the
+    // bolt-home seat pitched up a shade (rate 1.08) and a little brighter than a beat, so a
+    // hit is FELT as a hit and never as another knock; still nothing loud. 'dry' is the empty
+    // gun's click (weapon.js emits it on every dry pull now): quiet, dull, informative.
+    let rate = 0.98 + this.rng.next() * 0.05, gain = 0.55;
+    if (n === 'active') { buf = 'boltHome'; rate = 1.08; gain = 0.62; }
+    else if (n === 'dry') { buf = 'dryClick'; gain = 0.50; }
+    else if (n.indexOf('out') >= 0 || n.indexOf('release') >= 0 || n.indexOf('drop') >= 0) buf = 'magOut';
     else if (n.indexOf('bolt') >= 0 || n.indexOf('charge') >= 0 || n.indexOf('rack') >= 0) buf = p.empty ? 'boltBack' : 'boltHome';
     else if (n.indexOf('shell') >= 0 || n.indexOf('round') >= 0) buf = 'shellIn';
     else if (n.indexOf('dry') >= 0 || n.indexOf('empty') >= 0) buf = 'dryClick';
@@ -642,8 +649,8 @@ export class GunAudio {
     else if (n.indexOf('end') >= 0 || n.indexOf('seat') >= 0) buf = 'boltHome';
     else if (n.indexOf('cancel') >= 0) buf = 'shellIn';
     const s = A.spec();
-    s.bus = 'weapons'; s.gain = 0.55; s.send = 0.10;
-    s.rate = 0.98 + this.rng.next() * 0.05;
+    s.bus = 'weapons'; s.gain = gain; s.send = 0.10;
+    s.rate = rate;
     return A.play(buf, s);
   }
 

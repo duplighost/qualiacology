@@ -34,18 +34,35 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG } from '../config.js';
 import { Kit, C } from './sites.js';
 import { projectPlaceSurfaceUVs } from './place-surfaces.js';
-import { MAJORS } from './placedata.js';
+import { MAJORS, MINOR_KINDS, FIXED_MINORS } from './placedata.js';
 import { OPENING as O, STATION_PYLON } from './opening-layout.js';
-import { mountSignBoard } from './sign-mount.js';
+import { mountSignBoard, reseatFace } from './sign-mount.js';
+import { MASK } from './collision.js';
 
 const S = CFG.signage || {};
 const POSTER_EVERY = S.posterEveryM ?? 260;
 const MILE_EVERY = S.mileEveryM ?? 800;
 const RADIAL_MILE_EVERY = S.radialMileEveryM ?? 300;
 const VERGE_EXTRA = S.vergeExtra ?? 2.1;
-const KEEPOUT_MAJOR = S.keepoutMajor ?? 70;
-const KEEPOUT_MINOR = S.keepoutMinor ?? 14;
+const KEEPOUT_MAJOR = S.keepoutMajor ?? 70;     // the FLOOR of a major's keep-out; its pad + MAJOR_PAD_MARGIN is the real one
+const KEEPOUT_MINOR = S.keepoutMinor ?? 14;     // the floor of a minor's; its kind's bulk + MINOR_BULK_MARGIN is the real one
 const KEEPOUT_SIGN = S.keepoutSign ?? 30;
+// REAL FOOTPRINTS. _clear used to test POINTS: 70 m from a major's centre, 14 m from a
+// minor's, whatever stood there. The Holdfast's town runs to z 166 with houses at x +-52 and
+// two 'holdfast-foretown' pads of r 76 at local (+-23, 123); an orchard minor is 9 m of
+// trees. So a stake went into a wall. A major keeps out its flat pad plus a verge, a minor
+// its declared bulk plus one, and the floors above still apply.
+const MAJOR_PAD_MARGIN = 6, MINOR_BULK_MARGIN = 4;
+// the Holdfast's foretown discs, local to its frame (places._registerFlats)
+const FORETOWN = [[-23, 123, 76], [23, 123, 76]];
+const MINOR_BULK = new Map();
+for (const k of MINOR_KINDS) MINOR_BULK.set(k.id, k.bulk || 0);
+const FIXED_BULK = new Map();
+for (const f of FIXED_MINORS) FIXED_BULK.set(f.x + ',' + f.z, f.bulk || 0);
+// the stake styles whose faces stand on their own posts on a verge (the runtime drop, _build)
+const STAKED = new Set(['poster', 'plywood', 'mile', 'highway', 'marker']);
+const STAKE_PROBE = 0.6;      // m in front of a stake's face the drop probe starts from
+const _p0 = { x: 0, y: 0, z: 0 }, _pd = { x: 0, y: 0, z: 0 };
 const ATLAS_W = (S.atlas && S.atlas.w) || 2048;
 const ATLAS_H = (S.atlas && S.atlas.h) || 1024;
 const GUTTER = (S.atlas && S.atlas.gutter) || 8;
@@ -560,7 +577,14 @@ export class Signage {
   _onMajor(F, style, lines, lx, ly, lz, w, h, localYaw, opts = {}) {
     const r = this._sign({ style, lines, x: F.wx(lx, lz), y: F.padY + ly, z: F.wz(lx, lz), w, h, yaw: localYaw + F.yaw,
       rx: opts.rx || 0, rz: opts.rz || 0, stage: opts.stage, arrow: opts.arrow, missing: opts.missing, field: opts.field, spray: opts.spray,
-      backing: opts.backing !== false, backCol: opts.backCol || K_DARK, backD: opts.backD || 0.04 });
+      backing: opts.backing !== false, backCol: opts.backCol || K_DARK, backD: opts.backD || 0.04, site: F.id });
+    // a wall-hung face sits on the wall that is actually there, not on the number it was typed
+    // with: reseat against the site's resident meshes (tests/sign-clearance.mjs proves the
+    // authored numbers against the FULL site; this catches a wall that moved a few centimetres)
+    if (!r.rx && !r.rz && opts.reseat !== false) {
+      const moved = reseatFace(r, this._siteMeshes(F.id), r.backing ? r.backD + 0.012 : 0.012);
+      if (moved !== null && Math.abs(moved) > 0.004) this.counts.reseated = (this.counts.reseated || 0) + 1;
+    }
     this.fixed.push({ id: F.id + ':' + style, x: +r.x.toFixed(1), z: +r.z.toFixed(1), yaw: r.yaw });
     this.counts.fixed++;
     return r;
@@ -582,13 +606,42 @@ export class Signage {
     }
     return { x, z };
   }
-  /** Is this spot clear of majors, minors, water and this lane's own posts? */
+  /** Is this spot clear of majors, minors, water and this lane's own posts? Real footprints:
+   * a major's pad plus a verge, a minor's declared bulk plus one, and the old point floors. */
   _clear(x, z, minors) {
-    for (const m of MAJORS) if (Math.hypot(m.x - x, m.z - z) < KEEPOUT_MAJOR) return false;
-    for (const m of minors) if (Math.hypot(m.x - x, m.z - z) < KEEPOUT_MINOR) return false;
+    for (const m of MAJORS) {
+      const keep = Math.max(KEEPOUT_MAJOR, ((m.flat && m.flat.radius) || 0) + MAJOR_PAD_MARGIN);
+      if (Math.hypot(m.x - x, m.z - z) < keep) return false;
+    }
+    // the Holdfast's foretown: two more pads, in the town's own frame
+    const hf = this._foretown || (this._foretown = this._foretownDiscs());
+    for (const f of hf) if (Math.hypot(f.x - x, f.z - z) < f.r) return false;
+    for (const m of minors) {
+      const bulk = m.fixed ? (FIXED_BULK.get(m.x + ',' + m.z) || 0) : (MINOR_BULK.get(m.kind) || 0);
+      if (Math.hypot(m.x - x, m.z - z) < Math.max(KEEPOUT_MINOR, bulk + MINOR_BULK_MARGIN)) return false;
+    }
     for (const p of this._posts) if (Math.hypot(p.x - x, p.z - z) < KEEPOUT_SIGN) return false;
     if (this._ground(x, z) < WATER_Y) return false;
     return true;
+  }
+  _foretownDiscs() {
+    const F = this._frame('holdfast');
+    if (!F) return [];
+    return FORETOWN.map(([lx, lz, r]) => ({ x: F.wx(lx, lz), z: F.wz(lx, lz), r: r + MAJOR_PAD_MARGIN }));
+  }
+  /**
+   * The owning site's RESIDENT meshes, for reseating a wall-hung face at build: the landmark
+   * node (always in the scene) and the body group when its chunk is in (the boot ring's are).
+   * World matrices are brought up to date here because signage builds before the first frame.
+   */
+  _siteMeshes(id) {
+    const places = this._sys('places'), out = [];
+    const rec = places && places.nodes && places.nodes.get(id);
+    if (rec && rec.node) { rec.node.updateWorldMatrix(true, true); out.push(rec.node); }
+    if (places && places.bodies) for (const list of places.bodies.values()) for (const b of list) {
+      if (b && b.kind === 'major' && b.id === id && b.group) { b.group.updateWorldMatrix(true, true); out.push(b.group); }
+    }
+    return out;
   }
   /** Walk a polyline dropping a callback every `every` metres from `phase` on. */
   _walk(poly, every, phase, fn) {
@@ -761,7 +814,7 @@ export class Signage {
         const bw = 4.8, bh = 2.4, ax = nz, az = -nx;                                        // the board's own axis
         const need = W * 0.5 + VERGE_EXTRA + bw * 0.5 * Math.abs(ax * -tz + az * tx) + 0.3;
         const x = px - tz * side * need, z = pz + tx * side * need, gy = this._ground(x, z), top = 5.2, y = gy + top - bh * 0.5, yaw = Math.atan2(nx, nz);
-        const r = this._sign({ style: 'billboard', lines: ['DAY AND NIGHT', 'SHALL NOT CEASE', '— GEN 8:22', 'LIAR'], x: x + nx * 0.05, y, z: z + nz * 0.05, w: bw, h: bh, yaw, backing: false });
+        const r = this._sign({ style: 'billboard', lines: ['DAY AND NIGHT', 'SHALL NOT CEASE', '— GEN 8:22', 'LIAR'], x: x + nx * 0.05, y, z: z + nz * 0.05, w: bw, h: bh, yaw, backing: false, site: 'cathedral' });
         r.mount = (k, col) => {
           // posts BEHIND the board (MEASURED: centred on it they stood proud of the face and cut the D and the T)
           for (const sgn of [-1, 1]) k.box(0.22, top, 0.22, x + ax * (bw * 0.5 - 0.5) * sgn - nx * 0.16, gy + top * 0.5, z + az * (bw * 0.5 - 0.5) * sgn - nz * 0.16, K_WOOD, yaw);
@@ -809,7 +862,7 @@ export class Signage {
       const gy = this._ground(x, z), w = 2.4, h = 1.2, top = 2.6, y = gy + top - h * 0.5;
       const nx = Math.sin(yaw), nz = Math.cos(yaw), ax = nz, az = -nx;
       const r = this._sign({ style: 'marquee', lines: ['DO YOU', 'REMEMBER', 'MORNING'], missing: [[1, 5], [2, 0]],
-        x: x + nx * 0.10, y, z: z + nz * 0.10, w, h, yaw, backing: false });
+        x: x + nx * 0.10, y, z: z + nz * 0.10, w, h, yaw, backing: false, site: 'chapel' });
       r.mount = (k, col) => {
         for (const s of [-1, 1]) k.box(0.10, top, 0.10, x + ax * (w * 0.5 - 0.3) * s, gy + top * 0.5, z + az * (w * 0.5 - 0.3) * s, K_METAL, yaw);
         k.box(w + 0.16, h + 0.16, 0.18, x, y, z, K_DARK, yaw);
@@ -829,14 +882,16 @@ export class Signage {
       // the field is the door's own albedo (manor.js PALETTE.dark), so only the letters read as added
       this._onMajor(avery, 'graffiti', ['WHO TURNED IT OFF'], 21.5, 4.82, 16.63, 9.6, 2.6, 0, { backing: false, field: '#1b1c1e', spray: '#4a3c30' });
       // and the plainer kitchen calendar, same page, on the kitchen's z=30 wall, facing into the room
-      this._onMajor(avery, 'calendar', ['NOVEMBER'], 25, 4.8, 6.15, 0.66, 0.99, 0, { backD: 0.02, backCol: K_PAPER });
+      // MEASURED (tests/sign-clearance.mjs): x 25 is the kitchen doorway in that wall and 26..27.5
+      // is the fridge; the wall's face is at z 6.13, so the paper hangs at 28.5 with its 0.02 board
+      this._onMajor(avery, 'calendar', ['NOVEMBER'], 28.5, 4.8, 6.167, 0.66, 0.99, 0, { backD: 0.02, backCol: K_PAPER });
     }
     // THE CURFEW. Alex: "ALL PERSONS INDOORS BY DUSK. VIOLATORS DETAINED UNTIL MORNING."
     const CURFEW = ['ALL PERSONS INDOORS BY DUSK', 'VIOLATORS DETAINED UNTIL MORNING'];
     const hf = this._frame('holdfast');
     if (hf) for (const sx of [-1, 1]) {
       const lx = sx * 7.6, lz = 67.36;
-      this._sign({ style: 'curfew', lines: CURFEW, x: hf.wx(lx, lz), y: G(hf, lx, 66) + 2.3, z: hf.wz(lx, lz), w: 0.9, h: 1.2, yaw: hf.yaw, backing: true, backCol: K_DARK, backD: 0.04 });
+      this._sign({ style: 'curfew', lines: CURFEW, x: hf.wx(lx, lz), y: G(hf, lx, 66) + 2.3, z: hf.wz(lx, lz), w: 0.9, h: 1.2, yaw: hf.yaw, backing: true, backCol: K_DARK, backD: 0.04, site: 'holdfast' });
       this.counts.fixed++;
     }
     if (hf) this.fixed.push({ id: 'holdfast:curfew', x: +hf.wx(7.6, 67.36).toFixed(1), z: +hf.wz(7.6, 67.36).toFixed(1), yaw: hf.yaw });
@@ -845,9 +900,11 @@ export class Signage {
       // the checkpoint lays itself in road space (sites.js checkpoint): u along, v across
       const info = roads.nearestRoadInfo(toll.x, toll.z, 60);
       const tx = info && info.hit ? info.tx : 0, tz = info && info.hit ? info.tz : 1, nx = -tz, nz = tx, GAP = 2.4;
-      const u = -3.4, v = GAP + 1.71;
+      // MEASURED (tests/sign-clearance.mjs): the booth's road-side wall is at v 3.90; the face
+      // hangs 0.012 in front of its 0.04 board, which sits on the wall. 4.11 was inside it.
+      const u = -3.4, v = 3.90 - 0.057;
       const x = toll.x + tx * u + nx * v, z = toll.z + tz * u + nz * v;
-      this._sign({ style: 'curfew', lines: CURFEW, x, y: toll.padY + 0.75, z, w: 0.9, h: 0.6, yaw: Math.atan2(-nx, -nz), backing: true, backCol: K_DARK, backD: 0.04 });
+      this._sign({ style: 'curfew', lines: CURFEW, x, y: toll.padY + 0.75, z, w: 0.9, h: 0.6, yaw: Math.atan2(-nx, -nz), backing: true, backCol: K_DARK, backD: 0.04, site: 'the-toll' });
       this.fixed.push({ id: 'the-toll:curfew', x: +x.toFixed(1), z: +z.toFixed(1), yaw: Math.atan2(-nx, -nz) }); this.counts.fixed++;
     }
     // THE FILLING STATION: OPEN 24 HRS on the pylon, the price board under it, the marker on
@@ -867,7 +924,7 @@ export class Signage {
           const side = ((wx - px) * -tz + (wz - pz) * tx) > 0 ? 1 : -1;
           const vv = this._verge(px, pz, tx, tz, side, W, VERGE_EXTRA + 0.3), x = vv.x, z = vv.z, gy = this._ground(x, z);
           const yaw = Math.atan2(px - x, pz - z), nx = Math.sin(yaw), nz = Math.cos(yaw), w = 1.2, h = 1.0, top = 2.5, y = gy + top - h * 0.5;
-          const r = this._sign({ style: 'marker', lines: ['SITE OF THE LAST SUNRISE', 'ERECTED NOVEMBER 1'], x: x + nx * 0.05, y, z: z + nz * 0.05, w, h, yaw, backing: false });
+          const r = this._sign({ style: 'marker', lines: ['SITE OF THE LAST SUNRISE', 'ERECTED NOVEMBER 1'], x: x + nx * 0.05, y, z: z + nz * 0.05, w, h, yaw, backing: false, site: 'filling-station' });
           r.mount = (k,col) => {
             mountSignBoard(k,{...r,groundY:(px,pz)=>this._ground(px,pz),postWidth:.12,boardColor:K_BROWN,postColor:K_METAL,tag:'metal'},col);
             k.cone(.16,.22,4,x-nx*.04,gy+top+.1,z-nz*.04,K_BROWN,yaw);
@@ -930,8 +987,23 @@ export class Signage {
     const clusters = new Map();
     const clusterOf = (x, z) => { const k = Math.floor((x + 2048) / 1024) + ',' + Math.floor((z + 2048) / 1024); let cl = clusters.get(k); if (!cl) { cl = { key: k, faces: [], kit: new Kit(), n: 0 }; clusters.set(k, cl); } return cl; };
     const col = (shape) => { if (collision && collision.addCollider) collision.addCollider(shape, 'signage'); };
+    const canRay = !!(collision && typeof collision.raycast === 'function');
     for (const r of this._signs) {
       if (!r.cell || !r.cell.rect) continue;
+      // THE RUNTIME DROP. A stake whose face has something solid in front of it (a resident
+      // chunk's wall, a fence, a wreck) is not a sign anybody can read: cast from STAKE_PROBE
+      // in front of the face back to it and drop the sign before its cluster merges, so the
+      // counts stay honest. Only what is resident at boot is seen; the node test sees all.
+      if (canRay && r.mount && STAKED.has(r.style)) {
+        const nx = Math.sin(r.yaw), nz = Math.cos(r.yaw);
+        _p0.x = r.x + nx * STAKE_PROBE; _p0.y = r.y; _p0.z = r.z + nz * STAKE_PROBE;
+        _pd.x = -nx; _pd.y = 0; _pd.z = -nz;
+        const hit = collision.raycast(_p0, _pd, STAKE_PROBE - 0.02, MASK.SOLID);
+        if (hit && hit.hit !== false && hit.t < STAKE_PROBE - 0.02) {
+          r.dropped = true; this.counts.dropped = (this.counts.dropped || 0) + 1;
+          continue;
+        }
+      }
       const cl = clusterOf(r.x, r.z);
       const g = new THREE.PlaneGeometry(r.w, r.h), R = r.cell.rect, uv = g.attributes.uv;
       const u0 = R.x / ATLAS_W, u1 = (R.x + R.w) / ATLAS_W, vTop = 1 - R.y / ATLAS_H, vBot = 1 - (R.y + R.h) / ATLAS_H;
@@ -1010,6 +1082,7 @@ export class Signage {
       built: this._built, signs: this._signs.length, faces: this.counts.faces, clusters: this.counts.clusters,
       posters: this.counts.posters.slice(), plywood: this.counts.plywood, mile: this.counts.mile, fixed: this.counts.fixed,
       overlays: this.counts.overlays, banners: this.counts.banners, posts: this._posts.length,
+      dropped: this.counts.dropped || 0, reseated: this.counts.reseated || 0,
       atlas: this.atlas || null, price: { stage: this._priceStage, cycle: this._priceCycle },
       late: this._late, notes: this.notes.slice(0, 8), fixedList: this.fixed.slice(),
     };

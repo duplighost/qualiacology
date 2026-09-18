@@ -68,6 +68,15 @@ const TAIL_SHORT = 0.34;          // the world got smaller
 const MAX_SILENCE_S = 45;         // the law
 const SILENCE_ANSWER_S = 40;      // answer before the law is broken, not after
 const HUSH_R = 20;                // the Hush sphere's outer radius [DESIGN 5]
+// C12: 'director:arriving' asks for the cricket cut; if the CUT_GAP refuses it, it may still
+// land at the next opening for this long — after that the body has risen and the tell is a lie.
+const ARRIVE_CUT_HOLD_S = 6;
+const KILL_GRACE_S = 20;          // one stem back this long after the last kill, with nothing alive (rule 4)
+const HOUR_TELEGRAPH = 0.5;       // clock.telegraph past this: the black hour is announced by subtraction
+const ICE_FEET_M = 0.35;          // feet within this of terrain.iceLevelAt: you are standing on the sheet (C9)
+const CREAK_GAP_S = [9, 22];      // a thin-ice creak every 9-22 s while moving on ice; never sooner than 9
+const CREAK_GAIN = 0.20;          // quiet: the sheet is informative, not loud
+const CREAK_MOVE_MPS = 0.4;       // slower than this is standing; the sheet has nothing new to say
 // ROUND 21: the rain stem's level at a full downpour. Set against the wind's 0.11 base and
 // deliberately near it: rain you can hear over everything else is rain you stop hearing.
 const WX_RAIN = 0.15;
@@ -142,6 +151,13 @@ export class Bed {
     // much weaker idea. audio.dread('mimic', ...) reads this.
     this._lastStep = 'step_duff0';
     this._lastStepRate = 1;
+    // C12 / the fight / the hour / the ice
+    this._arriveCutUntil = -1e9;     // a 'something is coming' cut the gap refused, still owed
+    this._lastKillT = -1e9; this._killRestoreArmed = false; this._killCheckT = 0;
+    this._hourStage = 0;             // 0 not yet, 1 insects gone, 2 canopy gone (once a night)
+    this._telegraph = 0;
+    this._onIce = false; this._creakT = -1; this._moveSpeed = 0; this._lastPx = 0; this._lastPz = 0;
+    this.rngIce = ctx.rng.fork('ambient:ice');
   }
 
   // The bed is band-limited: the highest content anywhere in it is the insect
@@ -541,7 +557,7 @@ export class Bed {
 
   _sys(id) { return this.ctx.systems ? this.ctx.systems.get(id) : null; }
 
-  _readWorld() {
+  _readWorld(dt) {
     const p = this._sys('player');
     const roads = this._sys('roads');
     const terrain = this._sys('terrain');
@@ -551,15 +567,21 @@ export class Bed {
     this.tension = sh && typeof sh.tension === 'number' ? sh.tension : 0;
     if (clock && clock.phase !== undefined) { this._phase = clock.phase; this._phaseT = clock.phaseT || 0; }
     else if (sh && sh.phase !== undefined) { this._phase = sh.phase; this._phaseT = sh.phaseT || 0; }
+    this._telegraph = clock && typeof clock.telegraph === 'number' ? clock.telegraph : 0;
 
     if (p && p.pos) {
+      // speed from the position delta: no second clock, and no dependence on what the
+      // controller happens to publish
+      this._moveSpeed = dt > 0 ? Math.hypot(p.pos.x - this._lastPx, p.pos.z - this._lastPz) / dt : 0;
+      this._lastPx = p.pos.x; this._lastPz = p.pos.z;
       this._px = p.pos.x; this._py = p.pos.y; this._pz = p.pos.z;
       if (roads && roads.roadDistance) this._offRoad = roads.roadDistance(p.pos.x, p.pos.z);
       if (terrain && terrain.regionAt) {
         const rg = terrain.regionAt(p.pos.x, p.pos.z);
         if (rg && rg.key) this._region = rg.key;
       }
-    } else { this._px = 0; this._py = 1.7; this._pz = 0; }
+      this._onIce = this._iceUnder(terrain, p.pos.x, p.pos.y, p.pos.z);
+    } else { this._px = 0; this._py = 1.7; this._pz = 0; this._onIce = false; this._moveSpeed = 0; }
 
     // The Hush: a sphere where the bed drops to zero and the reverb dies. It is
     // AUTHORED silence, so the watchdog holds its breath inside one.
@@ -573,13 +595,90 @@ export class Bed {
     if (this.radio) this.radio.update(dt);
     const A = this.A;
     if (!A.enabled || !A.actx || !this._started) return;
-    this._readWorld();
+    this._readWorld(dt);
     const T = A.actx.currentTime;
 
     this._applyCutRules();
+    this._stepHour();
+    this._stepKillGrace(dt);
     this._mixLoops(dt, T);
-    if (!A.silent) this._scheduleEvents(dt);
+    if (!A.silent) { this._scheduleEvents(dt); this._stepCreak(dt); }
     this._watchdog(dt);
+  }
+
+  /**
+   * C9. Standing on the ice: the WATER lane's terrain.iceLevelAt(x, z) is the sheet's level
+   * or -Infinity where there is none. Feet within ICE_FEET_M of it are on it. Checked BEFORE
+   * the road test everywhere, because the drowned loop road runs under the reservoir sheet.
+   */
+  _iceUnder(terrain, x, y, z) {
+    if (!terrain || typeof terrain.iceLevelAt !== 'function') return false;
+    const iy = terrain.iceLevelAt(x, z);
+    return iy > -Infinity && Math.abs(y - iy) < ICE_FEET_M;
+  }
+
+  /**
+   * THE BLACK HOUR IS ANNOUNCED BY SUBTRACTION. The sky telegraphs it for 90 s (clock.js);
+   * past half way the insects go, then the canopy — once a night, the gap spacing them — and
+   * exactly one stem comes back at the false dawn (onPhase). The hour had a sky and no sound.
+   */
+  _stepHour() {
+    if (this._telegraph <= HOUR_TELEGRAPH || this._hourStage >= 2) return;
+    const S = this.stem;
+    if (this._hourStage === 0 && (!S.insects.alive || this.cut('insects', 'the hour'))) this._hourStage = 1;
+    if (this._hourStage === 1 && (!S.canopy.alive || this.cut('canopy', 'the hour'))) this._hourStage = 2;
+  }
+
+  /**
+   * RULE 4, after a fight: KILL_GRACE_S after the last kill, with nothing left alive, ONE
+   * stem comes back. Asked once a second (the count walks every body), and only when
+   * something is actually gone — everything alive is not a return, and a gust after every
+   * fight would be noticed.
+   */
+  _stepKillGrace(dt) {
+    if (!this._killRestoreArmed) return;
+    this._killCheckT -= dt;
+    if (this._killCheckT > 0) return;
+    this._killCheckT = 1;
+    const en = this._sys('enemies');
+    const alive = en && typeof en.aliveCount === 'number' ? en.aliveCount : 0;
+    if (alive > 0) return;
+    this._killRestoreArmed = false;
+    if (this._anyGone()) this.restore('the fight is over');
+  }
+
+  _anyGone() {
+    for (let i = 0; i < GRACE_ORDER.length; i++) {
+      const k = GRACE_ORDER[i];
+      if (k === 'traffic' && this._trafficByDistance) continue;   // geometry, not dread; it comes back on its own
+      if (!this.stem[k].alive) return true;
+    }
+    return false;
+  }
+
+  /**
+   * THE THIN-ICE CREAK. While you move on the ice, one creak every CREAK_GAP_S from a
+   * bearing a few metres off your feet, never sooner than 9 s after the last, never inside
+   * the Hush and never on top of a hazard voice (a strike tell, damage) — a creak under a
+   * threat cue is noise; a creak alone is the sheet telling you what it thinks of you.
+   */
+  _stepCreak(dt) {
+    if (!this._onIce || this._inCar) { this._creakT = -1; return; }     // -1: a fresh timer on the next step onto ice
+    const A = this.A;
+    if (this._creakT < 0) { this._creakT = CREAK_GAP_S[0] + this.rngIce.next() * (CREAK_GAP_S[1] - CREAK_GAP_S[0]); return; }
+    if (this._moveSpeed < CREAK_MOVE_MPS) return;
+    this._creakT -= dt;
+    if (this._creakT > 0) return;
+    if (this._inHush || !A.baked || (A.threatVoiceUp && A.threatVoiceUp())) { this._creakT = 1; return; }   // ask again in a second
+    this._creakT = CREAK_GAP_S[0] + this.rngIce.next() * (CREAK_GAP_S[1] - CREAK_GAP_S[0]);
+    const az = this.rngIce.next() * Math.PI * 2, d = 1.5 + this.rngIce.next() * 2.5;
+    const s = A.spec();
+    s.x = this._px + Math.cos(az) * d; s.y = this._py + 0.05; s.z = this._pz + Math.sin(az) * d;
+    s.bus = 'world'; s.gain = CREAK_GAIN; s.rate = 0.92 + this.rngIce.next() * 0.16;
+    s.send = 0.18 * this._tail; s.occl = false; s.priority = 3; s.cls = CUE_WORLD;
+    s._name = 'ice_creak';
+    A.play('ice_creak' + ((this.rngIce.next() * 3) | 0), s);
+    this._quiet = 0;
   }
 
   /**
@@ -630,6 +729,11 @@ export class Bed {
 
     // 7. THE PACING LAW: the crickets never reach zero without a pressure event.
     //    If they stop, something is coming. Every time.
+    //    C12 first: the director IS the pressure event, and if the gap refused the cut
+    //    when it asked, it still lands here at the next opening, for a few seconds.
+    if (S.crickets.alive && this.ctx.time.t < this._arriveCutUntil && !this._inCar) {
+      if (this.cut('crickets', 'something is coming')) { this._arriveCutUntil = -1e9; this._pressure = false; }
+    }
     if (S.crickets.alive && t >= CRICKET_TENSION && this._pressure) {
       if (this.cut('crickets', 'pressure')) this._pressure = false;
     }
@@ -848,6 +952,9 @@ export class Bed {
   }
 
   _surface() {
+    // ICE FIRST (C9): the drowned loop runs under the reservoir sheet, so a road test before
+    // the ice test would say asphalt while your boots are on the ice.
+    if (this._iceUnder(this._sys('terrain'), this._px, this._py, this._pz)) return 'ice';
     const roads = this._sys('roads');
     if (roads && roads.onRoad && roads.onRoad(this._px, this._pz)) return 'asphalt';
     if (this._region === 'marsh') return 'water';
@@ -943,6 +1050,9 @@ export class Bed {
       // the drop is a LEVEL, not a cut, and it comes back with the phase.
       this._hushUntil = this.ctx.time.t + 6;
       this._oneShot('gust0', 0.5, 30, 8);
+      // the hour took the insects and the canopy; the false dawn gives exactly one back
+      if (this._hourStage > 0) this.restore('the false dawn');
+      this._hourStage = 0;
     }
     if (phase === 'black' && prev !== 'black') this._oneShot('gust1', 0.55, 26, 10);
   }
@@ -976,6 +1086,29 @@ export class Bed {
 
   /** A dread beat sounded somewhere. The county is not silent; hold the watchdog. */
   onDreadBeat() { this._quiet = 0; }
+
+  /**
+   * C12. 'director:arriving' {x, z, inS}: a body is about to rise inside 40 m. Alex's law,
+   * made literal: "if the crickets stop, something is coming, every single time". The cut
+   * honours CUT_GAP_S — refused now, it lands at the next opening (_applyCutRules) for
+   * ARRIVE_CUT_HOLD_S — and the pressure law is armed in the same breath. Not in the car:
+   * the cab is a lid and the crickets are already under it.
+   */
+  onArriving(p) {
+    void p;
+    this.armPressure();
+    if (this._inCar) return;
+    if (this.stem.crickets.alive && !this.cut('crickets', 'something is coming')) {
+      this._arriveCutUntil = this.ctx.time.t + ARRIVE_CUT_HOLD_S;
+    }
+  }
+
+  /** 'enemy:killed': the grace clock restarts from the LAST kill (rule 4, _stepKillGrace). */
+  onKill() {
+    this._lastKillT = this.ctx.time.t;
+    this._killRestoreArmed = true;
+    this._killCheckT = KILL_GRACE_S;
+  }
 
   /** Called by audio.js when the director declares authored silence. */
   authorSilence(seconds) { this._hushUntil = this.ctx.time.t + (seconds || 7); }
@@ -1026,6 +1159,9 @@ export class Bed {
       region: this._region,
       inCar: this._inCar,
       inHush: this._inHush,
+      onIce: this._onIce,
+      hourStage: this._hourStage,
+      telegraph: +this._telegraph.toFixed(2),
     };
   }
 }

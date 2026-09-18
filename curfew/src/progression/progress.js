@@ -76,8 +76,9 @@ const _loadedPayload = Object.freeze({});
 // THE ELEVEN REWIRE, version 1 under a NEW KEY. The schema moved too far for a merge to be
 // honest — parts replace bought upgrades, cases replace boss finishes, gas replaces repair —
 // and Alex authorised the clean break: "clear the save and skip migration entirely". A page
-// still holding the old `curfew.progress` key boots as a fresh game; that key is never read
-// again. Every load-time migration this file used to carry went out with it.
+// still holding the old `curfew.progress` key boots as a fresh game. Every load-time migration
+// this file used to carry went out with it. The ONE exception is _readForwardOldSave(): the
+// old blob is READ once for the guns and coins the break took with it, and never written.
 const SAVE_VERSION = 1;
 
 // WHERE HE HAS BEEN. Alex, fifth playtest: "a large map in the menu that shows where you've
@@ -151,6 +152,11 @@ const BANK_LIT = 0.60;          // ctx.shared.lit at or above this IS a lit thre
 const BANK_LIT_HOLD_S = 0.45;   // ...held this long, so walking past a lamp is not a bank
 const BANK_COOL_S = 6.0;        // one lit place is one bank, not sixty
 const BANK_CYCLE_BONUS = 1.25;  // a whole cycle out before banking (DESIGN section 6)
+// D11: the bank BELL, not the bank. Road XP banks a few points every 6 s on lit road and the
+// bell was ringing with it ("does it also bank every time the bell rings?"). It rings when
+// this long has passed since the last ring, or the pile is worth hearing, or on claim/rest.
+const BANK_BELL_EVERY_S = 45;
+const BANK_BELL_XP = 40;        // one good fight; a road trickle is under this
 
 const CORPSE_RADIUS_M = 3.0;    // walk back INTO it
 const CORPSE_ARM_M = 8.0;       // ...but only after you have LEFT it (see _onDeath)
@@ -298,6 +304,18 @@ export class Progress {
       startPointCredit: 1,
       nodes: [],        // owned node ids (bought AND auto-granted)
       auto: [],         // the subset that was auto-granted, so it never costs a point
+      // MAX HEALTH EARNED OUTSIDE THE TREE (a hamlet host's bedroom, +10 a hamlet). The BLOOD
+      // nodes write hpMax as WHOLE values in tier order (120, then 150), so a bonus written by
+      // an installer would be overwritten by the next tier; this is added AFTER the tier loop
+      // in _recompute() and moves only through grantHpMax(). Additive, permanent, never lost.
+      hpBonus: 0,
+      // THE ARSENAL. Owned guns in the order they were bought and each gun's magazine and
+      // reserve, exactly as weapons.serialize() hands them over at flush time. `rec` is a
+      // free-form bag (save.js: a `{}` default) keyed by weapon id so a gun the defs do not
+      // know yet still round-trips. Before this, ownership hid in 'dealer:weapon:<id>' flags
+      // and every reload reset every gun to a full magazine and its base reserve — bought
+      // ammunition evaporated on F5. The flags stay written for older saves and tests.
+      arsenal: { owned: [], rec: {} },
       // ROUND 18. The five car upgrades, bought with COINS at a lookout mechanic rather
       // than with points on the card (vehicle/garage.js). A separate list from `nodes`
       // because they are a separate currency and a separate counter, and because a save
@@ -313,9 +331,8 @@ export class Progress {
       cases: [],
       // Ari's schemes. Appearance only, bought once, free to swap for ever after.
       paint: { owned: ['moss'], current: 'moss' },
-      // A FREE-FORM BAG (save.js: a `{}` default declares one). companions[id] =
-      // { met, joined, trust, talks, home }.
-      companions: {},
+      // The `companions` bag left with the follower system (D16): the hamlets defend
+      // themselves now. save.js drops an undeclared key on load, so old saves shed it quietly.
       // Dialogue line ids marked `once` that have already been spoken.
       dialogueOnce: [],
       found: [],        // place ids discovered
@@ -401,6 +418,11 @@ export class Progress {
     this.litT = 0;
     this.litLevel = 0;      // last ctx.shared.lit seen, for state() — NOT this.lit (motes)
     this.bankCool = 0;
+    // D11: the bank BELL is rate-limited, the bank is not. Road XP refills the carried pile
+    // every 100 m of lit road, so driving a relit stretch banked (and rang) every 6 s.
+    // `_clock` is this system's own accumulated play time; `_bankBellAt` the last ring.
+    this._clock = 0;
+    this._bankBellAt = -1e9;   // far enough back that the first bank always rings
 
     // --- death ------------------------------------------------------------------
     // No latch and no emit. player:died and player:respawn are OWNED BY
@@ -447,6 +469,13 @@ export class Progress {
     if (!d.paint.owned.includes(d.paint.current)) d.paint.current = d.paint.owned[0];
     d.rumours = d.rumours.filter(r => r && typeof r.id === 'string' && Number.isFinite(r.x) && Number.isFinite(r.z));
     if (d.equippedFinish !== 'original' && !d.finishes.includes(d.equippedFinish)) d.equippedFinish = 'original';
+    d.hpBonus = Math.max(0, Math.floor(d.hpBonus) || 0);
+    // The arsenal, tolerant like everything above: rubbish loads as "nothing saved" and the
+    // weapons lane falls back to the dealer flags and claimed rewards.
+    if (!d.arsenal || typeof d.arsenal !== 'object') d.arsenal = { owned: [], rec: {} };
+    d.arsenal.owned = Array.isArray(d.arsenal.owned) ? d.arsenal.owned.filter(id => typeof id === 'string') : [];
+    if (!d.arsenal.rec || typeof d.arsenal.rec !== 'object' || Array.isArray(d.arsenal.rec)) d.arsenal.rec = {};
+    this._readForwardOldSave(d);
 
     for (const id of d.nodes) if (NODE_BY_ID[id]) this._owned.add(id);
     for (const id of d.auto) if (NODE_BY_ID[id]) this._auto.add(id);
@@ -488,6 +517,7 @@ export class Progress {
         pick: (i) => this.pick(i),
         bank: () => this.bank('debug'),
         grant: (n) => this.award(n, 0, 0, 0, 'debug'),
+        grantHpMax: (n) => this.grantHpMax(n, 'debug'),
         stats: () => this.stats,
         // The gate's surface. `report().deadHooks` and `report().unreadStats` are the two
         // lists that must be empty after a session that has exercised the tree.
@@ -498,6 +528,41 @@ export class Progress {
         visited: () => this.visitedGrid(),
         wipe: () => { this.save.reset(); },
       };
+    }
+  }
+
+  /**
+   * THE ONE READ-FORWARD, and it is a read. The save key moved from 'curfew.progress' to
+   * 'curfew.eleven' on 2026-09-14 with no migration, and Alex's bought shotgun and revolver
+   * went with it: the purchases sat as 'dealer:weapon:<id>' flags in a blob nobody opened
+   * again. Alex's rule is that nothing is ever taken away, so ONCE, on a new blob that has
+   * never flagged a gun, the old blob's gun flags and its cash come forward. The old key is
+   * never written; a 'rescued:curfew.progress' flag on the new blob stops it running twice
+   * (or the cash would come forward on every boot). Tolerant end to end: a missing key, a
+   * corrupt blob or a throwing storage all mean "nothing to bring", never a broken boot.
+   */
+  _readForwardOldSave(d) {
+    try {
+      const wf = d.worldFlags;
+      if (!wf || wf['rescued:curfew.progress']) return;
+      for (const k in wf) if (k.indexOf('dealer:weapon:') === 0) { wf['rescued:curfew.progress'] = 1; return; }
+      if (typeof localStorage === 'undefined') return;
+      const raw = localStorage.getItem('curfew.progress');
+      if (raw == null) return;
+      const old = JSON.parse(raw);
+      if (!old || typeof old !== 'object' || Array.isArray(old)) return;
+      let guns = 0;
+      const of = old.worldFlags;
+      if (of && typeof of === 'object') {
+        for (const k in of) if (k.indexOf('dealer:weapon:') === 0 && of[k]) { wf[k] = true; guns++; }
+      }
+      const cash = Math.max(0, Math.floor(Number(old.cash)) || 0);
+      if (cash > 0) d.cash = (d.cash | 0) + cash;
+      wf['rescued:curfew.progress'] = 1;
+      this.save.mark();
+      if (guns || cash) console.info('[progress] brought forward from curfew.progress: ' + guns + ' gun(s), ' + cash + ' coins');
+    } catch (e) {
+      void e;
     }
   }
 
@@ -979,10 +1044,26 @@ export class Progress {
     if (this.save.data.rumours.some(r => r.id === id) || this.found.has(id) || this.claimed.has(id) || this.bossCleared(id)) return false;
     const rumour = {id, name: String(name || id), x, z, kind: String(kind)};
     this.save.data.rumours.push(rumour); this.save.mark();
+    // D10: a NEW pin makes one sound, here, where every lead lands — a resident's last line,
+    // Hale's hint, Bo's paid lead, a keeper's Look, a note. The dedup above already returned
+    // for a place you know, so a re-told rumour is silent. Nobody else plays a sound for a lead.
+    this._chimeUI('xp_pin', 1, 0.42);
     this.ctx.bus.emit('map:rumour', rumour);
     return true;
   }
   rumours() { return this.save.data.rumours; }
+  /** D14: a lead that has been followed (the wilds open the cache it pinned) comes off the
+   *  map. Only the rumour row goes; found/claimed are untouched. The same 'map:rumour' event
+   *  carries `forgotten: true` so the HUD drops the pin and readouts prints nothing. */
+  forgetRumour(id) {
+    if (typeof id !== 'string' || !id) return false;
+    const rows = this.save.data.rumours, i = rows.findIndex(r => r.id === id);
+    if (i < 0) return false;
+    const rumour = rows[i];
+    rows.splice(i, 1); this.save.mark();
+    this.ctx.bus.emit('map:rumour', { ...rumour, forgotten: true });
+    return true;
+  }
   waypoint() { const p=this.save.data.waypoint;return p&&Number.isFinite(p.x)&&Number.isFinite(p.z)?p:null; }
   setWaypoint(point) {
     if(!point){this.save.data.waypoint={};this.save.mark();this.save.flush();this.ctx.bus.emit('map:waypoint',{cleared:true});return true;}
@@ -1040,6 +1121,11 @@ export class Progress {
     d.cash -= amount;
     this.save.mark();
     this._publish();
+    // D7: money leaving the purse sounds ONCE, here, for every shop in the county — the
+    // dealer, the four Holdfast counters, the keepers, the gate. Non-positional: it is the
+    // purse, not the counter. The dealer used to borrow the 'found a coin' chime, positional
+    // and only after progress had baked; the Holdfast counters played nothing at all.
+    this._chimeUI('cash_spent', 1, 0.45);
     this.ctx.bus.emit('cash:spent', { amount, total: d.cash, reason: reason || 'toll', _own: true });
     return true;
   }
@@ -1331,7 +1417,15 @@ export class Progress {
 
     const player = this.ctx.systems.get('player');
     const x = player ? player.pos.x : 0, y = player ? player.pos.y + 1.2 : 0, z = player ? player.pos.z : 0;
-    this._chime('xp_bank', x, y, z, 1, 0.7);
+    // D11: the bell is rate-limited, the bank is not. It rings for a claim or a rest (the
+    // arrival beats), for a pile worth hearing, or when it has been quiet long enough; a
+    // trickle of road XP every 6 s banks silently. The flash and 'xp:banked' still answer
+    // every bank, so the HUD pulse and the ledger never miss one.
+    const since = this._clock - this._bankBellAt;
+    if (since >= BANK_BELL_EVERY_S || moved >= BANK_BELL_XP || reason === 'claim' || reason === 'rest') {
+      this._bankBellAt = this._clock;
+      this._chime('xp_bank', x, y, z, 1, 0.55);
+    }
     const fx = this.ctx.systems.get('fx');
     if (fx && fx.flash) fx.flash(x, y, z, CARRY_COLOUR, 11, 0.45);
     // ROUND 13: the bank reaches the bus, so the HUD can answer the bell with a picture. It
@@ -1691,8 +1785,40 @@ export class Progress {
       if (!this._carOwned.has(u.id)) continue;
       try { u.install(this.hooks); } catch (e) { console.error('[progress] upgrade ' + u.id, e); }
     }
+    // D4: max health earned outside the tree, added LAST so 100 / 120 / 150 + bonus composes
+    // the same way whatever order things were earned in. The BLOOD nodes stay whole-value
+    // writes; this is the additive layer above them.
+    raw.hpMax += Math.max(0, this.save.data.hpBonus | 0);
     return this.stats;
   }
+
+  /**
+   * C1. A permanent max-health grant from outside the tree (a hamlet host's bedroom pays +10,
+   * once per hamlet). Mirrors buy(): the bigger body arrives filled, so the grant is felt on
+   * the frame it lands. The receipt is the same 'perk:triggered' shape the signature perks
+   * use, so readouts prints 'MAX HEALTH · +10' with no new listener anywhere.
+   */
+  grantHpMax(n, reason) {
+    const add = Math.max(0, Math.round(Number(n) || 0));
+    if (!add) return false;
+    const d = this.save.data;
+    const previousMax = this._statsRaw.hpMax;
+    d.hpBonus = (d.hpBonus | 0) + add;
+    this._recompute();
+    const extra = this._statsRaw.hpMax - previousMax;
+    if (extra > 0) this.ctx.systems.get('player')?.heal?.(extra);
+    this.save.mark();
+    this.ctx.bus.emit('perk:triggered', {
+      id: 'hpmax', name: 'MAX HEALTH', detail: '+' + add, reason: reason || '',
+      x: this._playerAt(0), y: this._playerAt(1), z: this._playerAt(2),
+    });
+    // The same soft receipt tone the signature perks make; quiet, on the ui bus.
+    this._chimeUI('xp_gain', 1.12, 0.18);
+    return true;
+  }
+
+  /** The additive max-health layer, for tools and the pause card. */
+  hpBonus() { return this.save.data.hpBonus | 0; }
 
   /* --------------------------------------------------- the garage, ROUND 18 -- */
 
@@ -1835,28 +1961,35 @@ export class Progress {
    * manifest #21 and does not exist when progress (#20) inits.
    */
   _chime(name, x, y, z, rate, gain) {
-    const A = this.ctx.systems.get('audio');
-    if (!A || !A.reg || !A.playAt) return;
-    if (!this._chimeReady) {
-      if (!A.actx || !A.baked) return;
-      this._bakeChimes(A);
-      this._chimeReady = true;
-    }
+    const A = this._ensureChimes();
+    if (!A || !A.playAt) return;
     if (!A.has || !A.has(name)) return;
     const s = A.spec ? A.spec() : null;
     if (s) { s.rate = rate; s.gain = gain; s.bus = 'world'; s.priority = 2; }
     A.playAt(name, x, y, z, s);
   }
 
-  /** ROUND 13: a non-positional receipt for something done on the card. Same lazy bake. */
-  _chimeUI(name, rate, gain) {
+  /**
+   * C3: the chimes bake EAGERLY, on the first step where the audio lane has its context and
+   * its own bake done — not on the first coin. Before this, every cue in this file depended
+   * on a prior _chime call having baked the buffers, so a purchase at the dealer before the
+   * first XP receipt was silent and the dealer worked around it with audio.has(). Returns the
+   * audio system once the chimes are registered, else null. Nothing allocates after the bake.
+   */
+  _ensureChimes() {
     const A = this.ctx.systems.get('audio');
-    if (!A || !A.reg || !A.play) return;
-    if (!this._chimeReady) {
-      if (!A.actx || !A.baked) return;
-      this._bakeChimes(A);
-      this._chimeReady = true;
-    }
+    if (!A || !A.reg) return null;
+    if (this._chimeReady) return A;
+    if (!A.actx || !A.baked) return null;
+    this._bakeChimes(A);
+    this._chimeReady = true;
+    return A;
+  }
+
+  /** ROUND 13: a non-positional receipt for something done on the card. Same eager bake. */
+  _chimeUI(name, rate, gain) {
+    const A = this._ensureChimes();
+    if (!A || !A.play) return;
     if (!A.has || !A.has(name)) return;
     const s = A.spec ? A.spec() : null;
     if (s) { s.rate = rate; s.gain = gain; s.bus = 'ui'; s.priority = 1; s.x = null; s.y = null; s.z = null; }
@@ -1883,9 +2016,10 @@ export class Progress {
     if (!A.has('xp_mote')) {
       A.reg('xp_mote', [mk(0.30, CHIME_BASE_HZ, [[1, 0.62], [1.5, 0.26], [3.0, 0.11]], 12, 0.42)], sr);
     }
-    // The bank: ONE bell, low, long. DESIGN's arrival beat rings once.
+    // The bank: ONE bell, low, long. DESIGN's arrival beat rings once. D11: bite 0.5 -> 0.4 so
+    // it sits under the church bells, which were softened in the same round.
     if (!A.has('xp_bank')) {
-      A.reg('xp_bank', [mk(1.60, BANK_BELL_HZ, [[1, 0.55], [2.01, 0.24], [2.98, 0.13], [5.4, 0.05]], 2.4, 0.5)], sr);
+      A.reg('xp_bank', [mk(1.60, BANK_BELL_HZ, [[1, 0.55], [2.01, 0.24], [2.98, 0.13], [5.4, 0.05]], 2.4, 0.4)], sr);
     }
     // A found thing: two close attacks climbing a fifth. Unlike the tiny mote tick and the
     // low bank bell, this is a bright two-syllable receipt that reads through engine noise.
@@ -1959,13 +2093,59 @@ export class Progress {
       }
       A.reg('xp_node', [b], sr);
     }
+    // D7: money spent. The INVERSE of a find — two strikes stepping DOWN a fifth (G5 to C5),
+    // shorter and drier than xp_gain and under its gain, so a spend is the same instrument
+    // answering the other way. One cue for every till in the county.
+    if (!A.has('cash_spent')) {
+      const secs = 0.35;
+      const n = Math.max(1, Math.floor(sr * secs));
+      const b = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const strike = (at, hz, gain) => {
+          const u = t - at;
+          if (u < 0) return 0;
+          const env = Math.exp(-u * 11) * (1 - Math.exp(-u * 1050));
+          return (Math.sin(TAU * hz * u) * 0.60
+            + Math.sin(TAU * hz * 2.01 * u) * 0.18
+            + Math.sin(TAU * hz * 3.0 * u) * 0.07) * env * gain;
+        };
+        b[i] = clamp(strike(0, 783.99, 0.40) + strike(0.10, 523.25, 0.36), -1, 1);
+      }
+      A.reg('cash_spent', [b], sr);
+    }
+    // D10: a pin set on the map. One soft strike on G4 and a quieter answer a fourth up, 0.14 s
+    // later, on the bell's partials at a lower pitch than xp_gain — "something was set down",
+    // not "something was found". Under xp_gain's gain; the 'MAP UPDATED' receipt is the words.
+    if (!A.has('xp_pin')) {
+      const secs = 0.55;
+      const n = Math.max(1, Math.floor(sr * secs));
+      const b = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const strike = (at, hz, gain) => {
+          const u = t - at;
+          if (u < 0) return 0;
+          const env = Math.exp(-u * 6) * (1 - Math.exp(-u * 900));
+          return (Math.sin(TAU * hz * u) * 0.58
+            + Math.sin(TAU * hz * 2.01 * u) * 0.20
+            + Math.sin(TAU * hz * 2.98 * u) * 0.08) * env * gain;
+        };
+        b[i] = clamp(strike(0, 392.0, 0.40) + strike(0.14, 523.25, 0.26), -1, 1);
+      }
+      A.reg('xp_pin', [b], sr);
+    }
   }
 
   /* ------------------------------------------------------------------- loop -- */
 
   step(dt) {
+    this._clock += dt;
     this.sinceCredit += dt;
     if (this.sinceCredit > STREAK_WINDOW_S) this.streak = 0;
+    // C3: bake the chimes the first step audio is ready, so no cue waits for a prior coin.
+    // One Map lookup and two reads a step until then; one boolean after.
+    if (!this._chimeReady) this._ensureChimes();
 
     this._stepMotes(dt);
     this._stepCarry(dt);
@@ -2020,6 +2200,7 @@ export class Progress {
     return {
       xp: d.xp, unbanked: d.unbanked, total: this.total(), carried: d.unbanked,
       cash: d.cash | 0,
+      hpBonus: d.hpBonus | 0, hpMax: this._statsRaw.hpMax,
       level: this.level, levelFrac: +levelFrac(d.xp).toFixed(3),
       nextAt: xpForLevel(this.level + 1),
       points: this.points, spent: this.spent,
@@ -2081,7 +2262,7 @@ export class Progress {
     for (let i = 0; i < STAT_KEYS.length; i++) {
       const k = STAT_KEYS[i];
       const c = STAT_CONTRACT[k] || null;
-      out.push({
+      const row = {
         key: k,
         value: this._statsRaw[k],
         reads: this._statReads.get(k) || 0,
@@ -2089,7 +2270,11 @@ export class Progress {
         site: c ? c.site : null,
         replaces: c ? c.replaces : null,
         fallback: c ? c.fallback : null,
-      });
+      };
+      // D4: hpMax is the one stat with an additive layer above the tree; say how much of the
+      // value is that layer. On the row, not as a row, so it can never read as an unread key.
+      if (k === 'hpMax') row.bonus = this.save.data.hpBonus | 0;
+      out.push(row);
     }
     return out;
   }
@@ -2125,6 +2310,7 @@ export class Progress {
     return {
       owned: this._owned.size, nodes: NODES.length,
       hookInstalls: installed,
+      hpBonus: this.save.data.hpBonus | 0,
       hooks, stats, deadHooks, unreadStats,
       undeclared: this.hooks.unknownNames(),
     };
@@ -2146,6 +2332,13 @@ export class Progress {
     d.minors = Array.from(this.minorsSeen);
     d.visited = this._encodeVisited();
     d.level = this.level;
+    // C2 / D9: the arsenal is the weapons lane's to describe and ours to keep. Read once per
+    // write, here, never per step; a build without weapons.serialize() keeps what it loaded.
+    const w = this.ctx.systems.get('weapons');
+    const ser = w && typeof w.serialize === 'function' ? w.serialize() : null;
+    if (ser && typeof ser === 'object' && Array.isArray(ser.owned)) {
+      d.arsenal = { owned: ser.owned, rec: ser.rec && typeof ser.rec === 'object' ? ser.rec : {} };
+    }
   }
 
   /** Free-form world flags, for any lane that needs one persisted. */

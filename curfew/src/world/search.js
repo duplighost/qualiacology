@@ -151,7 +151,13 @@ export class Search {
     if (!use) this._releaseRequired = false;
     const cand = inCar ? null : this._candidate(p.x, p.y, p.z);
 
-    if (!cand) { this.holdT = 0; this.holdKey = ''; this._usePrev = use; return; }
+    // D13: ONE HOLD PER PRESS. Nothing consumes E, so this timer used to run under
+    // scavenging's chest hold and pay a skeleton beside a wild crate on the same press.
+    // While another system says it owns the hold (ctx.shared.holdOwner, written by
+    // scavenging while its hold runs or has paid and E is still down) this one waits.
+    const busy = !!(sh && sh.holdOwner && sh.holdOwner !== 'search');
+
+    if (!cand) { this.holdT = 0; this.holdKey = ''; this._usePrev = use; this._publishHold(); return; }
 
     const span = cand.kind === 'gate' ? GATE_HOLD_S : SEARCH_HOLD_S;
     const gy = cand.kind === 'gate' ? 1.15 : GLYPH_Y;
@@ -161,7 +167,7 @@ export class Search {
     this._prompt(cand.x, cand.y + gy, cand.z,
       this.holdKey === cand.key ? this.holdT / span : 0, cand);
 
-    if (!use || this._releaseRequired || cand.hostile) { this.holdT = 0; this.holdKey = ''; this._usePrev = false; return; }
+    if (!use || this._releaseRequired || cand.hostile || busy) { this.holdT = 0; this.holdKey = ''; this._usePrev = false; this._publishHold(); return; }
 
     if (this.holdKey !== cand.key) { this.holdKey = cand.key; this.holdT = 0; }
     this.holdT += dt;
@@ -174,6 +180,16 @@ export class Search {
       if (cand.kind === 'gate') this._pay(cand);
       else this._take(cand);
     }
+    this._publishHold();
+  }
+
+  /** The other half of the rule above: say so while our own hold runs (or has paid and E is
+   *  still down), and clear only our own name. */
+  _publishHold() {
+    const sh = this.ctx.shared;
+    if (!sh) return;
+    if (this.holdT > 0 || this._releaseRequired) sh.holdOwner = 'search';
+    else if (sh.holdOwner === 'search') sh.holdOwner = '';
   }
 
   /** The nearest dead person in reach and in front of you. Corpses win ties: they are the

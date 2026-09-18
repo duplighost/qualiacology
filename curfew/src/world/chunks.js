@@ -566,11 +566,12 @@ export class Chunks {
   }
 
   _buildOpts() {
-    // The placement list is produced only when something will read it. flora.js owns
-    // planting in M0 with its own rng fork and its own hash grid, so this stays off and
-    // the builder skips the pass entirely — see the note in chunk-worker.js step 7.
-    const f = this._sys('flora');
-    return (f && typeof f.acceptPlacement === 'function') ? OPTS_PLACE : null;
+    // The placement pass is OFF. flora.js owns planting in M0 with its own rng fork and
+    // its own hash grid, and nothing consumes the worker's list — see the note in
+    // chunk-worker.js step 7. This used to probe flora for an acceptPlacement() nobody
+    // ships (the interfaces gate's "guard that can never be true"). The day a consumer
+    // lands: return OPTS_PLACE here and hand data.place to it in _handPlacement.
+    return null;
   }
 
   /**
@@ -1695,12 +1696,10 @@ export class Chunks {
   }
 
   _handPlacement(rec, data) {
-    if (!data.place || !data.placeCount) return;
-    const f = this._sys('flora');
-    if (f && typeof f.acceptPlacement === 'function') {
-      f.acceptPlacement(rec.id, rec.cx, rec.cz, data.place, data.placeCount);
-    }
-    data.place = null;      // never retained: the arrays are the payload's, not ours
+    // No consumer yet (see _buildOpts): the list is never requested, so all this does is
+    // make sure a payload that carried one is not retained. The arrays are the payload's.
+    void rec;
+    data.place = null;
   }
 
   _releaseMeshes(rec) {

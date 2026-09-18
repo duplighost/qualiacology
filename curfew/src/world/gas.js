@@ -105,6 +105,8 @@ export class Gas {
     // keeps its row with mesh null, so nothing ever re-registers it.
     this.cans = [];
     this._seeded = false;
+    this._siteCount = 0;         // places.gasCans() rows already placed
+    this._wildCount = 0;         // wilds.gasCans() rows already placed (C16)
     // The cap. `targeting` is the one field another system reads (car.js _pollEnter).
     this.targeting = false;
     this.capX = 0; this.capY = 0; this.capZ = 0;
@@ -178,9 +180,12 @@ export class Gas {
     const col = this._sys('collision');
     if (col && typeof col.addCollider === 'function') {
       // Solid, not breakable, not standable: something you walk up to, never a step or a target.
+      // D13: `breakable: false` is the ONLY way a 0.4 x 0.28 x 0.65 box opts out of
+      // collision's size rule (crushableBySize gave it 28 kg), and without it two stock swings,
+      // three rounds or a 4 m/s bumper popped the can like a crate and paid combat's coins.
       rec.collider = col.addCollider({
         kind: 'obb', x, z, halfX: 0.20, halfZ: 0.14, yaw: rec.yaw,
-        y0: y - 0.05, y1: y + 0.60, tag: 'gascan',
+        y0: y - 0.05, y1: y + 0.60, tag: 'gascan', breakable: false,
       }, 'gascan:' + flag);
     }
   }
@@ -190,9 +195,10 @@ export class Gas {
    *
    * A boss ground is its own frame and has no site table, so those four come straight off the
    * catalogue: one on the county side of the arena at radius + 16 m, which is a thing you find
-   * on the way in rather than a thing that starts the encounter. The wrecks are every third
-   * one in the minor table — about three in the county, always beside a road, always where a
-   * car already died, which is the only joke this system makes.
+   * on the way in rather than a thing that starts the encounter. The wrecks are EVERY roadside
+   * wreck in the minor table (D13; it was every third, about three cans in forty square
+   * kilometres), always beside a road, always where a car already died, which is the only
+   * joke this system makes.
    */
   _seedWorld() {
     const terrain = this._sys('terrain');
@@ -211,12 +217,13 @@ export class Gas {
     const places = this._sys('places');
     const minors = places && typeof places.minorList === 'function' ? places.minorList() : null;
     if (!minors) return;
-    let n = 0;
     for (const m of minors) {
       if (m.kind !== 'wreck') continue;
-      if (n++ % 3) continue;
-      const x = m.x + Math.sin(m.yaw + 1.2) * 2.1;
-      const z = m.z + Math.cos(m.yaw + 1.2) * 2.1;
+      // 2.75 m out: the wreck shell's own heading is its builder's rng, not m.yaw, and its
+      // 2.2 x 0.95 collider reaches 2.4 m from the centre at a corner. The can stands clear
+      // of the shell whichever way the car died, so the TAKE ray is never inside the car.
+      const x = m.x + Math.sin(m.yaw + 1.2) * 2.75;
+      const z = m.z + Math.cos(m.yaw + 1.2) * 2.75;
       this._place('gas:wreck:' + m.i, x, terrain.heightAt(x, z), z, m.yaw);
     }
   }
@@ -229,9 +236,17 @@ export class Gas {
   _seedSites() {
     const places = this._sys('places');
     const list = places && typeof places.gasCans === 'function' ? places.gasCans() : null;
-    if (!list || list.length === this._siteCount) return;
-    this._siteCount = list.length;
-    for (const c of list) this._place(c.flag, c.x, c.y, c.z, c.yaw);
+    if (list && list.length !== this._siteCount) {
+      this._siteCount = list.length;
+      for (const c of list) this._place(c.flag, c.x, c.y, c.z, c.yaw);
+    }
+    // C16: the wild wreck-cars register theirs the same way, on the wilds build api.
+    const wilds = this._sys('wilds');
+    const wild = wilds && typeof wilds.gasCans === 'function' ? (wilds.gasCans() ?? []) : null;
+    if (wild && wild.length !== this._wildCount) {
+      this._wildCount = wild.length;
+      for (const c of wild) this._place(c.flag, c.x, c.y, c.z, c.yaw);
+    }
   }
 
   /* --------------------------------------------------------------- step -- */
@@ -439,9 +454,10 @@ export class Gas {
       best = c; bestDot = dot;
     }
     if (!best) return;
+    // D13: the verb in the words. A press (kind 'use'), rank 5: over the door's 3, under the cap's 7.
     this.ctx.bus.emit('prompt', {
       kind: 'use', label: 'E', rank: 5, x: best.x, y: best.y + 0.55, z: best.z, k: 0,
-      detail: 'GAS CAN', subdetail: 'TAKE',
+      detail: 'TAKE GAS CAN', subdetail: '',
     });
     if (!use || this._useRelease) return;
     this._useRelease = true;
@@ -457,8 +473,9 @@ export class Gas {
     this._hide(c);
     this.ctx.bus.emit('pickup', { kind: 'gas', x: c.x, y: c.y, z: c.z });
     this._sys('hud')?.readouts?.receipt?.('GAS CAN · ' + pr.gas() + ' CARRIED', 'pickup');
-    // The pooled latch cue the rest of the county already uses for taking a thing.
-    this._sys('audio')?.dread?.('door', c.x, c.y + 0.4, c.z, 0.28);
+    // C10: its own cue — a metal can handle clacking as it is lifted (audio.js DREAD 'can'),
+    // not the pooled door latch. Gain 0.4: a thing picked up, nothing loud.
+    this._sys('audio')?.dread?.('can', c.x, c.y + 0.4, c.z, 0.4);
   }
 
   /* --------------------------------------------------------------- misc -- */

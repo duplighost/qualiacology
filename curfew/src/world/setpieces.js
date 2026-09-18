@@ -71,6 +71,20 @@ const HAZ_S = (SP.hazards && SP.hazards.periodS) ?? 1.2;
 const XING_S = (SP.crossing && SP.crossing.periodS) ?? 1.0;
 const XMAS_DAY = (SP.xmas && SP.xmas.dayS) ?? 120, XMAS_NIGHT = (SP.xmas && SP.xmas.nightS) ?? 20;
 const DYING_S = (SP.dying && SP.dying.fadeS) ?? 90, DYING_FLOOR = (SP.dying && SP.dying.floor) ?? 0.15;
+// Horror 18: the shutter. The camera ARMS when you are closing inside TC_ARM_MUL x reach in
+// front of the lens — one relay click at the camera (county's 'button' bake) — and flashes
+// TC_ARM_S later, once you are inside reach: a click, a beat, the flash. The flash kicks
+// the frame (fx.addTrauma) and lights post's pulse channel (C18: ctx.shared.pulseKick, read by
+// dread.present as max(telegraph, kick)) for TC_KICK_S, an after-image, not a wash.
+const TC_ARM_MUL = 1.3, TC_ARM_S = 0.30, TC_TRAUMA = 0.08, TC_KICK_S = 0.25;
+// Horror 19: the heads and the sunflowers follow a WALKER'S torch too, inside this many
+// metres (the car's beam keeps each tracker's own trackR), and when the beam has been still
+// for TRACK_STILL_S and every pivot has settled on it (mean error under TRACK_SETTLE_RAD)
+// they answer once per visit: 'withdraw' at the centroid and a hush. The sound is the settle.
+const TORCH_TRACK_R = 40, TRACK_STILL_S = 1.5, TRACK_SETTLE_RAD = 0.05, TRACK_HUSH_S = 2.0;
+// the torch's pose, read from lights every step; one record, never allocated in the loop
+const _torchBeam = { on: 0, x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: -1 };
+const _clickAt = { x: 0, y: 0, z: 0 };
 
 // The far-landmark proxy, copied from places.js (PROXY_R, HZ_GAIN_*, TINT_*) so the turbine
 // farm sits on the same horizon as the county's towers. If places retunes these, retune here.
@@ -176,18 +190,24 @@ class Tracker {
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(this.cx, cy, this.cz), rr + tr + 0.5);
     this.moving = false; this.dirty = 1; this.lit = false;
     this.mesh = null;
+    this.cy = cy;                                   // the pivots' mean height, for the settle's voice
+    this.bx = 0; this.bz = 0; this.settled = false; // horror 19: what they are looking at, and whether they have arrived
     this._writeAll(1);
     projectPlaceSurfaceUVs(geo, 3.2);
   }
 
-  /** Ease every pivot toward the beam (or back to its rest yaw). Fixed step. */
-  step(dt, beam) {
+  /** Ease every pivot toward the beam (or back to its rest yaw). Fixed step. `maxR` caps the
+   *  tracking radius for a weaker beam (a walker's torch: TORCH_TRACK_R). */
+  step(dt, beam, maxR) {
     let on = false, bx = 0, bz = 0;
     if (beam && beam.on > 0) {
       const dx = beam.x - this.cx, dz = beam.z - this.cz;
-      if (dx * dx + dz * dz < this.trackR * this.trackR) { on = true; bx = beam.x; bz = beam.z; }
+      const r = maxR > 0 && maxR < this.trackR ? maxR : this.trackR;
+      if (dx * dx + dz * dz < r * r) { on = true; bx = beam.x; bz = beam.z; }
     }
     this.lit = on;
+    this.bx = bx; this.bz = bz;
+    if (!on) this.settled = false;     // a new visit can settle again
     const maxStep = this.turnRate * dt, ease = Math.min(1, 5 * dt);
     let moved = false;
     const piv = this.piv, curr = this.curr, prev = this.prev, yaw0 = this.yaw0;
@@ -545,6 +565,12 @@ export const SETPIECE_BUILDERS = {
         // the boot lid, up
         const p = car.put(-1.75, 0);
         k.solid.box(0.06, 1.0, 1.5, p.x, car.gy + 1.35, p.z, rust ? RUST_DARK : shade(C.metal, 0.85), yaw, 0, -0.55);
+        // D13 / C16: ONE GAS CAN PER SEGMENT, unloaded from the open boot and set down on the
+        // verge side of the lane, a metre behind the bumper (the shell's collider ends at
+        // 2.2 m; the car behind starts 4.4 m back). places' minor api owns the flag and the
+        // frame; world/gas.js draws it. A test stub's api has no registerGasCan: nothing.
+        const g = car.put(-2.75, 0.6);
+        api.registerGasCan?.(g.x, g.z, car.gy, undefined, yaw + Math.PI * 0.5);
       }
     }
     register(api, { label: 'jam' });
@@ -972,9 +998,13 @@ export class Setpieces {
     this._ready = false;
     this._notes = [];
     this.turbine = null;          // { node, solid, glow, padY, x, z, proxy }
-    this.stats = { adopted: 0, dropped: 0, flashes: 0, crossings: 0 };
+    this.stats = { adopted: 0, dropped: 0, flashes: 0, crossings: 0, clicks: 0, settles: 0 };
     this._player = null;
     this._ev = { x: 0, y: 0, z: 0, kind: '', on: false };
+    // C18: the post pulse kick (1 on a flash, to 0 over TC_KICK_S), prev/curr for present()
+    this._kickPrev = 0; this._kickCurr = 0;
+    // horror 19: how long the tracked beam has been still, and where it was last step
+    this._beamStill = 0; this._beamLX = 0; this._beamLZ = 0;
     if (ctx.bus) {
       ctx.bus.on('chunk:built', () => this._drain());
       ctx.bus.on('chunk:disposed', (p) => { if (p) this._drop(String(p.id)); });
@@ -1239,28 +1269,90 @@ export class Setpieces {
     this._t += dt;
     this._loreStep(dt);
     if (PENDING.length) this._drain();
-    const car = this._sys('car');
-    const beam = car && typeof car.beamPose === 'function' ? car.beamPose() : null;
-    for (let i = 0; i < this._trackers.length; i++) this._trackers[i].step(dt, beam);
+    // C18: the flash's kick decays here (fixed step); present() hands the blend to post.
+    this._kickPrev = this._kickCurr;
+    if (this._kickCurr > 0) this._kickCurr = Math.max(0, this._kickCurr - dt / TC_KICK_S);
 
-    // the trail cams
+    // --- the trackers: the car's beam, or a walker's torch inside TORCH_TRACK_R ---------
+    const car = this._sys('car');
+    const inCar = !!(this.ctx.shared && this.ctx.shared.inCar);
+    let beam = car && typeof car.beamPose === 'function' ? car.beamPose() : null, maxR = 0;
+    if (!inCar) {
+      const lights = this._sys('lights'), torch = lights && lights.torch;
+      _torchBeam.on = 0;
+      if (torch && torch.intensity > 0 && torch.position && torch.target) {
+        const p = torch.position, tt = torch.target.position;
+        const dx = tt.x - p.x, dy = tt.y - p.y, dz = tt.z - p.z, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (len > 1e-4) {
+          _torchBeam.on = 1; _torchBeam.x = p.x; _torchBeam.y = p.y; _torchBeam.z = p.z;
+          _torchBeam.dx = dx / len; _torchBeam.dy = dy / len; _torchBeam.dz = dz / len;
+          beam = _torchBeam; maxR = TORCH_TRACK_R;
+        }
+      }
+    }
+    // how long the beam has stood still (a parked car, a walker who stopped)
+    if (beam && beam.on > 0) {
+      const mx = beam.x - this._beamLX, mz = beam.z - this._beamLZ;
+      this._beamStill = mx * mx + mz * mz < 0.05 * 0.05 ? this._beamStill + dt : 0;
+      this._beamLX = beam.x; this._beamLZ = beam.z;
+    } else this._beamStill = 0;
+    for (let i = 0; i < this._trackers.length; i++) {
+      const tr = this._trackers[i];
+      tr.step(dt, beam, maxR);
+      // horror 19: they have all settled on you, and the county goes quiet
+      if (tr.lit && !tr.settled && this._beamStill >= TRACK_STILL_S
+          && tr.N > 0 && tr.errorTo(tr.bx, tr.bz) < TRACK_SETTLE_RAD) {
+        tr.settled = true;
+        this.stats.settles++;
+        const dread = this._sys('dread');
+        if (dread && typeof dread.answer === 'function') {
+          dread.answer('withdraw', tr.cx, tr.cy, tr.cz, 0.7);
+          if (typeof dread.hush === 'function') dread.hush(TRACK_HUSH_S);
+        }
+      }
+    }
+
+    // --- the trail cams: arm (click), then flash --------------------------------------
     if (this._triggers.length) {
       const player = this._player || (this._player = this._sys('player'));
       const pos = player && player.pos;
       const lights = this._sys('lights');
+      const armR2 = TC_REACH * TC_ARM_MUL * TC_REACH * TC_ARM_MUL;
       for (let i = 0; i < this._triggers.length; i++) {
         const tg = this._triggers[i];
-        if (tg.cool > 0) { tg.cool -= dt; continue; }
+        if (tg.cool > 0) { tg.cool -= dt; tg.armed = false; continue; }
         if (!pos) continue;
         const dx = pos.x - tg.x, dz = pos.z - tg.z;
         const d2 = dx * dx + dz * dz;
-        if (d2 > TC_REACH * TC_REACH || d2 < 1e-4) continue;
+        if (d2 < 1e-4) continue;
         const d = Math.sqrt(d2);
-        if ((dx * tg.fx + dz * tg.fz) / d < TC_DOT) continue;
+        const facing = (dx * tg.fx + dz * tg.fz) / d >= TC_DOT;
+        const closing = tg.lastD !== undefined && d < tg.lastD - 1e-4;
+        tg.lastD = d;
+        if (!tg.armed) {
+          // arm: inside the outer band, in front of the lens, and walking toward it
+          if (d2 > armR2 || !facing || !closing) continue;
+          tg.armed = true; tg.armT = TC_ARM_S;
+          this.stats.clicks++;
+          const A = this._sys('audio');
+          if (A && A.county && typeof A.county.onButton === 'function') {
+            _clickAt.x = tg.x; _clickAt.y = tg.y; _clickAt.z = tg.z;
+            A.county.onButton(_clickAt);
+          }
+          continue;
+        }
+        // armed: walked away or turned away, and it lets go without a flash
+        if (d2 > armR2 * 1.5 || !facing) { tg.armed = false; continue; }
+        tg.armT -= dt;
+        if (tg.armT > 0 || d2 > TC_REACH * TC_REACH) continue;
+        tg.armed = false;
         tg.cool = TC_COOL;
         tg.fired++;
         this.stats.flashes++;
         if (lights && typeof lights.borrow === 'function') lights.borrow('trailcam', tg.x, tg.y, tg.z, 0xffffff, TC_CD, TC_TTL);
+        const fx = this._sys('fx');
+        if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(TC_TRAUMA);
+        this._kickCurr = 1;
         this._emit('setpiece:trailcam', tg.rec);
       }
     }
@@ -1269,6 +1361,11 @@ export class Setpieces {
   /* --------------------------------------------------------------- present -- */
   present(alpha) {
     for (let i = 0; i < this._trackers.length; i++) this._trackers[i].present(alpha);
+    // C18: the flash's after-image on post's pulse channel. dread.present composes it.
+    if (this.ctx.shared) {
+      const a = alpha === undefined || alpha === null ? 1 : alpha;
+      this.ctx.shared.pulseKick = this._kickPrev + (this._kickCurr - this._kickPrev) * a;
+    }
 
     const t = this._t;
     for (let i = 0; i < this._blinkers.length; i++) {

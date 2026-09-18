@@ -34,14 +34,18 @@ export const ACTIONS = Object.freeze([
   'forward', 'back', 'left', 'right',
   'jump', 'sprint', 'crouch', 'tacsprint',
   'fire', 'aim', 'reload', 'melee', 'torch',
-  // The car's verbs. Locate is owned here too: pointer lock makes an otherwise-clickable
-  // corner icon unreachable with a desktop mouse, so KeyL must travel through the same
-  // canonical edge path as every other play verb.
+  // The car's verbs. 'carlocate' has no key of its own any more (D5: H on foot calls the car,
+  // hud.js reads horn out of the car); it stays an action so the HUD icon and the test door
+  // (set({locate:true})) still travel the one canonical edge path.
   // ROUND 14. 'lookback' is HELD while driving to turn and look out of the tailgate;
   // 'radiotune' is a rising edge that moves the dial one station on. Both are car verbs
   // and both travel the same canonical edge path as use/horn/carlocate above.
   'use', 'horn', 'carlocate', 'lookback', 'radiotune',
   'menu', 'perks', 'map',
+  // The arsenal (C7 / D6). 'swap' is Q and a wheel notch down, 'swapprev' a notch up;
+  // slot1-4 pick a gun, slot5/6 exist for the shop menu's rows; 'lower' is X, the stance
+  // toggle (D1). weapons/weapon.js reads them all through held() and derives its own edges.
+  'swap', 'swapprev', 'slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'lower',
 ]);
 
 // e.code, never e.key: e.key is layout- and modifier-dependent and 'W' with shift held
@@ -60,13 +64,13 @@ const KEYMAP = Object.freeze({
   KeyF: 'torch',
   KeyE: 'use',
   KeyH: 'horn',
-  KeyL: 'carlocate',
   KeyB: 'lookback',
   KeyT: 'radiotune',
-  // ROUND 5 (NEXT.md item 3): the arsenal. Q cycles the owned weapons, 1 and 2 pick a slot.
-  // weapons/weapon.js reads these through held() on the same edge path as reload.
+  // The arsenal. Q cycles the owned weapons (the wheel does too, see _onWheel), 1-4 pick a
+  // gun, 5 and 6 are shop rows (D6). X lowers the gun and raises it again (D1).
   KeyQ: 'swap',
-  Digit1: 'slot1', Digit2: 'slot2',
+  Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6',
+  KeyX: 'lower',
   Escape: 'menu',
   Tab: 'perks', KeyM: 'map',
 });
@@ -127,6 +131,8 @@ export class Input {
     this._onBlur = this._onBlur.bind(this);
     this._onContextMenu = (e) => e.preventDefault();
     this._onLockChange = this._onLockChange.bind(this);
+    this._onWheel = this._onWheel.bind(this);
+    this._wheelUsed = false;       // one notch per rendered frame; endFrame() resets it
   }
 
   async init() {
@@ -136,6 +142,8 @@ export class Input {
     window.addEventListener('mouseup', this._onMouseUp);
     window.addEventListener('mousemove', this._onMouseMove);
     window.addEventListener('blur', this._onBlur);
+    // passive:false so the notch can be claimed (preventDefault) while the pointer is locked.
+    window.addEventListener('wheel', this._onWheel, { passive: false });
     document.addEventListener('pointerlockchange', this._onLockChange);
     if (this.canvas) {
       this.canvas.addEventListener('mousedown', this._onMouseDown);
@@ -229,6 +237,26 @@ export class Input {
   _onMouseUp(e) {
     const a = BUTTON_ACTION[e.button];
     if (!a) return;
+    this._up(a);
+  }
+
+  /**
+   * D6: the wheel switches weapons - a notch down is 'swap' (next), a notch up 'swapprev'.
+   * Only while pointer-locked and enabled (the pause map keeps its own zoom listener on the
+   * map element; unlocked, the notch is not ours). One notch per rendered frame, however
+   * fast the wheel spins: a flick is one swap, the same as mashing Q. The press and release
+   * land in the same frame and ride the LATCH (_down/_up above), so the action is held for
+   * exactly one fixed step, which is precisely the edge weapon.js derives from held().
+   */
+  _onWheel(e) {
+    if (!this.enabled || !this._locked()) return;
+    const d = e.deltaY;
+    if (!d) return;
+    e.preventDefault();
+    if (this._wheelUsed) return;
+    this._wheelUsed = true;
+    const a = d > 0 ? 'swap' : 'swapprev';
+    this._down(a);
     this._up(a);
   }
 
@@ -334,11 +362,10 @@ export class Input {
   }
 
   /**
-   * Called every rAF, even when zero steps ran. Nothing to clear here today — edges are
-   * per-step — but the hook exists so a frame-scoped input (wheel notches, gamepad
-   * polling) has an obvious home instead of being bolted onto endStep.
+   * Called every rAF, even when zero steps ran. Edges are per-step; the one frame-scoped
+   * input is the wheel's one-notch-per-frame gate (_onWheel), reset here.
    */
-  endFrame() {}
+  endFrame() { this._wheelUsed = false; }
 
   /* ------------------------------------------------------------------ test door */
 
@@ -394,6 +421,7 @@ export class Input {
     window.removeEventListener('mouseup', this._onMouseUp);
     window.removeEventListener('mousemove', this._onMouseMove);
     window.removeEventListener('blur', this._onBlur);
+    window.removeEventListener('wheel', this._onWheel);
     document.removeEventListener('pointerlockchange', this._onLockChange);
     if (this.canvas) {
       this.canvas.removeEventListener('mousedown', this._onMouseDown);

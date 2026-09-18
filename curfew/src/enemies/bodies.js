@@ -1015,6 +1015,33 @@ function buildHunter(def) {
       { rz: side * -0.72, rx: -0.18, sx: 0.075 * s, sy: 0.45 * s, sz: 0.075 * s });
   }
 
+  // THE TREANT'S CROWN (C15, 2026-09-17). Same GAUNT set, one more welded pass: a tree that
+  // was flora until you were close keeps its crown. Six bark limbs rise from the shoulder
+  // blades and lean outward the way a leader does when the trunk is gone, each with two
+  // dead twigs; five roots trail from the hips to the ankles and stop above the foot plane
+  // (enemies.js measures it once per species). Bark colours from the def, no new program.
+  if (def.id === 'treant') {
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * TAU + 0.4, r0 = 0.12, lean = 0.14 + 0.04 * (i % 2);
+      const limb = tendon([[Math.cos(a) * r0 * 0.6, 1.70, Math.sin(a) * r0 * 0.6 + 0.05],
+        [Math.cos(a) * (r0 + lean), 2.25 + 0.12 * (i % 3), Math.sin(a) * (r0 + lean * 0.85) + 0.04],
+        [Math.cos(a) * (r0 + lean * 2.1) + 0.05 * Math.sin(i * 2.1), 2.78 + 0.22 * (i % 2), Math.sin(a) * (r0 + lean * 1.6)]],
+      0.046, 0.011, 14, 7);
+      w.add(limb, 0, 0, 0, cloth, { sx: s, sy: s, sz: s }); limb.dispose();
+      const tx = Math.cos(a) * (r0 + lean * 1.7), ty = 2.55 + 0.18 * (i % 2), tz = Math.sin(a) * (r0 + lean * 1.3);
+      w.add(P.cone3, tx * s, ty * s, tz * s, bone,
+        { rx: -0.4 + 0.3 * (i % 3), rz: Math.cos(a) * 0.9, sx: 0.05 * s, sy: 0.34 * s, sz: 0.05 * s });
+      w.add(P.cone3, tx * s, (ty + 0.16) * s, tz * s, bone,
+        { rx: 0.5 - 0.3 * (i % 2), rz: -Math.sin(a) * 0.7, sx: 0.04 * s, sy: 0.26 * s, sz: 0.04 * s });
+    }
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * TAU + 1.1;
+      const root = tendon([[Math.cos(a) * 0.10, 1.00, Math.sin(a) * 0.10], [Math.cos(a) * 0.22, 0.55, Math.sin(a) * 0.20],
+        [Math.cos(a) * 0.30, 0.08, Math.sin(a) * 0.26]], 0.035, 0.012, 12, 7);
+      w.add(root, 0, 0, 0, bone, { sx: s, sy: s, sz: s }); root.dispose();
+    }
+  }
+
   // A human cranial structure stretched under the shoulder blades. The face
   // still has a nose and cheek bones, but its jaw has split away and the eye
   // apertures see into an unlit interior.
@@ -1661,8 +1688,13 @@ function buildSpider(def) {
 export function buildBody(key, rng) {
   if(key==='marrow')return buildMarrow(rng);
   const def = SPECIES[key];
-  // A FIXED VARIANT is how an authored person stays the same person: the three companions
+  // A FIXED VARIANT is how an authored person stays the same person: the three fixed faces
   // (species.js greer/roan/sheet) must not roll a new face every time their chunk streams.
+  // THE SPECIES ID IS THE buildHuman STYLE, so C15's 'hamlet-guard' reaches its hunting rifle
+  // here with no case of its own; a hamlet then authors the face per person through
+  // rig.setAppearance(look) (C14), which enemies.spawn calls right after binding the body.
+  // 'treant' is FORM.GAUNT and falls through to geoSetFor -> buildHunter(def) with its bark
+  // colours and the crown above: no new geometry set, no new program.
   if (def.human) return buildHuman(key,
     def.fixedVariant === undefined ? Math.floor(rng.next() * 12) : def.fixedVariant, def.height);
   const set = geoSetFor(key);

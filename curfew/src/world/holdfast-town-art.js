@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { groundY, glowColumn, PANE_LAMP, ON_APRON } from './sites.js';
+import { groundY, glowColumn, bulb, PANE_LAMP, ON_APRON } from './sites.js';
 
 export const P = Object.freeze({
   stone: [0.105, 0.113, 0.128], darkStone: [0.055, 0.060, 0.073], edge: [0.141, 0.152, 0.173],
@@ -111,6 +111,9 @@ export function lantern(k, x, y, z, yaw = 0, large = false) {
   for (const dx of [-r, r]) for (const dz of [-r, r]) k.solid.box(0.035, r * 2.6, 0.035, x + dx, y + r * 0.2, z + dz, P.iron);
   k.live.cyl(r * 0.72, r * 0.72, r * 1.8, 8, x, y + r * 0.1, z, [0.30, 0.24, 0.17]);
   k.live.pane(r * 3.0, r * 3.6, x, y, z + r, PANE_LAMP, yaw, 0, 4, 4);
+  // D18: the flame's core, over the bloom threshold, inside the glass: a lantern is a small
+  // hard bright thing in a soft warm one, and the soft part alone was the smudge.
+  bulb(k.live, x, y + r * 0.1, z, r * 0.26);
 }
 
 export function brazier(k, api, x, z, tall = false) {
@@ -218,6 +221,20 @@ export function bakePaths(k, api) {
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
   geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals();
   k.solid.push(geo,P.stone);geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  // FEET ON THE PAVING. The sheet above is drawn 6.9 cm over the terrain and had no collider,
+  // so the player (terrain.heightAt) walked with his boots inside it. One thin standable obb
+  // per run puts the floor where the stone is. Runs are cut into <= 12 m pieces, each at its
+  // own midpoint's ground, so a slight fall across a piece is a centimetre, not a step; every
+  // town run lies inside the level core of the pads anyway. Tag 'floor' is STRUCTURE (never
+  // crushed) and 7 cm tops are under the car's 0.34 m kerb rule, so the road through the
+  // foretown drives over them; `authored` because collision refuses long boxes otherwise.
+  for(const r of runs){
+    const dx=r.b[0]-r.a[0],dz=r.b[1]-r.a[1],length=Math.hypot(dx,dz),yaw=Math.atan2(dx,dz),n=Math.max(1,Math.ceil(length/12));
+    for(let i=0;i<n;i++){
+      const t0=i/n,t1=(i+1)/n,tm=(t0+t1)/2,x=r.a[0]+dx*tm,z=r.a[1]+dz*tm,top=groundY(api,x,z)+ON_APRON+.032;
+      api.emit({kind:'obb',x,z,halfX:r.width/2,halfZ:length*(t1-t0)/2+.02,yaw,y0:top-.30,y1:top,tag:'floor',standable:true,authored:true});
+    }
+  }
   for(const r of runs){
     const dx=r.b[0]-r.a[0],dz=r.b[1]-r.a[1],length=Math.hypot(dx,dz),yaw=Math.atan2(dx,dz),n=Math.ceil(length/7);
     for(let i=0;i<n;i++)for(const side of[-1,1]){

@@ -4,8 +4,9 @@
 // of analytic terrain that streams, and a grid big enough to cover it is a grid
 // nobody can afford to rebuild. So navigation here is three cheap things:
 //
-//   1. STEER on the analytic ground. terrain.heightAt is the only ground truth
-//      and nothing raycasts the mesh (world's guarantee A.1/A.2).
+//   1. STEER on the analytic ground. terrain.surfaceAt (the bed, or the ice over
+//      it) is the only ground truth and nothing raycasts the mesh (world's
+//      guarantee A.1/A.2).
 //   2. AVOID trunks by asking collision.canOccupy about a few whiskers ahead
 //      and sliding along the first clear one. The trunk colliders are already
 //      exactly trunk-sized — that was M0's last blocker — so this is enough.
@@ -70,11 +71,19 @@ const _out = { x: 0, z: 0, blocked: false };
 
 /* ------------------------------------------------------------------ ground -- */
 
-/** The ONE ground truth. Returns 0 if terrain is not up yet — never throws. */
+/**
+ * The ONE ground truth for a MOVER. Returns 0 if terrain is not up yet — never throws.
+ *
+ * C9 / D15 (2026-09-17): terrain.heightAt is the BED; terrain.surfaceAt(x, z) is
+ * max(bed, ice) — the frozen reservoir inlet and the four road pools. Bodies stand on the
+ * ice like the player and the car do, so a hound crossing the drowned loop walks the sheet
+ * instead of the bed under it. The director's SPAWN checks stay on heightAt on purpose
+ * (director.js): nothing is placed onto the ice, it only walks there.
+ */
 export function groundY(ctx, x, z) {
   const t = ctx.systems.get ? ctx.systems.get('terrain') : ctx.systems.terrain;
   if (!t || typeof t.heightAt !== 'function') return 0;
-  const h = t.heightAt(x, z);
+  const h = typeof t.surfaceAt === 'function' ? t.surfaceAt(x, z) : t.heightAt(x, z);
   return Number.isFinite(h) ? h : 0;
 }
 

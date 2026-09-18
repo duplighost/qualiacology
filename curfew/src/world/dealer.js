@@ -7,26 +7,48 @@ import { buildWorkshop } from './dealer-workshop.js';
 import { DEALER_CAMPS as CAMPS } from './dealer-camps.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { dampAngle, Rng } from '../engine/math.js';
+import { ShopMenu } from '../ui/shop-menu.js';
 import CFG from '../config.js';
 
 // ROUND 18 (Alex: "Things should cost much more"). x6 on the ladder — a revolver was 20
 // coins, which is three searched bodies, so the arsenal arrived before the county did.
-// The ammo price below is a quarter of the gun's price scaled by how many rounds you are
-// short, so it followed on its own.
 // ROUND 22 (Alex: "money buys bulbs and lanterns from the merchant, and the player relights
 // the county pole by pole ... you can't punch a bulb into existence"). The bulb is an ITEM,
 // not a gun: no ammo, no ownership, a fixed price, a count that goes into your pocket
 // (world/dusk-to-dawn.js carries it; progress flag 'd2d:bulbs' remembers it).
+// D7. A gun you own reads OWNED and is never sold twice; the per-gun ammo rows are gone.
+// ONE AMMUNITION row, a flat price, fills EVERY gun you own by one base bundle each
+// (weapons.addReserveAll) — "buying ammo must give an equal amount to every gun you own".
+// The four Holdfast counters import this table, so the county sells one list at one price.
+export const AMMO_PRICE = 60;   // a bundle for every gun; under the revolver, so it is the first thing a poor night buys
 export const STOCK = Object.freeze([
-  { id: 'shotgun', name: 'SHOTGUN', price: 190 },
-  { id: 'carbine', name: 'CARBINE', price: 340 },
-  { id: 'revolver', name: 'REVOLVER', price: 120 },
-  { id: 'bulb', name: 'BULB', price: CFG.duskToDawn?.bulbPrice ?? 40, item: true },
+  { id: 'shotgun', name: 'SHOTGUN', price: 190, line: 'Close work. A full reserve comes with it.' },
+  { id: 'carbine', name: 'CARBINE', price: 340, line: 'Long work. A full reserve comes with it.' },
+  { id: 'revolver', name: 'REVOLVER', price: 120, line: 'Six in the cylinder. A full reserve comes with it.' },
+  { id: 'ammo', name: 'AMMUNITION', price: AMMO_PRICE, ammo: true, line: 'One bundle for every gun you own.' },
+  { id: 'bulb', name: 'BULB', price: CFG.duskToDawn?.bulbPrice ?? 40, item: true, line: 'A light for one of the county’s roadside poles.' },
 ]);
-// Where the bulb carton sits, in the camp's local frame: on top of the right-hand crate
-// (dealer-workshop.js crate(3.13,.65,1.15,1.20,1.32) — its top is at y 1.38), so the row
-// has a thing to look at and its prompt hangs over it rather than over the gun rail.
-const BULB_AT = Object.freeze({ x: 3.13, y: 1.38, z: .72 });
+// The lines a row wears once it is not for sale. Shared with the Holdfast counters.
+export const OWNED_LINE = 'Yours already.';
+export const AMMO_FULL_LINE = 'Every gun you own is full.';
+// The bulb line carries the count you hold; one string per count, made the first time it is seen.
+const _bulbLines = [];
+export function bulbLine(n) { n = Math.max(0, n | 0); return _bulbLines[n] || (_bulbLines[n] = 'A light for a roadside pole · ' + n + ' carried.'); }
+// Where each row's THING sits, in the camp's local frame, so the menu's look-to-hover has
+// something on the counter to look at and the E prompt hangs over it, not over the person.
+//   guns  the three displays on the rail (dealer-workshop.js gun((i-1)*1.35, 1.21, .67))
+//   bulb  the carton on the right-hand crate (crate(3.13,.65,1.15,1.20,1.32): its top is y 1.38)
+//   ammo  a box of rounds at the right end of the leather mat (mat spans x ±2.05, top y 1.13),
+//         half a metre clear of the revolver so the gaze can tell them apart
+const RAIL = Object.freeze({
+  shotgun: { x: -1.35, y: 1.21, z: .67 }, carbine: { x: 0, y: 1.21, z: .67 }, revolver: { x: 1.35, y: 1.21, z: .67 },
+  bulb: { x: 3.13, y: 1.38, z: .72 }, ammo: { x: 1.92, y: 1.132, z: .60 },
+});
+const BULB_AT = RAIL.bulb, AMMO_AT = RAIL.ammo;
+// In front of the counter: past its front edge (z 1.13), within reach of the mat, and looking
+// at him rather than away — the dealer's old rail cone was the whole "am I at the counter" test.
+const COUNTER_REACH = 4.2;   // m from the mat centre: the bulb crate's far corner is 3.9 away, and a step past it still counts
+const COUNTER_DOT = .30;     // a wide cone: turning your back on him closes the menu, nothing less
 export const MAX_HP = 1500;
 export const SHOT_COMMIT_S = .62;
 const TRAVEL_INTERVAL = 660;
@@ -43,15 +65,22 @@ export class Dealer {
     this.enemy = { pos: this.pos, def: { radius: .38, height: 1.92 }, dealer: true };
     this.hp = MAX_HP; this.hostile = false; this.dead = false;
     this.phase = 'peaceful'; this.phaseT = 0; this.shot = 0;
-    this.timer = 0; this.hold = 0; this.locked = false; this.campIndex = 0;
-    this.cycle = 0; this.lastTarget = -1; this.hurtT = 0;
+    this.timer = 0; this.hold = 0; this.campIndex = 0;
+    this.cycle = 0; this.hurtT = 0;
     this.poseY=0;this.prevPoseY=0;this.poseX=0;this.prevPoseX=0;this.poseYaw=0;this.prevPoseYaw=0;this.gunRaise=0;this.prevGunRaise=0;
     this.record = { t: 0, point: new THREE.Vector3(), zone: 'torso', enemy: this.enemy };
     this.bodyId = -1;
     this.bodyShape = {kind:'circle',x:NaN,z:NaN,r:.38,y0:0,y1:0,mask:1,
       tag:'dealer',standable:false,climbable:false,breakable:false};
-    this.prompt = { kind: 'hold', label: 'E', rank: 4, x: 0, y: 0, z: 0, k: 0,
-      detail: '', subdetail: '', unavailable: false };
+    // D7: the one shop menu draws the list and emits the one E prompt; this.prompt IS its
+    // prompt object (rank 4 here), so a reader of dealer.prompt reads what the HUD reads.
+    this.menu = new ShopMenu(ctx);
+    this.prompt = this.menu.prompt;
+    // One row object per STOCK entry, rewritten in place every step at the counter: nothing
+    // is allocated while trading. x/y/z are the row's thing on the counter, in world space.
+    this.rows = STOCK.map(s => ({ id: s.id, name: s.name, price: s.price, line: s.line, owned: false, full: false,
+      unavailable: false, tag: '', note: '', x: 0, y: 0, z: 0, item: !!s.item, ammo: !!s.ammo }));
+    this.spec = { key: 'dealer', title: 'Arms & ammunition', rank: 4, cash: 0, x: 0, y: 0, z: 0, offers: this.rows, buy: o => this._buy(o) };
     this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .82, metalness: .12 });
     readableSurface(this.mat);
     this.lampMat = new THREE.MeshStandardMaterial({ vertexColors: true, emissive: 0xffbe69, emissiveIntensity: 2.5 });
@@ -74,7 +103,9 @@ export class Dealer {
   }
   // ROUND 22: a carton of bulbs on the right crate, on the camp's own vertex-coloured
   // Standard material — no new material, no new program. A cardboard box, its lid folded
-  // back, four pale bulbs standing in it.
+  // back, four pale bulbs standing in it. D7 adds the AMMUNITION row's thing beside it: an
+  // olive box of rounds on the right end of the mat with three brass cases standing on it,
+  // so the row has something to look at and the prompt hangs over the box, not the revolver.
   _buildCarton(){
     const parts=[];
     const put=(geo,col,x,y,z)=>{
@@ -82,7 +113,7 @@ export class Dealer {
       for(let i=0;i<n;i++){c[i*3]=col[0];c[i*3+1]=col[1];c[i*3+2]=col[2];}
       geo.setAttribute('color',new THREE.BufferAttribute(c,3));geo.translate(x,y,z);parts.push(geo);
     };
-    const card=[.20,.152,.098],pale=[.62,.60,.54];
+    const card=[.20,.152,.098],pale=[.62,.60,.54],olive=[.16,.17,.11],brass=[.42,.33,.14];
     const {x,y,z}=BULB_AT;
     put(new THREE.BoxGeometry(.34,.20,.26),card,x,y+.10,z);
     put(new THREE.BoxGeometry(.34,.012,.13),card,x,y+.21,z-.13+.065);
@@ -90,8 +121,12 @@ export class Dealer {
       put(new THREE.SphereGeometry(.04,8,6),pale,x+dx,y+.24,z+dz);
       put(new THREE.CylinderGeometry(.018,.018,.05,6),[.28,.27,.25],x+dx,y+.20,z+dz);
     }
+    const a=AMMO_AT;
+    put(new THREE.BoxGeometry(.30,.13,.20),olive,a.x,a.y+.065,a.z);
+    put(new THREE.BoxGeometry(.31,.010,.21),[.12,.13,.085],a.x,a.y+.135,a.z);
+    for(const dx of [-.07,0,.07])put(new THREE.CylinderGeometry(.011,.011,.055,6),brass,a.x+dx,a.y+.168,a.z+.02);
     const geo=mergeGeometries(parts,false);parts.forEach(g=>g.dispose());
-    const m=new THREE.Mesh(geo,this.mat);m.name='dealer-bulb-carton';m.castShadow=true;m.receiveShadow=true;
+    const m=new THREE.Mesh(geo,this.mat);m.name='dealer-counter-goods';m.castShadow=true;m.receiveShadow=true;
     return m;
   }
   /** How many bulbs he carries: the pole system's count, or the flag when a test has no such system. */
@@ -102,7 +137,7 @@ export class Dealer {
   }
   resetEncounter(){
     this.hp=MAX_HP;this.hostile=false;this.phase='peaceful';this.phaseT=0;this.shot=0;this.cycle=0;
-    this.hold=0;this.locked=false;this.hurtT=0;this.gunRaise=this.prevGunRaise=0;
+    this.hold=0;this.menu.close();this.hurtT=0;this.gunRaise=this.prevGunRaise=0;
     this.poseX=this.prevPoseX=this.poseY=this.prevPoseY=this.poseYaw=this.prevPoseYaw=0;
     this.targetX=this.targetZ=undefined;this.aim.visible=false;this.aim.scale.setScalar(1);
     this.person.position.set(0,.18,-.50);this.person.rotation.set(0,0,0);
@@ -199,8 +234,8 @@ export class Dealer {
     return !(h&&h.hit!==false);
   }
   step(dt){
-    if(!this.ctx.playing)return;
-    const player=this._sys('player');if(!player)return;
+    if(!this.ctx.playing){this.menu.close();return;}
+    const player=this._sys('player');if(!player){this.menu.close();return;}
     this.prevPoseY=this.poseY;this.prevPoseX=this.poseX;this.prevPoseYaw=this.poseYaw;this.prevGunRaise=this.gunRaise;
     this.root.updateMatrixWorld(true);this.prev.copy(this.pos);
     this.pos.set(this.poseX,.18+this.poseY,-.50).applyMatrix4(this.root.matrixWorld);
@@ -210,9 +245,9 @@ export class Dealer {
     this.greetingT=Math.max(0,(this.greetingT||0)-dt);
     if(d>120&&this.light){this._sys('lights')?.release(this.light);this.light=null;}
     if((this.dead||this.hostile)&&d>220){this.revive();return;}
-    if(this.dead)return;
-    if(!this.hostile && this.timer>TRAVEL_INTERVAL && d>220){this._place(this._chooseCamp());return;}
-    if(d>180){this.hold=0;if(this.light){this._sys('lights')?.release(this.light);this.light=null;}return;}
+    if(this.dead){this.menu.close();return;}
+    if(!this.hostile && this.timer>TRAVEL_INTERVAL && d>220){this.menu.close();this._place(this._chooseCamp());return;}
+    if(d>180){this.hold=0;this.menu.close();if(this.light){this._sys('lights')?.release(this.light);this.light=null;}return;}
     // One borrowed light, refreshed only while the camp is near. No new light census.
     if(d<100&&(!this.light||this.light.dead)){const l=this._world(0,2.50,1.65);this.light=this._sys('lights')?.borrow('dealer',l.x,l.y,l.z,0xffc886,7.5,0);}
     if(!this.hostile&&d<17&&!this.greetingT){this._voice('dealer-rack',.22);this.greetingT=90;}
@@ -220,66 +255,75 @@ export class Dealer {
     const target=Math.atan2(aimX-this.pos.x,aimZ-this.pos.z)-this.root.rotation.y;
     this.poseYaw=d<180?dampAngle(this.poseYaw,target,3,dt):0;
     if(this.hostile){
-      this._fight(dt,player,d);
+      this.menu.close();this._fight(dt,player,d);
       this.pos.set(this.poseX,.18+this.poseY,-.50).applyMatrix4(this.root.matrixWorld);this._syncBody();
       this.gunRaise+=(Number(this.phase==='aim'||this.phase==='fire')-this.gunRaise)*(1-Math.exp(-dt*10));return;
     }
     this._trade(dt,player);
   }
+  /**
+   * D7: AT THE COUNTER. In front of it, near the mat, facing him: the one shop menu shows
+   * the rail as rows, picks by gaze on the rail (or a digit), and buys on a click or the hold.
+   * Money moves in _buy; the purse (progress.spendCash) makes the one sound of spending.
+   */
   _trade(dt,player){
-    const input=this.ctx.input, held=!!input?.held('use');
-    if(!held)this.locked=false;
     _from.copy(player.pos);this.root.worldToLocal(_from);
-    if(this.ctx.shared.inCar||_from.z<1.13||Math.abs(_from.y) > 2.5){this.hold=0;return;}
-    const cam=this._sys('camera'), pr=this._sys('progress'), weapons=this._sys('weapons');
-    let chosen=-1,best=2.5;
-    for(let i=0;i<STOCK.length;i++){
-      const p=STOCK[i].item?this._world(BULB_AT.x,BULB_AT.y+.08,.95):this._world((i-1)*1.35,1.18,.95);
-      const dx=p.x-player.pos.x,dz=p.z-player.pos.z,d=Math.hypot(dx,dz);
-      if(d<best && (-Math.sin(cam.yaw)*dx-Math.cos(cam.yaw)*dz)/Math.max(d,.001)>.66){chosen=i;best=d;}
+    let at=!this.ctx.shared.inCar&&_from.z>=1.13&&Math.abs(_from.y)<=2.5&&Math.hypot(_from.x,_from.z-.65)<=COUNTER_REACH;
+    if(at){
+      // Looking his way at all keeps the menu; the rail's own cone does the row picking.
+      const cam=this._sys('camera'),h=this._world(0,1.62,-.5);
+      const dx=h.x-player.pos.x,dz=h.z-player.pos.z,d=Math.hypot(dx,dz)||.001;
+      at=cam?(-Math.sin(cam.yaw)*dx-Math.cos(cam.yaw)*dz)/d>COUNTER_DOT:true;
     }
-    if(chosen<0){this.hold=0;this.lastTarget=-1;return;}
-    if(chosen!==this.lastTarget){this.hold=0;this.lastTarget=chosen;}
-    const s=STOCK[chosen],cash=pr.cash();
-    if(s.item){
+    if(!at){this.menu.close();this.hold=0;return;}
+    const pr=this._sys('progress'),weapons=this._sys('weapons');
+    this._offers(weapons);
+    const spec=this.spec,a=this._world(0,1.62,-.5);
+    spec.cash=pr.cash();spec.x=a.x;spec.y=a.y;spec.z=a.z;
+    this.menu.show(spec,dt);
+    this.hold=this.menu.hold;
+  }
+  /** Is every gun you own at its reserve ceiling? Then the AMMUNITION row reads FULL. */
+  _ammoFull(weapons){
+    const owned=weapons?.owned;if(!owned||!owned.length)return false;
+    for(let k=0;k<owned.length;k++){const base=CFG.weapons.defs[owned[k]];if(base&&weapons.reserveOf(owned[k])<base.reserve*2)return false;}
+    return true;
+  }
+  /** Rewrite the row objects in place from what he has and what you have. No allocation. */
+  _offers(weapons){
+    const rows=this.rows;
+    for(let i=0;i<rows.length;i++){
+      const o=rows[i],s=STOCK[i],p=this._world(RAIL[s.id].x,RAIL[s.id].y,RAIL[s.id].z);
+      o.x=p.x;o.y=p.y;o.z=p.z;o.price=s.price;o.unavailable=false;o.tag='';o.note='';
+      if(s.item){o.owned=false;o.full=false;o.line=bulbLine(this._bulbsHeld());continue;}
+      if(s.ammo){o.owned=false;o.full=this._ammoFull(weapons);o.line=o.full?AMMO_FULL_LINE:s.line;continue;}
+      o.owned=!!weapons?.has(s.id);o.full=false;o.line=o.owned?OWNED_LINE:s.line;
+    }
+  }
+  /** One purchase, from the menu, only when the row could be bought and the purse covered it. */
+  _buy(o){
+    const pr=this._sys('progress'),weapons=this._sys('weapons');
+    if(o.item){
       // ROUND 22: the bulb row. Fixed price, no ownership, never full — you can always carry
       // one more. The count is read from the pole system so the line is honest about it.
-      const bulbs=this._bulbsHeld(),price=s.price;
-      const p=this._world(BULB_AT.x,BULB_AT.y+.42,BULB_AT.z);
-      Object.assign(this.prompt,{x:p.x,y:p.y,z:p.z,k:this.hold/.85,
-        detail:`${s.name} · ${price} COINS`,
-        subdetail:cash<price?`YOU HAVE ${cash} · NEED ${price-cash}`:`YOU HAVE ${cash} · ${bulbs} ${bulbs===1?'BULB':'BULBS'} · HOLD E TO BUY`,
-        unavailable:cash<price});
-      this.ctx.bus.emit('prompt',this.prompt);
-      if(!held||this.locked){this.hold=0;return;}
-      this.hold+=dt;
-      if(this.hold<.85)return;
-      this.hold=0;this.locked=true;
-      if(!pr.spendCash(price,'dealer:'+s.id)){this._voice('dealer-rack',.3);return;}
-      const d2d=this._sys('dusk-to-dawn');
+      if(!pr.spendCash(o.price,'dealer:'+o.id)){this._voice('dealer-rack',.3);return;}
+      const d2d=this._sys('dusk-to-dawn'),bulbs=this._bulbsHeld();
       const count=d2d&&typeof d2d.addBulb==='function'?d2d.addBulb(1):pr.flag('d2d:bulbs',bulbs+1);
-      this.ctx.bus.emit('dealer:bought',{id:s.id,price,ammo:false,rounds:0,count});
-      this._voice('xp_gain',.55);
+      this.ctx.bus.emit('dealer:bought',{id:o.id,price:o.price,ammo:false,rounds:0,count});
       return;
     }
-    const owned=weapons.has(s.id);
-    const bundle=CFG.weapons.defs[s.id].reserve;
-    const rounds=owned?Math.max(0,Math.min(bundle,bundle*2-weapons.reserveOf(s.id))):0;
-    const full=owned&&rounds===0;
-    const price=owned?Math.max(1,Math.ceil(Math.max(6,Math.round(s.price*.25))*rounds/bundle)):s.price;
-    const p=this._world((chosen-1)*1.35,1.46,.96);
-    Object.assign(this.prompt,{x:p.x,y:p.y,z:p.z,k:this.hold/.85,
-      detail:full?`${s.name} · AMMO FULL`:owned?`${s.name} · ${rounds} ROUNDS · ${price} COINS`:`${s.name} · ${price} COINS`,
-      subdetail:full?`YOU HAVE ${cash} COINS`:cash<price?`YOU HAVE ${cash} · NEED ${price-cash}`:`YOU HAVE ${cash} · HOLD E TO BUY`,unavailable:full||cash<price});
-    this.ctx.bus.emit('prompt',this.prompt);
-    if(!held||this.locked||full){this.hold=0;return;}
-    this.hold+=dt;
-    if(this.hold<.85)return;
-    this.hold=0;this.locked=true;
-    if(!pr.spendCash(price,'dealer:'+s.id)){this._voice('dealer-rack',.3);return;}
-    if(owned)weapons.addReserveTo(s.id,rounds);else this._grantWeapon(s.id);
-    this.ctx.bus.emit('dealer:bought',{id:s.id,price,ammo:owned,rounds});
-    this._voice('xp_gain',.55);
+    if(o.ammo){
+      if(this._ammoFull(weapons))return;
+      if(!pr.spendCash(o.price,'dealer:ammo')){this._voice('dealer-rack',.3);return;}
+      const rounds=weapons.addReserveAll(1);
+      this.ctx.bus.emit('dealer:bought',{id:'ammo',price:o.price,ammo:true,rounds});
+      return;
+    }
+    // Belt and braces under the greyed row: a gun you own is never sold twice.
+    if(weapons.has(o.id))return;
+    if(!pr.spendCash(o.price,'dealer:'+o.id)){this._voice('dealer-rack',.3);return;}
+    this._grantWeapon(o.id);
+    this.ctx.bus.emit('dealer:bought',{id:o.id,price:o.price,ammo:false,rounds:0});
   }
   _fight(dt,player,d){
     this.phaseT-=dt;
@@ -322,6 +366,7 @@ export class Dealer {
     this.poseY+=(crouch-this.poseY)*(1-Math.exp(-dt*9));
   }
   present(alpha=1){
+    this.menu.present();
     if(this.dead)return;
     this.person.position.x=this.prevPoseX+(this.poseX-this.prevPoseX)*alpha;
     this.person.position.y=.18+this.prevPoseY+(this.poseY-this.prevPoseY)*alpha;
@@ -360,15 +405,15 @@ export class Dealer {
       this._syncBody();
       const rewarded=!!pr.flag('dealer:rewarded');
       if(!rewarded){pr.payCash(150,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');pr.award(320,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');pr.flag('dealer:rewarded',true);}
-      // The death reward is a GUN he had on the rail; the bulb row is an item, not a weapon.
-      const gun=STOCK.find(s=>!s.item&&!this._sys('weapons').has(s.id));if(gun&&!rewarded)this._grantWeapon(gun.id);
+      // The death reward is a GUN he had on the rail; the bulb and ammunition rows are not weapons.
+      const gun=STOCK.find(s=>!s.item&&!s.ammo&&!this._sys('weapons').has(s.id));if(gun&&!rewarded)this._grantWeapon(gun.id);
       this.ctx.bus.emit('dealer:defeated',{x:this.pos.x,z:this.pos.z});return {killed:true};
     }
     return {killed:false};
   }
   state(){return {camp:this.campIndex,near:CAMPS[this.campIndex]?.near,spawnPoints:CAMPS.length,maxHp:MAX_HP,x:this.pos.x,y:this.pos.y,z:this.pos.z,hp:this.hp,hostile:this.hostile,dead:this.dead,phase:this.phase,stock:STOCK,bulbs:this._bulbsHeld()};}
   dispose(){
-    this._off?.();if(this.light)this._sys('lights')?.release(this.light);
+    this._off?.();this.menu.dispose();if(this.light)this._sys('lights')?.release(this.light);
     this._sys('collision')?.removeChunk('travelling-arms-dealer');
     this._sys('collision')?.removeChunk('travelling-arms-dealer-body');
     this.root.traverse(o=>{if(o.isMesh&&!o.userData.sharedHuman)o.geometry.dispose();});this.human.dispose();this.root.removeFromParent();this.mats.forEach(m=>m.dispose());

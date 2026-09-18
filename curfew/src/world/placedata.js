@@ -497,10 +497,12 @@ export const MAJORS = Object.freeze([
     flat: { radius: 52, blend: 0.62 },
     approach: { x: 0, z: 31, w: 15, h: 11.8, style: 'great-tree', routeX: 0, routeZ: 20 },
     discoverR: 32, nearR: 120, horizon: true,
-    // Out on the deck's east shoulder, clear of the trunk and close enough to the edge
-    // that its high lamp reads from the yard below. The original x=2.4 position was
-    // inside the trunk's visible taper and the deck lip hid the glint from the ground.
-    claim: { how: 'touch', dx: 4.2, dy: 12.9, dz: 0.6, r: 2.6 },
+    // On the crown deck's ring (r 3.7..9.0 round the trunk), 1.4 m inside the outer rail on
+    // the east side. places.js FIXTURE_FACE turns the plate to face the trunk (-X), so the
+    // stair delivers you to its front with 3.6 m of boards before the bark, and its lamp
+    // still reads from the yard through the rail. lore-lookout.js and lore-records.js read
+    // this point; sites.js's cage stands 0.75 m behind it.
+    claim: { how: 'touch', dx: 7.6, dy: 12.9, dz: 0.6, r: 2.6 },
     xpFind: 40, xpClaim: 220, startClaimed: false,
   },
   {
@@ -575,6 +577,17 @@ export const MAJORS = Object.freeze([
   // (tools/_hamlet-sites.mjs, the §4.I rule): a road within 40-150 m so the car reaches it,
   // no other major within 300 m, clear of every boss ground by 320 m, no lookout tower within
   // 120 m, and under 8 degrees of fall across the footprint.
+  //
+  // D17 — YOU CAN NOW DRIVE TO ONE. "A road within 40-150 m" turned out not to mean a road
+  // you could take: measured, the nearest centreline to these three centres was 120.5 m,
+  // 95.1 m and 120.2 m, with no spur off it and nothing at the roadside to say a village was
+  // there, and two of the three were not even TURNED toward a road, because places.js only
+  // looks 96 m for one. roads.js now runs a 4 m gravel track to each (HAMLET_TRACKS, off a
+  // control point of the loop or the outer ring so the junction is an exact graph fact),
+  // ending 40-52 m short of these centres. That distance is what turns each hamlet to face
+  // its own arrival, so the lookout post, the fire and the three siege attack points finally
+  // point at the road you come in on. roads.js keeps those numbers — this row is not a second
+  // copy of them; tests/hamlets.mjs holds the two files against each other.
   {
     id: 'eelwater', name: 'Eelwater',
     x: -1541, z: 363, region: 'fen', terrainRegion: 'marsh', kind: 'stilts',
@@ -754,6 +767,18 @@ export const FIXED_MINORS = Object.freeze([
   { kind: 'jam-segment', x: 2135.23, z: -309.01, yaw: -0.0284, bulk: 4.0 },
   { kind: 'jam-segment', x: 2133.24, z: -253.10, yaw: -0.0428, bulk: 4.0 },
   { kind: 'jam-segment', x: 2130.51, z: -197.21, yaw: -0.0550, bulk: 4.0 },
+  // THE GEAR YARD, 2026-09-17 (V3 verification). The rationed walk lays NONE: the open bug on
+  // the 'gear' row above (one yard in 40 km^2 at round 18) went to zero when round 22's five
+  // set-piece rows joined the table ahead of it, and the last row of an over-subscribed
+  // table is never reached — measured with the live walk on this build and on the pre-round
+  // build ef68573: 219 rationed sites, gear chosen 0 times on both. tests/cash.mjs (c) and
+  // tests/break-open.mjs anchor on a gear yard, and Alex asked for the boxes (ALEX-BRIEF 10).
+  // So ONE is authored here, on the verge of the road east out of the Filling Station, 144 m
+  // of road from the yard: slope 0.0, 70 m+ from every major, 30 m+ from every rationed
+  // minor, outside every sight corridor, off the ice, facing the road point (-389.0, 180.4)
+  // the way the walk faces its own rows. Appended after both walks like every fixed row, so
+  // no existing minor index moves and no saved per-minor flag changes meaning.
+  { kind: 'gear', x: -393.97, z: 171.92, yaw: 0.5257, bulk: 1.6 },
 ]);
 
 /** How far off the centreline an `offRoad` minor sits: in the trees, but in sight of the

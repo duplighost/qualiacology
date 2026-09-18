@@ -2,6 +2,7 @@
 // actual door gaps; upper lanes have stairs, floors and open arches beneath them.
 import { Kit, kits, groundY, ON_APRON, GLOW } from './sites.js';
 import { HOLDFAST_TOWN } from './holdfast-town-layout.js';
+import { mountSignBoard } from './sign-mount.js';
 import { dressHoldfastKeep } from './holdfast-keep.js';
 import { building } from './holdfast-town-houses.js';
 import { P, solid, cylinder, crescent, banner, icicles, lantern, brazier, statue, arch, path, bakePaths, snowCap, lowWall, chair, chest } from './holdfast-town-art.js';
@@ -210,6 +211,16 @@ export function buildHoldfastTown(api) {
     k.solid.box(.08,.59,.08,x,y,z-.20,P.cutWood);
     k.solid.cyl(.055,.055,.26,8,x,y+.27,z-.32,P.cutWood,0,Math.PI/2);
     lantern(k,x+.7,y+.95,z-.15,Math.PI,true);
+  }
+  // THE PAINTED SIGNS' BOARDS. holdfast-life.js hangs HOLDFAST_TOWN.signs as bare painted
+  // planes; a 'post' sign gets a timber board behind its face and two posts down to the
+  // paving here, in the town's own kit, so a shop's name is a signboard over its lane and
+  // not a sheet in the air. The face stays where the layout says; the timber is behind it.
+  for (const s of HOLDFAST_TOWN.signs) {
+    if (s.mount !== 'post') continue;
+    mountSignBoard(k.solid, { x: s.x, y: api.padY + (s.y || 2.3), z: s.z, yaw: s.yaw, w: 2.6, h: 0.87,
+      depth: 0.07, postWidth: 0.11, postSpacing: 1.95, boardColor: P.wood, postColor: P.iron,
+      groundY: (px, pz) => groundY(api, px, pz) + ON_APRON }, shape => api.emit(shape));
   }
   bakePaths(k,api);
   return { solid: k.solid.build(), people: k.cloth.build(), glow: null,

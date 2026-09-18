@@ -253,6 +253,37 @@ const POWER_RAMP_S = 1.15;       // s for the lamps to come up after the throw
 
 const DRAW_R = 320;              // m; beyond this the refuge's four meshes are not drawn
 
+/* ------------------------------------------------------------ the dead pilot -- */
+// Alex: the keep's breaker "needs to be more lit up and visible when you walk in". Rule 3
+// above still holds — the pilot BURNS after — but before the throw the board now carries a
+// dull amber standby light that breathes, the way a dead panel's one live indicator does:
+// the only moving light in a 24 m hall, on the thing you are meant to find. It is a clone
+// of matGlow (same program, one extra draw) and it is 0 the moment power is on.
+const PILOT_LO = 0.12;           // opacity at the trough of the breath
+const PILOT_HI = 0.35;           // ...and at its peak
+const PILOT_S = 2.4;             // s per breath, the same cycle as places.js's claim glint
+const PILOT_COL = 0xd4862e;      // dull amber: a standby lamp, not the lit pilot's GLOW.lamp
+
+/* -------------------------------------------------------- the night beats -- */
+// Horror 6: KNOCKING. The one promise is that nothing gets in; the beat is that something
+// wants to. Only while the room is actually a refuge (power on, door shut, you inside), only
+// at night, only after the door has been shut long enough to be believed.
+const KNOCK_SHUT_S = 45;         // s the door has been shut before the first knock can come
+const KNOCK_EVERY_MIN = 90;      // s between knocks, at least
+const KNOCK_EVERY_MAX = 180;     // ...and at most (rng fork 'refuge:knock')
+const KNOCK_GAIN = 0.75;
+const KNOCK_HUSH_S = 2.5;        // the silence after the knock is the beat
+const KNOCK_TRY_P = 0.30;        // the handle is tried
+const KNOCK_TRY_K = 0.06;        // how far the shut leaf gives, in swing units. Never opens.
+const KNOCK_TRY_S = 0.40;        // ...and for how long before it settles
+// Horror 9: FOUND AJAR. In-session only, never on a load: a refuge you shut and left is,
+// one time in five, open when you come back — wet prints leading in and one creak. The saved
+// flag is never written by it, so a reload restores the door shut, which is also the fiction.
+const AJAR_AWAY_S = 120;         // s you must have been gone
+const AJAR_AWAY_M = 80;          // m you must have gone, from the doorway
+const AJAR_NEAR_M = 25;          // m from the doorway at which the return is decided
+const AJAR_P = 0.20;             // rng fork 'refuge:ajar'
+
 /* ------------------------------------------------------------------ palette -- */
 // Linear albedos. FX_BOARD/FX_BRASS are places.js's own fixture numbers, deliberately reused:
 // he learns one shape and one contrast for "the thing you throw", wherever he finds it.
@@ -352,6 +383,7 @@ export class Refuge {
     this.stats = {
       throws: 0, doorShuts: 0, doorOpens: 0, doorNudges: 0, rests: 0, refusals: 0,
       trailsLost: 0, hookRuns: 0, healed: 0,
+      knocks: 0, ajar: 0,        // the night beats (horror 6 and 9)
     };
 
     // --- the scene side ----------------------------------------------------
@@ -370,6 +402,22 @@ export class Refuge {
 
     this._lamp = null; this._lampWhere = '';
     this._overlay = null;
+
+    // the dead pilot (see PILOT_*): its mesh, its clone of matGlow, and its breath
+    this.pilot = null; this.matPilot = null;
+    this._pilotT = 0; this._pilotPrev = 0; this._pilotCurr = 0;
+
+    // the night beats. None of it is saved.
+    this._shutFor = 0;           // s the door has been shut, with the power on
+    this._knockT = -1;           // s to the next knock; -1 = not scheduled
+    this._tryT = 0;              // s left of the handle being tried
+    this._tryPrev = 0; this._tryCurr = 0;   // the leaf's give, present-only
+    this._away = false;          // the player is more than AJAR_AWAY_M from the doorway
+    this._awayT = 0;             // for how long
+    this._leftShut = false;      // and the door was shut when he went
+    this._shutThisSession = false;   // a door he shut, not one a save restored shut
+    this._rng = null;            // ctx.rng.fork('refuge:knock'), on first use
+    this._rngAjar = null;        // ctx.rng.fork('refuge:ajar')
 
     // interpolation: simulation writes prev/curr, present() writes the transform
     this._leverPrev = 0; this._leverCurr = 0;
@@ -704,6 +752,25 @@ export class Refuge {
       const foot = Number.isFinite(this.anchors.breaker.footY) ? this.anchors.breaker.footY : 0.95;
       bead(parts, q.x, y + foot + q.y, q.z, 0.038);
       halo(parts, q.x, y + foot + q.y, q.z, 0.13, 0.34, 0.85);
+      // THE DEAD PILOT, its own mesh on a clone of matGlow, in the same bezel. Breathes dull
+      // amber while the board is dead (see PILOT_*), 0 once it is thrown. Visible at opacity
+      // 0 from boot for the same reason the glow mesh is: its program links with the scene.
+      const pp = [];
+      bead(pp, q.x, y + foot + q.y, q.z, 0.030);
+      halo(pp, q.x, y + foot + q.y, q.z, 0.11, 0.30, 0.60);
+      const pg = merge(pp);
+      if (pg) {
+        this.matPilot = this.matGlow.clone();
+        this.matPilot.name = 'refuge-pilot';
+        this.matPilot.color.setHex(PILOT_COL);
+        this.matPilot.opacity = 0;
+        const pm = new THREE.Mesh(pg, this.matPilot);
+        pm.name = 'refuge-pilot-' + this.siteId;
+        pm.renderOrder = 4;
+        pm.visible = true;
+        this.group.add(pm);
+        this.pilot = pm;
+      }
     }
     // 2. the bulb over the bed. MEASURED first cut: a 0.34 x 0.80 halo overflowed its own
     //    0.20 m shade and put 6% of the frame over 150 from the bed — a lamp reads as a lamp
@@ -965,8 +1032,116 @@ export class Refuge {
     if (this.power && this.powerK < 1) this.powerK = Math.min(1, this.powerK + dt / POWER_RAMP_S);
     else if (!this.power && this.powerK > 0) this.powerK = Math.max(0, this.powerK - dt / POWER_RAMP_S);
 
+    // --- the dead pilot's breath --------------------------------------------
+    this._pilotPrev = this._pilotCurr;
+    if (this.pilot) {
+      if (this.power || this.powerK > 0) this._pilotCurr = 0;
+      else {
+        this._pilotT += dt;
+        if (this._pilotT > PILOT_S) this._pilotT -= PILOT_S;
+        this._pilotCurr = PILOT_LO + (PILOT_HI - PILOT_LO) * (0.5 + 0.5 * Math.sin(this._pilotT * (Math.PI * 2) / PILOT_S));
+      }
+    }
+
     this._lampStep(px, pz);
+    this._nightBeat(dt, px, py, pz);
     this._cullStep(dt);
+  }
+
+  /* ------------------------------------------------------ the night beats -- */
+  _fork(name, field) {
+    if (this[field]) return this[field];
+    const r = this.ctx && this.ctx.rng;
+    if (!r || typeof r.fork !== 'function') return null;
+    this[field] = r.fork(name);
+    return this[field];
+  }
+
+  /**
+   * Horror 6 and 9. Nothing here opens a shut door while you are inside it, and nothing here
+   * is written to the save. Both beats go round dread.permitOk on purpose: that gate refuses
+   * every beat while you are protected, and these two are ABOUT being protected.
+   */
+  _nightBeat(dt, px, py, pz) {
+    // the handle being tried, settling
+    this._tryPrev = this._tryCurr;
+    if (this._tryT > 0) {
+      this._tryT = Math.max(0, this._tryT - dt);
+      // a bump: out and back over KNOCK_TRY_S, never past the jamb
+      this._tryCurr = KNOCK_TRY_K * Math.sin(Math.PI * (1 - this._tryT / KNOCK_TRY_S));
+    } else this._tryCurr = 0;
+
+    const shut = this.doorK >= DOOR_SHUT_AT;
+    this._shutFor = shut && this.power ? this._shutFor + dt : 0;
+
+    // --- knocking ---------------------------------------------------------
+    const phase = this.ctx.shared ? this.ctx.shared.phase : '';
+    const dark = phase === 'night' || phase === 'black';
+    const inside = this._canRest() && this.contains(px, py, pz);
+    if (!inside || !dark || this._shutFor < KNOCK_SHUT_S || this.resting) {
+      this._knockT = -1;
+    } else {
+      const rng = this._fork('refuge:knock', '_rng');
+      if (rng) {
+        if (this._knockT < 0) this._knockT = KNOCK_EVERY_MIN + rng.next() * (KNOCK_EVERY_MAX - KNOCK_EVERY_MIN);
+        this._knockT -= dt;
+        if (this._knockT <= 0) {
+          this._knock(rng);
+          this._knockT = KNOCK_EVERY_MIN + rng.next() * (KNOCK_EVERY_MAX - KNOCK_EVERY_MIN);
+        }
+      }
+    }
+
+    // --- found ajar -------------------------------------------------------
+    const dx = px - this.doorWX, dz = pz - this.doorWZ;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d > AJAR_AWAY_M) {
+      if (!this._away) {
+        this._away = true; this._awayT = 0;
+        this._leftShut = shut && this.power && this._shutThisSession;
+      }
+      this._awayT += dt;
+    } else if (this._away && d < AJAR_NEAR_M) {
+      this._away = false;
+      if (this._leftShut && this._awayT >= AJAR_AWAY_S && this.power && this.doorK >= DOOR_SHUT_AT) {
+        const rng = this._fork('refuge:ajar', '_rngAjar');
+        if (rng && rng.next() < AJAR_P) this._ajar();
+      }
+      this._leftShut = false;
+    }
+  }
+
+  /** Three knuckles on the leaf, from the outside, then the county holds its breath. */
+  _knock(rng) {
+    const dr = this.anchors.door;
+    const hx = this._wx(dr.hingeX, dr.hingeZ), hz = this._wz(dr.hingeX, dr.hingeZ);
+    const hy = this.padY + 1.2;
+    const dread = this._sys('dread');
+    if (dread && typeof dread.answer === 'function') {
+      dread.answer('knock', hx, hy, hz, KNOCK_GAIN);   // C10: audio.js DREAD 'knock', three knuckles 0.55 s apart
+      if (typeof dread.hush === 'function') dread.hush(KNOCK_HUSH_S, hx, hz);
+    } else this._say('knock', KNOCK_GAIN, hx, hy, hz);
+    this.stats.knocks++;
+    if (rng.next() < KNOCK_TRY_P) {
+      // the handle is tried: the leaf gives KNOCK_TRY_K and settles. Present-only — doorK,
+      // the collider and the save never move, so the room stays exactly as safe as it was.
+      this._tryT = KNOCK_TRY_S;
+      this.stats.doorNudges++;
+    }
+  }
+
+  /** The door you shut is open. Prints lead in. One creak. The flag is not touched. */
+  _ajar() {
+    this.doorTarget = 0;
+    this.doorK = 0;
+    this._doorPrev = this._doorCurr = 0;
+    this.stats.doorOpens++;
+    this.stats.ajar++;
+    this._syncDoorCollider();
+    this._say('door', 0.55, this.doorWX, this.doorWY + 1.1, this.doorWZ);
+    const dread = this._sys('dread');
+    // 7-12 wet prints from the doorway, along the way you are walking: into the room.
+    if (dread && typeof dread.commission === 'function') dread.commission('footprints', this.doorWX, this.doorWY, this.doorWZ, 'refuge');
   }
 
   /**
@@ -1171,6 +1346,7 @@ export class Refuge {
    */
   _onShut(px, pz) {
     this.stats.doorShuts++;
+    this._shutThisSession = true;     // horror 9 only ever reopens a door HE shut
     this._say('door', 1.0, this.doorWX, this.doorWY + 1.1, this.doorWZ);
     const enemies = this._sys('enemies');
     if (enemies && typeof enemies.loseTrail === 'function') {
@@ -1398,11 +1574,17 @@ export class Refuge {
     if (this._leverMesh) this._leverMesh.rotation.z = LEVER_UP + (LEVER_DOWN - LEVER_UP) * lever;
     if (this.leaf) {
       const d = this.anchors.door;
-      this.leaf.rotation.y = (d.yaw || 0) + d.open * (1 - door);
+      // the handle being tried (horror 6) is a give in the DRAWN leaf only
+      const give = this._tryPrev + (this._tryCurr - this._tryPrev) * a;
+      this.leaf.rotation.y = (d.yaw || 0) + d.open * (1 - door + give);
     }
     if (this.glow) {
       this.matGlow.opacity = this.powerK;
       this.glow.visible = this.group.visible;
+    }
+    if (this.pilot && this.matPilot) {
+      this.matPilot.opacity = this._pilotPrev + (this._pilotCurr - this._pilotPrev) * a;
+      this.pilot.visible = this.group.visible;
     }
     return this._fadePrev + (this._fadeCurr - this._fadePrev) * a;
   }
@@ -1548,6 +1730,8 @@ export class Refuge {
     }
     if (this.matBody) { this.matBody.dispose(); this.matBody = null; }
     if (this.matGlow) { this.matGlow.dispose(); this.matGlow = null; }
+    if (this.matPilot) { this.matPilot.dispose(); this.matPilot = null; }
+    this.pilot = null;
     if (!this._owner && this._overlay && this._overlay.parentNode) this._overlay.parentNode.removeChild(this._overlay);
     this._overlay = null;
     this._ready = false;

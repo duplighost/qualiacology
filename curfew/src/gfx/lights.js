@@ -7,7 +7,10 @@
 //   1 HemisphereLight          — "the house feels empty" is this number, not a prop count
 //   1 AmbientLight             — the floor; nowhere is a pitch-black void
 //   8 PointLight               — the rover pool; muzzle, eyes, motes, embers all BORROW
-//   2 SpotLight                — torch (512 shadow) + headlights (no shadow)
+//   2 SpotLight                — torch (1024 shadow) + headlights (no shadow). While you
+//                                DRIVE the shadowed torch spot is aimed as the headlamp and
+//                                the unshadowed one is parked (D18 c.3): same census, same
+//                                caster count, and the road gets trunk shadows.
 //
 // Three bakes numDirectional/numPoint/numSpot AND the shadow counts into every material's
 // program. A light that appears later recompiles every material mid-frame and the page
@@ -61,6 +64,55 @@ const TORCH_COLOUR = 0xffeccb;
 // The two numbers are the whole lever. If it reads wrong, they are TORCH_DECAY here and
 // CFG.lights.torch.hot in config.js, and they must move together or the mid field moves.
 const TORCH_DECAY = 1.25;
+
+// D18 c.3 — THE SHADOWED TORCH SPOT DOUBLES AS THE HEADLIGHT WHILE DRIVING. The census gives
+// the car one SpotLight and it casts nothing, so a night drive had a road with no trunk
+// shadows sweeping across it. Rather than a third caster (a recompile of every material),
+// setHeadlights() aims the torch spot — the one shadowed spot — from the headlamp lens while
+// ctx.shared.inCar and car.mode === 'driving', at the headlight's candela and cone, and
+// parks the unshadowed spot. On foot it swaps back. Census and caster count unchanged.
+const HEAD_COLOUR = 0xfff3d8;
+// three's SpotLightShadow copies light.distance into its shadow camera's far plane every
+// frame, so the shadow reach IS the distance written per role: 68 m as the torch, the
+// headlight's 80 m as the headlamp. Set at boot too, so the first shadow pass agrees.
+const HEADLAMP_SHADOW_FAR = 80;
+
+// D18 / C11 — THE TORCH FLICKERS WHEN A WARDEN IS NEAR (lore: its hand is on the pole).
+// enemies.js publishes ctx.shared.wardenNear (0..1 over 40 m) every step; step() eases toward
+// it and present() multiplies the SPOT by the dip. ctx.shared.lit reads the un-flickered
+// value, so the county's idea of "how lit you are" never flaps with the filament.
+const FLICKER_DAMP = 3;          // /s: a Warden crossing the 40 m line is felt in about a second, not on that frame
+const FLICKER_DIP = 0.14;        // the steady loss at k = 1...
+const FLICKER_A = 0.10;          // ...plus two sines. Their sum caps the dip at 0.30: the torch stays useful
+const FLICKER_B = 0.06;          //    (Alex asked for it to be); a flicker that reads as broken hardware is a bug report
+const FLICKER_W1 = 7.3, FLICKER_W2 = 3.1, FLICKER_PH2 = 1.7;  // incommensurate rates, so it never settles into a beat
+const FLICKER_FLOOR = 0.70;      // the multiplier never goes under the cap even where the sines align
+const FLICKER_DROP_K = 0.6;      // dropouts only past this nearness: a Warden inside 16 m
+const FLICKER_DROP_S = 0.06;     // a 60 ms cut — under four frames, seen, too short to read as a fault. The dropout is the tell
+const FLICKER_DROP_RATE = 0.4;   // cuts per second at k = 1 (one every ~2.5 s), scaled down to 0 at FLICKER_DROP_K
+
+// D18 — PERSISTENT LAMPS DO NOT FOLLOW YOU. present() faded every seated rover by
+// 1.15 - d/46, so a fixed yard lamp's pool brightened 2x over the last 30 m of walking to it
+// and dimmed again as you left ("as you walk toward the car the light on the ground follows
+// you"). A lamp bolted to the world now holds full until FIXED_HOLD_M and fades out over
+// FIXED_FADE_M — the fade exists only so a seat handoff never pops, and 60 m is past where a
+// 30 m rover lights anything. ttl'd flashes keep the VIGIL curve. Tagged by KIND at borrow:
+// the kinds below are every persistent world lamp that borrows today (grep lights.borrow().
+const FIXED_KINDS = new Set([
+  'claim-lamp', 'pole-lamp', 'cabin', 'headlamp', 'lantern', 'sanctuary', 'hamlet', 'dealer',
+  'holdfast-guard', 'gate-cashier', 'planetarium', 'kept-sunlight', 'opening-path', 'bay-lamp',
+  'christmas-house', 'false-dawn', 'car-pour',
+]);
+const FIXED_PREFIX_A = 'holdfast:', FIXED_PREFIX_B = 'refuge:';   // per-building / per-room lamps carry their id in the kind
+const FIXED_HOLD_M = 60, FIXED_FADE_M = 15;
+// A lamp given a longer reach than the pool default (the sanctuaries: 108 m) fades inside
+// the last 15% of its own reach instead, where three's (1-(d/reach)^4)^2 window has already
+// halved it, so the fade lands on a light that is going anyway.
+const FIXED_REACH_K = 0.85;
+// Seat hysteresis: a seated handle keeps its rover unless the challenger is 20% nearer
+// (0.8^2 on the squared distance), so two lamps at almost the same range stop trading seats
+// every 0.4 s as you walk between them.
+const SEAT_HYST = 0.64;
 
 // Moon direction, deep night. Elevation 34 degrees so trunks cast long readable bars and
 // the ground still separates from the sky; azimuth chosen so the light rakes across the
@@ -193,6 +245,7 @@ class RoverHandle {
     this.ttl = 0;        // <= 0 or non-finite means persistent until released
     this.age = 0;
     this.d2 = 0;
+    this.fixed = false;  // a world lamp (FIXED_KINDS): holds full to FIXED_HOLD_M instead of following you
   }
   get alive() { return this.inUse; }
   setPosition(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
@@ -233,8 +286,17 @@ export class Lights {
     this._torchIntensity = CFG.lights.torch.hot;
     this._faultT = 0;          // ROUND 13: seconds the filament is out (torchFault)
     this._torchLitT = 99;         // seconds since the torch came on (round 6, High Beam)
+    // The LOGICAL torch — hot x cabin x perks x fault, before the flicker — is what
+    // ctx.shared.lit reads. The spot may be dipped, cut for 60 ms or lent to the car; none of
+    // that is a fact about how visible you are.
+    this._torchLive = 0;
+    this._flicker = 0;            // C11: eased copy of ctx.shared.wardenNear (or setTorchFlicker)
+    this._flickerSet = 0;         // a caller's floor, held until they set it again
+    this._dropT = 0;              // seconds left of a 60 ms dropout
+    this._rng = null;             // ctx.rng.fork('lights:flicker'), taken lazily
     this._headlightOn = false;
     this._headLevel = 1;          // ROUND 22: the car's filament, 0..1, scales the SpotLight
+    this._headViaTorch = false;   // D18 c.3: the torch spot is currently aimed as the headlamp
 
     // ---- lightning (ROUND 22 lane F). Envelope from weather; applied in present(). ------
     // _moonBaseI is the moon's intensity BEFORE the flash and is the only input to the maths;
@@ -356,7 +418,10 @@ export class Lights {
     torch.castShadow = true;                      // PINNED, see header
     torch.shadow.mapSize.set(CFG.render.shadow.torchSize, CFG.render.shadow.torchSize);
     torch.shadow.camera.near = 0.4;
-    torch.shadow.camera.far = TORCH_DISTANCE;
+    // 80, not 68: the road ahead of the car has to be inside the shadow box the first time
+    // the spot is lent to the headlamp. three re-derives far from light.distance each shadow
+    // pass (see HEADLAMP_SHADOW_FAR), so this is the boot value and the distance is the lever.
+    torch.shadow.camera.far = HEADLAMP_SHADOW_FAR;
     torch.shadow.bias = -0.0008;
     torch.shadow.normalBias = 0.03;
     torch.name = 'torch';
@@ -366,7 +431,7 @@ export class Lights {
     this.torch = torch;
 
     const H = CFG.lights.headlight;
-    const head = new THREE.SpotLight(0xfff3d8, 0, H.distance, H.angle,
+    const head = new THREE.SpotLight(HEAD_COLOUR, 0, H.distance, H.angle,
       H.penumbra !== undefined ? H.penumbra : 0.35, H.decay !== undefined ? H.decay : 2.0);
     head.castShadow = false;                      // census: headlights never cast
     head.name = 'headlight';
@@ -422,6 +487,11 @@ export class Lights {
     h.ttl = ttl;
     h.age = 0;
     h.d2 = 0;
+    // A world lamp by kind, and only when it is persistent: a ttl'd flash under a fixed
+    // kind's name (the claim's 1.4 s 'claim' burst is not one) keeps the VIGIL curve.
+    const persistent = !(ttl > 0 && isFinite(ttl));
+    h.fixed = persistent && typeof kind === 'string'
+      && (FIXED_KINDS.has(kind) || kind.startsWith(FIXED_PREFIX_A) || kind.startsWith(FIXED_PREFIX_B));
     // Re-seat NOW rather than up to CFG.lights.rovers.reseat seconds from now: a muzzle
     // flash lives 50 ms and would otherwise be over before it was ever seated. Combat
     // borrows during step(), which runs after ours, so present() picks the flag up in the
@@ -481,11 +551,27 @@ export class Lights {
   setTorch(on) {
     const was = this._torchOn;
     this._torchOn = !!on;
-    this.torch.intensity = this._torchOn ? this._torchIntensity : 0;
+    // The logical value moves NOW so a headless step with no present() sees lit move; the
+    // spot follows unless it is lent to the car this frame (setHeadlights owns it then).
+    this._torchLive = this._torchOn ? this._torchIntensity : 0;
+    if (!this._headViaTorch) this.torch.intensity = this._torchLive;
     // ROUND 6 (lane G): the seconds since the torch came ON, for LAMP's High Beam (present).
     if (this._torchOn && !was) this._torchLitT = 0;
   }
   torchOn() { return this._torchOn; }
+
+  /**
+   * C11 — a caller's floor under the torch flicker, 0..1, held until set again. The Warden
+   * term from ctx.shared.wardenNear is max'd with it, so a scripted beat can shake the
+   * filament without a Warden and a Warden still shakes it during the beat.
+   */
+  setTorchFlicker(k) { this._flickerSet = clamp01(typeof k === 'number' && isFinite(k) ? k : 0); }
+
+  /** The eased flicker being applied to the spot this frame, 0..1. Tests and the debug HUD. */
+  torchFlicker() { return this._flicker; }
+
+  /** TRUE while the shadowed torch spot is aimed as the car's headlamp (D18 c.3). */
+  torchIsHeadlamp() { return this._headViaTorch; }
 
   /**
    * ROUND 13: THE BLACKOUT. The filament dies for `seconds` — present() writes the torch's
@@ -674,12 +760,63 @@ export class Lights {
   setHeadlights(on, x = 0, y = 0, z = 0, dx = 0, dy = 0, dz = -1, level = 1) {
     this._headlightOn = !!on;
     this._headLevel = typeof level === 'number' && isFinite(level) ? clamp01(level) : 1;
-    this.headlight.intensity = this._headlightOn ? CFG.lights.headlight.intensity * this._headLevel : 0;
+    const I = this._headlightOn ? CFG.lights.headlight.intensity * this._headLevel : 0;
+    // D18 c.3 — while you are DRIVING the shadowed torch spot is the headlamp. Decided here,
+    // not in present(): vehicle/car.js calls this from its own present() with the lens pose
+    // it is drawing the car at THIS frame, and lights presents before the car (#2 vs #19).
+    // A pose one frame stale at 23 m/s sits 0.4 m inside a bonnet that casts shadows.
+    const sh = this.ctx.shared;
+    const car = this.ctx.systems ? this.ctx.systems.get('car') : null;
+    const via = this._headlightOn && !!(sh && sh.inCar) && !!car && car.mode === 'driving';
+    if (via !== this._headViaTorch) this._setTorchRole(via);
+    if (via) {
+      this.torch.intensity = I;
+      this.torch.position.set(x, y, z);
+      this.torch.target.position.set(x + dx * 20, y + dy * 20, z + dz * 20);
+      this.headlight.intensity = 0;
+      this.headlight.position.set(0, -1000, 0);
+      return;
+    }
+    this.headlight.intensity = I;
     if (this._headlightOn) {
       this.headlight.position.set(x, y, z);
       this.headlight.target.position.set(x + dx * 20, y + dy * 20, z + dz * 20);
     } else {
       this.headlight.position.set(0, -1000, 0);
+    }
+  }
+
+  /**
+   * Lend the torch spot to the car, or take it back. Uniforms on a light that exists:
+   * colour, cone, decay and reach (the shadow far plane follows the reach, see
+   * HEADLAMP_SHADOW_FAR). Taking it back re-seats it at the eye at once, so the frame this
+   * runs on does not draw a torch hanging over the road; present() re-aims it from there.
+   */
+  _setTorchRole(asHeadlamp) {
+    this._headViaTorch = asHeadlamp;
+    const torch = this.torch;
+    if (asHeadlamp) {
+      const H = CFG.lights.headlight;
+      torch.color.set(HEAD_COLOUR);
+      torch.angle = H.angle;
+      torch.penumbra = H.penumbra !== undefined ? H.penumbra : 0.35;
+      torch.decay = H.decay !== undefined ? H.decay : 2.0;
+      torch.distance = H.distance;
+      return;
+    }
+    const T = CFG.lights.torch;
+    torch.color.set(TORCH_COLOUR);
+    torch.angle = T.angle;
+    torch.penumbra = T.penumbra;
+    torch.decay = TORCH_DECAY;
+    torch.distance = TORCH_DISTANCE;
+    torch.intensity = this._torchOn ? this._torchLive : 0;
+    const cam = this.ctx.camera;
+    if (cam) {
+      const p = cam.position;
+      torch.position.copy(p);
+      cam.getWorldDirection(_fwd);
+      torch.target.position.set(p.x + _fwd.x * T.ahead, p.y + _fwd.y * T.ahead, p.z + _fwd.z * T.ahead);
     }
   }
 
@@ -704,6 +841,24 @@ export class Lights {
 
     // ROUND 13: the torch's filament fault (dread's BLACKOUT beat) ages here, on the fixed step
     if (this._faultT > 0) this._faultT = Math.max(0, this._faultT - dt);
+
+    // C11: ease toward the nearest Warden (enemies.js publishes ctx.shared.wardenNear every
+    // step) or a caller's floor, and roll the rare dropout on the fixed step so a replay is
+    // deterministic. The dip itself is applied in present(), on the spot only.
+    {
+      const sh = this.ctx.shared;
+      const near = sh && typeof sh.wardenNear === 'number' ? clamp01(sh.wardenNear) : 0;
+      const want = near > this._flickerSet ? near : this._flickerSet;
+      this._flicker = damp(this._flicker, want, FLICKER_DAMP, dt);
+      if (this._dropT > 0) this._dropT = Math.max(0, this._dropT - dt);
+      else if (this._torchOn && this._flicker > FLICKER_DROP_K) {
+        if (!this._rng && this.ctx.rng && typeof this.ctx.rng.fork === 'function') {
+          this._rng = this.ctx.rng.fork('lights:flicker');
+        }
+        const rate = FLICKER_DROP_RATE * (this._flicker - FLICKER_DROP_K) / (1 - FLICKER_DROP_K);
+        if (this._rng && this._rng.next() < rate * dt) this._dropT = FLICKER_DROP_S;
+      }
+    }
 
     // Alex's natural play did not reveal any night transition and the carried light felt
     // pointless. The old fill stayed at 1.0 for dusk plus eleven minutes of deep night and
@@ -803,7 +958,10 @@ export class Lights {
     let lit = 0;
 
     /* ---- your own torch: the trade at the centre of the design -------------- */
-    if (this._torchOn && this.torch && this.torch.intensity > 0) {
+    // The LOGICAL torch (_torchLive), not the spot: the Warden's flicker and the 60 ms
+    // dropout are on the filament you see, not on how visible you are, and while the spot is
+    // lent to the car as its headlamp it is not your torch at all.
+    if (this._torchOn && this.torch && this._torchLive > 0) {
       let t = LIT_TORCH_BASE;
       const cam = this.ctx.camera;
       if (cam) {
@@ -819,7 +977,7 @@ export class Lights {
           t += LIT_TORCH_AIM * align;
         }
       }
-      t *= clamp01(this.torch.intensity / (CFG.lights.torch.hot || 1));
+      t *= clamp01(this._torchLive / (CFG.lights.torch.hot || 1));
       lit = lit + t - lit * t;
     }
 
@@ -829,7 +987,9 @@ export class Lights {
     // ARE the source — the lamp is 2 m ahead of the seat and the glow is on your hands.
     // Outside it, the beam only counts while you are standing in it. Both siblings are read
     // lazily, at use: shared is a scalar bag and the headlight is our own light.
-    if (this._headlightOn && this.headlight && this.headlight.intensity > 0) {
+    // The switch and the filament, not the spot's own intensity: while driving the headlamp
+    // is the torch spot and the census headlight sits parked at 0 (D18 c.3).
+    if (this._headlightOn && this.headlight && this._headLevel > 0) {
       let f;
       if (shared.inCar) f = 1;   // `shared` is the same bag we publish lit into, above
       else {
@@ -960,33 +1120,56 @@ export class Lights {
     return best2 === Infinity ? Infinity : Math.sqrt(best2);
   }
 
-  /** Nearest-first seating. Insertion sort over an Int32Array — no allocation. */
+  /**
+   * Nearest-first seating WITH HYSTERESIS. Insertion sort over an Int32Array — no allocation.
+   * A seated handle keeps its rover unless a challenger is SEAT_HYST nearer than the farthest
+   * seated one; a strict nearest-8 re-seat every 0.4 s handed pools back and forth between
+   * two lamps at nearly the same range as you walked, which read as the light moving.
+   */
   _reseat() {
     const camPos = this.ctx.camera ? this.ctx.camera.position : null;
     const px = camPos ? camPos.x : 0, py = camPos ? camPos.y : 0, pz = camPos ? camPos.z : 0;
+    const H = this.handles;
     let n = 0;
     for (let i = 0; i < MAX_BORROWS; i++) {
-      const h = this.handles[i];
+      const h = H[i];
       if (!h.inUse) continue;
       const dx = h.x - px, dy = h.y - py, dz = h.z - pz;
       h.d2 = dx * dx + dy * dy + dz * dz;
       // insertion into the ordered index list
       let j = n++;
-      while (j > 0 && this.handles[this._order[j - 1]].d2 > h.d2) {
+      while (j > 0 && H[this._order[j - 1]].d2 > h.d2) {
         this._order[j] = this._order[j - 1];
         j--;
       }
       this._order[j] = i;
     }
-    for (let s = 0; s < this._seated.length; s++) {
-      const idx = s < n ? this._order[s] : -1;
-      if (this._seated[s] !== idx) {
-        this._seated[s] = idx;
-        if (idx < 0) {
-          this.rovers[s].intensity = 0;
-          this.rovers[s].position.set(0, -1000, 0);
-        }
+    const S = this._seated, ns = S.length;
+    // A seat whose handle is gone is free. release() clears these too; this covers a seat
+    // that outlived its handle by any other path.
+    for (let s = 0; s < ns; s++) {
+      const j = S[s];
+      if (j >= 0 && !H[j].inUse) {
+        S[s] = -1;
+        this.rovers[s].intensity = 0;
+        this.rovers[s].position.set(0, -1000, 0);
       }
+    }
+    // Nearest first: a free seat is taken; a full house is challenged for its farthest seat.
+    for (let k = 0; k < n; k++) {
+      const idx = this._order[k];
+      let seated = false, free = -1, farS = -1, farD2 = -1;
+      for (let s = 0; s < ns; s++) {
+        const j = S[s];
+        if (j === idx) { seated = true; break; }
+        if (j < 0) { if (free < 0) free = s; continue; }
+        if (H[j].d2 > farD2) { farD2 = H[j].d2; farS = s; }
+      }
+      if (seated) continue;
+      if (free >= 0) { S[free] = idx; continue; }
+      if (farS >= 0 && H[idx].d2 < farD2 * SEAT_HYST) { S[farS] = idx; continue; }
+      // This one could not take a seat; everything after it is farther and could not either.
+      break;
     }
   }
 
@@ -1034,22 +1217,37 @@ export class Lights {
     /* ---- the torch lags the view ------------------------------------------- */
     // MARROW's feel: the cone chases the look rather than being welded to it, so a fast
     // flick shows you the dark for a beat. CFG.lights.torch.lag / .ahead.
+    // D18 c.3 belt and braces: the car hands the spot back through setHeadlights() the frame
+    // it stops driving. If it ever stops calling (a car torn down without its off switch),
+    // the torch is still yours the next frame rather than a lamp parked on the road.
+    if (this._headViaTorch) {
+      const sh = this.ctx.shared;
+      const car = this.ctx.systems ? this.ctx.systems.get('car') : null;
+      if (!(sh && sh.inCar) || !car || car.mode !== 'driving') {
+        this._setTorchRole(false);
+        this._headlightOn = false;
+        this.headlight.intensity = 0;
+        this.headlight.position.set(0, -1000, 0);
+      }
+    }
+
     if (this._torchOn) {
       const T = CFG.lights.torch;
-      // ROUND 6 (lane G): the two LAMP hooks nothing ran (NEXT.md 3). ONE read each, here,
-      // where the beam's angle and heat are set by name — nodes.js HOOK_POINTS 'torchFocus'
-      // and 'highBeam'. Focus: aiming with the torch on squeezes the cone to the spec's
-      // angle. High Beam: for the spec's seconds after the torch comes on it burns at twice
-      // its heat. Both are uniforms on a light that already exists: no light is added and
-      // no program links. With no node owned both reads return null and nothing changes.
+      // ROUND 6 (lane G): the LAMP hook nothing ran (NEXT.md 3). ONE read, here, where the
+      // beam's heat is set by name — nodes.js HOOK_POINTS 'highBeam': for the spec's seconds
+      // after the torch comes on it burns at twice its heat. A uniform on a light that
+      // already exists: no light is added and no program links. With no node owned the read
+      // returns null and nothing changes. (D3 retired 'torchFocus': the cone is T.angle for
+      // everyone, and lamp_1 'Long Beam' is a stat, read just below.)
       this._torchLitT += dt;
       const prog = this.ctx.systems.get('progress');
-      const focus = prog && typeof prog.perk === 'function' ? prog.perk('torchFocus', null) : null;
       const beam = prog && typeof prog.perk === 'function' ? prog.perk('highBeam', null) : null;
-      const inp = this.ctx.input;
-      const aiming = !!(inp && typeof inp.held === 'function' && inp.held('aim'));
-      const angle = focus && aiming && typeof focus.angle === 'number' ? focus.angle : T.angle;
-      if (this.torch.angle !== angle) this.torch.angle = angle;
+      // C6: lamp_1 'Long Beam' — stats in the bag, read lazily, 1 with no node owned. torchMul
+      // scales the heat, torchRangeMul the reach (and with it the shadow far plane).
+      const stats = prog && prog.stats;
+      const torchMul = stats && typeof stats.torchMul === 'number' && stats.torchMul > 0 ? stats.torchMul : 1;
+      const rangeMul = stats && typeof stats.torchRangeMul === 'number' && stats.torchRangeMul > 0 ? stats.torchRangeMul : 1;
+      const angle = T.angle;
       const hot = beam && typeof beam.seconds === 'number' && this._torchLitT < beam.seconds ? 2 : 1;
       // ROUND 14. IN THE CAR THE TORCH IS POINTED AT YOUR OWN DASHBOARD. Measured with
       // tools/carlook.mjs: seated with the torch lit, the dash, wheel and door cards clip
@@ -1061,19 +1259,43 @@ export class Lights {
       // moment they step out it is full strength again.
       const inCabin = !!(this.ctx.shared && this.ctx.shared.inCar);
       const cabin = inCabin ? CABIN_TORCH : 1;
-      this.torch.intensity = this._faultT > 0 ? 0 : this._torchIntensity * hot * cabin;
-      camera.getWorldDirection(_fwd);
-      // The torch sits at the eye; the offset is left to the viewmodel owner to author.
-      this.torch.position.copy(p);
-      const tx = p.x + _fwd.x * T.ahead;
-      const ty = p.y + _fwd.y * T.ahead;
-      const tz = p.z + _fwd.z * T.ahead;
-      const tt = this.torch.target.position;
-      tt.set(
-        damp(tt.x, tx, T.lag, dt),
-        damp(tt.y, ty, T.lag, dt),
-        damp(tt.z, tz, T.lag, dt),
-      );
+      // The fault test comes FIRST and wins outright: tests/jump.mjs pins a blackout at
+      // exactly 0 and back above it. The flicker only ever multiplies a lit filament.
+      const live = this._faultT > 0 ? 0 : this._torchIntensity * hot * cabin * torchMul;
+      this._torchLive = live;
+      // Lent to the car this frame? setHeadlights() owns the spot; only the logical torch
+      // (for lit) and the High Beam clock move. Spot writes resume the frame it comes back.
+      if (!this._headViaTorch) {
+        if (this.torch.angle !== angle) this.torch.angle = angle;
+        const reach = TORCH_DISTANCE * rangeMul;
+        if (this.torch.distance !== reach) this.torch.distance = reach;
+        // C11: the Warden's flicker, AFTER _updateLit (step) has read _torchLive, so
+        // ctx.shared.lit does not flap. A dropout is a 60 ms cut; the dip is capped at 30%.
+        let flick = 1;
+        if (this._dropT > 0) flick = 0;
+        else if (this._flicker > 0.002) {
+          // Wall clock, like the grain: a flicker that freezes in hitstop reads as a hang.
+          const wt = this.ctx.time ? this.ctx.time.t : 0;
+          const dip = FLICKER_DIP + FLICKER_A * Math.sin(wt * FLICKER_W1)
+            + FLICKER_B * Math.sin(wt * FLICKER_W2 + FLICKER_PH2);
+          flick = clamp(1 - this._flicker * dip, FLICKER_FLOOR, 1);
+        }
+        this.torch.intensity = live * flick;
+        camera.getWorldDirection(_fwd);
+        // The torch sits at the eye; the offset is left to the viewmodel owner to author.
+        this.torch.position.copy(p);
+        const tx = p.x + _fwd.x * T.ahead;
+        const ty = p.y + _fwd.y * T.ahead;
+        const tz = p.z + _fwd.z * T.ahead;
+        const tt = this.torch.target.position;
+        tt.set(
+          damp(tt.x, tx, T.lag, dt),
+          damp(tt.y, ty, T.lag, dt),
+          damp(tt.z, tz, T.lag, dt),
+        );
+      }
+    } else {
+      this._torchLive = 0;
     }
 
     /* ---- write the seated rovers ------------------------------------------- */
@@ -1088,9 +1310,18 @@ export class Lights {
       light.decay = h.decay;
       light.distance = h.distance;
       // Distance fade [skyshard rovers.js:56]: a rover that is about to lose its seat is
-      // already dim, so the handoff never pops.
+      // already dim, so the handoff never pops. A FIXED world lamp (h.fixed, see FIXED_KINDS)
+      // does not follow you: it holds full to FIXED_HOLD_M — or FIXED_REACH_K of its own reach
+      // when that is longer — and fades out over FIXED_FADE_M, past where its light lands anyway.
       const dx = h.x - p.x, dy = h.y - p.y, dz = h.z - p.z;
-      const fall = clamp01(1.15 - Math.sqrt(dx * dx + dy * dy + dz * dz) / Math.max(46,h.distance));
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      let fall;
+      if (h.fixed) {
+        const end = Math.max(FIXED_HOLD_M + FIXED_FADE_M, h.distance * FIXED_REACH_K);
+        fall = clamp01((end - d) / FIXED_FADE_M);
+      } else {
+        fall = clamp01(1.15 - d / Math.max(46, h.distance));
+      }
       let v = h.peak * fall;
       // A ttl'd borrow (muzzle flash, impact spark) decays on the VIGIL flash curve
       // [vigil fx.js:296-301]; a persistent borrow holds whatever intensity it was given.

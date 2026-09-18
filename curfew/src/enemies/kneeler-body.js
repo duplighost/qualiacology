@@ -391,55 +391,33 @@ export function kneelerSet() {
    Materials. Borrowed from the one factory (see the header).
    ========================================================================== */
 function borrowMaterials(rng) {
-  // THE PREFERRED PATH, and it is live since ROUND 7: bodies.js exports makeShell and
-  // contactTex (docs/ROUND-6/HANDOFF-C.md item 1, docs/NEXT.md section E). The boss no longer
-  // builds a whole hound at boot just to steal three materials off it.
-  if (typeof bodiesMod.makeShell === 'function' && typeof bodiesMod.contactTex === 'function') {
-    const shell = bodiesMod.makeShell(1, 1, 1);
-    const contact = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
-      bodiesMod.makeBasic(bodiesMod.contactTex(), 0x000000));
-    contact.material.opacity = 0.72;
-    contact.rotation.x = -Math.PI / 2;
-    // THE PAINTED CAST SHADOW. NEXT.md B4: "fully lit, no shadow". A real one needs
-    // castShadow, and castShadow on a vertexColors material links a DEPTH program the day the
-    // boss first enters the moon's cascade — mid-play, which is the one thing the program
-    // budget forbids (AGENTS.md). So the shadow is PAINTED: the same soft disc, stretched
-    // along the ground away from the moon and laid under the body. One draw, no program, and
-    // at 3 m it is the difference between a thing standing on the ground and a thing floating
-    // over it. Its offset and stretch are written once by the rig from the moon's bearing.
-    const cast = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
-      bodiesMod.makeBasic(bodiesMod.contactTex(), 0x000000));
-    cast.material.opacity = 0.46;
-    cast.rotation.x = -Math.PI / 2;
-    return {
-      shell, contact, cast,
-      eye: bodiesMod.makeBasic(bodiesMod.whiteTex(), new THREE.Color(EYE).multiplyScalar(EYE_GAIN)),
-      vent: bodiesMod.makeBasic(bodiesMod.whiteTex(), new THREE.Color(VENT).multiplyScalar(VENT_GAIN)),
-      reveal: (v) => { shell.userData.reveal = v; const u = shell.userData.uniforms; if (u) u.uReveal.value = v; },
-      rimGain: (v) => { shell.userData.rimGain = v; const u = shell.userData.uniforms; if (u) u.uRimGain.value = v; },
-      dispose() { shell.dispose(); if (contact.material) contact.material.dispose(); if (cast.material) cast.material.dispose(); },
-    };
-  }
-  // The path that exists today: build a hound, keep its materials and its contact
-  // disc, discard the rest. Boot-time only; the geometry set is cached inside
-  // bodies.js and is never disposed here.
-  const donor = bodiesMod.buildBody('hound', rng);
-  const shell = donor.shellMat;
-  // The hound's per-instance tint is a value spread 0.78..1.14 on a hex that is
-  // already near-black; the boss uses the ladder's own value (1.0) so its
-  // silhouette is the authored CLOTH and nothing else.
-  shell.color.setRGB(1, 1, 1);
-  const contact = donor.parts.contact;
-  if (contact.parent) contact.parent.remove(contact);
-  const eye = donor.eyeMat;
-  eye.color.set(EYE).multiplyScalar(EYE_GAIN);
-  eye.opacity = 1;
-  const vent = bodiesMod.makeBasic(bodiesMod.whiteTex(), new THREE.Color(VENT).multiplyScalar(VENT_GAIN));
+  // bodies.js exports makeShell and contactTex (ROUND 7, docs/ROUND-6/HANDOFF-C.md item 1):
+  // the boss borrows its three materials from the one factory and never builds a whole hound
+  // at boot to steal them. This was a typeof-guarded path with a donor-hound fallback that
+  // could never run (the interfaces gate's mirror scan); the fallback is gone.
+  const shell = bodiesMod.makeShell(1, 1, 1);
+  const contact = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+    bodiesMod.makeBasic(bodiesMod.contactTex(), 0x000000));
+  contact.material.opacity = 0.72;
+  contact.rotation.x = -Math.PI / 2;
+  // THE PAINTED CAST SHADOW. NEXT.md B4: "fully lit, no shadow". A real one needs
+  // castShadow, and castShadow on a vertexColors material links a DEPTH program the day the
+  // boss first enters the moon's cascade — mid-play, which is the one thing the program
+  // budget forbids (AGENTS.md). So the shadow is PAINTED: the same soft disc, stretched
+  // along the ground away from the moon and laid under the body. One draw, no program, and
+  // at 3 m it is the difference between a thing standing on the ground and a thing floating
+  // over it. Its offset and stretch are written once by the rig from the moon's bearing.
+  const cast = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+    bodiesMod.makeBasic(bodiesMod.contactTex(), 0x000000));
+  cast.material.opacity = 0.46;
+  cast.rotation.x = -Math.PI / 2;
   return {
-    shell, eye, vent, contact,
-    reveal: (v) => donor.reveal(v),
+    shell, contact, cast,
+    eye: bodiesMod.makeBasic(bodiesMod.whiteTex(), new THREE.Color(EYE).multiplyScalar(EYE_GAIN)),
+    vent: bodiesMod.makeBasic(bodiesMod.whiteTex(), new THREE.Color(VENT).multiplyScalar(VENT_GAIN)),
+    reveal: (v) => { shell.userData.reveal = v; const u = shell.userData.uniforms; if (u) u.uReveal.value = v; },
     rimGain: (v) => { shell.userData.rimGain = v; const u = shell.userData.uniforms; if (u) u.uRimGain.value = v; },
-    dispose() { shell.dispose(); eye.dispose(); vent.dispose(); if (contact.material) contact.material.dispose(); },
+    dispose() { shell.dispose(); if (contact.material) contact.material.dispose(); if (cast.material) cast.material.dispose(); },
   };
 }
 

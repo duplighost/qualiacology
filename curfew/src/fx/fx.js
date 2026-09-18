@@ -125,7 +125,7 @@ const TRAUMA_DECAY = 1.6;
  * module-level beam records, present() writes 48 alphas into a Float32Array.
  */
 const EYE = (CFG.fx && CFG.fx.eyeshine) || {};
-const EYE_PAIRS = EYE.pairs || 24;
+const EYE_PAIRS = EYE.pairs || 5;
 const EYE_RANGE = EYE.range || [20, 60];
 const EYE_H = EYE.h || [0.6, 1.1];
 const EYE_H_WRONG = EYE.hWrong || [2.5, 3.5];
@@ -138,16 +138,33 @@ const EYE_DEPTH_FROM = EYE.depthFrom || 500;
 // the rim the count climbs toward. Inlined rather than imported: placedata pulls staged.js
 // and everything it dresses with, and this file must stay a leaf.
 const EYE_DEPTH_TO = 1750;
-const EYE_MIN_PAIRS = 2;          // the cap at the centre (was 6); EYE_PAIRS at the rim. Alex: "it seems like a lot"
-const EYE_SPAWN_S = 0.8;          // one placement attempt per this many seconds (was 0.25)
+// D14: the cap at the centre and the refill are CFG's now (config.js CFG.fx.eyeshine), because
+// three systems paint eyes on trunks and this was the one whose numbers nobody could see.
+const EYE_MIN_PAIRS = typeof EYE.minPairs === 'number' ? EYE.minPairs : 1;
+const EYE_SPAWN_S = typeof EYE.spawnEveryS === 'number' ? EYE.spawnEveryS : 6;
 const EYE_TRIES = 4;              // trunk probes per attempt (nearestTagged is cheap)
 // MEASURED from the driver's seat (tests/shots/round22-F-eyes.png): at 0.11 m apart the two
 // points merged into one glint by 40 m. 0.28 m is about 8 px apart at 25 m and still one
 // point past 60 m, which is how a pair reads at a distance anyway.
 const EYE_SEP = 0.28;             // m between the two eyes
 const EYE_SIZE = 0.16;            // m, the sprite's world diameter: 4 px at 25 m, 2 at 60
-const EYE_ALPHA = 0.60;           // colour * alpha stays under post.js's 1.05 bloom threshold
-const EYE_COL = [1.4, 1.6, 1.25]; // a green-white, the way a dog's eyes throw a lamp back
+// horror 11: TWO COLOURS, per pair, written into the Points' colour attribute at placement.
+// The shared pMat is `vertexColors: true` already (the ring's sparks are coloured that way),
+// so this costs no define and no program. A low pair is sunrise orange under the bloom
+// threshold; a wrong-height pair is cold and its colour x alpha crosses 1.05, so it is the
+// one thing in the treeline that blooms. The player learns the rule with no words:
+// orange means it is coming, cold means it is watching.
+const EYE_COL_LOW = EYE.colLow || [1.7, 0.85, 0.30];
+const EYE_COL_WRONG = EYE.colWrong || [1.0, 1.45, 1.6];
+const EYE_ALPHA_LOW = typeof EYE.alphaLow === 'number' ? EYE.alphaLow : 0.60;
+const EYE_ALPHA_WRONG = typeof EYE.alphaWrong === 'number' ? EYE.alphaWrong : 0.80;
+// D14: one shared eyes budget. dread._startEyes stamps ctx.shared.eyesAt (sim time) when a
+// dread or Auditor pair opens; no glint is placed inside this many seconds of it, so the
+// three systems that paint eyes never share a frame.
+const EYE_EXCL_S = typeof EYE.exclusionS === 'number' ? EYE.exclusionS : 20;
+// C13: a wrong-height pair that has been lit longer than EYE_LOOK_S and that the player has
+// closed on by this much is reported on the bus once; dread may make it a Pale.
+const EYE_APPROACH_M = typeof EYE.approachM === 'number' ? EYE.approachM : 4;
 const EYE_LOOK_COS = Math.cos(0.09);
 const EYE_AGE_MAX = 20;           // s; then it was never there
 const EYE_LIT_FADE = 0.6;         // s to fade up in a beam, and out of one
@@ -161,6 +178,8 @@ const _beamTorch = { on: false, x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: -1, cos: 0.7
 const _beamCar = { on: false, x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: -1, cos: 0.8 };
 const _beams = [_beamTorch, _beamCar];
 const _fwd = new THREE.Vector3();
+// C13: the reused payload for 'eyeshine:approached'. Written, emitted, never retained.
+const _approached = { x: 0, y: 0, z: 0 };
 
 // Module-level scratch.
 const _m4 = new THREE.Matrix4();
@@ -284,7 +303,7 @@ export class Fx {
     this.eyeAttr = new Float32Array(eyeN * 3);
     this.eyePos.fill(-9999);
     for (let i = 0; i < eyeN; i++) {
-      this.eyeCol[i * 3] = EYE_COL[0]; this.eyeCol[i * 3 + 1] = EYE_COL[1]; this.eyeCol[i * 3 + 2] = EYE_COL[2];
+      this.eyeCol[i * 3] = EYE_COL_LOW[0]; this.eyeCol[i * 3 + 1] = EYE_COL_LOW[1]; this.eyeCol[i * 3 + 2] = EYE_COL_LOW[2];
       this.eyeAttr[i * 3] = EYE_SIZE; this.eyeAttr[i * 3 + 1] = 0; this.eyeAttr[i * 3 + 2] = 1;
     }
     const eyeGeo = new THREE.BufferGeometry();
@@ -302,10 +321,14 @@ export class Fx {
       this.eyeState.push({
         live: false, x: 0, y: 0, z: 0, age: 0, lit: 0, unlitT: 0, lookT: 0,
         wrong: false, blinkT: 0, blinkOff: 0, died: 0,
+        // horror 11 / C13: this pair's alpha, seconds it has been lit, the distance it was
+        // first lit at, and whether the bus has already been told the player closed on it.
+        alpha: EYE_ALPHA_LOW, litT: 0, d0: 0, told: false,
       });
     }
     this._eyeSpawnT = 0;
     this._eyePosDirty = false;
+    this._eyeColDirty = false;
     this._eyeWasLive = false;   // so the alpha upload happens only while a pair is (or just was) on screen
     this._eyeLive = 0;
 
@@ -732,6 +755,16 @@ export class Fx {
       }
       e.lit += (target - e.lit) * litK;
       e.unlitT = target > 0 ? 0 : e.unlitT + dt;
+      // C13: how long it has been lit, and how far away it was when the light first found it.
+      // A wrong-height pair the player then walks TOWARD, with the beam still on it, is told
+      // to the bus once; dread decides whether the glint had a body all along.
+      if (e.lit > 0.5) { if (e.litT === 0) e.d0 = d; e.litT += dt; }
+      else e.litT = 0;
+      if (e.wrong && !e.told && e.litT > EYE_LOOK_S && e.d0 - d > EYE_APPROACH_M) {
+        e.told = true;
+        const bus = this.ctx.bus;
+        if (bus) { _approached.x = e.x; _approached.y = e.y; _approached.z = e.z; bus.emit('eyeshine:approached', _approached); }
+      }
       // Stared at straight: it looks away. Glancing across it costs nothing.
       const look = d > 1e-3 && (dx * _fwd.x + dy * _fwd.y + dz * _fwd.z) / d > EYE_LOOK_COS;
       e.lookT = look ? e.lookT + dt : Math.max(0, e.lookT - dt * 2);
@@ -757,6 +790,12 @@ export class Fx {
     if (this._eyeSpawnT > 0) return;
     this._eyeSpawnT = EYE_SPAWN_S;
     if ((!_beamTorch.on && !_beamCar.on) || this._underRoof) return;
+    // D14: the shared eyes budget. A dread or Auditor pair opened recently: no glint pool on
+    // top of it. Both stamps are the sim clock (main.js ctx.time.t), so the two agree.
+    {
+      const sh = this.ctx.shared, tm = this.ctx.time;
+      if (sh && tm && typeof sh.eyesAt === 'number' && tm.t - sh.eyesAt < EYE_EXCL_S) return;
+    }
     // Deeper in, more pairs: the cap climbs from the centre to the rim.
     const depthK = clamp01((Math.sqrt(cx * cx + cz * cz) - EYE_DEPTH_FROM) / (EYE_DEPTH_TO - EYE_DEPTH_FROM));
     const cap = Math.round(EYE_MIN_PAIRS + (EYE_PAIRS - EYE_MIN_PAIRS) * depthK);
@@ -800,6 +839,7 @@ export class Fx {
       const e = this.eyeState[slot];
       e.live = true; e.x = ex; e.y = ey; e.z = ez;
       e.age = 0; e.lit = 0; e.unlitT = 0; e.lookT = 0; e.wrong = wrong;
+      e.litT = 0; e.d0 = 0; e.told = false;
       e.blinkT = 1 + rng.next() * 4; e.blinkOff = 0;
       // The two eyes sit across the facing, EYE_SEP apart.
       const sx = -fz * EYE_SEP * 0.5, sz = fx * EYE_SEP * 0.5;
@@ -807,9 +847,40 @@ export class Fx {
       this.eyePos[j] = ex - sx; this.eyePos[j + 1] = ey; this.eyePos[j + 2] = ez - sz;
       this.eyePos[j + 3] = ex + sx; this.eyePos[j + 4] = ey; this.eyePos[j + 5] = ez + sz;
       this._eyePosDirty = true;
+      // horror 11: the pair's colour, both vertices. Orange low, cold at the wrong height.
+      // `tint`, not `col`: `col` is the collision system declared above this loop, and a
+      // second `const col` here shadowed it for the WHOLE loop body, so col.nearestTagged
+      // threw a TDZ ReferenceError on every spawn try and no pool pair ever opened.
+      const tint = wrong ? EYE_COL_WRONG : EYE_COL_LOW;
+      e.alpha = wrong ? EYE_ALPHA_WRONG : EYE_ALPHA_LOW;
+      const ec = this.eyeCol;
+      ec[j] = tint[0]; ec[j + 1] = tint[1]; ec[j + 2] = tint[2];
+      ec[j + 3] = tint[0]; ec[j + 4] = tint[1]; ec[j + 5] = tint[2];
+      this._eyeColDirty = true;
       this._eyeLive++;
       return;                                  // one pair per attempt
     }
+  }
+
+  /**
+   * C13: drop the live pair nearest (x, z), inside 1.5 m, this frame. dread calls it the
+   * step it stands a Pale where the glint was, so the eyes and the body never share a frame.
+   * Returns true when a pair was dropped.
+   */
+  killEyeshineNear(x, z) {
+    let best = -1, bd = 1.5;
+    for (let i = 0; i < EYE_PAIRS; i++) {
+      const e = this.eyeState[i];
+      if (!e.live) continue;
+      const d = Math.hypot(e.x - x, e.z - z);
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (best < 0) return false;
+    const e = this.eyeState[best];
+    e.live = false; e.died = 5;               // 5: it became something
+    this._eyePosDirty = true;
+    if (this._eyeLive > 0) this._eyeLive--;
+    return true;
   }
 
   /** Live pairs right now. Tools and tests. */
@@ -930,13 +1001,14 @@ export class Fx {
     for (let i = 0; i < EYE_PAIRS; i++) {
       const e = this.eyeState[i], j = i * 6;
       let al = 0;
-      if (e.live) { anyLive = true; al = e.blinkOff > 0 ? 0 : EYE_ALPHA * e.lit; }
+      if (e.live) { anyLive = true; al = e.blinkOff > 0 ? 0 : e.alpha * e.lit; }
       else if (eyePos[j + 1] !== -9999) { eyePos[j + 1] = -9999; eyePos[j + 4] = -9999; this._eyePosDirty = true; }
       eyeAttr[j + 1] = al; eyeAttr[j + 4] = al;
     }
     if (anyLive || this._eyeWasLive) this.eyeGeo.attributes.aP.needsUpdate = true;   // not a 576-byte upload every frame of an empty night
     this._eyeWasLive = anyLive;
     if (this._eyePosDirty) { this.eyeGeo.attributes.position.needsUpdate = true; this._eyePosDirty = false; }
+    if (this._eyeColDirty) { this.eyeGeo.attributes.color.needsUpdate = true; this._eyeColDirty = false; }
 
     /* ---- tracers --------------------------------------------------------- */
     // 340 m/s is 5.7 m per fixed step: without this lerp a 144 Hz display sees the same

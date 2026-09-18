@@ -72,6 +72,25 @@ const K = CFG.car;
 const SP = K.spawn;
 const SEAT = K.seat;
 
+// C9 / D15: THE ONE GROUND SAMPLE. The county keeps terrain.heightAt as the BED; what a
+// MOVER stands on is terrain.surfaceAt = max(bed, ice) — the reservoir inlet and the four
+// road pools are frozen, and the county loop runs under the reservoir sheet for 150 m.
+// Every height the car reads (chassis, tilt, settle, wheels, debris, placements) goes
+// through here, so the car climbs the bank onto the ice instead of driving the drowned
+// road with its roof under the sheet. Falls back to the bed on a terrain that has no ice.
+const groundAt = (terr, x, z) => (terr.surfaceAt ? terr.surfaceAt(x, z) : terr.heightAt(x, z));
+// A cheap deterministic 0..1 off a scalar (the cough clock is seeded off `travel`, not off
+// the rng, so a test rig with no rng still coughs the same way twice).
+const hashT = (v) => { const s = Math.sin(v * 12.9898) * 43758.5453; return s - Math.floor(s); };
+
+// C19 / D12: the parked roof, in collision's OBJECT form so `climbable: false` reaches
+// F_NOCLIMB — walking into the flank never mantles the car; Space at it still does (the
+// controller reads car.roofHeightAt only on a deliberate press). Still `standable`, so a
+// body that IS up there stands. `breakable: false` keeps it identical to the numeric
+// addCircle, which never makes a breakable. One object, mutated in place: a park allocates
+// nothing.
+const _roofShape = { kind: 'circle', x: 0, z: 0, r: 0.98, y0: 0, y1: 0, standable: true, climbable: false, breakable: false };
+
 /* ---------------------------------------------------------------------------
  * Locals config.js does not own yet. Each carries its donor or its reason; a
  * CFG.car block for them is requested in docs/HANDOFF.md.
@@ -122,7 +141,20 @@ const BOB_LAMBDA = 8.0;           // [mossway game.js:1873]
 // because with the bob cut back this spring is what you feel, and it was tuned against a
 // ride that already had a third of a metre of sine in it.
 const SUSP_K = 150.0, SUSP_C = 26.0, SUSP_DRIVE = 0.45;
-const GROUND_LAMBDA = 12.0;       // [peachful vehicle.js:99] damp to ground, not snap
+// [peachful vehicle.js:99] damp to ground, not snap. D12: the damp is LED by the slope
+// (see _integrate): a first-order lag chasing a ramp sits v*grade/lambda below it — 0.30 m
+// under the Holdfast road at 23 m/s, floating the same amount downhill — so the ground's
+// rate is fed forward and the steady-state error on any constant grade is zero while the
+// low-pass on ripples stays exactly this.
+const GROUND_LAMBDA = 12.0;
+// The fed-forward rate is itself low-passed (the spring keeps the raw rate). Simulated at
+// 60 Hz with the two-axle average: ON ROAD 6/s settles a grade change inside 0.2 s (a crest
+// is 30 m of road SY, 1.3 s at the cap; residual 3 cm) and spreads a pad-rim step so one
+// frame moves the seat 0.11 m, about what it moved before (0.09). OFF ROAD 1.5/s: at 6/s
+// the 2.5 m detail octave came through 44% rougher — Alex, round 19: "Car gets too bumpy,
+// especially off road" — and at 1.5/s it is 11% while a 15% off-road climb still settles
+// inside 14 m instead of sitting 0.14 m under the ground for ever.
+const LEAD_LAMBDA = 6.0, LEAD_LAMBDA_OFF = 1.5;
 const HIT_COOLDOWN = 0.45;        // [mossway game.js:1809]
 
 /* ---------------------------------------------------------------------------
@@ -294,8 +326,50 @@ const WEAR_OFFROAD_MUL = W.offRoadMul || 1.4;    // gravel and grass wear it fas
 const WEAR_PER_IMPACT = W.impact || 0.070;       // scaled by how much speed the contact actually cost
 const WEAR_PER_RAM_HIT = W.ram || 0.025;         // a body at speed dents a wing
 const WEAR_PER_TREE = W.tree || 0.0022;          // Treebreaker: per trunk felled
-const WEAR_SPEED_LOSS = 0.28;     // fraction of top speed a fully worn car has lost
+const WEAR_SPEED_LOSS = 0.28;     // fraction of top speed a fully worn car has lost — the WHOLE loss,
+                                  // flat in wear; the 0.80 collapse is gone (D12, the window below)
 const WEAR_LAMP_LOSS = 0.45;      // and the one working lamp browns out with it
+
+// D12 — THE FAILURE WINDOW. Alex: "rolls slow for soooo long; the further you go the
+// slower it breaks down." Wear is per metre and the old cap collapsed past 0.80, so a
+// slower car wore slower and the crawl approached the end asymptotically: 0.80 -> dead was
+// 3.2 km and 7.9 MINUTES at full throttle, measured by integration. Now, from WEAR_FAIL_FROM
+// with the engine on and a driver in the seat, wear rises on a CLOCK at WEAR_FAIL_RATE so
+// the stall lands WEAR_FAIL_WINDOW_S later whatever the speed, and the window is a TELL,
+// not a number: every COUGH_GAP the engine coughs (one dr_branch, quiet), the pedal drops
+// out for COUGH_CUT, the gauge kicks. Getting out pauses it (the engine is off); idling in
+// the seat does not. The .999 edge and _syncEngineFailure are untouched.
+const WEAR_FAIL_FROM = W.failFrom || 0.92;
+const WEAR_FAIL_WINDOW_S = W.failWindowS || 35;
+const WEAR_FAIL_RATE = (0.999 - WEAR_FAIL_FROM) / WEAR_FAIL_WINDOW_S;   // wear per second in the window
+const COUGH_GAP_MIN = 1.5, COUGH_GAP_MAX = 2.5;   // s between coughs: irregular enough not to be a metronome
+const COUGH_CUT_MIN = 0.2, COUGH_CUT_MAX = 0.4;   // s the pedal drops out per cough; it ramps back over 0.22
+const COUGH_KICK_S = 0.45;                        // s the gauge's kick takes to settle after a cough
+const COUGH_GAIN = 0.21;                          // under the failure coughs (.25/.17): a stumble, not an alarm
+
+// C8 / D5 — THE CAR ANSWERS. H on foot (hud.js emits 'car:locate' after arming its bearing
+// chevron) and the car honks from where it is, positional, through the air and the trees,
+// and blinks its one lamp twice. No 'noise' event: calling your car is not a lure.
+const ANSWER_GAIN = 0.28;         // under the seat horn's 0.34: it is far away, that is the point
+const LAMP_BLINK_ON = 0.18, LAMP_BLINK_GAP = 0.14;   // two blinks, readable from the treeline
+const LAMP_FLASH_S = LAMP_BLINK_ON * 2 + LAMP_BLINK_GAP;
+
+// HORROR 4 — THE CABIN BEATS. Every car apparition used to be gated on the player choosing
+// to look back; a player who never pressed B never got one. After CABIN_WARM_S of
+// continuous night driving with the lights on, two clocks run (rng fork 'car:cabin'):
+// BREATH — every BREATH_EVERY, roll BREATH_ROLL: a breath at the ear from 0.9 m behind
+// the seat, then rearPresence.prime() so the NEXT look-back inside BREATH_PRIME_S has the
+// figure on the road (without the prime the breath would be a lie 58% of the time).
+// ROOF — every ROOF_EVERY, roll ROOF_ROLL: a brush on the roof, a small camera knock, the
+// cabin light dips ROOF_DIM for ROOF_DIM_S. Neither touches controls or damage: the
+// file's own law. The clocks tick only while the gate holds, so a stop re-arms the warm-up
+// but does not reset what was owed.
+const CABIN_WARM_S = 60;
+const BREATH_EVERY_MIN = 140, BREATH_EVERY_MAX = 260, BREATH_ROLL = 0.30;
+const BREATH_GAIN = 0.55, BREATH_BEHIND = 0.9, BREATH_PRIME_S = 3.0;
+const ROOF_EVERY_MIN = 240, ROOF_EVERY_MAX = 420, ROOF_ROLL = 0.25;
+const ROOF_FIRST_S = 30;          // the two clocks never land on the same frame
+const ROOF_GAIN = 0.7, ROOF_TRAUMA = 0.05, ROOF_DIM = 0.3, ROOF_DIM_S = 0.4;
 
 // ROUND 22 — Alex, 2026-09-10: "Moths. Idle with your headlights on and they cake the lens,
 // dimming your beams until you drive. Free pressure to keep moving, no clock required."
@@ -468,6 +542,7 @@ export class Car {
     this.prevHeading = 0; this.prevPitch = 0; this.prevRoll = 0; this.prevBob = 0;
     // ROUND 18: the ride spring, interpolated between fixed steps like bob.
     this.susp = 0; this.suspV = 0; this.prevSusp = 0; this.pedal = 0;
+    this._leadV = 0;    // D12: the low-passed ground rate the chassis target leads by (_integrate)
     this.prevWheelRot = 0; this.prevSteer = 0;
     // The door and the courtesy light are simulation state like everything else: they are
     // stepped, they keep prev/curr, and present() lerps them. A door that snapped between
@@ -513,6 +588,16 @@ export class Car {
     this.wearShown = WEAR_START;
     this._engineFailed = false;
     this._failureAnnounced = false;
+    // D12: the failure window (_stepFailureWindow). `_failing` is what the gauge breathes on,
+    // `_coughKick` its kick, `_pedalCutT` the seconds the pedal is still dropped out.
+    this._failing = false; this._coughT = 0; this._coughN = 0;
+    this._pedalCutT = 0; this._coughKick = 0;
+    // C8: the answer to H on foot (answer()); the flash is two blinks of the one lamp.
+    this.answerCount = 0; this._answerPending = false; this._lampFlashT = 0;
+    // HORROR 4: the cabin beats (_stepCabinBeats). Clocks tick only while the gate holds.
+    this._cabinRng = null; this._cabinDriveS = 0;
+    this._breathT = 0; this._roofT = ROOF_FIRST_S; this._cabinDimT = 0;
+    this.breathCount = 0; this.roofCount = 0;
     // ROUND 22: the moths on the lens, 0..1 (see the MOTH_ block). `_mothPushed` is the
     // level the lens emissive was last told, because body.setLamp is event-driven and not
     // per-frame; `_mothSpawnT` accumulates fractional particles so the swarm allocates nothing.
@@ -678,8 +763,10 @@ export class Car {
     const scene = this.ctx.scene;
     if (!scene) throw new Error('car: ctx.scene missing (gfx must be manifest #1)');
     scene.add(this.body.root);
-    this.rearPresence = new RearPresence(this.ctx);
+    // The back-seat placement rides the body root, so it is interpolated with the car.
+    this.rearPresence = new RearPresence(this.ctx, this.body.root);
     this.distress = new CarDistress(this.ctx);
+    this._cabinRng = this.ctx.rng ? this.ctx.rng.fork('car:cabin') : null;
 
     // LISTEN, NEVER EMIT (integrator decision 3): player/controller.js owns player:died
     // and player:respawn and clears its own dead flag. This file only has to let go —
@@ -696,6 +783,8 @@ export class Car {
       });
       // Ari's schemes (vehicle/paint.js). Appearance only, so this is the whole consumer.
       bus.on('car:paint', () => this._applyPaint());
+      // C8 / D5: H on foot. hud.js arms its bearing chevron and emits this; the car answers.
+      bus.on('car:locate', () => this.answer());
       bus.on('player:died', () => this._forceRelease());
       bus.on('player:respawn', (p) => {
         const wasIn = this._forceRelease();
@@ -1210,7 +1299,7 @@ export class Car {
     }
 
     this.x = bestX; this.z = bestZ;
-    this.y = terr.heightAt(this.x, this.z);
+    this.y = groundAt(terr, this.x, this.z);
     this.heading = bestH;
     this.speed = PILOT_CRUISE;
     this.steer = 0; this.pitch = 0; this.roll = 0; this.bob = 0;
@@ -1242,7 +1331,9 @@ export class Car {
     this.prevPitch = this.pitch; this.prevRoll = this.roll; this.prevBob = this.bob; this.prevSusp = this.susp;
     this.prevWheelRot = this.wheelRot; this.prevSteer = this.steer;
     this.prevDoorA = this.doorA; this.prevCabin = this.cabin;
-
+    // D12: a placement is not a slope. The feed-forward's memory of the ground under the
+    // last step would read a teleport as a 14 m/s climb for one step.
+    this._lastGy = undefined; this._leadV = 0;
   }
 
   /* ----------------------------------------------------------------- lights */
@@ -1323,14 +1414,21 @@ export class Car {
   _placeRoof() {
     if (this._roofPlaced) return;
     const col = this._collision;
-    if (!col || !col.addCircle) return;
+    if (!col || !(col.addCollider || col.addCircle)) return;
     const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
     const y0 = this.y + 0.30, y1 = this.y + ROOF_Y;
     for (let i = 0; i < 3; i++) {
       const t = (i - 1) * 1.30;
-      this._roofColliders[i] = col.addCircle(
-        this.x + fx * t, this.z + fz * t, 0.98, y0, y1, 'car', true,
-      );
+      const x = this.x + fx * t, z = this.z + fz * t;
+      // C19: the object form carries `climbable: false` (F_NOCLIMB), so the passive no-key
+      // mantle never pulls you onto the car you were walking up to the door of. A collision
+      // without the object form (a stripped test rig) gets the old numeric circle.
+      if (col.addCollider) {
+        _roofShape.x = x; _roofShape.z = z; _roofShape.y0 = y0; _roofShape.y1 = y1;
+        this._roofColliders[i] = col.addCollider(_roofShape, 'car');
+      } else {
+        this._roofColliders[i] = col.addCircle(x, z, 0.98, y0, y1, 'car', true);
+      }
     }
     this._roofPlaced = true;
   }
@@ -1407,6 +1505,7 @@ export class Car {
     this._nitro(dt);
     this._stepMoths(dt);   // ROUND 22: every mode too — a held level must survive a park
     this.rearPresence?.step(dt, this);
+    this._stepCabinBeats(dt);   // HORROR 4: breath at the ear, something on the roof
     // Debris outlives the car: you can crush a fence, park, get out and watch the last
     // splinters settle. So it steps before any of the early returns below.
     this._stepDebris(dt);
@@ -1461,6 +1560,9 @@ export class Car {
     }
     // Driving and impacts can cross the wear threshold during the mode step.
     this._syncEngineFailure();
+    // C8: the answer's two blinks. AFTER the mode step, so the park cool-down's per-step
+    // setLamp does not overwrite a blink.
+    this._stepLampFlash(dt);
 
     // The seat owns the horn from the instant the door shuts, including the hotwire beat.
     // Previously input was not polled until `driving`, so any H tap during the 1.95 s entry
@@ -1495,6 +1597,9 @@ export class Car {
       this.hornT = Math.max(0, this.hornT - dt);
       this.hornHeld = false;
       this.hornSoundPending = false;
+      // C8: an answer booked while the audio clock was not running lands on the first step
+      // it is — same one-bit debt as the seat horn, and the flash has already gone.
+      if (this._answerPending && this._soundAnswer()) this._answerPending = false;
     }
 
     // The door and the courtesy light, every mode. This is the whole of the discoverability
@@ -1766,6 +1871,7 @@ export class Car {
     } else { this.fromX = this.x; this.fromY = this.y + SEAT.y; this.fromZ = this.z; }
     this.mode = 'entering';
     this.beacon = false;
+    this._answerPending = false;   // C8: you found it; an owed honk from outside is moot
     this.enterT = 0;
     // WHEEL 1, 'Hotwire' — hook 'hotwireS', base CFG.car.hotwire (nodes.js:119-120).
     // Read at the moment the door shuts, never captured: a node bought between two entries
@@ -1977,13 +2083,18 @@ export class Car {
     const onRoad = rd < ON_ROAD_D;
     // Wear costs top speed and nothing else: a beaten car is a slower car, which is a read
     // you get through the windscreen instead of off a gauge. WHEEL 4 is the only thing
-    // that gives any of it back. At WEAR_START the on-road cap is 22.0 rather than 23.0.
+    // that gives any of it back.
     // ROUND 22 — Alex: "Car should degrade faster." About one lap of the county (10.4 km
-    // of road, WEAR_DRIVE_M) from part-worn to the crawl at the 0.80 knee, and 13.6 km to
-    // the engine stopping; rough ground wears it WEAR_OFFROAD_MUL faster. Impacts still
-    // count independently; idling does not — idling is the moths' job.
+    // of road, WEAR_DRIVE_M) from part-worn to the failure window at WEAR_FAIL_FROM;
+    // rough ground wears it WEAR_OFFROAD_MUL faster. Impacts still count independently;
+    // idling does not — idling is the moths' job.
+    // D12: the cap is FLAT in wear — 23.0 at 0, 16.6 at 1 — because the old collapse past
+    // 0.80 (to 12% of the cap) was the crawl Alex complained about: a slower car wears
+    // slower per second, so the end receded as you approached it. The end is a clock now
+    // (_stepFailureWindow), and the last stretch is driven at a speed that still feels
+    // like driving.
     if(this.mode==='driving')this._addWear(Math.abs(this.speed)*dt*(onRoad?1:WEAR_OFFROAD_MUL)/WEAR_DRIVE_M,'drive');
-    const worn = this.wear>=.999 ? 0 : (1-WEAR_SPEED_LOSS*this.wear)*Math.max(.12,1-Math.max(0,this.wear-.80)*4.5);
+    const worn = this.wear>=.999 ? 0 : 1-WEAR_SPEED_LOSS*this.wear;
     // WHEEL 3 'Nitro'. CONSUMED, not read: _nitro() runs from _stepDriving immediately above
     // this call and sets both, and clearing them here means the OTHER caller of _integrate —
     // the pilot that drives the car in on its own (line ~1395) — can never inherit a boost
@@ -2010,6 +2121,9 @@ export class Car {
     const rate = throttle ? 1 / 0.22 : 1 / 0.13;
     this.pedal = this.pedal === undefined ? want
       : this.pedal + clamp(want - this.pedal, -rate * dt, rate * dt);
+    // D12: a cough drops the pedal out for COUGH_CUT, and it ramps back over the same
+    // 0.22 s — the stumble you feel in the seat is the failure window's tell.
+    if (this._pedalCutT > 0) this.pedal = 0;
     if (this.pedal > 0.001) {
       this.speed += (onRoad ? K.accelOn : K.accelOff * offMul) * boostAccel * this.pedal * dt;
     }
@@ -2083,16 +2197,31 @@ export class Car {
     // NOT ON A POINT. One terrain sample under the centre picks up every ripple the
     // heightfield has at a 2.55 m scale and hands it straight to the seat; averaging the
     // two AXLE points is a physical low-pass — it is what having wheels 2.55 m apart
-    // actually does to a body — and it costs one extra heightAt on a step that already
-    // takes four in _tilt. The damp stays exactly where it was: this changes what the car
-    // is following, not how fast it follows it.
+    // actually does to a body — and it costs one extra sample on a step that already
+    // takes four in _tilt. (C9: the samples are the SURFACE, bed or ice, see groundAt.)
     let gy = 0;
     if (terr) {
       const ax = K.wheelbase * 0.5;
-      gy = (terr.heightAt(this.x + fx * ax, this.z + fz * ax)
-          + terr.heightAt(this.x - fx * ax, this.z - fz * ax)) * 0.5;
+      gy = (groundAt(terr, this.x + fx * ax, this.z + fz * ax)
+          + groundAt(terr, this.x - fx * ax, this.z - fz * ax)) * 0.5;
     }
-    this.y = damp(this.y, gy, GROUND_LAMBDA, dt);
+    // D12 — THE GROUND LEADS, THE CHASSIS FOLLOWS, AND ON A GRADE THEY AGREE. A first-order
+    // damp toward a ramp lags it: at 23 m/s on the Holdfast road's 15.7% the chassis sat
+    // 0.27 m BELOW the ribbon (0.52 m on the loop's 30%), and the same amount ABOVE it
+    // going down — tyres and bumper under the road on the climb, a float on the descent,
+    // "nothing floaty" broken both ways. dgy is the ground's own rate under the car (it
+    // already drives the spring below). Fed forward as a lead on the target, the lag
+    // cancels EXACTLY on any constant slope: the discrete damp y += (T - y)(1 - e^-ld)
+    // lags a ramp by rate * d * e^-ld / (1 - e^-ld) = rate * d / (e^ld - 1), which is
+    // rate/lambda as d -> 0 and is what is added here, so the error is zero at any step
+    // size (simulated: -0.0000 m at 23 m/s on 15.7% and 30%). The lead is low-passed
+    // (LEAD_LAMBDA / _OFF) so a ripple or a pad rim is still a ripple or a step to the
+    // seat and not a spike; the +-14 m/s clamp bounds what any one step can hand it.
+    const ddt = Math.max(dt, 1e-4);
+    const dgy = (gy - (this._lastGy === undefined ? gy : this._lastGy)) / ddt;
+    this._lastGy = gy;
+    this._leadV = damp(this._leadV || 0, clamp(dgy, -14, 14), onRoad ? LEAD_LAMBDA : LEAD_LAMBDA_OFF, dt);
+    this.y = damp(this.y, gy + this._leadV * ddt / (Math.exp(GROUND_LAMBDA * ddt) - 1), GROUND_LAMBDA, dt);
 
     /* ---- ROUND 18: SPRINGS. The third half of "a bit smoother to drive" ------------
      * `this.y` is the CHASSIS and everything physical reads it — the collider, the ram
@@ -2105,8 +2234,6 @@ export class Car {
      * Deliberately small (the clamp is +-9 cm). This is meant to take the buzz off a rough
      * verge, not to make the car wallow — Alex's standing note is "nothing floaty".
      */
-    const dgy = (gy - (this._lastGy === undefined ? gy : this._lastGy)) / Math.max(dt, 1e-4);
-    this._lastGy = gy;
     this.suspV = (this.suspV || 0) + (-(this.susp || 0) * SUSP_K - (this.suspV || 0) * SUSP_C
       - clamp(dgy, -14, 14) * SUSP_DRIVE) * dt;
     this.susp = clamp((this.susp || 0) + this.suspV * dt, -0.09, 0.09);
@@ -2123,12 +2250,16 @@ export class Car {
     const lam = onRoad ? TILT_LAMBDA : TILT_LAMBDA_OFF;
     const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
     const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
-    const hf = terr.heightAt(this.x + fx * sf, this.z + fz * sf);
-    const hb = terr.heightAt(this.x - fx * sf, this.z - fz * sf);
-    const hr = terr.heightAt(this.x + rx * ss, this.z + rz * ss);
-    const hl = terr.heightAt(this.x - rx * ss, this.z - rz * ss);
+    const hf = groundAt(terr, this.x + fx * sf, this.z + fz * sf);
+    const hb = groundAt(terr, this.x - fx * sf, this.z - fz * sf);
+    const hr = groundAt(terr, this.x + rx * ss, this.z + rz * ss);
+    const hl = groundAt(terr, this.x - rx * ss, this.z - rz * ss);
     // nose-up on a climb: forward is -Z, so a rising front is a POSITIVE x rotation.
-    const wantPitch = Math.atan2(hf - hb, sf * 2) * 0.78;
+    // D12: gain 1.0 ON ROAD — the road SY is 30 m-smoothed already, so the body sits on
+    // the grade it is on; at 0.78 the nose 2.2 m ahead was another 0.08 m into a 15%
+    // climb, and CFG.car.pitchClamp 0.32 now lets it follow the loop's 30%. Off road the
+    // 0.78 stays: a rut is a lean, not a pitch (ROUND 19).
+    const wantPitch = Math.atan2(hf - hb, sf * 2) * (onRoad ? 1.0 : 0.78);
     // roll is about the car's local Z (which points BACKWARD), so a positive roll raises
     // the car's local +X — its RIGHT. Higher ground on the right therefore wants a
     // POSITIVE roll, and a left turn wants a NEGATIVE one, because a body leans OUT of a
@@ -2158,7 +2289,7 @@ export class Car {
   /** Parked/entering/exiting: keep the pose alive on the terrain without driving it. */
   _settle(dt) {
     const terr = this._terrain;
-    if (terr) this.y = damp(this.y, terr.heightAt(this.x, this.z), GROUND_LAMBDA, dt);
+    if (terr) this.y = damp(this.y, groundAt(terr, this.x, this.z), GROUND_LAMBDA, dt);
     this._tilt(dt, true);
   }
 
@@ -2207,13 +2338,21 @@ export class Car {
     // From outside the disc pushed the car away instead, which is why the door read as a
     // one-way. collision.nearestSurface() ranks and pushes off the real surface, so a wall
     // stops the car where the wall is and a trunk behaves exactly as it did.
+    //
+    // AND IT IS THE NEAREST SURFACE IN THE CAR'S OWN HEIGHT BAND. The kerb/overhang test
+    // below used to be the only height filter, applied AFTER the ranking — so under the
+    // Filling Station bay, where a roof rafter six metres up is the nearest thing in XZ to
+    // every spine point, the rafter won, was skipped, and the shut shutter behind it never
+    // pushed back (measured 2026-09-17: floored at the closed door the car crept sideways to
+    // 0.56 m off the slab with a wing through it). The band goes into the query now.
     if (col.nearestSurface) {
+      const bandLo = feet + 0.34, bandHi = feet + ROOF_Y;
       for (let pass = 0; pass < 3; pass++) {
         let moved = false;
         for (let a = 0; a < 3; a++) {
           const t = (a - 1) * 1.40;
           const ax = this.x + fx * t, az = this.z + fz * t;
-          const near = col.nearestSurface(ax, az, 3.0);
+          const near = col.nearestSurface(ax, az, 3.0, bandLo, bandHi);
           if (!near) continue;
           // copy the scalars: it returns shared scratch, like every query in that file.
           const gap = near.distance, y0 = near.y0, y1 = near.y1;
@@ -2765,7 +2904,7 @@ export class Car {
       d.vy[i] -= DEBRIS_GRAV * dt;
       d.x[i] += d.vx[i] * dt; d.y[i] += d.vy[i] * dt; d.z[i] += d.vz[i] * dt;
       d.a[i] += d.wa[i] * dt; d.b[i] += d.wb[i] * dt; d.c[i] += d.wc[i] * dt;
-      const gy = terr ? terr.heightAt(d.x[i], d.z[i]) : 0;
+      const gy = terr ? groundAt(terr, d.x[i], d.z[i]) : 0;   // C9: debris lands on the ice too
       if (d.y[i] <= gy + 0.06) {
         d.y[i] = gy + 0.06;
         if (d.vy[i] < -1.6) {
@@ -3047,6 +3186,45 @@ export class Car {
   }
 
   /**
+   * D12 — THE FAILURE WINDOW. From WEAR_FAIL_FROM, with the engine on and a driver in the
+   * seat (mode 'driving' — idling in the seat counts, getting out pauses it), wear rises at
+   * a fixed rate through _addWear so the stall at .999 lands WEAR_FAIL_WINDOW_S seconds in
+   * whatever the speed, and the engine coughs on an irregular clock seeded off `travel`:
+   * one quiet dr_branch, the pedal dropped out for a moment, the gauge kicked. The first
+   * cough is on the first step of the window, so the window announces itself. Runs every
+   * mode from _stepWear and gates itself; allocates nothing.
+   */
+  _stepFailureWindow(dt) {
+    const inWindow = this.exists && this.wear >= WEAR_FAIL_FROM && this.wear < .999
+      && this.engineOn && this.mode === 'driving';
+    this._failing = inWindow;
+    if (this._pedalCutT > 0) this._pedalCutT = Math.max(0, this._pedalCutT - dt);
+    if (this._coughKick > 0) this._coughKick = Math.max(0, this._coughKick - dt / COUGH_KICK_S);
+    if (!inWindow) { this._coughT = 0; return; }
+    this._addWear(WEAR_FAIL_RATE * dt, 'failing');
+    this._coughT = (this._coughT || 0) - dt;
+    if (this._coughT > 0) return;
+    this._coughN = (this._coughN || 0) + 1;
+    const u = hashT((this.travel || 0) * 0.37 + this._coughN * 7.31);
+    this._coughT = COUGH_GAP_MIN + (COUGH_GAP_MAX - COUGH_GAP_MIN) * u;
+    this._pedalCutT = COUGH_CUT_MIN + (COUGH_CUT_MAX - COUGH_CUT_MIN) * hashT(u * 91.7 + 3.1);
+    this._coughKick = 1;
+    this._soundCough(u);
+  }
+
+  /** One cough: a single falling dr_branch, positioned at the car, quieter than the stall's. */
+  _soundCough(u) {
+    const a = this._audio, ac = a && (a.audioCtx || a.context || a.actx);
+    if (!a?.enabled || !a.baked || a.silent || ac?.state !== 'running' || !a.spec || !a.play || !a.has) return;
+    const name = 'dr_branch' + ((u * 3) | 0);
+    if (!a.has(name)) return;
+    const s = a.spec(); s.x = this.x; s.y = this.y + .8; s.z = this.z;
+    s.gain = COUGH_GAIN; s.rate = .48 + u * .16; s.dur = s.rate * .19;
+    s.bus = 'world'; s.send = .035; s.air = false; s.occl = false; s.lpHz = 480; s.priority = 1;
+    a.play(name, s);
+  }
+
+  /**
    * THE ONE PLACE WEAR GOES UP. Driving, a tree, a ram and a crush all come through here, so
    * WHEEL 4 'Kept' has exactly one line to stand on — nodes.js HOOK_POINTS names this method
    * as the site of `wearAdd`, and "one site per point" is the rule that keeps a hook
@@ -3081,6 +3259,7 @@ export class Car {
       const d = this.wear - this.wearShown;
       this.wearShown = Math.abs(d) <= step ? this.wear : this.wearShown + Math.sign(d) * step;
     }
+    this._stepFailureWindow(dt);   // D12: the bounded end, every mode (it gates itself)
     if (this.wear <= 0 || this.wear >= .999) return;
     const pr = this._progress;
     if (!pr || typeof pr.perk !== 'function') return;
@@ -3281,6 +3460,127 @@ export class Car {
   }
 
   /**
+   * C8 / D5 — THE CAR ANSWERS. H on foot: hud.js arms the 5.5 s bearing chevron and emits
+   * 'car:locate'; this honks from where the car is (positional, through the air and the
+   * trees) and blinks the one lamp twice. NO 'noise' event: calling your car is not a
+   * lure, and the horn's 46 m disturbance belongs to the seat. Refused while you are in it
+   * (the seat has its own horn) and while there is no car to answer.
+   */
+  answer() {
+    if (!this.exists || !this.body) return false;
+    if (this.ctx.shared && this.ctx.shared.inCar) return false;
+    if (this.mode === 'entering' || this.mode === 'driving' || this.mode === 'thrown') return false;
+    this.answerCount++;
+    this._lampFlashT = LAMP_FLASH_S;
+    this._answerPending = !this._soundAnswer();
+    this._emit('car:answered', { x: this.x, z: this.z });
+    return true;
+  }
+
+  /** The seat horn's bake, POSITIONED at the car. Same guards as _soundHorn. */
+  _soundAnswer() {
+    const a = this._audio;
+    const ac = a && (a.audioCtx || a.context || a.actx);
+    if (!a || a.enabled !== true || !a.baked || a.silent || !ac || ac.state !== 'running'
+        || typeof a.spec !== 'function' || typeof a.play !== 'function'
+        || typeof a.has !== 'function') return false;
+    let voices = 0;
+    if (a.has('car_horn')) {
+      const s = a.spec();
+      s.x = this.x; s.y = this.y + 0.9; s.z = this.z;   // from the car, wherever it is
+      s.gain = ANSWER_GAIN;
+      s.bus = 'world';
+      s.send = 0.14;
+      s.air = true; s.occl = true;   // the bearing IS the beat: air loss and the trees between
+      s.lpHz = 0;
+      s.filterHz = 1500; s.toneDb = 1.5;
+      s.priority = 1;
+      if (a.play('car_horn', s)) voices++;
+    } else if (a.has('dmg_ring0')) {
+      // the older bake set's duller horn, still from the right place
+      for (let n = 0; n < 2; n++) {
+        const rate = (n === 0 ? 370 : 466) / 3150;
+        const s = a.spec();
+        s.x = this.x; s.y = this.y + 0.9; s.z = this.z;
+        s.gain = (n === 0 ? 0.15 : 0.12) * (ANSWER_GAIN / 0.34);
+        s.rate = rate;
+        s.bus = 'world';
+        s.send = 0.10;
+        s.air = true; s.occl = true;
+        s.lpHz = 1800;
+        s.filterHz = 620; s.toneDb = 2.0;
+        s.offset = 0.030;
+        s.dur = rate * 0.31;
+        s.priority = 1;
+        if (a.play('dmg_ring0', s)) voices++;
+      }
+    }
+    return voices > 0;
+  }
+
+  /**
+   * The answer's flash: two blinks of the one lamp and the tails through body.setLamp (the
+   * lens emissive is the pulse every other lamp beat uses), then whatever the lamp was
+   * showing before — the beacon's filament, the cool-down's, or dark. No light is
+   * created: the census is pinned.
+   */
+  _stepLampFlash(dt) {
+    if (!(this._lampFlashT > 0) || !this.body) return;
+    this._lampFlashT = Math.max(0, this._lampFlashT - dt);
+    const e = LAMP_FLASH_S - this._lampFlashT;
+    const on = e < LAMP_BLINK_ON
+      || (e >= LAMP_BLINK_ON + LAMP_BLINK_GAP && e < LAMP_BLINK_ON * 2 + LAMP_BLINK_GAP);
+    const rest = this.headlightsOn ? this._filament() : 0;
+    if (this._lampFlashT > 0) this.body.setLamp(on ? 1 : rest, on || this.headlightsOn, this.moths);
+    else this.body.setLamp(rest, this.headlightsOn, this.moths);
+  }
+
+  /**
+   * HORROR 4 — THE CABIN BEATS (see the constants). Gate: night or the black hour, in the
+   * seat, engine and lights on. CABIN_WARM_S of that continuously, then two clocks:
+   * a breath at the ear from 0.9 m behind the seat that primes the rear presence, and a
+   * brush on the roof with a small knock and a dip in the cabin light. Nothing here
+   * touches controls or damage. A stop re-arms the warm-up; the clocks keep what they owe.
+   */
+  _stepCabinBeats(dt) {
+    if (this._cabinDimT > 0) this._cabinDimT = Math.max(0, this._cabinDimT - dt);
+    const sh = this.ctx.shared;
+    const night = !!sh && (sh.phase === 'night' || sh.phase === 'black');
+    const on = night && sh.inCar && this.exists && this.mode === 'driving'
+      && this.engineOn && this.headlightsOn && !!this._cabinRng;
+    if (!on) { this._cabinDriveS = 0; return; }
+    this._cabinDriveS += dt;
+    if (this._cabinDriveS < CABIN_WARM_S) return;
+    const rng = this._cabinRng;
+    this._breathT -= dt;
+    if (this._breathT <= 0) {
+      this._breathT = BREATH_EVERY_MIN + rng.next() * (BREATH_EVERY_MAX - BREATH_EVERY_MIN);
+      if (rng.next() < BREATH_ROLL) {
+        const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
+        const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
+        // the seat is at local (SEAT.x, SEAT.z) with forward -Z; behind it is +Z, i.e.
+        // MINUS the forward vector, like the door point
+        const back = SEAT.z + BREATH_BEHIND;
+        this._say('breath-ear', BREATH_GAIN,
+          this.x + rx * SEAT.x - fx * back, this.y + SEAT.y - 0.25, this.z + rz * SEAT.x - fz * back);
+        if (this.rearPresence && this.rearPresence.prime) this.rearPresence.prime(BREATH_PRIME_S);
+        this.breathCount++;
+      }
+    }
+    this._roofT -= dt;
+    if (this._roofT <= 0) {
+      this._roofT = ROOF_EVERY_MIN + rng.next() * (ROOF_EVERY_MAX - ROOF_EVERY_MIN);
+      if (rng.next() < ROOF_ROLL) {
+        this._say('brush', ROOF_GAIN, this.x, this.y + ROOF_Y + 0.13, this.z);
+        const fx = this._fx;
+        if (fx && fx.addTrauma) fx.addTrauma(ROOF_TRAUMA);
+        this._cabinDimT = ROOF_DIM_S;
+        this.roofCount++;
+      }
+    }
+  }
+
+  /**
    * The horn, through audio.js's PUBLIC pooled one-shot door. `noise` is an AI event, not
    * an audible channel, and audio.js does not subscribe to it; that made a mechanically
    * successful H press sound exactly like a failed one.
@@ -3456,7 +3756,8 @@ export class Car {
     // ROUND 18: the condition gauge on the binnacle. Alex asked for the breakdown meter to
     // be "on the cars dashboard and not on the hud", so this is the only place the number
     // is shown and the HUD line that used to print it is gone (ui/readouts.js).
-    if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wearShown), (this.ctx.time && this.ctx.time.t) || 0);
+    // D12: the lamp breathes only inside the failure window and kicks on each cough.
+    if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wearShown), (this.ctx.time && this.ctx.time.t) || 0, this._coughKick, this._failing);
     this._glimmer(x, y, z);
     this.distress?.update(this, this.ctx.time?.t || 0);
     this.body.setMotion?.(this.speed, this.boost, this.boosting, this.ctx.time?.t || 0,this.shield??3);
@@ -3493,8 +3794,10 @@ export class Car {
         _v.set(w.x,w.y,w.z).applyEuler(root.rotation);
         const wx=x+_v.x,wz=z+_v.z;
         const asphalt=this._roads?.onRoad(wx,wz) ? .045 : 0;
-        const target=this._terrain.heightAt(wx,wz)+WHEEL_RADIUS+asphalt;
-        _pos.y+=clamp((target-(y+bob+_v.y))/Math.max(.5,Math.cos(pitch)*Math.cos(roll)),-.16,.20);
+        const target=groundAt(this._terrain,wx,wz)+WHEEL_RADIUS+asphalt;
+        // D12: +0.20 -> +0.30 of reach as the backstop on a crest the chassis is still
+        // catching up to (the feed-forward makes it rare; the tyre should never be the tell).
+        _pos.y+=clamp((target-(y+bob+_v.y))/Math.max(.5,Math.cos(pitch)*Math.cos(roll)),-.16,.30);
       }
       _m.compose(_pos, _q, _s);
       this.body.wheels.setMatrixAt(i, _m);
@@ -3509,7 +3812,9 @@ export class Car {
     // The one part of this prop that is a VERB. Both are interpolated, so the swing is
     // smooth at any frame rate and the light comes up with it rather than in steps.
     if (this.body.setDoor) this.body.setDoor(doorA);
-    if (this.body.setCabin) this.body.setCabin(cabin);
+    // HORROR 4: the roof beat dips the cabin light by ROOF_DIM, hard on, back over 80 ms.
+    const dimK = this._cabinDimT > 0 ? ROOF_DIM * Math.min(1, this._cabinDimT / 0.08) : 0;
+    if (this.body.setCabin) this.body.setCabin(cabin, dimK);
     if (this.cabinHandle) {
       // the rover rides the door's own hinge arc, so the pool of warm light on the ground
       // swings out with the panel instead of sitting in the middle of a shut car
@@ -3523,7 +3828,7 @@ export class Car {
         y + bob + 1.05,
         z + rz0 * lx0 - fz0 * lz0,
       );
-      if (this.cabinHandle.setIntensity) this.cabinHandle.setIntensity(CABIN_POOL * cabin);
+      if (this.cabinHandle.setIntensity) this.cabinHandle.setIntensity(CABIN_POOL * cabin * (1 - dimK));
     }
 
     /* ---- the working headlamp ---- */
@@ -3769,6 +4074,12 @@ export class Car {
       stuckT: this.stuckT,
       horn: { count: this.hornCount, sounds: this.hornSoundCount,
         held: this.hornHeld, repeatIn: this.hornT, pending: this.hornSoundPending },
+      // C8: how often the car answered H from outside; D12: the failure window's state;
+      // HORROR 4: the cabin beats' clocks and counts.
+      answer: { count: this.answerCount, pending: this._answerPending, flashT: this._lampFlashT },
+      failing: !!this._failing, coughs: this._coughN, pedalCutT: this._pedalCutT,
+      cabinBeats: { driveS: this._cabinDriveS, breaths: this.breathCount, roofs: this.roofCount,
+        breathIn: this._breathT, roofIn: this._roofT, dimT: this._cabinDimT },
       // THE LAST RAM (round 6): what it hit, what it cost, and whether the node made it clean.
       ram: { hits: this._ramLast.hits, n: this._ramLast.n, mass: this._ramLast.mass,
         before: this._ramLast.before, after: this._ramLast.after, keep: this._ramLast.keep,
@@ -3831,7 +4142,7 @@ export class Car {
     let landing=null;
     for(let ring=0;ring<ranges.length&&!landing;ring++)for(let j=0;j<12;j++){
       const a=dir+(j%2?1:-1)*Math.ceil(j/2)*.23,r=ranges[ring];
-      const x=start.x+Math.sin(a)*r,z=start.z+Math.cos(a)*r,y=terrain.heightAt(x,z);
+      const x=start.x+Math.sin(a)*r,z=start.z+Math.cos(a)*r,y=groundAt(terrain,x,z);
       if(!Number.isFinite(y)||y<3||Math.abs(x)>3800||Math.abs(z)>3800)continue;
       if(terrain.slopeAt?.(x,z)>.16||col?.canOccupy&&!col.canOccupy(x,z,3.1,2.8))continue;
       landing={x,z,y};break;
@@ -3865,7 +4176,7 @@ export class Car {
   placeAt(x, z, heading) {
     const terr = this._terrain;
     this.x = x; this.z = z;
-    this.y = terr ? terr.heightAt(x, z) : 0;
+    this.y = terr ? groundAt(terr, x, z) : 0;
     this.heading = heading === undefined ? this.heading : heading;
     this.speed = 0; this.steer = 0; this.kickOwed = 0;
     this.exists = true;

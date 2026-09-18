@@ -148,3 +148,84 @@ export function characterMaps(kind = 'hide') {
   const maps={map:texture(col,'colour'),bumpMap:texture(bump,'relief'),roughnessMap:texture(rough,'roughness')};
   MATERIAL_MAPS.set(kind,maps);return maps;
 }
+
+// Shared by the two textures below: the same integer hash and smooth value noise the
+// character maps use, so a pore in the normal map is a pore of the same family as the
+// pore in the colour map.
+const hashI=(x,y)=>{let n=Math.imul(x,374761393)^Math.imul(y,668265263);n=Math.imul(n^n>>>13,1274126177);return((n^n>>>16)>>>0)/4294967295;};
+function smoothI(x,y,scale){
+  const u=x/scale,v=y/scale,ix=Math.floor(u),iy=Math.floor(v),f=u-ix,g=v-iy;
+  const a=f*f*(3-2*f),b=g*g*(3-2*g),m=(p,q,t)=>p+(q-p)*t;
+  return m(m(hashI(ix,iy),hashI(ix+1,iy),a),m(hashI(ix,iy+1),hashI(ix+1,iy+1),a),b);
+}
+
+// SKIN NORMAL MAP (D16). 1024^2 tangent-space normals derived from a height field of the
+// same pore/crease family as characterMaps('skin'), in place of the 512^2 bump map. A bump
+// map is two texture taps and a finite difference at run time; a normal map is one tap and
+// it survives mipmapping, which a bump map does not (the pores vanished at 2 m). Built once,
+// ~4 MB, linear (a normal map is data, never colour).
+let SKIN_NORMAL=null;
+export function skinNormalMap(){
+  if(SKIN_NORMAL)return SKIN_NORMAL;
+  const N=1024,h=new Float32Array(N*N);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const low=smoothI(x,y,128),mid=smoothI(x,y,26),small=smoothI(x,y,8),fine=smoothI(x,y,3);
+    // a pore is a 3-texel pit where the finest noise peaks: ~0.3 mm at the head's tiling
+    const pores=Math.pow(Math.max(0,(fine-.56)/.44),2);
+    // two crossing families of creases make a net, not stripes; the second is fainter
+    const crease=Math.pow(1-Math.abs(Math.sin(x*.0185+y*.0065+mid*2.7)),20);
+    const crease2=Math.pow(1-Math.abs(Math.sin(y*.021-x*.008+low*4.1)),24)*.6;
+    h[y*N+x]=.5+(small-.5)*.055+(fine-.5)*.010-pores*.10-crease*.018-crease2*.012;
+  }
+  const data=new Uint8Array(N*N*4);
+  // 32: the slope gain. A pore's 0.10 drop over two texels then tilts the normal ~58 deg,
+  // a crease's 0.018 over one ~30 deg: pits read, creases are a whisper. Tuned at 3 m.
+  const K=32;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const xl=(x+N-1)%N,xr=(x+1)%N,yd=(y+N-1)%N,yu=(y+1)%N;
+    const dx=(h[y*N+xr]-h[y*N+xl])*.5*K,dy=(h[yu*N+x]-h[yd*N+x])*.5*K;
+    const inv=1/Math.sqrt(dx*dx+dy*dy+1),nx=-dx*inv,ny=-dy*inv,nz=inv,k=(y*N+x)*4;
+    data[k]=Math.round((nx*.5+.5)*255);data[k+1]=Math.round((ny*.5+.5)*255);data[k+2]=Math.round((nz*.5+.5)*255);data[k+3]=255;
+  }
+  const t=new THREE.DataTexture(data,N,N);t.name='character-skin-normal';
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.generateMipmaps=true;t.minFilter=THREE.LinearMipmapLinearFilter;
+  t.magFilter=THREE.LinearFilter;t.anisotropy=4;t.needsUpdate=true;
+  SKIN_NORMAL=t;return t;
+}
+
+// HAIR STRANDS (D16). A 256x64 card texture: u runs across a card, v from the root (0) to
+// the tip (1). RGB is a per-strand shade that multiplies the authored hair colour; A is the
+// cutout. The root HALF (v < .47) is fully opaque so the scalp cap and the brows can sample
+// it, and so a card's mip chain stays over the .5 alpha test at distance; the outer half
+// splits into ~26 strands that taper to nothing by the tip. Linear, like every character map.
+let STRANDS=null;
+export function strandTexture(){
+  if(STRANDS)return STRANDS;
+  const W=256,H=64,data=new Uint8Array(W*H*4),ROOT=30;
+  const strands=[];
+  for(let i=0;i<26;i++){
+    const c=(i+.5)/26*W+(hashI(i,7)-.5)*6;
+    // 3.2-6.8 texels wide on a 9.8 texel pitch: half the outer band is strand where the taper
+    // starts, so a card feathers out instead of thinning to wire
+    strands.push({c,w:3.2+hashI(i,3)*3.6,shade:.55+hashI(i,11)*.45,end:.80+hashI(i,5)*.20,drift:(hashI(i,13)-.5)*8});
+  }
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const t=y/(H-1);
+    let shade=.42,alpha=0;
+    for(let i=0;i<strands.length;i++){
+      const s=strands[i],cx=s.c+s.drift*t*t,taper=t<ROOT/H?1:Math.max(0,1-(t-ROOT/H)/Math.max(.05,s.end-ROOT/H));
+      let d=Math.abs(x-cx);d=Math.min(d,W-d);
+      const hw=s.w*taper;
+      if(d<hw){const edge=1-d/hw;shade=Math.max(shade,s.shade*(.78+.22*edge));alpha=Math.max(alpha,Math.min(1,edge*3));}
+    }
+    if(y<ROOT)alpha=1;
+    // the root darkens: hair is denser and in its own shadow near the scalp
+    shade*=.72+.28*Math.min(1,y/12);
+    const k=(y*W+x)*4;
+    data[k]=data[k+1]=data[k+2]=Math.round(Math.min(1,shade)*255);data[k+3]=Math.round(alpha*255);
+  }
+  const t=new THREE.DataTexture(data,W,H);t.name='character-hair-strands';
+  t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;t.generateMipmaps=true;
+  t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;t.anisotropy=4;t.needsUpdate=true;
+  STRANDS=t;return t;
+}

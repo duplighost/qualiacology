@@ -18,17 +18,23 @@ export function motorSamples(sr=22050,seconds=2){
 // ALEX, 2026-09-16: "Car running out of health sounds too annoying with constant
 // ticking/beeping."
 //
-// MEASURED, and this is where it comes from. Past the 0.80 knee car.js collapses the top
-// speed to 12% of 22 m/s, so a dying car crawls — and the motor loop is a 50 Hz triangle
-// under a 25 Hz amplitude pulse played back at .76 + speed, which at a crawl is a 19-22 Hz
-// putt. At full gain. For as long as you limp. A repetitive low pulse held at one level is
-// what a fan sounds like, and the county's own earshot lane already learned that lesson once
-// (audio/earshot.js, "a true fact reported continuously is indistinguishable from a fan").
+// MEASURED, and this is where it came from. Past the 0.80 knee car.js used to collapse the
+// top speed to 12% of 22 m/s, so a dying car crawled — and the motor loop is a 50 Hz
+// triangle under a 25 Hz amplitude pulse played back at .76 + speed, which at a crawl is a
+// 19-22 Hz putt. At full gain. For as long as you limp. A repetitive low pulse held at one
+// level is what a fan sounds like, and the county's own earshot lane already learned that
+// lesson once (audio/earshot.js, "a true fact reported continuously is indistinguishable
+// from a fan").
 //
 // So the engine BREAKS UP rather than nagging: from the knee it loses gain and loses top
 // end, and by the time the car has stopped it has gone quiet. Nothing is added — there was
 // never a beep in the code to remove; what there was was one loop that never let up.
-const WEAR_KNEE = .62;            // where the sound starts coming apart, under the 0.80 knee
+//
+// D12: the crawl is gone (the cap only ever loses 28%) and the end is a 35 s FAILURE WINDOW
+// from wear 0.92 (car.js _stepFailureWindow: coughs, pedal cuts, the stall). The knee moves
+// up to 0.88 so the motor comes apart INSIDE that window and not for the last third of a
+// lap — the coughs are the tell, and they need a whole engine under them to read.
+const WEAR_KNEE = .88;            // where the sound starts coming apart, just under the window's 0.92
 export function engineMix(car,allowed=true){
   const active=!!(allowed&&car?.exists&&car.engineOn&&car.wear<.999&&['driving','arriving'].includes(car.mode));
   const speed=clamp(Math.abs(car?.speed||0)/28,0,1),load=clamp(car?.pedal||0,0,1);

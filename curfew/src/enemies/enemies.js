@@ -329,6 +329,7 @@ const _v2 = new THREE.Vector3();
 // ROUND 18: the spider's ceiling probe. Module scratch, never allocated per step.
 const _rayUpO = { x: 0, y: 0, z: 0 };
 const _rayUp = { x: 0, y: 1, z: 0 };
+const _rayDown = { x: 0, y: -1, z: 0 };   // D14: the floor probe under a spider with no roof
 // ROUND 18: the tags the moth will cling to. An array, because that is what
 // collision.nearestTagged() wants; frozen so nothing can push a tag into it at runtime.
 const TRUNK_TAGS = Object.freeze(['tree', 'trunk']);
@@ -395,6 +396,65 @@ function evtReset(e, kind) {
 const _spawnScratch = { id: -1, def: null };
 const _aliveOut = [];
 const INCAR_BLOCKED = Object.freeze({ hound: true, pale: true, runner: true });   // ROUND 22: a quadruped cannot open a door
+
+/* D12 (2026-09-17): A PACK AT A SHUT CAR DOOR. An INCAR_BLOCKED body can never take a token
+   while he is in the car, and with no verb left it stood at the windscreen for as long as the
+   engine ran, shuffling on the front-arc ring — "just looking at the car and walking back and
+   forth" (map-vehicle 4). A blocked body inside CAR_HOLD_MUL x standoff of the car now PROWLS
+   the world-space ring at CAR_PROWL_SPEED, facing the car, for CAR_PROWL_S; holds still for
+   the last beat; and at CAR_PATIENCE_S it stands down (aware 0, the calm on, home moved out
+   to CAR_LEAVE_R) and walks off. A shut door is an answer. hear() honours the calm for every
+   source but a shot, so the 0.4 s engine noise cannot re-alert it until the calm lapses. */
+const CAR_HOLD_MUL = 1.6;        // x standoff: the door ring, the same margin the break-off uses
+const CAR_PROWL_S = 6.0;         // s of circling before it stops and stares
+const CAR_PATIENCE_S = 8.0;      // s at the door before it gives up
+const CAR_PROWL_SPEED = 0.4;     // x cruise: readable, not a chase
+const CAR_LEAVE_R = 24;          // m: a home nearer the car than this is moved this far off, or "leave" means "stand there"
+
+/* C5 (perk blood_2 'Fight Back'): repel(opts.airborne). The stagger branch damps a GROUNDED
+   body's push at rate 8 — half a metre and it is over. A thrown body keeps its momentum in
+   the air (see ramHit), so the shove is a hop: 2 vy / g = 0.45 s of flight at GRAVITY 22,
+   0.57 m at the peak, ~4 m of travel at force 9 before it lands and the landing damps it. */
+const REPEL_THROW_VY = 5.0;
+
+/* Horror 1 (2026-09-17): THE COUNTY HOLDS ITS BREATH before the first strike of a fight.
+   dread.hush() drops the bed to nothing; the telegraph itself is on the creatures bus and
+   stays. Under a second so it can never become the metronome dread.js's header forbids,
+   once per STRIKE_HUSH_GAP_S county-wide, and never while he is already being hurt. */
+const STRIKE_HUSH_S = 0.9;
+const STRIKE_HUSH_GAP_S = 30;
+const STRIKE_HUSH_DIST = 6;      // m: only a body about to land on him
+const STRIKE_HUSH_QUIET_S = 12;  // s since he was last hurt: a fight in progress gets no hush
+
+/* Horror 15 (2026-09-17): THE STANDING KIND IS HEARD. Its rule is visual (it moves only
+   while unobserved) and a player who never looks back cannot learn it; one who does gets no
+   confirmation. So its feet are answered while it moves unseen — a footfall is a fact about
+   distance, which is what the rule is about — and the frame you look and it is
+   STANDING_WITNESS_M closer than you last saw it is the 'witnessed' beat. */
+const STANDING_STEP_S = 0.55;    // s between footfalls while it moves unseen
+const STANDING_WITNESS_M = 3;    // m closer than last seen: caught
+const STANDING_WITNESS_GAP_S = 8;
+const STANDING_WITNESS_TRAUMA = 0.10;
+
+/* C6 (perk lamp_3 'Cold Light'): a pressure body inside the torch beam within this many
+   metres moves at cruise x progress.stats.litSlowMul (base 1: a fresh save measures nothing). */
+const LIT_SLOW_R = 14;
+
+/* C11: how near the nearest Warden is, 0..1 over this many metres; gfx/lights.js flickers
+   the torch off it (the lore: the Warden has its hand on the pole). */
+const WARDEN_NEAR_R = 40;
+
+/* C14: a neutral person inside this many metres of your eye looks at you (present()). */
+const LOOK_R = 8;
+
+/* D14 (map-woods c): THE MOTH'S PERCH. It searches the director's own cover radius (COVER_R
+   7 m, director.js) instead of 4.2 — the director guaranteed "a solid within 7 m", and a
+   4.2 m search under that guarantee found nothing a third of the time — and it takes only
+   a real trunk: a 0.18 m collider is a sapling, and a 1.15 m moth cannot hide against it.
+   With no trunk it does NOT perch: it starts on the ground and _stepAir lifts it to hoverLo
+   on its first step, a flier in the open rather than a furred thing hanging in mid-air. */
+const PERCH_SEARCH_R = 7.0;
+const PERCH_TRUNK_MIN_R = 0.18;
 
 /* ROUND 22 — THE LIT POOLS. Alex, 2026-09-10: dusk-to-dawn lights "are the one thing the
    hounds won't cross." Lane E publishes ctx.shared.litPoles = [{x, z, r, on}] every step;
@@ -484,6 +544,11 @@ export class Enemies {
     this._poles = EMPTY_POLES;
     this._playerPool = false;
     this._rallied = 0;
+    // 2026-09-17
+    this._strikeHushAt = -99;     // Horror 1: when the county last held its breath
+    this._litSlowMul = 1;         // C6: progress.stats.litSlowMul, read once a step
+    this._perchNoTrunk = 0;       // D14: moths that found no trunk and flew instead
+    this._carStoodDown = 0;       // D12: bodies that gave up on a shut car door
   }
 
   /* =====================================================================
@@ -892,7 +957,16 @@ export class Enemies {
     if (e?.def?.officer || e?.goingHome) return { killed:false, hpFrac:1, species:e.species };
     if(e) e.damageSource=info?.source || 'player';
     if (!e || !e.alive) return { killed: false, hpFrac: 0, species: e ? e.species : '' };
-    if (e.neutral) this.provokeGate(e.siteGuard);
+    if (e.neutral) {
+      // D16 / people map item 2 (2026-09-17): NOBODY IN A HAMLET IS TAKEN AWAY BY A STRAY
+      // SWING. A hamlet person (siteGuard 'hamlet:<site>:<id>') flinches and stops what it
+      // was doing for twelve seconds — townFear, which the town loops read to hold their
+      // fire — and that is all: a civilian never turns, a guard never turns, and no
+      // 'gate-hostile:hamlet:*' flag is stamped for _standDownGates to carry. Everywhere
+      // else (the Holdfast, the Toll, the authored gate casts) a hit still chooses the fight.
+      if (e.siteGuard && e.siteGuard.startsWith('hamlet:')) e.townFear = 12;
+      else this.provokeGate(e.siteGuard);
+    }
     const zone = info && info.zone ? info.zone : 'torso';
     let dmg = amount;
     if (e.staggerT > 0) dmg = Math.round(dmg * 1.25);   // a staggered body takes more
@@ -1332,6 +1406,34 @@ export class Enemies {
     return hit ? { x: hit.x, z: hit.z, r: hit.radius } : null;
   }
 
+  /**
+   * D14 (2026-09-17). The SOLID roof over a point, probed from the body: one ray straight up
+   * from (x, y + 0.2, z), `reach` metres long. Returns the roof's world y, or -1 for open
+   * sky (or no collision system). Module scratch, no allocation; the shared hit record is
+   * read before anything else can ask.
+   */
+  _roofOver(x, y, z, reach) {
+    const col = this._sys('collision');
+    if (!col || typeof col.raycast !== 'function' || !(reach > 0)) return -1;
+    _rayUpO.x = x; _rayUpO.y = y + 0.20; _rayUpO.z = z;
+    const hit = col.raycast(_rayUpO, _rayUp, reach, col.MASK ? col.MASK.SOLID : 1);
+    return hit ? y + 0.20 + hit.t : -1;
+  }
+
+  /**
+   * D14. The floor under a point that has no roof: the top of the first SOLID collider
+   * straight down from (x, y + 0.3, z), or the terrain `g` when nothing is in the way. A
+   * spider that finds no ceiling sits on this — a surface — and never on g + 2.8 in the air.
+   */
+  _floorUnder(x, y, z, g) {
+    const col = this._sys('collision');
+    const reach = y + 0.30 - g + 0.5;
+    if (!col || typeof col.raycast !== 'function' || !(reach > 0)) return g;
+    _rayUpO.x = x; _rayUpO.y = y + 0.30; _rayUpO.z = z;
+    const hit = col.raycast(_rayUpO, _rayDown, reach, col.MASK ? col.MASK.SOLID : 1);
+    return hit ? Math.max(g, y + 0.30 - hit.t) : g;
+  }
+
   _spawnOne(key, x, z, opts) {
     const def = SPECIES[key];
     if (!def) return null;
@@ -1360,15 +1462,6 @@ export class Enemies {
       }
     }
 
-    e.alive = true;
-    e.dead = false;
-    e.goingHome=false;e.homecomingT=0;e.departSink=0;e.officerSeen=false;e.officerGaze=0;e.officerCeiling=0;e.wardenWorkT=0;
-    // ROUND 7: unless it is a TABLEAU. See the note above STAGED bodies in _stepEnemy.
-    e.alerted = def.owner === OWNER.DREAD && !(opts && opts.staged && !opts.awake);
-    e.hunt = false; e.huntSpeedMul = 1;
-    e.leashed = true; e.holdFire = false;
-    e.maxHp = def.hp * ((opts && opts.hpScale) || 1);
-    e.hp = e.maxHp;
     // ROUND 7. opts.feetY puts a body on a FLOOR — a hay loft, a mezzanine, a ringing
     // chamber 13 m up — instead of on the terrain. Only a STAGED body may use it, and only
     // while it holds its post: the moment it notices you it walks, and walking is
@@ -1380,25 +1473,41 @@ export class Enemies {
     // ceiling — and nothing checked that a ceiling was there. The Holdfast's nest was
     // authored at (0, 6), which is seven metres out into the open bailey, so its spider was
     // hung 6.6 m up in the open air and then descended out of an empty sky the first time
-    // the player came near. (The nest has been moved into the keep; this is the guard, so
-    // the next authored coordinate that misses a room fails visibly instead of magically.)
+    // the player came near. (The nest is gone; this is the guard, so the next authored
+    // coordinate that misses a room fails visibly instead of magically.)
     //
-    // One ray up from the ground under the spawn. No roof within its own dropFrom and the
-    // body simply starts on the floor, which is what _stepAir does with it from then on
-    // anyway — the only thing that changes is that it never appears in mid-air.
+    // D14 (2026-09-17): the probe runs FROM THE BODY at its authored height, ceilingHi +
+    // dropFrom up — the same ray _stepOfficer hangs it by — so a nest on a raised floor or
+    // under a tall vault is measured in its own room and not 7 m up from the terrain under
+    // it. No roof in that reach and the body starts on the FLOOR under it (a collider top,
+    // else the ground), never in mid-air; and it must still fit there, or it is refused.
+    // This runs BEFORE the record is claimed, so a refusal leaves the pool untouched.
     if (def.ceiling && opts && typeof opts.feetY === 'number') {
       const gy = groundY(this.ctx, x, z);
       if (feetY > gy + 0.5) {
-        const col = this._sys('collision');
-        let roofed = false;
-        if (col && col.raycast) {
-          _rayUpO.x = x; _rayUpO.y = gy + 0.35; _rayUpO.z = z;
-          roofed = !!col.raycast(_rayUpO, _rayUp, (def.dropFrom || 9) + 1,
-            col.MASK ? col.MASK.SOLID : 1);
+        const roof = this._roofOver(x, feetY, z, (def.ceilingHi || 5.2) + (def.dropFrom || 6));
+        if (roof < 0) {
+          feetY = this._floorUnder(x, feetY, z, gy) + 0.02;
+          if (col && typeof col.fits === 'function' && !col.fits(x, z, feetY, def.radius, def.height)) {
+            this._refused++; return null;
+          }
         }
-        if (!roofed) feetY = gy;
       }
     }
+
+    e.alive = true;
+    e.dead = false;
+    e.goingHome=false;e.homecomingT=0;e.departSink=0;e.officerSeen=false;e.officerGaze=0;e.officerCeiling=0;e.officerCeilSet=false;e.wardenWorkT=0;
+    // C14 (2026-09-17): an authored person's face, palette and hair. The PEOPLE lane's human
+    // rig record answers setAppearance(look); every other rig has no such method and is left
+    // alone. Right after the body is bound, before anything reads it.
+    if (opts && opts.look && typeof e.built.setAppearance === 'function') e.built.setAppearance(opts.look);
+    // ROUND 7: unless it is a TABLEAU. See the note above STAGED bodies in _stepEnemy.
+    e.alerted = def.owner === OWNER.DREAD && !(opts && opts.staged && !opts.awake);
+    e.hunt = false; e.huntSpeedMul = 1;
+    e.leashed = true; e.holdFire = false;
+    e.maxHp = def.hp * ((opts && opts.hpScale) || 1);
+    e.hp = e.maxHp;
     e.pos.set(x, feetY, z);
     e.vel.set(0, 0, 0);
     e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
@@ -1468,6 +1577,9 @@ export class Enemies {
     e.unique = !!(opts && opts.unique);
     e.poleX = 0; e.poleZ = 0; e.poleR = 0; e.poleHold = false;
     e.dashDirX = 0; e.dashDirZ = 1;
+    // 2026-09-17: the shut-car clock (D12) and the Standing Kind's ears (Horror 15)
+    e.carHoldT = 0;
+    e.standingStepT = 0; e.lastSeenDist = -1; e.witnessCd = 0; e.obsPrev = false;
 
     /* ---- ROUND 18: THE PERCH ------------------------------------------------------
      * ALEX: the moth "blends into trees in the forest. And then can fly."
@@ -1479,17 +1591,20 @@ export class Enemies {
      * machine: the tableau rules keep it motionless, _noticeStaged wakes it, and the frame
      * it wakes it is an ordinary flying body.
      *
-     * It looks for a real trunk within 4 m and puts itself against it. With no trunk to
-     * cling to it simply starts in the air — the county has open ground in it and a moth
-     * refusing to spawn there would be a famine, which is the failure this whole lane is
-     * written to avoid.
+     * It looks for a real trunk within PERCH_SEARCH_R and puts itself against it. With no
+     * trunk to cling to it does NOT perch (D14, 2026-09-17: it used to "simply start in the
+     * air", and a furred thorax with six hooked legs hanging motionless 3-4 m up in open
+     * air is exactly the "spider not on a surface" Alex reported from the woods). It starts
+     * on the ground, awake to the ordinary rules, and _stepAir lifts it to hoverLo on its
+     * first step — a moth in the open, not a famine: the county has open ground in it and a
+     * moth refusing to spawn there is a deferred order the director retries eight times.
      */
     e.perched = false;
     e.ceilY = 0; e.ceilT = 0; e.dropped = false;
     if (def.perch && !(opts && (opts.staged || opts.ambush || opts.awake))) {
-      const trunk = this._nearestTrunk(x, z, 4.2);
-      const up = def.perchLo + this.rng.next() * (def.perchHi - def.perchLo);
-      if (trunk) {
+      const trunk = this._nearestTrunk(x, z, PERCH_SEARCH_R);
+      if (trunk && trunk.r >= PERCH_TRUNK_MIN_R) {
+        const up = def.perchLo + this.rng.next() * (def.perchHi - def.perchLo);
         // Against the bark, on the far side from the player, at trunk radius plus its own.
         const bx = trunk.x - x, bz = trunk.z - z;
         const bl = Math.hypot(bx, bz) || 1;
@@ -1497,14 +1612,14 @@ export class Enemies {
         const pz = trunk.z + (bz / bl) * (trunk.r + def.radius * 0.55);
         e.pos.set(px, groundY(this.ctx, px, pz) + up, pz);
         e.yaw = faceYaw(px, pz, trunk.x, trunk.z);
+        e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
+        e.prevYaw = e.currYaw = e.yaw;
+        e.stagedX = e.pos.x; e.stagedY = e.pos.y; e.stagedZ = e.pos.z; e.stagedYaw = e.yaw;
+        e.staged = true;
+        e.perched = true;
       } else {
-        e.pos.y = groundY(this.ctx, x, z) + up;
+        this._perchNoTrunk++;         // telemetry().perchNoTrunk: the woods sighting, counted
       }
-      e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
-      e.prevYaw = e.currYaw = e.yaw;
-      e.stagedX = e.pos.x; e.stagedY = e.pos.y; e.stagedZ = e.pos.z; e.stagedYaw = e.yaw;
-      e.staged = true;
-      e.perched = true;
     }
     e.gen++;
 
@@ -1582,7 +1697,7 @@ export class Enemies {
     this._ringPhase = (this._ringPhase + RING_SPIN * dt) % TAU;
 
     const p = this._sys('player');
-    if (!p) return;
+    if (!p) { if (this.ctx.shared) this.ctx.shared.wardenNear = 0; return; }
     const black = this._phase() === PHASE.BLACK;
     this._standDownGates(dt,p);
     // ROUND 22: the lit pools. One array read, one scan for the player, per step.
@@ -1606,6 +1721,9 @@ export class Enemies {
     {
       const pr = this._sys('progress');
       this._eyeMul = (pr && typeof pr.perk === 'function') ? (pr.perk('eyeshineMul', 1) || 1) : 1;
+      // C6: lamp_3 'Cold Light'. A stat in the bag, read lazily once a step; 1 with no node.
+      const st = pr && pr.stats;
+      this._litSlowMul = (st && typeof st.litSlowMul === 'number' && st.litSlowMul > 0) ? st.litSlowMul : 1;
     }
 
     // frozen separation snapshot, then everybody reads the SAME crowd
@@ -1619,6 +1737,7 @@ export class Enemies {
     this._aliveNow = 0;
     this._awareNow = 0;
     this._huntNow = 0;
+    let wardenNear = 0;
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
       if (!e.alive) continue;
@@ -1626,7 +1745,14 @@ export class Enemies {
       if (e.committed) this._commit++;
       if (e.aware > 0 && e.def.owner === OWNER.PRESSURE) this._awareNow++;
       if (e.hunt) this._huntNow++;
+      // C11: the nearest Warden, 0..1 over WARDEN_NEAR_R, in the same pass (six slots at most).
+      if (e.species === 'warden') {
+        const k = 1 - Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) / WARDEN_NEAR_R;
+        if (k > wardenNear) wardenNear = k;
+      }
     }
+    // Published EVERY step, 0 when no Warden is up: gfx/lights.js eases the torch flicker to it.
+    if (this.ctx.shared) this.ctx.shared.wardenNear = wardenNear > 1 ? 1 : wardenNear;
 
     // THE DEAD-MAN'S HANDLE, decided ONCE a step. `autonomous` is read per body
     // inside _approach, so it must not be an O(n) census or a systems lookup
@@ -1693,9 +1819,19 @@ export class Enemies {
     } else if(e.initiallyNeutral){e.poleR=0;e.poleHold=false;}
   }
 
-  // A close defensive burst cancels a commitment and uses ordinary collision integration.
-  repel(x, z, radius = 8, seconds = 1.4, force = 5) {
+  /**
+   * A close defensive burst: every PRESSURE body inside `radius` with a clear line from his
+   * chest is uncommitted, staggered for `seconds` and pushed away at `force` m/s through the
+   * ordinary integration. lamp_4 'Flashburn' and blood_2 'Fight Back' are both this verb.
+   *
+   * C5 (2026-09-17): `opts.airborne` THROWS it instead. A grounded stagger damps the push at
+   * rate 8 (half a metre, and it read as nothing happened); in the air the stagger branch
+   * keeps the momentum, so the body hops REPEL_THROW_VY and travels the push, lands on the
+   * terrain the way a ram throw does, and the rest of the stagger is the landing.
+   */
+  repel(x, z, radius = 8, seconds = 1.4, force = 5, opts) {
     let count = 0;
+    const thrown = !!(opts && opts.airborne);
     const p = this._sys('player'), col = this._sys('collision');
     for (const e of this.all) {
       if (!e.alive || e.neutral || e.initiallyNeutral || e.def.owner !== OWNER.PRESSURE) continue;
@@ -1707,6 +1843,7 @@ export class Enemies {
       const d = dist || 1;
       e.vel.x = (dist ? dx/d : Math.sin(e.yaw)) * force;
       e.vel.z = (dist ? dz/d : Math.cos(e.yaw)) * force;
+      if (thrown) { e.airborne = true; e.vel.y = REPEL_THROW_VY; }
       count++;
     }
     return count;
@@ -1926,8 +2063,18 @@ export class Enemies {
     if(seen&&!e.officerSeen){e.officerSeen=true;this.ctx.bus.emit('lore:sighting',{species:'pale'});}
     e.officerGaze=seen?(e.officerGaze||0)+dt:0;
     if(e.species==='spider') {
-      const g=groundY(this.ctx,e.pos.x,e.pos.z),col=this._sys('collision');
-      if(!e.officerCeiling){const hit=col?.raycast(new THREE.Vector3(e.pos.x,g+.4,e.pos.z),_UP,7,col.MASK?.SOLID||1);e.officerCeiling=hit?g+.4+hit.t-.7:g+2.8;}
+      // D14 (2026-09-17). Measured ONCE, from the BODY at its authored height and never
+      // from the terrain under it: a nest on a ringing floor or under a 15 m nave was
+      // probing 7 m up from the ground, finding nothing, and hanging at g + 2.8 in the
+      // open. A roof inside ceilingHi + dropFrom (11.2 m) and it hangs 0.7 under it; none,
+      // and it sits on the floor under it — a surface, never open air. No allocation: the
+      // probes use the module's ray scratch.
+      if(!e.officerCeilSet){
+        const g=groundY(this.ctx,e.pos.x,e.pos.z),def=e.def;
+        const roof=this._roofOver(e.pos.x,e.pos.y,e.pos.z,(def.ceilingHi||5.2)+(def.dropFrom||6));
+        e.officerCeiling=roof>=0?roof-.7:this._floorUnder(e.pos.x,e.pos.y,e.pos.z,g)+.02;
+        e.officerCeilSet=true;
+      }
       e.pos.y=e.officerCeiling;
     }
     if(e.dist<(e.species==='spider'?2.5:12)||e.officerGaze>=1.5)this._release(e);
@@ -2155,6 +2302,18 @@ export class Enemies {
       e.memT = Math.max(e.memT, def.memAlert);
     }
 
+    // ---- D12: AT A SHUT CAR DOOR (see CAR_PATIENCE_S). The clock runs while an aware
+    //      blocked body is inside the door ring; it resets the moment he is out of the car.
+    let carProwl = false, carStare = false;
+    if (INCAR_BLOCKED[def.id] && this.ctx.shared && this.ctx.shared.inCar) {
+      if (e.aware > 0) {
+        if (e.dist <= def.standoff * CAR_HOLD_MUL) e.carHoldT += dt;
+        if (e.carHoldT >= CAR_PATIENCE_S) { this._carStandDown(e); return; }
+        carProwl = e.carHoldT > 0 && e.carHoldT < CAR_PROWL_S;
+        carStare = e.carHoldT >= CAR_PROWL_S;
+      }
+    } else e.carHoldT = 0;
+
     // ---- the target: a RING SLOT, so a pack surrounds instead of stacking.
     //      A body still spending its BREAKOFF breath rings out to a readable
     //      distance instead: it bit you, and now it leaves and comes back.
@@ -2167,8 +2326,10 @@ export class Enemies {
     // boxed in and keeps the old world-space ring, because at that point the
     // near-doubled windup and the rear audio cue are what it is paying with
     // instead. Everything dread-owned keeps the world ring by law.
+    //      D12: a body prowling a shut car takes the WORLD ring — it circles the car
+    //      instead of crowding the windscreen, which is the readable half of "prowl".
     const fa = (def.owner === OWNER.PRESSURE && e.aware > 0
-      && e.frontDeniedT < FRONT_PATIENCE) ? aimAngle(this.ctx) : null;
+      && e.frontDeniedT < FRONT_PATIENCE && !carProwl && !carStare) ? aimAngle(this.ctx) : null;
     let a;
     if (fa !== null) {
       const u = RING_SLOTS > 1 ? (slot / (RING_SLOTS - 1)) * 2 - 1 : 0;
@@ -2211,6 +2372,13 @@ export class Enemies {
       tx = e.heardX; tz = e.heardZ;
       want = def.speed * 0.42;
     }
+    // D12: the prowl is slow and readable; the stare is still. Neither is a chase.
+    if (carProwl) want = def.speed * CAR_PROWL_SPEED;
+    else if (carStare) want = 0;
+    // C6: lamp_3 'Cold Light'. Inside his torch beam within LIT_SLOW_R it moves at
+    // litSlowMul (base 1). litSelf is the beam test the Pale already reads, on the
+    // perception tick, so this costs nothing per frame.
+    if (this._litSlowMul !== 1 && e.litSelf && e.dist < LIT_SLOW_R) want *= this._litSlowMul;
 
     // ---- ROUND 22: THE LIT POOL IS A FENCE. Alex: the dusk-to-dawn lights are "the one
     // thing the hounds won't cross." With a lit pool cached on the perception tick:
@@ -2284,7 +2452,9 @@ export class Enemies {
     // relocation is what delivers that hunt. An "arrived" exemption here made the pack stand
     // by the car for ever. The dog-caller's pack answers him UNAWARE (rally, wake=false), and
     // no watchdog runs on an unaware body, so it never needed the exemption.
-    if (e.aware > 0 && !e.scripted && !e.poleHold) {
+    // (D12: and not a body prowling or staring at a shut car — it is holding, not stalled,
+    // and a relocation would put it back at the windscreen from 22 m out.)
+    if (e.aware > 0 && !e.scripted && !e.poleHold && !carProwl && !carStare) {
       e.stallT += dt;
       if (e.stallT >= STALL_WIN_S) {
         const ax = e.pos.x - e.stallAX, az = e.pos.z - e.stallAZ;
@@ -2327,7 +2497,8 @@ export class Enemies {
     // and was being teleported back to his side every six seconds for as long as it
     // lived. That is a second, quieter "they always know where I am". A body that is
     // not chasing anyone is never moved.
-    if (e.aware > 0 && !e.scripted && !e.siteGuard && !e.poleHold && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
+    if (e.aware > 0 && !e.scripted && !e.siteGuard && !e.poleHold && !carProwl && !carStare
+      && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
       if (relocate(this.ctx, e, this.placeRng, _pt)) {
         e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
         e.prevPos.copy(e.pos); e.currPos.copy(e.pos);   // never interpolate a relocation
@@ -2336,7 +2507,7 @@ export class Enemies {
         this._relocated++;
       }
       resetProgress(e, tx, tz);
-    } else if (e.aware === 0 || e.poleHold) resetProgress(e, tx, tz);
+    } else if (e.aware === 0 || e.poleHold || carProwl || carStare) resetProgress(e, tx, tz);
 
     // ---- the hunter's scream: it does not sneak, it recruits
     if (def.screamRadius && e.aware > 0 && e.screamCd <= 0 && e.dist < 46) {
@@ -2382,8 +2553,54 @@ export class Enemies {
 
     // facing
     const spd = Math.hypot(e.vel.x, e.vel.z);
-    if (spd > 0.5) e.yaw = dampAngle(e.yaw, Math.atan2(-e.vel.x, -e.vel.z), 8, dt);
+    if (carProwl || carStare) {
+      // D12: it faces the CAR while it circles and while it stares — the seat is where
+      // he is, but the thing it cannot open is the door.
+      const car = this._sys('car');
+      const cx = car && Number.isFinite(car.x) ? car.x : p.pos.x;
+      const cz = car && Number.isFinite(car.z) ? car.z : p.pos.z;
+      e.yaw = dampAngle(e.yaw, faceYaw(e.pos.x, e.pos.z, cx, cz), 5, dt);
+    }
+    else if (spd > 0.5) e.yaw = dampAngle(e.yaw, Math.atan2(-e.vel.x, -e.vel.z), 8, dt);
     else e.yaw = dampAngle(e.yaw, faceYaw(e.pos.x, e.pos.z, p.pos.x, p.pos.z), 5, dt);
+  }
+
+  /**
+   * D12. It gave up on the door. Exactly what standDown() does to a body the director calls
+   * off — forgets him, the calm on, home its search point — plus the one thing "and leave"
+   * needs: a home under the windscreen is not leaving, so a home inside CAR_LEAVE_R of the
+   * car is moved out to CAR_LEAVE_R along the line away from it, and that is where it holds
+   * station. The clock is reset so a body his gun re-engages prowls again before it gives up
+   * again; stoodDownN is NOT bumped (tests/pack.mjs counts the director's call-offs there).
+   */
+  _carStandDown(e) {
+    this._uncommit(e);
+    e.aware = 0; e.alerted = false;
+    e.memT = 0; e.trailT = 0;
+    e.hunt = false; e.huntSpeedMul = 1;
+    e.calmT = CALM_S;
+    e.navBest = undefined;
+    e.carHoldT = 0;
+    // It BOLTS first (the flee state: 0.9x cruise straight away from him for FLEE_MIN_S),
+    // then trots home on the unaware walk. The calm's near exception (CALM_NEAR_R, after
+    // CALM_HARD_S) would otherwise let the 0.4 s engine noise re-alert a body still ambling
+    // off at 2 m/s inside 12 m, and it would come back and prowl again — leaves, returns,
+    // leaves. Eight metres in the first second puts it past that line. scatter() does the
+    // same thing for the same reason.
+    e.state = 'flee'; e.stateT = 0; e.staged = false;
+    const car = this._sys('car');
+    const cx = car && Number.isFinite(car.x) ? car.x : e.heardX;
+    const cz = car && Number.isFinite(car.z) ? car.z : e.heardZ;
+    const hx = e.homeX - cx, hz = e.homeZ - cz;
+    if (hx * hx + hz * hz < CAR_LEAVE_R * CAR_LEAVE_R) {
+      let ax = e.pos.x - cx, az = e.pos.z - cz;
+      const al = Math.hypot(ax, az);
+      if (al < 1e-3) { ax = -Math.sin(e.yaw); az = -Math.cos(e.yaw); } else { ax /= al; az /= al; }
+      e.homeX = cx + ax * CAR_LEAVE_R; e.homeZ = cz + az * CAR_LEAVE_R;
+    }
+    e.heardX = e.homeX; e.heardZ = e.homeZ;
+    e.stallT = 0; e.stallN = 0; e.stallAX = e.pos.x; e.stallAZ = e.pos.z;
+    this._carStoodDown++;
   }
 
   _approachPoacher(e, dt, p) {
@@ -2427,6 +2644,8 @@ export class Enemies {
       tz = e.pos.z - (dzp / d) * k * 12;
       want = (Math.abs(err) < 2.5) ? 0 : (e.aware === 2 ? def.alertSpeed : def.speed);
     }
+    // C6: lamp_3 'Cold Light' — the same rule as _approach's, for a poacher in the beam.
+    if (this._litSlowMul !== 1 && e.litSelf && e.dist < LIT_SLOW_R) want *= this._litSlowMul;
     e.speedWant = want;
     e.moving = want > 0.1;
 
@@ -2725,6 +2944,33 @@ export class Enemies {
       e.moving = true;
       e.yaw = faceYaw(e.pos.x, e.pos.z, p.pos.x, p.pos.z);
     }
+
+    // Horror 15: HEARD while it moves unseen, CAUGHT when you look (STANDING_STEP_S,
+    // STANDING_WITNESS_M). Both go out through dread.answer, which owns the bakes:
+    // 'footfall' is the dry close print, 'witnessed' is being caught looking.
+    if (e.witnessCd > 0) e.witnessCd -= dt;
+    if (e.obsSelf) {
+      if (!e.obsPrev && e.lastSeenDist >= 0 && e.dist <= e.lastSeenDist - STANDING_WITNESS_M
+        && e.witnessCd <= 0) {
+        e.witnessCd = STANDING_WITNESS_GAP_S;
+        const fx = this._sys('fx');
+        if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(STANDING_WITNESS_TRAUMA);
+        const dread = this._sys('dread');
+        if (dread && typeof dread.answer === 'function') {
+          dread.answer('witnessed', e.pos.x, e.pos.y + def.height * 0.9, e.pos.z, 0.8);
+        }
+      }
+      e.lastSeenDist = e.dist;       // where you last saw it: the witnessed beat measures from here
+      e.standingStepT = 0;
+    } else if (e.moving) {
+      e.standingStepT += dt;
+      if (e.standingStepT >= STANDING_STEP_S) {
+        e.standingStepT -= STANDING_STEP_S;
+        const dread = this._sys('dread');
+        if (dread && typeof dread.answer === 'function') dread.answer('footfall', e.pos.x, e.pos.y, e.pos.z, 0.4);
+      }
+    }
+    e.obsPrev = e.obsSelf;
 
     if (e.dist <= def.strikeRange && !e.obsSelf && this._takeToken(e)) {
       e.attackKind = 'strike';
@@ -3269,6 +3515,18 @@ export class Enemies {
     e.rearStrike = e.frontDot < FRONT_DOT;
     e.telegraphS = def.telegraph * (e.rearStrike ? REAR_TELEGRAPH_MUL : 1);
     if (e.rearStrike) this._rearStrikes++;
+    // Horror 1: before the FIRST strike of a fight the county holds its breath (STRIKE_HUSH_S).
+    // A pressure body about to land on him, nothing has hurt him for STRIKE_HUSH_QUIET_S, and
+    // not inside STRIKE_HUSH_GAP_S of the last one. dread.hush with no point centres on him.
+    if (def.owner === OWNER.PRESSURE && !e.initiallyNeutral && e.dist < STRIKE_HUSH_DIST
+      && (this._t - this._strikeHushAt) >= STRIKE_HUSH_GAP_S) {
+      const pl = this._sys('player');
+      const since = (pl && typeof pl.sinceHurt === 'number') ? Math.min(pl.sinceHurt, this._landedT) : this._landedT;
+      if (since >= STRIKE_HUSH_QUIET_S) {
+        const dread = this._sys('dread');
+        if (dread && typeof dread.hush === 'function') { dread.hush(STRIKE_HUSH_S); this._strikeHushAt = this._t; }
+      }
+    }
     e.built.telegraph(0.001);
     evtReset(e, kind);                       // reads e.rearStrike into _evt.rear
     _evt.y = e.pos.y + def.height * yOff;
@@ -3752,6 +4010,11 @@ export class Enemies {
       // ROUND 18: how loose the rig has gone. bodies.js's gaits read it and let the limbs
       // hang and swing off the tumble instead of holding their last live pose forever.
       anim.limp = e.state === 'corpse' ? e.deathLimp : 0;
+      // C14: a person near you looks at you. The camera IS his eye on this frame (first
+      // person, and the seat while driving), so no player read and no allocation: three
+      // numbers on the boot-declared anim record, null when nobody is looking.
+      if (e.neutral && e.def.human && dist < LOOK_R) { anim.lookX = camX; anim.lookY = camY; anim.lookZ = camZ; }
+      else anim.lookX = null;
       e.built.animate(anim);
     }
 
@@ -3850,6 +4113,13 @@ export class Enemies {
       respawnCleared: this._respawnCleared,
       stalls: this._stalls,
       cornered: this._cornered,
+      // 2026-09-17
+      // perchNoTrunk   moths that found no trunk inside PERCH_SEARCH_R and flew instead (D14)
+      // carStoodDown   bodies that gave up on a shut car door and walked off (D12)
+      // wardenNear     what this step published for the torch flicker (C11)
+      perchNoTrunk: this._perchNoTrunk,
+      carStoodDown: this._carStoodDown,
+      wardenNear: (this.ctx.shared && typeof this.ctx.shared.wardenNear === 'number') ? +this.ctx.shared.wardenNear.toFixed(3) : 0,
     };
   }
 
@@ -3992,6 +4262,12 @@ function makeRecord(id, species, def, built, rng) {
     //   poleHold        it is pacing that pool's rim because what it wants is inside
     //   dashDirX/Z      the runner's committed dash line
     unique: false, poleX: 0, poleZ: 0, poleR: 0, poleHold: false, dashDirX: 0, dashDirZ: 1,
+    // 2026-09-17.
+    //   carHoldT        seconds an INCAR_BLOCKED body has spent at a shut car door (D12)
+    //   officerCeiling  where a spider officer hangs (or sits); officerCeilSet once measured (D14)
+    //   standingStepT / lastSeenDist / witnessCd / obsPrev   the Standing Kind's ears (Horror 15)
+    carHoldT: 0, officerCeiling: 0, officerCeilSet: false,
+    standingStepT: 0, lastSeenDist: -1, witnessCd: 0, obsPrev: false,
     slot: -1,
     // Where this body was last hurt, and whether it was hurt by a swing. Both
     // are declared HERE, at boot, with every other field, and both exist so
@@ -4019,7 +4295,9 @@ function makeRecord(id, species, def, built, rng) {
     navBest: undefined, navBestT: 0,
     navMoved: 0, navLastX: 0, navLastZ: 0,      // nav.js progress(): metres really covered
     _navYaw: rng.next() * TAU, _navValid: false, _navBlocked: false,
-    anim: { gait: 0, moveAmp: 0, coil: 0, swing: 0, bank: 0, aim: 0, tick: 0, time: 0, dead: false, limp: 0 },
+    // C14: lookX null = nobody to look at; else the eye a neutral person turns its head to.
+    anim: { gait: 0, moveAmp: 0, coil: 0, swing: 0, bank: 0, aim: 0, tick: 0, time: 0, dead: false, limp: 0,
+      lookX: null, lookY: 0, lookZ: 0 },
   };
 }
 

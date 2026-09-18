@@ -5,9 +5,11 @@ export function lightZones(ctx) {
 }
 export function peacefulAt(ctx, x, z) {
   if(ctx?.systems?.get('holdfast-life')?.contains(x,z)) return true;
-  // THE ELEVEN REWIRE: a hamlet is lit ground for the same reason the Holdfast is. It also
-  // pushes a zone into ctx.shared.sanctuaryZones below, which is belt and braces on purpose:
-  // this call is the cheap one and runs on the spawn path.
+  // THE ELEVEN REWIRE: a hamlet is lit ground for the same reason the Holdfast is. This call
+  // is the cheap one and runs on the spawn path; hamlet-life.contains() is the whole answer
+  // (it pushes nothing into ctx.shared.sanctuaryZones — that array is sanctuaries.js's own).
+  // D16: while a hamlet's defence is LIVE, contains() ignores that one hamlet (C22), so the
+  // waves can walk in and the dread lane treats it as open ground until it holds again.
   if(ctx?.systems?.get('hamlet-life')?.contains(x,z)) return true;
   const s = ctx?.shared;
   for (const list of [s?.sanctuaryZones, s?.territoryZones, s?.bossZones]) for (const q of list || []) {

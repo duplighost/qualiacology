@@ -134,8 +134,15 @@ const NOT_A_LAMP = /(^|-)(mark|horizon)(-|$)/;
 const SKIP_SUBTREES = new Set(['chunks', 'flora', 'airlight', 'sky', 'impostor-bake']);
 const SCAN_S = 0.45;
 /* A halo is bigger than the bulb that makes it. 3.4x, floored so a 4 cm bead still has a
- * glow and ceilinged so a 12 m cathedral window does not fill the sky. */
-const HALO_MUL = 0.85, HALO_MIN = 0.16, HALO_MAX = 0.75;
+ * glow and ceilinged so a 12 m cathedral window does not fill the sky.
+ *
+ * D18: HALO_MAX .75 -> .45 and HALO_GAIN .035 -> .025 (the mist gain is untouched). Alex's
+ * note, "lights look like gigantic smudges": a lamp here was a soft halo plus a broad pool
+ * with nothing sharp in the middle, because no bulb crossed bloom's 1.05 threshold. The SITES
+ * lane now writes HDR bead cores so UnrealBloom draws the actual bulb; the halo is the air
+ * AROUND that and gets smaller and fainter to make room for it. tests/airlight.mjs reads a
+ * lamp as lit from s.fade * s.on, which neither number touches. */
+const HALO_MUL = 0.85, HALO_MIN = 0.16, HALO_MAX = 0.45;
 /* AND THE FIRST VERSION OF THESE WAS FAR TOO LOUD. 3.4x radius at a gain of 0.62 put a
  * two-metre orange balloon over every stall in the Holdfast's market
  * (tests/shots/vis-hold2/61-holdfast-gate.png) — the lamps stopped being lamps and became
@@ -143,7 +150,7 @@ const HALO_MUL = 0.85, HALO_MIN = 0.16, HALO_MAX = 0.75;
  * "nothing loud or anoying". A halo is what you see AROUND a lamp on a damp night, so it is
  * a little bigger than the bulb and a lot fainter, and the mist term is what makes it
  * grow — a halo IS the air, so with no air there is barely one. */
-const HALO_GAIN = 0.035, HALO_GAIN_MIST = 0.055;
+const HALO_GAIN = 0.025, HALO_GAIN_MIST = 0.055;
 /* The pool reads at roughly this against a cobbled apron and a forest floor; unlike the
  * halo it is landing on a real surface, so it can afford to be the stronger of the two. */
 const POOL_GAIN = 0.12;
@@ -153,7 +160,16 @@ const SRC_MAX_R = 14.0;
  * wider than any single pane, bead or window in the county and narrower than the gap between
  * two of them; see _clusters for why one forward pass is enough. */
 const CLUSTER_JOIN = 1.4;
-const CLUSTER_MAX = 28;
+/* The most lamps one merged glow mesh may seat. This is a cycle guard against a runaway
+ * geometry, NOT the draw budget (MAX_HALOS / MAX_POOLS bound what is drawn, nearest first).
+ * It was 28, set in Round 20 with the Filling Station's eight panes as the model, and the
+ * rebuilt Holdfast then merged its whole town into one 'body-glow-live-holdfast' of 768
+ * lamps (land-glow-holdfast: 71): the first 28 got a volume and the other 740 windows and
+ * lamp posts lit nothing, which is the silent failure this file's header describes and
+ * tests/airlight.mjs 'airlight puts light on the screen' caught at 0.03% of the frame
+ * (measured 2026-09-17, tools in the verifier's scratchpad). A cluster is a dozen numbers
+ * cached once per mesh; the per-scan cost is one transform and one heightAt per lamp. */
+const CLUSTER_MAX = 1024;
 /* An unlit lamp in this county is a DARK VERTEX COLOUR, not a hidden mesh (places.js writes
  * the claim's ignition straight into the colour attribute). So the volume's switch is read
  * off that colour: below the floor it is out, at full it is a lamp. */
@@ -717,6 +733,11 @@ export class AirLight {
   _torchBeam(i, cam) {
     const L = this.ctx.systems && this.ctx.systems.get('lights');
     if (!L || !L.torch || !(L.torch.intensity > 0)) return i;
+    // D18 c.3: while driving, the torch SpotLight is lent to the car as its shadowed headlamp
+    // (lights.torchIsHeadlamp). The cone in the air for that lamp is _carBeams' job, from the
+    // car's own pose; a second, torch-coloured volume at 340 cd down the same axis would
+    // blow out the middle of the windscreen.
+    if (typeof L.torchIsHeadlamp === 'function' && L.torchIsHeadlamp()) return i;
     // The SpotLight's own position and target ARE the torch. Reading them rather than the
     // camera means a torch the controller has swung, dropped or faulted is followed exactly,
     // and a blackout (lights.torchFault) takes the beam with it for free.

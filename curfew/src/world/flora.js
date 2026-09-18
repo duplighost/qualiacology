@@ -417,6 +417,8 @@ const BIOME_TEMPLATES = Object.freeze([
   Object.freeze([8, 2, 0, 4]),     // ridge: ash snags between high dark spires
 ]);
 const BIOME_DENSITY = Object.freeze([1.12, 0.50, 0.62, 0.80]);
+// D14: the template the burn band plants (the 'snag' row above, index 8 of the bank).
+const BURN_TEMPLATE = 8;
 const BIOME_HEIGHT = Object.freeze([1.12, 0.84, 0.92, 1.24]);
 const BIOME_TINT = Object.freeze([
   Object.freeze([0.83, 0.94, 1.02]),
@@ -1737,6 +1739,9 @@ export class Flora {
     this.chunks = new Map();     // chunkId -> record
     // ROUND 18: trees the Treebreaker has knocked over and not yet stood back up.
     this._felled = [];
+    // D14 (C17): trunks a walking tree has CLAIMED — hidden in place, never stood back up
+    // by the car's timer (a separate list, on purpose), forgotten with their chunk.
+    this._claimed = [];
     this.groups = new Map();     // "gx,gz" -> 2x2 record
     this.supers = new Map();     // "sx,sz" -> 4x4 record
     this._dirtyGroups = new Set();
@@ -2264,6 +2269,19 @@ export class Flora {
   }
 
   /**
+   * D14. THE BURN: 0 = live stand, 1 = a band of dead snags. A second field at half the
+   * cover field's frequency (CFG.flora.burn), so the walk changes character every ~400 m
+   * without a fifth template: the snag (template 8) is already in the bank and takes one
+   * of the group's four slots where the band runs. Sampled at world x/z like coverAt.
+   */
+  burnAt(x, z) {
+    const B = CFG.flora.burn;
+    if (!B) return 0;
+    const f = fbm2(x * B.freq, z * B.freq, this.seed + 63, 2);
+    return smoothstep(B.lo, B.hi, f);
+  }
+
+  /**
    * ROUND 16, item 12. THE MEADOW FIELD: where grass is allowed to be grass. 0 is bare
    * ground, 1 is a full meadow, and the smoothstep is steep enough that most of the county
    * is one or the other rather than a permanent grey middle (MEASURED over 400k samples:
@@ -2346,6 +2364,11 @@ export class Flora {
     const biomeDensity = BIOME_DENSITY[regionId] || 1;
     const biomeHeight = BIOME_HEIGHT[regionId] || 1;
     const biomeTint = BIOME_TINT[regionId] || BIOME_TINT[0];
+    // D14, the burn: which slot of this chunk's subset is the snag (or -1 at a band's edge
+    // where the group did not take it: the stand still thins, shortens and chars).
+    const B = CFG.flora.burn;
+    const burnTi = B && subset.indexOf(BURN_TEMPLATE) >= 0 ? BURN_TEMPLATE : -1;
+    const burnDensity = B ? B.density : 1, burnHeight = B ? B.height : 1, burnValue = B ? B.value : 1;
 
     const gx0 = Math.floor(ox / cell), gx1 = Math.ceil((ox + CH) / cell);
     const gz0 = Math.floor(oz / cell), gz1 = Math.ceil((oz + CH) / cell);
@@ -2366,6 +2389,10 @@ export class Flora {
 
         const cover = this.coverAt(wx, wz);
         if (h3 > Math.min(1, (0.06 + 0.94 * cover) * pFull * biomeDensity)) continue;
+        // The burn keeps a third of the stand (a second hash, so the survivors are not
+        // the same trees the density gate already kept).
+        const burn = B ? this.burnAt(wx, wz) : 0;
+        if (burn > 0.5 && hashI(gx, gz, this.seed + 12) > burnDensity) continue;
         // Roads are a field, not a mesh: excluded by distance, never by an
         // authored mask (DESIGN §2, CFG.roads.plantExclude).
         if (hasRoad && roads.roadDistance(wx, wz) < exclude) continue;
@@ -2381,9 +2408,10 @@ export class Flora {
         const h4 = hashI(gx, gz, this.seed + 4);
         const h5 = hashI(gx, gz, this.seed + 5);
         const h6 = hashI(gx, gz, this.seed + 6);
-        const ti = subset[(h4 * subset.length) | 0];
+        // Inside the burn 85% of what stands is the snag; the rest is what survived the fire.
+        const ti = burn > 0.5 && burnTi >= 0 && h4 < 0.85 ? burnTi : subset[(h4 * subset.length) | 0];
         const tpl = this.templates[ti];
-        const scale = (0.72 + h5 * 0.72) * biomeHeight;
+        const scale = (0.72 + h5 * 0.72) * biomeHeight * lerp(1, burnHeight, burn);
         const yaw = h6 * TAU;
 
         // ---- COLLIDER, RIGHT HERE, IN THE SAME PASS AS THE INSTANCE --------
@@ -2410,7 +2438,7 @@ export class Flora {
         _treeBuf[o + 3] = scale; _treeBuf[o + 4] = yaw; _treeBuf[o + 5] = ti;
         // Per-tree value jitter, cool toward the clearings so the stands read
         // darker than the gaps and the forest has depth in the value channel.
-        const v = 0.80 + hashI(gx, gz, this.seed + 7) * 0.42 - cover * 0.10;
+        const v = (0.80 + hashI(gx, gz, this.seed + 7) * 0.42 - cover * 0.10) * lerp(1, burnValue, burn);
         // ROUND 13: hue jitter as well as value, so neighbours are not the same green.
         _treeBuf[o + 6] = v * biomeTint[0];
         _treeBuf[o + 7] = v * (0.92 + hashI(gx, gz, this.seed + 8) * 0.16) * biomeTint[1];
@@ -3109,6 +3137,9 @@ export class Flora {
       const out = [];
       for (let i = 0; i < want; i++) out.push(family[(start + i) % family.length]);
       out.regionId = regionId;
+      // Inside the burn the snag takes the last slot, so the cap of `want` per chunk holds
+      // (the marsh and ridge families already carry it and change nothing).
+      if (out.indexOf(BURN_TEMPLATE) < 0 && this.burnAt(ox + 32, oz + 32) > 0.5) out[out.length - 1] = BURN_TEMPLATE;
       return out;
     }
     const score = [];
@@ -3128,6 +3159,8 @@ export class Flora {
     const out = [];
     for (let i = 0; i < want; i++) out.push(score[i][1]);
     out.regionId = 0;
+    if (out.indexOf(BURN_TEMPLATE) < 0 && BURN_TEMPLATE < this.templates.length
+      && this.burnAt(ox + 32, oz + 32) > 0.5) out[out.length - 1] = BURN_TEMPLATE;
     return out;
   }
 
@@ -3140,6 +3173,7 @@ export class Flora {
     if (!rec) return;
     this._dropNear(rec);
     this._dropGrass(rec);
+    if (this._claimed.length) this._forgetClaims(rec);   // a chunk that is gone takes its claims with it
     this.chunks.delete(id);
     this._treeCount -= rec.trees;
     rec.underPending = false;                    // a dead queue entry; _plantPending drops it
@@ -3414,6 +3448,8 @@ export class Flora {
       out.push(mesh);
     }
     rec.nearMeshes = out;
+    // A walking tree's hole is cut again in the fresh copy of the standing matrices.
+    if (this._claimed.length) this._reapplyClaims(rec);
   }
 
   _dropNear(rec) {
@@ -3424,6 +3460,8 @@ export class Flora {
     if (!rec.nearMeshes) return;
     for (const m of rec.nearMeshes) { this.group.remove(m); m.dispose(); }
     rec.nearMeshes = null;
+    // the claim survives the ring (its mesh does not): _reapplyClaims re-cuts it on rebuild
+    if (this._claimed.length) for (let q = 0; q < this._claimed.length; q++) if (this._claimed[q].rec === rec) this._claimed[q].mesh = null;
   }
 
   /** The understory's meshes: one InstancedMesh per kind, on materials that already exist,
@@ -3762,10 +3800,10 @@ export class Flora {
     const out = [];
     if (!this._built) return out;
     const r2 = radius * radius;
-    for (const rec of this.chunks.values()) {
-      if (!rec.nearMeshes || !rec.streams) continue;
-      for (let si = 0; si < rec.nearMeshes.length; si++) {
-        const mesh = rec.nearMeshes[si], s = rec.streams[si];
+    for (const chunk of this.chunks.values()) {
+      if (!chunk.nearMeshes || !chunk.streams) continue;
+      for (let si = 0; si < chunk.nearMeshes.length; si++) {
+        const mesh = chunk.nearMeshes[si], s = chunk.streams[si];
         if (!mesh || !s) continue;
         const arr = mesh.instanceMatrix.array;
         for (let k = 0; k < s.count; k++) {
@@ -3779,6 +3817,10 @@ export class Flora {
             const f = this._felled[q];
             if (f.mesh === mesh && f.k === k) { dup = true; break; }
           }
+          // A CLAIMED trunk is not a tree any more (it walked off): the car's timer must
+          // never lay it over and then stand it back up as a tree. (`chunk`, not `rec`:
+          // the felled record below shadows that name.)
+          if (!dup) dup = this._claimIndex(chunk, si, k) >= 0;
           if (dup) continue;
           // Fall AWAY from the car, about the horizontal axis square to that.
           const len = Math.hypot(dx, dz) || 1;
@@ -3800,6 +3842,103 @@ export class Flora {
     const arr = rec.mesh.instanceMatrix.array, src = rec.stream.mat, b = rec.k * 16;
     for (let i = 0; i < 16; i++) arr[b + i] = src[b + i];
     rec.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /* ============================================ THE WALKING TREE, D14 (C17) ==
+   * dread's 'uproot' beat wants one real tree to stop being flora: it claims the nearest
+   * live instance, retires its collider (collision.fellTrees) and stands a 'treant' where
+   * the trunk was. The instance is hidden with a ZERO-SCALE matrix — the translation
+   * stays so the record still says where the hole is — and the standing matrix survives
+   * in stream.mat exactly as it does for the Treebreaker, so restoreTrunk is standUp.
+   *
+   * These are NOT in _felled: car.js walks that list with its own timer and would put a
+   * tree back where an enemy is standing. A claim outlives the near ring (the ring is
+   * rebuilt with the hole re-cut) and dies with its chunk.
+   */
+  _claimIndex(rec, si, k) {
+    const list = this._claimed;
+    for (let q = 0; q < list.length; q++) {
+      const c = list[q];
+      if (c.rec === rec && c.si === si && c.k === k) return q;
+    }
+    return -1;
+  }
+
+  _hideInstance(mesh, k) {
+    const arr = mesh.instanceMatrix.array, b = k * 16;
+    for (let i = 0; i < 12; i++) arr[b + i] = 0;   // the 3x3 goes to zero; translation stays
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /**
+   * Claim the nearest live tree instance inside r of (x, z). Returns the record the
+   * caller keeps for restoreTrunk — { mesh, stream, k, ti, scale, yaw, x, y, z } — or null
+   * when no instance is inside r, or the nearest is already felled or claimed.
+   */
+  claimTrunk(x, z, r) {
+    if (!this._built) return null;
+    let best = null, bestD2 = r * r;
+    for (const rec of this.chunks.values()) {
+      if (!rec.nearMeshes || !rec.streams) continue;
+      for (let si = 0; si < rec.nearMeshes.length; si++) {
+        const mesh = rec.nearMeshes[si], s = rec.streams[si];
+        if (!mesh || !s) continue;
+        const src = s.mat;
+        for (let k = 0; k < s.count; k++) {
+          const b = k * 16;
+          const dx = src[b + 12] - x, dz = src[b + 14] - z;
+          const d2 = dx * dx + dz * dz;
+          if (d2 >= bestD2) continue;
+          if (this._claimIndex(rec, si, k) >= 0) continue;
+          let down = false;
+          for (let q = 0; q < this._felled.length; q++) {
+            const f = this._felled[q];
+            if (f.mesh === mesh && f.k === k) { down = true; break; }
+          }
+          if (down) continue;
+          bestD2 = d2;
+          if (!best) best = { rec: null, si: 0, mesh: null, stream: null, k: 0, ti: 0, scale: 1, yaw: 0, x: 0, y: 0, z: 0 };
+          best.rec = rec; best.si = si; best.mesh = mesh; best.stream = s; best.k = k;
+        }
+      }
+    }
+    if (!best) return null;
+    const src = best.stream.mat, b = best.k * 16;
+    best.ti = best.stream.ti;
+    // the packed matrix is Rz*Rx*Ry*scale: the Y column's length is the (stretched) scale
+    best.scale = Math.hypot(src[b + 4], src[b + 5], src[b + 6]);
+    best.yaw = Math.atan2(src[b + 8], src[b + 10]);
+    best.x = src[b + 12]; best.y = src[b + 13]; best.z = src[b + 14];
+    this._hideInstance(best.mesh, best.k);
+    this._claimed.push(best);
+    return best;
+  }
+
+  /** Give a claimed trunk back to the forest (the beat was refused, or the treant died
+   *  and the stump wants its tree). A record whose chunk is gone is simply forgotten. */
+  restoreTrunk(rec) {
+    if (!rec) return false;
+    const i = this._claimed.indexOf(rec);
+    if (i >= 0) this._claimed.splice(i, 1);
+    if (!rec.mesh || !this.chunks.has(rec.rec && rec.rec.id)) return i >= 0;
+    this.standUp(rec);
+    return true;
+  }
+
+  /** The claims that belong to one chunk record: re-cut when its near ring is rebuilt. */
+  _reapplyClaims(rec) {
+    const list = this._claimed;
+    for (let q = 0; q < list.length; q++) {
+      const c = list[q];
+      if (c.rec !== rec) continue;
+      c.mesh = rec.nearMeshes ? rec.nearMeshes[c.si] || null : null;
+      if (c.mesh) this._hideInstance(c.mesh, c.k);
+    }
+  }
+
+  _forgetClaims(rec) {
+    const list = this._claimed;
+    for (let q = list.length - 1; q >= 0; q--) if (list[q].rec === rec) list.splice(q, 1);
   }
 
   /**

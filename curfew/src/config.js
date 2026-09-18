@@ -61,6 +61,30 @@ export const CFG = {
     // Rendering targets remain separate from material/asset allocation ceilings.
     budget: {
       fpsMin: 58,
+      // THESE TWO ARE RED AND THEY ARE TELLING THE TRUTH. Left at the target on purpose.
+      //
+      // MEASURED 2026-09-17 (tests/perf.mjs, vsync off). Nobody had run this suite for an
+      // unknown number of rounds, so first: it is NOT this round's doing. The pre-round build
+      // ef68573, run from a clean worktree, was red at the same two scenes and worse on that
+      // sample: avery-house 47.1 median / 102.2 p95, gallowsfen 44.8 / 93.8, both 20 fps.
+      //
+      // Then the caution. Three runs of the SAME build on this PC disagree by up to 2x:
+      //   avery-house   28.5 median, then 48.6      (33 fps, then 20)
+      //   gallowsfen    28.7, then 22.4             (30 fps, then 42)
+      //   dense         23.6, then 35.9
+      // and one run taken while an orphaned headless Chrome from an earlier suite was still
+      // alive read 96.7 / 393.7 for the whole sweep. So a tight ceiling fitted to any single
+      // run here is a fiction, and no honest regression/improvement claim can be made from
+      // these samples either way. Kill stray chrome.exe and re-measure before believing a
+      // number (the harness reaps on a clean exit; a killed run leaks one).
+      //
+      // What IS solid: the cost is GPU, not simulation. Every system's step and present
+      // together measure 1.1 ms at gallowsfen, and airlight — the loudest suspect after its
+      // cluster cap went 28 -> 1024 — is 0.10 ms of that. 567 draws and 2.75 M triangles at
+      // 1600x900 is not a draw-call problem; it is fill, and Avery House is the worst of it.
+      //
+      // DO NOT raise these to make the suite green. The game really does run at 20 fps in at
+      // least one interior and that deserves its own lane, on a quiet machine.
       medianMax: 15,
       p95Max: 34,
       drawsMax: 1400,
@@ -263,6 +287,17 @@ export const CFG = {
     lodHysteresis: 0.1,
     alphaTest: 0.30,        // coverage-preserving mips [cinderbloom]
     wind: { gain: 0.22, gustHz: 0.13 },
+    // D14: THE BURN. A second low-frequency field over the cover field: inside a band the
+    // stand is dead snags (template 8, already in the bank; a group's 4-template cap holds)
+    // at a third of the density, shorter and charred, so a long walk changes character
+    // every ~400 m instead of passing the same four crowns for a kilometre.
+    burn: {
+      freq: 0.0025,           // 1/m; ~400 m wavelength, twice the cover field's 182 m
+      lo: 0.65, hi: 0.78,     // smoothstep band of the fbm: MEASURED 11% of the county at these (17% at .60/.74); a steep edge, a real treeline
+      density: 0.35,          // x the biome density inside the burn
+      height: 0.80,           // x the tree scale: a snag is a broken trunk, not a crown
+      value: 0.55,            // x the tint: charred, darker than the live stand
+    },
     // ROUND 6, lane F. Alex: "The woods hardly has anything in it." Four instanced
     // understory templates planted by the same loop as the trees, one InstancedMesh per
     // KIND per chunk (never per variant), materialised with the near ring and dropped with
@@ -300,7 +335,9 @@ export const CFG = {
   // fx's particle material, the meteors are eight spare vertices in the star field.
   fx: {
     eyeshine: {
-      pairs: 10,              // the pool (was 24: Alex, 2026-09-11, "it seems like a lot"). Two additive points each, one draw
+      pairs: 5,               // the pool (was 24, then 10: Alex, 2026-09-11, "it seems like a lot"). D14: five at the rim is a treeline, ten was wallpaper
+      minPairs: 1,            // the cap at the county's centre; climbs to `pairs` by the rim (was fx.js's own 2)
+      spawnEveryS: 6,         // s between placement attempts (was fx.js's own 0.8): a pair per sweep, not per trunk
       range: [20, 60],        // m from the beam's origin: far enough to be a glint, not a body
       h: [0.6, 1.1],          // m above the ground: a dog, a deer, something on all fours
       hWrong: [2.5, 3.5],     // ...and the ones that are not. Nothing in the county stands there
@@ -309,6 +346,14 @@ export const CFG = {
       near: 12,               // m: walk this close and the pair is gone. Never seen up close
       lookS: 1.5,             // seconds of being stared at straight before it looks away
       depthFrom: 900,         // m from the centre where the count starts climbing (was 500)
+      // horror 11: hound eyes are the orange of a sunrise, the only sunrise colour in the county;
+      // the pair at the wrong height is cold. Colour x alpha against post's 1.05 bloom threshold:
+      colLow: [1.7, 0.85, 0.30],  // sunrise orange; 1.7 * 0.60 = 1.02, never blooms
+      alphaLow: 0.60,
+      colWrong: [1.0, 1.45, 1.6], // cold; 1.6 * 0.80 = 1.28, so it is the one thing in the treeline that blooms, faintly
+      alphaWrong: 0.80,
+      exclusionS: 20,         // D14: no glint pool this many s after a dread/Auditor pair opened (ctx.shared.eyesAt)
+      approachM: 4,           // C13: a lit wrong-height pair the player has closed by this much can become a Pale
     },
     meteor: {
       gapS: [40, 120],        // seconds between streaks: you have to be looking up
@@ -336,8 +381,12 @@ export const CFG = {
     waterY: 1.5,            // the reservoir bed is -4.7; below this is water
     separation: 110,        // m between any two sites (cells are 280, so this only bites at seams)
     towerApart: 420,        // m between two lookout towers
-    // per-kind quotas, in the order they are served from the shuffled cell list
-    counts: { tower: 13, stand: 27, ruin: 18, wreck: 28, camp: 28 },
+    // per-kind quotas, in the order they are served from the shuffled cell list.
+    // D14: ruin 18 -> 24 and camp 28 -> 34. The first 114 deals (wilds.js BASE_COUNTS) are
+    // planned exactly as before so every saved 'w:<id>' keeps its site; the extra twelve are
+    // a second pass over the same cells (a cell is 280 m, two sites 110 m apart fit) and get
+    // the new clearing variants (hide, burnt, timber) and ids w114..w125.
+    counts: { tower: 13, stand: 27, ruin: 24, wreck: 28, camp: 34 },
     cacheChance: { tower: 1.0, stand: 0.5, ruin: 0.34, wreck: 0.30, camp: 0.30 },
     buildWithin: 220,       // m; a site's body streams in inside this ...
     disposeBeyond: 264,     // ... and out past this (hysteresis, so a boundary cannot thrash)
@@ -579,7 +628,9 @@ export const CFG = {
     // numbers and are untouched.
     turn: { rMin: 7.5, rCubic: 0.00284 },
     wheelbase: 2.55,
-    pitchClamp: 0.22, rollClamp: 0.18,
+    // D12: 0.22 -> 0.32 so the body follows the county loop's steepest grade (30% near
+    // (410,-1290) = 0.29 rad) instead of sitting nose-into the road at the clamp.
+    pitchClamp: 0.32, rollClamp: 0.18,
     // MOSSWAY scrubs speed *= 0.58 PER FRAME on a tree hit - the one frame-rate-dependent
     // line in that file. Made time-based here. ROUND 5: the scrub scales with how square-on
     // the contact is — a head-on trunk still damps toward targetMul, a graze along the
@@ -619,7 +670,14 @@ export const CFG = {
     // 50000, which outlived every session); offRoadMul is how much faster gravel wears it;
     // impact / ram / crush / tree are the per-contact costs (0.055 / 0.020 / 0.010 / 0.0016
     // before), raised less than the drive rate because a dent already registered on the needle.
-    wear: { driveMetres: 16000, offRoadMul: 1.4, impact: 0.070, ram: 0.025, crush: 0.014, tree: 0.0022 },
+    // D12 — Alex: "rolls slow for soooo long; the further you go the slower it breaks down."
+    // The old cap collapsed past 0.80 (to 12% of top speed), and because wear is per metre a
+    // slower car wore slower: 0.80 -> dead was 3.2 km and 7.9 MINUTES at full throttle. Now
+    // the cap only ever loses 28% (car.js WEAR_SPEED_LOSS), and from failFrom the engine is
+    // on a CLOCK: wear rises at a fixed rate so it dies failWindowS seconds later whatever
+    // the speed — coughs, pedal cuts and the gauge kicking are the tell, then the stall.
+    wear: { driveMetres: 16000, offRoadMul: 1.4, impact: 0.070, ram: 0.025, crush: 0.014, tree: 0.0022,
+      failFrom: 0.92, failWindowS: 35 },
     // ROUND 22 — Alex: "Moths. Idle with your headlights on and they cake the lens, dimming
     // your beams until you drive." Noticeable by 30 s, the floor by 80 s, gone 10 s into a
     // drive. idleSpeed is the m/s under which you are idling; graceS the free stop before the
@@ -647,7 +705,11 @@ export const CFG = {
     // off that sometimes moves, alarm clocks behind every door and coffee makers at the false
     // dawn, the rooster, the dawn chorus that stops embarrassed, wind chimes before the hounds.
     county: {
-      bellEveryS: 210,          // the county has no hours; one lone toll every 3.5 min stands in for them
+      bellEveryS: 0,            // off: the hour is the phase change. >0 brings back a lone toll every N s
+      // Tolls per phase change from ONE church (D11): one at dusk (the cycle begins), silence in
+      // deep night, three at the black hour (the only warning the sky cannot give by ear), one at
+      // the false dawn (the cycle ends). county.js caps every caller at four tolls a minute.
+      tolls: { dusk: 1, night: 0, black: 3, dawn: 1 },
       bellRangeM: 1800,         // sound carries a mile; a bell two miles off is not this player's bell
       chimeCooldownS: 25,       // one ring per approach, or a pack order becomes a wind-chime concert
       thunderDuckDb: 4,         // near thunder steps the bed back a little; never the threat duck (reserved)
@@ -664,6 +726,9 @@ export const CFG = {
       dogcallerLpHz: 1800,      // the voice is a quarter mile off: no consonants left
       dogcallerTailS: 1.2,      // a valley's worth of tail baked in once at decode
       dogcallerCooldownS: 4,    // lane C may call faster than a man can shout
+      xingOnS: 20,              // the crossing rings for 20 s once you come inside 200 m of it...
+      xingOffS: 90,             // ...then rests 90 s, and rings again only if you are still there
+      truckPlaysPerNight: 2,    // the jingle at most twice a night, 90-210 s apart: a truck, not a loop
     },
   },
 
@@ -690,11 +755,14 @@ export const CFG = {
     // waits sinceLoudMin after any loud beat, needs dense cover, distance from a road, a walking
     // pace, and its own cooldown. bonusXp pays on top of the species when you kill the body.
     jump: {
-      everyS: { drop: 240, turn: 300, blackout: 360, pack: 420 },
-      sinceLoudMin: 40, coverMin: 0.72, roadMin: 24, speedMax: 7.0, placeClear: 60,
+      // D14: cooldowns dropped (were drop 240 / turn 300 / pack 420) so a cover walk gets a body
+      // every 2-3 min instead of 4-7; uproot is the new one (a real tree becomes a treant).
+      everyS: { drop: 150, turn: 200, blackout: 360, pack: 300, uproot: 300 },
+      sinceLoudMin: 40, coverMin: 0.72, roadMin: 24, speedMax: 7.0, placeClear: 40,   // placeClear was 60: 60 m from any place cut most of the woods out
       bonusXp: 40,
       turnWalkS: 4.0, turnBehind: 2.5, turnHoldS: 0.6, turnAmbushS: 8,
       dropH: 6.0, dropTreeMin: 2.0, dropTreeMax: 3.5,
+      uprootTreeMin: 2.0, uprootTreeMax: 4.5,   // m off the point three metres ahead: closer is a wall, farther is scenery
       packAhead: [9, 12], packSize: 3, packMinHp: 60, packSinceHurtS: 40,
       blackoutS: 1.8, blackoutRevealChance: 0.30, blackoutRevealAt: 1.4,
     },

@@ -2,7 +2,7 @@
 // Installers register behavior through HOOK_POINTS and rebuild the sampled stats below.
 // Signature effects use system APIs in perk-effects.js; importing the tree needs no renderer.
 
-import {refillSprint, returnHeadshotRound, bloodPrice, panicGuard, tickPanic, flashlamp} from './perk-effects.js';
+import {refillSprint, returnHeadshotRound, bloodPrice, panicGuard, tickPanic, flashlamp, slipStep, slipAt} from './perk-effects.js';
 
 export const BRANCHES = Object.freeze([
   { id: 'legs',  name: 'Legs',  verb: 'run',    tint: 0x9fb4d8 },
@@ -39,28 +39,27 @@ export const HOOK_POINTS = Object.freeze([
     at: 'progression/progress.js _wire() from place:near' },
 
   // Hooks sampled by the systems that own the action.
-  { name: 'reloadWindow', kind: 'reduce', runner: 'weapons', base: 'null',
-    at: 'weapons/weapon.js _startReload()',
-    sig: '(spec|null, ctx, weapon) -> {from,to,mul,jamS}|null' },
-  { name: 'reloadResume', kind: 'reduce', runner: 'weapons', base: 'false',
-    at: 'weapons/weapon.js _cancelReload()', sig: '(bool, ctx, weapon) -> bool' },
+  // D2/D3: the active-reload WINDOW and reload PARKING are base behaviour in weapon.js now,
+  // so 'reloadWindow' and 'reloadResume' are gone from this table — no node sells them and a
+  // row nobody installs on is a promise the card does not make. What the HANDS branch sells
+  // instead is a stat (hands_1 primedMul) and this reduce (hands_3):
+  { name: 'reloadSpeed', kind: 'reduce', runner: 'weapons', base: '1',
+    at: 'weapons/weapon.js _startReload(), the duration; dur is MULTIPLIED by the result',
+    sig: '(mul, ctx, weapon) -> mul   // 0.8 = every reload 20% faster' },
   { name: 'holdBreath', kind: 'reduce', runner: 'weapons', base: 'null',
     at: 'weapons/weapon.js _stanceMods()', sig: '(spec|null, ctx, weapon) -> {swayMul,seconds}|null' },
   { name: 'penCm', kind: 'reduce', runner: 'weapons', base: 'CFG.weapons.pen[material]',
     at: 'combat/combat.js the penetration test', sig: '(cm, ctx, material) -> cm' },
   { name: 'penExits', kind: 'reduce', runner: 'weapons', base: '0',
     at: 'combat/combat.js the exit-count loop', sig: '(n, ctx) -> n' },
-  // ROUND 6 (lane G): run by gfx/lights.js present(), inside the torch block — the beam's
-  // angle and heat are set by name there, and the two reads live beside them.
-  { name: 'torchFocus', kind: 'reduce', runner: 'lights', base: 'null',
-    at: 'gfx/lights.js present(), the torch block', sig: '(spec|null, ctx) -> {angle}|null' },
+  // ROUND 6 (lane G): run by gfx/lights.js present(), inside the torch block, where the
+  // beam's heat is set by name. D3 retired 'torchFocus' (lamp_1 is Long Beam now, a stat)
+  // and 'resolveWatchers' (a watcher withdrawing under a held beam is base dread behaviour);
+  // a lane that still samples either name simply gets its base back.
   { name: 'highBeam', kind: 'reduce', runner: 'lights', base: 'null',
     at: 'gfx/lights.js present(), the torch block', sig: '(spec|null, ctx) -> {seconds}|null' },
   { name: 'eyeshineMul', kind: 'reduce', runner: 'enemies', base: '1',
     at: 'enemies/enemies.js the eye-glint range test', sig: '(mul, ctx) -> mul' },
-  // ROUND 6 (lane G): run by director/dread.js _stepWatcher(), the withdrawal decision.
-  { name: 'resolveWatchers', kind: 'reduce', runner: 'dread', base: 'false',
-    at: 'director/dread.js _stepWatcher(), the watcher reveal', sig: '(bool, ctx) -> bool' },
   { name: 'noiseRadius', kind: 'reduce', runner: 'player',
     base: 'the radius about to be emitted',
     at: 'player/controller.js the footstep noise emit; weapons/weapon.js _fire()',
@@ -120,7 +119,11 @@ export const HOOK_POINTS = Object.freeze([
   { name: 'secondWind', kind: 'reduce', runner: 'player', base: 'null',
     at: 'player/controller.js hurt(), immediately before _die()',
     sig: '(spec|null, ctx) -> {seconds}|null' },
-  // Latched doors, entering the car and securing a place share the trail-loss hook.
+  // Latched doors, entering the car and securing a place share this run hook. D3: the shut
+  // door drops every unseen pursuer's trail for FREE (world/refuge.js _onShut, before it
+  // emits door:shut), so no node installs here any more; the point stays declared because
+  // refuge.js and progress.js still run it and a hookReport row with zero installers is the
+  // honest answer.
   { name: 'onDoorShut', kind: 'run', runner: 'progress', sig: '(ctx, x, z)',
     at: 'progression/progress.js _doorShut() from door:shut, car:entered and place:claimed' },
 ]);
@@ -146,6 +149,11 @@ export function baseStats() {
     hpMax: 100,             // CFG.player.health.max
     speedMul: 1.0,          // every ground speed of the body
     damageMul: 1.0,         // every round the gun lands
+    // D3 / C6. Base 1 is the game exactly as it ships; the node writes the whole value.
+    primedMul: 1.0,         // damage of every round fired PRIMED (weapon:fire dmgMul)
+    torchMul: 1.0,          // the torch's intensity
+    torchRangeMul: 1.0,     // the torch's range / distance
+    litSlowMul: 1.0,        // move speed of a pressure body lit by the torch within 14 m
   };
 }
 
@@ -200,6 +208,27 @@ export const STAT_CONTRACT = Object.freeze({
     replaces: null, fallback: 1.0,
     note: 'Multiply the damage of every round the gun lands. Melee too.',
   }),
+  // D3 / C6 — the four stats the redesign added. Read lazily, never retained.
+  primedMul: Object.freeze({
+    file: 'src/weapons/weapon.js', site: '_fire(), the weapon:fire payload (dmgMul) while this.primed',
+    replaces: null, fallback: 1.0,
+    note: 'Carried on the payload, not the bag: primed is per-magazine state and the bag is rebuilt on buy/load.',
+  }),
+  torchMul: Object.freeze({
+    file: 'src/gfx/lights.js', site: 'present(), the torch block: intensity',
+    replaces: null, fallback: 1.0,
+    note: 'Multiply the torch SpotLight intensity. Never a lamp, never the headlight.',
+  }),
+  torchRangeMul: Object.freeze({
+    file: 'src/gfx/lights.js', site: 'present(), the torch block: range / distance',
+    replaces: null, fallback: 1.0,
+    note: 'Multiply the torch range. The cone angle is untouched.',
+  }),
+  litSlowMul: Object.freeze({
+    file: 'src/enemies/enemies.js', site: 'the pressure-body move speed, while e.playerLit within 14 m',
+    replaces: null, fallback: 1.0,
+    note: 'Multiply move speed only. Never the horror species, never a neutral.',
+  }),
 });
 
 /* ------------------------------------------------------------- hook payloads -- */
@@ -207,23 +236,25 @@ export const STAT_CONTRACT = Object.freeze({
 // `nitro`, `wearAdd` and `wearMend` are reduced on frames, not on events, and a fresh object
 // literal per frame is exactly the hot-path allocation the CONTRACT forbids.
 
-const ACTIVE_RELOAD = Object.freeze({ from: 1.000, to: 1.160, mul: 1.25, jamS: 0.65 });
+// D2: the active-reload window (and its jam) used to be authored here as ACTIVE_RELOAD and
+// sold by hands_1. The window is base now and lives in weapon.js; there is no jam anywhere.
 const HOLD_BREATH   = Object.freeze({ swayMul: 0.25, seconds: 2.5 });
-// `angle` and nothing else: this spec used to carry a stunS and a costS that lights.js has
-// never read and no other lane has ever asked for. A field nobody reads is a promise the
-// card does not make and the game does not keep, so they are gone.
-const TORCH_FOCUS   = Object.freeze({ angle: 0.25 });
 const HIGH_BEAM     = Object.freeze({ seconds: 1.6 });
 const SECOND_WIND   = Object.freeze({ seconds: 2.5 });
 
 const STEP_LOUD_MUL   = 0.6;    // quiet_1
 const COLD_BARREL_M   = 14;     // quiet_2, metres, and only from UNAWARE
-const EYESHINE_MUL    = 2.0;    // lamp_2
+const EYESHINE_MUL    = 2.5;    // lamp_2: D3 raised it from 2.0 so the glint is felt at range
 const PEN_MUL         = 1.5;    // hands_4
 // ROUND 18: HOTWIRE_S, RAM_MIN_SPEED and WEAR_MEND moved to vehicle/garage.js with the
 // four car upgrades they belonged to. NITRO went with them.
 
-const SHUT_DOOR_M     = 12;     // quiet_3, metres
+// D3 — the redesigned cards. One number each, the whole of it.
+const PRIMED_MUL      = 1.5;    // hands_1: every round until the next reload, after a hit window
+const RELOAD_SPEED    = 0.8;    // hands_3: dur x 0.8, every reload a fifth faster
+const TORCH_LONG      = 1.45;   // lamp_1: torch intensity
+const TORCH_REACH     = 1.25;   // lamp_1: torch range
+const LIT_SLOW        = 0.70;   // lamp_3: a body in the beam moves 30% slower
 
 // ROUND 6 — the numbers with teeth. Two steps each, the second the whole of it.
 const HP_THICK_SKIN   = 120;    // blood_2
@@ -256,31 +287,10 @@ function nothingIsAware(ctx) {
   return !seen;
 }
 
-/**
- * Stop hunting anything further away than `beyond`. `setHunt` is the enemies lane's public
- * API (enemies.js:338) and is the only handle this file touches — no enemy field is written
- * from here.
- */
-function dropDistantHunts(ctx, x, z, beyond) {
-  const en = sys(ctx, 'enemies');
-  if (typeof en?.loseTrail === 'function') return en.loseTrail(x, z, beyond);
-  if (!en || typeof en.forEachAlive !== 'function' || typeof en.setHunt !== 'function') return 0;
-  const b2 = beyond * beyond;
-  let n = 0;
-  en.forEachAlive((e) => {
-    if (!e || !e.hunt || !e.pos) return;
-    const dx = e.pos.x - x, dz = e.pos.z - z;
-    if (dx * dx + dz * dz < b2) return;
-    en.setHunt(e, false, 1);
-    n++;
-  });
-  return n;
-}
-
 /* -------------------------------------------------------------------- nodes -- */
 
 // A node is an INSTALLER (rocket-shoes items.js:7-31): `install(stats, hooks, rank)` writes
-// one of the nine surviving stats, or registers hooks, or both. `rank` is how many times this
+// one of the stats in baseStats(), or registers hooks, or both. `rank` is how many times this
 // node is owned — always 1 today, passed anyway so a future stacking node needs no signature
 // change. `line` is the ONE sentence the pause card prints under the name: what it buys, in
 // words he can repeat. Under sixty characters so it holds two lines on the card.
@@ -290,7 +300,8 @@ export const NODES = Object.freeze([
   { id: 'legs_1', branch: 'legs', tier: 0, cost: 1, name: 'Drop-roll',
     line: 'Hold crouch as you land. Roll through a long fall.',
     install: (s) => { s.dropRoll = 1; } },
-  { id: 'legs_2', branch: 'legs', tier: 1, cost: 2, name: 'Second Wind',
+  // D3: 'Runner', not 'Second Wind' — those two words belong to Iron, where dying is the subject.
+  { id: 'legs_2', branch: 'legs', tier: 1, cost: 2, name: 'Runner',
     line: 'Every kill refills your hard sprint. Run faster, too.',
     install: (s, hooks) => { s.speedMul = SPEED_STRIDE; hooks.on('onKill','legs_2',ctx=>refillSprint(ctx)); } },
   { id: 'legs_3', branch: 'legs', tier: 2, cost: 3, name: 'Cut',
@@ -304,23 +315,28 @@ export const NODES = Object.freeze([
       hooks.on('onLand','legs_4',(ctx,p)=>{if(p?.speed>=7)refillSprint(ctx,'legs_4');}); } },
 
   /* ---- HANDS: the gun answers harder ------------------------------------------ */
-  { id: 'hands_1', branch: 'hands', tier: 0, cost: 1, name: 'Active',
-    line: 'Press R at the reload click to finish early. Mistime it and the gun jams.',
-    install: (s, hooks) => {
-      void s;
-      // The WINDOW is the node. weapons asks once, at _startReload, and gets the spec or
-      // null; there is no flag to read and no second key that could disagree with it.
-      hooks.on('reloadWindow', 'hands_1', () => ACTIVE_RELOAD);
-    } },
+  // D2/D3. The window on the reload arc is BASE now (every reload has a click; R on it and
+  // the rest runs faster; miss it and nothing happens). What this card buys is the payoff:
+  // hit the click and the gun is PRIMED — every round until the next reload lands x1.5.
+  // weapon.js reads the stat lazily and carries it on the weapon:fire payload as dmgMul;
+  // the ammo box glimmers while primed so the state is on screen, not in the card.
+  { id: 'hands_1', branch: 'hands', tier: 0, cost: 1, name: 'Primed',
+    line: 'Press R at the click. Rounds hit harder until you reload.',
+    install: (s) => { s.primedMul = PRIMED_MUL; } },
+  // D3: the WHOLE magazine back, not one cartridge. One round into a 30-round carbine was
+  // nothing; a full magazine on a headshot is a felt reward in a game that starves ammo.
   { id: 'hands_2', branch: 'hands', tier: 1, cost: 2, name: 'Last Round',
-    line: 'A headshot kill returns a round to your gun. Hit harder.',
+    line: 'A headshot kill refills the magazine. Hit harder.',
     install: (s, hooks) => { s.damageMul = DMG_HEAVY; hooks.on('onKill','hands_2',returnHeadshotRound); } },
-  { id: 'hands_3', branch: 'hands', tier: 2, cost: 3, name: 'Hold',
-    line: 'Steady your aim. Interrupted reloads resume where you left them.',
+  // D3: 'Steady'. Reload parking (sprint / swap / lower parks it, the next R resumes it) is
+  // base behaviour in weapon.js now; nobody should pay three points for good gamefeel. The
+  // card buys the breath-hold and a fifth off every reload, both of which a hand can feel.
+  { id: 'hands_3', branch: 'hands', tier: 2, cost: 3, name: 'Steady',
+    line: 'Shift while aiming holds your breath. Reloads 20% faster.',
     install: (s, hooks) => {
       void s;
       hooks.on('holdBreath', 'hands_3', () => HOLD_BREATH);
-      hooks.on('reloadResume', 'hands_3', () => true);
+      hooks.on('reloadSpeed', 'hands_3', (mul) => (typeof mul === 'number' ? mul * RELOAD_SPEED : RELOAD_SPEED));
     } },
   { id: 'hands_4', branch: 'hands', tier: 3, cost: 5, name: 'Through',
     line: 'Shoot through cover and the body behind it.',
@@ -331,18 +347,24 @@ export const NODES = Object.freeze([
     } },
 
   /* ---- LAMP: what the light is for -------------------------------------------- */
-  { id: 'lamp_1', branch: 'lamp', tier: 0, cost: 1, name: 'Focus',
-    line: 'Aim with the torch on and the beam squeezes tight.',
-    install: (s, hooks) => { void s; hooks.on('torchFocus', 'lamp_1', () => TORCH_FOCUS); } },
+  // D3. Three of the four old LAMP cards tuned a number the player never saw (a narrower
+  // cone, a watcher that leaves). The branch is about the torch being a WEAPON now: brighter
+  // and further (lamp_1), eyes caught sooner (lamp_2), what it lights slowed (lamp_3), and
+  // the flash that throws them back (lamp_4). Stats are read lazily by lights.js / enemies.js.
+  { id: 'lamp_1', branch: 'lamp', tier: 0, cost: 1, name: 'Long Beam',
+    line: 'The torch burns brighter and reaches a quarter further.',
+    install: (s) => { s.torchMul = TORCH_LONG; s.torchRangeMul = TORCH_REACH; } },
   { id: 'lamp_2', branch: 'lamp', tier: 1, cost: 2, name: 'Eyeshine',
-    line: 'Eyes catch the light twice as far out.',
+    line: 'Eyes catch your beam from much further out.',
     // VALUE only, never hue: the glint gets further away, it does not change colour.
     install: (s, hooks) => { void s; hooks.on('eyeshineMul', 'lamp_2', (m) => m * EYESHINE_MUL); } },
-  { id: 'lamp_3', branch: 'lamp', tier: 2, cost: 3, name: 'Resolve',
-    line: 'Hold a watcher in your beam. Make it withdraw.',
-    install: (s, hooks) => { void s; hooks.on('resolveWatchers', 'lamp_3', () => true); } },
+  { id: 'lamp_3', branch: 'lamp', tier: 2, cost: 3, name: 'Cold Light',
+    line: 'Anything in your beam within 14 m moves 30% slower.',
+    install: (s) => { s.litSlowMul = LIT_SLOW; } },
+  // Kept: the one LAMP card that was already an event. perk-effects flashlamp() throws the
+  // flash (fx.flash, so it is SEEN) and the receipt; highBeam doubles the heat for 1.6 s.
   { id: 'lamp_4', branch: 'lamp', tier: 3, cost: 5, name: 'Flashburn',
-    line: 'Switch on the torch to repel attackers. Recharges in 12s.',
+    line: 'Torch on throws back what faces you. 12 s recharge.',
     install: (s, hooks) => { void s; hooks.on('highBeam', 'lamp_4', () => HIGH_BEAM);
       hooks.on('onStep','lamp_4',flashlamp); } },
 
@@ -370,21 +392,20 @@ export const NODES = Object.freeze([
         return nothingIsAware(ctx) ? COLD_BARREL_M : r;
       });
     } },
-  { id: 'quiet_3', branch: 'quiet', tier: 2, cost: 3, name: 'Shut the Door',
-    line: 'Close a door. Unseen pursuers lose your trail.',
+  // D3: 'Slip'. Alex, 2026-09-16: "the shut the door perk should work without a perk" — and
+  // it already did: refuge.js drops every unseen pursuer the moment a door latches, so the
+  // old card's door half could never be felt. What this card sells is the OTHER two ways out:
+  // getting into the car, and reaching lit ground. Every pursuer that cannot see you loses
+  // the trail, and it says so ('SLIP · TRAIL LOST'). The car edge is watched on onStep
+  // (ctx.shared.inCar rising); lit ground arrives on the place:near heartbeat.
+  { id: 'quiet_3', branch: 'quiet', tier: 2, cost: 3, name: 'Slip',
+    line: 'Reach the car or lit ground. Unseen pursuers lose you.',
     install: (s, hooks) => {
       void s;
-      // Reaching a lit place also breaks a pursuit that no longer has line of sight.
-      const shut = (ctx, x, z) => {
-        const p = sys(ctx, 'player');
-        const px = Number.isFinite(x) ? x : (p && p.pos ? p.pos.x : 0);
-        const pz = Number.isFinite(z) ? z : (p && p.pos ? p.pos.z : 0);
-        dropDistantHunts(ctx, px, pz, SHUT_DOOR_M);
-      };
-      hooks.on('onDoorShut', 'quiet_3', shut);
+      hooks.on('onStep', 'quiet_3', slipStep);
       hooks.on('onPlaceNear', 'quiet_3', (ctx, pl) => {
         if (!pl || (pl.lit !== true && pl.hub !== true)) return;
-        shut(ctx, pl.x, pl.z);
+        slipAt(ctx, pl.x, pl.z);
       });
     } },
   { id: 'quiet_4', branch: 'quiet', tier: 3, cost: 5, name: 'Unheard',
@@ -404,8 +425,12 @@ export const NODES = Object.freeze([
   { id: 'blood_1', branch: 'blood', tier: 0, cost: 1, name: 'Mend',
     line: 'Wounds mend back to 70 health without a medkit.',
     install: (s) => { s.regenCeiling = 70; } },
+  // D3: the shove is REAL now — 6 m, thrown (airborne, so the stagger damping cannot eat
+  // it), force 9, 12 s recharge, a flash and a camera punch. It used to move a body half a
+  // metre once every 25 s, which read as nothing happening. The numbers live in
+  // perk-effects.js panicGuard beside the call.
   { id: 'blood_2', branch: 'blood', tier: 1, cost: 2, name: 'Fight Back',
-    line: 'When hurt near death, shove attackers back. +20 max health.',
+    line: 'Near death, all within 6 m are thrown back. +20 max health.',
     install: (s, hooks) => { s.hpMax = HP_THICK_SKIN;
       hooks.on('onHurt','blood_2',panicGuard);hooks.on('onStep','blood_2',tickPanic); } },
   { id: 'blood_3', branch: 'blood', tier: 2, cost: 3, name: 'Blood Price',
@@ -417,7 +442,7 @@ export const NODES = Object.freeze([
       hooks.on('onKill', 'blood_3', bloodPrice);
     } },
   { id: 'blood_4', branch: 'blood', tier: 3, cost: 5, name: 'Iron',
-    line: '150 max health. Survive a fatal hit once each cycle and escape.',
+    line: '150 max health. Survive one fatal hit a cycle and escape.',
     install: (s, hooks) => {
       // The WHOLE number, like Wind: 150 is what the body reads once Thick Skin and Iron
       // are both owned, not 120 + 30 applied in some order.

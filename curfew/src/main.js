@@ -83,7 +83,7 @@ import * as sanctuariesMod from './world/sanctuaries.js';
 import * as territoryMod from './world/territory.js';
 import * as holdfastLifeMod from './world/holdfast-life.js';
 import * as hamletLifeMod from './world/hamlet-life.js';
-import * as companionsMod from './world/companions.js';
+import * as hamletDefenceMod from './world/hamlet-defence.js';
 import * as bossSitesMod from './world/boss-sites.js';
 import * as bossEncountersMod from './enemies/boss-encounters.js';
 import * as worldStoriesMod from './world/world-stories.js';
@@ -155,8 +155,9 @@ const SYSTEMS = [
   ['hamlet-life', hamletLifeMod],   // THE ELEVEN REWIRE: Eelwater, The Cut, Highwood. AFTER
                                     // places (it reads each hamlet's pad and yaw) and enemies
                                     // (it spawns their residents through it)
-  ['companions', companionsMod],    // and the one person who comes with you. AFTER hamlet-life
-                                    // (it asks where somebody lives when they walk home)
+  ['hamlet-defence', hamletDefenceMod], // D16: the lookout's ask, three waves, the thanks. AFTER
+                                    // hamlet-life (it reads the casts and tells contains()
+                                    // which hamlet is under siege)
   ['world-stories', worldStoriesMod],
   ['lore-ledger', loreLedgerMod],
   ['lore-lookout', loreLookoutMod],

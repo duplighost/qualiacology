@@ -13,7 +13,8 @@
 //      surface you walk onto instead. VANTA required an explicit supportsPlayer flag
 //      (colliderBlocksPlayer 1551-1578) and low props there read as knee-high glass.
 //
-// Ground is ALWAYS terrain.heightAt. Never a collider, never a mesh raycast. Colliders only
+// Ground is ALWAYS the terrain field: surfaceAt (the bed, or the ice sheet over it; contract
+// C9) where the terrain has one, else heightAt. Never a collider, never a mesh raycast. Colliders only
 // ever ADD a standable top above the ground.
 //
 // This module imports no renderer and no three: it is pure math over typed arrays, so
@@ -390,6 +391,8 @@ export class Collision {
     };
 
     this._terrainSys = null;
+
+    this._floorFn = null;   // bound in _terrain(): surfaceAt or heightAt
   }
 
   // -------------------------------------------------------------------------
@@ -421,24 +424,36 @@ export class Collision {
   _terrain() {
     if (this._terrainSys) return this._terrainSys;
     const s = this.ctx && this.ctx.systems && this.ctx.systems.get('terrain');
-    if (s) this._terrainSys = s;
+    if (s) {
+      this._terrainSys = s;
+      // Bound once, at capture: the floor is surfaceAt (bed or ice, contract C9) when the
+      // terrain has one, and the bed alone for a fixture that only carries heightAt. One
+      // property test here instead of one per groundHeight() call.
+      this._floorFn = typeof s.surfaceAt === 'function'
+        ? (x, z) => s.surfaceAt(x, z)
+        : (x, z) => s.heightAt(x, z);
+    }
     return s || null;
   }
 
+  // THE FLOOR. The player, the solver's support fallback, mantles and descents all come
+  // through here, so the ice is one change: max(bed, ice) is what the feet meet.
   groundHeight(x, z) {
     const t = this._terrain();
     if (!t) { this._tel.noTerrain++; return 0; }
-    return t.heightAt(x, z);
+    return this._floorFn(x, z);
   }
 
   // Central-difference terrain gradient. VANTA samples at 0.32 m (:227) — small enough to
   // follow a bank, wide enough that the detail octave does not make every step a cliff.
+  // Sampled on the same floor the feet stand on: the ice is level however steep the drowned
+  // bed under it is, so nobody slides on a sheet because of a bank they cannot touch.
   _gradient(x, z) {
     const t = this._terrain();
     if (!t) { this._gx = 0; this._gz = 0; return; }
-    const h = TERRAIN_SAMPLE, inv = 1 / (2 * h);
-    this._gx = (t.heightAt(x + h, z) - t.heightAt(x - h, z)) * inv;
-    this._gz = (t.heightAt(x, z + h) - t.heightAt(x, z - h)) * inv;
+    const h = TERRAIN_SAMPLE, inv = 1 / (2 * h), f = this._floorFn;
+    this._gx = (f(x + h, z) - f(x - h, z)) * inv;
+    this._gz = (f(x, z + h) - f(x, z - h)) * inv;
   }
 
   _terrainNormalY(x, z) {
@@ -749,12 +764,22 @@ export class Collision {
    * `distance` here is the signed distance to the real surface — negative inside — and
    * `normalX`/`normalZ` is the unit direction out of it, in world space. Same box transform
    * as _overlap(). Returns the shared _nearestSurf record, or null.
+   *
+   * `lo`/`hi` (optional) is the caller's HEIGHT BAND: a collider whose slab does not overlap
+   * it is not a surface for that caller and is skipped before the ranking. MEASURED
+   * 2026-09-17 (tools/shutter-check.mjs, the seat night): under the Filling Station bay the
+   * nearest thing in XZ to every point of the car's spine was a roof rafter six metres up
+   * (one every 0.62 m across the bay), so this returned the rafter, vehicle/car.js skipped it
+   * as an overhang, and the SHUT shutter behind it was never pushed against — the car
+   * floored at the door crept sideways into the slab and its wing stood out through the
+   * closed door. Without the band the caller cannot ask for the next one down.
    */
-  nearestSurface(x, z, maxRadius = 16) {
+  nearestSurface(x, z, maxRadius = 16, lo = -Infinity, hi = Infinity) {
     let best = -1, bestD = Infinity, bnx = 1, bnz = 0;
     const n = this._gather(x, z, maxRadius);
     for (let k = 0; k < n; k++) {
       const i = this._near[k];
+      if (this._y1[i] < lo || this._y0[i] > hi) continue;
       const dx = x - this._x[i], dz = z - this._z[i];
       let d, nx, nz;
       if (this._kind[i] === KIND_OBB) {

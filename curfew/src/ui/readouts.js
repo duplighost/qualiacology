@@ -71,13 +71,25 @@ export class Readouts {
       this.receipt((p.name||'UPGRADE')+' · FITTED ON THE CAR','part',0,p.line||'');
       this.receipts.at(-1).until=this.now()+9;
     });
-    on('perk:triggered',p=>this.receipt(p.name+(p.detail?' · '+p.detail:''),'ability'));
+    // D3/D4 receipts ride this one channel: 'SLIP · TRAIL LOST', 'FIGHT BACK · THROWN BACK',
+    // 'LAST ROUND · HEADSHOT · MAGAZINE FULL'. The one exception in shape is the max-health
+    // grant (progress.grantHpMax, id 'hpmax', name 'MAX HEALTH', detail '+10'), which reads
+    // as a number first: '+10 MAX HEALTH', the way '+12 HEALTH' and '+N COINS' already do.
+    on('perk:triggered',p=>this.receipt(p.id==='hpmax'&&p.detail?p.detail+' '+p.name:p.name+(p.detail?' · '+p.detail:''),'ability'));
+    // D3 hands_1 'Primed': the hit on the reload click. weapon.js emits the beat 'active' on
+    // every hit (the window is base); the receipt is printed only when the node is owned,
+    // which is when the hit means anything (progress.stats.primedMul above its base 1).
+    on('weapon:reload',p=>{
+      if(p?.name!=='active')return;
+      const mul=this.ctx.systems.get('progress')?.stats?.primedMul;
+      if(typeof mul==='number'&&mul>1)this.receipt('PRIMED','ability');
+    });
     on('sanctuary:lit',()=>{this.receipt('THE WOODS ARE LIT · 96 M OF SAFE GROUND','light');this.receipts.at(-1).until=this.now()+6;});
     // Finding a crown is the only moment anything ever tells you a crown can be bought.
     on('sanctuary:found',()=>{this.receipt('A LANTERN CROWN · COINS AT ITS BOX LIGHT THE WOOD','light');this.receipts.at(-1).until=this.now()+7;});
     on('territory:secured',p=>this.receipt(p.name+' · SECURED','light'));
     on('refuge:puzzle',()=>this.receipt('NINE LIGHTS','light'));
-    on('map:rumour',p=>{this.receipt('MAP UPDATED · '+p.name+' · M','rumour');this.receipts.at(-1).until=this.now()+6.5;});
+    on('map:rumour',p=>{if(p.forgotten)return;this.receipt('MAP UPDATED · '+p.name+' · M','rumour');this.receipts.at(-1).until=this.now()+6.5;});
     on('map:waypoint',p=>this.receipt(p.cleared?'WAYPOINT CLEARED':'WAYPOINT SET · '+p.name,'rumour'));
     // THE ELEVEN REWIRE: a boss leaves a CAR PART, which arrives on 'garage:bought' just
     // above and is already receipted there. What a boss no longer leaves is a weapon

@@ -16,7 +16,10 @@ export class CarDistress {
     // The SMOKE follows the needle (car.wearShown), not the raw number, so it thins out over
     // the pour instead of vanishing on one frame. The disabled test is the real wear.
     const shown=car.wearShown===undefined?car.wear:car.wearShown;
-    const failed=car.wear>=.999,severity=Math.max(0,(shown-.64)/.36),front=1.5;
+    // D12: the plume starts at 0.80 (was 0.64) and is full at the stall — it is the failure
+    // window's approach, not a third of the night's driving. The cap no longer collapses,
+    // so a smoking car is still one you can drive.
+    const failed=car.wear>=.999,severity=Math.max(0,(shown-.80)/.20),front=1.5;
     this.root.visible=car.exists&&severity>0;
     this.root.position.set(car.x-Math.sin(car.heading)*front,car.y+1.28,car.z-Math.cos(car.heading)*front);
     for(let i=0;i<this.puffs.length;i++){

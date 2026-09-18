@@ -153,6 +153,84 @@ const jump = (id, approach, crest, landing, recovery) => (
   { id, approach, crest, landing, recovery }
 );
 
+/* ------------------------------------------------------------------ *
+ * D17 — THE THREE HAMLET TRACKS.
+ *
+ * Eelwater, The Cut and Highwood are places people live in, and until now you could not
+ * drive to any of them: measured, the nearest centreline was 120.5 m, 95.1 m and 120.2 m
+ * from their centres, with no spur, no junction and nothing at the road to say a village
+ * was over there. Alex drives everywhere. A hamlet you cannot see from the road and cannot
+ * drive to is a hamlet nobody ever finds.
+ *
+ * A dressed footpath and a sign would have been the cheap answer. A REAL ROAD is the right
+ * one, and it costs 351 m of gravel in a 55.1 km network, because being a route is what buys
+ * all of this at once:
+ *   - the terrain is CARVED under it, so the grade is the road's own smoothed profile
+ *     instead of whatever the fen or the ridge happens to do. Measured over a 2.55 m
+ *     wheelbase: the raw walk in to Highwood hit 30.6%, the track that replaces it 5.8%,
+ *     and the three worst grades on all three tracks are 8.2 / 17.9 / 5.8% against the
+ *     33% CFG.car.pitchClamp can follow;
+ *   - places.js turns each destination to face `nearestRoadInfo(x, z, 96)`, and 96 m is why
+ *     Eelwater and Highwood were both sitting at yaw 0 with their lookout post, their fire
+ *     and their three attack points pointing at nothing. A track that ends at the pad rim
+ *     is inside 96 m, so all three now face the road you actually arrive on;
+ *   - dusk-to-dawn.js walks every route and stands its lamp posts along it, so the junction
+ *     and the track are LIT at night from a moving car — which is the only time anyone is
+ *     out here — and the car's own spawn, wayfinding and on/off-road physics all read the
+ *     same field they read for the county loop.
+ *
+ * Each one leaves an EXISTING control point of the loop or the outer ring. Identical samples
+ * are how this file detects a real graph junction (JUNCTION_SAMPLES below) and pins the
+ * branch's elevation to the older road's, which is what stops a step in the ribbon where the
+ * two meet — so the junction is the shared point object, never a coordinate near it.
+ *
+ * `stop` is metres short of the hamlet centre. Each track ends INSIDE its pad's flat radius
+ * (50 of 52, 52 of 58, 40 of 48) and outside the RIM hamlets.js builds on (41.6 / 42.9 /
+ * 34.6), so the last stretch is made ground and the car stops about ten metres OUTSIDE the
+ * three attack points the siege spawns at, with the lookout post 15-24 m further in. You
+ * park at the road end; they come up the road between you and the fire.
+ *
+ * The centres are TYPED here. roads.js imports no world graph on purpose — chunk-worker.js
+ * imports this file into a Worker that cannot resolve the page's importmap — so placedata.js
+ * is out of reach. tests/hamlets.mjs holds these three pairs against the real rows.
+ */
+const HAMLET_TRACKS = [
+  // Eelwater, fen. Off the same loop point spur-west leaves from, which makes a crossroads
+  // rather than a second mouth 40 m along. Bowed north around the higher ground at the
+  // midpoint; the corridor never comes near the 1.5 m water line (y 10.1 -> 11.8 measured).
+  { id: 'eelwater-track', junction: LOOP_PTS[10], cx: -1541, cz: 363, stop: 50, bow: 15 },
+  // The Cut, ridge. The quarry floor falls away south-east of the chord, so the bow is the
+  // other way and holds the track on the shoulder above it (y 99.9 -> 99.2, sagging to 97.8).
+  { id: 'cut-track', junction: OUTER_PTS[27], cx: 2235, cz: -1115, stop: 52, bow: -13 },
+  // Highwood, pines. A steady 4.8 m of fall over 172 m; the bow is only there because a
+  // straight line through trees is the one thing a road out here never is.
+  { id: 'highwood-track', junction: OUTER_PTS[18], cx: -1832, cz: -1866, stop: 40, bow: 12 },
+];
+
+/**
+ * One hamlet track as a polyline: from `junction` to a point `stop` metres short of the
+ * hamlet centre, bowed off its own chord by a sine that changes sign once — a long left and
+ * then a long right, the shape `radial()` uses and for the same reason.
+ */
+export function hamletTrack(t) {
+  const A = t.junction;
+  const dx = t.cx - A[0], dz = t.cz - A[1];
+  const full = Math.hypot(dx, dz) || 1;
+  const B = [t.cx - (dx / full) * t.stop, t.cz - (dz / full) * t.stop];
+  const ex = B[0] - A[0], ez = B[1] - A[1];
+  const L = Math.hypot(ex, ez) || 1;
+  const nx = -ez / L, nz = ex / L;
+  const pts = [A];
+  const N = 5;
+  for (let k = 1; k < N; k++) {
+    const u = k / N;
+    const off = Math.sin(u * Math.PI * 2) * t.bow * Math.sin(u * Math.PI);
+    pts.push([A[0] + ex * u + nx * off, A[1] + ez * u + nz * off]);
+  }
+  pts.push(B);
+  return pts;
+}
+
 const ROUTES_SRC = [
   { id: 'county-loop', kind: 'asphalt', closed: true, width: RC.width, pts: LOOP_PTS },
   {
@@ -304,7 +382,43 @@ const ROUTES_SRC = [
   { id: 'radial-south', kind: 'gravel', closed: false, width: RC.width * 0.80, pts: radial(16, 22, 4.6) },
   { id: 'broken-highway', kind: 'asphalt', closed: false, width: RC.width * 1.55, pts: HIGHWAY_PTS },
   { id: 'lost-house-drive', kind: 'forest', secondary: true, closed: false, noMinors:true, width: 3.35, pts: LOST_DRIVE },
+
+  /* -- D17: the three hamlet tracks ---------------------------------------------------- *
+   * APPENDED, never inserted. dusk-to-dawn.js and places.js both WALK this array in order
+   * and spend a forked stream as they go, so anything added at the end leaves every lamp
+   * post and every minor site already on the map exactly where it was.
+   *
+   * GRAVEL, not `secondary`. 'secondary' names the ten narrow FOREST lanes that rejoin the
+   * graph at both ends and carry ten direction changes each; these are short approaches to
+   * a place, the same class as spur-west, spur-north and holdfast-road, and marking them
+   * secondary would file them in the wrong family (the mistake holdfast-road's comment
+   * above records). 4.0 m: wide enough for the car to meet something coming the other way,
+   * narrower than the 5.7 m loop.
+   *
+   * `noMinors`: the rationed minor table drops a set piece every 120-220 m of road, and
+   * nothing should be standing in a village's own approach — the hamlet builds its own
+   * arrival, and the siege spawns its waves across this ground. */
+  ...HAMLET_TRACKS.map(t => ({
+    id: t.id, kind: 'gravel', closed: false, noMinors: true, width: 4.00, pts: hamletTrack(t),
+  })),
 ];
+
+/**
+ * THE ONE SOURCE for where a hamlet's track runs. hamlets.js stands its two lit posts off
+ * this polyline rather than off a second copy of the numbers: a marker placed against a
+ * straight chord landed 1.4 m from the county loop's centreline — inside its asphalt —
+ * because the track's bow puts it up to 7 m off that chord near the junction.
+ *
+ * Keyed by the HAMLET id, not the track id, because that is what a builder has in hand.
+ * Control points, in world coordinates: [0] is the junction, the last is where it stops.
+ */
+export const HAMLET_TRACK_BY_SITE = Object.freeze({
+  eelwater: Object.freeze(hamletTrack(HAMLET_TRACKS[0])),
+  'the-cut': Object.freeze(hamletTrack(HAMLET_TRACKS[1])),
+  highwood: Object.freeze(hamletTrack(HAMLET_TRACKS[2])),
+});
+/** The authored rows themselves, so a check can hold them against the placedata rows. */
+export const HAMLET_TRACK_SPEC = Object.freeze(HAMLET_TRACKS.map(t => Object.freeze({ ...t })));
 
 /* ------------------------------------------------------------------ *
  * Catmull-Rom resample (SKYSHARD streams.js:29-43), closed-loop aware.
