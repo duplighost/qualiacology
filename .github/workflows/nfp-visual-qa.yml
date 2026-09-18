@@ -1,0 +1,105 @@
+name: NO FIXED POINTS Visual QA
+
+on:
+  push:
+    branches: [ai/no-fixed-points-reforged-qa]
+    paths:
+      - 'nfp-qa/**'
+      - '.github/workflows/nfp-visual-qa.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  render-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct QA build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p nfp-dist/vendor nfp-artifact/qa
+          cat nfp-qa/payload-00.txt nfp-qa/payload-01.txt nfp-qa/payload-02.txt nfp-qa/tail-*.txt \
+            | base64 --decode | gzip --decompress > nfp-dist/index.html
+          cp arc/vendor/three.module.min.js nfp-dist/vendor/three.module.min.js
+          cp nfp-dist/index.html nfp-dist/NO_FIXED_POINTS_THE_WEIGHT_OF_GOD.html
+          test "$(wc -c < nfp-dist/index.html)" -gt 100000
+          test "$(wc -c < nfp-dist/vendor/three.module.min.js)" -gt 600000
+
+      - name: Start local server
+        shell: bash
+        run: |
+          cd nfp-dist
+          python3 -m http.server 4173 > /tmp/nfp-http.log 2>&1 &
+          echo $! > /tmp/nfp-http.pid
+          for i in {1..30}; do curl -fsS http://127.0.0.1:4173/index.html >/dev/null && exit 0; sleep 1; done
+          exit 1
+
+      - name: Render authored QA views
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          "$CHROME" --version | tee nfp-artifact/qa/chrome-version.txt
+          for shot in hero bell reliquary spine boss scale; do
+            "$CHROME" \
+              --headless=new --no-sandbox --disable-dev-shm-usage \
+              --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist \
+              --hide-scrollbars --window-size=1440,900 --virtual-time-budget=14000 \
+              --screenshot="$GITHUB_WORKSPACE/nfp-artifact/qa/${shot}.png" \
+              "http://127.0.0.1:4173/index.html?shot=${shot}" \
+              >"/tmp/nfp-${shot}.log" 2>&1
+            test -s "nfp-artifact/qa/${shot}.png"
+            bytes="$(wc -c < "nfp-artifact/qa/${shot}.png")"
+            test "$bytes" -gt 40000
+            printf '%s %s bytes\n' "$shot" "$bytes" | tee -a nfp-artifact/qa/render-sizes.txt
+          done
+
+      - name: Runtime readiness probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          "$CHROME" \
+            --headless=new --no-sandbox --disable-dev-shm-usage \
+            --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist \
+            --virtual-time-budget=14000 --dump-dom \
+            'http://127.0.0.1:4173/index.html?shot=hero' \
+            > nfp-artifact/qa/runtime-dom.html 2> nfp-artifact/qa/runtime-stderr.log
+          grep -q 'data-ready="true"' nfp-artifact/qa/runtime-dom.html
+          grep -q 'data-engine="three.js r161"' nfp-artifact/qa/runtime-dom.html
+          cp /tmp/nfp-http.log nfp-artifact/qa/http.log
+
+      - name: Assemble offline package
+        shell: bash
+        run: |
+          cp -R nfp-dist nfp-artifact/NO_FIXED_POINTS_REFORGED
+          cat > nfp-artifact/README.txt <<'EOF'
+          NO FIXED POINTS — THE WEIGHT OF GOD
+
+          Run locally:
+            python3 -m http.server 8080 --directory NO_FIXED_POINTS_REFORGED
+          Then open:
+            http://localhost:8080/
+
+          Controls:
+            WASD move · Mouse look · Space jump · Shift sprint · Q dash
+            RMB tether · LMB strike / throw · Esc pause
+
+          The package vendors Three.js r161 and does not require a CDN.
+          EOF
+          cd nfp-artifact
+          zip -qr ../NO_FIXED_POINTS_REFORGED.zip NO_FIXED_POINTS_REFORGED README.txt qa
+
+      - name: Upload package and visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: NO_FIXED_POINTS_REFORGED_QA
+          path: |
+            nfp-artifact/
+            NO_FIXED_POINTS_REFORGED.zip
+          if-no-files-found: error
+          retention-days: 7
