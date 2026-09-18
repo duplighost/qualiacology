@@ -71,7 +71,16 @@ function upperStreet(k, api, rng) {
     k.solid.cyl(0.055, 0.072, 0.64, 7, x, floorY + 1.10, 43.9, P.iron);
     lantern(k, x, floorY + 1.58, 43.9, 0, true);
   }
-  for(const cx of[-32,-16,0,16,32]){icicles(k,cx,floorY-.30,43.86,13,0,rng);snowCap(k,cx,floorY+.025,42.95,15,.85,0,.12,cx);}
+  // The bank the wind leaves down the outer half of the upper street. It is ON the walkway
+  // (the floor runs z 40.1..43.9), so unlike the caps on the parapets above it this is snow
+  // you walk INTO — Alex, 2026-09-18: "piles of snow people stand right through" — and it
+  // gets a collider. 20 cm, standable, so it is a step over and never a wall.
+  for(const cx of[-32,-16,0,16,32]){
+    icicles(k,cx,floorY-.30,43.86,13,0,rng);
+    snowCap(k,cx,floorY+.025,42.95,15,.85,0,.12,cx);
+    api.emit({kind:'obb',x:cx,z:42.95,halfX:7.5,halfZ:.425,yaw:0,
+      y0:floorY-.25,y1:floorY+.20,tag:'snow',standable:true});
+  }
   chest(k, api, 40, floorY + 0.02, 44.2);
 }
 
