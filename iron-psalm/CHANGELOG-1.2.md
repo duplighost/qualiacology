@@ -67,6 +67,9 @@ weight is gone, and you feel it in your hands rather than read it on a card.
   side-mounted lamps.
 - Denser, clumped meadow grass with seed heads, a collapsed fence line, a dead
   tree and field stones.
+- Daylight comes through the ridge glazing as actual geometry: crossed curtains
+  hung under each skylight, raked along the sun, with a pool where they land.
+  Off entirely on the low profile and at 60% on mobile.
 
 ## Things that were floating
 

@@ -4069,6 +4069,7 @@ const buildPolishArt = function (v, Batch) {
         }
     }
     buildSkyAndSea(v, Batch);
+    buildLightShafts(v, roofRooms);
     v.roofEnvelopes = roofRooms;
     b.flush();
     floorBatch.flush(false);
@@ -4359,6 +4360,87 @@ const setDawn = function (v, strength) {
     if (v.fill) v.fill.color.setRGB(IP.lerp(.561, .784, t), IP.lerp(.698, .612, t), IP.lerp(.749, .592, t));
     if (v.scene.fog) v.scene.fog.color.setRGB(IP.lerp(.200, .470, t), IP.lerp(.267, .330, t), IP.lerp(.259, .262, t));
 };
+
+/** Daylight coming through the ridge glazing, as geometry. Each shaft is a pair
+ * of crossed curtains hung under the skylight slot and raked along the sun, so
+ * there is always one facing the camera and none of it is a screen overlay. */
+const buildLightShafts = function (v, roofRooms) {
+    const dir = v.skyUniforms ? v.skyUniforms.uSunDir.value : new T.Vector3(31, 43, 24).normalize();
+    const lean = new T.Vector2(dir.x, dir.z).normalize().multiplyScalar(-1);
+    v.shaftUniforms = { uTime: { value: 0 }, uStrength: { value: 1 }, uDawn: { value: 0 } };
+    const mat = new T.ShaderMaterial({
+        uniforms: v.shaftUniforms, transparent: true, depthWrite: false, fog: false,
+        blending: T.AdditiveBlending, side: T.DoubleSide,
+        vertexShader: `varying vec3 vW;varying vec3 vN;varying vec2 vUvS;
+ void main(){vUvS=uv;vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vN=normalize(mat3(modelMatrix)*normal);gl_Position=projectionMatrix*viewMatrix*w;}`,
+        fragmentShader: `varying vec3 vW;varying vec3 vN;varying vec2 vUvS;uniform float uTime,uStrength,uDawn;
+ float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+1.),f.x),f.y);}
+ void main(){
+   // Bright at the glazing, gone before it reaches the floor.
+   float fall=pow(1.-vUvS.y,1.55)*smoothstep(0.,.06,vUvS.y);
+   // Soft edges across the width, broken up by slow drifting motes of dust.
+   float across=smoothstep(0.,.22,vUvS.x)*smoothstep(1.,.78,vUvS.x);
+   float grain=.72+.42*n(vec2(vW.x*.55+uTime*.05,vW.z*.55));
+   // A flat quad seen edge-on has to disappear, or the shaft becomes a wall.
+   vec3 eye=normalize(cameraPosition-vW);
+   float facing=smoothstep(.04,.34,abs(dot(normalize(vN),eye)));
+   float a=fall*across*grain*facing*uStrength*.74;
+   vec3 c=mix(vec3(1.,.93,.78),vec3(1.,.82,.58),uDawn);
+   gl_FragColor=vec4(c*a,a);
+ }`
+    });
+    mat.name = 'daylight-shaft';
+    const poolMat = new T.ShaderMaterial({
+        uniforms: v.shaftUniforms, transparent: true, depthWrite: false, fog: false,
+        blending: T.AdditiveBlending, side: T.DoubleSide,
+        vertexShader: 'varying vec2 vUvS;void main(){vUvS=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+        fragmentShader: `varying vec2 vUvS;uniform float uStrength,uDawn;
+ void main(){
+   float d=length((vUvS-.5)*vec2(1.,.78))*2.;
+   float a=pow(max(0.,1.-d),2.4)*uStrength*.42;
+   gl_FragColor=vec4(mix(vec3(1.,.94,.80),vec3(1.,.84,.60),uDawn)*a,a);
+ }`
+    });
+    poolMat.name = 'daylight-pool';
+    v.shaftGroup = new T.Group();
+    v.shaftGroup.name = 'daylight-shafts';
+    v.scene.add(v.shaftGroup);
+    for (const r of roofRooms) {
+        const mid = (r.x1 + r.x2) / 2, top = r.eave + r.rise, drop = top - .35;
+        const width = Math.min(3.4, (r.x2 - r.x1) * .22);
+        for (let z = r.z1 + 4.0; z < r.z2 - 2; z += 7.6) {
+            const foot = new T.Vector2(mid, z).add(lean.clone().multiplyScalar(drop * .42));
+            for (const across of [true, false]) {
+                const g = new T.BufferGeometry();
+                const hx = across ? width * .5 : 0, hz = across ? 0 : width * .5;
+                const p = [
+                    mid - hx, top, z - hz, mid + hx, top, z + hz,
+                    foot.x + hx, top - drop, foot.y + hz, foot.x - hx, top - drop, foot.y - hz
+                ];
+                g.setAttribute('position', new T.Float32BufferAttribute(p, 3));
+                g.setAttribute('uv', new T.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+                g.setIndex([0, 1, 2, 0, 2, 3]);
+                g.computeVertexNormals();
+                const mesh = new T.Mesh(g, mat);
+                mesh.renderOrder = 6;
+                mesh.frustumCulled = true;
+                mesh.geometry.computeBoundingSphere();
+                v.shaftGroup.add(mesh);
+            }
+            // The pool where the shaft lands. Without it the light arrives from
+            // the roof and then simply stops in mid-air above the floor.
+            {
+                const pool = new T.Mesh(new T.PlaneGeometry(width * 2.3, width * 3.1), poolMat);
+                pool.rotation.x = -Math.PI / 2;
+                pool.position.set(foot.x, .035, foot.y);
+                pool.renderOrder = 5;
+                v.shaftGroup.add(pool);
+            }
+        }
+    }
+};
+
 const updatePolishedLights = function (v, dt) {
     const s = v.sim, p = s.player;
     let pool = v._lampOwners;
@@ -4456,6 +4538,15 @@ const updatePolishedLights = function (v, dt) {
         u.uCamWorld.value.copy(v.camera.matrixWorld);
         u.uDawn.value = v.dawn || 0;
         u.uEnding.value = s.finale ? IP.clamp(v.dawn || 0, 0, 1) : 0;
+        if (v.shaftUniforms) {
+            v.shaftUniforms.uTime.value = v.elapsed;
+            v.shaftUniforms.uDawn.value = v.dawn || 0;
+            // Shafts belong to the roofed half of the game and to profiles that
+            // can afford the overdraw.
+            const inside = 1 - v.outdoorMix;
+            v.shaftUniforms.uStrength.value = (v.quality === 'low' ? 0 : v.quality === 'mobile' ? .60 : 1) * inside;
+            v.shaftGroup.visible = v.quality !== 'low' && inside > .02;
+        }
         const outdoors = !!v.sim.floorAt(p.x, p.z)?.outdoors || !!s.climb;
         v.outdoorMix = IP.damp(v.outdoorMix ?? (outdoors ? 1 : 0), outdoors ? 1 : 0, 2.4, dt || 1 / 60);
         u.uHaze.value = (0.0030 + 0.0012 * (v.dawn || 0)) * v.outdoorMix;
@@ -4466,7 +4557,7 @@ const updatePolishedLights = function (v, dt) {
             ? clamp(facing * 2.1 - .18, 0, 1) * v.outdoorMix * (.34 + .55 * (v.dawn || 0)) : 0;
     }
 };
-module.exports = { polishMaterials, buildPolishArt, buildSkyAndSea, setDawn, updatePolishedLights };
+module.exports = { polishMaterials, buildPolishArt, buildSkyAndSea, buildLightShafts, setDawn, updatePolishedLights };
 
 }, {"../shared/math": "src/shared/math.js", "./engine": "src/presentation/engine.js"}],
 "src/presentation/pose-buffer.js": [function(require, module, exports) {
@@ -6247,7 +6338,7 @@ function makeMaterials(view) {
     sky.dispose();
 }
 function makeLight(view) {
-    const ambient = new T.HemisphereLight(0x8ba6ad, 0x222521, .95);
+    const ambient = new T.HemisphereLight(0x8ba6ad, 0x2a2d28, 1.06);
     view.ambient = ambient;
     view.scene.add(ambient);
     view.sun = new T.DirectionalLight(0xffd8a8, 2.9);
@@ -6275,7 +6366,7 @@ function makeLight(view) {
     view.scene.add(view.bounce);
     view.pointLights = [];
     for (let i = 0; i < 7; i++) {
-        let l = new T.PointLight(0xffc27a, 0, 18, 2);
+        let l = new T.PointLight(0xffc27a, 0, 21, 2);
         view.scene.add(l);
         view.pointLights.push(l);
     }
