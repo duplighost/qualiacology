@@ -17,7 +17,15 @@ export class FirstLight{
   const caseGeo=k.build(),caseMat=this._sys('places').matBody;this.root.add(new THREE.Mesh(caseGeo,caseMat));
   this.marker=new THREE.Mesh(new THREE.TorusGeometry(.19,.035,6,16),new THREE.MeshBasicMaterial({color:0xffcd68,transparent:true,opacity:.8}));this.root.add(this.marker);
   this.canvas=document.createElement('canvas');this.canvas.width=960;this.canvas.height=1100;this.texture=new THREE.CanvasTexture(this.canvas);this.texture.colorSpace=THREE.SRGBColorSpace;this.texture.anisotropy=4;
-  const board=new THREE.Mesh(new THREE.PlaneGeometry(1.65,1.89),new THREE.MeshBasicMaterial({map:this.texture,color:0xb7b09b}));board.position.set(-524.82,y+1.98,237.75);board.rotation.y=Math.PI/2;this.root.add(board);
+  // ABOVE THE COUNTER. ALEX, 2026-09-18: "sign at the first spawn point is partly blocked."
+  // The station's own body stands in front of its bottom third and ate the last line and the
+  // eleven marks. MEASURED by casting at the face on a 10 cm ladder from a reader's stance
+  // 2.7 m out, eye 1.68: blocked at padY+0.90 through +1.30, clear from +1.40 up. The plane
+  // is 1.89 tall, so a centre at +1.98 put its bottom at +1.035, a third of a metre inside
+  // that. At +2.40 the bottom sits at +1.455 and the whole board is readable; the top goes to
+  // +3.345, which is a 32-degree look up from that stance and is what a board over a counter
+  // is. The texture keeps its aspect, so nothing in the drawing is squashed to fit.
+  const board=new THREE.Mesh(new THREE.PlaneGeometry(1.65,1.89),new THREE.MeshBasicMaterial({map:this.texture,color:0xb7b09b}));board.position.set(-524.82,y+2.40,237.75);board.rotation.y=Math.PI/2;this.root.add(board);
   this.style=document.createElement('style');this.style.textContent='#journey-cue{position:fixed;right:28px;top:90px;width:250px;padding:13px 16px;border-left:2px solid #d0b67688;background:linear-gradient(90deg,#080e17cb,#080e1700);color:#dedcca;font:13px/1.55 Segoe UI,Arial,sans-serif;z-index:15;pointer-events:none}#journey-cue small{display:block;color:#a8b8bc;font:10px/1.5 Consolas,monospace;letter-spacing:.12em;margin-bottom:4px}';document.head.append(this.style);this.cue=document.createElement('div');this.cue.id='journey-cue';this.cue.hidden=true;document.body.append(this.cue);
   this.off.push(this.ctx.bus.on('place:rested',p=>{this._sys('progress').flag('journey:rested',true);if(p.id==='filling-station')this._sys('progress').flag('journey:station-rested',true);}));
   this.off.push(this.ctx.bus.on('boss:cleared',()=>{this.afterBoss=11;}));

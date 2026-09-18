@@ -422,7 +422,31 @@ export class Scavenging {
       if(s.node.collider>=0&&col.massOf(s.node.collider)<0)this._take(s);
       if(s.stage>=4||this.ctx.shared.inCar||p.dead||d>near||Math.abs(p.pos.y-s.y)>1.5)continue;
       const dx=s.x-p.pos.x,dz=s.z-p.pos.z,dot=(dx*_dir.x+dz*_dir.z)/(d||1);
-      if(dot<.60||!col.segmentClear(p.pos.x,p.eyeY,p.pos.z,s.x,s.y+.78,s.z))continue;
+      if(dot<.60)continue;
+      // THE COFFER IS NOT ITS OWN OCCLUDER. This was a segmentClear to the lid at s.y+.78,
+      // and the lid is INSIDE the coffer's own collider (y0 s.y-.05 .. y1 s.y+.93), so the
+      // ray had to pass through the box to reach the point it was aiming at. Close up that
+      // is fatal: MEASURED standing 1.6 m from the station woodstore, eye 1.60 over its
+      // floor, the ray crosses y1 0.29 m short of the centre — inside the halfZ .50
+      // footprint — and segmentClear returned false, so the loop skipped the site, no
+      // target was ever chosen and NO E PROMPT WAS EMITTED AT ALL. At 3 m the same ray
+      // clears the top edge by a few centimetres and the prompt appears, which is why this
+      // read as "chests stopped opening" rather than as a range problem: walking up to a
+      // coffer made its prompt go away.
+      //
+      // It is as old as the aim point, and it stayed invisible because _stepHandOpen used
+      // to catch the coffer as a rank-2 'OPEN' fallback whenever this path refused. D13 put
+      // 'supply' and 'strongbox-empty' on NO_HOLD_TAG to stop that fallback paying a second
+      // time on top of this one — correct, and it took the mask off this.
+      //
+      // So it asks the question the test was always for, the way _stepHandOpen already asks
+      // it: is anything SOLID between the eye and the coffer's own surface? A wall still
+      // refuses. Its own near face does not.
+      const dyy=(s.y+.78)-p.eyeY,len=Math.hypot(dx,dyy,dz)||1;
+      _rayD.x=dx/len;_rayD.y=dyy/len;_rayD.z=dz/len;
+      _rayO.x=p.pos.x;_rayO.y=p.eyeY;_rayO.z=p.pos.z;
+      const hit=col.raycast(_rayO,_rayD,len,col.MASK?col.MASK.SOLID:1);
+      if(hit&&hit.t<len-BOX_LOS_SLACK)continue;
       target=s;near=d;
     }
     if(target!==this.target){this.target=target;this.hold=0;if(use)this.release=true;}
