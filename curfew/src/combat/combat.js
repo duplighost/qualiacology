@@ -417,8 +417,13 @@ export class Combat {
       let killed = false;
 
       if (h.enemy) {
-        // the boss owns its own hp (enemies/kneeler.js); everything else is the pool's
-        const owner = this._sys(h.enemy.encounter ? 'boss-encounters' : h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+        // the boss owns its own hp (enemies/kneeler.js); everything else is the pool's.
+        // INTERIOR FIRST (2026-09-17): an interior resident carries interior:true AND
+        // encounter:'<room id>' (interior-horror.js _stage; search.js and territory.js read it),
+        // while a boss record carries encounter:true and never `interior`. Testing `encounter`
+        // first sent every round that landed on a resident into BossEncounters.damage, which
+        // threw on k.site.anchors — a shot at a resident crashed the sim step (tests/interior-horror.mjs).
+        const owner = this._sys(h.enemy.interior ? 'interior-horror' : h.enemy.encounter ? 'boss-encounters' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
         const res = owner && owner.damage
           ? owner.damage(h.enemy, dmg, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
           : { killed: false };
@@ -551,7 +556,8 @@ export class Combat {
     const stats = this._progStats();
     const multiplier = h.enemy ? ((stats && stats.damageMul) || 1) : 1;
     const dealt = Math.max(1, Math.round(damage * multiplier));
-    const owner = h.enemy && this._sys(h.enemy.encounter ? 'boss-encounters' : h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+    // interior first: see resolveShot's owner pick (a resident carries encounter:'<room id>' too)
+    const owner = h.enemy && this._sys(h.enemy.interior ? 'interior-horror' : h.enemy.encounter ? 'boss-encounters' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
     // ROUND 18: `melee: true` was missing from this payload, so enemies.js recorded EVERY
     // melee kill as `lastMelee = false` and the 'enemy:killed' event said `kind: 'kill'`.
     // The heavier melee throw and every other lane that wants to know a swing did it

@@ -160,7 +160,16 @@ const SRC_MAX_R = 14.0;
  * wider than any single pane, bead or window in the county and narrower than the gap between
  * two of them; see _clusters for why one forward pass is enough. */
 const CLUSTER_JOIN = 1.4;
-const CLUSTER_MAX = 28;
+/* The most lamps one merged glow mesh may seat. This is a cycle guard against a runaway
+ * geometry, NOT the draw budget (MAX_HALOS / MAX_POOLS bound what is drawn, nearest first).
+ * It was 28, set in Round 20 with the Filling Station's eight panes as the model, and the
+ * rebuilt Holdfast then merged its whole town into one 'body-glow-live-holdfast' of 768
+ * lamps (land-glow-holdfast: 71): the first 28 got a volume and the other 740 windows and
+ * lamp posts lit nothing, which is the silent failure this file's header describes and
+ * tests/airlight.mjs 'airlight puts light on the screen' caught at 0.03% of the frame
+ * (measured 2026-09-17, tools in the verifier's scratchpad). A cluster is a dozen numbers
+ * cached once per mesh; the per-scan cost is one transform and one heightAt per lamp. */
+const CLUSTER_MAX = 1024;
 /* An unlit lamp in this county is a DARK VERTEX COLOUR, not a hidden mesh (places.js writes
  * the claim's ignition straight into the colour attribute). So the volume's switch is read
  * off that colour: below the floor it is out, at full it is a lamp. */

@@ -89,7 +89,7 @@ export class Readouts {
     on('sanctuary:found',()=>{this.receipt('A LANTERN CROWN · COINS AT ITS BOX LIGHT THE WOOD','light');this.receipts.at(-1).until=this.now()+7;});
     on('territory:secured',p=>this.receipt(p.name+' · SECURED','light'));
     on('refuge:puzzle',()=>this.receipt('NINE LIGHTS','light'));
-    on('map:rumour',p=>{this.receipt('MAP UPDATED · '+p.name+' · M','rumour');this.receipts.at(-1).until=this.now()+6.5;});
+    on('map:rumour',p=>{if(p.forgotten)return;this.receipt('MAP UPDATED · '+p.name+' · M','rumour');this.receipts.at(-1).until=this.now()+6.5;});
     on('map:waypoint',p=>this.receipt(p.cleared?'WAYPOINT CLEARED':'WAYPOINT SET · '+p.name,'rumour'));
     // THE ELEVEN REWIRE: a boss leaves a CAR PART, which arrives on 'garage:bought' just
     // above and is already receipted there. What a boss no longer leaves is a weapon

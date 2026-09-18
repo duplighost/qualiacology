@@ -756,6 +756,18 @@ export const FIXED_MINORS = Object.freeze([
   { kind: 'jam-segment', x: 2135.23, z: -309.01, yaw: -0.0284, bulk: 4.0 },
   { kind: 'jam-segment', x: 2133.24, z: -253.10, yaw: -0.0428, bulk: 4.0 },
   { kind: 'jam-segment', x: 2130.51, z: -197.21, yaw: -0.0550, bulk: 4.0 },
+  // THE GEAR YARD, 2026-09-17 (V3 verification). The rationed walk lays NONE: the open bug on
+  // the 'gear' row above (one yard in 40 km^2 at round 18) went to zero when round 22's five
+  // set-piece rows joined the table ahead of it, and the last row of an over-subscribed
+  // table is never reached — measured with the live walk on this build and on the pre-round
+  // build ef68573: 219 rationed sites, gear chosen 0 times on both. tests/cash.mjs (c) and
+  // tests/break-open.mjs anchor on a gear yard, and Alex asked for the boxes (ALEX-BRIEF 10).
+  // So ONE is authored here, on the verge of the road east out of the Filling Station, 144 m
+  // of road from the yard: slope 0.0, 70 m+ from every major, 30 m+ from every rationed
+  // minor, outside every sight corridor, off the ice, facing the road point (-389.0, 180.4)
+  // the way the walk faces its own rows. Appended after both walks like every fixed row, so
+  // no existing minor index moves and no saved per-minor flag changes meaning.
+  { kind: 'gear', x: -393.97, z: 171.92, yaw: 0.5257, bulk: 1.6 },
 ]);
 
 /** How far off the centreline an `offRoad` minor sits: in the trees, but in sight of the

@@ -47,8 +47,12 @@ export const SPIDER_NESTS = Object.freeze({
   // its spider. The only room is the open belfry over the 19 m ringing floor: four corner
   // posts and a cap at 25.6 m that are geometry with NO collider, so the probe finds no
   // roof and the spider sits on the ringing floor (the shaft obb's top at padY + 19),
-  // 2.1 m off the axis so it clears the bell's r 1.15 collider (y 23.1 .. 25.1).
-  'bell-tower': [{ lx: 2.1, lz: 2.1, ly: 21.0, yaw: 0 }],
+  // on a diagonal 2.4 m off the axis so it clears the bell's r 1.15 collider (y 23.1 .. 25.1)
+  // by half a metre with its own 0.72. NOT the (+, +) diagonal: a 0.3 m metal post of the
+  // belfry (y 18.7 .. 21.05) stands 0.64 m from (2.1, 2.1) and collision.fits refused the
+  // spawn there three times a visit (measured 2026-09-17, tools/round19-check.mjs); the
+  // other three diagonals fit.
+  'bell-tower': [{ lx: 1.7, lz: -1.7, ly: 21.0, yaw: 0 }],
   // ROUND 19. ALEX: "Spiders falling from the sky when not inside or somewhere."
   //
   // THE HOLDFAST ROW WAS THE ONE. (0, 6) is not a room — it is seven metres out into the open

@@ -558,9 +558,14 @@ export const POOL = Object.freeze({
   // and a corpse holds its slot for a minute.
   'hamlet-guard': 9, treant: 2,
   // ROUND 18. Six moths, because a swarm is not what was asked for — "a freaky horror moth"
-  // is one thing on one trunk. Four spiders: interior-horror places at most one per room and
-  // the county has thirteen rooms, but only the ones you are inside are ever alive at once.
-  moth: 6, spider: 4,
+  // is one thing on one trunk. Spiders: SEVEN, one per nest (world/spider-nests.js), because
+  // a nest's spider is a STAGED CAST — placed once per save when you come within 150 m and
+  // holding its slot until it notices you, never recycled by cull() — so the fourth site you
+  // visited used to empty the pool for every nest after it for the rest of the night
+  // (measured 2026-09-17 with tools/round19-check.mjs: hollow-mill, jackfield and the bell
+  // tower refused, telemetry().refused +3 each). The old 'four: only the rooms you are inside
+  // are alive' was interior-horror's rule, whose residents are released; these are not.
+  moth: 6, spider: 7,
   // ROUND 22. Three runners so a corpse holding its slot cannot starve the director's one
   // live runner (ROSTER maxAlive 1); one dog-caller, because there is one voice in the woods.
   runner: 3, dogcaller: 1,

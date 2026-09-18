@@ -801,9 +801,10 @@ export class Weapons {
    * 0 forever and this whole branch would have stayed inert while looking wired, which is
    * the exact failure class this round exists to end. The declared call is
    * `progress.perk(name, base, arg)` (progress.js: "THE TWO CALLS EVERY OTHER LANE
-   * MAKES"), and HOOK_POINTS in nodes.js names weapons as the runner for `reloadWindow`,
-   * `reloadResume` and `holdBreath`. progress.hookReport() marks a hook with installers
-   * and zero runs as `dead`; these three stop being dead here.
+   * MAKES"), and HOOK_POINTS in nodes.js names weapons as the runner for `holdBreath` and
+   * `reloadSpeed` (D2/D3 retired `reloadWindow` and `reloadResume`: the active window and
+   * reload parking are base behaviour, so no node sells them). progress.hookReport() marks
+   * a hook with installers and zero runs as `dead`; these stop being dead here.
    *
    * `_stats()` stays as a second-best fallback so that if a future node writes the stat
    * instead of installing the hook, the verb still exists.
@@ -1002,20 +1003,13 @@ export class Weapons {
   }
 
   /**
-   * D2: the active window onto a reload that has just started. BASE_ACTIVE is the floor; the
-   * 'reloadWindow' hook (HOOK_POINTS names _startReload as its one call site) may only WIDEN
-   * or QUICKEN it, never shrink it, so an older node spec cannot take the base away. Scaled
+   * D2: the active window onto a reload that has just started. BASE_ACTIVE is the window on
+   * every gun (D2/D3 retired the 'reloadWindow' hook: no node widens or sells it). Scaled
    * by `scale` like every beat, floored at ACTIVE_MIN_S wide, and kept inside `limit` (the
    * reload, or the tube's first shell).
    */
   _setWindow(r, scale, limit) {
-    const spec = this._perk('reloadWindow', null, this.def.id);
-    let f = BASE_ACTIVE.from, t = BASE_ACTIVE.to, m = BASE_ACTIVE.mul;
-    if (spec && spec.to > spec.from) {
-      if (spec.from < f) f = spec.from;
-      if (spec.to > t) t = spec.to;
-      if (spec.mul > m) m = spec.mul;
-    }
+    const f = BASE_ACTIVE.from, t = BASE_ACTIVE.to, m = BASE_ACTIVE.mul;
     const from = f * scale;
     const to = Math.min(Math.max(t * scale, from + ACTIVE_MIN_S), limit - 0.02);
     if (!(to > from)) return;                    // a reload too short for a window has none

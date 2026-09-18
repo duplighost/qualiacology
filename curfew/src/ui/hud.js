@@ -1379,7 +1379,8 @@ export class Hud {
         btn.appendChild(name);
         btn.appendChild(el('span', 'cl', n.line));
         btn.appendChild(el('span', 'sweep'));
-        // The click buys, when it can; the press never resumes (the block above stops it).
+        // The click SELECTS (pause-menu.js selectPerk); the purchase is the detail pane's
+        // 'Learn ability' control. The press never resumes (the block above stops it).
         btn.addEventListener('click', (e) => {
           e.stopPropagation(); e.preventDefault();
           this.menu?.selectPerk(n.id);

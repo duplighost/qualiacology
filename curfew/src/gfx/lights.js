@@ -1233,24 +1233,21 @@ export class Lights {
 
     if (this._torchOn) {
       const T = CFG.lights.torch;
-      // ROUND 6 (lane G): the two LAMP hooks nothing ran (NEXT.md 3). ONE read each, here,
-      // where the beam's angle and heat are set by name — nodes.js HOOK_POINTS 'torchFocus'
-      // and 'highBeam'. Focus: aiming with the torch on squeezes the cone to the spec's
-      // angle. High Beam: for the spec's seconds after the torch comes on it burns at twice
-      // its heat. Both are uniforms on a light that already exists: no light is added and
-      // no program links. With no node owned both reads return null and nothing changes.
+      // ROUND 6 (lane G): the LAMP hook nothing ran (NEXT.md 3). ONE read, here, where the
+      // beam's heat is set by name — nodes.js HOOK_POINTS 'highBeam': for the spec's seconds
+      // after the torch comes on it burns at twice its heat. A uniform on a light that
+      // already exists: no light is added and no program links. With no node owned the read
+      // returns null and nothing changes. (D3 retired 'torchFocus': the cone is T.angle for
+      // everyone, and lamp_1 'Long Beam' is a stat, read just below.)
       this._torchLitT += dt;
       const prog = this.ctx.systems.get('progress');
-      const focus = prog && typeof prog.perk === 'function' ? prog.perk('torchFocus', null) : null;
       const beam = prog && typeof prog.perk === 'function' ? prog.perk('highBeam', null) : null;
       // C6: lamp_1 'Long Beam' — stats in the bag, read lazily, 1 with no node owned. torchMul
       // scales the heat, torchRangeMul the reach (and with it the shadow far plane).
       const stats = prog && prog.stats;
       const torchMul = stats && typeof stats.torchMul === 'number' && stats.torchMul > 0 ? stats.torchMul : 1;
       const rangeMul = stats && typeof stats.torchRangeMul === 'number' && stats.torchRangeMul > 0 ? stats.torchRangeMul : 1;
-      const inp = this.ctx.input;
-      const aiming = !!(inp && typeof inp.held === 'function' && inp.held('aim'));
-      const angle = focus && aiming && typeof focus.angle === 'number' ? focus.angle : T.angle;
+      const angle = T.angle;
       const hot = beam && typeof beam.seconds === 'number' && this._torchLitT < beam.seconds ? 2 : 1;
       // ROUND 14. IN THE CAR THE TORCH IS POINTED AT YOUR OWN DASHBOARD. Measured with
       // tools/carlook.mjs: seated with the torch lit, the dash, wheel and door cards clip

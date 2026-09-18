@@ -229,7 +229,6 @@ export class Earshot {
     // Hoisted ONCE. This used to be a closure built inside _gather(), which is
     // one function object allocated every frame for the life of the game — in a
     // file whose whole point is that the hot path allocates nothing.
-    this._push = (e) => this._pushBody(e);
 
     this.voices = [];        // the two-stem rack
     this.tracked = new Map(); // id -> { e, slot }
@@ -717,11 +716,12 @@ export class Earshot {
     if (!en) return;
     // TEST typeof, never truthiness. On the real Enemies class `.alive` is a
     // METHOD, so `en.alive || en.list || en.all` returned a FUNCTION: not an
-    // array, so Array.isArray was false and this fell through to forEachAlive
-    // BY LUCK. The luck runs out the day someone renames forEachAlive.
+    // array, and Array.isArray was false.
     // `.all` first, for the same reason tension.js puts it first: it is the live
-    // array and it never allocates. `alive()` reuses one array, so it is safe to
-    // call and unsafe to hold — which is fine, this loop does not hold it.
+    // array (tests/interfaces.mjs pins it) and it never allocates. `alive()` reuses
+    // one array, so it is safe to call and unsafe to hold — which is fine, this
+    // loop does not hold it. There is no forEach fallback: enemies never shipped
+    // one, so the branch could never run (the interfaces gate's mirror scan).
     let list = null;
     if (Array.isArray(en.all)) list = en.all;
     else if (typeof en.list === 'function') { const r = en.list(); if (Array.isArray(r)) list = r; }
@@ -730,8 +730,6 @@ export class Earshot {
     else if (Array.isArray(en.alive)) list = en.alive;
 
     if (list) { for (let i = 0; i < list.length; i++) this._pushBody(list[i]); }
-    else if (typeof en.forEachAlive === 'function') en.forEachAlive(this._push);
-    else if (typeof en.forEach === 'function') en.forEach(this._push);
   }
 
   /**

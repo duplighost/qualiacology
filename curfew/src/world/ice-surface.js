@@ -152,6 +152,10 @@ export function sharedIceMaterial(ctx) {
   return shared;
 }
 
+/** The shared instance if one exists, or null. Never creates one: a weather writer (the
+ *  wilds' setWeather) must not decide which sky the material is keyed on. */
+export function currentIceMaterial() { return shared; }
+
 /** Owner teardown only (world-stories dispose). The next sharedIceMaterial() makes a new one. */
 export function disposeSharedIceMaterial() {
   if (shared) { shared.dispose(); shared = null; }

@@ -1052,6 +1052,18 @@ export class Progress {
     return true;
   }
   rumours() { return this.save.data.rumours; }
+  /** D14: a lead that has been followed (the wilds open the cache it pinned) comes off the
+   *  map. Only the rumour row goes; found/claimed are untouched. The same 'map:rumour' event
+   *  carries `forgotten: true` so the HUD drops the pin and readouts prints nothing. */
+  forgetRumour(id) {
+    if (typeof id !== 'string' || !id) return false;
+    const rows = this.save.data.rumours, i = rows.findIndex(r => r.id === id);
+    if (i < 0) return false;
+    const rumour = rows[i];
+    rows.splice(i, 1); this.save.mark();
+    this.ctx.bus.emit('map:rumour', { ...rumour, forgotten: true });
+    return true;
+  }
   waypoint() { const p=this.save.data.waypoint;return p&&Number.isFinite(p.x)&&Number.isFinite(p.z)?p:null; }
   setWaypoint(point) {
     if(!point){this.save.data.waypoint={};this.save.mark();this.save.flush();this.ctx.bus.emit('map:waypoint',{cleared:true});return true;}

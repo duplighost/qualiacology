@@ -848,11 +848,14 @@ export class Fx {
       this.eyePos[j + 3] = ex + sx; this.eyePos[j + 4] = ey; this.eyePos[j + 5] = ez + sz;
       this._eyePosDirty = true;
       // horror 11: the pair's colour, both vertices. Orange low, cold at the wrong height.
-      const col = wrong ? EYE_COL_WRONG : EYE_COL_LOW;
+      // `tint`, not `col`: `col` is the collision system declared above this loop, and a
+      // second `const col` here shadowed it for the WHOLE loop body, so col.nearestTagged
+      // threw a TDZ ReferenceError on every spawn try and no pool pair ever opened.
+      const tint = wrong ? EYE_COL_WRONG : EYE_COL_LOW;
       e.alpha = wrong ? EYE_ALPHA_WRONG : EYE_ALPHA_LOW;
       const ec = this.eyeCol;
-      ec[j] = col[0]; ec[j + 1] = col[1]; ec[j + 2] = col[2];
-      ec[j + 3] = col[0]; ec[j + 4] = col[1]; ec[j + 5] = col[2];
+      ec[j] = tint[0]; ec[j + 1] = tint[1]; ec[j + 2] = tint[2];
+      ec[j + 3] = tint[0]; ec[j + 4] = tint[1]; ec[j + 5] = tint[2];
       this._eyeColDirty = true;
       this._eyeLive++;
       return;                                  // one pair per attempt

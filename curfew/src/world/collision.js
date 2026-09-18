@@ -764,12 +764,22 @@ export class Collision {
    * `distance` here is the signed distance to the real surface — negative inside — and
    * `normalX`/`normalZ` is the unit direction out of it, in world space. Same box transform
    * as _overlap(). Returns the shared _nearestSurf record, or null.
+   *
+   * `lo`/`hi` (optional) is the caller's HEIGHT BAND: a collider whose slab does not overlap
+   * it is not a surface for that caller and is skipped before the ranking. MEASURED
+   * 2026-09-17 (tools/shutter-check.mjs, the seat night): under the Filling Station bay the
+   * nearest thing in XZ to every point of the car's spine was a roof rafter six metres up
+   * (one every 0.62 m across the bay), so this returned the rafter, vehicle/car.js skipped it
+   * as an overhang, and the SHUT shutter behind it was never pushed against — the car
+   * floored at the door crept sideways into the slab and its wing stood out through the
+   * closed door. Without the band the caller cannot ask for the next one down.
    */
-  nearestSurface(x, z, maxRadius = 16) {
+  nearestSurface(x, z, maxRadius = 16, lo = -Infinity, hi = Infinity) {
     let best = -1, bestD = Infinity, bnx = 1, bnz = 0;
     const n = this._gather(x, z, maxRadius);
     for (let k = 0; k < n; k++) {
       const i = this._near[k];
+      if (this._y1[i] < lo || this._y0[i] > hi) continue;
       const dx = x - this._x[i], dz = z - this._z[i];
       let d, nx, nz;
       if (this._kind[i] === KIND_OBB) {

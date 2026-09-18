@@ -47,6 +47,8 @@ import { MAJORS, MAJOR_BY_ID } from './placedata.js';
 import { SITE_COLOURS as C, GLOW } from './sites.js';
 import { projectPlaceSurfaceUVs } from './place-surfaces.js';
 import { createWaterMaterial, prepareWaterGeometry } from './water-surface.js';
+import { registerIceBody, unregisterIceBody } from './frozen-water.js';
+import { sharedIceMaterial, currentIceMaterial } from './ice-surface.js';
 
 const W = CFG.wilds;
 const CHUNK = CFG.world.CHUNK;
@@ -79,6 +81,10 @@ const TRAVEL_WATER_SPECS = Object.freeze([
 ]);
 const TRAVEL_POOL_RX = 13.0;
 const TRAVEL_POOL_RZ = 8.0;
+// D15: a road pool is frozen. The water MESH sinks under the sheet so black ice reads dark
+// in the middle; the ice mesh rides a hair above the level the feet stand on (waterY).
+const POOL_WATER_UNDER_ICE = -0.22;
+const POOL_ICE_ABOVE_LEVEL = 0.03;
 const TRAVEL_FORD_LEN = 72;
 const TRAVEL_FORD_WIDTH = 8.4;
 const TRAVEL_POOL_OFFSETS = Object.freeze([15, 18, 21, 24]);
@@ -386,6 +392,10 @@ export function planTravelWaters(roads) {
       waterRelief: profile ? profile.relief : 0,
       roadX: p.x, roadZ: p.z,
     };
+    // D15: a still pool beside a road is ICE (the ford is running water and stays open).
+    // Registered here, at planning, so terrain.surfaceAt holds movers at the sheet whether
+    // or not the pool's body is resident; the footprint is the rendered pool edge exactly.
+    if (spec.kind === 'pool') registerIceBody({ id: spec.id, kind: 'ellipse', x, z, yaw, rx: poolRX, rz: poolRZ, y: rec.waterY });
     out.push(rec);
   }
   return out;
@@ -3223,6 +3233,22 @@ export class Wilds {
       m.name = (site.kind === 'travel-water' ? 'travel-water-surface-' : 'wild-water-surface-') + site.id;
       m.userData.waterSurface = true;
       g.add(m);
+      if (site.kind === 'travel-water' && site.variant === 'pool') {
+        // D15: the pool is frozen. The same clipped geometry twice, as the Drowned Light does
+        // it (lore-drowned-light.js): the water mesh drops so the dark water reads through
+        // the translucent middle of the sheet, the ice rises 0.03 m so feet at waterY stand
+        // on the drawn ice. prepareWaterGeometry has just added the 'waterDepth' attribute
+        // the ice vertex shader needs. The material is the one shared instance, fetched per
+        // build (the wilds can build before the sky exists) and never disposed here; the
+        // geometry's double dispose in _dispose is harmless.
+        m.position.y = POOL_WATER_UNDER_ICE;
+        const ice = new THREE.Mesh(waterGeo, sharedIceMaterial(this.ctx));
+        ice.name = 'travel-ice-surface-' + site.id;
+        ice.userData.iceSurface = true;
+        ice.position.y = POOL_ICE_ABOVE_LEVEL;
+        ice.renderOrder = 3;
+        g.add(ice);
+      }
     }
     if (glowGeo) {
       glow = new THREE.Mesh(glowGeo, this.matGlow);
@@ -3523,6 +3549,10 @@ export class Wilds {
     s.taken = true;
     this._stats.takes++;
     this._saveFlag(s);
+    // D14: a dig's lead pinned this cache on the map as 'wild:<id>' (scavenging.js). Opened,
+    // the pin comes off, quietly. Reached by the hold and by the crushed-cache path alike.
+    const pr = this._sys('progress');
+    if (pr && typeof pr.forgetRumour === 'function') pr.forgetRumour('wild:' + s.id);
     const c = s.rec && s.rec.cache;
     if (c) {
       c.lid.rotation.x = -2.0; c.glint.visible = false;
@@ -3897,6 +3927,15 @@ export class Wilds {
     return s ? !!this._build(s) : false;
   }
 
+  /** D15: the frozen pools take the county's lying snow and rain (weather.js _drive). The
+   *  sheet material is shared with the reservoir's, so one uniform write covers every pool;
+   *  null until the first sheet is built, and this never builds one. */
+  setWeather(snow, wet) {
+    const m = currentIceMaterial();
+    const u = m && m.uniforms ? m.uniforms.uWeather : null;
+    if (u) u.value.set(snow, wet);
+  }
+
   stats() { return this._stats; }
   notes() { return this._notes; }
 
@@ -3916,7 +3955,7 @@ export class Wilds {
     for (let i = 0; i < this._unsubs.length; i++) this._unsubs[i]();
     this._unsubs.length = 0;
     if (this.sites) for (const s of this.sites) this._dispose(s);
-    for (const s of this._travelWaters) this._dispose(s);
+    for (const s of this._travelWaters) { this._dispose(s); if (s.variant === 'pool') unregisterIceBody(s.id); }
     this._travelWaters.length = 0;
     for (const m of this._horizon) this.horizonGroup.remove(m);
     this._horizon.length = 0;

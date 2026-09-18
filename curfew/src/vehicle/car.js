@@ -2338,13 +2338,21 @@ export class Car {
     // From outside the disc pushed the car away instead, which is why the door read as a
     // one-way. collision.nearestSurface() ranks and pushes off the real surface, so a wall
     // stops the car where the wall is and a trunk behaves exactly as it did.
+    //
+    // AND IT IS THE NEAREST SURFACE IN THE CAR'S OWN HEIGHT BAND. The kerb/overhang test
+    // below used to be the only height filter, applied AFTER the ranking — so under the
+    // Filling Station bay, where a roof rafter six metres up is the nearest thing in XZ to
+    // every spine point, the rafter won, was skipped, and the shut shutter behind it never
+    // pushed back (measured 2026-09-17: floored at the closed door the car crept sideways to
+    // 0.56 m off the slab with a wing through it). The band goes into the query now.
     if (col.nearestSurface) {
+      const bandLo = feet + 0.34, bandHi = feet + ROOF_Y;
       for (let pass = 0; pass < 3; pass++) {
         let moved = false;
         for (let a = 0; a < 3; a++) {
           const t = (a - 1) * 1.40;
           const ax = this.x + fx * t, az = this.z + fz * t;
-          const near = col.nearestSurface(ax, az, 3.0);
+          const near = col.nearestSurface(ax, az, 3.0, bandLo, bandHi);
           if (!near) continue;
           // copy the scalars: it returns shared scratch, like every query in that file.
           const gap = near.distance, y0 = near.y0, y1 = near.y1;

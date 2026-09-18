@@ -324,6 +324,11 @@ export class Weather {
     const places = sys.get('places');
     if (places && places.setWeather) places.setWeather(this.snow, this.wet);
 
+    // D15: the frozen road pools share the reservoir's ice material; the wilds write its
+    // snow/wet uniform (lore-drowned-light.js writes the same one each step; harmless).
+    const wilds = sys.get('wilds');
+    if (wilds && wilds.setWeather) wilds.setWeather(this.snow, this.wet);
+
     const fx = sys.get('fx');
     if (fx && fx.setWeather) fx.setWeather(k, s, this.windX, this.windZ);
 
