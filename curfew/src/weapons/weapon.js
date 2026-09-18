@@ -161,10 +161,24 @@ const BEATS_EMPTY = [
 ];
 
 const MAXT = 300;                 // metres a shot is allowed to travel
-// THE LOWERED STANCE (D1). X toggles it; fire, aim, melee or R raise it, and the raising
-// press is spent on the raise (a second click fires). 0.26 s down, 0.24 s up: quicker up than
-// down, because the answer to something arriving must never be the slow half.
+// THE LOWERED STANCE. Alex: "it used to lower with holding the r key and raise back up with
+// the same holding key or by clicking." A held R (LOWER_HOLD_S) or X lowers; fire, aim, melee
+// or R raise it, and the raising press is spent on the raise (a second click fires). What broke
+// hold-R the first time is gone: R never touches a running reload (a press there is only the
+// active attempt), and in a fight (a shot, a swing or a hit inside CALM_S) R reloads on the
+// press exactly as before, so a held R can only lower a gun that has nothing to load. Calm, a
+// tap reloads on the release and a hold puts the gun down. X still toggles. 0.26 s down,
+// 0.24 s up: quicker up than down, because the answer to something arriving must never be
+// the slow half.
 const LOWER_IN_S = .26, LOWER_OUT_S = .24;
+const LOWER_HOLD_S = 0.45;
+const CALM_S = 3.0;
+// LOW-READY. Facing someone you can talk to, pay or buy from, the gun dips on its own (when it
+// is calm and no reload is running) and the first click, aim, swing or R brings it back up and
+// keeps it up until you look away. Only the prompt that WINS the E bus counts (hud.js's rule:
+// the highest rank of the step), so a person standing behind a gate crank does not dip it.
+const LOW_READY = /\b(COINS|BUY|PAY|REPAIR|TALK|LISTEN|STAND WITH US|COME INSIDE)\b/;
+const LOW_READY_HOLD_S = 0.16;     // the dip outlives its prompt this long, so a flicker never bobs the gun
 // THE ACTIVE RELOAD, base behaviour on every reload (D2). Authored in seconds against the
 // REFERENCE choreography like the beats above and scaled per gun: 1.00-1.30 s of the 2.10 s
 // reference is the moment the magazine seats. A hit runs the rest of the reload at x1.35; a
@@ -205,6 +219,19 @@ const TUBE_BEATS_MAX = 16;
 // A swap is lower-then-raise through the viewmodel's sprint-out pose. The gun changes at
 // the midpoint, when it is fully out of frame.
 const SWAP_S = 0.45;
+
+// THE SHOT'S LENS PUNCH (r3 shooting feel). camera.js has read `weapons.fovPunch` since the
+// camera was lifted and nothing ever wrote it. Degrees taken off the view on the shot, halved
+// when aimed, gone with a 55 ms half-life, and added by the camera straight onto the lens
+// (never into its damped FOV clock, or the punch arrives late and soft). The heavy guns thump;
+// the carbine barely breathes, because twelve thumps a second is a wobble, not a punch.
+const FOV_PUNCH = Object.freeze({ bolt: 1.3, shotgun: 1.8, revolver: 0.9, carbine: 0.18 });
+const FOV_PUNCH_MAX = 2.2, FOV_PUNCH_HL = 0.055;
+// THE WORK AFTER THE SHOT. How far through the cycle the bolt (or the pump) is fully back and
+// fully home: the viewmodel's throw reaches the rear at 0.42 and closes at 0.86, and the case
+// leaves at 0.34 (viewmodel _queueBrass). 'weapon:cycle' goes out on both, so the ear gets the
+// clack of the bolt and the hands get a jolt, instead of a silent 0.62 s of animation.
+const CYCLE_BACK = 0.34, CYCLE_HOME = 0.86;
 
 /* ---- module-level scratch. The hot path allocates nothing. ---- */
 const _dir = new THREE.Vector3();
@@ -248,9 +275,14 @@ export class Weapons {
     this._autoReload = false;      // true while the gun in the hands is empty with reserve (derived each step)
     this.grantCount = 0;
     this.swapCount = 0;
-    this.lowered = false; this.lowerT = 0;          // D1: the stance, X's toggle (C21: the HUD reads both)
+    this.lowered = false; this.lowerT = 0;          // the stance: a held R or X (C21: the HUD reads both)
     this._raiseEaten = false;                        // this step's fire/aim/melee press was spent raising the gun
+    this._liftHold = false;                          // the trigger that raised the gun is still held: it never fires
+    this._fightT = 99;                               // seconds since the last shot, swing or hit (CALM_S)
+    this._rPend = false; this._rHoldT = 0; this._rTap = false;   // a calm R press: tap or hold, not yet known
     this._lowerClock = 0; this._shopLowerUntil = -Infinity;
+    this._promptRank = -1; this._promptLow = false;  // the best E prompt since the last step, and whether it dips the gun
+    this._lowVeto = false;                           // the player asked for the gun at this prompt: it stays up
     this._shopWas = false;                           // C7: a shop menu was open last step
     this.primed = false;                             // D3: an active-reload hit; every round until the next reload hits harder
     this.dryFlashT = 0;                              // C21: seconds of the HUD's dry-click flash left
@@ -283,10 +315,20 @@ export class Weapons {
         const n = p ? Math.floor(+p.n) : 0;
         if (n > 0) { this.ammoPickups++; this.addReserve(n); }
       });
-      ctx.bus.on('prompt',p=>{
-        // The existing shop/payment prompt owns low-ready; leaving it restores
-        // the player's chosen stance rather than overwriting that choice.
-        if((p?.label||'E')==='E'&&/\b(COINS|BUY|PAY|REPAIR)\b/.test((p.detail||'')+' '+(p.subdetail||'')))this._shopLowerUntil=this._lowerClock+.16;
+      // Being hurt is a fight too: R goes back to reloading on the press.
+      ctx.bus.on('player:hurt', () => { this._fightT = 0; });
+      // A key held behind the pause card is released by input.clear() on the way back; that
+      // release must not read as a tap.
+      ctx.bus.on('game:paused', (on) => { if (on) this._rPend = false; });
+      // LOW-READY's listener. Every owner emits once per step; the best rank since our last
+      // step is the prompt the HUD is showing. Leaving it restores the stance the player chose.
+      ctx.bus.on('prompt', (p) => {
+        if (!p || !p.kind) return;
+        const rank = Number.isFinite(p.rank) ? p.rank : p.kind === 'hold' ? 2 : 1;   // hud.js
+        if (rank <= this._promptRank) return;
+        this._promptRank = rank;
+        this._promptLow = (p.label || 'E') === 'E'
+          && (LOW_READY.test(p.detail || '') || LOW_READY.test(p.subdetail || ''));
       });
     }
 
@@ -309,8 +351,11 @@ export class Weapons {
       subT: 0, index: 0, tracer: false, lowAmmo: false, loud: 26,
       pellets: 1, pellet: 0, spreadDeg: 0,
       dmgMul: 1,                 // D3: the primed magazine's multiplier; combat.resolveShot multiplies by it
+      pull: 0,                   // r3: which trigger pull this is (fireCount); combat and audio key "once per pull" on it
+      last: false,               // r3: this round emptied the magazine (audio: the light click after it)
     };
     this._reloadPayload = { phase: 'start', name: '', empty: false, ammo: 0, reserve: 0, credited: false };
+    this._cyclePayload = { phase: 'back', weapon: 'bolt', empty: false };
 
     // --- state the viewmodel reads. One object, mutated, never replaced.
     this.vmState = {
@@ -328,6 +373,7 @@ export class Weapons {
     this.vmState.weapon = this.def.id; this.vmState.mag = this.def.mag;
 
     this.flashEV = 0;              // post.js reads this for the exposure transient
+    this.fovPunch = 0;             // degrees; camera.js adds it straight onto the lens (FOV_PUNCH)
     this.fireTimes = [];           // ideal sim-time of each shot (the feel gate reads it)
     this.fireCount = 0;
     this.meleeCount = 0;
@@ -703,32 +749,63 @@ export class Weapons {
     this.ctx.bus.emit('weapon:stance', { lowered: this.lowered });
   }
 
+  /** What _startReload() would do with an R press now: false when it would refuse. */
+  _reloadWanted() {
+    return !this.reloading && this.reserve > 0 && this.ammo < this.def.mag + (this.chambered ? 1 : 0);
+  }
+
   /**
-   * D1, THE STANCE. X TOGGLES lowered. While lowered, fire, aim, melee or R RAISE the gun and
-   * that press is spent on the raise: a second click fires (presses during the 0.24 s rise are
-   * buffered in step(), so the next click after the gun is up lands). R never lowers: with the
-   * gun up it reloads, and during a reload it is the active-reload attempt, resolved ON THE
-   * PRESS with the press-time sample (D2). Returns true when this press starts a reload.
+   * THE STANCE. X TOGGLES lowered; a held R lowers too (LOWER_HOLD_S). While lowered, fire,
+   * aim, melee or R RAISE the gun and that press is spent on the raise: a second click fires
+   * (presses during the 0.24 s rise are buffered in step(), so the next click after the gun is
+   * up lands), and a held trigger never fires off the raising click (_liftHold in step()).
+   * R with the gun up:
+   *   - during a reload it is only the active-reload attempt, resolved ON THE PRESS with the
+   *     press-time sample (D2). Holding it does nothing more: nothing here cancels a reload.
+   *   - in a fight (_fightT < CALM_S) with something to load, it reloads on the press, as it
+   *     always has. A held R cannot lower.
+   *   - otherwise (calm, or nothing to load) the press waits: let go before LOWER_HOLD_S and it
+   *     is a reload (when there is one to do), hold on and the gun goes down.
+   * Returns true when this step starts a reload.
    */
-  _stepLowering(dt, i, reloadPressed, lowerPressed, raiseEdge, dead) {
-    this._lowerClock += dt;
+  _stepLowering(dt, i, reloadPressed, lowerPressed, raiseEdge, dead, handsFree) {
+    this._lowerClock += dt; this._fightT += dt;
     this._raiseEaten = false;
     let reloadTap = false;
+    const lowReady = this._lowerClock <= this._shopLowerUntil;   // LOW-READY: a person's prompt has focus
+    if (!lowReady) this._lowVeto = false;
+    const want = raiseEdge || reloadPressed;
     if (!dead) {
-      if (lowerPressed) this._setLowered(!this.lowered);
-      else if (this.lowered && (raiseEdge || reloadPressed)) { this._setLowered(false); this._raiseEaten = raiseEdge; }
-      else if (reloadPressed) {
-        if (this.reloading) this._activeReloadPress(this.reloading.t);
-        else reloadTap = true;
+      if (lowerPressed) {
+        this._rPend = false; this._setLowered(!this.lowered);
+        if (!this.lowered) this._lowVeto = lowReady;
+      } else if (want && (this.lowered || (lowReady && !this._lowVeto && this.lowerT > .001))) {
+        // Any press means "I want the gun": it comes up, and the press is spent on the lift.
+        if (this.lowered) this._setLowered(false);
+        this._lowVeto = lowReady; this._raiseEaten = raiseEdge; this._rPend = false;
+      } else {
+        if (want && lowReady) this._lowVeto = true;
+        if (reloadPressed) {
+          if (this.reloading) this._activeReloadPress(this.reloading.t);
+          else {
+            const wanted = this._reloadWanted();
+            if (wanted && this._fightT < CALM_S) reloadTap = true;
+            else { this._rPend = true; this._rHoldT = 0; this._rTap = wanted; }
+          }
+        }
       }
-    }
-    // The shop/payment prompt's low-ready (the 'prompt' listener in the constructor): the gun
-    // dips while you are paying and lifts the moment you ask for it. That first press is spent
-    // on the lift, exactly like a raise from X, so paying never turns into a shot.
-    const shopHeld = this._lowerClock <= this._shopLowerUntil;
-    const shop = shopHeld && !i.fire && !i.aim && !i.melee;
-    if (raiseEdge && !this.lowered && shopHeld && this.lowerT > .001) this._raiseEaten = true;
-    const target = this.lowered || shop;
+      if (this._rPend) {
+        // Anything else the hands start first ends the question; so does letting go.
+        if (raiseEdge || this.reloading || this.melee || this.swapT >= 0 || this.lowered || !handsFree) this._rPend = false;
+        else if (!i.reload) { this._rPend = false; reloadTap = this._rTap; }
+        else if ((this._rHoldT += dt) >= LOWER_HOLD_S - 1e-6) { this._rPend = false; this._setLowered(true); }
+      }
+    } else this._rPend = false;
+    // LOW-READY: the gun dips while a person's prompt has focus, never mid-reload or mid-fight,
+    // and once asked for (the veto) it stays up until the prompt has gone.
+    const dip = lowReady && !this._lowVeto && !this.reloading && this._fightT >= CALM_S
+      && !i.fire && !i.aim && !i.melee;
+    const target = this.lowered || dip;
     this.lowerT = clamp01(this.lowerT + (target ? dt / LOWER_IN_S : -dt / LOWER_OUT_S));
     return reloadTap;
   }
@@ -750,6 +827,8 @@ export class Weapons {
       rewardCount: this.rewardCount, ammoPickups: this.ammoPickups,
       blocksSprint: this.wantsSprintCancel,
       lowered: this.lowered, lowerT: this.lowerT, travelReady: this.travelReady,
+      rPend: this._rPend, rHoldT: this._rHoldT, fightT: this._fightT, liftHold: this._liftHold,
+      lowVeto: this._lowVeto, lowReady: this._lowerClock <= this._shopLowerUntil,
       primed: this.primed, dryFlashT: this.dryFlashT,
       adsT: this.adsT, spreadDeg: this._cone(), bloom: this.bloom,
       kickPitch: this.kickPitch, kickYaw: this.kickYaw,
@@ -1109,6 +1188,15 @@ export class Weapons {
     this.ctx.bus.emit('weapon:reload', p);
   }
 
+  /** The bolt (or the pump) reached the back, or went home. See CYCLE_BACK / CYCLE_HOME. */
+  _emitCycle(phase) {
+    const c = this._cyclePayload;
+    c.phase = phase; c.weapon = this.def.id; c.empty = this.ammo === 0;
+    this.ctx.bus.emit('weapon:cycle', c);
+    const pu = this._pulse('cycle');
+    if (pu) { pu.name = phase; pu.adsT = this.adsT; }
+  }
+
   /* ---- the shot --------------------------------------------------------- */
 
   _fire(subT) {
@@ -1124,6 +1212,7 @@ export class Weapons {
     this.fireCount++;
     const idx = this.shotIndex++;
     this.sinceShot = 0;
+    this._fightT = 0;                        // not sinceShot: select() resets that on every swap
     this.recovering = false;
     this.cycle = d.cycle;                    // start the bolt throw
 
@@ -1178,7 +1267,11 @@ export class Weapons {
     payload.weapon = d.id;
     payload.subT = subT;
     payload.index = idx;
+    payload.pull = this.fireCount;
+    payload.last = this.ammo === 0;
     payload.lowAmmo = this.ammo <= Math.max(1, Math.floor(d.mag * 0.2));
+    // The lens punch (FOV_PUNCH). Negative is a tighter view: the world comes at you on the shot.
+    this.fovPunch = Math.max(-FOV_PUNCH_MAX, this.fovPunch - (FOV_PUNCH[d.id] || 0) * lerp(1, 0.5, this.adsT));
     // ROUND 7 (lane G): quiet_2 "Cold Barrel". HOOK_POINTS names this exact line as the site
     // and nobody had written it; enemies.js's own comment at :534 says it takes p.loud as
     // published so the discount happens once, here.
@@ -1288,6 +1381,7 @@ export class Weapons {
   _startMelee() {
     if (this.melee) return;
     this.melee = { t: 0, phase: 'windup', target: null, struck: false };
+    this._fightT = 0;
     if (this.reloading) this._cancelReload();
     this._pulse('melee:start');
   }
@@ -1337,9 +1431,16 @@ export class Weapons {
     pr.slot1 = i.slot1; pr.slot2 = i.slot2; pr.slot3 = i.slot3; pr.slot4 = i.slot4;
 
     const dead = !!p.dead;
-    // D1: fire, aim and melee all mean "I want the gun" - any of them raises a lowered one.
-    const reloadTap = this._stepLowering(dt, i, reloadPressed, lowerPressed, firePressed || aimPressed || meleePressed, dead);
     const handsFree = !p.scaling && !p.scaleDescending && !p.climb;
+    // LOW-READY: the prompt that won the E bus since our last step, then clear for the next.
+    if (this._promptLow) this._shopLowerUntil = this._lowerClock + LOW_READY_HOLD_S;
+    this._promptRank = -1; this._promptLow = false;
+    // Fire, aim and melee all mean "I want the gun" - any of them raises a lowered one.
+    const reloadTap = this._stepLowering(dt, i, reloadPressed, lowerPressed, firePressed || aimPressed || meleePressed, dead, handsFree);
+    // The click that raised the gun is spent, and so is the rest of that pull: an automatic
+    // does not start firing off it once the gun is up. A fresh press fires.
+    if (this._raiseEaten && firePressed) this._liftHold = true;
+    if (!i.fire) this._liftHold = false;
     const weaponReady = !this.lowered && this.lowerT <= .001 && handsFree;
     // The gun is on its way up (a raise, or the shop low-ready lifting): presses queue for it.
     const raising = !this.lowered && this.lowerT > .001 && handsFree;
@@ -1380,7 +1481,17 @@ export class Weapons {
 
     const d = this.def;
     this.sinceShot += dt;
-    if (this.cycle > 0) this.cycle = Math.max(0, this.cycle - dt);
+    if (this.cycle > 0) {
+      // The bolt's two knocks. An empty gun's bolt comes back and stays back (the viewmodel
+      // holds it open), so there is no 'home' to hear.
+      const len = d.cycle, before = len - this.cycle;
+      this.cycle = Math.max(0, this.cycle - dt);
+      const after = len - this.cycle;
+      if (len > 0) {
+        if (before < len * CYCLE_BACK && after >= len * CYCLE_BACK) this._emitCycle('back');
+        if (before < len * CYCLE_HOME && after >= len * CYCLE_HOME && this.ammo > 0) this._emitCycle('home');
+      }
+    }
 
     // ---- ADS. Interruptible, never restarts. vigil weapon.js:305-308.
     // ROUND 6 (NEXT.md item 3): a reload the GUN started at zero no longer drops the sight
@@ -1455,8 +1566,9 @@ export class Weapons {
       }
     }
 
-    // R reloads on the PRESS (D1: nothing else lives on R any more). A press during a reload
-    // was already the active-reload attempt inside _stepLowering; while lowered it raised.
+    // R reloads: on the press in a fight, on the release when calm (a held R lowers instead;
+    // see _stepLowering). A press during a reload was already the active-reload attempt
+    // there; while lowered it raised.
     if (reloadTap && !swapping && weaponReady) this._startReload();
 
     // ---- AUTO-RELOAD (ROUND 5, NEXT.md item 3). Alex: "it should automatically reload when
@@ -1552,7 +1664,7 @@ export class Weapons {
     // muzzle flash and the tracer are placed where the shot actually was.
     const canFire = !this.reloading && !this.melee && this.sprintOutTimer <= 0
       && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar&&weaponReady;
-    const wantFire = d.auto ? (i.fire || this.buffered > 0) : (this.buffered > 0);
+    const wantFire = d.auto ? ((i.fire && !this._liftHold) || this.buffered > 0) : (this.buffered > 0);
     if (firePressed) this.dryLatch = false;   // every CLICK clicks (the latch is per held pull)
     this.firing = false;
     if (wantFire && canFire && this.ammo > 0) {
@@ -1661,6 +1773,8 @@ export class Weapons {
     // ---- exposure transient. post.js reads weapons.flashEV.
     this.flashEV *= Math.pow(0.5, dt / 0.083);
     if (this.flashEV < 0.002) this.flashEV = 0;
+    this.fovPunch *= Math.pow(0.5, dt / FOV_PUNCH_HL);
+    if (this.fovPunch > -0.005) this.fovPunch = 0;
     if (this.dryFlashT > 0) this.dryFlashT = Math.max(0, this.dryFlashT - dt);
 
     // ---- publish. viewmodel is manifest entry 12 and steps next.

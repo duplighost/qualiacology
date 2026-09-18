@@ -129,10 +129,22 @@ export function landing(k, api, o) {
   // a rail on three sides, open where the ladder arrives
   const c = Math.cos(yaw), s = Math.sin(yaw);
   for (const sx of [-1, 1]) {
-    S.box(0.07, 0.90, d, x + sx * (w * 0.5) * c, top + 0.45, z - sx * (w * 0.5) * s, IRON, yaw);
+    const px = x + sx * (w * 0.5) * c, pz = z - sx * (w * 0.5) * s;
+    S.box(0.07, 0.90, d, px, top + 0.45, pz, IRON, yaw);
+    // MEASURED 2026-09-18: the side panels were drawn with no collider, so a landing's
+    // "rail" was a picture you walked through and off the edge.
+    api.emit({ kind: 'obb', x: px, z: pz, halfX: 0.05, halfZ: d * 0.5, yaw,
+      y0: top, y1: top + 0.90, tag: 'metal', standable: false, climbable: false });
   }
-  S.box(w, 0.09, 0.09, x - Math.sin(yaw) * (d * 0.5), top + 0.88,
-    z - Math.cos(yaw) * (d * 0.5), PALE, yaw);
+  // `back: false` for a landing whose far side IS the way on (the eave of a roof you step
+  // onto): no bar there, rather than a bar you can walk through.
+  if (o.back !== false) {
+    const bx = x - Math.sin(yaw) * (d * 0.5), bz = z - Math.cos(yaw) * (d * 0.5);
+    S.box(w, 0.09, 0.09, bx, top + 0.88, bz, PALE, yaw);
+    S.box(w, 0.07, 0.07, bx, top + 0.45, bz, IRON, yaw);   // the mid-rail
+    api.emit({ kind: 'obb', x: bx, z: bz, halfX: w * 0.5, halfZ: 0.05, yaw,
+      y0: top, y1: top + 0.93, tag: 'metal', standable: false, climbable: false });
+  }
   return top;
 }
 
@@ -264,27 +276,47 @@ export const SITE_EXTRAS = Object.freeze({
     ],
   },
   'the-toll': { cans: [{ id: 'booth', x: 3.4, z: -2.6, yaw: 1.1 }] },
-  'red-quarry': { cans: [{ id: 'landing', x: -6.2, z: 8.4, yaw: -0.6 }] },
+  // The quarry is a pit (world-scars.js). Two quarrymen's ladders up the west faces, floor to
+  // the first bench and the first to the second, where the upper strongbox is (outer-
+  // destinations.js keeps both faces flush). Each stops 0.10 under its tread, the county's
+  // ladder-to-deck norm the scaler pulls over by. The petrol was the winch engine's, and it is still
+  // inside the winch house at the derrick's foot, on the floor beside the door; same id, so a
+  // can already taken stays taken.
+  'red-quarry': {
+    climbs: [
+      { x: -27.92, z: -45, yaw: Math.PI / 2, height: 3.4, width: 1.8 },
+      { x: -31.92, z: -41.5, yaw: Math.PI / 2, height: 3.4, width: 1.8, base: 3.5 },
+    ],
+    cans: [{ id: 'landing', x: 12.95, z: -43.05, yaw: -0.6 }],
+  },
   'choir-vault': { cans: [{ id: 'stair-top', x: 4.8, z: -3.2, yaw: 0.8 }] },
+  // r3 (2026-09-18). MEASURED in the interiors map: every one of these was INSIDE the house.
+  // Both climbs ran up interior wall lines through the floors, the moth case sat in the
+  // first-floor slab, the chimney stash in a ceiling, and the can and the yard box were sealed
+  // in the void under the dining room. Now: two faces on the OUTSIDE of the two gables, each
+  // up to its own landing against the wall (the east one opens onto the roof at the eave);
+  // the can and the yard box in the drive among the guests' cars (estate-details.js). The
+  // ids are unchanged, so a save that already took one keeps it taken.
   'blackthorn-manor': {
     climbs: [
-      // the service wing's back wall, up to the first-floor gutter
-      { x: -16.5, z: 6.2, yaw: -Math.PI / 2, height: 7.2 },
-      // the chimney stack at the east gable, up to the ridge
-      { x: 17.2, z: -6.0, yaw: Math.PI / 2, height: 10.4, width: 1.7 },
+      // the west gable, between the passage window and the ballroom's: a boarded face up to
+      // a small balcony against the wall
+      { x: -31.95, z: -7.0, yaw: -Math.PI / 2, height: 7.55 },
+      // the east gable, inside the pergola's line: up to the eave and onto the roof
+      { x: 32.3, z: -12.0, yaw: Math.PI / 2, height: 10.85, width: 1.7 },
     ],
     landings: [
-      { x: -14.9, z: 6.2, yaw: -Math.PI / 2, top: 7.3, w: 2.4, d: 1.8 },
-      { x: 15.6, z: -6.0, yaw: Math.PI / 2, top: 10.5, w: 2.0, d: 1.6 },
+      { x: -31.1, z: -7.0, yaw: -Math.PI / 2, top: 7.65, w: 2.0, d: 1.7 },
+      { x: 31.575, z: -12.0, yaw: Math.PI / 2, top: 10.95, w: 2.0, d: 1.45, back: false },
     ],
     stashes: [
-      { id: 'roof', x: -14.9, z: 6.9, y: 7.3, yaw: 0.4, case: 'moth' },   // the case, at the top of the climb
-      { id: 'chimney', x: 15.6, z: -6.6, y: 10.5, yaw: -0.3 },  // and the other one
-      { id: 'cellar', x: -9.4, z: -12.6, y: 0.02, yaw: 0.8 },   // the cellar, by the resident
-      { id: 'hall', x: 13.6, z: 5.6, y: 3.22, yaw: -0.5 },      // upstairs off the hall
-      { id: 'yard', x: 8.8, z: 14.2, y: 0.02, yaw: 1.9 },       // behind the outbuilding
+      { id: 'roof', x: -30.72, z: -7.0, y: 7.65, yaw: -Math.PI / 2, case: 'moth' },  // the case, on the balcony
+      { id: 'chimney', x: 31.25, z: -12.4, y: 10.95, yaw: Math.PI / 2 },           // at the eave, before the roof
+      { id: 'cellar', x: -9.4, z: -12.6, y: 0.02, yaw: 0.8 },   // the Old Tunnel
+      { id: 'hall', x: 15.8, z: 5.6, y: 3.22, yaw: -0.5 },      // the Long Corridor, clear of the dining room door
+      { id: 'yard', x: 19.4, z: 23.2, yaw: 1.05 },              // tucked against the third car
     ],
-    cans: [{ id: 'outbuilding', x: 9.4, z: 13.4, y: 0.02, yaw: 1.6 }],
+    cans: [{ id: 'outbuilding', x: 12.3, z: 26.7, yaw: 1.6 }], // between the first two cars
   },
   'avery-house': {
     climbs: [{ x: 16.4, z: 5.0, yaw: Math.PI / 2, height: 7.2 }],

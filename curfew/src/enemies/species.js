@@ -389,31 +389,39 @@ export const SPECIES = {
      ROUND 18. ALEX, 2026-09-09: "Another new enemy inside a destination if it's big and
      looks old should be a giant spider that crawls on ceiling and drops off."
 
-     So it is not spawned by the pressure budget at all — director.js's ROSTER does not name
-     it, and _pick can only draw from that table (see the Warden's note above). It is placed
-     by world/interior-horror.js, which is the lane that already knows which rooms are big
-     and which are old.
+     C8, 2026-09-18. ALEX: "I think we have a problem with spiders in this game ... often they
+     hover on nothing. And then fall but nevevr really atack. they end up hovering again. we
+     should just find an easier way to do that." Twice the ceiling version failed: first a
+     body that dropped and climbed back up, then a harmless officer pinned under a guessed roof.
 
-     `ceiling` is its whole behaviour: it walks the underside of the roof above you, keeping
-     station, and DROPS when it is over you. The drop is the attack. On the floor it is
-     slower than you and it will climb back up if you leave it alone, which is the beat —
-     you can always walk out of the room, and then it is above you again on the way back. */
+     So it is a FLOOR CRAWLER: a pressure body with the hound's brain, living in four big old
+     rooms (world/spider-nests.js) on each room's measured floor. It holds still in its corner
+     until it notices you, then comes in bursts faster than a sprint, rears on a 0.34 s
+     telegraph and lunges; it hurts (18), it dies to a few rounds (75), and a killed one stays
+     dead for the save. `nest` is its whole contract with enemies.js: it stands on real floors
+     and against real walls (collision.resolveCapsule), it is never teleported or driven out
+     by a light, and it belongs to its nest — past `homeLeash` from home, or a storey away, it
+     lets you go and walks back. It is never a counted defender and never marked.
+
+     No leapCooldown/squadLeapGap: it lunges, it never arcs. 0.92 m tall scales the rig to a
+     1.26 m leg span, so its 0.56 m body circle keeps the legs out of the walls it stands at.
+     The director's roster does not name it and it is not DREAD, so nothing spawns one in the
+     open: only a nest does. */
   spider: {
-    id: 'spider', form: FORM.SPIDER, owner: OWNER.DREAD, xp: 0, officer: true,
+    id: 'spider', form: FORM.SPIDER, owner: OWNER.PRESSURE, xp: 60,
     phases: ALL_PHASES,
-    hp: 180, dmg: 0, radius: 0.72, height: 1.05, mass: 95,
-    speed: 5.20,
-    burst: 0.760, pause: 0.300,
+    hp: 75, dmg: 18, radius: 0.56, height: 0.92, mass: 60,
+    speed: 7.0,                             // > SPRINT 6.60 in its bursts, < tacSprint 9.20
+    burst: 0.450, pause: 0.260,
     engage: [0, 12], standoff: 2.4,
-    telegraph: 0.420, attack: 0.380, strikeAt: 0.160, recover: 0.700,
-    strikeRange: 2.30,
-    // CEILING. dropFrom is how far above your head it will let itself go from; climbRate
-    // is how fast it gets back up there once it has lost you.
-    ceiling: true, ceilingLo: 2.60, ceilingHi: 5.20, dropFrom: 6.0, climbRate: 1.9,
-    notice: 22, memAlert: 12.0,
-    litNotice: 0.5,
-    deathNoise: 16,
-    countsAs: 2,
+    telegraph: 0.340, attack: 0.420, strikeAt: 0.10, recover: 0.500,
+    strikeRange: 1.70,
+    lungeRange: 3.40, lungeSpeed: 10.5, lungeTime: 0.24,
+    notice: 16, memAlert: 6.0,
+    litNotice: 0.3,
+    nest: true, homeLeash: 18,
+    deathNoise: 14,
+    countsAs: 0.5,
     eye: 0xff9a5c, cloth: 0x0f0d0c, skin: 0x191413, bone: 0x2d2622,
   },
 
@@ -558,14 +566,11 @@ export const POOL = Object.freeze({
   // and a corpse holds its slot for a minute.
   'hamlet-guard': 9, treant: 2,
   // ROUND 18. Six moths, because a swarm is not what was asked for — "a freaky horror moth"
-  // is one thing on one trunk. Spiders: SEVEN, one per nest (world/spider-nests.js), because
-  // a nest's spider is a STAGED CAST — placed once per save when you come within 150 m and
-  // holding its slot until it notices you, never recycled by cull() — so the fourth site you
-  // visited used to empty the pool for every nest after it for the rest of the night
-  // (measured 2026-09-17 with tools/round19-check.mjs: hollow-mill, jackfield and the bell
-  // tower refused, telemetry().refused +3 each). The old 'four: only the rooms you are inside
-  // are alive' was interior-horror's rule, whose residents are released; these are not.
-  moth: 6, spider: 7,
+  // is one thing on one trunk. Spiders: one per nest (world/spider-nests.js, four since C8),
+  // because a nest's spider is a STAGED CAST — placed once per save when you come within
+  // 150 m and holding its slot until it notices you, never recycled by cull() — so a pool
+  // smaller than the nests empties it for every nest after the one you visited last.
+  moth: 6, spider: 4,
   // ROUND 22. Three runners so a corpse holding its slot cannot starve the director's one
   // live runner (ROSTER maxAlive 1); one dog-caller, because there is one voice in the woods.
   runner: 3, dogcaller: 1,

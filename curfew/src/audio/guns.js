@@ -105,6 +105,36 @@ export function normGun(w) {
 // as weapon:hit.kind; anything unknown falls through to 'dirt' rather than to
 // silence, because a shot that hits and says nothing reads as a miss.
 export const SURFACES = ['wood', 'dirt', 'rock', 'metal', 'flesh', 'water', 'glass', 'foliage'];
+// r3: combat speaks 'stone' for every wall, building and rock (TAG_SURFACE), and this file only
+// knew 'rock', so a round into a wall made the dirt sound. The rest of combat's words, mapped.
+const SURFACE_ALIAS = Object.freeze({
+  stone: 'rock', plank: 'wood', tin: 'metal', plate: 'metal', deflect: 'metal',
+  snow: 'dirt', cloth: 'foliage',
+});
+
+/* r3 SHOOTING FEEL — THE PLAYER'S OWN GUN, HEARD.
+ *
+ * Everything on the 'weapons' bus reaches the mix through audio.js's 4th-order 1.6 kHz mix-law
+ * low-pass, which is -14 dB at 2.4 kHz and -28 dB at 3.6 kHz: the sear, the bolt, the magazine
+ * knocks and the dry click all live up there, so they arrived as a dull thud or not at all. The
+ * player's own near-field detail now goes on the 'body' bus (the shot's punch layer, which skips
+ * the low-pass and the 400 Hz carve), several dB quieter than it was written, so it is CLEAR
+ * rather than louder. Remote guns keep the full positional chain. */
+const MECH_BODY_DB = -19;            // the player's mechanical layer (was -14 on 'weapons', low-passed)
+const HANDLING_K = 0.72;             // reload foley on 'body': .55 -> .40, active .62 -> .45, dry .50 -> .36
+/* THE HIT CONFIRMATION. A hit on a body answers with a short dry tick; a head adds a ring; a
+ * kill is a low thump under it. Once per trigger pull (a blast is one hit), never positional,
+ * and at least 45 ms after the shot so the gun's own crack cannot mask it. Quiet on purpose:
+ * it tells you, it does not cheer. */
+const CONFIRM_MIN_S = 0.045;
+const CONFIRM_GAIN = { tick: 0.20, head: 0.24, kill: 0.30 };
+/* THE AUTOMATIC. Every carbine round played the whole 1.5 s forest tail and two slaps, about 150
+ * long voices a magazine against a 64-voice pool, and the sum of thirty tails was a wash louder
+ * than one shot. Inside a burst the tails are thinned and the slaps are every third round. */
+const BURST_S = 0.12, BURST_TAIL_K = 0.45;
+/* THE LAST ROUND. The shot that empties the magazine is followed by a small light click: it tells
+ * you why the gun is about to reload before the number would. */
+const LAST_CLICK = { delay: 0.05, rate: 1.35, gain: 0.22 };
 
 export class GunAudio {
   constructor(ctx, audio) {
@@ -113,9 +143,23 @@ export class GunAudio {
     this.rng = ctx.rng.fork('gunAudio');
     this.shotIndex = 0;
     this._lastBv = 0; this._lastMv = 0;
-    this._stats = { shots: 0, impacts: 0, tails: 0, slaps: 0 };
+    this._stats = { shots: 0, impacts: 0, tails: 0, slaps: 0, confirms: 0, kills: 0, cycles: 0, brass: 0 };
     this.baked = {};
+    this._lastPlayerShot = -9;       // A.now of the player's last shot (the burst rule)
+    this._confirmPull = -2;          // the pull that already ticked
+    this._killPull = -2;             // the pull that already thumped
+    this._surfPull = -2; this._surfN = 0;   // how many surface impacts this pull has said
+    // Two channels audio.js does not wire and this file answers on its own: the bolt or pump
+    // coming back and going home (weapon.js 'weapon:cycle'), and a spent case landing where it
+    // actually landed (viewmodel.js 'brass:land'). Guarded: a headless fixture has no bus.
+    const b = ctx.bus;
+    this._off = b && b.on ? [
+      b.on('weapon:cycle', (p) => { try { this.cycleCue(p || {}); } catch (e) { void e; } }),
+      b.on('brass:land', (p) => { try { this.brassLand(p || {}); } catch (e) { void e; } }),
+    ] : [];
   }
+
+  dispose() { for (const off of this._off) { try { off(); } catch (e) { void e; } } this._off.length = 0; }
 
   get sr() { return this.A.sr; }
 
@@ -415,6 +459,61 @@ export class GunAudio {
     A.reg('shellIn', [knock(0.10, [1400, 2900], [0.004, 0.0018], [0.6, 0.3], 600)]);
     A.reg('dryClick', [knock(0.07, [2400, 5100], [0.0014, 0.0007], [0.8, 0.3], 1100)]);
 
+    // THE PUMP (r3). A pump gun's identity is the rack: a slide of steel on steel with wood in
+    // the hand, ending in a knock. Back is the longer, looser slide; home is short and solid.
+    const rack = (dur, slide, slideF, knockAt, freqs, taus, amps, thump) => {
+      const b = new Float32Array(N(dur));
+      const n = new Float32Array(N(slide));
+      noiseFill(n, rn);
+      biquadSweep(n, sr, 'bp', slideF[0], slideF[1], 1.1, slide, 1.2);
+      envAD(n, sr, slide * 0.35, slide * 0.30, 0, 1.4);
+      mixInto(b, n, 0.35);
+      for (let i = 0; i < freqs.length; i++) damped(b, sr, freqs[i], taus[i], amps[i], 0, knockAt);
+      damped(b, sr, 240, 0.014, thump, 0, knockAt);                      // the wood in the hand
+      grains(b, sr, rn, { count: 4, from: knockAt, span: 0.02, len: [0.0006, 0.002], hp: 2000, lp: 9000, amp: 0.3 });
+      biquad(b, sr, 'hp', 160, 0.7);
+      fadeOut(b, sr, 0.015);
+      return normalizeTo(b, 0.85);
+    };
+    A.reg('pumpBack', [rack(0.20, 0.075, [1800, 3400], 0.070, [620, 1400, 3100], [0.009, 0.004, 0.0016], [0.8, 0.5, 0.25], 0.45)]);
+    A.reg('pumpHome', [rack(0.16, 0.045, [2600, 1600], 0.042, [700, 1650, 3600], [0.010, 0.0035, 0.0014], [0.95, 0.45, 0.25], 0.55)]);
+    // The revolver's cylinder turning on and the hammer settling: one small bright click.
+    A.reg('cylClick', [knock(0.05, [3300, 5600], [0.0012, 0.0006], [0.7, 0.3], 1500)]);
+
+    // THE HIT CONFIRMATION (CONFIRM_GAIN). A tick is two short resonances and 3 ms of air; the
+    // head ring is the tick with a thin 2.6 kHz ring on it; the kill is a low falling thump with
+    // a knock inside it, felt as much as heard.
+    for (let v = 0; v < 3; v++) {
+      const k = 1 + (v - 1) * 0.05;
+      const b = new Float32Array(N(0.035));
+      damped(b, sr, 1850 * k, 0.0018, 0.9);
+      damped(b, sr, 3900 * k, 0.0009, 0.45);
+      const n = new Float32Array(N(0.003));
+      noiseFill(n, rn);
+      biquad(n, sr, 'hp', 1800, 0.7); biquad(n, sr, 'lp', 7000, 0.7);
+      envAD(n, sr, 0.0002, 0.0009, 0, 1);
+      mixInto(b, n, 0.5);
+      fadeOut(b, sr, 0.006);
+      A.reg('hitTick' + v, [normalizeTo(b, 0.9)]);
+    }
+    {
+      const b = new Float32Array(N(0.09));
+      damped(b, sr, 1850, 0.0018, 0.9);
+      damped(b, sr, 3900, 0.0009, 0.45);
+      damped(b, sr, 2600, 0.012, 0.35, 0, 0.002);
+      fadeOut(b, sr, 0.02);
+      A.reg('hitHead', [normalizeTo(b, 0.9)]);
+    }
+    {
+      const b = new Float32Array(N(0.20));
+      sweepSine(b, sr, 110, 48, 0.090, 0.045, 1.0);
+      damped(b, sr, 520, 0.008, 0.35);
+      grains(b, sr, rn, { count: 3, from: 0.001, span: 0.012, len: [0.0006, 0.0015], hp: 900, lp: 4000, amp: 0.25 });
+      biquad(b, sr, 'hp', 35, 0.7);
+      fadeOut(b, sr, 0.04);
+      A.reg('killThump', [normalizeTo(b, 0.92)]);
+    }
+
     // a spent case landing — three light knocks and then nothing
     for (let v = 0; v < 3; v++) {
       const b = new Float32Array(N(0.40));
@@ -486,9 +585,12 @@ export class GunAudio {
     const lowAmmo = !!o.lowAmmo;
 
     // ---- 1. MECHANICAL ----------------------------------------------------
+    // Yours goes on 'body', under the low-pass that was burying it (MECH_BODY_DB).
     if (mechG > 0.02) {
       const s = A.spec();
-      s.bus = 'weapons'; s.gain = dB(-14) * trim * mechG; s.rate = detune;
+      s.bus = isPlayer ? 'body' : 'weapons';
+      // r3: -14 -> -18 for a remote gun, now that the weapons bus is no longer low-passed
+      s.gain = dB(isPlayer ? MECH_BODY_DB : -18) * trim * mechG; s.rate = detune;
       s.send = 0.03; s.when = when + j1;
       if (positional) { s.x = o.ox; s.y = o.oy; s.z = o.oz; s.propagate = true; s.priority = 1; }
       A.play('gm_' + key + mv, s);
@@ -507,7 +609,11 @@ export class GunAudio {
     }
 
     // ---- 3. TAIL ----------------------------------------------------------
-    this._tail(key, when, dB(tailDb) * trim * W.tailGain, positional ? o : null, isPlayer, d);
+    // Inside a burst (BURST_S) a round's tail is thinned and its slaps come every third round.
+    const burst = isPlayer && A.now - this._lastPlayerShot < BURST_S;
+    if (isPlayer) this._lastPlayerShot = A.now;
+    this._tail(key, when, dB(tailDb) * trim * W.tailGain * (burst ? BURST_TAIL_K : 1),
+      positional ? o : null, isPlayer, d, burst && this.shotIndex % 3 !== 0);
 
     // ---- 4. SUB -----------------------------------------------------------
     if (d < 30) {
@@ -520,13 +626,98 @@ export class GunAudio {
     // ---- the punch move and the auditory reflex ---------------------------
     if (isPlayer) {
       A.punch(when);
-      // The brass, a beat and a bit later, from your own right hand.
-      const s = A.spec();
-      s.bus = 'world'; s.gain = 0.28; s.send = 0.10;
-      s.when = when + 0.34 + j2; s.rate = 0.97 + r.next() * 0.08;
-      A.play('casing' + (this.shotIndex % 3), s);
+      // The brass is no longer a timed sound 0.34 s after every shot (the revolver, which
+      // ejects nothing, clicked its way through six phantom cases): the viewmodel's case says
+      // 'brass:land' where and when it hits the ground (brassLand below).
+      // The revolver's cylinder turns on: one small bright click behind the report.
+      if (key === 'revolver') {
+        const s = A.spec();
+        s.bus = 'body'; s.gain = 0.16; s.send = 0.04; s.when = when + 0.085 + j2;
+        s.rate = 0.97 + r.next() * 0.06;
+        A.play('cylClick', s);
+      }
+      // THE LAST ROUND (LAST_CLICK).
+      if (o.last) {
+        const s = A.spec();
+        s.bus = 'body'; s.gain = LAST_CLICK.gain; s.send = 0.04;
+        s.when = when + LAST_CLICK.delay; s.rate = LAST_CLICK.rate;
+        A.play('dryClick', s);
+      }
     }
     return true;
+  }
+
+  /**
+   * THE HIT CONFIRMATION (CONFIRM_GAIN). Called from impact() for a landing on a body. Once per
+   * trigger pull; a kill always thumps, once per pull. Swings do not tick (a buttstroke that
+   * lands already stops the world), but a swing that kills still thumps.
+   */
+  confirm(p) {
+    const A = this.A;
+    if (!A.enabled || A.silent || !A.baked) return null;
+    const pull = typeof p.pull === 'number' ? p.pull : -1;
+    const melee = p.weapon === 'melee' || pull < 0;
+    const dist = Number.isFinite(p.dist) ? p.dist : 10;
+    const when = A.now + CONFIRM_MIN_S + Math.min(0.06, dist / 900);
+    let played = false;
+    if (!melee && (pull !== this._confirmPull)) {
+      this._confirmPull = pull;
+      const s = A.spec();
+      s.bus = 'body'; s.send = 0.02; s.when = when;
+      if (p.zone === 'head') { s.gain = CONFIRM_GAIN.head; s.rate = 1; A.play('hitHead', s); }
+      else {
+        s.gain = CONFIRM_GAIN.tick * (p.deflected ? 0.7 : 1);
+        s.rate = (p.deflected ? 0.72 : 1) * (0.98 + this.rng.next() * 0.04);
+        A.play('hitTick' + (this._stats.confirms % 3), s);
+      }
+      this._stats.confirms++;
+      played = true;
+    }
+    if (p.killed && pull !== this._killPull) {
+      this._killPull = pull < 0 ? -3 - this._stats.kills : pull;
+      const s = A.spec();
+      s.bus = 'body'; s.send = 0.04; s.when = when + 0.012;
+      s.gain = CONFIRM_GAIN.kill; s.rate = p.zone === 'head' ? 1.08 : 1;
+      A.play('killThump', s);
+      this._stats.kills++;
+      played = true;
+    }
+    return played;
+  }
+
+  /** The bolt or the pump, back and home (weapon.js 'weapon:cycle'). */
+  cycleCue(p) {
+    const A = this.A;
+    if (!A.enabled || A.silent || !A.baked) return null;
+    const key = normGun(p.weapon);
+    const back = p.phase === 'back';
+    const s = A.spec();
+    s.bus = 'body'; s.send = 0.06;
+    s.rate = 0.97 + this.rng.next() * 0.05;
+    let name;
+    if (key === 'shotgun') { name = back ? 'pumpBack' : 'pumpHome'; s.gain = back ? 0.34 : 0.38; s.rate *= 0.92; }
+    else { name = back ? 'boltBack' : 'boltHome'; s.gain = back ? 0.30 : 0.34; }
+    this._stats.cycles++;
+    return A.play(name, s);
+  }
+
+  /**
+   * A spent case hitting the ground (viewmodel.js 'brass:land', its first bounce): positional,
+   * as loud as the fall was hard, bright on a hard floor and near silent in the grass.
+   */
+  brassLand(p) {
+    const A = this.A;
+    if (!A.enabled || A.silent || !A.baked) return null;
+    if (!Number.isFinite(p.x) || p.soft === 2) return null;          // into water: nothing
+    const hard = p.soft ? 0.35 : 1;
+    const sp = clamp((p.speed || 2) / 4, 0.3, 1.1);
+    const s = A.spec();
+    s.x = p.x; s.y = p.y; s.z = p.z;
+    s.bus = 'world'; s.send = 0.10; s.priority = 3; s.occl = false;
+    s.gain = 0.30 * hard * sp; s.rate = (p.shell ? 0.62 : 0.97) + this.rng.next() * 0.08;
+    if (p.soft) s.lpHz = 2600;
+    this._stats.brass++;
+    return A.play('casing' + (this._stats.brass % 3), s);
   }
 
   /**
@@ -538,7 +729,7 @@ export class GunAudio {
    * answers across the valley. Nobody authored that; six rays did.
    * donor: cinderbloom/src/audio/guns.js:845-878
    */
-  _tail(key, when, gain, pos, isPlayer, d) {
+  _tail(key, when, gain, pos, isPlayer, d, noSlaps = false) {
     const A = this.A;
     const open = A.openness();
     const v = this.shotIndex & 1;
@@ -561,7 +752,7 @@ export class GunAudio {
 
     // The two DISCRETE slapbacks, at the probe's measured distances. Near shots
     // only: at 60 m the shooter's slapbacks are not your room.
-    if (wForest > 0.15 && d < 30) {
+    if (wForest > 0.15 && d < 30 && !noSlaps) {
       const E = A.early();
       for (let k = 0; k < 2; k++) {
         const g = gain * wForest * E[k][1] * 1.5;
@@ -585,8 +776,16 @@ export class GunAudio {
   impact(p) {
     const A = this.A;
     if (!A.enabled || A.silent) return null;
+    // The shooter's side of a hit on a body: the tick (confirm, above).
+    if (p.enemy && !p.exit) this.confirm(p);
+    // A blast is not eight impacts: the first two surface hits of a pull speak, the rest do not.
+    if (!p.enemy && typeof p.pull === 'number' && p.pull >= 0) {
+      if (p.pull !== this._surfPull) { this._surfPull = p.pull; this._surfN = 0; }
+      if (++this._surfN > 2) return null;
+    }
     this._stats.impacts++;
-    const kind = SURFACES.indexOf(p.kind) >= 0 ? p.kind : 'dirt';
+    const k0 = SURFACE_ALIAS[p.kind] || p.kind;
+    const kind = SURFACES.indexOf(k0) >= 0 ? k0 : 'dirt';
     const v = (this.shotIndex + this._stats.impacts) % 3;
     const dist = p.dist === undefined ? A.distToListener(p.x, p.y, p.z) : p.dist;
 
@@ -595,6 +794,9 @@ export class GunAudio {
     s.bus = kind === 'flesh' ? 'creatures' : 'world';
     s.gain = clamp(0.85 * (p.deflected ? 0.6 : 1), 0, 1.2);
     s.rate = 0.94 + this.rng.next() * 0.12;
+    // Snow and cloth take a round softly: the dirt thud a little lower, the foliage hiss duller.
+    if (p.kind === 'snow') { s.rate *= 0.82; s.lpHz = 1800; s.gain *= 0.7; }
+    else if (p.kind === 'cloth') { s.rate *= 0.75; s.lpHz = 2400; }
     s.send = 0.22;
     s.priority = 1;                       // threat audio gets the reserved rays
     s.propagate = dist > 25;              // a hit 80 m off arrives a quarter-second late
@@ -605,7 +807,7 @@ export class GunAudio {
     if (p.deflected && (kind === 'rock' || kind === 'metal' || kind === 'glass')) {
       const q = A.spec();
       q.x = p.x; q.y = p.y; q.z = p.z;
-      q.bus = 'weapons'; q.gain = 0.5; q.send = 0.35; q.delay = 0.012;
+      q.bus = 'weapons'; q.gain = 0.35; q.send = 0.35; q.delay = 0.012;   // r3: 0.5, unmuffled
       q.rate = 0.92 + this.rng.next() * 0.2;
       A.play('ric' + (this._stats.impacts % 3), q);
     }
@@ -618,7 +820,7 @@ export class GunAudio {
     if (!A.enabled || A.silent) return null;
     const s = A.spec();
     s.x = x; s.y = y; s.z = z;
-    s.bus = 'weapons'; s.gain = 0.7; s.send = 0.08; s.priority = 1; s.occl = false;
+    s.bus = 'weapons'; s.gain = 0.5; s.send = 0.08; s.priority = 1; s.occl = false;   // r3: 0.7, unmuffled
     s.cls = CUE_THREAT;                // a round past your ear IS 'you are being shot at'
     s.rate = 0.9 + this.rng.next() * 0.25;
     return A.play('whizz' + (this.shotIndex & 1), s);
@@ -638,9 +840,12 @@ export class GunAudio {
     // bolt-home seat pitched up a shade (rate 1.08) and a little brighter than a beat, so a
     // hit is FELT as a hit and never as another knock; still nothing loud. 'dry' is the empty
     // gun's click (weapon.js emits it on every dry pull now): quiet, dull, informative.
+    // r3: these are YOUR hands, so they go on 'body' (clear, not low-passed) at HANDLING_K.
     let rate = 0.98 + this.rng.next() * 0.05, gain = 0.55;
     if (n === 'active') { buf = 'boltHome'; rate = 1.08; gain = 0.62; }
     else if (n === 'dry') { buf = 'dryClick'; gain = 0.50; }
+    else if (n === 'shell') { buf = 'shellIn'; }
+    else if (n === 'boltrelease') { buf = 'boltHome'; }
     else if (n.indexOf('out') >= 0 || n.indexOf('release') >= 0 || n.indexOf('drop') >= 0) buf = 'magOut';
     else if (n.indexOf('bolt') >= 0 || n.indexOf('charge') >= 0 || n.indexOf('rack') >= 0) buf = p.empty ? 'boltBack' : 'boltHome';
     else if (n.indexOf('shell') >= 0 || n.indexOf('round') >= 0) buf = 'shellIn';
@@ -649,7 +854,7 @@ export class GunAudio {
     else if (n.indexOf('end') >= 0 || n.indexOf('seat') >= 0) buf = 'boltHome';
     else if (n.indexOf('cancel') >= 0) buf = 'shellIn';
     const s = A.spec();
-    s.bus = 'weapons'; s.gain = gain; s.send = 0.10;
+    s.bus = 'body'; s.gain = gain * HANDLING_K; s.send = 0.10;
     s.rate = rate;
     return A.play(buf, s);
   }

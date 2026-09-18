@@ -44,7 +44,8 @@ export const ACTIONS = Object.freeze([
   'menu', 'perks', 'map',
   // The arsenal (C7 / D6). 'swap' is Q and a wheel notch down, 'swapprev' a notch up;
   // slot1-4 pick a gun, slot5/6 exist for the shop menu's rows; 'lower' is X, the stance
-  // toggle (D1). weapons/weapon.js reads them all through held() and derives its own edges.
+  // toggle (a held R lowers too, timed in weapon.js). weapons/weapon.js reads them all
+  // through held() and derives its own edges.
   'swap', 'swapprev', 'slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'lower',
 ]);
 
@@ -67,7 +68,7 @@ const KEYMAP = Object.freeze({
   KeyB: 'lookback',
   KeyT: 'radiotune',
   // The arsenal. Q cycles the owned weapons (the wheel does too, see _onWheel), 1-4 pick a
-  // gun, 5 and 6 are shop rows (D6). X lowers the gun and raises it again (D1).
+  // gun, 5 and 6 are shop rows (D6). X lowers the gun and raises it again; so does holding R.
   KeyQ: 'swap',
   Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6',
   KeyX: 'lower',

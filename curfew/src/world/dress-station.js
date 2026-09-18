@@ -75,15 +75,27 @@ export const ANCHORS = Object.freeze({
   }),
   // The bed you rest on.
   bag: Object.freeze({ x: -13.30, z: 2.20, yaw: 0.16 }),
+  // THE BEDSIDE CABINET (refuge-comfort.js), at the pillow end on the room side. ALEX,
+  // 2026-09-18: "the very first bed/safehouse ... had 2 objects inside each other a little."
+  // refuge-comfort's bedsidePlacement is written for refuge's own bag (long in Z, head at -Z);
+  // this bed is long in X with the pillow at -X, so "beside" landed 0.4 m inside the foot of
+  // the mattress. Here the cabinet's footprint is x -14.26..-13.64, z 0.66..1.44: 0.34 m off
+  // the mattress, 0.42 m off the shelving, and its board faces +X into the room, so the
+  // reader stands on open floor at (-13.03, 1.05). It is the room's one nightstand; the lamp
+  // that was on the crate is on it now (lamps.table).
+  bedside: Object.freeze({ x: -13.95, z: 1.05, yaw: Math.PI / 2 }),
   // Every light the breaker turns on, local frame, y above padY.
   lamps: Object.freeze({
     // The flex hangs BESIDE the bed, not over your face: at z 1.30 it filled a third of the
     // frame from the pillow (tests/shots/refuge-rest-fading.png, first cut).
     bulb: Object.freeze({ x: -13.30, y: 2.42, z: 0.85 }),   // the flex over the bed
     // The crate stood at z 2.98 and MEASURED (tests/refuge.mjs, the walk section) it wedged
-    // the only lane between the doorway and the bed: a body walking in on foot stopped 3.2 m
-    // short of the bag and could not get round it. It is south of the bed now, out of the lane.
-    table: Object.freeze({ x: -12.30, y: 0.74, z: 1.05 }),  // the lamp on the crate
+    // the only lane between the doorway and the bed. Then it stood at (-12.30, 1.05), a second
+    // nightstand 0.14 m from the bedside cabinet. There is no crate now: the lamp stands on
+    // the cabinet's top, at its bed-side front corner (cabinet-local (-0.29, +0.17) turned by
+    // the cabinet's PI/2), clear of the reader's line to the nine lamps. y puts the foot of
+    // the lamp's base (y - 0.1225) on the cabinet's top at 0.8575.
+    table: Object.freeze({ x: -13.78, y: 0.98, z: 1.34 }),  // the lamp on the bedside cabinet
     stove: Object.freeze({ x: -14.62, y: 0.46, z: -1.70 }), // the firebox
     door: Object.freeze({ x: -10.50, y: 2.78, z: -3.32 }),  // the bulkhead OUTSIDE the door
     counter: Object.freeze({ x: -8.20, y: 1.16, z: 1.30 }), // the strip over the counter
@@ -368,11 +380,15 @@ function palletStack(k, api) {
     }
   }
   api.emit({ kind: 'obb', x: x + 0.1, z: z + 0.1, halfX: 0.63, halfZ: 0.54, yaw: 0.12, y0: g - 0.2, y1: g + 1.16, tag: 'wood', standable: true });
-  // one pallet dropped flat beside it, and a couple of loose boards
-  k.box(1.22, 0.09, 1.02, x + 1.55, g + ON_APRON + 0.05, z - 1.30, D.timber, -0.5);
-  api.emit({ kind: 'obb', x: x + 1.55, z: z - 1.30, halfX: 0.63, halfZ: 0.54, yaw: -0.5, y0: g - 0.2, y1: g + 0.10, tag: 'wood', standable: true });
-  k.box(1.60, 0.04, 0.16, x + 0.9, g + ON_APRON + 0.03, z + 1.70, C.wood, 0.9);
-  k.box(1.40, 0.04, 0.14, x + 1.4, g + ON_APRON + 0.03, z + 1.95, C.wood, 0.6);
+  // one pallet dropped flat beside it, and a couple of loose boards. MEASURED (r3 station
+  // room probe): the dropped pallet stood at (-15.35, 1.00) turned -0.5, so 0.7 m of it ran
+  // through the shop's west wall and out under the shelving inside; both loose boards had an
+  // end in the shop's back corner. All three lie in the gap between the shop (x > -15.72) and
+  // the service bay (x < -17.9) now, clear of the stack and of each other.
+  k.box(1.22, 0.09, 1.02, x + 0.10, g + ON_APRON + 0.05, z - 1.58, D.timber, -0.10);
+  api.emit({ kind: 'obb', x: x + 0.10, z: z - 1.58, halfX: 0.63, halfZ: 0.54, yaw: -0.10, y0: g - 0.2, y1: g + 0.10, tag: 'wood', standable: true });
+  k.box(1.60, 0.04, 0.16, x - 0.10, g + ON_APRON + 0.03, z + 1.65, C.wood, 0.3);
+  k.box(1.40, 0.04, 0.14, x + 0.55, g + ON_APRON + 0.03, z + 2.45, C.wood, 1.2);
 }
 
 /**
@@ -796,20 +812,24 @@ function shopInterior(k, api) {
     k.cyl(0.045, 0.042, 0.09, 8, b.x + 1.16, y + 0.045, b.z - 0.52, D.enamel);
   }
 
-  // ---- the crate beside the bed, with the lamp and the dead radio on it
+  // ---- the lamp on the bedside cabinet, and the dead radio on the floor beside it.
+  // The cabinet itself is refuge-comfort's (ANCHORS.bedside). The crate that used to carry
+  // these was a second nightstand, and the radio floated 0.3 m off the crate's front edge.
   {
-    const t = L.table;
-    k.box(0.52, 0.62, 0.46, t.x, y + 0.31, t.z, D.timber, 0.06);
-    api.emit({ kind: 'obb', x: t.x, z: t.z, halfX: 0.27, halfZ: 0.24, yaw: 0.06, y0: y - 0.2, y1: y + 0.62, tag: 'wood', standable: true });
+    const t = L.table, F = 0.116;            // F: refuge's timber floor over the pad
     // the lamp: a base, a stem and a metal shade. The bulb inside it is refuge's.
-    k.cyl(0.09, 0.10, 0.035, 10, t.x, y + 0.635, t.z, D.conduit);
-    k.cyl(0.014, 0.014, 0.20, 6, t.x, y + 0.735, t.z, D.conduit);
-    k.cone(0.145, 0.16, 12, t.x, y + 0.905, t.z, C.slate, 0, 0, 0);
-    // the radio: a dark box with a dial that is not lit
-    k.box(0.34, 0.20, 0.17, t.x + 0.02, y + 0.72, t.z - 0.62, D.timber, -0.30);
-    k.quad(0.20, 0.07, t.x + 0.02, y + 0.74, t.z - 0.70, C.glass, -0.30);
-    k.cyl(0.022, 0.022, 0.03, 8, t.x + 0.13, y + 0.66, t.z - 0.70, D.conduit, -0.30, Math.PI * 0.5, 0);
-    k.cyl(0.006, 0.006, 0.54, 4, t.x - 0.14, y + 0.98, t.z - 0.58, D.chrome, 0, 0, 0.28);  // its aerial
+    k.cyl(0.09, 0.10, 0.035, 10, t.x, y + t.y - 0.105, t.z, D.conduit);
+    k.cyl(0.014, 0.014, 0.20, 6, t.x, y + t.y - 0.005, t.z, D.conduit);
+    k.cone(0.145, 0.16, 12, t.x, y + t.y + 0.165, t.z, C.slate, 0, 0, 0);
+    // the radio, on the boards between the cabinet and the chair: a dark box, a dial that is
+    // not lit, and its aerial still up. Under STICK, so it is walked past, not climbed.
+    // Its dial faces the room (+X); its long side runs along the cabinet, 5 cm clear of it.
+    const rx = -13.55, rz = 0.40, ra = 1.2, rc = Math.cos(ra), rs = Math.sin(ra);
+    k.box(0.34, 0.20, 0.17, rx, y + F + 0.10, rz, D.timber, ra);
+    k.quad(0.20, 0.07, rx + 0.086 * rs, y + F + 0.12, rz + 0.086 * rc, C.glass, ra);
+    // the aerial stands from the radio's back corner (radio-local (-0.12, -0.05))
+    k.cyl(0.006, 0.006, 0.54, 4, rx - 0.12 * rc - 0.05 * rs, y + F + 0.47, rz + 0.12 * rs - 0.05 * rc, D.chrome);
+    api.emit({ kind: 'obb', x: rx, z: rz, halfX: 0.17, halfZ: 0.085, yaw: ra, y0: y - 0.2, y1: y + F + 0.20, tag: 'wood', standable: true });
   }
 
   // ---- the stove, and the flue up through the roof. The firebox glow is refuge's.
@@ -1084,7 +1104,7 @@ function contactStains(k, api) {
   stain(1.35, 5.35, 1.00, 1.10, 0.12);      // the standing bin
   stain(2.60, 6.02, 1.45, 1.05, -0.62);     // the bin on its side
   stain(-16.85, 2.36, 1.70, 1.50, 0.10);    // the pallet stack
-  stain(-15.35, 1.00, 1.40, 1.25, -0.50);   // the pallet dropped beside it
+  stain(-16.80, 0.72, 1.40, 1.25, -0.10);   // the pallet dropped beside it
   stain(-7.90, -4.85, 1.25, 1.05, 0.34);    // the spilled crate
   stain(3.35, -2.65, 1.15, 1.35, 0.78);     // the fallen A-board
   stain(-6.05, -3.90, 1.30, 1.30, 0.0);     // the hose coils

@@ -58,6 +58,24 @@ function table(k, a, x, z, w, d, base = 0, col = P.timber) {
       a.padY + base + 0.39, z + sz * (d * 0.5 - 0.15), P.iron);
 }
 
+/** A plain chair on a floor at local height `base`; the sitter faces (sin yaw, cos yaw).
+ *  The seat is a standable block from the floor and the back is its own thin body. */
+function chair(k, a, x, z, base, yaw, col = P.timber) {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const at = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
+  k.solid.box(0.42, 0.045, 0.42, x, a.padY + base + 0.4575, z, col, yaw);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const [px, pz] = at(sx * 0.18, sz * 0.18);
+    k.solid.box(0.04, 0.435, 0.04, px, a.padY + base + 0.2175, pz, P.iron, yaw);
+  }
+  const [bx, bz] = at(0, -0.19);
+  k.solid.box(0.40, 0.44, 0.04, bx, a.padY + base + 0.70, bz, col, yaw);
+  a.emit({ kind: 'obb', x, z, halfX: 0.21, halfZ: 0.21, yaw, y0: a.padY + base, y1: a.padY + base + 0.48,
+    tag: 'wood', standable: true });
+  a.emit({ kind: 'obb', x: bx, z: bz, halfX: 0.20, halfZ: 0.03, yaw, y0: a.padY + base + 0.48,
+    y1: a.padY + base + 0.92, tag: 'wood', climbable: false });
+}
+
 function cabinet(k, a, x, z, w = 1.6, base = 0, yaw = 0, col = P.green) {
   box(k, a, x, z, w, 0.66, base, 2.10, col, 'metal', true, yaw);
   const c = Math.cos(yaw), s = Math.sin(yaw);
@@ -213,9 +231,38 @@ function granary(k, a) {
   // The gallery ends at z=-5.4, beside the FINAL tread at z=-5.1. Its entire
   // approach flight is open overhead; a continuous slab would seal the staircase.
   table(k, a, 10.45, -0.60, 2.25, 1.0);
-  for (let i = 0; i < 6; i++) k.solid.box(0.32, 0.15, 0.25,
-    9.7 + (i % 3) * 0.53, a.padY + 1.0, -0.86 + Math.floor(i / 3) * 0.36,
-    i % 3 ? P.cloth : P.rust, 0.12 * i);
+  // The grain measures sit ON the top (0.90); they floated 2.5 cm over it at 1.0.
+  for (let i = 0; i < 3; i++) k.solid.box(0.32, 0.15, 0.25,
+    9.75 + i * 0.5, a.padY + 0.975, -0.34, i % 2 ? P.cloth : P.rust, 0.12 * i);
+  // THE FISKS' BREAK. Four tin mugs set out along the table and four chairs: three still
+  // at it, one pushed back from the end as if its man had been called outside and meant to
+  // come back to it. Measured on the granary grid (feet 0.08, r 0.22): the north side of the
+  // table (z -1.3..-2.0) and its east end are open floor; the south side is the lean-to's crate.
+  for (const [cx, cz, yaw] of [[9.70, -1.56, 0], [10.45, -1.60, 0.05], [11.20, -1.55, -0.06], [12.40, -0.95, -1.05]]) {
+    chair(k, a, cx, cz, 0.08, yaw);
+  }
+  for (const [mx, mz] of [[9.70, -0.88], [10.47, -0.86], [11.22, -0.90], [11.44, -0.52]]) {
+    k.solid.cyl(0.043, 0.040, 0.095, 8, mx, a.padY + 0.9475, mz, [0.11, 0.115, 0.12]);
+    k.solid.cyl(0.034, 0.034, 0.004, 8, mx, a.padY + 0.993, mz, P.soot);
+    const handle = new THREE.TorusGeometry(0.026, 0.006, 3, 8, Math.PI);
+    handle.rotateZ(-Math.PI * 0.5); handle.translate(mx + 0.043, a.padY + 0.95, mz);
+    k.solid.push(handle, [0.11, 0.115, 0.12]);
+  }
+  // a pair of boots inside the door, worn through at the toes, left where he stepped out of them
+  for (const s of [-1, 1]) {
+    const bx = 16.2 + s * 0.13, bz = 2.25;
+    k.solid.box(0.12, 0.05, 0.30, bx, a.padY + 0.105, bz, P.soot, s * 0.08);
+    k.solid.box(0.11, 0.22, 0.12, bx, a.padY + 0.24, bz + 0.08, P.soot, s * 0.08);
+    k.solid.box(0.07, 0.03, 0.06, bx, a.padY + 0.12, bz - 0.13, P.bone, s * 0.08);
+  }
+  // THE WORN RING: four horses walked the threshing floor's gear round for years, outside
+  // its teeth (r 4.0), and wore a path into the stone. A band on the floor's collider top.
+  {
+    const RX = -10.5, RZ = -8.5, top = groundY(a, RX, RZ) + 0.18 + 0.004;
+    const ring = new THREE.RingGeometry(4.55, 5.10, 48, 1);
+    ring.rotateX(-Math.PI * 0.5); ring.translate(RX, top, RZ);
+    k.solid.push(ring, [0.055, 0.050, 0.044]);
+  }
   cabinet(k, a, 9.1, -5.1, 2.0, 0.08, Math.PI * 0.5, P.timber);
   for (const z of [-8.1, -11.2]) {
     box(k, a, 10.4, z, 1.8, 1.5, 0.08, 0.67, P.timber);
@@ -239,17 +286,90 @@ function granary(k, a) {
     target: { x: 19.08, z: -6.3, y: a.padY + 3.50 } };
 }
 
+// THE CHAIN ROOM, under the tipple (destination-compounds weepingMine: legs at
+// (-11.5 +-5.3, 8 +-4.2), sorting deck underside at 8.02). A pit-head chain room is where
+// a shift hung its clothes: each man's hook hauled up to the roof on its own chain, the
+// chain run down to a rail and padlocked with his number. Clothes up, man down the shaft.
+// Six are still up there. Nobody came back up to lower them.
+//
+// It used to stand at z 8.1, and the works landmark's 46 m stack (sites.js, r 2.4 at
+// (-13, 8)) stands there: both benches and five of the six coats were inside the brick,
+// on a beam at 5.4 m that touched nothing. Everything here is on the north strip now,
+// 0.3 m or more clear of the stack, hung from a rail fixed under the deck.
+export const CHAIN_ROOM = Object.freeze({
+  railY: 7.96,            // the pulley rail's centre, its top against the deck's underside
+  railZ: 10.9,
+  railX0: -16.4, railX1: -8.6,
+  benchZ: 11.3,           // seat 0.40..0.52 over the floor, back at +0.27
+  benches: [-14.5, -11.3],
+  hoisted: [-15.4, -14.6, -13.8, -12.0, -11.2, -10.4],
+  lockZ: 11.85, lockY: 1.5, lockX0: -16.3, lockX1: -8.0,
+  // the seventh hook, on the open floor past the east bench's end (measured clear; between the
+  // benches the stack stood between it and every way into the room). world-stories hangs what
+  // is on it.
+  seventh: { x: -9.55, z: 10.9 },
+});
+
+const CHAIN = [0.075, 0.052, 0.040];   // old chain: rust gone dark, not a copper wire
+
 function mine(k, a) {
-  // A chain room under the tipple. Repeated head-height bags belong to a changing
-  // room: nobody is in them, but torchlight has to sort every silhouette out.
-  const base = groundY(a, -11.5, 8) - a.padY;
-  for (const x of [-14.0, -10.8]) {
-    bench(k, a, x, 8.1, 2.4, base);
-    beam(k, a, [x - 1.3, base + 5.4, 8.1], [x + 1.3, base + 5.4, 8.1], 0.055);
-    for (let i = 0; i < 3; i++) {
-      const px = x - 0.88 + i * 0.88;
-      beam(k, a, [px, base + 5.4, 8.1], [px, base + 3.1 + i * 0.16, 8.1], 0.021, P.rust);
-      coat(k, a, px, 8.1, base + 2.06 + i * 0.16);
+  const R = CHAIN_ROOM;
+  const base = groundY(a, -12.9, R.benchZ) - a.padY;
+  // the pulley rail, bolted under the sorting deck: it touches the deck, so it hangs from
+  // something, and every chain in the room hangs from it
+  k.solid.box(R.railX1 - R.railX0, 0.12, 0.14, (R.railX0 + R.railX1) * 0.5,
+    a.padY + R.railY, R.railZ, P.iron);
+  // the lock rail on two posts, behind the benches: the chains come down to it
+  for (const x of [R.lockX0, R.lockX1]) {
+    k.solid.box(0.10, R.lockY + 0.10, 0.10, x, a.padY + base + (R.lockY + 0.10) * 0.5, R.lockZ, P.timber);
+    a.emit({ kind: 'circle', x, z: R.lockZ, r: 0.07, y0: a.padY + base, y1: a.padY + base + R.lockY + 0.1,
+      tag: 'post', climbable: false });
+  }
+  k.solid.box(R.lockX1 - R.lockX0, 0.10, 0.08, (R.lockX0 + R.lockX1) * 0.5,
+    a.padY + base + R.lockY, R.lockZ, P.timber);
+  a.emit({ kind: 'obb', x: (R.lockX0 + R.lockX1) * 0.5, z: R.lockZ, halfX: (R.lockX1 - R.lockX0) * 0.5,
+    halfZ: 0.05, yaw: 0, y0: a.padY + base + R.lockY - 0.05, y1: a.padY + base + R.lockY + 0.05,
+    tag: 'wood', climbable: false });
+  // A pulley turns in the y-z plane: the chain comes off its front to the hook, and its
+  // tail comes off the back and down to the padlock on the rail behind the benches.
+  const pulley = (px) => {
+    k.solid.cyl(0.09, 0.09, 0.05, 8, px, a.padY + R.railY - 0.16, R.railZ, P.iron, 0, 0, Math.PI * 0.5);
+    beam(k, a, [px, R.railY - 0.16, R.railZ + 0.09], [px, base + R.lockY + 0.03, R.lockZ - 0.05], 0.012, CHAIN);
+    k.solid.box(0.05, 0.07, 0.03, px, a.padY + base + R.lockY - 0.07, R.lockZ - 0.055, P.bone);
+  };
+  R.hoisted.forEach((px, i) => {
+    const cb = 5.62 + (i % 3) * 0.17;          // hauled up, not all to the same height
+    pulley(px);
+    beam(k, a, [px, R.railY - 0.16, R.railZ - 0.02], [px, cb + 1.11, R.railZ], 0.014, CHAIN);
+    coat(k, a, px, R.railZ, cb);
+  });
+  // the seventh hook: its pulley and its padlock, and nothing on it. world-stories hangs
+  // what is on it (CHAIN_ROOM.seventh), so it can be there one time you look and not the next.
+  pulley(R.seventh.x);
+  // SIXTEEN LUNCH PAILS on the benches, a name tag on each. Two have their lids off and
+  // are empty; the other fourteen were never opened.
+  let n = 0;
+  for (const bx of R.benches) {
+    bench(k, a, bx, R.benchZ, 2.4, base);
+    for (let i = 0; i < 8; i++, n++) {
+      const px = bx - 1.05 + i * 0.3, pz = R.benchZ - 0.08, seat = a.padY + base + 0.52;
+      const open = n === 5 || n === 12;
+      const col = n % 3 ? P.iron : P.rust;
+      if (open) {
+        // open and empty: the dark of its inside, level with the rim
+        k.solid.cyl(0.105, 0.095, 0.20, 10, px, seat + 0.10, pz, col);
+        k.solid.cyl(0.094, 0.094, 0.004, 10, px, seat + 0.201, pz, P.soot);
+        // its lid, set down on the seat behind it
+        k.solid.cyl(0.11, 0.11, 0.018, 10, px + 0.12, seat + 0.009, pz + 0.19, col);
+      } else {
+        k.solid.cyl(0.105, 0.095, 0.20, 10, px, seat + 0.10, pz, col);
+        k.solid.cyl(0.112, 0.112, 0.022, 10, px, seat + 0.211, pz, P.soot);
+        const bail = new THREE.TorusGeometry(0.095, 0.006, 3, 10, Math.PI);
+        bail.rotateY(0.25 * ((n % 5) - 2));
+        bail.translate(px, seat + 0.222, pz);
+        k.solid.push(bail, P.iron);
+      }
+      k.solid.box(0.08, 0.035, 0.006, px, seat + 0.13, pz - 0.103, P.bone);
     }
   }
   cabinet(k, a, -16.12, 5.5, 2.3, base, Math.PI * 0.5);
@@ -265,22 +385,16 @@ function mine(k, a) {
     k.solid.box(0.13, 0.13, 10.5, 12.5, a.padY + 5.03, z, P.iron, Math.PI * 0.5);
     light(k, a, 17.95, z, 4.22, -Math.PI * 0.5);
   }
-  record(a, 'tipple-chain-room', { x: -11.5, z: 12.3, y: a.padY + base },
-    [{ x: -12.2, z: 5.0, y: a.padY + base }]);
+  record(a, 'tipple-chain-room', { x: -6.8, z: 9.0, y: a.padY + base },
+    [{ x: -9.4, z: 9.6, y: a.padY + base }, { x: -12.2, z: 4.6, y: a.padY + base }]);
 }
 
 function fen(k, a) {
-  // The drowned church has a funeral landing and a crossing between its surviving
-  // aisles. The wake table is raised above the water; shapes beneath the cloth are
-  // deliberately ambiguous. The main causeway and hanging-lamp shot remain open.
-  const gy = groundY(a, 12.5, -9.5) - a.padY + 1.25;
-  table(k, a, 13.4, -10.4, 2.5, 0.95, gy, P.iron);
-  k.solid.box(2.2, 0.24, 0.72, 13.4, a.padY + gy + 1.05, -10.4, P.cloth);
-  for (let i = 0; i < 5; i++) {
-    const x = 12.52 + i * 0.44;
-    k.solid.box(0.11, 0.52 + (i & 1) * 0.13, 0.08,
-      x, a.padY + gy + 0.91, -10.91, P.cloth, 0, 0, (i - 2) * 0.055);
-  }
+  // The drowned church's crossing between its surviving aisles. The wake table that stood
+  // here stood inside two of the chancel pews (destination-compounds lays them on the turned
+  // chancel floor, and it is solid pews: there is no aisle for a table), with five candles
+  // hanging off its edge in the air. It is on the ringing floor now (dress-interiors
+  // WAKE_TABLE), under the bell rope. The main causeway and hanging-lamp shot remain open.
   for (const x of [-5.5, 5.5]) {
     const y = groundY(a, x, 16) - a.padY;
     bench(k, a, x, 16, 3.6, y + 0.35, x < 0 ? 0.20 : -0.20);

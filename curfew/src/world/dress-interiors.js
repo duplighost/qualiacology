@@ -149,6 +149,36 @@ function lamp(kS, kG, api, x, y, z, face, w, h) {
   }
 }
 
+/** A plain wooden chair on the floor at local height `fy`. The sitter faces `yaw` (the kit's
+ *  frame: local +Z goes to (sin yaw, cos yaw)). The seat is a block from the floor, standable,
+ *  as every other chair in here is; the back is its own thin body. */
+function chair(k, api, x, z, fy, yaw, col) {
+  const f = frame(x, z, yaw);
+  k.box(0.42, 0.045, 0.42, x, api.padY + fy + 0.4575, z, col, yaw);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    k.box(0.04, 0.435, 0.04, f.x(sx * 0.18, sz * 0.18), api.padY + fy + 0.2175, f.z(sx * 0.18, sz * 0.18), col, yaw);
+  }
+  k.box(0.40, 0.44, 0.04, f.x(0, -0.19), api.padY + fy + 0.70, f.z(0, -0.19), col, yaw);
+  api.emit({ kind: 'obb', x, z, halfX: 0.21, halfZ: 0.21, yaw, y0: api.padY + fy, y1: api.padY + fy + 0.48,
+    tag: 'wood', standable: true });
+  api.emit({ kind: 'obb', x: f.x(0, -0.19), z: f.z(0, -0.19), halfX: 0.20, halfZ: 0.03, yaw,
+    y0: api.padY + fy + 0.48, y1: api.padY + fy + 0.92, tag: 'wood', climbable: false });
+}
+
+/** A coat hung by its collar from a hook at (x, y, z): collar, shoulders, body and two
+ *  sleeves, facing along `yaw`. Drawn only; the caller gives it its body. */
+function hungCoat(k, x, y, z, yaw, col) {
+  const c = col || [0.055, 0.058, 0.055];
+  const f = frame(x, z, yaw);
+  k.box(0.15, 0.08, 0.13, x, y - 0.02, z, SOOT, yaw);
+  k.box(0.46, 0.10, 0.15, x, y - 0.09, z, c, yaw);
+  k.box(0.40, 0.70, 0.12, x, y - 0.48, z, c, yaw, 0.03, 0);
+  for (const s of [-1, 1]) {
+    k.box(0.12, 0.60, 0.13, f.x(s * 0.25, 0.01), y - 0.42, f.z(s * 0.25, 0.01), c, yaw, 0, s * 0.10);
+  }
+  k.box(0.40, 0.035, 0.125, x, y - 0.83, z, SOOT, yaw);
+}
+
 /** A grid of small pale things — hymn tiles, shift tags, chalked numbers. The only place in
  *  this file that spends the pale end of the palette, and never more than 0.03 m^2 a piece. */
 function tags(k, api, x, y, z, face, cols, rows, gap, col) {
@@ -162,6 +192,13 @@ function tags(k, api, x, y, z, face, cols, rows, gap, col) {
   }
 }
 
+/** THE WAKE at Gallowsfen, on the ringing floor under the bell rope (steeple() below): a
+ *  table in the floor's own frame (centre RX, RZ, yaw -0.12; floor top at the ground there
+ *  plus 1.35). world-stories lays him on it and owns the sheet, which lifts. Measured on the
+ *  floor: its posts at (+-2.1, +-1.7), the rail along z -2.02, the ringers' bench at z +1.4
+ *  and the rope's coil at (-1.4, -0.8) all stand clear of the table's 2.3 x 0.9. */
+export const WAKE_TABLE = Object.freeze({ rx: 3.2, rz: -5.0, yaw: -0.12, raise: 1.35, lx: 0.15, lz: -0.55, top: 0.86, len: 2.3, wid: 0.9 });
+
 /* ==========================================================================
    THE TEN. Keyed by `kind` — each of these kinds belongs to exactly one destination.
    ========================================================================== */
@@ -172,8 +209,10 @@ export const DRESS = {
      THE WEEPING MINE'S WINDING HOUSE. sites.js puts a 12 x 9 x 5.4 shell at (12.5, -8) with
      its doorway on the -Z face. What was in a winding house: the drum the rope wound onto,
      the gantry that lifted off it, the shift board that said who was underground, and the
-     lockers of the men who were. You come in past the drum, climb to the control mezzanine —
-     and somebody is already standing at the board with their back to you. */
+     lockers of the men who were. You come in past the drum and climb to the control
+     mezzanine, and the board is still up. Whoever read it last is outside now: on the way in
+     along the tramway, somebody stands in the black gap between two furnace houses with
+     their back to you. */
   works(api) {
     const k = kits(), S = k.solid, G = k.glow;
     const OX = 12.5, OZ = -8;
@@ -190,7 +229,6 @@ export const DRESS = {
       kind: 'obb', x: OX, z: OZ - 0.6, halfX: 1.9, halfZ: 1.35, yaw: 0,
       y0: api.padY, y1: api.padY + 2.9, tag: 'metal',
     });
-    S.cyl(0.07, 0.07, 8.6, 5, OX - 2.8, api.padY + 3.3, OZ - 4.4, IRON, 0, -0.30, 0.55);
 
     // ---- the gantry over it -----------------------------------------------------------
     S.box(0.34, 0.34, 9.4, OX, api.padY + 4.35, OZ - 0.6, IRON, Math.PI * 0.5);
@@ -203,11 +241,19 @@ export const DRESS = {
     const MY = 2.35;
     deck(S, api, OX, OZ + 2.9, 10.6, 3.0, MY, C.plank, 0, false);
     for (const px of [OX - 4.6, OX - 1.5, OX + 1.5, OX + 4.6]) {
-      S.cyl(0.13, 0.13, MY, 6, px, api.padY + MY * 0.5, OZ + 1.7, TAR);
+      post(S, api, 0.13, MY, px, 0, OZ + 1.7, TAR);
     }
-    // its handrail, stopped short so the stair can arrive
+    // its handrail, stopped short so the stair can arrive; you lean on it, not through it.
+    // The body is the top bar only: it stops a body at the hip, and you still see and
+    // shoot between the uprights.
     S.box(8.7, 0.08, 0.08, OX - 0.95, api.padY + MY + 1.0, OZ + 1.42, C.rust);
-    for (let i = -4; i <= 2; i++) S.box(0.05, 1.0, 0.05, OX + i * 1.2, api.padY + MY + 0.5, OZ + 1.42, C.rust);
+    for (let i = -4; i <= 2; i++) {
+      S.box(0.05, 1.0, 0.05, OX + i * 1.2, api.padY + MY + 0.5, OZ + 1.42, C.rust);
+      api.emit({ kind: 'circle', x: OX + i * 1.2, z: OZ + 1.42, r: 0.04,
+        y0: api.padY + MY, y1: api.padY + MY + 1.0, tag: 'post' });
+    }
+    api.emit({ kind: 'obb', x: OX - 0.95, z: OZ + 1.42, halfX: 4.35, halfZ: 0.06, yaw: 0,
+      y0: api.padY + MY + 0.96, y1: api.padY + MY + 1.04, tag: 'metal', climbable: false });
     steps(S, api, OX + 4.3, OZ + 1.35, 1.2, MY, 0, C.plank);
 
     // ---- THE SHIFT BOARD, still up ----------------------------------------------------
@@ -221,6 +267,8 @@ export const DRESS = {
     for (const s of [-1, 1]) S.box(0.09, 0.72, 0.09, OX - 2.6 + s * 0.8, api.padY + MY + 0.36, OZ + 3.1, TAR);
     S.box(0.46, 0.06, 0.44, OX - 4.0, api.padY + MY + 0.46, OZ + 3.0, TAR, 0.6);
     S.box(0.42, 0.52, 0.06, OX - 4.0, api.padY + MY + 0.76, OZ + 3.22, TAR, 0.6);
+    api.emit({ kind: 'obb', x: OX - 4.0, z: OZ + 3.1, halfX: 0.24, halfZ: 0.27, yaw: 0.6,
+      y0: api.padY + MY, y1: api.padY + MY + 1.02, tag: 'wood' });
     S.box(0.36, 0.02, 0.26, OX - 2.2, api.padY + MY + 0.81, OZ + 3.0, C.paper, 0.4);
 
     // ---- the locker row, west wall, three doors standing open --------------------------
@@ -231,6 +279,8 @@ export const DRESS = {
       if (i === 1 || i === 4 || i === 5) {
         S.box(0.50, 1.80, 0.04, OX - 4.60, api.padY + 0.98, lz + 0.30, C.metal, 1.05);
         S.box(0.24, 0.44, 0.10, OX - 4.86, api.padY + 1.28, lz, C.cloth);
+        api.emit({ kind: 'obb', x: OX - 4.60, z: lz + 0.30, halfX: 0.25, halfZ: 0.05, yaw: 1.05,
+          y0: api.padY + 0.08, y1: api.padY + 1.88, tag: 'metal', climbable: false });
       }
     }
     S.box(0.30, 0.06, 3.4, OX - 5.0, api.padY + 2.02, OZ - 1.0, TAR);
@@ -252,8 +302,10 @@ export const DRESS = {
     return {
       solid: S.build(), glow: G.build(),
       // Dread-owned: no XP, outside the pressure budget, and it only moves while you are
-      // not looking at it.
-      cast: [{ species: 'standing', lx: OX + 3.9, lz: OZ, yaw: Math.PI, awake: false }],
+      // not looking at it. Its old spot (OX + 3.9, OZ) was inside the mezzanine stair, so it
+      // never stood up and the marker pointed at a wall for ever. This one is open ground
+      // you walk past, 1 m clear of every resident's room, facing into the furnace gap.
+      cast: [{ species: 'standing', lx: 22.2, lz: 2.3, yaw: -Math.PI * 0.5, awake: false }],
     };
   },
 
@@ -524,19 +576,40 @@ export const DRESS = {
     // ---- the ringing floor, on piles beside the boardwalk --------------------------------
     const RX = 3.2, RZ = -5.0, RY = gAt(RX, RZ) + 1.35;
     deck(S, api, RX, RZ, 5.0, 4.2, RY, C.plank, -0.12, false);
+    const rf = frame(RX, RZ, -0.12);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      const px = RX + sx * 2.1, pz = RZ + sz * 1.7;
-      S.cyl(0.16, 0.16, 2.6, 6, px, api.padY + gAt(px, pz) + 1.0, pz, TAR);
+      // the piles run on up past the boards as corner posts, so they are posts you meet
+      const px = rf.x(sx * 2.1, sz * 1.7), pz = rf.z(sx * 2.1, sz * 1.7);
+      post(S, api, 0.16, 2.6, px, gAt(px, pz) - 0.3, pz, TAR);
     }
     steps(S, api, RX - 2.0, RZ - 2.4, 1.4, RY, 0, C.plank);
-    S.box(5.0, 0.08, 0.08, RX, api.padY + RY + 1.0, RZ - 2.1, C.rust, -0.12);
-    for (let i = -2; i <= 2; i++) S.box(0.05, 1.0, 0.05, RX + i * 1.2, api.padY + RY + 0.5, RZ - 2.1, C.rust);
+    // The rail follows the floor's own edge and stops where the steps arrive.
+    S.box(3.7, 0.08, 0.08, rf.x(0.65, -2.02), api.padY + RY + 1.0, rf.z(0.65, -2.02), C.rust, -0.12);
+    for (let i = -1; i <= 2; i++) {
+      S.box(0.05, 1.0, 0.05, rf.x(i * 1.2, -2.02), api.padY + RY + 0.5, rf.z(i * 1.2, -2.02), C.rust, -0.12);
+      api.emit({ kind: 'circle', x: rf.x(i * 1.2, -2.02), z: rf.z(i * 1.2, -2.02), r: 0.04,
+        y0: api.padY + RY, y1: api.padY + RY + 1.0, tag: 'post' });
+    }
+    api.emit({ kind: 'obb', x: rf.x(0.65, -2.02), z: rf.z(0.65, -2.02), halfX: 1.85, halfZ: 0.06, yaw: -0.12,
+      y0: api.padY + RY + 0.96, y1: api.padY + RY + 1.04, tag: 'metal', climbable: false });
     // the ringers' bench, the chalked peal board, the coil of rope
     solid(S, api, 1.8, 0.10, 0.42, RX + 1.2, RY + 0.46, RZ + 1.4, TAR, 0, 'wood', true);
     for (const e of [-1, 1]) S.box(0.10, 0.46, 0.36, RX + 1.2 + e * 0.8, api.padY + RY + 0.23, RZ + 1.4, TAR);
     S.box(1.1, 0.80, 0.06, RX - 1.6, api.padY + RY + 1.30, RZ + 1.9, SOOT, 0.5);
     tags(S, api, RX - 1.6, RY + 1.55, RZ + 1.86, 0.5, 3, 3, 0.20, C.paper);
     S.cyl(0.28, 0.28, 0.22, 10, RX - 1.4, api.padY + RY + 0.11, RZ - 0.8, C.cloth, 0, Math.PI * 0.5);
+
+    // ---- THE WAKE: a table on the floor for the one they rang for (see WAKE_TABLE) -----------
+    {
+      const W = WAKE_TABLE, tx = rf.x(W.lx, W.lz), tz = rf.z(W.lx, W.lz), tf = frame(tx, tz, W.yaw);
+      S.box(W.len, 0.07, W.wid, tx, api.padY + RY + W.top - 0.035, tz, TAR, W.yaw);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        S.box(0.08, W.top - 0.07, 0.08, tf.x(sx * (W.len * 0.5 - 0.12), sz * (W.wid * 0.5 - 0.1)),
+          api.padY + RY + (W.top - 0.07) * 0.5, tf.z(sx * (W.len * 0.5 - 0.12), sz * (W.wid * 0.5 - 0.1)), IRON, W.yaw);
+      }
+      api.emit({ kind: 'obb', x: tx, z: tz, halfX: W.len * 0.5, halfZ: W.wid * 0.5, yaw: W.yaw,
+        y0: api.padY + RY, y1: api.padY + RY + W.top, tag: 'wood', standable: true });
+    }
 
     // ---- THE ROPE, from the belfry down to the floor ---------------------------------------
     {
@@ -572,12 +645,20 @@ export const DRESS = {
     for (let i = 0; i < 5; i++) {
       const fx = -3.0 - i * 1.4, fz = 1.6 + i * 1.9;
       const gy = gAt(fx, fz);
-      S.box(0.34, 0.34, api.rng.range(3.4, 5.6), fx, api.padY + gy + 0.22, fz, TAR,
-        api.rng.range(-1.2, 1.2), api.rng.range(-0.2, 0.2));
-      api.emit({
-        kind: 'obb', x: fx, z: fz, halfX: 0.4, halfZ: 2.0, yaw: 0,
-        y0: api.padY + gy - 0.2, y1: api.padY + gy + 0.42, tag: 'wood', standable: true,
-      });
+      // Same three draws in the same order as ever, so nothing after this moves.
+      const len = api.rng.range(3.4, 5.6), yaw = api.rng.range(-1.2, 1.2), tilt = api.rng.range(-0.2, 0.2);
+      S.box(0.34, 0.34, len, fx, api.padY + gy + 0.22, fz, TAR, yaw, tilt);
+      // Its body lies along the beam as drawn (it was a fixed north-south box, so half of
+      // every fallen beam was a ghost and the other half an invisible log): two halves,
+      // each as high as that half of the tilted beam.
+      const f = frame(fx, fz, yaw);
+      for (const side of [-1, 1]) {
+        const mid = side * len * 0.25, top = 0.22 - Math.sin(tilt) * mid + 0.17;
+        api.emit({
+          kind: 'obb', x: f.x(0, mid), z: f.z(0, mid), halfX: 0.17, halfZ: len * 0.25, yaw,
+          y0: api.padY + gy - 0.2, y1: api.padY + gy + Math.max(0.08, top), tag: 'wood', standable: true,
+        });
+      }
     }
 
     // ---- the ladder-stair up the tower to a landing at 4.6 m ----------------------------------
@@ -609,8 +690,9 @@ export const DRESS = {
 
     return {
       solid: S.build(), glow: G.build(),
-      // one of them was already lying beside the bell
-      cast: [{ species: 'pallbearer', lx: 8.6, lz: 3.8, yaw: 1.2, awake: false }],
+      // one of them was already lying beside the bell (in the aisle; (8.6, 3.8) was inside
+      // the arcade pier, so it never rose and the site could never be cleared)
+      cast: [{ species: 'pallbearer', lx: 7.5, lz: 4.45, yaw: 1.2, awake: false }],
     };
   },
 
@@ -672,6 +754,38 @@ export const DRESS = {
       }
       solid(S, api, 0.42, 0.46, 0.42, f.x(0.2, -0.7), 0.23, f.z(0.2, -0.7), TAR, Y + 0.7, 'wood', true);
       S.box(0.40, 0.46, 0.05, f.x(0.2, -0.5), api.padY + 0.68, f.z(0.2, -0.5), TAR, Y + 0.7);
+
+      // ---- BREAKFAST FOR TWO ----------------------------------------------------------------
+      // The keeper's wife went out to the lamp and the keeper went after her. A small table set
+      // for two in the open floor between the chart table and the stove: his chair tucked in,
+      // hers pushed back and turned to the door; two plates, two mugs; by the door his coat on
+      // its hook and the hook beside it empty. Measured on the cottage grid (feet at the floor
+      // top, 0.12): shell x 0.6..2.8, z -1.2..1.3 is clear, and the door leaf swings on the
+      // other side of the opening.
+      const FY = 0.12;
+      const T = { x: 1.8, z: 0.1 };
+      S.box(0.90, 0.05, 0.70, f.x(T.x, T.z), api.padY + FY + 0.72, f.z(T.x, T.z), TAR, Y);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        S.box(0.05, 0.695, 0.05, f.x(T.x + sx * 0.39, T.z + sz * 0.29), api.padY + FY + 0.3475,
+          f.z(T.x + sx * 0.39, T.z + sz * 0.29), TAR, Y);
+      }
+      api.emit({ kind: 'obb', x: f.x(T.x, T.z), z: f.z(T.x, T.z), halfX: 0.45, halfZ: 0.35, yaw: Y,
+        y0: api.padY + FY, y1: api.padY + FY + 0.745, tag: 'wood', standable: true });
+      chair(S, api, f.x(T.x, 0.80), f.z(T.x, 0.80), FY, Y + Math.PI, TAR);
+      chair(S, api, f.x(1.95, -1.02), f.z(1.95, -1.02), FY, Y + Math.atan2(-1.95, -2.23), TAR);
+      const top = FY + 0.745;
+      for (const [px, pz, mx, mz, eaten] of [[1.8, 0.27, 2.1, 0.30, false], [1.95, -0.08, 1.55, -0.13, true]]) {
+        S.cyl(0.11, 0.10, 0.014, 12, f.x(px, pz), api.padY + top + 0.007, f.z(px, pz), [0.20, 0.19, 0.17]);
+        if (!eaten) S.box(0.09, 0.025, 0.06, f.x(px + 0.02, pz), api.padY + top + 0.026, f.z(px + 0.02, pz), SOOT, Y + 0.5);
+        S.cyl(0.042, 0.038, 0.09, 8, f.x(mx, mz), api.padY + top + 0.045, f.z(mx, mz), [0.10, 0.11, 0.12]);
+        S.cyl(0.033, 0.033, 0.004, 8, f.x(mx, mz), api.padY + top + 0.089, f.z(mx, mz), SOOT);
+      }
+      S.box(0.16, 0.008, 0.018, f.x(1.72, 0.05), api.padY + top + 0.004, f.z(1.72, 0.05), C.metal, Y + 0.3);
+      // the two hooks by the door, on the inside face of the front wall (shell z -3.03)
+      for (const hx of [1.55, 1.95]) S.box(0.04, 0.04, 0.07, f.x(hx, -2.995), api.padY + 1.74, f.z(hx, -2.995), IRON, Y);
+      hungCoat(S, f.x(1.55, -2.93), api.padY + 1.74, f.z(1.55, -2.93), Y);
+      api.emit({ kind: 'obb', x: f.x(1.55, -2.93), z: f.z(1.55, -2.93), halfX: 0.24, halfZ: 0.07, yaw: Y,
+        y0: api.padY + 0.89, y1: api.padY + 1.74, tag: 'wood', climbable: false });
     }
 
     // ---- the lamp room at 36.7: the mechanism the light turned on -------------------------------
@@ -929,6 +1043,8 @@ export const DRESS = {
         if (i !== 2) {
           S.box(1.86, 0.44, 0.56, MX, api.padY + 0.92, MZ + s * 0.78, C.stone);
           S.box(1.90, 0.06, 0.60, MX, api.padY + 1.16, MZ + s * 0.78, IRON);
+          api.emit({ kind: 'obb', x: MX, z: MZ + s * 0.78, halfX: 0.95, halfZ: 0.30, yaw: 0,
+            y0: api.padY + 0.70, y1: api.padY + 1.19, tag: 'stone', standable: true });
         }
       }
       S.box(1.9, 0.14, 0.60, MX + 0.5, api.padY + 0.07, MZ - 1.0, C.stone, 0.22);
@@ -940,8 +1056,10 @@ export const DRESS = {
     }
 
     // ---- the grave that was dug OUT -----------------------------------------------------------------
+    // It was dug half into the chapel of rest's east wall and onto a headstone, and its
+    // pallbearer was never let out of the wall. It lies in the open strip west of the stones.
     {
-      const GX = -14.0, GZ = 3.2, gy = groundY(api, GX, GZ);
+      const GX = -15.0, GZ = -2.0, gy = groundY(api, GX, GZ);
       for (const [ox, oz, w, d] of [[0, 1.15, 2.4, 0.5], [0, -1.15, 2.4, 0.5], [-1.0, 0, 0.5, 2.0], [1.0, 0, 0.5, 2.0]]) {
         S.box(w, 0.42, d, GX + ox, gy + 0.16, GZ + oz, C.soil, 0.3);
       }
@@ -950,9 +1068,65 @@ export const DRESS = {
       S.box(0.20, 0.30, 0.03, GX + 1.44, gy + 0.02, GZ + 1.0, C.metal, 0.3);
     }
 
+    // ---- THE ROW THAT FACES THE WOODS -----------------------------------------------------------
+    // The newest graves, in the gap in the west wall between its end (-24.3, -3.1) and the
+    // chapel of rest's north-west corner (-21.9, 3.6). Five fresh mounds, and every stone set at
+    // the FAR end, turned round so its face looks out through the gap into the trees instead of
+    // back over its grave. You come up behind them. The sixth is dug and not filled; the spade
+    // is still in the spoil with his coat over the handle. Measured on the garden grid (r 0.35):
+    // x -23.5..-18.5, z -3.9..2.0 is clear ground, 0.9 m inside the chapel wall.
+    {
+      const STONE = [0.150, 0.150, 0.138];
+      const fresh = [0.050, 0.030, 0.018];
+      const SX = -23.0;
+      for (let i = 0; i < 5; i++) {
+        const z = -2.6 + i * 1.05, gy = groundY(api, SX, z), tall = 0.74 + (i % 2) * 0.08;
+        S.box(0.24, 0.20, 0.72, SX, gy + 0.0, z, STONE);                         // the footing, half buried
+        S.box(0.11, tall, 0.62, SX, gy + 0.10 + tall * 0.5, z, STONE);
+        const cap = new THREE.CylinderGeometry(0.31, 0.31, 0.11, 12, 1, false, 0, Math.PI);
+        cap.rotateZ(Math.PI * 0.5);                  // the half-disc stands up, 0.11 thick in x
+        cap.translate(SX, gy + 0.10 + tall, z);
+        S.push(cap, STONE);
+        // the face is the side with the sunk panel and the jar of stems: it is the woods' side
+        S.box(0.012, 0.34, 0.40, SX - 0.061, gy + 0.10 + tall * 0.56, z, [0.085, 0.085, 0.080]);
+        const jx = SX - 0.34, jz = z + 0.14, jg = groundY(api, jx, jz);
+        S.cyl(0.048, 0.04, 0.13, 7, jx, jg + 0.065, jz, [0.10, 0.11, 0.11]);
+        for (let j = 0; j < 3; j++) S.cyl(0.005, 0.005, 0.30, 3, jx + (j - 1) * 0.02, jg + 0.24, jz, TAR, 0, 0, (j - 1) * 0.35);
+        api.emit({ kind: 'obb', x: SX, z, halfX: 0.12, halfZ: 0.36, yaw: 0,
+          y0: gy - 0.1, y1: gy + 0.10 + tall + 0.30, tag: 'headstone', climbable: false });
+        // the mound lies behind the stone, on the garden's side
+        const mx = SX + 1.12, mg = Math.min(groundY(api, mx - 0.8, z), groundY(api, mx + 0.8, z));
+        const mound = new THREE.SphereGeometry(1, 16, 6, 0, TAU, 0, Math.PI * 0.5);
+        mound.scale(0.95, 0.24, 0.44);
+        S.at(mound, fresh, mx, mg - 0.03, z, 0);
+      }
+      // the sixth: an open grave, its spoil heaped on the garden side, a spade stood in it
+      {
+        const z = -3.7, gx = -21.9, gy = groundY(api, gx, z);
+        S.quad(1.72, 0.74, gx, gy + 0.037, z, SOOT, 0, -Math.PI * 0.5);   // ON_APRON: the made ground is 0.025 up
+        for (const [ox, oz, w, d] of [[0, 0.43, 1.9, 0.14], [0, -0.43, 1.9, 0.14], [-0.93, 0, 0.14, 0.86], [0.93, 0, 0.14, 0.86]]) {
+          S.box(w, 0.10, d, gx + ox, groundY(api, gx + ox, z + oz) + 0.03, z + oz, fresh);
+        }
+        const hx = gx + 1.65, hg = groundY(api, hx, z);
+        const heap = new THREE.SphereGeometry(1, 10, 5, 0, TAU, 0, Math.PI * 0.5);
+        heap.scale(0.55, 0.42, 0.70);
+        S.at(heap, fresh, hx, hg - 0.04, z, 0.2);
+        // the spade: blade 0.18 into the heap, shaft leaning back toward the grave
+        const sx = hx - 0.10, sz = z + 0.05, top = hg + 0.36;
+        const lean = 0.16;
+        S.box(0.17, 0.26, 0.02, sx + Math.sin(lean) * 0.04, top - 0.05, sz, C.metal, 0, 0, lean);
+        S.cyl(0.018, 0.018, 1.02, 5, sx - Math.sin(lean) * 0.55, top + 0.52, sz, TAR, 0, 0, lean);
+        const hy = top + 1.02, hxp = sx - Math.sin(lean) * 1.05;
+        S.box(0.16, 0.03, 0.03, hxp, hy, sz, TAR);
+        // his coat, hung over the handle by its collar; it hangs straight, the shaft leans in it
+        hungCoat(S, hxp, hy + 0.01, sz, Math.PI * 0.5);
+        api.emit({ kind: 'circle', x: hx, z, r: 0.34, y0: hg - 0.2, y1: hy + 0.05, tag: 'post', climbable: false });
+      }
+    }
+
     return {
       solid: S.build(), glow: G.build(),
-      cast: [{ species: 'pallbearer', lx: -14.0, lz: 3.2, yaw: 0, awake: false }],
+      cast: [{ species: 'pallbearer', lx: -15.0, lz: -2.0, yaw: 0, awake: false }],
     };
   },
 
@@ -1120,8 +1294,12 @@ export const DRESS = {
     // stair the far half of the loft was a bare box
     for (let i = 0; i < 13; i++) {
       const bx = 2.6 + (i % 4) * 1.7, bz = -4.4 + Math.floor(i / 4) * 3.1;
-      solid(S, api, 1.02, 0.50, 0.70, bx, LY + 0.25 + (i % 3 === 0 ? 0.50 : 0), bz,
+      const up = i % 3 === 0;
+      solid(S, api, 1.02, 0.50, 0.70, bx, LY + 0.25 + (up ? 0.50 : 0), bz,
         C.cloth, api.rng.range(-0.2, 0.2), 'wood', true);
+      // Every third bale was authored half a metre up with nothing under it: five bales
+      // hanging in the loft air (one in front of the high window). It is a stack of two.
+      if (up) solid(S, api, 1.02, 0.50, 0.70, bx, LY + 0.25, bz, C.cloth, i & 1 ? 0.07 : -0.07, 'wood', true);
     }
     S.box(1.9, 0.06, 0.9, 7.6, api.padY + LY + 0.04, 3.4, C.paper, 0.2);
     // the crate the gun was in, and the pitchfork somebody left standing in a bale
@@ -1178,6 +1356,49 @@ export const DRESS = {
       S.push(g, IRON);
       solid(S, api, 1.2, 0.9, 1.2, x1 + 0.3, 0.45, z1, TAR, 0.2, 'wood');
     }
+    // ---- NEARER THE SKY ----------------------------------------------------------------------
+    // A child's mattress dragged across the loft to lie under the one high window in the barn
+    // (sites.js cuts it in the -Z gable at (0, 7.6, -6.05)), the blanket kicked back, and a
+    // toy telescope on its tripod aimed up past the lintel at where the sky would be.
+    // Measured on the loft grid (feet 3.30): the floor between the bales at z -4.1..-1.7 is
+    // clear from x 1.6 to 9.6; every piece sits on the loft deck's top at LY.
+    {
+      const MX = 3.0, MZ = -2.85;
+      solid(S, api, 1.9, 0.16, 0.86, MX, LY + 0.08, MZ, [0.15, 0.14, 0.12], 0.04, 'wood', true);
+      S.box(1.86, 0.02, 0.05, MX, api.padY + LY + 0.165, MZ - 0.31, [0.10, 0.09, 0.08], 0.04);
+      S.box(0.46, 0.10, 0.56, MX - 0.66, api.padY + LY + 0.21, MZ + 0.03, C.cloth, 0.12);
+      // the blanket, thrown back off the foot of it and down onto the boards
+      S.box(1.05, 0.06, 0.92, MX + 0.28, api.padY + LY + 0.19, MZ + 0.02, [0.16, 0.10, 0.075], 0.10);
+      S.cyl(0.08, 0.08, 0.92, 7, MX + 0.84, api.padY + LY + 0.24, MZ + 0.05, [0.14, 0.09, 0.066], 0.10, Math.PI * 0.5);
+      S.box(0.55, 0.035, 0.80, MX + 1.36, api.padY + LY + 0.018, MZ + 0.12, [0.14, 0.09, 0.066], 0.30);
+      // three picture books on the boards by the pillow
+      for (let i = 0; i < 3; i++) {
+        S.box(0.24, 0.025, 0.30, MX - 0.60, api.padY + LY + 0.0125 + i * 0.025, MZ - 0.72,
+          i === 1 ? C.paper : [0.10, 0.12, 0.13], 0.2 * i - 0.2);
+      }
+      // the tripod, and the tube aimed at the window
+      const TX = 1.78, TZ = -3.62, HY = LY + 0.92;
+      for (let i = 0; i < 3; i++) {
+        const a = i * TAU / 3 + 0.4, fx = TX + Math.cos(a) * 0.22, fz = TZ + Math.sin(a) * 0.22;
+        const leg = new THREE.CylinderGeometry(0.011, 0.014, Math.hypot(0.22, HY - LY), 4);
+        leg.translate(0, Math.hypot(0.22, HY - LY) * 0.5, 0);
+        leg.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0),
+          new THREE.Vector3(TX - fx, HY - LY, TZ - fz).normalize()));
+        leg.translate(fx, api.padY + LY, fz);
+        S.push(leg, TAR);
+      }
+      S.box(0.06, 0.05, 0.06, TX, api.padY + HY + 0.02, TZ, IRON);
+      {
+        const d = new THREE.Vector3(0 - TX, 7.6 - HY, -6.05 - TZ).normalize();
+        const tube = new THREE.CylinderGeometry(0.034, 0.042, 0.72, 8);
+        tube.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d));
+        tube.translate(TX + d.x * 0.16, api.padY + HY + 0.05 + d.y * 0.16, TZ + d.z * 0.16);
+        S.push(tube, [0.12, 0.10, 0.05]);
+      }
+      api.emit({ kind: 'circle', x: TX, z: TZ, r: 0.24, y0: api.padY + LY, y1: api.padY + HY + 0.3,
+        tag: 'post', climbable: false });
+    }
+
     // the stable lantern, the tack on the wall, the cart backed in through the big door
     lamp(S, G, api, -4.4, 2.05, -1.2, Math.PI * 0.5, 0.28, 0.32);
     for (let i = 0; i < 4; i++) {

@@ -24,6 +24,20 @@
 //
 // The LANTERNS in the geometry are emissive, not lights. What this file borrows is one rover
 // per hamlet, over the fire, near the player only.
+//
+// R3 (2026-09-18). ALEX: "i couldn't ever talk to anyone when i thought i completed it ...
+// it looks like the important characters might be able to be killed too. they should get
+// back up ... there are definitely supposed to be people you can talk to that will help you
+// after the event." So:
+//   - NOBODY HERE STAYS DOWN. Every person is spawned neutral, which gives them getsUp (C6,
+//     enemies.js): a killing blow lays them on the ground, not in a corpse, and they stand
+//     up again. While they are down nobody walks them, talks to them, or fires their rifle.
+//   - DURING A SIEGE you can still talk to anyone, and they tell you where the nearest of it
+//     is from where you are looking: 'Not now. Behind you.'
+//   - WHEN IT HOLDS the lookout says so across the hamlet, the fire swells, and the three
+//     rifles are cleared one after another. The trader pays, and from then on his counter is
+//     the one shop menu (ui/shop-menu.js), selling what the county sells: ammunition at the
+//     dealer's price and gas at the keepers'.
 
 import * as THREE from 'three';
 import { faceYaw } from '../enemies/nav.js';
@@ -31,14 +45,18 @@ import { readingTime } from '../dialogue/lines.js';
 import { CASE_SITE } from './climbs-and-caches.js';
 import { MAJOR_BY_ID } from './placedata.js';
 import { HAMLET_PLAN } from './hamlets.js';
+import { CFG } from '../config.js';
+import { STOCK, AMMO_PRICE, AMMO_FULL_LINE } from './dealer.js';
+import { ShopMenu } from '../ui/shop-menu.js';
 
 /* ------------------------------------------------------------------- the people -- */
 //
 // Positions are LOCAL to each hamlet, in the frame hamlets.js builds in (+Z is the road).
 // `y` is the storey above the pad (0 the ground, 0.10 Eelwater's water, 0.55 its boards,
 // 3.4 The Cut's lower terrace, 1.2 a lookout post). `face` is what they look at. `look` is
-// the per-person appearance the PEOPLE lane draws (C14): fen faces 0-3, ridge 4-7, pines
-// 8-11, one palette per hamlet, so each cast is visibly its own.
+// the per-person appearance the PEOPLE lane draws (C14): one palette per hamlet, so each cast
+// is visibly its own; within a hamlet the second person of each coat colour wears another of
+// the palette's three cuts (variant / 4), so no two people stand there in the same clothes.
 //
 // `lines` are said before the defence, `thanks` after it is won; `here` is what the lookout
 // shouts as each wave arrives. Every line is authored here and handed to the dialogue system
@@ -72,20 +90,20 @@ export const HAMLETS = Object.freeze({
           'There was a boat. You do not want to know what happened to the boat.'],
         thanks: ['Two cans. Off the boat that is not coming back.'] },
       { id: 'eel-bram', name: 'Bram', role: 'guard',
-        x: -3.6, z: 28.6, y: 0, face: [-3.6, 60], look: { variant: 0, palette: 'fen', hair: 'cropped' },
+        x: -3.6, z: 28.6, y: 0, face: [-3.6, 60], look: { variant: 4, palette: 'fen', hair: 'cropped' },
         lines: ['Road side. That is where it comes from.',
           'I do not sleep before the black hour. Nobody here does.'] },
       { id: 'eel-tam', name: 'Tam', role: 'guard',
-        x: 3.6, z: 28.6, y: 0, face: [3.6, 60], look: { variant: 1, palette: 'fen', hair: 'cropped' },
+        x: 3.6, z: 28.6, y: 0, face: [3.6, 60], look: { variant: 9, palette: 'fen', hair: 'cropped' },
         lines: ['Greer saw the first one. I saw the second.',
           'Keep your torch off the water. It draws them.'] },
       { id: 'eel-wick', name: 'Wick', role: 'guard',
-        x: 2.6, z: 16, y: 0.10, face: [0, 40], look: { variant: 2, palette: 'fen', hair: 'tied' },
+        x: 2.6, z: 16, y: 0.10, face: [0, 40], look: { variant: 6, palette: 'fen', hair: 'tied' },
         lines: ['I check the traps. Something checks them before me.',
           'The cold does not bother me. The other thing does.'] },
       { id: 'eel-boy', name: 'a boy on the boards', role: 'plain',
         x: 19.4, z: -6, y: 0.55, face: [30, -6], walk: [[19.4, -6], [4, -6]],
-        look: { variant: 3, palette: 'fen', hair: 'loose' },
+        look: { variant: 11, palette: 'fen', hair: 'loose' },
         lines: ['I can hold my breath to the smokehouse and back. Do not tell Ness.',
           'Ord says the third board. It is the fourth.'],
         thanks: ['I counted. You got four.'] },
@@ -122,20 +140,20 @@ export const HAMLETS = Object.freeze({
           'The drums are for the hoist engine. The hoist engine is for nothing, now.'],
         thanks: ['Two cans. The engine will not miss them.'] },
       { id: 'cut-dace', name: 'Dace', role: 'guard',
-        x: -4, z: 25, y: 0, face: [-4, 60], look: { variant: 4, palette: 'ridge', hair: 'cropped' },
+        x: -4, z: 25, y: 0, face: [-4, 60], look: { variant: 0, palette: 'ridge', hair: 'cropped' },
         lines: ['Stone at my back. That is the whole plan.',
           'They do not like the kiln light. They come anyway.'] },
       { id: 'cut-orrin', name: 'Orrin', role: 'guard',
-        x: 4, z: 25, y: 0, face: [4, 60], look: { variant: 5, palette: 'ridge', hair: 'tied' },
+        x: 4, z: 25, y: 0, face: [4, 60], look: { variant: 9, palette: 'ridge', hair: 'tied' },
         lines: ['I was a quarryman. Now I am this.',
           'If it gets past me it gets Ilke. So it does not get past me.'] },
       { id: 'cut-hesper', name: 'Hesper', role: 'guard',
-        x: 10, z: -2.2, y: 3.4, face: [10, 40], look: { variant: 6, palette: 'ridge', hair: 'loose' },
+        x: 10, z: -2.2, y: 3.4, face: [10, 40], look: { variant: 2, palette: 'ridge', hair: 'loose' },
         lines: ['I can hit the road from here. I have.',
           'Up here is where I would want to be, if I were you. I am not you.'] },
       { id: 'cut-pip', name: 'Pip · with the bucket', role: 'plain',
         x: -15.5, z: 9.5, y: 0, face: [-19, 14], walk: [[-15.5, 9.5], [-13.5, 19]],
-        look: { variant: 7, palette: 'ridge', hair: 'cropped' },
+        look: { variant: 11, palette: 'ridge', hair: 'cropped' },
         lines: ['Lime in the bucket. Lime on my hands. Lime in the bread, probably.',
           'Ilke says the kiln is older than the road. The road says nothing.'],
         thanks: ['I watched from the stair. You were quick.'] },
@@ -168,11 +186,11 @@ export const HAMLETS = Object.freeze({
           'Nobody has gone up in a year. There is nothing up there to go up for.'],
         thanks: ['Two cans. The winch will not need them again.'] },
       { id: 'wood-aldo', name: 'Aldo', role: 'guard',
-        x: -4, z: 22, y: 0, face: [-4, 60], look: { variant: 8, palette: 'pines', hair: 'cropped' },
+        x: -4, z: 22, y: 0, face: [-4, 60], look: { variant: 0, palette: 'pines', hair: 'cropped' },
         lines: ['I was the skeleton. Sif was the witch. Marn came as himself.',
           'Fire behind me, road in front. I can live with that.'] },
       { id: 'wood-marn', name: 'Marn', role: 'guard',
-        x: 4, z: 22, y: 0, face: [4, 60], look: { variant: 9, palette: 'pines', hair: 'tied' },
+        x: 4, z: 22, y: 0, face: [4, 60], look: { variant: 5, palette: 'pines', hair: 'tied' },
         lines: ['They do not like the pumpkins. Neither do I, any more.',
           'The trees hide us from the road. They hide the road from us too.'] },
       // D17: moved from z 13 to z 7. The third rifle in each hamlet stands DEEP and answers
@@ -183,12 +201,12 @@ export const HAMLETS = Object.freeze({
       // wave 1 alone in 10.5 s here against 22 and 39 at the other two). Seven metres back
       // puts her 23.9 m off it, and closer to the fire she talks about.
       { id: 'wood-sif', name: 'Sif', role: 'guard',
-        x: 6.5, z: 7, y: 0, face: [3, 40], look: { variant: 10, palette: 'pines', hair: 'loose' },
+        x: 6.5, z: 7, y: 0, face: [3, 40], look: { variant: 2, palette: 'pines', hair: 'loose' },
         lines: ['I was the witch. I still have the hat somewhere.',
           'Sit by the fire if you want. Just do not stand in my line.'] },
       { id: 'wood-lark', name: 'Lark · in a paper crown', role: 'plain',
         x: 12.5, z: 5.5, y: 0, face: [0, 1], walk: [[12.5, 5.5], [5, 4]],
-        look: { variant: 11, palette: 'pines', hair: 'loose' },
+        look: { variant: 7, palette: 'pines', hair: 'loose' },
         lines: ['I was a king. I am still a king. Nobody has said otherwise.',
           'The lanterns are paper. The fire is not. Pell says to remember which.'],
         thanks: ['A king does not thank people. But.'] },
@@ -205,6 +223,18 @@ const LAMP_NEAR = 70;
 const TALK_REST_S = 8;        // D10: dark this long after the last line's reading time
 const WALK_SPEED = 0.62;      // m/s: a stroll, half the Holdfast's 0.74, on boards and dust
 const WALK_PAUSE_S = 3;       // s at each end of a route
+const LAMP_PEAK = 7.5;        // the fire's borrowed rover
+const FLARE_S = 2.5;          // s the fire swells for when the hamlet holds...
+const FLARE_GAIN = 1.6;       // ...to (1 + this) times its peak, easing back
+const RACK_FIRST_S = 0.9;     // s after the lookout's line the first rifle is cleared
+const RACK_GAP_S = 0.45;      // s between the three
+const RACK_GAIN = 0.4;        // the dealer's bolt, quietly: three people unloading, not a volley
+const GAS_PRICE = 100;        // the tower keepers' can (mechanics.js GAS_PRICE): one county, one price
+const AMMO_LINE = (STOCK.find(s => s.ammo) || {}).line || 'One bundle for every gun you own.';
+// What anyone says to you mid-siege, by where the nearest of it is from where you are looking.
+// 0 nothing standing (between waves), 1 behind, 2 left, 3 right, 4 in front, past them.
+const BUSY = Object.freeze(['Not now. There is more coming.', 'Not now. Behind you.',
+  'Not now. On your left.', 'Not now. On your right.', 'Not now. Past me.']);
 const FLOOR_RECHECK_S = 0.7;  // ask the collision field for the floor this often: a chunk
                               // that streams in after the person did re-floors them inside a
                               // second, and 8 probes a step at most is nothing
@@ -267,6 +297,16 @@ const GUARD_VOLLEY_GAP = 0.12;// s between ANY two rifles in the same hamlet. Th
 const GUARD_MAG = 5;          // rounds before the rifle comes down
 const GUARD_RELOAD_S = 3.4;   // s it stays down
 const GUARD_FLASH_S = 0.05;   // s of borrowed muzzle light
+// R3: WHERE A RIFLE LOOKS FROM. The sight line used to run from 1.2 m on the guard to 1.15 m
+// on the target: waist to chest. Measured at The Cut, hands-off: a poacher stood 0.4 m behind
+// the lookout post (a filled block 1.2 m high), 5.6 and 7 m from the two road-end rifles, and
+// shot at the fire for three minutes, because that line grazed the top of the block; its head
+// and shoulders were in plain view over it. A rifle is shouldered at the eye, and a guard who
+// can only see a head and shoulders still takes the shot, just a harder one.
+const GUARD_EYE = 1.55;       // m: the rifle at the shoulder, the eye behind it
+const GUARD_CHEST = 1.15;     // m on the target: the first thing aimed at
+const GUARD_HEAD_K = 0.85;    // x the target's height: what shows over cover
+const GUARD_HEAD_HIT = 0.6;   // x the hit chance when only that much of it shows
 
 /** A villager's hit chance at `d` metres: flat inside GUARD_NEAR_M, linear out to the edge. */
 export function guardHitChance(d) {
@@ -285,6 +325,9 @@ export const GUARD = Object.freeze({
 
 // module scratch, never allocated per step: the guard ray, one world point, the prompt
 const _from = new THREE.Vector3(), _to = new THREE.Vector3(), _ray = new THREE.Vector3();
+// A guard's hit, reused: the round's own line on the ground (dx/dz) so the body it strikes
+// is pushed the way the round went (enemies.damage, r3). Owners must not keep it.
+const _guardHit = { zone: 'torso', point: null, dist: 0, dx: 0, dz: 0, source: 'guard' };
 const _scratch = { x: 0, y: 0, z: 0 };
 const _prompt = { kind: 'hold', label: 'E', rank: 9, x: 0, y: 0, z: 0, k: 0, detail: '', subdetail: '', unavailable: false };
 
@@ -302,6 +345,16 @@ export class HamletLife {
     // One stream for every round the three rifles ever fire. No Math.random anywhere in src:
     // fork() is the law, and a named fork means adding one never shifts another's sequence.
     this._aim = ctx.rng?.fork ? ctx.rng.fork('hamlet-guard-aim') : null;
+    // THE COUNTER, after the trader has paid. Two rows, made once and rewritten in place; the
+    // menu itself is made the first time a counter opens (it owns a canvas).
+    this._shopRows = [
+      { id: 'ammo', name: 'AMMUNITION', price: AMMO_PRICE, line: AMMO_LINE, ammo: true,
+        owned: false, full: false, unavailable: false, tag: '', note: '' },
+      { id: 'gas', name: 'GAS CAN', price: GAS_PRICE, line: 'One can. It fills the car.', gas: true,
+        owned: false, full: false, unavailable: false, tag: '', note: '' },
+    ];
+    this._shopSpec = { key: '', title: '', rank: 9, cash: 0, x: 0, y: 0, z: 0, offers: this._shopRows, buy: o => this._buy(o) };
+    this._menu = null;
   }
 
   _sys(id) { return this.ctx.systems.get(id); }
@@ -312,7 +365,8 @@ export class HamletLife {
       const rec = places?.nodes?.get?.(id);
       if (!rec) continue;
       const site = {
-        id, spec, plan: HAMLET_PLAN[id], rec, lamp: null, lastShot: -99,
+        id, spec, plan: HAMLET_PLAN[id], rec, lamp: null, lastShot: -99, flareT: 0,
+        tag: 'siege:' + id, shopKey: 'hamlet:' + id,   // made once: read every step
         people: spec.people.map(p => ({
           ...p, e: null, gen: 0,
           read: 0, restUntil: 0, talks: 0, chain: '',   // D10: this read-through, and which chain it is
@@ -323,7 +377,7 @@ export class HamletLife {
           // Everything else is plain numbers on the person: no Map, no allocation, no lookup.
           phase: p.role === 'guard' && this.ctx.rng?.fork
             ? this.ctx.rng.fork('hamlet-guard:' + p.id).next() * GUARD_PHASE : 0,
-          nextShot: 0, seenT: 0, mag: GUARD_MAG, reloadT: 0,
+          nextShot: 0, seenT: 0, mag: GUARD_MAG, reloadT: 0, rackT: 0,
         })),
       };
       this.sites.push(site);
@@ -392,11 +446,11 @@ export class HamletLife {
     const en = this._sys('enemies');
     for (const s of this.sites) {
       for (const p of s.people) {
-        if (p.e?.alive && p.e.gen === p.gen) en?._release?.(p.e);
+        if (p.e && p.e.gen === p.gen && (p.e.alive || p.e.state === 'corpse')) en?._release?.(p.e);
         p.e = null; p.read = 0; p.restUntil = 0; p.chain = ''; p.wp = 1; p.dir = 1; p.pause = 0;
-        p.nextShot = 0; p.seenT = 0; p.mag = GUARD_MAG; p.reloadT = 0;
+        p.nextShot = 0; p.seenT = 0; p.mag = GUARD_MAG; p.reloadT = 0; p.rackT = 0;
       }
-      s.lastShot = -99;
+      s.lastShot = -99; s.flareT = 0;
     }
     this.target = '';
   }
@@ -477,15 +531,26 @@ export class HamletLife {
 
   /* -------------------------------------------------------------- guards -- */
 
-  _sight(a, b, height = 1.2) {
+  _sightAt(a, b, fromH, toH) {
     const col = this._sys('collision');
     if (!col || typeof col.raycast !== 'function') return true;
-    _from.set(a.x, a.y + height, a.z); _to.set(b.x, b.y + 1.15, b.z);
+    _from.set(a.x, a.y + fromH, a.z); _to.set(b.x, b.y + toH, b.z);
     const dx = _to.x - _from.x, dy = _to.y - _from.y, dz = _to.z - _from.z;
     const d = Math.hypot(dx, dy, dz) || 0.001;
     _ray.set(dx / d, dy / d, dz / d);
     const h = col.raycast(_from, _ray, Math.max(0, d - 0.35), col.MASK.SIGHT | col.MASK.GROUND);
     return !(h && h.hit !== false);
+  }
+
+  /**
+   * What a rifle at `a` can see of body `e` standing at `b`: 0 nothing, 1 its chest, or the
+   * height on it (metres over its feet) of the part that shows over cover, head and shoulders.
+   */
+  _sight(a, b, e) {
+    if (this._sightAt(a, b, GUARD_EYE, GUARD_CHEST)) return 1;
+    const hh = ((e && e.def && e.def.height) || 0) * ((e && e.scale) || 1) * GUARD_HEAD_K;
+    if (hh > GUARD_CHEST + 0.2 && this._sightAt(a, b, GUARD_EYE, hh)) return hh;
+    return 0;
   }
 
   /**
@@ -509,7 +574,7 @@ export class HamletLife {
     for (const q of s.people) {
       if (q.role !== 'guard') continue;
       const g = q.e;
-      if (!g?.alive || g.gen !== q.gen || !g.neutral) continue;
+      if (!g?.alive || g.gen !== q.gen || !g.neutral || g.down) continue;
       g.townGuard = true; g.townAim = 0;
       // THE RIFLE COMES DOWN. Out of rounds is three and a half seconds of one fewer gun, and
       // you can see which one it is, because townAim 0 is the lowered pose. The clock runs
@@ -518,11 +583,16 @@ export class HamletLife {
       if (q.reloadT > 0) { q.reloadT -= dt; if (q.reloadT <= 0) q.mag = GUARD_MAG; }
       // flinching: no aim, no shot, and the sighting clock goes back to nothing
       if (g.townFear > 0) { q.seenT = 0; continue; }
-      let target = null, dist = GUARD_SIGHT;
+      let target = null, dist = GUARD_SIGHT, part = 0;
       for (const e of en.all) {
         if (!e.alive || e.initiallyNeutral || e.neutral) continue;
+        // R3: nothing that is on its way out (stood down, C3), on the ground, or one of the
+        // hour's officials a round cannot touch. With nothing else in reach the rifle stays down.
+        if (e.leaving || e.down || e.goingHome || e.def?.officer) continue;
         const d = Math.hypot(e.pos.x - g.pos.x, e.pos.z - g.pos.z);
-        if (d < dist && this._sight(g.pos, e.pos)) { target = e; dist = d; }
+        if (d >= dist) continue;
+        const seen = this._sight(g.pos, e.pos, e);
+        if (seen) { target = e; dist = d; part = seen; }
       }
       if (!target) { q.seenT = 0; if (this.target !== q.id) g.stagedYaw = q.homeYaw; continue; }
       g.stagedYaw = faceYaw(g.pos.x, g.pos.z, target.pos.x, target.pos.z);
@@ -540,8 +610,9 @@ export class HamletLife {
 
       const mz = g.built?.muzzle, sy = Math.sin(g.stagedYaw), cy = Math.cos(g.stagedYaw), scale = g.scale || 1;
       _from.set(g.pos.x + (mz ? mz.x * cy + mz.z * sy : 0) * scale, g.pos.y + (mz ? mz.y * scale : 1.5), g.pos.z + (mz ? -mz.x * sy + mz.z * cy : 0) * scale);
-      let dx = target.pos.x - _from.x, dy = target.pos.y + 1 - _from.y, dz = target.pos.z - _from.z;
-      const hit = (this._aim ? this._aim.next() : 0) < guardHitChance(dist);
+      // aimed at the chest, or at whatever shows over the cover (a harder shot)
+      let dx = target.pos.x - _from.x, dy = target.pos.y + (part === 1 ? 1 : part) - _from.y, dz = target.pos.z - _from.z;
+      const hit = (this._aim ? this._aim.next() : 0) < guardHitChance(dist) * (part === 1 ? 1 : GUARD_HEAD_HIT);
       if (!hit) {
         // WIDE. Push the round off the body by up to GUARD_MISS_M across the line of sight,
         // and a hand's worth high or low, so the tracer visibly goes past it. Scalars only.
@@ -554,7 +625,11 @@ export class HamletLife {
       _ray.set(dx / n, dy / n, dz / n);
       this._sys('fx')?.tracer?.(_from, _ray, dist);
       this._sys('lights')?.borrow('hamlet-guard', _from.x, _from.y, _from.z, 0xffc27a, 26, GUARD_FLASH_S);
-      if (hit) en.damage(target, GUARD_DMG, { zone: 'torso', point: target.pos, dist, source: 'guard' });
+      if (hit) {
+        const gl = Math.hypot(_ray.x, _ray.z) || 1;
+        _guardHit.point = target.pos; _guardHit.dist = dist; _guardHit.dx = _ray.x / gl; _guardHit.dz = _ray.z / gl;
+        en.damage(target, GUARD_DMG, _guardHit);
+      }
       this._sys('audio')?.dread?.('dealer-shot', g.pos.x, g.pos.y + 1.5, g.pos.z, 0.16);
       this.ctx.bus.emit('hamlet:guard-shot', { site: s.id, x: g.pos.x, y: g.pos.y + 1.5, z: g.pos.z, target: target.pos, hit });
     }
@@ -618,16 +693,127 @@ export class HamletLife {
     if (best) pr.learnRumour(best);
   }
 
+  /* ------------------------------------------------------------ the end -- */
+
+  /**
+   * THE HAMLET HELD, said out loud (hamlet-defence._win). The lookout says the first of her
+   * thanks across the hamlet, and the next time you talk to her she goes on from there; if she
+   * is down, the first rifle standing says it instead. Then the three rifles are cleared, one
+   * after another (see _rack). Returns whether anybody said it.
+   */
+  announceHeld(id) {
+    const s = this.site(id);
+    if (!s) return false;
+    let i = 0;
+    for (const g of s.people) if (g.role === 'guard') g.rackT = RACK_FIRST_S + RACK_GAP_S * i++;
+    const d = this._sys('dialogue');
+    if (!d) return false;
+    const q = this.person(id, 'lookout');
+    if (q?.e?.alive && q.e.gen === q.gen && !q.e.down && q.thanks?.length) {
+      const text = q.thanks[0];
+      const ok = d.say({ id: 'hamlet.' + id + '.' + q.id + '.thanks0', speaker: q.name, text, priority: 5, interrupt: true, audibleR: 70 },
+        { speakerEntity: q.e, name: q.name });
+      if (ok) {
+        q.chain = 'thanks'; q.read = 1; q.talks++;
+        q.restUntil = q.read >= q.thanks.length ? this.time + readingTime(text) + 0.35 + TALK_REST_S : 0;
+        return true;
+      }
+    }
+    for (const g of s.people) {
+      if (g.role !== 'guard' || !g.e?.alive || g.e.gen !== g.gen || g.e.down) continue;
+      return !!d.say({ id: 'hamlet.' + id + '.' + g.id + '.held', speaker: g.name, text: 'That is the last of them.', priority: 5, interrupt: true, audibleR: 70 },
+        { speakerEntity: g.e, name: g.name });
+    }
+    return false;
+  }
+
+  /** The fire swells and settles (the same borrowed rover: no new light). */
+  flare(id) { const s = this.site(id); if (s) s.flareT = FLARE_S; }
+
+  /** A rifle cleared: the dealer's bolt, quietly, from where the guard stands, rifle down. */
+  _rack(q, dt) {
+    q.rackT -= dt;
+    if (q.rackT > 0) return;
+    q.rackT = 0;
+    const g = q.e;
+    if (!g?.alive || g.down) return;
+    g.townAim = 0; q.seenT = 0;
+    this._sys('audio')?.dread?.('dealer-rack', g.pos.x, g.pos.y + 1.3, g.pos.z, RACK_GAIN);
+  }
+
+  /**
+   * Mid-siege, anybody you talk to says one short thing: where the nearest of it is, from
+   * where you are looking. It never moves their read-through along.
+   */
+  _busy(q, s, p) {
+    const d = this._sys('dialogue'), en = this._sys('enemies'), cam = this._sys('camera');
+    if (!d) return;
+    const tag = s.tag;
+    let best = null, bd = Infinity;
+    for (const e of en?.all || []) {
+      if (!e.alive || e.siteGuard !== tag) continue;
+      const dd = Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z);
+      if (dd < bd) { bd = dd; best = e; }
+    }
+    let k = 0;
+    if (best && cam) {
+      const dx = best.pos.x - p.pos.x, dz = best.pos.z - p.pos.z, l = Math.hypot(dx, dz) || 1;
+      const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+      const ahead = (dx * -sy + dz * -cy) / l, right = (dx * cy - dz * sy) / l;
+      k = ahead < -0.45 ? 1 : ahead > 0.6 ? 4 : right < 0 ? 2 : 3;
+    }
+    d.say({ id: 'hamlet.' + s.id + '.' + q.id + '.busy' + k, speaker: q.name, text: BUSY[k], priority: 4, interrupt: true },
+      { speakerEntity: q.e, name: q.name });
+  }
+
+  /* ------------------------------------------------------------ the counter -- */
+
+  /** Is every gun you own at its reserve ceiling? Then the AMMUNITION row reads FULL (dealer.js's rule). */
+  _ammoFull(w) {
+    const owned = w?.owned;
+    if (!owned || !owned.length) return false;
+    for (let k = 0; k < owned.length; k++) {
+      const base = CFG.weapons?.defs?.[owned[k]];
+      if (base && w.reserveOf(owned[k]) < base.reserve * 2) return false;
+    }
+    return true;
+  }
+
+  /** The trader's counter, driven every step he is in focus. Rows rewritten in place. */
+  _shop(q, s, dt) {
+    const pr = this._sys('progress'), w = this._sys('weapons');
+    if (!pr) return;
+    const ammo = this._shopRows[0];
+    ammo.full = this._ammoFull(w); ammo.line = ammo.full ? AMMO_FULL_LINE : AMMO_LINE;
+    const spec = this._shopSpec, e = q.e;
+    spec.key = s.shopKey; spec.title = q.name; spec.cash = pr.cash();
+    spec.x = e.pos.x; spec.y = e.pos.y + 1.6; spec.z = e.pos.z;
+    if (!this._menu) this._menu = new ShopMenu(this.ctx);
+    this._menu.show(spec, dt);
+  }
+
+  /** One purchase, from the menu, only when the row could be bought and the purse covered it. */
+  _buy(o) {
+    const pr = this._sys('progress'), w = this._sys('weapons');
+    if (!pr) return;
+    if (o.ammo) {
+      if (!w || this._ammoFull(w)) return;
+      if (pr.spendCash(o.price, 'hamlet:ammo')) w.addReserveAll(1);
+      return;
+    }
+    if (o.gas && pr.spendCash(o.price, 'hamlet:gas')) pr.addGas(1);
+  }
+
   /* --------------------------------------------------------------- step -- */
 
   step(dt) {
-    if (!this.ctx.playing || this.ctx.paused) return;
+    if (!this.ctx.playing || this.ctx.paused) { this._menu?.close(); return; }
     this.time += dt;
     const p = this._sys('player');
     const en = this._sys('enemies');
     const lights = this._sys('lights');
     const defence = this._sys('hamlet-defence');
-    if (!p?.pos || !en) return;
+    if (!p?.pos || !en) { this._menu?.close(); return; }
     const use = this.ctx.input.held('use');
     if (!use) this.useLock = false;
 
@@ -637,28 +823,38 @@ export class HamletLife {
 
       // ONE ROVER PER HAMLET, over the fire, and only while you are in it. The lanterns in
       // the geometry are emissive and cost nothing; this is the light that reaches the ground.
+      // When the hamlet holds it swells and settles (flare), on the same rover.
       if (d < LAMP_NEAR && !p.dead) {
         const at = this._world(s, s.spec.lamp[0], s.spec.lamp[1], s.spec.lamp[2]);
-        if (!s.lamp?.inUse) s.lamp = lights?.borrow('hamlet', at.x, at.y, at.z, 0xffb06a, 7.5, 0) || null;
+        if (!s.lamp?.inUse) s.lamp = lights?.borrow('hamlet', at.x, at.y, at.z, 0xffb06a, LAMP_PEAK, 0) || null;
+        if (s.lamp) { const f = s.flareT / FLARE_S; s.lamp.peak = LAMP_PEAK * (1 + FLARE_GAIN * f * f); }
       } else if (s.lamp) { lights?.release(s.lamp); s.lamp = null; }
+      if (s.flareT > 0) s.flareT = Math.max(0, s.flareT - dt);
 
-      if (d > NEAR_R) {
+      // Out of reach, they go (and so does anything that is not standing, so a corpse can
+      // never keep a lookout's one pool slot). Not while this hamlet's siege is live: you can
+      // back off a hundred metres and the rifles are still there when you come back.
+      const live = this.siege === s.id;
+      if (d > NEAR_R && !live) {
         for (const q of s.people) {
-          if (q.e?.alive && q.e.gen === q.gen) en._release(q.e);
+          if (q.e && q.e.gen === q.gen && (q.e.alive || q.e.state === 'corpse')) en._release(q.e);
           q.e = null;
         }
         continue;
       }
 
+      // the host's door takes the press there (hamlet-defence); asked once a step per hamlet
+      const atDoor = !!defence?.atDoor?.(s.id);
       for (const q of s.people) {
         if (!q.e || q.e.gen !== q.gen) { q.e = null; this._spawn(s, q); if (!q.e) continue; }
         if (!q.e.alive || !q.e.neutral) continue;
+        if (q.rackT > 0) this._rack(q, dt);
+        // C6: on the ground, or getting up. Nobody walks it, re-floors it or talks to it.
+        if (q.e.down) continue;
         this._refloor(q, s, dt);
         this._walk(s, q, dt);
 
-        // nobody talks in a hamlet under siege; the lookout is busy and so is everyone else.
-        // And at the host's door the press is the door's (hamlet-defence), not hers.
-        if (this.siege === s.id || defence?.resting || defence?.atDoor?.(s.id)) continue;
+        if (defence?.resting || atDoor) continue;
         const pos = q.e.pos;
         const dd = Math.hypot(p.pos.x - pos.x, p.pos.z - pos.z);
         if (dd > best || Math.abs(p.pos.y - pos.y) > 2.2) continue;
@@ -671,8 +867,38 @@ export class HamletLife {
       this._protect(s, dt);
     }
 
-    if (!talkTo || p.dead || this.ctx.shared.inCar) { this.target = ''; return; }
+    if (!this._focus(p, talkTo, talkSite, use, dt)) this._menu?.close();
+  }
+
+  /** The person you are facing: the counter, a word mid-siege, or the read-through. True when the counter is open. */
+  _focus(p, talkTo, talkSite, use, dt) {
+    if (!talkTo || p.dead || this.ctx.shared.inCar) { this.target = ''; return false; }
+    const defence = this._sys('hamlet-defence');
     const e = talkTo.e;
+    const live = this.siege === talkSite.id;
+
+    // THE COUNTER. Once the trader has paid, he sells. Not on the press that paid, while E is
+    // still down from it: that press was the line, not the start of a purchase hold.
+    if (!live && talkTo.role === 'trader' && defence?.traderOpen?.(talkSite.id) && !(use && this.useLock)) {
+      this.target = talkTo.id;
+      e.stagedYaw = faceYaw(e.pos.x, e.pos.z, p.pos.x, p.pos.z);
+      this._shop(talkTo, talkSite, dt);
+      return true;
+    }
+
+    const pp = _prompt;   // one payload, rewritten every step: hud.js copies the fields in its listener
+    pp.x = e.pos.x; pp.y = e.pos.y + 1.6; pp.z = e.pos.z; pp.detail = talkTo.name;
+
+    // MID-SIEGE: they will talk, briefly, and what they say is where to look.
+    if (live) {
+      this.target = talkTo.id;
+      e.stagedYaw = faceYaw(e.pos.x, e.pos.z, p.pos.x, p.pos.z);
+      pp.rank = 9; pp.subdetail = 'E · TALK';
+      this.ctx.bus.emit('prompt', pp);
+      if (use && !this.useLock) { this.useLock = true; this._busy(talkTo, talkSite, p); }
+      return false;
+    }
+
     const lines = this._lines(talkTo, talkSite);
     const finished = talkTo.read >= lines.length;
     // THE ASK. The lookout, read through, with a defence still to be had: her prompt is the
@@ -681,29 +907,29 @@ export class HamletLife {
     const offer = talkTo.role === 'lookout' && talkTo.talks >= lines.length && talkTo.chain === 'lines'
       && !!defence?.canOffer?.(talkSite.id);
     if (!offer) {
-      if (finished && this.time < talkTo.restUntil) { this.target = ''; return; }     // D10: dark
-      if (finished) talkTo.read = 0;                                                  // readable again
+      if (finished && this.time < talkTo.restUntil) { this.target = ''; return false; }   // D10: dark
+      if (finished) talkTo.read = 0;                                                     // readable again
     }
     this.target = talkTo.id;
     e.stagedYaw = faceYaw(e.pos.x, e.pos.z, p.pos.x, p.pos.z);
     const d = this._sys('dialogue');
     const listening = !!(d?.active?.opts?.speakerEntity === e);
-    const pp = _prompt;   // one payload, rewritten every step: hud.js copies the fields in its listener
-    pp.rank = offer ? 10 : 9; pp.x = e.pos.x; pp.y = e.pos.y + 1.6; pp.z = e.pos.z;
-    pp.detail = talkTo.name;
+    pp.rank = offer ? 10 : 9;
     pp.subdetail = offer ? 'E · STAND WITH US' : listening ? 'E · LISTEN' : 'E · TALK';
     this.ctx.bus.emit('prompt', pp);
-    if (!use || this.useLock) return;
+    if (!use || this.useLock) return false;
     this.useLock = true;
-    if (offer) { defence.start(talkSite.id); return; }
+    if (offer) { defence.start(talkSite.id); return false; }
     this._talk(talkTo, talkSite);
+    return false;
   }
 
   state() {
     return {
       hamlets: this.sites.map(s => ({
         id: s.id, lit: !!s.lamp?.inUse,
-        standing: s.people.filter(q => q.e?.alive).length,
+        standing: s.people.filter(q => q.e?.alive && !q.e.down).length,
+        down: s.people.filter(q => q.e?.alive && q.e.down).length,
         talks: s.people.reduce((n, q) => n + q.talks, 0),
         // D17: what the three rifles are actually doing, for a report and for the suites
         rifles: s.people.filter(q => q.role === 'guard')
@@ -711,8 +937,11 @@ export class HamletLife {
       })),
       target: this.target,
       siege: this.siege,
+      shop: !!this._menu?.showing,
     };
   }
+
+  present() { this._menu?.present(); }
 
   dispose() {
     for (const off of this._offs) off?.();
@@ -720,6 +949,7 @@ export class HamletLife {
     const lights = this._sys('lights');
     for (const s of this.sites) if (s.lamp) { lights?.release(s.lamp); s.lamp = null; }
     this._reset();
+    this._menu?.dispose(); this._menu = null;
   }
 }
 

@@ -33,6 +33,30 @@ import { TAU, clamp, clamp01 } from '../engine/math.js';
 import { frostAt } from '../world/terrain.js';
 
 const MAX_PARTICLES = 1400;
+/* r3 SHOOTING FEEL — THE DARK RING.
+ *
+ * Every particle in this file was ADDITIVE, and at night additive can only ever add light. Dust
+ * off a wall, a puff of dirt, gun smoke and blood all read as faint embers or not at all: the
+ * flesh burst was twelve glowing red points, which is a spark, not blood. MAX_DARK more slots
+ * sit in the SAME buffers and are drawn by a second Points through a second geometry that
+ * shares every attribute (one upload) with its own draw range, on a material with the SAME
+ * shader source and normal blending. Blending is render state, not part of three's program key,
+ * so this costs a draw and no program (checked against renderer.info.programs in the game).
+ *
+ * A normal-blended mote covers what is behind it and adds its own colour, and its colour is
+ * LIT AT BIRTH (_litK): full in your torch or the car's beam, near black out of it. So dust
+ * thrown into your torch hangs there pale, and the same dust in the dark is only a darker
+ * patch against whatever the torch has lit behind it, which is what dust at night does.
+ */
+const MAX_DARK = 360;
+const P_TOTAL = MAX_PARTICLES + MAX_DARK;
+const LIT_AMB = 0.14;                 // what the moon gives a mote no beam is on
+const LIT_REACH = 40;                 // m: past this no beam lights a mote
+// r3: the gun's own smoke. Per weapon: how many puffs, how opaque, and how far they are thrown.
+const SMOKE = Object.freeze({
+  bolt: { n: 3, a: 0.26, v: 1.5 }, shotgun: { n: 4, a: 0.30, v: 1.9 },
+  revolver: { n: 3, a: 0.24, v: 1.2 }, carbine: { n: 1, a: 0.14, v: 1.1 },
+});
 
 /* ------------------------------------------------------------------ *
  * ROUND 18 — FALLING SNOW, WHERE THE FROST LIES.
@@ -96,7 +120,9 @@ const RAIN_COL = Object.freeze({ r: 0.56, g: 0.64, b: 0.78 });
 const _snowO = { x: 0, y: 0, z: 0 };
 const _snowUp = Object.freeze({ x: 0, y: 1, z: 0 });
 const MAX_TRACERS = 24;
-const MAX_DECALS = 64;
+// r3: 128, not 64. The ground and every wall now take a mark (impact()), and a shotgun leaves
+// eight; at 64 the first blast's marks were being recycled by the eighth. One draw at any count.
+const MAX_DECALS = 128;
 
 // Trauma decays to zero in ~1/TRAUMA_DECAY seconds; shake is trauma squared so a small
 // hit is a tap and a big one is a wallop [cinderbloom COMBAT_FEEL].
@@ -197,6 +223,22 @@ const COLORS = {
   flesh: new THREE.Color(0.62, 0.16, 0.16),
   deflect: new THREE.Color(0.55, 0.62, 0.75),
 };
+// r3: the dark ring's materials, at full light. _tint() scales them by _litK at birth.
+const DARK = {
+  stoneDust: new THREE.Color(0.36, 0.35, 0.33),
+  chip: new THREE.Color(0.20, 0.19, 0.18),
+  woodDust: new THREE.Color(0.32, 0.26, 0.19),
+  splinter: new THREE.Color(0.30, 0.19, 0.10),
+  clod: new THREE.Color(0.12, 0.095, 0.07),
+  earth: new THREE.Color(0.25, 0.21, 0.17),
+  snow: new THREE.Color(0.78, 0.81, 0.87),
+  leaf: new THREE.Color(0.11, 0.15, 0.07),
+  cloth: new THREE.Color(0.26, 0.23, 0.19),
+  water: new THREE.Color(0.50, 0.56, 0.62),
+  blood: new THREE.Color(0.30, 0.035, 0.03),
+  smoke: new THREE.Color(0.40, 0.40, 0.42),
+};
+const _tc = new THREE.Color();        // _tint's one scratch colour; burst() reads it at once
 
 export class Fx {
   static id = 'fx';
@@ -223,27 +265,32 @@ export class Fx {
     //   pPrv / pAttrP  — the same, one step earlier.
     // Interpolating in place would feed a fractional position back into the next step and
     // the debris would drift, so the render buffer is its own array.
-    this.pPos = new Float32Array(MAX_PARTICLES * 3);
-    this.pCur = new Float32Array(MAX_PARTICLES * 3);
-    this.pPrv = new Float32Array(MAX_PARTICLES * 3);
-    this.pCol = new Float32Array(MAX_PARTICLES * 3);
+    // r3: every per-particle array is P_TOTAL long: [0, MAX_PARTICLES) is the additive ring,
+    // [MAX_PARTICLES, P_TOTAL) the dark ring (see MAX_DARK).
+    this.pPos = new Float32Array(P_TOTAL * 3);
+    this.pCur = new Float32Array(P_TOTAL * 3);
+    this.pPrv = new Float32Array(P_TOTAL * 3);
+    this.pCol = new Float32Array(P_TOTAL * 3);
     // ROUND 21: size, alpha, ANISO. The third float stretches the sprite vertically in the
     // fragment shader, and it is the whole difference between rain and glitter: a round
     // additive dot falling fast reads as a spark, and rain at night is a LINE. It costs one
     // float per particle and no new program — the alternative was a second material, against
     // a 94-program budget with two spare. 1 is round; snow and every spark stay at 1.
-    this.pAttr = new Float32Array(MAX_PARTICLES * 3);
-    this.pAttrC = new Float32Array(MAX_PARTICLES * 3);
-    this.pAttrP = new Float32Array(MAX_PARTICLES * 3);
-    this.pVel = new Float32Array(MAX_PARTICLES * 3);
-    this.pLife = new Float32Array(MAX_PARTICLES * 2);   // age, life
-    this.pDrag = new Float32Array(MAX_PARTICLES);
-    this.pGrav = new Float32Array(MAX_PARTICLES);
-    this.pSize0 = new Float32Array(MAX_PARTICLES);
-    this.pAlpha0 = new Float32Array(MAX_PARTICLES);
+    this.pAttr = new Float32Array(P_TOTAL * 3);
+    this.pAttrC = new Float32Array(P_TOTAL * 3);
+    this.pAttrP = new Float32Array(P_TOTAL * 3);
+    this.pVel = new Float32Array(P_TOTAL * 3);
+    this.pLife = new Float32Array(P_TOTAL * 2);   // age, life
+    this.pDrag = new Float32Array(P_TOTAL);
+    this.pGrav = new Float32Array(P_TOTAL);
+    this.pSize0 = new Float32Array(P_TOTAL);
+    this.pAlpha0 = new Float32Array(P_TOTAL);
+    this.pGrow = new Float32Array(P_TOTAL).fill(0.6);   // r3: size growth over a life (smoke spreads)
     this.pPos.fill(-9999); this.pCur.fill(-9999); this.pPrv.fill(-9999);
     this.pCursor = 0;
+    this.dCursor = MAX_PARTICLES;                        // r3: the dark ring's own cursor
     this.pColDirty = true;
+    this._pLive = 0; this._pWasLive = true;              // r3: skip the upload of an empty ring
 
     const pGeo = new THREE.BufferGeometry();
     pGeo.setAttribute('position', new THREE.BufferAttribute(this.pPos, 3));
@@ -252,6 +299,7 @@ export class Fx {
     // never culled: the bounding sphere of a ring buffer is meaningless and recomputing
     // it every frame is the cost we are avoiding by pooling in the first place
     pGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
+    pGeo.setDrawRange(0, MAX_PARTICLES);
     this.pGeo = pGeo;
 
     const pMat = new THREE.ShaderMaterial({
@@ -292,6 +340,25 @@ export class Fx {
     this.points.frustumCulled = false;
     this.points.name = 'fx.particles';
     scene.add(this.points);
+
+    /* ---------------- r3: the dark ring (MAX_DARK), same buffers, same program ------------ */
+    const dGeo = new THREE.BufferGeometry();
+    dGeo.setAttribute('position', pGeo.attributes.position);
+    dGeo.setAttribute('color', pGeo.attributes.color);
+    dGeo.setAttribute('aP', pGeo.attributes.aP);
+    dGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
+    dGeo.setDrawRange(MAX_PARTICLES, MAX_DARK);
+    this.dGeo = dGeo;
+    const dMat = new THREE.ShaderMaterial({
+      uniforms: {},
+      vertexShader: pMat.vertexShader, fragmentShader: pMat.fragmentShader,
+      vertexColors: true, transparent: true, depthWrite: false,
+      blending: THREE.NormalBlending, toneMapped: false,
+    });
+    this.dark = new THREE.Points(dGeo, dMat);
+    this.dark.frustumCulled = false;
+    this.dark.name = 'fx.dark';
+    scene.add(this.dark);
 
     /* ---------------- eyeshine (ROUND 22): a second Points on the SAME pMat -------- */
     // The same material INSTANCE, never a clone: a clone is a new program and the county
@@ -385,10 +452,18 @@ export class Fx {
 
   /* --------------------------------------------------------------- spawners -- */
 
-  spawnParticle(x, y, z, vx, vy, vz, life, size, r, g, b, grav = 12, drag = 0.9, alpha0 = 1, aniso = 1) {
-    const i = this.pCursor;
+  spawnParticle(x, y, z, vx, vy, vz, life, size, r, g, b, grav = 12, drag = 0.9, alpha0 = 1, aniso = 1, dark = false, grow = 0.6) {
+    let i;
+    if (dark) {
+      i = this.dCursor;
+      this.dCursor = this.dCursor + 1 >= P_TOTAL ? MAX_PARTICLES : this.dCursor + 1;
+    } else {
+      i = this.pCursor;
+      this.pCursor = (this.pCursor + 1) % MAX_PARTICLES;
+    }
     const i3 = i * 3, i2 = i * 2;
-    this.pCursor = (this.pCursor + 1) % MAX_PARTICLES;
+    this.pGrow[i] = grow;
+    if (this.pLife[i2] >= this.pLife[i2 + 1]) this._pLive++;   // a dead slot comes alive
     // prev = curr = render at birth. The ring reuses slots, and a slot whose prev still held
     // the last owner's position would draw one frame of streak from wherever that one died.
     this.pCur[i3] = x; this.pCur[i3 + 1] = y; this.pCur[i3 + 2] = z;
@@ -405,6 +480,7 @@ export class Fx {
     this.pAttrP[i3] = size; this.pAttrP[i3 + 1] = alpha0; this.pAttrP[i3 + 2] = aniso;
     this.pAttr[i3] = size; this.pAttr[i3 + 1] = alpha0; this.pAttr[i3 + 2] = aniso;
     this.pColDirty = true;   // colour is written on spawn only, never integrated
+    return i;
   }
 
   burst(point, normal, count, speed, life, size, color, opts) {
@@ -412,6 +488,9 @@ export class Fx {
     const grav = opts && opts.grav !== undefined ? opts.grav : 12;
     const drag = opts && opts.drag !== undefined ? opts.drag : 0.9;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
+    const dark = !!(opts && opts.dark);
+    const grow = opts && opts.grow !== undefined ? opts.grow : 0.6;
+    const cr = color.r, cg = color.g, cb = color.b;     // read once: color may be _tc
     const rng = this.rng;
     for (let i = 0; i < count; i++) {
       const a = rng.next() * TAU;
@@ -422,7 +501,52 @@ export class Fx {
       const vz = (normal.z * (1 - spread * 0.5) + Math.sin(a) * spread * (1 - up * 0.5)) * s;
       this.spawnParticle(point.x, point.y, point.z, vx, vy, vz,
         life * (0.6 + rng.next() * 0.8), size * (0.7 + rng.next() * 0.6),
-        color.r, color.g, color.b, grav, drag, alpha);
+        cr, cg, cb, grav, drag, alpha, 1, dark, grow);
+    }
+  }
+
+  /**
+   * r3: how much light a mote born at (x, y, z) has: the moon's LIT_AMB, plus the torch's and
+   * the car's beams where they reach it, softened at the cone's edge and falling off with
+   * distance. Read once, at birth (a particle's colour is never integrated). The two beam
+   * records are refreshed every step by _eyeshine's _beamPoses.
+   */
+  _litK(x, y, z) {
+    let k = LIT_AMB;
+    for (let b = 0; b < _beams.length; b++) {
+      const bm = _beams[b];
+      if (!bm.on) continue;
+      const bx = x - bm.x, by = y - bm.y, bz = z - bm.z;
+      const d = Math.sqrt(bx * bx + by * by + bz * bz);
+      if (d < 1e-3 || d > LIT_REACH) continue;
+      const c = (bx * bm.dx + by * bm.dy + bz * bm.dz) / d;
+      if (c <= bm.cos) continue;
+      k += clamp01((c - bm.cos) / Math.max(1e-3, 1 - bm.cos) * 3) * 1.1 / (1 + d * d * 0.012);
+    }
+    return k > 1.25 ? 1.25 : k;
+  }
+
+  /** `c` scaled by `k` into the one scratch colour. Consume it before the next call. */
+  _tint(c, k) { return _tc.setRGB(c.r * k, c.g * k, c.b * k); }
+
+  /**
+   * r3: the gun's own smoke, from the world muzzle (viewmodel.js muzzleWorld, on the flash): a
+   * few slow grey puffs thrown forward that spread and rise, lit by whatever beam they are in.
+   * (A warm additive glow puff was tried here and read as a ball floating off the barrel.)
+   */
+  muzzleSmoke(x, y, z, dx, dy, dz, weapon, amt = 1) {
+    const S = SMOKE[weapon] || SMOKE.bolt;
+    const rng = this.rng;
+    const k = this._litK(x, y, z);
+    for (let i = 0; i < S.n; i++) {
+      const f = 0.5 + rng.next() * 0.9;
+      const px = x + dx * (0.05 + i * 0.06), py = y + dy * (0.05 + i * 0.06), pz = z + dz * (0.05 + i * 0.06);
+      const j = (rng.next() - 0.5) * 0.5;
+      this.spawnParticle(px, py, pz,
+        dx * S.v * f + j * 0.3, dy * S.v * f + 0.25 + rng.next() * 0.2, dz * S.v * f - j * 0.3,
+        1.2 + rng.next() * 0.6, 0.07 + rng.next() * 0.04,
+        DARK.smoke.r * k, DARK.smoke.g * k, DARK.smoke.b * k,
+        -0.25, 2.2, S.a * amt * (0.7 + rng.next() * 0.3), 1, true, 3.2);
     }
   }
 
@@ -535,35 +659,87 @@ export class Fx {
 
   /* ---------------------------------------------------------------- impact -- */
 
+  /**
+   * r3 SHOOTING FEEL: every surface says what it is. Combat speaks 'stone' for every wall,
+   * building and rock and 'dirt' for the ground, and both fell through to one faint additive
+   * puff with no mark at all, so the two things you shoot most answered least. Each material
+   * now has what it throws (chips, splinters, clods, powder, leaves, spray, blood) in the dark
+   * ring, lit where your torch is, a dim additive fleck or two where a hot or hard thing is
+   * struck, and a mark on everything solid.
+   */
   impact(kind, point, normal, power = 1) {
     const n = normal || _up;
+    const L = this._litK(point.x, point.y, point.z);
+    // Sizes are what the thing is: a stone chip is a centimetre or two, a pellet's mark is
+    // small. A mark scales with the round's power (combat lands a shotgun pellet at 0.6).
+    const m = power > 1 ? 1 : power;
     switch (kind) {
       case 'rock':
-        this.burst(point, n, 6, 5.2 * power, 0.24, 0.05, COLORS.rock, { grav: 14 });
-        this.burst(point, n, 4, 1.8 * power, 0.80, 0.42, COLORS.dust, { grav: 2.5, drag: 2.4, spread: 1.4, alpha: 0.15 });
-        this.decal(point, n, 0.16);
+      case 'stone':
+        this.burst(point, n, 3, 5.2 * power, 0.16, 0.022, COLORS.rock, { grav: 14, alpha: 0.55 });
+        this.burst(point, n, 6, 3.4 * power, 0.55, 0.016, this._tint(DARK.chip, L), { grav: 15, dark: true, alpha: 0.95, grow: 0 });
+        this.burst(point, n, 4, 1.2 * power, 1.10, 0.12, this._tint(DARK.stoneDust, L), { grav: 0.6, drag: 2.6, spread: 1.4, alpha: 0.24, dark: true, grow: 2.4 });
+        this.decal(point, n, 0.085 * m);
         break;
       case 'wood':
-        this.burst(point, n, 7, 4.6 * power, 0.30, 0.055, COLORS.wood, { grav: 15 });
-        this.burst(point, n, 3, 1.4 * power, 0.70, 0.34, COLORS.dust, { grav: 2.0, drag: 2.4, spread: 1.3, alpha: 0.12 });
-        this.decal(point, n, 0.13);
+      case 'plank':
+        // No glow: wood does not spark. Splinters and a little dust, in whatever light there is.
+        this.burst(point, n, 8, 3.8 * power, 0.60, 0.018, this._tint(DARK.splinter, L), { grav: 13, drag: 1.4, dark: true, alpha: 0.95, grow: 0 });
+        this.burst(point, n, 3, 1.0 * power, 0.90, 0.10, this._tint(DARK.woodDust, L), { grav: 0.5, drag: 2.6, spread: 1.3, alpha: 0.18, dark: true, grow: 2.0 });
+        this.decal(point, n, 0.06 * m);
         break;
       case 'metal':
         this.burst(point, n, 9, 6.5 * power, 0.18, 0.045, COLORS.metal, { grav: 16 });
         this.flash(point.x, point.y, point.z, 0xffc46a, 14, 0.05);
-        this.decal(point, n, 0.11);
+        this.decal(point, n, 0.045 * m);
+        break;
+      case 'dirt':
+        if (frostAt(point.x, point.z) > 0.5) { this._snowPuff(point, n, power, L); break; }
+        this.burst(point, n, 7, 3.4 * power, 0.55, 0.026, this._tint(DARK.clod, L), { grav: 15, spread: 0.8, dark: true, alpha: 1, grow: 0 });
+        this.burst(point, n, 4, 1.5 * power, 1.00, 0.14, this._tint(DARK.earth, L), { grav: 0.8, drag: 2.4, spread: 1.2, alpha: 0.28, dark: true, grow: 2.2 });
+        this.decal(point, n, 0.09 * m);
+        break;
+      case 'snow':
+        this._snowPuff(point, n, power, L);
+        break;
+      case 'foliage':
+        this.burst(point, n, 7, 2.2 * power, 1.30, 0.022, this._tint(DARK.leaf, L), { grav: 2.2, drag: 3.0, spread: 1.6, dark: true, alpha: 0.95, grow: 0 });
+        this.burst(point, n, 2, 0.8 * power, 0.70, 0.10, this._tint(DARK.earth, L), { grav: 0.4, drag: 2.6, dark: true, alpha: 0.14, grow: 1.8 });
+        break;
+      case 'cloth':
+        this.burst(point, n, 5, 1.6 * power, 1.10, 0.018, this._tint(DARK.cloth, L), { grav: 1.6, drag: 3.2, spread: 1.4, dark: true, alpha: 0.9, grow: 0 });
+        this.decal(point, n, 0.045 * m);
+        break;
+      case 'glass':
+        this.burst(point, n, 8, 4.0 * power, 0.30, 0.016, COLORS.deflect, { grav: 14, alpha: 0.8 });
+        this.burst(point, n, 6, 2.2 * power, 0.70, 0.014, this._tint(DARK.water, L), { grav: 16, dark: true, alpha: 0.9, grow: 0 });
+        break;
+      case 'water':
+        this.burst(point, _up, 10, 3.2 * power, 0.55, 0.024, this._tint(DARK.water, L), { grav: 13, spread: 0.45, dark: true, alpha: 0.8, grow: 0.3 });
+        this.burst(point, _up, 3, 0.8 * power, 0.60, 0.12, this._tint(DARK.water, L * 0.7), { grav: 0.5, drag: 3.0, dark: true, alpha: 0.16, grow: 2.0 });
         break;
       case 'flesh':
-        this.burst(point, n, 12, 3.6 * power, 0.42, 0.075, COLORS.flesh, { grav: 8, spread: 1.2, alpha: 0.9 });
+        // A dim red fleck or two is the "it went in" (additive); the blood itself is dark and
+        // heavy and falls: a spray, and a few drops that drop like drops.
+        this.burst(point, n, 2, 2.6 * power, 0.12, 0.03, COLORS.flesh, { grav: 8, spread: 1.0, alpha: 0.4 });
+        this.burst(point, n, 6, 2.8 * power, 0.45, 0.045, this._tint(DARK.blood, Math.max(L, 0.45)), { grav: 9, drag: 1.2, spread: 1.1, dark: true, alpha: 0.6, grow: 1.2 });
+        this.burst(point, n, 4, 3.4 * power, 0.60, 0.016, this._tint(DARK.blood, Math.max(L, 0.45) * 0.8), { grav: 14, drag: 0.4, spread: 0.7, dark: true, alpha: 0.95, grow: 0 });
         break;
       case 'deflect':
         this.burst(point, n, 8, 7.0 * power, 0.15, 0.04, COLORS.deflect, { grav: 12 });
         this.flash(point.x, point.y, point.z, 0x9fb4d8, 10, 0.04);
         break;
       default:
-        this.burst(point, n, 5, 3.5 * power, 0.26, 0.05, COLORS.dust, { grav: 10, spread: 1.2, alpha: 0.4 });
+        this.burst(point, n, 5, 3.5 * power, 0.26, 0.03, COLORS.dust, { grav: 10, spread: 1.2, alpha: 0.35 });
+        this.burst(point, n, 3, 1.2 * power, 0.90, 0.12, this._tint(DARK.earth, L), { grav: 0.6, drag: 2.6, dark: true, alpha: 0.22, grow: 2.0 });
         break;
     }
+  }
+
+  /** Powder off lying snow: it goes UP and hangs, pale where your light is. No mark. */
+  _snowPuff(point, n, power, L) {
+    this.burst(point, n, 6, 2.6 * power, 0.50, 0.026, this._tint(DARK.snow, L), { grav: 9, spread: 1.2, dark: true, alpha: 0.9, grow: 0.4 });
+    this.burst(point, _up, 5, 1.4 * power, 1.30, 0.15, this._tint(DARK.snow, L * 0.8), { grav: 0.35, drag: 2.4, spread: 1.4, dark: true, alpha: 0.26, grow: 2.4 });
   }
 
   /**
@@ -575,6 +751,7 @@ export class Fx {
     this.impact('rock', _p, _up); this.impact('wood', _p, _up);
     this.impact('metal', _p, _up); this.impact('flesh', _p, _up);
     this.impact('deflect', _p, _up);
+    this.muzzleSmoke(0, -400, 0, 0, 0, -1, 'bolt');      // r3: the dark ring's draw, compiled at boot
     this.tracer(_p, _up, 1);
   }
 
@@ -907,7 +1084,9 @@ export class Fx {
     // present() owns them; this method only advances curr and remembers prev.
     const pCur = this.pCur, pPrv = this.pPrv, pAC = this.pAttrC, pAP = this.pAttrP;
     const pVel = this.pVel, pLife = this.pLife;
-    for (let i = 0; i < MAX_PARTICLES; i++) {
+    // r3: both rings, and a live count so present() can skip an empty buffer's upload.
+    let live = 0;
+    for (let i = this._pLive > 0 ? 0 : P_TOTAL; i < P_TOTAL; i++) {
       const i3 = i * 3, i2 = i * 2;
       if (pLife[i2] >= pLife[i2 + 1]) continue;
       pPrv[i3] = pCur[i3]; pPrv[i3 + 1] = pCur[i3 + 1]; pPrv[i3 + 2] = pCur[i3 + 2];
@@ -923,6 +1102,7 @@ export class Fx {
         pAC[i3 + 1] = 0; pAP[i3 + 1] = 0;
         continue;
       }
+      live++;
       const dr = Math.exp(-this.pDrag[i] * dt);
       pVel[i3] *= dr;
       pVel[i3 + 1] = pVel[i3 + 1] * dr - this.pGrav[i] * dt;
@@ -931,8 +1111,9 @@ export class Fx {
       pCur[i3 + 1] += pVel[i3 + 1] * dt;
       pCur[i3 + 2] += pVel[i3 + 2] * dt;
       pAC[i3 + 1] = this.pAlpha0[i] * (1 - t * t);
-      pAC[i3] = this.pSize0[i] * (1 + t * 0.6);
+      pAC[i3] = this.pSize0[i] * (1 + t * this.pGrow[i]);
     }
+    this._pLive = live;
 
     // tracers: the head advances at 340 m/s. The matrix is composed in present().
     let trDirty = false;
@@ -974,23 +1155,30 @@ export class Fx {
     const a = alpha === undefined ? 1 : (alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha));
 
     /* ---- particles ------------------------------------------------------- */
+    // r3: an empty ring (and the frame after it emptied, which parks the last of them) was
+    // still re-uploaded every frame: two 21 KB buffers for nothing. Now only while anything
+    // is alive, or has just died.
     const pPos = this.pPos, pCur = this.pCur, pPrv = this.pPrv;
     const pAttr = this.pAttr, pAC = this.pAttrC, pAP = this.pAttrP, pLife = this.pLife;
-    for (let i = 0; i < MAX_PARTICLES; i++) {
-      const i3 = i * 3, i2 = i * 2;
-      if (pLife[i2] >= pLife[i2 + 1]) {
-        // Idempotent, and only writes on the frame a particle actually retired.
-        if (pAttr[i3 + 1] !== 0) { pAttr[i3 + 1] = 0; pPos[i3 + 1] = -9999; }
-        continue;
+    const ringLive = this._pLive > 0;
+    if (ringLive || this._pWasLive) {
+      for (let i = 0; i < P_TOTAL; i++) {
+        const i3 = i * 3, i2 = i * 2;
+        if (pLife[i2] >= pLife[i2 + 1]) {
+          // Idempotent, and only writes on the frame a particle actually retired.
+          if (pAttr[i3 + 1] !== 0) { pAttr[i3 + 1] = 0; pPos[i3 + 1] = -9999; }
+          continue;
+        }
+        pPos[i3] = pPrv[i3] + (pCur[i3] - pPrv[i3]) * a;
+        pPos[i3 + 1] = pPrv[i3 + 1] + (pCur[i3 + 1] - pPrv[i3 + 1]) * a;
+        pPos[i3 + 2] = pPrv[i3 + 2] + (pCur[i3 + 2] - pPrv[i3 + 2]) * a;
+        pAttr[i3] = pAP[i3] + (pAC[i3] - pAP[i3]) * a;
+        pAttr[i3 + 1] = pAP[i3 + 1] + (pAC[i3 + 1] - pAP[i3 + 1]) * a;
       }
-      pPos[i3] = pPrv[i3] + (pCur[i3] - pPrv[i3]) * a;
-      pPos[i3 + 1] = pPrv[i3 + 1] + (pCur[i3 + 1] - pPrv[i3 + 1]) * a;
-      pPos[i3 + 2] = pPrv[i3 + 2] + (pCur[i3 + 2] - pPrv[i3 + 2]) * a;
-      pAttr[i3] = pAP[i3] + (pAC[i3] - pAP[i3]) * a;
-      pAttr[i3 + 1] = pAP[i3 + 1] + (pAC[i3 + 1] - pAP[i3 + 1]) * a;
+      this.pGeo.attributes.position.needsUpdate = true;
+      this.pGeo.attributes.aP.needsUpdate = true;
     }
-    this.pGeo.attributes.position.needsUpdate = true;
-    this.pGeo.attributes.aP.needsUpdate = true;
+    this._pWasLive = ringLive;
     if (this.pColDirty) { this.pGeo.attributes.color.needsUpdate = true; this.pColDirty = false; }
 
     /* ---- eyeshine (ROUND 22) --------------------------------------------- */
@@ -1047,13 +1235,15 @@ export class Fx {
     if (this.ctx.time) this.ctx.time.scale = this._freeze > 0 ? 0 : 1;
   }
 
-  ready() { return !!(this.points && this.tracers && this.decals && this.eyes); }
+  ready() { return !!(this.points && this.tracers && this.decals && this.eyes && this.dark); }
 
   dispose() {
     this._offBroken?.();
     // The eyes share the ring's material: remove and drop the geometry, dispose the
     // material once, with the ring.
     if (this.eyes) { this.eyes.removeFromParent(); this.eyes.geometry.dispose(); this.eyes = null; }
+    // The dark ring shares the ring's attributes: drop its geometry and its own material.
+    if (this.dark) { this.dark.removeFromParent(); this.dark.geometry.dispose(); this.dark.material.dispose(); this.dark = null; }
     for (const m of [this.points, this.tracers, this.decals]) {
       if (!m) continue;
       m.removeFromParent();

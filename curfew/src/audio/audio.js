@@ -841,7 +841,6 @@ export class Audio {
     this.mixLP2 = c.createBiquadFilter();
     this.mixLP2.type = 'lowpass'; this.mixLP2.frequency.value = MIX_LP_HZ; this.mixLP2.Q.value = 1.307;
     this.mixLP1.connect(this.mixLP2);
-    this.mixLP2.connect(this.threatDuckGain);
 
     // The 400 Hz punch carve. Everything except a player shot's own body.
     this.dipEQ = c.createBiquadFilter();
@@ -849,7 +848,12 @@ export class Audio {
     this.dipEQ.frequency.value = 400;
     this.dipEQ.Q.value = 1.1;
     this.dipEQ.gain.value = 0;
-    this.dipEQ.connect(this.mixLP1);
+    this.dipEQ.connect(this.threatDuckGain);
+    // r3: the lowpass is the WORLD's and the CREATURES', as the header says, and then the
+    // punch carve: the 400 Hz dip ducks everything but the body layer. It used to be wired the
+    // other way round, so every remote shot, tail and impact went through the 1.6 kHz 4th-order
+    // lowpass (muffled) and the per-shot dip touched the weapons bus only.
+    this.mixLP2.connect(this.dipEQ);
 
     // Weapons cede the pinna band without losing their leading edge: a broad
     // -5 dB scoop centred in 2.5-5.5 kHz rather than the world bus's brick LP.
@@ -1170,6 +1174,9 @@ export class Audio {
       // meaning anything. player/controller.js owns the footfall emit now.
     });
     on('weapon:hit', (p) => this.guns.impact(p));
+    // r3: a poacher's report (enemies._fireBolt), placed, and a round past your ear
+    on('enemy:shot', (p) => this.guns.shot(p));
+    on('enemy:whizz', (p) => this.guns.whizz(p.x, p.y, p.z));
     on('weapon:reload', (p) => this.guns.reloadCue(p));
     on('player:step', (p) => this.bed.footstep(p));
     on('player:land', (p) => this.bed.land(p));

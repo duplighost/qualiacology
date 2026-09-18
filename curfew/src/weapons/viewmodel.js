@@ -64,6 +64,78 @@ function bevelBox(w,h,d) {
   return g;
 }
 
+/* ---------------- r3: shapes that are not boxes ----------------
+ * The guns were built from boxes with a 3 mm bevel, capped tubes and an 8x6 sphere: a stock of
+ * three planks with a square block for a grip, a straight 25 mm barrel, flat trigger guards. These
+ * are the few shapes that replace them, all core three geometry, in the same four materials:
+ * a part drawn in PROFILE (a side view, extruded to its width and rounded all round), a long part
+ * with rounded long edges, and a lathe for anything round. Normals are welded so a rounded part
+ * shades as one surface, not as facets. */
+function smoothed(geo) {
+  // Weld every vertex that shares a position (to 10 um), then let three average the faces. (The
+  // vendored BufferGeometryUtils carries mergeGeometries only.) Boot-time work, a few thousand
+  // vertices a part.
+  const src = geo.index ? geo.toNonIndexed() : geo;
+  const pos = src.attributes.position, n = pos.count;
+  const seen = new Map(), idx = new Uint32Array(n), out = [];
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const key = Math.round(x * 1e5) + ',' + Math.round(y * 1e5) + ',' + Math.round(z * 1e5);
+    let k = seen.get(key);
+    if (k === undefined) { k = out.length / 3; seen.set(key, k); out.push(x, y, z); }
+    idx[i] = k;
+  }
+  const m = new THREE.BufferGeometry();
+  m.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  m.setIndex(new THREE.BufferAttribute(idx, 1));
+  m.computeVertexNormals();
+  if (src !== geo) src.dispose();
+  geo.dispose();
+  return m;
+}
+/** A centred rounded rectangle, into `path`. */
+function rrect(path, w, h, r) {
+  const x = -w / 2, y = -h / 2;
+  path.moveTo(x + r, y);
+  path.lineTo(x + w - r, y); path.quadraticCurveTo(x + w, y, x + w, y + r);
+  path.lineTo(x + w, y + h - r); path.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  path.lineTo(x + r, y + h); path.quadraticCurveTo(x, y + h, x, y + h - r);
+  path.lineTo(x, y + r); path.quadraticCurveTo(x, y, x + r, y);
+  return path;
+}
+/** A long part, its length on z: long edges rounded to `r`, both ends softened by `e`. */
+function roundBar(w, h, d, r, e = 0.0025) {
+  const iw = w - 2 * e, ih = h - 2 * e;
+  const rr = Math.max(0.0004, Math.min(r, iw / 2 - 1e-4, ih / 2 - 1e-4));
+  const geo = new THREE.ExtrudeGeometry(rrect(new THREE.Shape(), iw, ih, rr), {
+    depth: Math.max(1e-4, d - 2 * e), bevelEnabled: e > 0, bevelThickness: e, bevelSize: e,
+    bevelSegments: 2, curveSegments: 5,
+  });
+  geo.translate(0, 0, -(d - 2 * e) / 2);
+  return smoothed(geo);
+}
+/**
+ * A part drawn in profile: `draw(shape)` traces its side view with x = the gun's z and y = the
+ * gun's y, and it is extruded across the gun to `width`, every edge rounded by `bevel`.
+ */
+function profile(width, bevel, draw) {
+  const shape = new THREE.Shape();
+  draw(shape);
+  const depth = Math.max(1e-4, width - 2 * bevel);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel * 0.9, bevelSegments: 3, curveSegments: 10,
+  });
+  geo.translate(0, 0, -depth / 2);
+  geo.rotateY(-Math.PI / 2);          // shape x -> gun z, extrusion -> across the gun (x)
+  return smoothed(geo);
+}
+/** Turned along z: `pts` are [radius, z] pairs from the back to the front. */
+function turned(pts, seg = 28) {
+  const geo = new THREE.LatheGeometry(pts.map(([r, z]) => new THREE.Vector2(r, z)), seg);
+  geo.rotateX(Math.PI / 2);           // lathe y -> gun z (the back of the list ends up at +z)
+  return smoothed(geo);
+}
+
 /* ---------------- the authored pose anchors ---------------- */
 
 // VIGIL's hip pose was authored for the CINDER CARBINE, and lifting it onto a BOLT RIFLE is
@@ -132,6 +204,8 @@ const POSES = {
     muzzle: new THREE.Vector3(0, 0.014, -0.5850),
     boltThrow: 1.0, boltLift: -0.55,
     brass: { right: 0.16, fwd: 0.30, down: 0.06 },
+    kick: { pos: 0.90, flip: 1.50, twist: 1.20, rot: { f: 4.09, z: 1.38 } },   // see KICK below: 25 mm back, 5 degrees up
+    flash: { k: 1.0, core: 0.034, cone: 0.55, len: 1.0, light: 46 },   // THE FLASH, per gun (_presentFlash)
   },
   carbine: {
     // Started at VIGIL's rest (0.0975, -0.0880, -0.2820) and MEASURED (tests/weapon.mjs (f),
@@ -174,6 +248,8 @@ const POSES = {
     muzzle: new THREE.Vector3(0, 0.012, -0.472),
     boltThrow: 0.30, boltLift: 0,
     brass: { right: 0.14, fwd: 0.24, down: 0.05 },
+    kick: { pos: 0.30, flip: 0.45, twist: 0.45, alt: true, climb: 0.22 },   // 8 mm and 1.5 degrees, twelve times a second
+    flash: { k: 0.72, core: 0.025, cone: 0.40, len: 0.8, light: 26 },
   },
   /* ROUND 6 (Alex, fifth playtest: "I'm assuming there are other guns, right? I haven't found
    * any"). The shotgun and the revolver were defined in CFG.weapons.defs and fired through
@@ -188,8 +264,11 @@ const POSES = {
     rest: new THREE.Vector3(0.1300, -0.1220, -0.2900), rot: new THREE.Euler(-0.024, 0.038, 0.052), scale: 0.96,
     sight: new THREE.Vector3(0, 0.0420, -0.0200), adsDist: 0.230,
     muzzle: new THREE.Vector3(0, 0.016, -0.6300),
-    boltThrow: 1.0, boltLift: 0,            // the pump comes back on the cycle, no lift
+    // r3: a 9 cm stroke (1.45 of the rifle's 6.2 cm bolt throw), which is what a pump racks.
+    boltThrow: 1.45, boltLift: 0,           // the pump comes back on the cycle, no lift
     brass: { right: 0.15, fwd: 0.26, down: 0.06 },
+    kick: { pos: 1.10, flip: 1.90, twist: 1.40, rot: { f: 3.73, z: 1.39 } },   // the heaviest: 31 mm back, 6.5 degrees up
+    flash: { k: 1.45, core: 0.040, cone: 0.70, len: 1.3, light: 54 },
   },
   revolver: {
     // a pistol in two hands: nearer the eye, lower, and the sight line higher in the frame
@@ -198,6 +277,11 @@ const POSES = {
     muzzle: new THREE.Vector3(0, 0.024, -0.2100),
     boltThrow: 0, boltLift: 0,              // cycle 0: the hammer is the moving part, and it does not travel
     brass: null,                            // a revolver keeps its brass in the cylinder
+    kick: { pos: 0.50, flip: 2.10, twist: 1.00, rot: { f: 5.13, z: 1.26 } },   // short and light: it flips, 7 degrees
+    flash: { k: 1.15, core: 0.030, cone: 0.50, len: 0.7, light: 40, gap: true },
+    // A short gun held close: the shared low-ready took all but its front sight off the
+    // bottom of the frame (looked at, 2026-09-18), so it dips less and turns a little more.
+    low: { pos: new THREE.Vector3(0, -0.012, 0.010), rot: new THREE.Euler(-5 * DEG, 19 * DEG, 5 * DEG) },
   },
 };
 
@@ -224,6 +308,10 @@ const adsPosFor = (sight, adsDist, scale, out) =>
 // A bolt rifle is long. The crown sits well forward of the carbine's -0.472. Per-weapon now
 // (POSES.*.muzzle); this.muzzle is the selected gun's.
 const FLASH_AHEAD = 0.070;                    // see THE CINDERBLOOM CLAMP above
+const FLASH_NONE = { k: 1, core: 0.034, cone: 0.55, len: 1, light: 46 };
+// r3: where the revolver's cylinder meets its barrel (gun space): the cylinder's front face is
+// at z -0.051 and the frame is 3 cm wide, so the flares sit just outside it either side.
+const REVOLVER_GAP = { x: 0.026, y: 0.012, z: -0.053 };
 
 const SPRINT_POS = new THREE.Vector3(0.075, -0.045, -0.020);
 const SPRINT_ROT = new THREE.Euler(-14 * DEG, 8 * DEG, 32 * DEG);
@@ -233,11 +321,84 @@ const SPRINT_ROT = new THREE.Euler(-14 * DEG, 8 * DEG, 32 * DEG);
 // gun's share of the frame at the bottom of the swap is what says it left.
 const SWAP_DROP = new THREE.Vector3(0.02, -0.19, 0.03);
 const SWAP_ROT = new THREE.Euler(-34 * DEG, 0, 0);
+// THE LOW-READY. Lowered is a pose, not an absence: the muzzle drops and swings in across the
+// body, still in frame, so a lowered gun reads as a gun you chose to point at the floor. Small
+// on purpose: the lens is 48 degrees and the guns sit low right, so any drop of 4.5 cm or more
+// loses the shotgun and the revolver off the bottom of the frame (the r3 evidence pass rastered
+// the real meshes). Looked at in the game on all four guns, 2026-09-18.
+const LOW_POS = new THREE.Vector3(0, -0.030, 0.015);
+const LOW_ROT = new THREE.Euler(-10 * DEG, 16 * DEG, 4 * DEG);
+const LOW = { pos: LOW_POS, rot: LOW_ROT };      // a gun's POSES entry may carry its own `low`
 // ROUND 6: how far down the swap curve reaches (of SWAP_DROP / SWAP_ROT + the sprint pose).
 // Measured: the bolt's coverage hits 0% at 0.55 of the drop and the carbine's at 0.55 on the
 // way back up, so 0.66 clears the frame with a margin and nothing more — the gun leaves the
 // frame for ~4 steps around the midpoint instead of 17.
 const SWAP_REACH = 0.66;
+// THE KICK (r3 polish, 2026-09-18). The weapon-kick springs were nudged x16 in _onPulse and
+// divided by 16 again in present(), on a 16 Hz spring that is back at rest one step after the
+// shot, so the gun in the hands moved 0.005 mm when it fired while the world punched (measured:
+// tests/shots/r3-gun/polish/before-*). The numbers in _onPulse are now the PEAK the gun reaches,
+// in metres and radians at the hip, times the gun's own POSES.*.kick and the stance's mW (0.32
+// aimed): the impulse that reaches that peak is worked out from the spring itself at boot, so
+// retuning a spring cannot quietly change how far the gun goes. The springs are slower than
+// VIGIL's 16 Hz so the kick is seen: the push back is gone in four steps, the muzzle comes down
+// over six, and neither rings.
+const KICK_POS = { f: 9, z: 0.60 };
+const KICK_ROT = { f: 7, z: 0.65 };
+/** Peak displacement of `spring` params for a unit impulse, sampled at the fixed step. */
+function kickPeak({ f, z }) {
+  const s = new Spring(f, z);
+  s.nudge(1);
+  let pk = 0;
+  for (let i = 0; i < 12; i++) pk = Math.max(pk, s.update(CFG.loop.FIXED));
+  return pk;
+}
+const KICK_GAIN_POS = 1 / kickPeak(KICK_POS);
+const KICK_GAIN_ROT = 1 / kickPeak(KICK_ROT);
+const KICK_NONE = { pos: 1, flip: 1, twist: 1 };
+// THE WEIGHT (r3 shooting feel). On KICK_ROT every gun's muzzle was back at rest 83 ms after the
+// shot, which read light and twitchy for a rifle. A heavy gun's muzzle SNAPS up and then comes
+// down under the shooter's control, and that is an OVERDAMPED spring: two real rates instead of
+// a ring. POSES.*.kick.rot is that spring per gun, chosen from the two rates (per second):
+//   bolt      11 / 60  -> 4.09 Hz z 1.38: peak on step 1-2, half down at 117 ms, 10% at 267 ms
+//   shotgun   10 / 55  -> 3.73 Hz z 1.39: peak on step 2,   half down at 117 ms, 10% at 300 ms
+//   revolver  16 / 65  -> 5.13 Hz z 1.26: peak on step 1,   half down at  83 ms, 10% at 200 ms
+// none overshooting by more than 1.3% (scratchpad r3/gun/rotsim.mjs, engine/math.js's Spring).
+// The carbine keeps KICK_ROT: at twelve rounds a second a slow return is a climb, and the
+// climb is authored on its own (CLIMB_MAX). Each spring's own impulse gain is worked out here,
+// so the peaks written in _onPulse stay the peaks.
+for (const id in POSES) {
+  const K = POSES[id].kick;
+  if (K) K.gainRot = K.rot ? 1 / kickPeak(K.rot) : KICK_GAIN_ROT;
+}
+// THE HANDS AT WORK (r3 shooting feel). The same fault as the kick, on the other two springs:
+// the reload beats nudged a 13 Hz jolt by j*10, which peaks at 0.05 mm (the seat) to 0.08 mm
+// (the bolt release) one step later and is gone the next (simulated with engine/math.js's own
+// Spring: scratchpad r3/gun/joltsim.mjs), and a hard landing dipped the gun 0.7 mm. Now the
+// numbers in RELOAD_JOLT / CYCLE_JOLT are PEAKS, in jolt units (one unit is 3 mm down and 0.6
+// degrees of muzzle, see present()), and the jolt is slower so a knock is seen: at 8 Hz it
+// peaks on the second step and has settled in eight. Aimed, a jolt is 6% of that
+// (JOLT_ADS_K), so a reload you keep the sight up through keeps the bead on the ray (0.048 NDC
+// at a tenth, against tests/weapon.mjs (l)'s 0.05, so it is less).
+const JOLT_SPRING = { f: 8, z: 0.50 };
+const JOLT_GAIN = 1 / kickPeak(JOLT_SPRING);
+const JOLT_ADS_K = 0.06;
+const DIP_SPRING = { f: 6.2, z: 0.62 };
+const DIP_GAIN = 1 / kickPeak(DIP_SPRING);
+// The rifle's bolt (and, scaled by POSES.*.boltThrow, the pump and the charging handle) travels
+// this far back on the cycle, and stays back on an empty gun until the reload closes it.
+const BOLT_TRAVEL = 0.062;
+const BOLT_CLOSE_S = 0.12;           // the empty reload's bolt, released, runs home in this long
+// The carbine walks up in the hands over a long burst (POSES.carbine.kick.climb, degrees a
+// round at the hip), to this, and settles back with this half-life once the trigger lets go.
+const CLIMB_MAX = 2.4 * DEG, CLIMB_HL = 0.12;
+
+// YOUR TORCH ON YOUR OWN HANDS (r3 polish). Where the stand-in for the torch sits in this
+// scene (camera metres: a hand's width above the eye and a little behind), and how bright it is
+// against the torch's CFG.lights.torch.hot. See _buildLights.
+const TORCH_AT = new THREE.Vector3(-0.05, 0.09, 0.04);
+const VM_TORCH = 2.4;
+
 // ROUND 6 repair: the reload body track (the -0.045 m dip and the 9 / 22 / -16 degree roll that
 // says "hands working") is scaled down to this at full ADS. MEASURED 2026-09-03 before the change
 // (tests/artifacts/r1-probe-sight-before.txt): the auto reload KEPT adsT at 1.0 (weapon.js) while
@@ -314,10 +475,56 @@ const VM_GRADE_HELPERS = /* glsl */`
   }
   float vmBayer2(vec2 a) { a = floor(a); return fract(a.x * 0.5 + a.y * a.y * 0.75); }
   float vmBayer4(vec2 a) { return vmBayer2(0.5 * a) * 0.25 + vmBayer2(a); }
+  float vmHash13(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+  float vmNoise3(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = mix(vmHash13(i), vmHash13(i + vec3(1.0, 0.0, 0.0)), f.x);
+    float b = mix(vmHash13(i + vec3(0.0, 1.0, 0.0)), vmHash13(i + vec3(1.0, 1.0, 0.0)), f.x);
+    float c = mix(vmHash13(i + vec3(0.0, 0.0, 1.0)), vmHash13(i + vec3(1.0, 0.0, 1.0)), f.x);
+    float d = mix(vmHash13(i + vec3(0.0, 1.0, 1.0)), vmHash13(i + vec3(1.0, 1.0, 1.0)), f.x);
+    return mix(mix(a, b, f.y), mix(c, d, f.y), f.z);
+  }
+`;
+
+/* r3: THE SURFACE. Every part was one flat colour, so the steel read as dark painted plastic and
+ * the stock as brown card. Per material (uVmSurf): WOOD (1) gets grain, fine dark lines running
+ * the length of the gun, wandering a little, over a slow figure of lighter and darker wood, and
+ * a satin sheen where the grain is tight; STEEL (2) gets a fine breakup of its roughness and a
+ * few percent of its colour, so light moves across it the way it does on worn bluing instead of
+ * sliding off one smooth sheet. It is keyed on the part's own position (vFinishPosition, which
+ * finishes.js already carries), so it holds still on the gun as the gun moves. The hands, the
+ * pour rig, the glass and the dot are 0: untouched. */
+const VM_SURF_COLOR = /* glsl */`
+  if (uVmSurf > 0.5) {
+    vec3 sp = vFinishPosition;
+    if (uVmSurf < 1.5) {
+      float wav = vmNoise3(sp * vec3(9.0, 9.0, 2.2)) * 0.020 + vmNoise3(sp * vec3(40.0, 40.0, 7.0)) * 0.004;
+      float lines = sin((sp.y * 0.92 + sp.x * 0.39 + wav) * 1150.0);
+      float grain = smoothstep(0.55, 1.0, lines);
+      float figure = vmNoise3(sp * vec3(26.0, 26.0, 5.0));
+      diffuseColor.rgb *= mix(1.10, 0.80, figure) * (1.0 - 0.30 * grain);
+    } else {
+      float n = vmNoise3(sp * 55.0) * 0.6 + vmNoise3(sp * 190.0) * 0.4;
+      diffuseColor.rgb *= 0.94 + 0.12 * n;
+    }
+  }
+`;
+// Roughness only ever goes UP from the tuned value (ART.md's measured lobe): a breakup that
+// polished spots below it lifted the gun's brightest pixels past its value ceiling.
+const VM_SURF_ROUGH = /* glsl */`
+  if (uVmSurf > 1.5) {
+    float rn = vmNoise3(vFinishPosition * 38.0) * 0.65 + vmNoise3(vFinishPosition * 150.0) * 0.35;
+    roughnessFactor = clamp(roughnessFactor * (1.0 + 0.16 * rn), 0.05, 1.0);
+  } else if (uVmSurf > 0.5) {
+    float wv = vmNoise3(vFinishPosition * vec3(9.0, 9.0, 2.2)) * 0.020;
+    float ln = smoothstep(0.55, 1.0, sin((vFinishPosition.y * 0.92 + vFinishPosition.x * 0.39 + wv) * 1150.0));
+    roughnessFactor = clamp(roughnessFactor + 0.08 * ln, 0.05, 1.0);
+  }
 `;
 
 const VM_GRADE_TAIL = /* glsl */`
-  {
+  if (uVmOn > 0.5) {
     vec3 vmCol = gl_FragColor.rgb;
     float vmLum = dot(vmCol, vec3(0.2126, 0.7152, 0.0722));
     vec3 vmCurved = (vmCol - 0.5) * uVmContrast + 0.5;
@@ -356,6 +563,8 @@ const _fwd = new THREE.Vector3();
 const _rgt = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
 const _S = new Float64Array(C.N);             // the interpolated frame
+const _rayO = { x: 0, y: 0, z: 0 };            // r3: the brass floor ray (_floorUnder)
+const _DOWN = Object.freeze({ x: 0, y: -1, z: 0 });
 const _ZERO = Object.freeze({ x: 0, y: 0, z: 0 });
 
 export class Viewmodel {
@@ -395,13 +604,14 @@ export class Viewmodel {
     this._buildBrass();
     this._selectGun('bolt');        // pose, anchors and visibility for the M0 gun
 
-    /* ---- springs. VIGIL's freq/damping pairs, unchanged. ---- */
-    this.kickPos = new Spring3(16, 0.50);
-    this.kickRot = new Spring3(16, 0.50);
+    /* ---- springs. VIGIL's freq/damping pairs, except the kick (THE KICK, above). ---- */
+    this.kickPos = new Spring3(KICK_POS.f, KICK_POS.z);
+    this.kickRot = new Spring3(KICK_ROT.f, KICK_ROT.z);
+    { const R = (this.cur && this.cur.pose.kick && this.cur.pose.kick.rot) || KICK_ROT; for (const sp of [this.kickRot.x, this.kickRot.y, this.kickRot.z]) { sp.w = TAU * R.f; sp.z = R.z; } }
     this.angLag = new Spring3(6.5, 0.72);
     this.linLag = new Spring3(7.0, 0.80);
-    this.landDip = new Spring(6.2, 0.62);
-    this.jolt = new Spring(13, 0.55);
+    this.landDip = new Spring(DIP_SPRING.f, DIP_SPRING.z);
+    this.jolt = new Spring(JOLT_SPRING.f, JOLT_SPRING.z);    // THE HANDS AT WORK (was 13 Hz)
     this.boltS = new Spring(22, 0.30);
 
     this.prevS = new Float64Array(C.N);
@@ -417,10 +627,20 @@ export class Viewmodel {
     this.muzzleHandle = null;
     this.muzzleGen = -1;
     this.renderedFrame = -1;
+    this._openHold = false;            // r3: an empty reload keeps the bolt back until it closes it
+    this._closeT = 99;                 // s since the held-back bolt was released
+    this._climb = 0;                   // r3: the carbine's walk up the burst (CLIMB_MAX)
+    this._brassLand = { x: 0, y: 0, z: 0, speed: 0, soft: 0, shell: false };   // 'brass:land', reused
+    this._flashLight = 46;             // the selected gun's world flash (POSES.*.flash.light)
+    this._flashJit = 1;                // this shot's flash size, 0.88..1.12
+    this._smokeN = 0;
+    this._cylFrom = 0; this._cylAng = 0; this._cylT = 99;   // r3: the revolver's cylinder turning on
+    this._hammerT = 99;                                        // r3: s since the hammer fell
 
+    // A hard landing dips the gun: up to 16 mm and 1.3 degrees (it was 0.7 mm, THE HANDS AT WORK).
     ctx.bus.on('player:land', (p) => {
       const sp = (p && p.speed) || 0;
-      this.landDip.nudge(-clamp(sp * 0.030, 0, 0.42) * 6.2);
+      this.landDip.nudge(-clamp(sp * 0.030, 0, 0.42) * 2.2 * DIP_GAIN);
     });
 
     // The gun draws AFTER the world and after post, with depth cleared. Nothing
@@ -463,6 +683,12 @@ export class Viewmodel {
     this._applyPose();
     if (this.flashCore) this.flashCore.position.copy(this.muzzle);
     if (this.flashCone) this.flashCone.position.set(this.muzzle.x, this.muzzle.y, this.muzzle.z - 0.14);
+    this._flashLight = P.flash ? P.flash.light : 46;
+    // THE WEIGHT: this gun's muzzle spring (the springs exist after the constructor's first select).
+    if (this.kickRot) {
+      const R = (P.kick && P.kick.rot) || KICK_ROT;
+      for (const sp of [this.kickRot.x, this.kickRot.y, this.kickRot.z]) { sp.w = TAU * R.f; sp.z = R.z; }
+    }
   }
 
   /**
@@ -508,24 +734,32 @@ export class Viewmodel {
         uVmBlackFloor: { value: G.blackFloor },
         uVmGrain: { value: G.grain * VM_GRAIN_MATCH },
         uVmVignette: { value: G.vignette },
+        uVmOn: { value: 1 },            // r3: the whole lane-local grade, on or off (setGraded)
       };
       this._gradeOn = true;
       this._bufSize = new THREE.Vector2(1, 1);
     }
     const U = this._gradeU;
+    // r3: THE SURFACE, per material (VM_SURF_*). A uniform, not a define, so every material in
+    // this scene still shares the one program.
+    if (!mat.userData.vmSurf) mat.userData.vmSurf = { value: 0 };
+    const surf = mat.userData.vmSurf;
     mat.onBeforeCompile = (shader) => {
       for (const k in U) shader.uniforms[k] = U[k];
+      shader.uniforms.uVmSurf = surf;
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>',
           '#include <common>\n' +
           'uniform float uVmTime, uVmContrastFrom, uVmContrastTo, uVmContrast;\n' +
-          'uniform float uVmBlackFloor, uVmGrain, uVmVignette;\n' +
+          'uniform float uVmBlackFloor, uVmGrain, uVmVignette, uVmOn, uVmSurf;\n' +
           'uniform vec2 uVmResolution;\n' + VM_GRADE_HELPERS)
+        .replace('#include <color_fragment>', '#include <color_fragment>\n' + VM_SURF_COLOR)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + VM_SURF_ROUGH)
         .replace('#include <colorspace_fragment>',
           '#include <colorspace_fragment>\n' + VM_GRADE_TAIL);
     };
     // CONSTANT, and identical across all four materials: they share one program.
-    mat.customProgramCacheKey = () => 'curfew-vm-grade-1';
+    mat.customProgramCacheKey = () => 'curfew-vm-grade-2';
     finishMaterial(mat, 0);
     mat.needsUpdate = true;
   }
@@ -539,6 +773,7 @@ export class Viewmodel {
     this._gradeU.uVmGrain.value = on ? G.grain * VM_GRAIN_MATCH : 0;
     this._gradeU.uVmContrast.value = on ? G.contrast : 1;
     this._gradeU.uVmBlackFloor.value = on ? G.blackFloor : 0;
+    this._gradeU.uVmOn.value = on ? 1 : 0;
   }
 
   _buildLights() {
@@ -617,6 +852,34 @@ export class Viewmodel {
     // ahead of the crown every frame (THE CINDERBLOOM CLAMP, top of file).
     this.viewFlash = new THREE.PointLight(0xffc27a, 0, 4, 2);
     this.scene.add(this.viewFlash);
+    // YOUR TORCH ON YOUR OWN HANDS (r3 polish). The torch is a WORLD light and the gun is drawn
+    // in this scene, so the gun's pixels were identical with the torch on and off, and gloves
+    // held in its beam stayed moon-grey against a wall it had lit warm (r3 critic). This is the
+    // torch's stand-in here: its colour, cone and lagging aim, from TORCH_AT, with no distance
+    // falloff (decay 0), so a butt plate 7 cm from the eye gets what a muzzle 60 cm away gets
+    // and THE CINDERBLOOM CLAMP has nothing to bite. It exists from boot at intensity 0, so it
+    // is in every viewmodel program from the first compile and the torch switch never links a
+    // shader. present() copies the torch's live intensity, flicker and blackout included.
+    const T = CFG.lights.torch;
+    this.torchFill = new THREE.SpotLight(0xffeccb, 0, 0, T.angle, T.penumbra, 0);
+    this.torchFill.position.copy(TORCH_AT);
+    this.torchFill.target.position.set(TORCH_AT.x, TORCH_AT.y, TORCH_AT.z - 1);
+    this.scene.add(this.torchFill, this.torchFill.target);
+  }
+
+  /** The torch stand-in follows the real torch: its intensity, its cone and its lagging aim. */
+  _presentTorch() {
+    const L = this._sys('lights'), T = L && L.torch, wc = this.ctx.camera, F = this.torchFill;
+    if (!T || !wc || (L.torchIsHeadlamp && L.torchIsHeadlamp())) { F.intensity = 0; return; }
+    F.intensity = VM_TORCH * T.intensity / CFG.lights.torch.hot;
+    if (F.intensity <= 0) return;
+    if (F.angle !== T.angle) F.angle = T.angle;
+    // lights.js damps the torch's target toward the look, so the beam trails a fast turn.
+    // Carry that into camera space so the gun is lit from where the beam actually points.
+    _v2.subVectors(T.target.position, T.position);
+    if (_v2.lengthSq() < 1e-8) _v2.set(0, 0, -1);
+    else _v2.transformDirection(_m.extractRotation(wc.matrixWorld).transpose());
+    F.target.position.copy(F.position).add(_v2);
   }
 
   _buildGun() {
@@ -661,6 +924,10 @@ export class Viewmodel {
     const brassM = new THREE.MeshStandardMaterial({ color: 0x7a5a24, roughness: 0.42, metalness: 0.80 });
     this._mats = [wood, blued, matte, brassM];
     for (const m of this._mats) this._grade(m);
+    // r3: the surfaces (VM_SURF_*), and how much of the night sky each one gives back once the
+    // scene has the world's reflection map (init()).
+    wood.userData.vmSurf.value = 1; blued.userData.vmSurf.value = 2; matte.userData.vmSurf.value = 2;
+    wood.envMapIntensity = 0.25; blued.envMapIntensity = 0.9; matte.envMapIntensity = 0.45; brassM.envMapIntensity = 1.0;
     this._finishMats = [...this._mats];
     for (let i=0;i<this._finishMats.length;i++) this._finishMats[i].userData.finishUniforms.uFinishStrength.value = i===2?.72:i===3?.48:1;
     // A visible alternating grip communicates the held-Space movement without a tutorial.
@@ -757,27 +1024,91 @@ export class Viewmodel {
     this.gun.add(revolverGroup);
     this.guns.revolver = this._buildRevolver(revolverGroup, { add, tube, ridgedBox, wood, blued, matte, brassM });
 
+    // r3: DRAW CALLS. Every part was its own mesh: the bolt rifle 28 draws, the carbine 51, the
+    // shotgun 23, the revolver 22, every frame, for a thing that never comes apart. The parts that
+    // do not move are merged into one mesh per material per gun; the moving ones (the bolt, the
+    // pump, the magazine, the cylinder, the hammer) and the sight dots stay their own.
+    for (const id in this.guns) {
+      const r = this.guns[id];
+      this._mergeStatic(r.group, new Set([r.bolt, r.mag, r.cyl, r.dot].filter(Boolean)));
+    }
+
     // Nothing on a viewmodel may ever be frustum-culled: the gun sits inside
     // the near plane's shadow and three's bounding-sphere test gets it wrong.
     this.gun.traverse(o => { o.frustumCulled = false; });
   }
 
+  /** Merge every mesh under `g` that is not (under) something in `keep` into one mesh per material. */
+  _mergeStatic(g, keep) {
+    this.root.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(g.matrixWorld).invert();
+    const rel = new THREE.Matrix4();
+    const byMat = new Map(), gone = [];
+    g.traverse((o) => {
+      if (!o.isMesh || o.renderOrder !== 0) return;
+      for (let q = o; q && q !== g; q = q.parent) if (keep.has(q)) return;
+      rel.multiplyMatrices(inv, o.matrixWorld);
+      const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      geo.applyMatrix4(rel);
+      for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+      geo.clearGroups();
+      let list = byMat.get(o.material);
+      if (!list) byMat.set(o.material, (list = []));
+      list.push(geo);
+      gone.push(o);
+    });
+    for (const o of gone) { o.parent.remove(o); o.geometry.dispose(); }
+    for (const [mat, list] of byMat) {
+      const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
+      if (list.length > 1) for (const q of list) q.dispose();
+      const m = new THREE.Mesh(merged, mat);
+      m.name = 'vm-merged';
+      g.add(m);
+    }
+  }
+
   /** The M0 bolt rifle, exactly as it shipped. Returns the per-weapon record. */
   _buildBolt(g, K) {
-    const { add, tube, ridgedBox, wood, blued, matte } = K;
-    // receiver + barrel: the long line that says "rifle" from the first frame
-    add(g, ridgedBox(0.050, 0.062, 0.235, 3), blued, 0, 0, -0.045);
-    add(g, tube(0.0125, 0.42), blued, 0, 0.014, -0.375);
-    add(g, tube(0.0165, 0.030), blued, 0, 0.014, -0.5750);          // crown
-    add(g, bevelBox(0.0045, 0.018, 0.007), blued, 0, 0.0335, -0.545);  // front blade
-    // furniture
-    add(g, bevelBox(0.042, 0.044, 0.260), wood, 0, -0.008, -0.290);    // forend
-    add(g, bevelBox(0.046, 0.030, 0.016), blued, 0, 0.004, -0.400);    // barrel band
-    add(g, bevelBox(0.044, 0.072, 0.240), wood, 0, -0.014, 0.135);     // comb
-    add(g, bevelBox(0.048, 0.092, 0.016), matte, 0, -0.028, 0.256);    // butt plate
-    add(g, bevelBox(0.038, 0.062, 0.075), wood, 0, -0.048, 0.055, 0.22); // wrist
-    add(g, bevelBox(0.044, 0.036, 0.085), blued, 0, -0.042, -0.055);   // floorplate
-    add(g, bevelBox(0.010, 0.005, 0.056), blued, 0, -0.050, -0.012);   // trigger guard
+    const { add, tube, wood, blued, matte } = K;
+    // r3: a sporting rifle, not a stack of boxes. The receiver is rounded; the barrel tapers from
+    // 27 mm at the receiver to 19 mm at the muzzle and lies in a channel in the fore-end; the
+    // stock is ONE piece drawn in profile, with a comb, a pistol grip and a rubber pad; the guard
+    // is a bow whose ends meet the bottom metal and the grip. Nothing here is on the sight line.
+    add(g, roundBar(0.050, 0.062, 0.235, 0.010), blued, 0, 0, -0.045);            // receiver
+    {
+      const b = new THREE.CylinderGeometry(0.0135, 0.0095, 0.42, 32, 1);          // top = the breech end
+      b.rotateX(Math.PI / 2);
+      add(g, b, blued, 0, 0.014, -0.375);
+    }
+    add(g, tube(0.0112, 0.012), blued, 0, 0.014, -0.5790);                       // the crown
+    add(g, bevelBox(0.0045, 0.014, 0.010), blued, 0, 0.0322, -0.566);            // front blade, on the crown
+    // the fore-end: a channel for the barrel, a belly that deepens toward the action, a rounded tip
+    add(g, profile(0.040, 0.005, (sh) => {
+      sh.moveTo(-0.098, 0.002); sh.lineTo(-0.415, 0.002);
+      sh.quadraticCurveTo(-0.432, 0.001, -0.432, -0.012);
+      sh.quadraticCurveTo(-0.431, -0.022, -0.410, -0.022);
+      sh.lineTo(-0.180, -0.030); sh.lineTo(-0.110, -0.034); sh.lineTo(-0.098, -0.032);
+      sh.lineTo(-0.098, 0.002);
+    }), wood, 0, 0, 0);
+    // the buttstock: tang, comb, heel, butt, belly, pistol grip, back under the action
+    add(g, profile(0.044, 0.005, (sh) => {
+      sh.moveTo(0.066, 0.014);
+      sh.quadraticCurveTo(0.140, 0.020, 0.205, 0.012);
+      sh.lineTo(0.252, 0.008); sh.lineTo(0.256, -0.064);
+      sh.quadraticCurveTo(0.230, -0.068, 0.170, -0.050);
+      sh.quadraticCurveTo(0.120, -0.040, 0.098, -0.048);
+      sh.quadraticCurveTo(0.078, -0.060, 0.066, -0.084);
+      sh.lineTo(0.046, -0.090);
+      sh.quadraticCurveTo(0.026, -0.078, 0.020, -0.052);
+      sh.lineTo(0.022, -0.030); sh.lineTo(0.066, -0.026); sh.lineTo(0.066, 0.014);
+    }), wood, 0, 0, 0);
+    add(g, roundBar(0.046, 0.080, 0.014, 0.008, 0.002), matte, 0, -0.028, 0.264);   // the recoil pad
+    add(g, roundBar(0.036, 0.034, 0.090, 0.006), blued, 0, -0.040, -0.055);         // bottom metal
+    {
+      const guard = new THREE.TorusGeometry(0.0205, 0.0026, 8, 20, Math.PI);
+      guard.rotateY(Math.PI / 2);
+      add(g, guard, blued, 0, -0.050, -0.004, 0, 0, Math.PI);                    // the bow
+    }
     add(g, bevelBox(0.006, 0.020, 0.005), blued, 0, -0.044, -0.008);   // trigger
 
     // the bolt: a group so the whole assembly throws back and forward
@@ -785,11 +1116,17 @@ export class Viewmodel {
     g.add(bolt);
     bolt.position.set(0, 0, 0);
     add(bolt, tube(0.0105, 0.120, 8), blued, 0.0, 0.021, -0.010);
-    add(bolt, bevelBox(0.030, 0.009, 0.009), blued, 0.020, 0.018, 0.030);  // stem
-    add(bolt, new THREE.SphereGeometry(0.0115, 8, 6), blued, 0.036, 0.012, 0.030);      // knob
+    {
+      // the handle: a round stem swept out and down from the bolt to a proper knob
+      const stem = new THREE.CylinderGeometry(0.0034, 0.0042, 0.030, 12, 1);
+      stem.rotateZ(Math.PI / 2 - 0.42);
+      add(bolt, stem, blued, 0.021, 0.015, 0.032);
+      add(bolt, new THREE.SphereGeometry(0.0100, 18, 12), blued, 0.035, 0.009, 0.032);   // knob
+    }
     // ejection port shadow: a near-black sliver so the port reads as a HOLE and
-    // the bolt's travel is legible against it in moonlight.
-    add(g, bevelBox(0.002, 0.026, 0.070), this._portMat, 0.0255, 0.020, -0.010);
+    // the bolt's travel is legible against it in moonlight. (r3: lowered onto the flat of the
+    // rounded receiver, where it used to stand 2 mm proud of the top edge.)
+    add(g, bevelBox(0.002, 0.022, 0.070), this._portMat, 0.0255, 0.012, -0.010);
 
     // scope. The reticle is a real illuminated dot: the gun has to be aimable
     // in a county with no daylight, and a black crosshair on a black hillside
@@ -808,8 +1145,26 @@ export class Viewmodel {
     add(sg, tube(0.0195, 0.200, 12, true), bore, 0, 0, -0.045);
     add(sg, tube(0.0260, 0.048, 12, true), bore, 0, 0, -0.152);   // objective bell
     add(sg, tube(0.0225, 0.036, 12, true), bore, 0, 0, 0.026);    // ocular
-    add(sg, bevelBox(0.030, 0.016, 0.016), blued, 0, -0.022, -0.112);
-    add(sg, bevelBox(0.030, 0.016, 0.016), blued, 0, -0.022, 0.004);
+    // The bells are open tubes round the main tube, so each end showed the gap between the two
+    // as a paper-thin 'C' in every frame (r3 critic). A shoulder closes each end of that gap,
+    // and a rolled lip gives the objective's open mouth and the eyepiece a wall to see.
+    const shoulder = (r0, r1, z, back) => {
+      const m = add(sg, new THREE.RingGeometry(r0, r1, 40, 1), bore, 0, 0, z);
+      if (back) m.rotation.y = Math.PI;
+      return m;
+    };
+    shoulder(0.0195, 0.0225, 0.044, false);    // ocular, the end that faces you
+    shoulder(0.0195, 0.0225, 0.008, true);
+    shoulder(0.0195, 0.0260, -0.128, false);   // objective, the end that faces you
+    add(sg, new THREE.TorusGeometry(0.0250, 0.0014, 6, 40), matte, 0, 0, -0.176);   // objective lip
+    add(sg, new THREE.TorusGeometry(0.0200, 0.0009, 6, 40), matte, 0, 0, 0.055);    // eyepiece lip
+    // r3: THE MOUNTS. Two blocks 16 mm tall used to stop 11 mm short of the receiver, so the
+    // scope hung in the air over the rifle. Each is now a ring clamped round the tube and a base
+    // that stands on the receiver (its top is 0.031; the scope's axis is SIGHT.y above the bore).
+    for (const z of [-0.112, 0.004]) {
+      add(sg, new THREE.TorusGeometry(0.0212, 0.0027, 8, 36), blued, 0, 0, z);
+      add(sg, roundBar(0.020, 0.0235, 0.012, 0.003, 0.0015), blued, 0, 0.0305 + 0.0235 / 2 - SIGHT.y, z);
+    }
     // The ocular glass. At 0.30 over a CLOSED tube this was simply a darker lid; over an
     // open bore it is what a coated lens actually is — a faint cool tint you see the county
     // through. depthWrite off so a transparent disc cannot punch the depth of the world
@@ -865,7 +1220,7 @@ export class Viewmodel {
     const dot = add(sg, new THREE.CircleGeometry(0.0013, 10), this._dotMat, 0, 0, DOT_Z);
     dot.renderOrder = 5;
 
-    return { group: g, bolt, dot, mag: null, pose: POSES.bolt };
+    return { group: g, bolt, boltZ0: bolt.position.z, dot, mag: null, pose: POSES.bolt };
   }
 
   /**
@@ -958,7 +1313,7 @@ export class Viewmodel {
     const dot = add(sg, new THREE.CircleGeometry(0.0016, 10), this._dotMat, 0, 0, 0.013);
     dot.renderOrder = 5;
 
-    return { group: g, bolt, dot, mag, pose: POSES.carbine };
+    return { group: g, bolt, boltZ0: bolt.position.z, dot, mag, pose: POSES.carbine };
   }
 
   /**
@@ -971,35 +1326,54 @@ export class Viewmodel {
   _buildShotgun(g, K) {
     const { add, tube, ridgedBox, wood, blued, matte, brassM } = K;
     const B = (w, h, d) => bevelBox(w, h, d);
-    // receiver, its top rib, and the loading / ejection ports
-    add(g, ridgedBox(0.048, 0.062, 0.180, 3), blued, 0, 0.002, -0.020);
+    // receiver, its top rib, and the loading / ejection ports (r3: the receiver is rounded)
+    add(g, roundBar(0.048, 0.062, 0.180, 0.010), blued, 0, 0.002, -0.020);
     add(g, B(0.010, 0.006, 0.150), blued, 0, 0.036, -0.030);                 // the rib
     add(g, B(0.003, 0.024, 0.062), this._portMat, 0.0245, 0.008, -0.030);   // ejection port
     add(g, B(0.030, 0.003, 0.070), this._portMat, 0, -0.030, -0.020);       // loading port
     // barrel over the magazine tube, a band at the muzzle, the bead
     add(g, tube(0.0115, 0.520), blued, 0, 0.016, -0.365);
     add(g, tube(0.0095, 0.400), blued, 0, -0.012, -0.320);
-    add(g, B(0.030, 0.040, 0.014), blued, 0, 0.002, -0.500);                 // the band
+    add(g, roundBar(0.028, 0.052, 0.012, 0.012), blued, 0, 0.002, -0.500);  // the band, round both tubes
     add(g, tube(0.0135, 0.020), blued, 0, 0.016, -0.622);                    // crown
     add(g, B(0.004, 0.010, 0.006), blued, 0, 0.033, -0.612);                 // front post
     // the pump: the moving part. It rides `bolt`, authored at rest; the cycle slides it +z.
+    // It wraps the magazine tube and its top just meets the barrel (y 0.006 against the
+    // barrel's 0.0045), and the two action bars run back along the tube's sides into the
+    // receiver, so pumping it slides them in and out of the action as on the real gun.
     const bolt = new THREE.Group();
-    bolt.position.set(0, -0.004, -0.300);
+    bolt.position.set(0, -0.017, -0.300);
     g.add(bolt);
-    add(bolt, B(0.046, 0.046, 0.150), wood, 0, 0, 0);
-    for (let i = 0; i < 5; i++) add(bolt, B(0.048, 0.003, 0.004), blued, 0, -0.014, -0.060 + i * 0.030);
-    add(bolt, B(0.016, 0.012, 0.150), blued, 0, 0.026, 0);                  // the action bar
-    // stock: comb, wrist, butt plate; trigger guard and trigger
-    add(g, B(0.044, 0.070, 0.230), wood, 0, -0.014, 0.185);
-    add(g, B(0.048, 0.094, 0.016), matte, 0, -0.028, 0.306);
-    add(g, B(0.038, 0.060, 0.080), wood, 0, -0.048, 0.085, 0.24);
-    const guardGeo = new THREE.TorusGeometry(0.022, 0.003, 6, 18, Math.PI);
+    // r3: the fore-end is TURNED, round the magazine tube (which runs through it), with the ribs
+    // a hand grips by, instead of a square wooden block with five steel strips under it.
+    {
+      const pts = [[0.013, -0.075], [0.0186, -0.075], [0.0204, -0.071]];
+      for (let z = -0.060; z <= 0.0601; z += 0.008) pts.push([0.0208, z - 0.0026], [0.0196, z - 0.0010], [0.0196, z + 0.0010], [0.0208, z + 0.0026]);
+      pts.push([0.0204, 0.071], [0.0186, 0.075], [0.013, 0.075]);
+      add(bolt, turned(pts), wood, 0, 0.002, 0);
+    }
+    for (const x of [-0.0115, 0.0115]) add(bolt, B(0.003, 0.006, 0.125), blued, x, 0.005, 0.1375);  // action bars
+    // stock: one piece in profile, a semi-pistol grip and a recoil pad (r3, was three planks)
+    add(g, profile(0.044, 0.005, (sh) => {
+      sh.moveTo(0.066, 0.016);
+      sh.quadraticCurveTo(0.160, 0.018, 0.245, 0.006);
+      sh.lineTo(0.288, 0.004); sh.lineTo(0.292, -0.070);
+      sh.quadraticCurveTo(0.262, -0.074, 0.190, -0.054);
+      sh.quadraticCurveTo(0.130, -0.042, 0.108, -0.050);
+      sh.quadraticCurveTo(0.090, -0.060, 0.082, -0.078);
+      sh.lineTo(0.064, -0.082);
+      sh.quadraticCurveTo(0.050, -0.066, 0.050, -0.036);
+      sh.lineTo(0.066, -0.026); sh.lineTo(0.066, 0.016);
+    }), wood, 0, 0, 0);
+    add(g, roundBar(0.046, 0.086, 0.020, 0.008, 0.002), matte, 0, -0.033, 0.302);   // recoil pad
+    // The guard's ends meet the receiver's floor (they hung 4 mm under it).
+    const guardGeo = new THREE.TorusGeometry(0.022, 0.0028, 8, 20, Math.PI);
     guardGeo.rotateY(Math.PI / 2);
-    add(g, guardGeo, blued, 0, -0.036, 0.040, 0, 0, Math.PI);
-    add(g, B(0.005, 0.022, 0.005), blued, 0, -0.038, 0.034, -0.18);
+    add(g, guardGeo, blued, 0, -0.030, 0.040, 0, 0, Math.PI);
+    add(g, B(0.005, 0.018, 0.005), blued, 0, -0.038, 0.034, -0.18);
     // the bead at the muzzle, on the sight axis: what you put on the body
     const dot = add(g, new THREE.SphereGeometry(0.0030, 8, 6), brassM, 0, POSES.shotgun.sight.y, -0.614);
-    return { group: g, bolt, dot, mag: null, pose: POSES.shotgun };
+    return { group: g, bolt, boltZ0: bolt.position.z, dot, mag: null, pose: POSES.shotgun };
   }
 
   /**
@@ -1011,20 +1385,38 @@ export class Viewmodel {
   _buildRevolver(g, K) {
     const { add, tube, ridgedBox, wood, blued, matte, brassM } = K;
     const B = (w, h, d) => bevelBox(w, h, d);
-    // frame and top strap
-    add(g, ridgedBox(0.030, 0.042, 0.100, 3), blued, 0, 0.004, -0.005);
-    add(g, B(0.024, 0.008, 0.115), blued, 0, 0.032, -0.030);
-    // the cylinder, with six flutes as dark slivers
-    const cyl = new THREE.CylinderGeometry(0.0195, 0.0195, 0.042, 12);
-    cyl.rotateX(Math.PI / 2);
-    add(g, cyl, blued, 0, 0.008, -0.030);
-    for (let i = 0; i < 6; i++) {
-      const a = i * Math.PI / 3 + Math.PI / 6;
-      add(g, B(0.004, 0.004, 0.026), this._portMat, Math.cos(a) * 0.0185, 0.008 + Math.sin(a) * 0.0185, -0.030, 0, 0, a);
+    // frame and top strap (r3: the frame's edges are rounded)
+    add(g, roundBar(0.030, 0.042, 0.100, 0.006), blued, 0, 0.004, -0.005);
+    // The strap runs back to 0.050 so the rear-sight ears below stand ON it: it used to stop at
+    // 0.0275 and the ears floated 12 mm behind its end and 11 mm over the frame (r3 critic).
+    // It also sits ON the frame now (it hung 2 mm over it), still topping out at 0.036.
+    add(g, B(0.028, 0.0102, 0.1375), blued, 0, 0.0309, -0.01875);
+    // r3: THE CYLINDER. It was a 12-sided can with six dark slivers stuck on for flutes. Now it is
+    // round, cut with six real flutes between the chambers and six chamber mouths through it, its
+    // edges rounded, and it is a group of its own so it can turn on to the next round (present).
+    const cylG = new THREE.Group();
+    cylG.position.set(0, 0.008, -0.030);
+    g.add(cylG);
+    {
+      const cs = new THREE.Shape(), R = 0.0195, N = 96;
+      for (let i = 0; i <= N; i++) {
+        const a = (i / N) * TAU;
+        const f = Math.cos(6 * (a - Math.PI / 6));
+        const r = R - 0.0024 * Math.pow(Math.max(0, (f - 0.35) / 0.65), 1.4);
+        if (i === 0) cs.moveTo(Math.cos(a) * r, Math.sin(a) * r); else cs.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      for (let k = 0; k < 6; k++) {
+        const a = k * Math.PI / 3, h = new THREE.Path();
+        h.absarc(Math.cos(a) * 0.0115, Math.sin(a) * 0.0115, 0.0040, 0, TAU, true);
+        cs.holes.push(h);
+      }
+      const cg = new THREE.ExtrudeGeometry(cs, { depth: 0.039, bevelEnabled: true, bevelThickness: 0.0015, bevelSize: 0.0012, bevelSegments: 2, curveSegments: 10 });
+      cg.translate(0, 0, -0.0195);
+      add(cylG, smoothed(cg), blued, 0, 0, 0);
     }
     // barrel over the underlug, the crown, the front blade
     add(g, tube(0.0095, 0.155, 10), blued, 0, 0.024, -0.130);
-    add(g, B(0.020, 0.026, 0.150), blued, 0, 0.004, -0.128);
+    add(g, roundBar(0.020, 0.026, 0.150, 0.006), blued, 0, 0.004, -0.128);      // the underlug
     add(g, tube(0.0115, 0.016), blued, 0, 0.024, -0.205);
     add(g, B(0.004, 0.014, 0.006), blued, 0, 0.037, -0.196);
     // rear notch: two ears either side of the sight axis, their tops level with the bead
@@ -1032,13 +1424,23 @@ export class Viewmodel {
     // its contract (15/17 px); moving the ears, rather than shrinking the front bead,
     // preserves the aiming reference.
     for (const x of [-0.011, 0.011]) add(g, B(0.0055, 0.008, 0.010), blued, x, 0.040, 0.045);
-    // grip, trigger guard, trigger
-    add(g, B(0.028, 0.078, 0.038), wood, 0, -0.052, 0.036, 0.30);
+    // grip, trigger guard, trigger. r3: the grip is a plow handle drawn in profile (it was a
+    // tilted block), and the guard's ends meet the frame (they hung 5 mm under it).
+    add(g, profile(0.028, 0.004, (sh) => {
+      sh.moveTo(0.012, -0.016);
+      sh.lineTo(0.050, -0.012);
+      sh.quadraticCurveTo(0.062, -0.030, 0.058, -0.058);
+      sh.quadraticCurveTo(0.057, -0.080, 0.068, -0.092);
+      sh.lineTo(0.052, -0.098);
+      sh.lineTo(0.030, -0.094);
+      sh.quadraticCurveTo(0.024, -0.060, 0.012, -0.030);
+      sh.lineTo(0.012, -0.016);
+    }), wood, 0, 0, 0);
     add(g, B(0.032, 0.016, 0.042), blued, 0, -0.014, 0.030);
-    const guardGeo = new THREE.TorusGeometry(0.017, 0.003, 6, 16, Math.PI);
+    const guardGeo = new THREE.TorusGeometry(0.017, 0.0028, 8, 18, Math.PI);
     guardGeo.rotateY(Math.PI / 2);
-    add(g, guardGeo, blued, 0, -0.022, -0.004, 0, 0, Math.PI);
-    add(g, B(0.005, 0.018, 0.004), blued, 0, -0.026, -0.008, -0.2);
+    add(g, guardGeo, blued, 0, -0.018, -0.004, 0, 0, Math.PI);
+    add(g, B(0.005, 0.014, 0.004), blued, 0, -0.024, -0.008, -0.2);
     // the hammer: the moving part, which on this gun does not travel. Its spur stays UNDER
     // the sight line (y 0.044): a hammer that stood above it blocked the bead at full ADS
     // (measured: 0 px of world above the bead, tests/weapon.mjs (m), first cut).
@@ -1049,7 +1451,7 @@ export class Viewmodel {
     add(bolt, B(0.012, 0.005, 0.010), matte, 0, 0.012, 0.010);
     // the bead on the front blade, on the sight axis
     const dot = add(g, new THREE.SphereGeometry(0.0025, 8, 6), brassM, 0, POSES.revolver.sight.y, -0.197);
-    return { group: g, bolt, dot, mag: null, pose: POSES.revolver };
+    return { group: g, bolt, boltZ0: bolt.position.z, dot, mag: null, cyl: cylG, pose: POSES.revolver };
   }
 
   _buildFlash() {
@@ -1083,7 +1485,10 @@ export class Viewmodel {
           vec3 col = mix(vec3(1.0, 0.93, 0.78), vec3(1.0, 0.62, 0.22), clamp(rr * 1.6, 0.0, 1.0));
           gl_FragColor = vec4(col * a, a);
         }`,
-      transparent: true, depthWrite: false, depthTest: false,
+      // r3: depth-TESTED (never written). With the test off the star was painted over the gun
+      // itself: aimed, the bolt's flash sat inside the scope's tube. Now the scope and the crown
+      // stand in front of the flash they make, which is what a flash seen from behind looks like.
+      transparent: true, depthWrite: false, depthTest: true,
       blending: THREE.AdditiveBlending, toneMapped: false,
     });
     this.flashCore = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), coreMat);
@@ -1103,16 +1508,69 @@ export class Viewmodel {
     this.flashCone.visible = false;
     this.flashCone.frustumCulled = false;
     this.gun.add(this.flashCone);
+    // r3: THE CYLINDER GAP. A revolver also flashes sideways out of the gap between the cylinder
+    // and the barrel, and from behind the gun that is two small flares either side of the frame.
+    // The same material as the core (one program, the same life and turn), shown on the revolver.
+    this.flashGap = [];
+    for (const x of [-1, 1]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.022, 0.022), coreMat);
+      m.position.set(x * REVOLVER_GAP.x, REVOLVER_GAP.y, REVOLVER_GAP.z);
+      m.visible = false; m.frustumCulled = false;
+      this.gun.add(m);
+      this.flashGap.push(m);
+    }
+  }
+
+  /**
+   * r3: the gun's smoke, from the real crown in the world (fx.muzzleSmoke). Thinner when aimed,
+   * so the sight picture clears, and only every third round of the carbine, whose smoke would
+   * otherwise stand in front of you as a wall.
+   */
+  _smoke(adsT) {
+    const fx = this._sys('fx'), cam = this._sys('camera');
+    if (!fx || !fx.muzzleSmoke || !cam) return;
+    if (this.curId === 'carbine' && (this._smokeN++ % 3) !== 0) return;
+    if (!this.muzzleWorld(_v3, 0.05)) return;
+    cam.aimDir(_fwd);
+    fx.muzzleSmoke(_v3.x, _v3.y, _v3.z, _fwd.x, _fwd.y, _fwd.z, this.curId, lerp(1, 0.4, adsT || 0));
+  }
+
+  /**
+   * r3: THE CROWN, IN THE WORLD, ON ITS OWN PIXEL. The gun is drawn through this file's 44-48
+   * degree lens and the world through the camera's 55-74, so the crown's camera-space point,
+   * put into the world as it is, lands on a different pixel from the crown you see: nearer the
+   * middle of the frame (THE FLARE TRAP at the top of this file, for anything that is not a
+   * light). The point is moved out along the view plane by the ratio of the two lenses at the
+   * same depth, so smoke and the tracer leave the muzzle you are looking at. `ahead` metres
+   * down the bore. Writes world coordinates into `out`; false with no world camera.
+   */
+  muzzleWorld(out, ahead = 0) {
+    const wc = this.ctx.camera;
+    if (!wc) return false;
+    const MZ = this.muzzle;
+    this.gun.updateWorldMatrix(true, false);
+    this.gun.localToWorld(out.set(MZ.x, MZ.y, MZ.z - ahead));
+    const k = Math.tan(wc.fov * DEG * 0.5) / Math.tan(this.camera.fov * DEG * 0.5);
+    out.x *= k; out.y *= k;
+    out.applyMatrix4(wc.matrixWorld);
+    return true;
   }
 
   _buildBrass() {
     // Brass lives in the WORLD scene: a case you can walk back and find is a
     // record of what you did, and it is the cheapest proof the gun is real.
     const geo = new THREE.CylinderGeometry(0.0042, 0.0040, 0.0620, 6);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xc8963e, roughness: 0.35, metalness: 0.9 });
+    // r3: roughness 0.35 -> 0.5. A case 20 cm from the eye caught the muzzle light at its height
+    // and bloomed into a glowing orange rod beside the carbine's sight; spent brass is not mirror.
+    const mat = new THREE.MeshStandardMaterial({ color: 0xc8963e, roughness: 0.5, metalness: 0.9 });
     this.brass = new THREE.InstancedMesh(geo, mat, BRASS_N);
     this.brass.frustumCulled = false;
     this.brass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    // Every slot starts parked (a new InstancedMesh is 48 identity matrices, 48 cases at the
+    // origin): _presentBrass only writes a slot when it changes (r3).
+    _m.makeScale(0, 0, 0);
+    for (let i = 0; i < BRASS_N; i++) this.brass.setMatrixAt(i, _m);
+    this.brass.instanceMatrix.needsUpdate = true;
     // NOT attached here. main.js constructs every system before it calls any init(), so
     // ctx.scene is still null at construction and this guard was always false - the brass
     // pool then simulated and wrote instance matrices every frame on an orphaned mesh that
@@ -1124,6 +1582,9 @@ export class Viewmodel {
         pos: new THREE.Vector3(), prev: new THREE.Vector3(),
         vel: new THREE.Vector3(), rot: new THREE.Euler(),
         prot: new THREE.Euler(), spin: new THREE.Vector3(),
+        // r3: the floor it will land on (a collider's top under where it is thrown, checked
+        // again where it arrives), whether that is ground (soft) and whether it has been heard.
+        floorY: -Infinity, floorChecked: false, soft: 1, heard: false, shown: false,
       });
     }
     this.brassCursor = 0;
@@ -1145,6 +1606,12 @@ export class Viewmodel {
     // asserts brass.parent so a future regression fails the boot sweep instead of silently
     // simulating an ejection pool nobody can see.
     if (this.ctx.scene && !this.brass.parent) this.ctx.scene.add(this.brass);
+    // r3: THE STEEL HAS A SKY TO REFLECT. gfx gives the world scene a baked, filtered night canopy
+    // (gfx/night-reflections.js); the gun's own scene had nothing, so its metal could only show
+    // the four lights. It shares the same map: set here, before main.js warms every program, so
+    // no program links later and the count does not change (the scene's materials already share
+    // one program, and still do).
+    if (this.ctx.scene && this.ctx.scene.environment) this.scene.environment = this.ctx.scene.environment;
 
     if (typeof window !== 'undefined') {
       const T = (window.__CURFEW = window.__CURFEW || {});
@@ -1199,6 +1666,7 @@ export class Viewmodel {
   warmup() {
     this.flashCore.visible = true;
     this.flashCone.visible = true;
+    for (const m of this.flashGap) m.visible = false;
     for (const id in this.guns) this.guns[id].group.visible = true;
     if (this.ctx.renderer) this.ctx.renderer.compile(this.scene, this.camera);
     this.flashCore.visible = false;
@@ -1233,6 +1701,7 @@ export class Viewmodel {
     this.angLag.update(dt); this.linLag.update(dt);
     this.landDip.update(dt); this.jolt.update(dt); this.boltS.update(dt);
     this.boltAnim += dt;
+    this._cylT += dt; this._hammerT += dt;
 
     // ---- look lag from the camera's angular velocity
     if (!this._seeded) { this.prevYaw = cam.yaw; this.prevPitch = cam.pitch; this._seeded = true; }
@@ -1258,17 +1727,35 @@ export class Viewmodel {
     // interval so the cadence is the animation, not a cooldown number.
     // Per weapon: the carbine has no bolt throw (cycleLen 0) and only a short hold-open,
     // so the travel is scaled by POSES.*.boltThrow.
+    // r3: the throw is scaled per gun (the pump racks 9 cm), and an EMPTY gun's bolt comes back
+    // and STAYS back: it used to slam home at 0.86 of the cycle and pop open again the next
+    // step, and it snapped shut the moment a reload began. It is held back through an empty
+    // reload until the beat that closes it ('boltrelease', or the shotgun's first shell) and
+    // then runs home in BOLT_CLOSE_S.
     let boltZ = 0;
     const cyc = st.cycleLen;
     const throwK = this.cur ? this.cur.pose.boltThrow : 1;
+    const travel = BOLT_TRAVEL * throwK;
+    const heldOpen = st.empty && (!st.reloading || this._openHold);
     if (cyc > 0 && this.boltAnim < cyc) {
       const u = this.boltAnim / cyc;
-      if (u < 0.42) boltZ = 0.062 * ease.outQuad(u / 0.42);
-      else if (u < 0.86) boltZ = 0.062 * (1 - ease.inQuad((u - 0.42) / 0.44)) - 0.0015;
+      if (u < 0.42) boltZ = travel * ease.outQuad(u / 0.42);
+      else if (heldOpen) boltZ = travel;
+      else if (u < 0.86) boltZ = travel * (1 - ease.inQuad((u - 0.42) / 0.44)) - 0.0015 * throwK;
       else boltZ = 0;
-    } else if (st.empty && !st.reloading) {
-      boltZ = 0.062 * throwK;                 // held open on empty: it SHOWS you
+    } else if (heldOpen) {
+      boltZ = travel;                         // held open on empty: it SHOWS you
+    } else if (this._closeT < BOLT_CLOSE_S) {
+      boltZ = travel * (1 - ease.inQuad(this._closeT / BOLT_CLOSE_S));
     }
+    this._closeT += dt;
+
+    // ---- the carbine's climb settles once the trigger lets go (CLIMB_MAX)
+    if (this._climb > 0 && st.sinceShot > 0.09) {
+      this._climb *= Math.pow(0.5, dt / CLIMB_HL);
+      if (this._climb < 1e-4) this._climb = 0;
+    }
+    this.kickRot.x.target = this._climb;
 
     // ---- ROUND 5: the swap. Fully lowered at the midpoint, which is the step weapon.js
     // changes the gun.
@@ -1362,13 +1849,27 @@ export class Viewmodel {
         // CHANNEL 3 of the three. ~70% of the felt motion, and it lives here,
         // in a scene that does not share the world camera — so however violent
         // it looks it cannot move a bullet.
+        // The numbers are the peak at the hip (THE KICK): 28 mm back, 6 mm up, 4 mm aside;
+        // 3.4 degrees of muzzle, 1.1 of yaw and 2.2 of roll, alternating shot to shot.
+        // r3: only the carbine ALTERNATES its roll (a light gun shaken shot to shot). A heavy
+        // gun rolls the same way every time, into the shoulder and to the right, as a real
+        // one does under the shooter's grip, and its sideways kick is a small random lean
+        // biased right; it used to rock left-right-left like a metronome.
         const i = pu.index, mW = pu.mW;
-        this.kickPos.nudge((i % 2 ? -0.004 : 0.004) * mW * 16, 0.006 * mW * 16, 0.028 * mW * 16);
-        this.kickRot.nudge(3.4 * DEG * mW * 16,
-          (i % 2 ? 1.1 : -1.1) * DEG * mW * 16,
-          (i % 2 ? 2.2 : -2.2) * DEG * mW * 16);
+        const K = (this.cur && this.cur.pose.kick) || KICK_NONE;
+        const gR = K.gainRot || KICK_GAIN_ROT;
+        const kp = mW * K.pos * KICK_GAIN_POS, kf = mW * K.flip * gR, kt = mW * K.twist * gR;
+        const side = K.alt ? (i % 2 ? 1 : -1) : -1;
+        const lean = K.alt ? side : (this.rng.next() < 0.7 ? -1 : 1) * (0.5 + this.rng.next() * 0.5);
+        this.kickPos.nudge(-lean * 0.004 * kp, 0.006 * kp, 0.028 * kp);
+        this.kickRot.nudge(3.4 * DEG * kf, lean * 1.1 * DEG * kt, side * 2.2 * DEG * kt);
+        if (K.climb) this._climb = Math.min(CLIMB_MAX, this._climb + K.climb * DEG * mW);
         this.boltS.nudge(1.0);
         this.boltAnim = 0;
+        // The revolver: the hammer falls, and the cylinder turns on a sixth to the next round.
+        if (this.cur && this.cur.cyl) {
+          this._cylFrom = this._cylAng; this._cylAng += Math.PI / 3; this._cylT = 0; this._hammerT = 0;
+        }
         break;
       }
       case 'flash': {
@@ -1380,29 +1881,49 @@ export class Viewmodel {
         const cy = st.cycleLen;
         this._queueBrass((cy > 0 ? cy * 0.34 : 0.028) - pu.subT);
         this._borrowMuzzleLight();
+        // Each shot's flash is its own: up to 12% larger or smaller than the last.
+        this._flashJit = 0.88 + this.rng.next() * 0.24;
+        this._smoke(pu.adsT);
         break;
       }
+      case 'reload:start':
+        // An empty reload (or a resumed one that is still empty) keeps the bolt back.
+        this._openHold = pu.name !== 'tac' && !!st.empty;
+        break;
       case 'reload:beat': {
         const j = RELOAD_JOLT[pu.name];
-        if (j) this.jolt.nudge(j * 10);
+        if (j) this.jolt.nudge(j * JOLT_GAIN * lerp(1, JOLT_ADS_K, st.adsT));
         if (pu.name === 'drop') this.magDropT = 0;
         if (pu.name === 'enter') { this.magRiseT = 0; this.magDropT = -1; }
+        if (this._openHold && (pu.name === 'boltrelease' || pu.name === 'shell')) { this._openHold = false; this._closeT = 0; }
         break;
       }
       case 'reload:end':
         this.magDropT = -1; this.magRiseT = -1;
+        if (this._openHold) { this._openHold = false; this._closeT = st.empty ? 99 : 0; }
         break;
+      // r3: the bolt (or the pump) at the back and going home (weapon.js 'weapon:cycle').
+      case 'cycle': {
+        const j = CYCLE_JOLT[pu.name];
+        if (j) this.jolt.nudge(j * JOLT_GAIN * lerp(1, JOLT_ADS_K, pu.adsT));
+        break;
+      }
       // ROUND 18. What a connecting swing does to the gun in your hands. The old dose was
       // a shade under the rifle's own recoil, so hitting something felt LIGHTER than
       // firing at it. Now it stops the swing dead and bounces it back, which is what
       // hitting a body with a rifle stock actually does to the rifle.
+      //
+      // r3 polish: and it never showed, for the same x16 / 16 reason as the shot (THE KICK).
+      // These are peaks now: the stock stops and comes back 5 cm the way it came, drops 4 cm
+      // and twists. The 12.5 cm shove down the bore it was written with is 6 here: on top of
+      // the swing's own 27 cm it read as the gun leaving the hands.
       case 'melee:connect':
-        this.kickPos.nudge(-0.052 * 16, -0.044 * 16, -0.125 * 16);
-        this.kickRot.nudge(-13 * DEG * 16, 11 * DEG * 16, 18 * DEG * 16);
-        this.jolt.nudge(19);
+        this.kickPos.nudge(-0.052 * KICK_GAIN_POS, -0.044 * KICK_GAIN_POS, -0.060 * KICK_GAIN_POS);
+        this.kickRot.nudge(-13 * DEG * KICK_GAIN_ROT, 11 * DEG * KICK_GAIN_ROT, 18 * DEG * KICK_GAIN_ROT);
+        this.jolt.nudge(6 * JOLT_GAIN);
         break;
       case 'dry':
-        this.jolt.nudge(2.4);
+        this.jolt.nudge(0.5 * JOLT_GAIN * lerp(1, JOLT_ADS_K, st.adsT));
         break;
       default: break;
     }
@@ -1427,7 +1948,7 @@ export class Viewmodel {
     this.muzzleHandle = lights.borrow(
       'muzzle',
       ox + _fwd.x * reach, oy + _fwd.y * reach - 0.06, oz + _fwd.z * reach,
-      0xffc27a, 46, 0.075,
+      0xffc27a, this._flashLight, 0.075,
     );
     // The pool bumps `gen` on every borrow. Once our ttl expires the pool releases the
     // handle and somebody else (an impact spark, an ember) may be holding it by the time
@@ -1475,19 +1996,46 @@ export class Viewmodel {
       b.vel.y -= CFG.player.GRAVITY * dt;
       b.vel.multiplyScalar(Math.exp(-0.12 * dt));
       b.pos.addScaledVector(b.vel, dt);
-      const gy = terrain && terrain.heightAt ? terrain.heightAt(b.pos.x, b.pos.z) : 0;
+      // r3: the ground is what a mover stands on (surfaceAt: ice over a pond, not the bed under
+      // it), and a floor is a floor: a case fired in a room used to fall through the boards to
+      // the soil underneath the building. The floor found at the throw is confirmed once, with
+      // one short ray, where the case actually arrives, so one thrown off a deck still falls.
+      let gy = terrain ? (terrain.surfaceAt ? terrain.surfaceAt(b.pos.x, b.pos.z) : terrain.heightAt(b.pos.x, b.pos.z)) : 0;
+      let soft = b.soft;
+      if (b.floorY > gy && b.pos.y < b.floorY + 0.02) {
+        if (!b.floorChecked) { b.floorChecked = true; if (this._floorUnder(b.pos.x, b.floorY + 0.25, b.pos.z, 0.5) === -Infinity) b.floorY = -Infinity; }
+        if (b.floorY > gy) { gy = b.floorY; soft = 0; }
+      }
       if (b.pos.y < gy + 0.01 && b.vel.y < 0 && b.bounces < 2) {
+        const hit = -b.vel.y;
         b.pos.y = gy + 0.01;
         b.vel.y *= -0.32;
         b.vel.x *= 0.55; b.vel.z *= 0.55;
         b.spin.multiplyScalar(0.45);
         b.bounces++;
+        if (!b.heard) {
+          // The first knock: where it lands and as hard as it lands (guns.js brassLand).
+          b.heard = true;
+          const L = this._brassLand;
+          L.x = b.pos.x; L.y = b.pos.y; L.z = b.pos.z; L.speed = hit; L.soft = soft;
+          L.shell = this.curId === 'shotgun';
+          this.ctx.bus.emit('brass:land', L);
+        }
       } else if (b.pos.y < gy) {
         b.pos.y = gy; b.vel.set(0, 0, 0); b.spin.set(0, 0, 0);
       }
       b.rot.x += b.spin.x * dt;
       b.rot.y += b.spin.y * dt;
     }
+  }
+
+  /** The top of a collider under (x, z), searching `reach` metres down from y; -Infinity if none. */
+  _floorUnder(x, y, z, reach) {
+    const col = this._sys('collision');
+    if (!col || !col.raycast) return -Infinity;
+    _rayO.x = x; _rayO.y = y; _rayO.z = z;
+    const h = col.raycast(_rayO, _DOWN, reach, col.MASK ? col.MASK.SOLID : 1);
+    return h && h.hit !== false && !h.ground && h.point ? h.point.y : -Infinity;
   }
 
   _spawnBrass(p, cam) {
@@ -1508,6 +2056,14 @@ export class Viewmodel {
     b.vel.y = 1.35 * j();
     b.vel.addScaledVector(_fwd, -0.30 * j());
     if (p.vel) b.vel.add(p.vel);            // NOT optional: a case thrown from a
+    // r3: the floor where it will come down, from its flight (about 0.7 s; drag is small):
+    // a collider's top under that point if there is one, else the ground (soft).
+    b.heard = false; b.floorChecked = false; b.soft = 1;
+    {
+      const tf = (b.vel.y + Math.sqrt(b.vel.y * b.vel.y + 2 * CFG.player.GRAVITY * 1.5)) / CFG.player.GRAVITY;
+      b.floorY = this._floorUnder(b.pos.x + b.vel.x * tf, b.pos.y, b.pos.z + b.vel.z * tf, 3.5);
+      b.floorChecked = false;
+    }
     b.rot.set(this.brassRng.next() * TAU, this.brassRng.next() * TAU, 0);  // moving
     b.prot.copy(b.rot);                                                    // gun
     b.spin.set(5 + this.brassRng.next() * 9, 14 + this.brassRng.next() * 9, 4);
@@ -1592,24 +2148,29 @@ export class Viewmodel {
     _v.x += 0.014 * Math.sin(bph) * amp;
 
     // ---- springs: look lag, velocity lag, kick, land dip, jolt
-    _e.x += _S[C.AL_X] + _S[C.KR_X] / 16;
-    _e.y += _S[C.AL_Y] + _S[C.KR_Y] / 16;
-    _e.z += _S[C.AL_Z] + _S[C.KR_Z] / 16;
-    _v.x += _S[C.LL_X] + _S[C.KP_X] / 16;
-    _v.y += _S[C.LL_Y] + _S[C.KP_Y] / 16 + _S[C.DIP] * 0.0170 + _S[C.JOLT] * -0.003;
-    _v.z += _S[C.LL_Z] + _S[C.KP_Z] / 16;
+    _e.x += _S[C.AL_X] + _S[C.KR_X];
+    _e.y += _S[C.AL_Y] + _S[C.KR_Y];
+    _e.z += _S[C.AL_Z] + _S[C.KR_Z];
+    _v.x += _S[C.LL_X] + _S[C.KP_X];
+    _v.y += _S[C.LL_Y] + _S[C.KP_Y] + _S[C.DIP] * 0.0170 + _S[C.JOLT] * -0.003;
+    _v.z += _S[C.LL_Z] + _S[C.KP_Z];
     _e.x += _S[C.DIP] * -1.4 * DEG + _S[C.JOLT] * 0.6 * DEG;
 
     // root locked to the camera orientation: rotate-then-place
     this.root.position.set(0, 0, 0);
     this.root.quaternion.identity();
     const gripping=p.scaling||p.scaleDescending||p.climb!==0;
-    _v.y-=.72*_S[C.LOWER];_e.x+=1.05*_S[C.LOWER];
+    const lo = ease.inOutQuad(_S[C.LOWER]);
+    if (lo > 0) {
+      const L = (this.cur && this.cur.pose.low) || LOW;
+      _v.y += L.pos.y * lo; _v.z += L.pos.z * lo;
+      _e.x += L.rot.x * lo; _e.y += L.rot.y * lo; _e.z += L.rot.z * lo;
+    }
     // The pour hides the gun for as long as it lasts. It rides the same bob and sway as the
     // gun does, because it is in the same hands.
     if(this.pourRig){this.pourRig.root.visible=this.pouring&&!gripping;
       if(this.pourRig.root.visible){this.pourRig.root.position.copy(_v);this.pourRig.root.rotation.copy(_e);}}
-    this.gun.visible=!gripping&&!this.pouring&&_S[C.LOWER]<.999;
+    this.gun.visible=!gripping&&!this.pouring;
     for(const hand of this.climbHands){
       hand.visible=gripping&&!!this.ctx.camera&&placeClimbingHand(hand,p,this.ctx.camera,this.camera);
     }
@@ -1618,9 +2179,20 @@ export class Viewmodel {
 
     // ---- moving parts. The rifle's bolt handle lifts while back; the carbine's charging
     // handle does not (POSES.*.boltLift).
+    // The travel is added to where the part was BUILT (boltZ0). It used to be written over it,
+    // which put the shotgun's pump inside the receiver, buried the revolver's hammer and moved
+    // the carbine's charging handle 3 cm back, in every frame (the r3 critic's side views).
     const P = this.cur ? this.cur.pose : POSES.bolt;
-    this.bolt.position.z = _S[C.BOLTZ] + _S[C.BOLTS] * 0.004;
+    this.bolt.position.z = (this.cur ? this.cur.boltZ0 : 0) + _S[C.BOLTZ] + _S[C.BOLTS] * 0.004;
     this.bolt.rotation.z = _S[C.BOLTZ] > 0.001 ? P.boltLift : 0;
+    // r3: the revolver's cylinder turns on 60 degrees 30-100 ms after the shot, and its hammer,
+    // down on the shot, comes back to full cock over 140 ms (neither ever above the sight line).
+    const cyl = this.cur ? this.cur.cyl : null;
+    if (cyl) {
+      const ta = alpha * CFG.loop.FIXED;
+      cyl.rotation.z = lerp(this._cylFrom, this._cylAng, ease.inOutQuad(clamp01((this._cylT + ta - 0.03) / 0.07)));
+      this.bolt.rotation.x = -0.5 * (1 - ease.outCubic(clamp01((this._hammerT + ta) / 0.14)));
+    }
     // The carbine's magazine follows the reload choreography (the rifle has a floorplate).
     const mag = this.cur ? this.cur.mag : null;
     if (mag) {
@@ -1637,24 +2209,33 @@ export class Viewmodel {
       this.camera.updateProjectionMatrix();
     }
 
+    this._presentTorch();
     this._presentFlash(t);
     this._presentBrass(alpha);
   }
 
   _presentFlash(t) {
+    // r3: each gun's own flash (POSES.*.flash): the shotgun's is half again the rifle's and
+    // lasts longer, the carbine's is small and quick (twelve a second), the revolver's has the
+    // cylinder gap. Every shot is jittered in size (_flashJit) so no two read the same.
+    const F = (this.cur && this.cur.pose.flash) || FLASH_NONE;
+    const coreS = F.core, coneS = F.core * 1.47;
     const ft = t - this.flashT0;
-    if (ft >= 0 && ft < 0.060) {
-      this.flashCore.visible = ft < 0.034;
-      this.flashCone.visible = ft < 0.050;
-      this.flashU.uLife.value = clamp01(ft / 0.034);
-      this.coneMat.opacity = (1 - clamp01(ft / 0.050)) * 0.55;
-      this.flashCone.scale.setScalar(1 + (ft / 0.050) * 0.35);
+    if (ft >= 0 && ft < coneS + 0.010) {
+      this.flashCore.visible = ft < coreS;
+      this.flashCone.visible = ft < coneS;
+      this.flashU.uLife.value = clamp01(ft / coreS);
+      this.coneMat.opacity = (1 - clamp01(ft / coneS)) * F.cone;
+      const grow = 1 + (ft / coneS) * 0.35, ck = F.k * this._flashJit;
+      this.flashCone.scale.set(ck * grow, F.len * grow, ck * grow);
       const env = Math.exp(-ft / 0.018);
-      const scale = lerp(1, 0.55, this.flashAds);
+      const scale = lerp(1, 0.55, this.flashAds) * ck;
       this.flashCore.scale.setScalar(scale);
       const MZ = this.muzzle;                 // the selected gun's crown (ROUND 5)
       this.flashCore.position.set(MZ.x, MZ.y, MZ.z - this.flashAds * 0.06);
-      this.viewFlash.intensity = 2.6 * env * lerp(1, 0.55, this.flashAds);
+      this.flashCone.position.set(MZ.x, MZ.y, MZ.z - 0.14 * F.len * grow);
+      for (const m of this.flashGap) { m.visible = !!F.gap && ft < coreS; m.scale.setScalar(scale); }
+      this.viewFlash.intensity = 2.6 * env * lerp(1, 0.55, this.flashAds) * Math.sqrt(F.k);
       // 7 cm AHEAD of the crown. THE CINDERBLOOM CLAMP, top of file.
       //
       // AND THE LAW WAS NOT BEING KEPT. This wrote the muzzle point as though it were a SCENE
@@ -1703,16 +2284,23 @@ export class Viewmodel {
     } else {
       this.flashCore.visible = false;
       this.flashCone.visible = false;
+      for (const m of this.flashGap) m.visible = false;
       this.viewFlash.intensity = 0;
       if (this.muzzleHandle) this._releaseMuzzleLight();
     }
   }
 
   _presentBrass(alpha) {
+    // r3: a dead case is parked once, on the frame it goes, not rewritten every frame; with
+    // nothing live and nothing just gone there is no upload at all (it was 48 matrices a frame).
     let dirty = false;
     for (let i = 0; i < BRASS_N; i++) {
       const b = this.brassState[i];
-      if (!b.live) { _m.makeScale(0, 0, 0); this.brass.setMatrixAt(i, _m); dirty = true; continue; }
+      if (!b.live) {
+        if (b.shown) { b.shown = false; _m.makeScale(0, 0, 0); this.brass.setMatrixAt(i, _m); dirty = true; }
+        continue;
+      }
+      b.shown = true;
       _v2.lerpVectors(b.prev, b.pos, alpha);
       _e.set(lerp(b.prot.x, b.rot.x, alpha), lerp(b.prot.y, b.rot.y, alpha), 0);
       const sc = b.age > 5.4 ? 1 - (b.age - 5.4) / 0.6 : 1;
@@ -1744,6 +2332,18 @@ export class Viewmodel {
     // the vignette centre drifts off the frame centre at renderScale 0.75 and the grain field
     // stops matching the world's — which is the whole point of applying it here at all.
     // Both writes are into pre-allocated objects; nothing here allocates.
+    // r3: GRADED ONCE. post.js draws the gun INTO its HDR target now, so the world's grade already
+    // covers it; this file's own grade then ran on top, in linear light: a second vignette where
+    // the gun sits (the corner, where it is strongest), a black floor that lifted its blacks and a
+    // second split tone. The door for it (setGraded) was never called; it is, the first frame the
+    // post chain says it draws the overlays.
+    if (!this._gradeChecked) {
+      const post = this._sys('post');
+      if (post && typeof post.willWarmOverlays === 'function') {
+        this._gradeChecked = true;
+        if (post.willWarmOverlays()) this.setGraded(false);
+      }
+    }
     if (this._gradeU) {
       r.getDrawingBufferSize(this._bufSize);
       this._gradeU.uVmResolution.value.set(this._bufSize.x, this._bufSize.y);
@@ -1782,6 +2382,10 @@ export class Viewmodel {
 // 'active' (D2) is the active-reload hit landing in the hands: a shade more than the seat,
 // so a hit is felt and not only heard. 'shell' is one shell thumbed into the shotgun's tube
 // (weapon.js _startTubeReload), lighter than a magazine seating and repeated per shell.
-const RELOAD_JOLT = { contact: 0.18, seat: 0.5, boltrelease: 0.85, drop: 0.1, active: 0.6, shell: 0.3 };
+// r3: PEAKS in jolt units now (THE HANDS AT WORK): the seat is 6 mm, the bolt going home on an
+// empty reload 9 mm. The ratios between the beats are VIGIL's, near enough.
+const RELOAD_JOLT = { contact: 1.0, seat: 2.0, boltrelease: 3.0, drop: 0.6, active: 2.3, shell: 1.0 };
+// r3: the bolt (or the pump) arriving at the back and going home (weapon.js 'weapon:cycle').
+const CYCLE_JOLT = { back: 1.3, home: 1.7 };
 
 export default Viewmodel;

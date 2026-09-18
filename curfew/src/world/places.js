@@ -184,6 +184,15 @@ const DRESS_CHAIN = [DRESS_STATION, DRESS_INTERIORS, DRESS_COMPOUNDS, DRESS_COMP
 /** How close you have to come before a staged cast is placed. Outside the chunk residency
  *  ring so nobody is ever seen popping into a scene in front of you. */
 const CAST_PLACE_R = 150;
+/** R3. Alex: "the last enemy i just couldn't find even though it was marked." Three counted
+ *  seats had been built over by later rounds (a stair, a chapel wall, an arcade pier), so
+ *  enemies.spawn refused them every second forever, the count never reached zero and the
+ *  marker pointed into a wall. A blocked hostile seat now looks for standing room within
+ *  CAST_NUDGE_R (_castSpot), and one that finds none this many passes running is given up
+ *  for the session: c.void, not placed, not counted. Derived from seeded geometry, so it is
+ *  never saved. */
+const CAST_NUDGE_R = 1.5;
+const CAST_VOID_AFTER = 3;
 
 /* ==========================================================================
    Local constants.
@@ -394,6 +403,11 @@ const FIXTURE_PROUD = 0.28;
 // close. The lever and the plate are what you read at 2 m; the glint is for 30.
 const GLINT_FADE_NEAR = 4;
 const GLINT_FADE_FAR = 12;
+// ...and the bead itself comes down to this share of its HDR core over the same band (r3). The
+// core is over bloom's threshold so it reads as a bulb from 30 m; grown 1.8x by the claim, at
+// the switch it bloomed into a flat white disc 150 px across (tests/sites.mjs (j): 0.69% of the
+// frame over 200). At 0.42 it is a warm bulb under the threshold up close, and unchanged from 12 m.
+const GLINT_BEAD_NEAR = 0.42;
 // A shoot row's glint is this much bigger than a switch post's: the lamp and the bell are read
 // from 18-60 m, where a 0.11 m bead is four pixels.
 const SHOOT_GLINT_SCALE = 1.6;
@@ -794,6 +808,19 @@ function fixtureGlyph(kind) {
   return fxMerge(p);
 }
 
+/** Which side of its switch a prize case stands on, where the default side has a wall. */
+const PRIZE_SIDE = { 'weeping-mine': -1 };
+/**
+ * R3. A prize case with its own spot (site-local x, z, yaw) and size. The Drowned Light's
+ * lamp room is a 144-degree floor round a 0.9 m pedestal, with the switch 1.1 m inside the
+ * gallery door. Its 1.9 m case stood on the switch (0.26 m apart, measured), and no spot on
+ * that floor takes a case that long without closing the one 0.75 m way to the door. At 0.6
+ * it is 1.2 m long and fits the corner by the stairwell rail with 12 cm to spare all round,
+ * clear of the door, the switch and the way up from the stair, its open side to the landing
+ * you arrive on. The revolver in it is still twice the size of a real one.
+ */
+const PRIZE_AT = { 'drowned-light': { lx: -1.71, lz: 0.83, yaw: -Math.PI * 0.5, scale: 0.6 } };
+
 /**
  * A destination weapon is physically waiting beside the completion fixture BEFORE it is
  * granted: an open black transit case, with the gun reduced to the silhouette that matters
@@ -901,6 +928,7 @@ export class Places {
     this._t = 0;
     this._nodeList = [];          // flat: iterating a Map allocates an iterator per frame
     this._gateAny = false;        // ROUND 19: does any landmark carry a swinging gate leaf?
+    this._defK = -1; this._defT = -1; this._defStr = '';   // R3: the switch's counter line, cached
     this._flickers = [];          // body glows that breathe (the dying headlight)
     this._embers = [];            // resident campfire glows, breathed in present()
     this._campfires = [];         // every authored campfire {i, x, z, ...}, for proximity
@@ -925,6 +953,9 @@ export class Places {
     // placed again when its chunk streams back in.
     this._casts = new Map();
     this._castDone = new Set();
+    // R3: the spider nests' records ('nest:<id>'), kept apart from the site's 'major:<id>'
+    // cast so a spider is never a defender. See _nestKilled.
+    this._nests = [];
     // ROUND 18. Hidden caches that must remember being opened. Rebuilt from scratch every
     // time a site streams in, which is why the flag and not this list is the memory: this is
     // only the lookup that turns a break at a world position back into a flag name.
@@ -943,6 +974,7 @@ export class Places {
       ctx.bus.on('chunk:built', (p) => { if (p) this.buildChunk(p.cx, p.cz, p.id); });
       ctx.bus.on('chunk:disposed', (p) => { if (p) this.disposeChunk(p.id); });
       ctx.bus.on('weapon:hit', (p) => { if (p) this._onShot(p); });
+      ctx.bus.on('enemy:killed', (p) => this._nestKilled(p));
       // D11: the FIRST phase:changed is clock.js's boot announcement (clock.js `_announced`),
       // and a claimed bell tower ringing the moment a save loads is a bell nobody rang. The
       // clock takes over from the dt countdown on that event; the tower only answers the next.
@@ -1136,7 +1168,7 @@ export class Places {
       if (!rec) continue;
       let yaw = 0;
       const p = this._roadPointFor(d);
-      if (p) yaw = Math.atan2(p.x - d.x, p.z - d.z);   // the front (-Z local) faces the road
+      if (Number.isFinite(d.yaw)) yaw = d.yaw; else if (p) yaw = Math.atan2(p.x - d.x, p.z - d.z);   // the front (-Z local) faces the road; a row may pin its own (the quarry's pit)
       rec.yaw = yaw;
       rec.padY = terrain && terrain.heightAt ? terrain.heightAt(d.x, d.z) : 0;
       rec.node.position.set(d.x, 0, d.z);
@@ -1307,7 +1339,7 @@ export class Places {
       node.matrixAutoUpdate = true;
       this.nodes.set(d.id, {
         def: d, node, yaw: 0, padY: 0,
-        solid: null, glow: null, prize: null, built: false,
+        solid: null, glow: null, prize: null, prizeCol: -1, built: false,
         mark: null,                // ROUND 19: the shaped far read (fixtureGlyph)
         moving: null,              // [{ mesh, role, rate }]
         glowLevel: d.startClaimed ? 1 : 0,
@@ -1407,7 +1439,9 @@ export class Places {
         const open = typeof mv.open === 'number' ? mv.open : 0;
         const shut0 = open && this.gateIsOpen(d.id) ? open : 0;
         rec.moving.push({ mesh, role: mv.role, rate, glow: isGlow, open, prev: shut0, curr: shut0 });
-        if (open) { mesh.rotation.y = shut0; this._gateAny = true; }
+        // R3: and the step must agree. It writes open * ease(gateK) every step, and gateK was
+        // set only by openGate(), so a leaf built open was swung straight back shut.
+        if (open) { mesh.rotation.y = shut0; this._gateAny = true; if (shut0) rec.gateK = 1; }
       }
     }
 
@@ -1596,6 +1630,9 @@ export class Places {
           z: oz - lx * sy + lz * cy,
           y0: shape.y0, y1: shape.y1,
         };
+        // A dress may author a movement-only body (a rail that stops feet but not sight or
+        // shots). Left undefined, collision gives the default SOLID|SHOT|SIGHT.
+        if (shape.mask !== undefined) w.mask = shape.mask;
         if (shape.kind === 'obb') {
           w.halfX = shape.halfX; w.halfZ = shape.halfZ;
           w.yaw = (+shape.yaw || 0) + rec.yaw;
@@ -1631,7 +1668,12 @@ export class Places {
       /** Has the toll been paid? The builder asks, so a paid gate rebuilds open. */
       gateOpen() {
         const prog = self._sys('progress');
-        return !!(prog && typeof prog.flag === 'function' && prog.flag('gate:' + d.id));
+        const open = !!(prog && typeof prog.flag === 'function' && prog.flag('gate:' + d.id));
+        // R3: remember what the streamed body was built with. The boot ring streams in before
+        // progress reads the save, so _restoreFromSave can find a body built shut for a gate
+        // the save has open, and rebuild it.
+        if (phase === 'body') rec.bodyGate = open;
+        return open;
       },
       /**
        * ROUND 18. A world flag, keyed to THIS SITE, for a builder that has to remember
@@ -1866,10 +1908,18 @@ export class Places {
     if (out.cast) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, out.cast, rec.padY);
     // ROUND 18. "a giant spider that crawls on ceiling and drops off", inside the big old
     // interiors and nowhere else. It rides the ordinary staged-cast machinery — placed once
-    // per save when you come within CAST_PLACE_R, holding still on the roof until you
-    // notice it — so it costs no new streaming, no new save state and no new cleanup.
+    // per save when you come within CAST_PLACE_R — so it costs no new streaming and no new
+    // cleanup.
+    //
+    // R3 (C8). Its OWN record, 'nest:<id>', and never the site's 'major:<id>'. Territory
+    // counts, marks and gates the claim on 'major:' seats only, so a spider is never a
+    // defender and never a diamond pointing at a ceiling (Alex: "That may be contributing
+    // to things if they're marked as an enemy you have to defeat"). Its kill is still kept
+    // for the save as 'cast-killed:nest:<id>:<i>' (_nestKilled), so _castStep never hangs a
+    // dead one again. The spider was always the LAST seat of the major record, so moving it
+    // shifts no other seat's saved kill key.
     const nest = spiderCast(d.id);
-    if (nest) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, nest, rec.padY);
+    if (nest) this._recordCast('nest:' + d.id, d.x, d.z, rec.yaw, nest, rec.padY);
 
     const g = new THREE.Group();
     g.name = 'place-body-' + d.id;
@@ -1889,7 +1939,15 @@ export class Places {
     const ap = hasBody ? apron(api, rad, d.apronCol || null) : null;
     if (ap) {
       projectPlaceSurfaceUVs(ap, 7);
-      const m = new THREE.Mesh(ap, this.matBody);
+      // A place whose apron IS the site (the Red Quarry's pit floor, rim and road in) wears
+      // its own surface there instead of the shared plaster map: a clone, same program.
+      let apMat = this.matBody;
+      if (d.apronSurface) {
+        apMat = this.matBody.clone();
+        apMat.map = placeSurfaceFor(this.surfaceTextures, d);
+        apMat.bumpMap = placeBumpFor(this.surfaceTextures, d);
+      }
+      const m = new THREE.Mesh(ap, apMat);
       m.name = 'apron-' + d.id;
       m.receiveShadow = true;
       g.add(m);
@@ -1910,6 +1968,19 @@ export class Places {
       m.name = 'body-' + d.id;
       m.castShadow = true; m.receiveShadow = true;
       g.add(m);
+    }
+    // r3 (manor lane): THE TIMBER CHANNEL. manor.js hands back its boards, joinery and
+    // furniture on their own so they stop wearing the manor's brick-peel plaster map. A clone
+    // of matBody with the barn's timber map: the same program, one more draw.
+    if (out.timber) {
+      projectPlaceSurfaceUVs(out.timber);
+      const tm = this.matBody.clone();
+      tm.map = placeSurfaceFor(this.surfaceTextures, 'barn');
+      tm.bumpMap = placeBumpFor(this.surfaceTextures, 'barn');
+      const mt = new THREE.Mesh(out.timber, tm);
+      mt.name = 'body-timber-' + d.id;
+      mt.castShadow = true; mt.receiveShadow = true;
+      g.add(mt);
     }
     if (out.glow) {
       glowMesh = new THREE.Mesh(out.glow, this.matGlow.clone());
@@ -2032,6 +2103,9 @@ export class Places {
         guard: !!e.guard, neutral: !!e.neutral || !!e.guard,
         hpScale: e.hpScale || 1,
         entity: null, spawned: false,
+        // R3: how many times in a row the geometry refused this seat, and whether it has been
+        // given up for this session (see _castStep). Derived, never saved.
+        blockedN: 0, void: false,
       };
       // ROUND 7, lane B's request: `ly` is metres ABOVE THE SITE'S PAD, so a tableau can
       // stand on a hay loft, a mezzanine or a ringing floor 13 m up and be seen from the
@@ -2042,7 +2116,11 @@ export class Places {
     }
     if (cast.length) {
       const rec=this._casts.get(key);
-      if (!rec) this._casts.set(key,{key,x:ox,z:oz,cast,placed:false});
+      if (!rec) {
+        const made={key,x:ox,z:oz,cast,placed:false};
+        this._casts.set(key,made);
+        if (key.startsWith('nest:')) this._nests.push(made);
+      }
       else for(const c of cast) if(!rec.cast.some(old=>old.species===c.species&&old.x===c.x&&old.z===c.z)) {
         rec.cast.push(c);rec.placed=false;this._castDone.delete(key);
       }
@@ -2060,7 +2138,9 @@ export class Places {
     if (!p) return;
     const prog = this._sys('progress');
     for (const rec of this._casts.values()) {
-      const siteId = rec.key.startsWith('major:') ? rec.key.slice(6) : '';
+      // A nest belongs to its site too: a secured site never hangs a new spider.
+      const siteId = rec.key.startsWith('major:') ? rec.key.slice(6)
+        : rec.key.startsWith('nest:') ? rec.key.slice(5) : '';
       // Neutral people are a renewable population, never saved permanent casualties.
       if(Math.hypot(p.x-rec.x,p.z-rec.z)>245) for(const c of rec.cast) {
         if(!c.neutral)continue;
@@ -2073,6 +2153,7 @@ export class Places {
       // Requeue only unfinished hostile cast seats; recorded kills stay gone.
       for (let castIndex=0;castIndex<rec.cast.length;castIndex++) {
         const c=rec.cast[castIndex];
+        if (c.void) continue;   // spawned:true with no body, on purpose; never requeue it
         if (returning && !c.neutral && !SPECIES[c.species]?.human && !['poacher','hunter'].includes(c.species)) continue;
         if(!c.spawned||c.neutral||prog?.flag('cast-killed:'+rec.key+':'+castIndex)||prog?.flag('secured:'+siteId))continue;
         if(c.entity?.alive&&c.entity.gen===c.generation)continue;
@@ -2094,19 +2175,101 @@ export class Places {
         // Paying opens the gate; the people who protect the town still live here.
         if (c.guard && siteId !== 'holdfast' && prog?.flag('gate:' + siteId)) { c.spawned = true; continue; }
         try {
+          // A hostile seat is placed where it can really stand (_castSpot), and asked for
+          // exactly there: enemies' own nudge is lenient about steps (see _castSpot).
+          let sx = c.x, sz = c.z, blocked = false;
+          if (!c.neutral) {
+            if (this._castSpot(c)) { sx = this._spotX; sz = this._spotZ; }
+            else blocked = true;
+          }
           const hostile = !!prog?.flag('gate-hostile:' + siteId);
-          const e = enemies.spawn(c.species, c.x, c.z, {
+          const e = blocked ? null : enemies.spawn(c.species, sx, sz, {
             awake: c.neutral ? true : c.awake, yaw: c.yaw, staged: true, feetY: c.feetY,
             neutral: c.neutral && !hostile, initiallyNeutral:c.neutral, siteGuard: c.neutral ? siteId : '', hpScale: c.hpScale,
-            placementRadius: c.neutral ? 1.5 : 0, townGuard: siteId === 'holdfast' && c.guard,
+            placementRadius: c.neutral ? CAST_NUDGE_R : 0, townGuard: siteId === 'holdfast' && c.guard,
             townCivilian: siteId === 'holdfast' && c.species === 'cashier',
           });
-          if (e) { c.entity = e; c.generation = e.gen; c.spawned = true; }
-          else complete = false;
+          if (e) { c.entity = e; c.generation = e.gen; c.spawned = true; c.blockedN = 0; }
+          else {
+            complete = false;
+            // Only geometry counts toward giving up: nowhere to stand within reach, or C4's
+            // enemies.lastRefusal 'blocked'. A full pool, protected ground or a deliberate wait
+            // never got as far as the geometry, so it neither counts nor clears the tally.
+            if (!c.neutral && (blocked || enemies.lastRefusal === 'blocked') && ++c.blockedN >= CAST_VOID_AFTER) {
+              c.void = true; c.spawned = true;
+              this._note('cast ' + rec.key + ':' + castIndex + ' ' + c.species + ' has nowhere to stand; not counted');
+            }
+          }
         } catch (e) { complete = false; this._note('cast ' + rec.key + ' ' + c.species + ': ' + e.message); }
       }
       if (complete) { rec.placed = true; this._castDone.add(rec.key); }
     }
+  }
+
+  /**
+   * R3 (C8). A killed spider stays dead for the save. Territory writes kill flags only for
+   * seats that count toward a claim, and a spider never does, so places keeps its own
+   * nests' kills: the same key shape, 'cast-killed:nest:<id>:<i>', which _castStep already
+   * reads before it places anyone. A handful of seats, walked only when something dies.
+   */
+  _nestKilled(p) {
+    const e = p && p.e;
+    if (!e || !this._nests.length) return;
+    const prog = this._sys('progress');
+    if (!prog || typeof prog.flag !== 'function') return;
+    for (let r = 0; r < this._nests.length; r++) {
+      const rec = this._nests[r];
+      for (let i = 0; i < rec.cast.length; i++) {
+        const c = rec.cast[i];
+        if (c.entity === e && c.generation === e.gen) prog.flag('cast-killed:' + rec.key + ':' + i, true);
+      }
+    }
+  }
+
+  /**
+   * R3. Where a hostile seat can actually stand. Writes this._spotX/_spotZ; false means
+   * nowhere within CAST_NUDGE_R.
+   *
+   * A seat that passes enemies.spawn's own test where it was authored is placed exactly where
+   * it always was. Only a seat that fails it searches, and the search is stricter than
+   * enemies' nudge: that one tests canOccupy, which lifts the feet onto any step within reach,
+   * and then puts the body at terrain height. Measured at the Weeping Mine: it moved the
+   * Standing 0.61 m, onto a spot with a stair tread 0.78 m up its legs. Here a spot must have
+   * the whole capsule clear AND the floor under the body at the height its feet are drawn:
+   * no tread through its shins, no air under a loft seat that slid off the loft.
+   * Not the hot path: once a second per unplaced seat, 24 probes at most.
+   */
+  _castSpot(c) {
+    this._spotX = c.x; this._spotZ = c.z;
+    const col = this._sys('collision');
+    if (!col || typeof col.fits !== 'function' || typeof col.canOccupy !== 'function'
+      || typeof col.supportHeight !== 'function') return true;
+    const def = SPECIES[c.species];
+    const r = def && def.radius > 0 ? def.radius : 0.4, h = def && def.height > 0 ? def.height : 1.8;
+    const raised = typeof c.feetY === 'number';
+    if (raised ? col.fits(c.x, c.z, c.feetY, r, h) : col.canOccupy(c.x, c.z, r, h)) return true;
+    const g0 = this._groundAt(c.x, c.z);
+    for (let i = 0; i < 24; i++) {
+      const a = i * 2.399, rr = CAST_NUDGE_R * Math.sqrt((i + 1) / 24);
+      const px = c.x + Math.cos(a) * rr, pz = c.z + Math.sin(a) * rr;
+      const g = this._groundAt(px, pz);
+      if (!raised && Math.abs(g - g0) > 0.45) continue;
+      const feet = raised ? c.feetY : g;
+      // Any top from 0.12 to 0.6 m over the feet, under any part of the body (the support
+      // footprint is 0.55 of the radius asked, so ask r / 0.55), is a step it would stand in.
+      if (Math.abs(col.supportHeight(px, pz, feet + 0.02, r / 0.55, 0.5) - feet) > 0.12) continue;
+      if (!col.fits(px, pz, feet + 0.02, r, h)) continue;
+      this._spotX = px; this._spotZ = pz;
+      return true;
+    }
+    return false;
+  }
+
+  /** The ground a body is placed on: nav.js groundY's rule (the surface, else the bed). */
+  _groundAt(x, z) {
+    const t = this._sys('terrain');
+    const v = t ? (typeof t.surfaceAt === 'function' ? t.surfaceAt(x, z) : t.heightAt?.(x, z)) : 0;
+    return Number.isFinite(v) ? v : 0;
   }
 
   gateDefeated(id) {
@@ -3008,8 +3171,14 @@ export class Places {
         const progress = this._sys('territory')?.status(d.id);
         if (progress && !progress.clear) {
           this._sys('territory')?.track(d.id);
+          // C1: the one counter string, the same words the objective panel uses. Built only
+          // when the count moves, because this runs every frame you stand at the switch.
+          const total = progress.total | 0, killed = Math.max(0, total - (progress.remaining | 0));
+          if (killed !== this._defK || total !== this._defT) {
+            this._defK = killed; this._defT = total; this._defStr = killed + ' / ' + total + ' ENEMIES DEFEATED';
+          }
           this.ctx.bus.emit('prompt', { kind:'power', label:'E', x:fx.wx, y:fx.wy+1.48, z:fx.wz, k:0,
-            detail:'CLEAR THE MARKED DEFENDERS', subdetail:progress.remaining+' REMAIN · DIAMONDS SHOW WHO COUNTS', unavailable:true, rank:2 });
+            detail:this._defStr, unavailable:true, rank:2 });
           continue;
         }
         if (fd < candD) { candD = fd; cand = rec; }
@@ -3397,6 +3566,9 @@ export class Places {
     for (const rec of this.nodes.values()) {   // not the hot path: claims are rare
       const claimed = this.claimed.has(rec.def.id);
       if(!claimed){rec.glowLevel=0;if(rec.glow){rec.glow.visible=false;rec.glow.material.opacity=0;}}
+      // R3: the prize case stops being drawn on the claim (present), so its collider goes
+      // here, for a claim made now and for one restored from the save alike.
+      if (claimed && rec.prizeCol >= 0) { this._sys('collision')?.removeCollider?.(rec.prizeCol); rec.prizeCol = -1; }
       // the mast goes white, and only then does it blink
       if (rec.def.kind === 'relay' && rec.glow) {
         rec.glow.material.color.set(claimed ? GLOW.white : GLOW.red);
@@ -3454,7 +3626,37 @@ export class Places {
     if (fd && typeof fd.forEach === 'function') {
       fd.forEach((id) => { if (typeof id === 'string' && !this.found.has(id)) { this.found.add(id); added++; } });
     }
+    this._restoreGates();
     if (added) { this._nearFlags = -1; this._applyState(); }
+  }
+
+  /**
+   * R3 (hamlet-build 7 d/e). A gate opened in an earlier session is open when you load.
+   *
+   * Landmarks are built in init, before progress has read the save, so every leaf was built
+   * shut, and the step held it shut: it writes open * ease(gateK) and gateK was only ever set
+   * by openGate(). A body streamed in after the load had already dropped its gate collider,
+   * so the paid Holdfast gate came back as a closed gate you walked through. Both are put
+   * right from the one flag, 'gate:<id>': the leaves stand where the save has them, with no
+   * swing and no sound, and a body built with the other answer is rebuilt. Reads both ways,
+   * so a fresh save after an open one shuts them again. A swing in progress is left alone.
+   */
+  _restoreGates() {
+    const list = this._nodeList || [];
+    for (let i = 0; i < list.length; i++) {
+      const rec = list[i];
+      if (rec.gateSwing) continue;
+      const open = this.gateIsOpen(rec.def.id);
+      let leaves = false;
+      if (rec.moving) for (const mv of rec.moving) {
+        if (mv.role !== 'gateLeaf') continue;
+        leaves = true;
+        mv.prev = mv.curr = open ? mv.open : 0;
+        mv.mesh.rotation.y = mv.curr;
+      }
+      if (leaves) { rec.gateK = open ? 1 : 0; rec.gateCleared = open; if (open) this._gateAny = true; }
+      if (rec.bodyGate !== undefined && rec.bodyGate !== open) this.rebuildSite(rec.def.id);
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -3716,8 +3918,10 @@ export class Places {
               if (hk !== fx.haloK) {
                 fx.haloK = hk;
                 const ga = mv.mesh.geometry.attributes.color;
-                const arr = ga.array, base = fx.halo.base;
-                for (let j = fx.halo.from * 3; j < arr.length; j++) arr[j] = base[j] * hk;
+                const arr = ga.array, base = fx.halo.base, from = fx.halo.from * 3;
+                const bk = GLINT_BEAD_NEAR + (1 - GLINT_BEAD_NEAR) * hk;
+                for (let j = 0; j < from; j++) arr[j] = base[j] * bk;
+                for (let j = from; j < arr.length; j++) arr[j] = base[j] * hk;
                 ga.needsUpdate = true;
               }
             }
@@ -3870,26 +4074,46 @@ export class Places {
     if (!d.reward || !rec.fixture) return;
     const fx = rec.fixture;
     const rx = -fx.fdz, rz = fx.fdx;
-    const side = d.reward === 'revolver' ? 1.48 : 1.72;
+    // R3, measured with the site streamed in: at 1.72 the long case's inner end stood 0.09 m
+    // from the switch's centre, so its rail went into the switch post (Jackfield), and at the
+    // Weeping Mine its far end went through the winding house's brick wall. 2.1 leaves
+    // 0.47 m to the post, the same as the revolver's 1.48, and the Mine's case goes on the
+    // other side of its switch, the only side with floor and nothing through it.
+    const side = (PRIZE_SIDE[d.id] || 1) * (d.reward === 'revolver' ? 1.48 : 2.1);
     // The lighthouse's generic perpendicular placement landed the revolver over the open
-    // stairwell beside the centre pedestal. Put it on the actual lamp-room floor sector,
-    // just inside the gallery doorway: visible on arrival, supported underfoot, and still
-    // beside the real claim rather than duplicated at ground level.
-    const lightA = 1.95, lightR = 1.65;
-    const lx = d.id === 'drowned-light' ? Math.cos(lightA) * lightR : fx.lx + rx * side;
-    const lz = d.id === 'drowned-light' ? Math.sin(lightA) * lightR : fx.lz + rz * side;
+    // stairwell beside the centre pedestal, so it has its own spot on the lamp-room floor
+    // (PRIZE_AT): beside the real claim rather than duplicated at ground level.
+    const at = PRIZE_AT[d.id] || null;
+    const lx = at ? at.lx : fx.lx + rx * side;
+    const lz = at ? at.lz : fx.lz + rz * side;
+    const sc = at ? at.scale : 1;
     const geo = prizeCase(d.reward);
     if (!geo) return;
     const mat = rec.solid ? rec.solid.material : this.matLand.clone();
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = 'land-prize-' + d.id;
     mesh.position.set(lx, fx.ly, lz);
-    mesh.rotation.y = d.id === 'drowned-light' ? -(lightA + Math.PI * 0.5) : fx.faceYaw;
+    mesh.rotation.y = at ? at.yaw : fx.faceYaw;
+    if (sc !== 1) mesh.scale.setScalar(sc);
     mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false;
     rec.node.add(mesh);
     rec.prize = mesh;
-    // No collider: the whole prop disappears with the existing grant. A collider left after
-    // that visual removal would be the exact invisible-wall failure this pass is fixing.
+    // R3: the case is solid while it is drawn. It was left without a collider so that none
+    // could outlive the prop, because nothing could take one away again, and so you walked
+    // through a 3 m gun case (evidence at the Weeping Mine's breaker). Now it is emitted here
+    // and taken away in _applyState on the claim, the moment present() stops drawing the
+    // case. Its footprint is prizeCase()'s: the side rails stand 6 cm past the length and
+    // 0.55 m either side, and the back panel tops out at 0.98 m (times the case's scale).
+    // Never lower than 0.66: collision treats any top within 0.60 of the feet as a step, and
+    // the small lamp-room case (0.59) would have been stepped onto, a body stood on the rim
+    // of an open case over the gun. Nothing stands on it either way.
+    rec.prizeCol = -1;
+    if (!this.claimed.has(d.id)) {
+      const long = d.reward === 'revolver' ? 1.90 : 3.15;
+      rec.prizeCol = api.emit({ kind: 'obb', x: lx, z: lz, halfX: (long * 0.5 + 0.06) * sc, halfZ: 0.56 * sc,
+        yaw: mesh.rotation.y, y0: fx.ly, y1: fx.ly + Math.max(0.66, 0.98 * sc), tag: 'metal',
+        standable: false, climbable: false, breakable: false });
+    }
   }
 
   /** Force a claim, for tests and for the integrator's screenshot rig. */

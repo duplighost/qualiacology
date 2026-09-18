@@ -50,7 +50,7 @@ export const TALL_CEIL = 7.4;        // double-height rooms (foyer, ballroom, ch
 export const ROOMS = Object.freeze({
   ground: [
     ['study', 'The Study', 0, 15, 3, 19, { wall: 'wallGreen', floor: 'woodFloorDark', furn: 'study' }],
-    ['library', 'The Library', 4, 15, 10, 19, { wall: 'woodMid', floor: 'woodFloorDark', furn: 'library' }],
+    ['library', 'The Library', 4, 15, 10, 19, { wall: 'wallLibrary', floor: 'woodFloorDark', furn: 'library' }],   // r3 polish: papered, panelled to the dado (manor.js trim); full-height barn planks read as a log cabin
     ['foyer', 'The Grand Foyer', 11, 15, 18, 19, { wall: 'wallRed', floor: 'marble', tall: true, furn: 'foyer' }],
     ['dining', 'The Dining Room', 19, 15, 24, 19, { wall: 'wallRed', floor: 'woodFloor', furn: 'dining' }],
     ['kitchen', 'The Kitchen', 25, 15, 29, 19, { wall: 'plaster', floor: 'stone', furn: 'kitchen' }],
@@ -241,6 +241,40 @@ export const CEIL_HOLES = Object.freeze([
  * converted numbers and tests/manor.mjs asserts the two agree.
  * ------------------------------------------------------------------ */
 export const CLAIM_DONOR = Object.freeze({ x: 41.0, z: 12.0, level: 'basement' });
+
+/* ------------------------------------------------------------------ *
+ * THE HOUSE'S OWN STORY (r3, 2026-09-18). Alex: "black thorn manner is so empty. also where
+ * are the unique scary things?" Vera's ledger (lore/catalog.js) is the spine: a masque on
+ * Halloween, the guests who stayed for breakfast when the morning did not come, every clock
+ * stopped at one fifty-nine, and Lucian going down to throw the cellar breaker himself.
+ *
+ * These anchors are DONOR metres, the same frame as every table above, and they are read by
+ * BOTH manor.js (the furniture keeps clear of them, and dresses the rooms around them) and
+ * world/manor-scares.js (which owns everything here that moves). One set of numbers, so a
+ * dancer can never be put where a chair already stands.
+ * ------------------------------------------------------------------ */
+export const SCARES = Object.freeze({
+  // The ballroom: three couples still in the middle of a waltz. [x, z, axis] per couple:
+  // the two dancers stand 0.30 m either side of (x, z) along the heading `axis`.
+  masque: Object.freeze({
+    level: 'ground', room: Object.freeze([0, 16, 18, 26]),
+    pairs: Object.freeze([
+      Object.freeze([4.0, 18.6, 0]), Object.freeze([4.6, 23.4, 0.6]), Object.freeze([13.4, 21.0, Math.PI / 2]),
+    ]),
+  }),
+  // The nursery: a rocking horse that is already rocking when you come in.
+  horse: Object.freeze({ level: 'first', room: Object.freeze([36, 16, 48, 26]), x: 45.2, z: 22.8, ry: 0.35,
+    underBed: Object.freeze([39.74, 17.0]) }),
+  // Lady Constance's room: her bed, head against the east wall. Somebody is still in it.
+  constance: Object.freeze({ level: 'first', room: Object.freeze([8, 30, 22, 40]),
+    bed: Object.freeze({ x: 20.80, z: 35.0, ry: Math.PI / 2, w: 1.5, l: 2.1 }) }),
+  // The Cellar: Lucian, face in the corner, 1.6 m from the breaker he threw.
+  lucian: Object.freeze({ level: 'basement', room: Object.freeze([40, 10, 50, 14]), x: 40.45, z: 13.55,
+    ry: -Math.PI / 4 }),
+  // The portrait gallery: every canvas turned to the wall but one, and that one is a sunrise.
+  sunrise: Object.freeze({ level: 'ground', room: Object.freeze([24, 0, 36, 12]), x: 29.0, z: 0.235,
+    ry: Math.PI, w: 1.0, h: 1.4, y: 1.7 }),
+});
 
 /* ------------------------------------------------------------------ *
  * The windows that come up when the place is claimed. Every other pane in the house is

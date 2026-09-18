@@ -13,7 +13,10 @@ const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className
 const button=(text,fn,cls='')=>{const b=el('button',cls,text);b.type='button';b.addEventListener('click',fn);return b;};
 const HEX=n=>'#'+n.toString(16).padStart(6,'0');
 const WEAPON_NAMES={bolt:'Bolt rifle',carbine:'Carbine',shotgun:'Shotgun',revolver:'Revolver'};
-const BRANCH_DETAIL={legs:'Keep moving. Recover from a fall, cross open ground, escape a closing distance.',hands:'Make every opening count. Keep the gun working when a fight turns ugly.',lamp:'Turn what you carry into something the dark has to answer.',quiet:'Choose when a fight begins. Leave nothing behind for it to follow.',blood:'Survive the moment that should have finished you.'};
+// 2026-09-18, Alex: "this writing is [bad]." The branch line under every card is now the keys
+// the branch is about, not a slogan. A card says what to press and what happens; this says
+// which of your hands it lives in.
+const BRANCH_DETAIL={legs:'Movement. Hard sprint is double-tap Shift and hold.',hands:'The gun. R reloads; press R again at the click.',lamp:'The torch. F switches it on and off.',quiet:'What enemies can hear. Crouch is C or Ctrl.',blood:'Your health: what happens when you are hurt, and when you kill.'};
 const ICONS={legs:'↟',hands:'⌁',lamp:'☼',quiet:'◌',blood:'◈'};
 
 const CSS=`
@@ -37,7 +40,7 @@ const CSS=`
 #curfew-pause .nd .cn{font-size:12px;line-height:1.4;display:block}#curfew-pause .nd .cn>span:first-child{display:block;min-height:32px}#curfew-pause .nd .cm{margin-top:6px;justify-content:space-between}#curfew-pause .nd .ct{font-size:9px;color:var(--accent)}#curfew-pause .nd .cc{font-size:8px;letter-spacing:.06em}#curfew-pause .nd .cl{display:none}
 #curfew-pause .nd+.nd:before{left:50%;top:-16px;width:1px;height:14px;background:#6a7c9166}#curfew-pause .nd.own+.nd:before{background:var(--accent)}#curfew-pause .nd.lock{opacity:.55;filter:none}#curfew-pause .nd.poor{opacity:.76}#curfew-pause .nd .dot{top:17px;left:9px;width:7px;height:7px}#curfew-pause .nd.lock .dot{top:18px;left:10px;width:5px;height:5px}
 #curfew-pause .nd[data-selected=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 11%,#101925);box-shadow:0 0 26px color-mix(in srgb,var(--accent) 8%,transparent)}
-#curfew-pause .perk-detail{border-left:1px solid #63718855;padding:25px 0 16px 25px;align-self:stretch;display:flex;flex-direction:column}#curfew-pause .perk-emblem{font:72px/1 Georgia,serif;color:var(--accent);height:95px;opacity:.85}#curfew-pause .detail-eyebrow{text-transform:uppercase;font:10px/1.6 ui-monospace,Consolas,monospace;letter-spacing:.18em;color:var(--accent)}#curfew-pause .perk-detail h2{font-size:27px;font-weight:400;line-height:1.15;margin:14px 0 18px}#curfew-pause .perk-description{font-size:16px;line-height:1.65;color:#d1dce3}#curfew-pause .perk-context{font-size:12px;line-height:1.8;color:#8396a7;margin:20px 0}
+#curfew-pause .perk-detail{border-left:1px solid #63718855;padding:25px 0 16px 25px;align-self:stretch;display:flex;flex-direction:column}#curfew-pause .perk-emblem{font:72px/1 Georgia,serif;color:var(--accent);height:95px;opacity:.85}#curfew-pause .detail-eyebrow{text-transform:uppercase;font:10px/1.6 ui-monospace,Consolas,monospace;letter-spacing:.18em;color:var(--accent)}#curfew-pause .perk-detail h2{font-size:27px;font-weight:400;line-height:1.15;margin:14px 0 18px}#curfew-pause .perk-description{font-size:16px;line-height:1.65;color:#d1dce3}#curfew-pause .perk-tell{font-size:13px;line-height:1.6;color:#c9b98f;margin:12px 0 0}#curfew-pause .perk-context{font-size:12px;line-height:1.8;color:#8396a7;margin:20px 0}
 #curfew-pause .perk-action{padding-top:24px;margin-top:auto}#curfew-pause .primary-action{width:100%;padding:15px;border:1px solid #d5c095aa;background:#d5c09516;color:#ebd8b5;cursor:pointer;font-size:14px}#curfew-pause .primary-action:hover:enabled{background:#d5c0952a}#curfew-pause .primary-action:disabled{background:#7e8c9811;color:#8797a5;border-color:#7e8c9844}#curfew-pause .detail-requirement{min-height:31px;margin:12px 0 0;color:#a6b4bf;font-size:11px;line-height:1.5}
 #curfew-pause .map-page{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:28px;align-items:start}#curfew-pause .map-wrap{max-width:none}#curfew-pause .map{width:min(68vh,100%);max-width:760px;margin:0 auto;background:#050a1077;border:1px solid #64718533}#curfew-pause .map-journal{border-left:1px solid #64718544;padding-left:23px;max-height:65vh;overflow:auto}#curfew-pause .map-journal h2{font-size:16px;font-weight:400;margin:5px 0 20px}#curfew-pause .map-pin{display:block;width:100%;border:0;border-bottom:1px solid #63718433;background:transparent;text-align:left;padding:13px 0;cursor:pointer}#curfew-pause .map-pin strong{display:block;font-size:13px;font-weight:400}#curfew-pause .map-pin small{display:block;font:10px/1.5 ui-monospace,Consolas,monospace;color:#bea780;margin-top:5px}#curfew-pause .map-pin[data-state=cleared] small{color:#96c9ad}#curfew-pause .map-journal p{font-size:13px;line-height:1.8;color:#879baa}
 #curfew-pause .car-page{max-width:1060px;margin:0 auto}
@@ -75,7 +78,12 @@ export class PauseMenu {
     const links=el('div','home-choices');
     for(const [id,title,hint,key] of [['resume','Return','Back to the world','Esc'],['perks','Perks','Choose what keeps you alive','Tab'],['map','Map','Places found. Things heard.','M'],['weapons','Weapons','The marks you brought back',''],['ledger','What we were told','Vera’s ledger','']]){const b=button('',()=>id==='resume'?hud._resume():this.show(id),'home-choice'),text=el('span');text.append(el('strong','',title),el('small','',hint));b.append(text,el(key?'kbd':'span','',key||'→'));links.append(b);}home.append(links);
     const perks=page('perks','perks-layout');this.branches=el('div','perk-branches');for(const row of [...tree.querySelectorAll('.br')])this.branches.append(row);tree.append(this.branches);perks.append(tree);
-    this.detail=el('aside','perk-detail');this.emblem=el('div','perk-emblem');this.eyebrow=el('div','detail-eyebrow');this.perkName=el('h2');this.description=el('div','perk-description');this.context=el('p','perk-context');const action=el('div','perk-action');this.buy=button('Learn ability',()=>this.purchase(),'primary-action');this.requirement=el('p','detail-requirement');this.requirement.setAttribute('role','status');action.append(this.buy,this.requirement);this.detail.append(this.emblem,this.eyebrow,this.perkName,this.description,this.context,action);perks.append(this.detail);
+    this.detail=el('aside','perk-detail');this.emblem=el('div','perk-emblem');this.eyebrow=el('div','detail-eyebrow');this.perkName=el('h2');this.description=el('div','perk-description');this.tell=el('p','perk-tell');this.context=el('p','perk-context');const action=el('div','perk-action');this.buy=button('Learn ability',()=>this.purchase(),'primary-action');this.requirement=el('p','detail-requirement');this.requirement.setAttribute('role','status');action.append(this.buy,this.requirement);this.detail.append(this.emblem,this.eyebrow,this.perkName,this.description,this.tell,this.context,action);perks.append(this.detail);
+    // HOVER READS A PERK. The card itself only has room for its name; pointing at one shows it
+    // in the pane without a click, and leaving the grid puts the pane back on the one that is
+    // selected, which is the one Learn buys (the mouse leaves the grid on its way to Learn).
+    this.branches.addEventListener('pointerover',e=>{const b=e.target.closest&&e.target.closest('.nd');if(b&&b.dataset.node)this.showPerk(b.dataset.node);});
+    this.branches.addEventListener('mouseleave',()=>this.showPerk(this.selectedNode));
     // THE CAR. Alex, 2026-09-16: "I nevevr know what my car part does when i get it. it
     // should tell you. and have it in the menu somewhere." Every part already carries the
     // sentence that says what it does (vehicle/garage.js line); this is the one surface that
@@ -116,9 +124,15 @@ export class PauseMenu {
     xpNote.style.cssText='color:#aabcc9;line-height:1.65;font-size:14px;margin-top:18px';this.journeyPage.append(xpNote);
   }
   selectPerk(id){
-    const n=NODES.find(n=>n.id===id)||NODES[0],b=BRANCHES.find(b=>b.id===n.branch),p=this.ctx.systems.get('progress'),owned=p?.ownedSet?.();this.selectedNode=n.id;
+    const n=NODES.find(n=>n.id===id)||NODES[0];this.selectedNode=n.id;
     for(const q of this.hud.nodeEls||[]){q.btn.dataset.selected=String(q.node.id===n.id);q.btn.setAttribute('aria-pressed',String(q.node.id===n.id));q.btn.setAttribute('aria-label',q.node.name+'. '+q.node.line);}
-    this.detail.style.setProperty('--accent',HEX(b.tint));this.emblem.textContent=ICONS[b.id];this.eyebrow.textContent=b.name+'  /  '+['I','II','III','IV'][n.tier];this.perkName.textContent=n.name;this.description.textContent=n.line;this.context.textContent=BRANCH_DETAIL[b.id];
+    this.showPerk(n.id);
+  }
+  // The pane, for any node: the selected one, or the one under the pointer. Learn always buys
+  // this.selectedNode, never what is merely being read.
+  showPerk(id){
+    const n=NODES.find(n=>n.id===id)||NODES[0],b=BRANCHES.find(b=>b.id===n.branch),p=this.ctx.systems.get('progress'),owned=p?.ownedSet?.();
+    this.detail.style.setProperty('--accent',HEX(b.tint));this.emblem.textContent=ICONS[b.id];this.eyebrow.textContent=b.name+'  /  '+['I','II','III','IV'][n.tier];this.perkName.textContent=n.name;this.description.textContent=n.line;this.tell.textContent=n.tell||'';this.context.textContent=BRANCH_DETAIL[b.id];
     const own=owned?.has(n.id),can=p?.canBuy?.(n.id),pre=NODES.find(q=>q.branch===n.branch&&q.tier===n.tier-1);
     this.buy.disabled=!can;this.buy.textContent=own?'Learned':`Learn · ${n.cost} ${n.cost===1?'point':'points'}`;
     this.requirement.textContent=own?'Yours to keep.':pre&&!owned?.has(pre.id)?'Learn '+pre.name+' first.':!can?`${n.cost} skill ${n.cost===1?'point':'points'} required. Bank experience at a light.`:'Permanently unlock this ability.';

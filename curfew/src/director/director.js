@@ -236,6 +236,15 @@ const COOL_EVERY = 2.0;        // seconds between stand-downs: the pack thins, i
 // half-angle sits INSIDE the 50 degree half-width of the frame at fov 68 / 16:9. That gap is
 // where "dead ahead" lived. The oscillation is enemies.js's CALM_S.
 const COOL_MIN_R = 25;         // m: never the body that is on him -- the bite IS the fight
+// R3 (2026-09-18), C7: SECURED GROUND. Alex, at a hamlet he had just held: "i was looking for a
+// place to rest while hunters will still shooting no matter how many i killed", and "the enemies
+// should stop appearing around the town after that." hamlet-defence.quietAt(x, z) is the fence:
+// within 150 m of a hamlet whose siege is live, and 130 m of one that has held, for good. No
+// candidate spawn point inside it is taken (_place, _evictPoint, and _spawnBody for any other
+// caller), and while HE stands inside it the director holds its designed silence, which already
+// stops the budget, the pity spawn, the watchdog, dread's beats (permitOk) and the enemies lane's
+// own trickle (the heartbeat). hamlet-defence stands down whatever is already there.
+const HAMLET_QUIET_S = 0.5;    // s of silence re-armed every step he is inside one
 const SCREEN_MARGIN = 0.14;    // rad (8 deg) of slack outside the frame edge: "seen" errs wide
 const DIR_CALM_S = 20;         // s a body this file stands down refuses to re-acquire him (= enemies.js CALM_S)
 const COOL_UNSEEN = 1000;      // rank bonus, in metres, for a body he cannot currently see
@@ -735,6 +744,8 @@ export class Director {
       if (!b.pressure) return;                       // horror is dread's, not mine (DESIGN §4)
       if (raw && raw.scripted) return;               // ROUND 13: an ambush is placed on purpose
       if (raw && raw.unique) return;                 // ROUND 22: and the dog-caller is never moved by a clearing
+      if (raw && raw.hold) return;                   // a siege body keeps to its fight's circle (C5)
+      if (raw && raw.def && raw.def.nest) return;    // a nest spider keeps to its building
       let hit = false;
       for (let i = 0; i < this._clearN; i++) {
         const dx = b.x - this._clearX[i], dz = b.z - this._clearZ[i];
@@ -890,6 +901,8 @@ export class Director {
   _spawnBody(species, x, y, z, packSize) {
     const en = this._sys('enemies');
     if (!en) return null;
+    // C7: every order ends here, so the hamlet fence holds for any path that did not ask first
+    if (this._hamletQuiet(x, z)) { this.lastRefusal = 'hamlet ground'; return null; }
     const opts = this._opts;
     opts.species = species;
     opts.pack = packSize;
@@ -1119,6 +1132,11 @@ export class Director {
     if (this._respawnClearT > 0) this._respawnClearT -= dt;
     if (this._respawnQuietT > 0) this._respawnQuietT -= dt;
     if (this._respawnEaseT > 0) this._respawnEaseT -= dt;
+    // C7: inside a live or held hamlet's ground the county is designed quiet (HAMLET_QUIET_S)
+    if (this._hamletQuiet(this._px, this._pz)) {
+      if (this._silenceT < HAMLET_QUIET_S) this._silenceT = HAMLET_QUIET_S;
+      this._sinceContact = 0;
+    }
 
     // Noise decays on a half-life: a shot is loud for a few seconds, not forever.
     if (this.noise > 0) this.noise *= Math.pow(0.5, dt / NOISE_HALFLIFE);
@@ -1264,9 +1282,12 @@ export class Director {
    * The thermostat's other half. One body per COOL_EVERY, and only while the census reads
    * more head than the target wants (COOL_MARGIN): the highest-ranked alerted body — the
    * farthest, preferring one he cannot see (COOL_UNSEEN) — is stood down through
-   * enemies.standDown(), the enemies lane's own verb, so the body forgets him exactly the
-   * way its memory running out would have. NOTHING IS REMOVED HERE; the body walks away.
-   * If the lane ships no standDown(), nothing happens and the county simply stays warm.
+   * enemies.coolDown(), the enemies lane's walk-home verb: it loses him, turns for home and
+   * a release takes it later. This was standDown() until C3 (2026-09-18) gave that name a
+   * verb that LEAVES the fight for good (the hamlets' secured ground). The thermostat was
+   * designed and measured on walking home, so it keeps walking home; standDown() is only the
+   * fallback for an enemies lane that has no coolDown().
+   * If the lane ships neither, nothing happens and the county simply stays warm.
    */
   _cool() {
     this._coolT += 1 / CENSUS_HZ;
@@ -1274,9 +1295,11 @@ export class Director {
     if (!raw || this._coolT < COOL_EVERY) return;
     if (this._cHead <= this.target + COOL_MARGIN) return;
     const en = this._sys('enemies');
-    if (!en || typeof en.standDown !== 'function') return;
+    if (!en) return;
+    const home = typeof en.coolDown === 'function';
+    if (!home && typeof en.standDown !== 'function') return;
     let ok = false;
-    try { ok = !!en.standDown(raw); } catch (e) { ok = false; }
+    try { ok = !!(home ? en.coolDown(raw) : en.standDown(raw)); } catch (e) { ok = false; }
     if (ok) { this.stoodDown++; this._coolT = 0; }
     this._coolBest = null; this._coolBestD = 0;
   }
@@ -1318,6 +1341,13 @@ export class Director {
     if (this._respawnEaseT > RESPAWN_RAMP_S) return RESPAWN_EASE;
     const k = Math.min(1, 1 - this._respawnEaseT / Math.max(0.001, RESPAWN_RAMP_S));
     return RESPAWN_EASE + (1 - RESPAWN_EASE) * k;
+  }
+
+  /** C7: is (x, z) a live or held hamlet's ground (hamlet-defence.quietAt)? Lazy, optional. */
+  _hamletQuiet(x, z) {
+    const hd = this._sys('hamlet-defence');
+    if (!hd || typeof hd.quietAt !== 'function') return false;
+    try { return !!hd.quietAt(x, z); } catch (e) { return false; }
   }
 
   /** True while a death still forbids an ORDER being placed at (x, z). */
@@ -1487,6 +1517,7 @@ export class Director {
         if (cdx * cdx + cdz * cdz < this._clearR2[c]) { inside = true; break; }
       }
       if (inside) continue;
+      if (this._hamletQuiet(x, z)) continue;       // C7: nor into a hamlet's ground
       if (collision && typeof collision.canOccupy === 'function'
         && !collision.canOccupy(x, z, 0.42, 1.70)) continue;
       _placed.x = x; _placed.y = h; _placed.z = z;
@@ -2284,6 +2315,8 @@ export class Director {
       // death nothing may be ORDERED anywhere near the ground he came back to. Wider than
       // the clearing on purpose — a body placed on the rim walks in during the clearing.
       if (this._inRespawnBubble(x, z)) continue;
+      // C7: nor on a live or held hamlet's ground
+      if (this._hamletQuiet(x, z)) continue;
 
       // never on top of a live body
       if (this._tooClose(x, z, R.spacing)) continue;

@@ -317,6 +317,7 @@ const MIST_LAG = 1.5;
 const MIST_RING = 58;            // m: the radius the local valley floor is searched over
 const MIST_DEPTH = 3.4;          // m: how deep the fog lies over that floor
 const MIST_HEAD = 1.05;          // m: it may never be more than this above your own ground
+const MIST_ROOF_RATE = 3.0;      // 1/s: the sheet thins over ~1 s as you walk in under a roof
 // ROUND 16, THE LIGHT LANE — BANKS, NOT A WALL.
 //
 // MEASURED, dusk, six seconds into the pines, grain zeroed, one rAF: hiding these two sheets
@@ -362,6 +363,10 @@ export class Sky {
     this.mistGeo = null;
     this._mistYPrev = null;
     this._mistYCurr = null;
+    // The mist's two multipliers: what the governor/interior lanes ask for (setMistScale),
+    // and how much sky is over the camera (1 in the open, eased to 0 under a roof).
+    this._mistScale = 1;
+    this._mistOpen = 1;
     this.phase = DEEP_NIGHT;
     // ONE Color, shared by scene.background and the dome's horizon uniform.
     this.horizon = new THREE.Color(0x313c4d);
@@ -899,9 +904,15 @@ export class Sky {
 
   /** 0 clears the mist entirely; the governor and the interior lanes may want that door. */
   setMistScale(k) {
+    this._mistScale = Math.max(0, +k || 0);
+    this._writeMistAmt();
+  }
+
+  _writeMistAmt() {
     if (!this.mist) return;
+    const k = this._mistScale * this._mistOpen;
     for (let i = 0; i < this.mist.length; i++) {
-      this.mist[i].mat.uniforms.uAmt.value = MIST_LAYERS[i].aMax * Math.max(0, k);
+      this.mist[i].mat.uniforms.uAmt.value = MIST_LAYERS[i].aMax * k;
     }
   }
 
@@ -1118,6 +1129,15 @@ export class Sky {
     // (nothing raycasts the mesh) and it is read lazily, at use, never captured — terrain is
     // manifest #4 and we are #3, so it does not exist while we are being constructed.
     if (!this.mist) return;
+    // UNDER A ROOF THERE IS NO GROUND MIST. The sheet rides the TERRAIN, so on a flat site it
+    // lies a metre over the floor of every ground-floor room and cuts through the furniture
+    // as a pale layer. The county already asks "is there sky over me" once every quarter
+    // second, one ray straight up from the camera (fx.js, the same test that stops it
+    // snowing indoors and puts the eyes out); read that, and ease rather than pop.
+    const fx = this.ctx.systems && this.ctx.systems.get('fx');
+    const open = fx && fx._underRoof ? 0 : 1;
+    if (open !== this._mistOpen) this._mistOpen = damp(this._mistOpen, open, MIST_ROOF_RATE, dt);
+    if (Math.abs(this._mistOpen - open) < 0.002) this._mistOpen = open;
     const camera = this.ctx.camera;
     const terrain = this.ctx.systems && this.ctx.systems.get('terrain');
     if (!camera || !terrain || typeof terrain.heightAt !== 'function') return;
@@ -1163,10 +1183,12 @@ export class Sky {
     // it also covers every case terrain.heightAt() cannot know about: a tower platform, the
     // manor's upper floor, the lighthouse gallery, the inside of the car.
     const ceil = camera.position.y - 0.30;
+    const amt = this._mistScale * this._mistOpen;
     for (let i = 0; i < this.mist.length; i++) {
       const m = this.mist[i];
       m.mesh.position.set(camera.position.x, Math.min(y + m.yOff, ceil), camera.position.z);
       const u = m.mat.uniforms;
+      u.uAmt.value = MIST_LAYERS[i].aMax * amt;
       u.uTime.value = this._t;
       u.uCam.value.copy(camera.position);
       u.uMoonDir.value.copy(du.uMoonDir.value);

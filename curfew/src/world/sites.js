@@ -1609,21 +1609,25 @@ export const BUILDERS = {
   works: {
     landmark(api) {
       const k = kits();
-      // two stacks, 46 m and 38 m
-      k.solid.tube(1.5, 2.4, 46, 12, -13, api.padY + 23, 8, C.brick);
+      // two stacks, 46 m and 38 m. The tall one stood at (-13, 8), up through the ore tipple's
+      // sorting deck and its hopper cones (round 3). It stands 9 m south now, on open pad:
+      // 1.8 m from the nearest structure and 3.2 m from its twin, measured by footprint.
+      k.solid.tube(1.5, 2.4, 46, 12, -13, api.padY + 23, -1, C.brick);
       k.solid.tube(1.3, 2.0, 38, 12, -19.5, api.padY + 19, 3, C.brick);
-      api.emit({ kind: 'circle', x: -13, z: 8, r: 2.5, y0: api.padY, y1: api.padY + 46, tag: 'stone' });
+      api.emit({ kind: 'circle', x: -13, z: -1, r: 2.5, y0: api.padY, y1: api.padY + 46, tag: 'stone' });
       api.emit({ kind: 'circle', x: -19.5, z: 3, r: 2.1, y0: api.padY, y1: api.padY + 38, tag: 'stone' });
-      // headframe
-      lattice(k.solid, api, 8, -6, 3.2, 1.6, 22, 5, C.rust, 'metal');
-      k.solid.box(7.4, 0.5, 0.5, 8, api.padY + 22.4, -6, C.rust);
+      // headframe. It stood INSIDE the winding house: a 22 m leg up through the drum and the
+      // roof. A headframe stands over its shaft beside the house that winds it, so it is
+      // here, west of the west wall, the same horizon read five metres over.
+      lattice(k.solid, api, 3.0, -5.6, 2.6, 1.3, 22, 5, C.rust, 'metal');
+      k.solid.box(7.4, 0.5, 0.5, 3.0, api.padY + 22.4, -5.6, C.rust);
       // The ember caps. THESE USED TO BE HORIZONTAL QUADS and that is a horizon read you
       // can only see from a helicopter: a flat plane at 46 m, viewed from a road 2 km away
       // at an elevation of one degree, is edge-on and contributes nothing. Measured, the
       // stacks' whole per-frame luminance delta at 2 km was 9.4 against a gate of 12.
       // A short vertical cylinder has the same projected area from EVERY bearing, which is
       // what a thing on the skyline has to have. 4.2 m and 3.6 m across, as the caps were.
-      k.glow.cyl(2.1, 2.1, 4.4, 10, -13, api.padY + 45.4, 8, [1, 1, 1]);
+      k.glow.cyl(2.1, 2.1, 4.4, 10, -13, api.padY + 45.4, -1, [1, 1, 1]);
       k.glow.cyl(1.8, 1.8, 3.8, 10, -19.5, api.padY + 37.6, 3, [1, 1, 1]);
       // the winding wheel: authored around its own pivot so places.js can turn it
       const wk = new Kit();
@@ -1633,7 +1637,7 @@ export const BUILDERS = {
       }
       return {
         solid: k.solid.build(), glow: k.glow.build(), glowColour: GLOW.ember,
-        moving: [{ geo: wk.build(), colour: null, role: 'wheel', x: 8, y: api.padY + 22.4, z: -6, rate: 0.9 }],
+        moving: [{ geo: wk.build(), colour: null, role: 'wheel', x: 3.0, y: api.padY + 22.4, z: -5.6, rate: 0.9 }],
       };
     },
     body(api) {
@@ -1663,8 +1667,23 @@ export const BUILDERS = {
         kind: 'obb', x: -2, z: 9.1, halfX: 1.2, halfZ: 0.8, yaw: 0,
         y0: api.padY - 0.2, y1: api.padY + 1.5, tag: 'stone', standable: true,
       });
-      k.solid.box(0.7, 0.35, 21, 8, api.padY + 6.2, 2.5, C.rust, 0, -0.22);
-      k.solid.box(6.5, 0.6, 6.5, 8, api.padY + 0.3, -6, C.dark);
+      // The conveyor runs down from the headframe to the middle ore bin and stands on two
+      // trestles; it used to start inside the winding house and hang 21 m with no support.
+      k.solid.box(0.7, 0.35, 17.6, 3.0, api.padY + 6.4, 3.2, C.rust, 0, 0.22);
+      for (const [tz, ty] of [[-0.4, 7.03], [8.6, 5.01]]) {
+        for (const sx of [-0.32, 0.32]) {
+          k.solid.box(0.16, ty, 0.16, 3.0 + sx, api.padY + ty * 0.5, tz, C.rust);
+          api.emit({ kind: 'circle', x: 3.0 + sx, z: tz, r: 0.1, y0: api.padY - 0.2,
+            y1: api.padY + ty, tag: 'post' });
+        }
+        k.solid.box(0.9, 0.12, 0.16, 3.0, api.padY + ty - 0.06, tz, C.rust);
+      }
+      // the collar of the shaft, under the headframe: a kerb you step up onto
+      k.solid.box(5.6, 0.45, 5.6, 3.0, api.padY + 0.225, -5.6, C.dark);
+      api.emit({
+        kind: 'obb', x: 3.0, z: -5.6, halfX: 2.8, halfZ: 2.8, yaw: 0,
+        y0: api.padY - 0.2, y1: api.padY + 0.45, tag: 'stone', standable: true,
+      });
       // slag: a low ash ridge that says this place burned for a century. Out at 16-26 m
       // these sit past the level core of the works disc, so they are grounded on the real
       // heightfield and buried 0.9 m into it — a slag heap has no visible base — and each
@@ -2046,9 +2065,16 @@ export const BUILDERS = {
       const c = api.site.claim;
       k.solid.cyl(0.55, 0.34, 1.0, 8, c.dx, api.padY + 0.5, c.dz, C.rust);
       k.glow.pane(0.9, 0.9, c.dx, api.padY + 1.05, c.dz, PANE_LAMP, 0, -Math.PI * 0.5, 8, 8);
-      // steps
+      // The landing before the west door: three courses of flagstone laid flat, 10 cm proud of
+      // the pad, each with its own standable body. They were drawn as a stair of 24 cm slabs
+      // that CLIMBED AWAY from a door at pad level to 0.72 m, the upper two hanging over
+      // nothing and none of them solid, so you walked through stone. Made solid as a stair they
+      // were a mound between the porch and the brazier; laid flat they are what a door has.
       for (let i = 0; i < 3; i++) {
-        k.solid.box(13 - i * 1.2, 0.24, 1.1, 0, api.padY + 0.12 + i * 0.24, -8.5 - i * 1.1, C.stone);
+        const top = 0.10 - i * 0.012;
+        k.solid.box(13 - i * 1.2, top, 1.1, 0, api.padY + top * 0.5, -8.5 - i * 1.1, C.stone);
+        api.emit({ kind: 'obb', x: 0, z: -8.5 - i * 1.1, halfX: (13 - i * 1.2) * 0.5, halfZ: 0.55,
+          y0: api.padY, y1: api.padY + top, tag: 'stone', standable: true });
       }
       return { solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.ember };
     },
@@ -2565,6 +2591,18 @@ export const BUILDERS = {
       const eastYaw = Math.atan2(Math.cos(api.yaw), Math.sin(api.yaw));
       const KINDS = ['gothic', 'gothic', 'shouldered', 'broken', 'cross', 'gothic', 'obelisk', 'shouldered', 'broken'];
       let gi = 0;
+      // The chapel of rest (dress-interiors.js cemetery, 7 x 8.6 at (-17.2, 6.5), yaw 0.34)
+      // stands on this lattice's west column: one stone stood inside it and another laid its
+      // mound through its east wall. A stone within reach of it is still rolled off the same
+      // dice, into a kit nobody builds, so nothing after it in the yard moves; it just is
+      // not there. The east margin is the mound's: it lies 1.05 m toward world east.
+      const chapelC = Math.cos(0.34), chapelS = Math.sin(0.34);
+      const nearChapel = (x, z) => {
+        const dx = x + 17.2, dz = z - 6.5;
+        return Math.abs(dx * chapelC - dz * chapelS) < 5.9 && Math.abs(dx * chapelS + dz * chapelC) < 5.7;
+      };
+      const unbuilt = { ...api, emit: () => -1 };
+      let unbuiltKit = null;
       for (let gz = 0; gz < 7; gz++) {
         for (let gx = 0; gx < 6; gx++) {
           const lx = -13 + gx * 5.2 + api.rng.range(-0.8, 0.8);
@@ -2573,6 +2611,11 @@ export const BUILDERS = {
           let inMaus = false;
           for (const m of MAUS) if (Math.abs(lx - m[0]) < 3.4 && Math.abs(lz - m[1]) < 3.7) inMaus = true;
           if (inMaus) continue;
+          if (nearChapel(lx, lz)) {
+            unbuiltKit = unbuiltKit || kits();
+            headstone(unbuiltKit, unbuilt, lx, lz, { kind: KINDS[gi++ % KINDS.length], yaw: eastYaw });
+            continue;
+          }
           headstone(k, api, lx, lz, { kind: KINDS[gi++ % KINDS.length], yaw: eastYaw });
         }
       }
