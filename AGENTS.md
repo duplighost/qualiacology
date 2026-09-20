@@ -58,6 +58,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | iron-psalm | `Projects\iron-psalm` | package source is in `source/`; `py -3 tools/build_website.py` rebuilds `publish/`, then `node build-site-copy.mjs` copies the runtime with the site shell |
 | kickmoon | `Projects\kick-ball-moonkick` (not `kick-ball`) | copy the `game/` runtime; keep the site's index.html shell |
 | pocket-sun | `Projects\pocket-sun` | `npm run build:site` then `npm run copy:site` there |
+| tideglass | `Projects	ideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
 | spaceboarding | `Projects\spaceboarding` | copy `assets src styles.css vendor`; keep the site's index.html shell |
 | fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
 | vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
