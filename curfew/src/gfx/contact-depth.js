@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {Pass, FullScreenQuad} from 'three/addons/postprocessing/Pass.js';
+import {MoonAirField} from './moon-air.js';
 
 // Contact shading and restrained first-bounce light from visible luminous surfaces.
 // Half-resolution neighborhoods are reconstructed along depth edges. No history
@@ -14,7 +15,7 @@ const POSITION = `
 `;
 export class ContactDepthPass extends Pass {
   constructor(ctx){
-    super();this.ctx=ctx;
+    super();this.ctx=ctx;this.air=new MoonAirField(ctx);
     this.target=new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType,depthBuffer:false,stencilBuffer:false});
     this.target.texture.name='county-contact-and-bounce';
     this.uniforms={tDiffuse:{value:null},tDepth:{value:null},uInvProjection:{value:new THREE.Matrix4()},uProjection:{value:new THREE.Matrix4()},uWorldUp:{value:new THREE.Vector3()},uResolution:{value:new THREE.Vector2(1,1)},uProjectionY:{value:1},uShadeCap:{value:.38},uReflectionStrength:{value:1}};
@@ -121,17 +122,29 @@ export class ContactDepthPass extends Pass {
         gl_FragColor=vec4(reflected,-p.z);
       }`});
     this.resolveMaterial=new THREE.ShaderMaterial({name:'CountyContactResolve',depthTest:false,depthWrite:false,vertexShader:VERTEX,
-      uniforms:{tDiffuse:{value:null},tDepth:{value:null},tField:{value:this.target.texture},tReflection:{value:this.reflectionTarget.texture},uInvProjection:this.uniforms.uInvProjection,uFieldSize:{value:new THREE.Vector2(1,1)},uReflectionSize:{value:new THREE.Vector2(1,1)}},
+      uniforms:{tDiffuse:{value:null},tDepth:{value:null},tField:{value:this.target.texture},tReflection:{value:this.reflectionTarget.texture},tAir:{value:this.air.target.texture},uInvProjection:this.uniforms.uInvProjection,uFieldSize:{value:new THREE.Vector2(1,1)},uReflectionSize:{value:new THREE.Vector2(1,1)}},
       fragmentShader:`
-        uniform sampler2D tDiffuse,tDepth,tField,tReflection;
+        uniform sampler2D tDiffuse,tDepth,tField,tReflection,tAir;
         uniform mat4 uInvProjection;
         uniform vec2 uFieldSize,uReflectionSize;
         varying vec2 vUv;
         ${POSITION}
+        vec3 airAt(float z){
+          vec2 cell=vUv*uReflectionSize-.5,base=(floor(cell)+.5)/uReflectionSize,f=fract(cell);
+          vec3 air=vec3(0.0);float total=0.0;
+          for(int y=0;y<2;y++)for(int x=0;x<2;x++){
+            vec2 o=vec2(float(x),float(y)),uv=base+o/uReflectionSize,w=mix(1.0-f,f,o);
+            vec4 a=textureLod(tAir,uv,0.0);
+            float dz=abs(a.a-min(-z,200.0)),weight=w.x*w.y/(1.0+dz*dz*65.0);
+            air+=a.rgb*weight;total+=weight;
+          }
+          return air/max(total,.00001);
+        }
         void main(){
           vec4 color=textureLod(tDiffuse,vUv,0.0);
-          if(textureLod(tDepth,vUv,0.0).r>.999998){gl_FragColor=color;return;}
           float z=positionAt(vUv).z;
+          vec3 air=airAt(z);
+          if(textureLod(tDepth,vUv,0.0).r>.999998){gl_FragColor=vec4(color.rgb+air,1.0);return;}
           float wet=clamp((.98-color.a)/.75,0.0,1.0);
           vec2 cell=vUv*uFieldSize-.5;
           vec2 base=(floor(cell)+.5)/uFieldSize;
@@ -162,12 +175,13 @@ export class ContactDepthPass extends Pass {
             // reflection RGB cannot bleed into an adjacent dry coplanar pixel.
             color.rgb+=reflected/max(total,.00001)*wet;
           }
-          color.a=1.0;
+          color.rgb+=air; color.a=1.0;
           gl_FragColor=color;
         }`});
     this.quad=new FullScreenQuad(this.material);
   }
   setSize(w,h){
+    this.air.setSize(w,h);
     this.uniforms.uResolution.value.set(w,h);
     const fw=Math.max(1,Math.ceil(w/2)),fh=Math.max(1,Math.ceil(h/2));
     this.target.setSize(fw,fh);this.resolveMaterial.uniforms.uFieldSize.value.set(fw,fh);
@@ -184,8 +198,9 @@ export class ContactDepthPass extends Pass {
     u.uShadeCap.value+=(want-u.uShadeCap.value)*(1-Math.exp(-1.5*(dt>0&&dt<1?dt:1/60)));
     this.quad.material=this.material;renderer.setRenderTarget(this.target);this.quad.render(renderer);
     this.quad.material=this.reflectionMaterial;renderer.setRenderTarget(this.reflectionTarget);this.quad.render(renderer);
+    this.air.render(renderer,readBuffer.depthTexture);
     const r=this.resolveMaterial.uniforms;r.tDiffuse.value=readBuffer.texture;r.tDepth.value=readBuffer.depthTexture;
     this.quad.material=this.resolveMaterial;renderer.setRenderTarget(this.renderToScreen?null:writeBuffer);this.quad.render(renderer);
   }
-  dispose(){this.target.dispose();this.reflectionTarget.dispose();this.reflectionMaterial.dispose();this.material.dispose();this.resolveMaterial.dispose();this.quad.dispose();}
+  dispose(){this.air.dispose();this.target.dispose();this.reflectionTarget.dispose();this.reflectionMaterial.dispose();this.material.dispose();this.resolveMaterial.dispose();this.quad.dispose();}
 }

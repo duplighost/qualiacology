@@ -1,6 +1,6 @@
 // Shared destination materials, projected in metres rather than stretched per mesh.
 // The offline bake stores nine albedos and five structural heights at 512 square,
-// followed by measured physical channels and normals for the steel/plaster scans.
+// followed by measured physical channels and normals for steel, plaster and stone.
 // Shared shader code adds world-space weathering, building-foot damp,
 // horizontal mineral paving, rain pooling and snow relief without new draw calls.
 //
@@ -14,7 +14,7 @@ const SIZE = 512;
 const COLOR_STYLES = ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt', 'avery', 'naturalRock'];
 const HEIGHT_STYLES = ['timber', 'stone', 'metal', 'plaster', 'naturalRock'];
 const BASE_BYTES = SIZE * SIZE * 32;
-const SCAN_BYTES = 8 + SIZE * SIZE * 10;
+const SCAN_BYTES = 8 + SIZE * SIZE * 15;
 let prebaked = null, preload = null;
 
 // These maps are deterministic and need not run millions of noise samples on every
@@ -28,7 +28,7 @@ export async function preloadPlaceSurfaceLibrary() {
     if (!response.ok) throw new Error('place surfaces: asset HTTP ' + response.status);
     const bytes = new Uint8Array(await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
     if (bytes.length !== BASE_BYTES + SCAN_BYTES) throw new Error('place surfaces: invalid baked data length');
-    if (String.fromCharCode(...bytes.subarray(BASE_BYTES, BASE_BYTES + 8)) !== 'PSCAN001') {
+    if (String.fromCharCode(...bytes.subarray(BASE_BYTES, BASE_BYTES + 8)) !== 'PSCAN002') {
       throw new Error('place surfaces: invalid scan channel header');
     }
     prebaked = bytes;
@@ -1028,7 +1028,7 @@ export function patchPlaceSurfaceLighting(shader, material) {
 }
 
 /**
- * Sixteen 512 x 512 images: nine colour, five packed height/response and two
+ * Seventeen 512 x 512 images: nine colour, five packed height/response and three
  * measured tangent normals. Natural rock retains its own pair for the Quarry.
  *
  * COST. Round 16's note here said 300-340 ms against 206 ms for twelve 256s — "four times the
@@ -1070,7 +1070,7 @@ export function createPlaceSurfaceLibrary() {
     // Normal XY adds one shared sampler, with a uniform branch for every material;
     // it does not split the destination shader into additional program variants.
     let scanOffset = BASE_BYTES + 8;
-    for (const family of ['metal', 'plaster']) {
+    for (const family of ['metal', 'plaster', 'stone']) {
       const response = lib[family + '-bump'].image.data;
       const normal = new Uint8Array(SIZE * SIZE * 4);
       for (let p = 0; p < response.length; p += 4) {
@@ -1088,10 +1088,14 @@ export function createPlaceSurfaceLibrary() {
       for (const style of COLOR_STYLES.filter(style => BUMP_OF[style] === family)) {
         lib[style].userData.scanNormal = normalTexture;
         if (family === 'metal') lib[style].repeat.set(2, 1);
+        // Bricks089 covers 2.2 x 1.1 m. Repeat against the common 4 m
+        // projection without rotating its courses or stretching its normals.
+        if (family === 'stone') lib[style].repeat.set(4 / 2.2, 4 / 1.1);
       }
       // The steel scan is 2:1 before rotation: a 2 x 4 metre repeat keeps its
       // photographic aspect and narrow rib spacing within the existing 4 m UVs.
       if (family === 'metal') lib[family + '-bump'].repeat.set(2, 1);
+      if (family === 'stone') lib[family + '-bump'].repeat.set(4 / 2.2, 4 / 1.1);
     }
   }
   // The renderer owns the expanded texels now; release the packed working copy.

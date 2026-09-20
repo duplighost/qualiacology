@@ -4,6 +4,46 @@
   "retrieved": "2026-09-12",
   "materials": [
     {
+      "id": "Bricks089",
+      "title": "Bricks 089",
+      "authors": [
+        "ambientCG"
+      ],
+      "authorAttribution": "Official ambientCG attribution; the asset API does not name an individual photographer.",
+      "source": "https://ambientcg.com/a/Bricks089",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://docs.ambientcg.com/license/",
+      "creationMethod": "Surface Photogrammetry",
+      "retrieved": "2026-09-20",
+      "archive": "https://ambientcg.com/get?file=Bricks089_1K-JPG.zip",
+      "archiveBytes": 5317280,
+      "archiveSha256": "54b2d7bfcd51f36b638a86738b23cb65db7c44304bc1eec23dbbb2989088fd87",
+      "sourceResolution": [
+        1024,
+        512
+      ],
+      "bakedResolution": [
+        512,
+        512
+      ],
+      "physicalSizeMetres": [
+        2.2,
+        1.1
+      ],
+      "families": [
+        "stone",
+        "mossStone"
+      ],
+      "transform": "All channels flipped for DataTexture and Lanczos resampled together. Measured 2.2 x 1.1 metre aspect retained by identical albedo/physical UV repeats. Linear albedo normalized per channel to the existing regional stone palette, retaining real block/mineral variation without an overall green cast. MossStone alone adds restrained moss in the photographed height/AO recesses, using a wrapped low-pass version of its existing regional growth field. Measured OpenGL normal XY, roughness and AO remain aligned with displacement.",
+      "sourceFileSha256": {
+        "Bricks089_1K-JPG_Color.jpg": "d400167a3133b3933ff7cd9bbb4db93361cd2c48cd08e640da16b5913d740c2b",
+        "Bricks089_1K-JPG_Displacement.jpg": "1981d2a361af554a85a3f1bd3d6dede7ea6edb0350127d019b3bf1dbdf542022",
+        "Bricks089_1K-JPG_Roughness.jpg": "e578aadd069976744ffaffb7dc8823d4d25772c2daba00695a7535a1a4de8b1e",
+        "Bricks089_1K-JPG_AmbientOcclusion.jpg": "f3f3836e5dacf66751bfb907b72576e4d57a6140f622a194b83e06ffe59bcc84",
+        "Bricks089_1K-JPG_NormalGL.jpg": "909d7b03cdc8cfb511826ee33620fd2b9bc2b0ca7fcd879e61a3d9101b7efef3"
+      }
+    },
+    {
       "id": "forest_leaves_02",
       "title": "Forest Leaves 02",
       "authors": [
@@ -158,15 +198,15 @@
     },
     {
       "file": "place-surfaces-v1.bin.gz",
-      "provenance": "Original procedural timber, masonry and rock plus CC0 ambientCG CorrugatedSteel009 and Plaster007 scans. Per-source attribution, licenses and original file digests appear above.",
+      "provenance": "Original procedural timber and rock plus CC0 ambientCG CorrugatedSteel009, Plaster007 and Bricks089 scans. Per-source attribution, licenses and original file digests appear above.",
       "source": ["src/world/place-surfaces.js", "tools/prepare-place-scans.py"],
       "regenerate": "node tools/bake-place-surfaces.mjs",
       "resolution": [512, 512],
       "colorMaps": 9,
       "heightMaps": 5,
-      "encoding": "Gzip; nine RGB images then five R height images in source library order; PSCAN001 header then metal and plaster records, each five interleaved bytes per texel: roughness, AO, metalness, normal X, normal Y. Runtime packs the real scan response into height GBA and reconstructs normal Z.",
-      "compressedBytes": 6491077,
-      "sha256": "64c1905d7a0c1d7a1080b2a055fe9d4214d59951e9e4d14143de0e1f3367dc67"
+      "encoding": "Gzip; nine RGB images then five R height images in source library order; PSCAN002 header then metal, plaster and stone records, each five interleaved bytes per texel: roughness, AO, metalness, normal X, normal Y. Runtime packs the real scan response into height GBA and reconstructs normal Z.",
+      "compressedBytes": 7674070,
+      "sha256": "d4db6faad30ee7b90a2a8da8b7ba58b240610f2de229e1cfd7028051a019336e"
     },
     {
       "file": "road-asphalt-v1.bin.gz",

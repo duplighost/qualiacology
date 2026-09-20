@@ -1458,12 +1458,14 @@ function buildTemplateGeometry(rec, lod, seed) {
 // 29 visible understory meshes over ~10 near chunks, so a fifth kind buys the whole floor
 // layer for about ten draws. It emits NO collider on purpose: it is 6 cm of dead leaves.
 // ---------------------------------------------------------------------------
-const UNDER_KINDS = ['fern', 'log', 'stump', 'boulder', 'litter'];
+const UNDER_KINDS = ['fern', 'log', 'stump', 'boulder', 'litter', 'shrub'];
 // The grass-over-the-roof probe (see _buildGrass): a top this far over the ground is a roof.
 const ROOF_OVER = 2.4;
 const ROOF_PROBE_RISE = 40;
 const GRASS_PROBE_R = 0.30;
-const UNDER_CAP = { fern: 1200, log: 96, stump: 96, boulder: 96, litter: 280 };
+const UNDER_CAP = { fern: 1200, log: 96, stump: 96, boulder: 96, litter: 280, shrub: 96 };
+const COLONY_CELL = 16;            // separated 4-8 m colonies leave open routes between them
+const COLONY_FERN_CAP = 48;        // added bracken shares the existing fern instance batch
 // ROUND 16, item 12. The litter layer's own numbers.
 const LITTER_COLLAR_P = 0.52;     // of this chunk's trunks get a drift at the foot
 const LITTER_SOIL_CELL = 4.6;     // m; one bare-soil candidate per cell
@@ -1550,6 +1552,43 @@ function makeFernGeometry() {
   for (const g of parts) g.dispose();
   merged.computeBoundingBox(); merged.computeBoundingSphere();
   return merged;
+}
+
+/** Soft young growth: three flexible stems with overlapping leafy shoulders.
+ * Uses the tree atlas/material, 108 triangles, and no physical obstacle. */
+function makeShrubGeometry() {
+  const parts = [];
+  const stems = [
+    [-0.12, 0.06, -0.25, 0.51, 0.10, -0.39, 1.04, 0.16],
+    [0.11, -0.05, 0.26, 0.39, -0.16, 0.46, 0.73, -0.10],
+    [0.01, 0.11, 0.06, 0.64, 0.15, 0.20, 1.19, 0.25],
+  ];
+  for (let i = 0; i < stems.length; i++) {
+    const [x, z, mx, my, mz, tx, ty, tz] = stems[i];
+    parts.push(segmentGeometry(x, 0, z, mx, my, mz, 0.017, 0.009, 3,
+      PAL.barkRed, 0, 0.13, { rough: 0.02, kind: 'broad', seed: 8021 + i }));
+    parts.push(segmentGeometry(mx, my, mz, tx, ty, tz, 0.009, 0.002, 3,
+      PAL.barkRed, 0.13, 0.35, { rough: 0.02, kind: 'broad', seed: 8039 + i }));
+  }
+  const lobes = [
+    [-0.26, 0.64, 0.12, 0.42, 2],
+    [0.36, 0.57, -0.10, 0.43, 3],
+    [0.15, 0.99, 0.23, 0.38, 2],
+    [-0.02, 0.31, -0.05, 0.39, 3],
+  ];
+  for (let i = 0; i < lobes.length; i++) {
+    const [x, y, z, r, cell] = lobes[i];
+    const leaf = i === 1 ? PAL.leafDry : PAL.leaf;
+    parts.push(foliageSprayGeometry(x, y, z, r, leaf, 0.86 + i * 0.035,
+      0.19 + y * 0.18, 0.88, 8101 + i * 31, i * 2.3999632, false, 0, cell, 9));
+  }
+  const geo = mergeGeometries(parts, false);
+  for (const part of parts) part.dispose();
+  geo.computeBoundingBox();
+  const height = geo.boundingBox.max.y;
+  geo.scale(1 / height, 1 / height, 1 / height);
+  geo.computeBoundingBox(); geo.computeBoundingSphere();
+  return geo;
 }
 
 /** A deadfall log, unit length along +X, resting on y = 0, radius 1 (the instance matrix
@@ -1874,6 +1913,7 @@ export class Flora {
     // --- the understory templates (ROUND 6) ---------------------------------
     this.underGeo = {
       fern: makeFernGeometry(),
+      shrub: makeShrubGeometry(),
       log: makeLogGeometry(),
       stump: makeStumpGeometry(),
       boulder: makeBoulderGeometry(this.seed + 977),
@@ -1885,8 +1925,9 @@ export class Flora {
       const geo = this.underGeo[kind];
       if (!geo) continue;
       const bark = new Float32Array(geo.attributes.position.count);
-      if (kind === 'log' || kind === 'stump') bark.fill(1);
+      if (kind === 'log' || kind === 'stump' || kind === 'shrub') bark.fill(1);
       geo.setAttribute('aBark', new THREE.BufferAttribute(bark, 1));
+      if (kind === 'shrub') continue; // twig bark and leaf UVs already address the tree atlas
       let uv = geo.attributes.uv;
       if (!uv) {
         uv = new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2);
@@ -1894,7 +1935,7 @@ export class Flora {
       }
       for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.75, 0.89);
     }
-    this._underCount = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0 };
+    this._underCount = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0, shrub: 0 };
 
     // --- impostor atlas ---------------------------------------------------
     const ok = this.impostors.bake(this.templates.map((t) => ({
@@ -1941,6 +1982,28 @@ export class Flora {
       shader.uniforms.uTier = uni.uTier;
       shader.uniforms.uBandNear = uni.uBandNear;
       shader.uniforms.uBandFar = uni.uBandFar;
+
+      // r161 evaluates every rover at every surviving leaf fragment, even when
+      // parked, dark or beyond its finite cutoff. Preserve the original lighting
+      // body for every contributing light; negative RGB is deliberately nonzero.
+      // The small outward margin keeps float rounding at the range boundary on
+      // the original path. No sampler or derivative is added to either guard.
+      const pointStart = '\t\tgetPointLightInfo( pointLight, geometryPosition, directLight );';
+      const pointEnd = '\t\tRE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+      const treeLights = THREE.ShaderChunk.lights_fragment_begin
+        .replace(pointStart, [
+          '\t\tif ( pointLight.color != vec3( 0.0 ) ) {',
+          '\t\t\tvec3 countyPointDelta = pointLight.position - geometryPosition;',
+          '\t\t\tbool countyPointHasCutoff = pointLight.distance > 0.0;',
+          '\t\t\t#ifdef LEGACY_LIGHTS',
+          '\t\t\tcountyPointHasCutoff = countyPointHasCutoff && pointLight.decay > 0.0;',
+          '\t\t\t#endif',
+          '\t\t\tif ( !countyPointHasCutoff || dot( countyPointDelta, countyPointDelta )',
+          '\t\t\t  <= pointLight.distance * pointLight.distance * 1.000001 ) {',
+          pointStart,
+        ].join('\n'))
+        .replace(pointEnd, pointEnd + '\n\t\t\t}\n\t\t}');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', treeLights);
 
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
@@ -2173,7 +2236,7 @@ export class Flora {
     // SAME key on purpose: the injected code is identical and only the uniform
     // values differ, so they SHOULD share one program - that is 1 program for
     // the near and mid rings instead of 2.
-    mat.customProgramCacheKey = () => 'curfew-tree-volume-4';
+    mat.customProgramCacheKey = () => 'curfew-tree-volume-5';
     return mat;
   }
 
@@ -2839,7 +2902,7 @@ export class Flora {
       return false;
     };
 
-    const counts = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0 };
+    const counts = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0, shrub: 0 };
     let minY = Infinity, maxY = -Infinity;
     const put = (kind, x, y, z, yaw, tilt, sx, sy, sz, tr, tg, tb) => {
       const k = counts[kind];
@@ -3122,6 +3185,153 @@ export class Flora {
           const rad = lerp(0.95, 2.60, hashI(gx, gz, S + 154));
           const v = 0.88 + hashI(gx, gz, S + 155) * 0.18;
           drift(wx, wz, rad, 0.62, S + 156, v * SOIL_MUL[0], v * SOIL_MUL[1], v * SOIL_MUL[2]);
+        }
+      }
+    }
+
+    // --- young growth: broken colonies on margins and beside fallen timber ----------
+    // This soft layer has no colliders. Its complete footprint clears made surfaces;
+    // the existing logs, stumps, rocks and their collision emission above stay intact.
+    {
+      const fernBefore = counts.fern;
+      const softSpots = [];
+      const horizontalRadius = geo => {
+        const p = geo.attributes.position;
+        let r = 0;
+        for (let i = 0; i < p.count; i++) r = Math.max(r, Math.hypot(p.getX(i), p.getZ(i)));
+        return r;
+      };
+      const shrubRadius = horizontalRadius(this.underGeo.shrub);
+      const brackenRadius = horizontalRadius(this.underGeo.fern);
+      const bossSites = this._sys('boss-sites')?.sites || [];
+      const stories = this._sys('world-stories');
+      const storyTargets = stories?.targets || [];
+      const hasSupport = collision && typeof collision.supportHeight === 'function';
+
+      const madeGround = (x, z, r) => {
+        if (hasRoad && roads.roadDistance(x, z) < excludeGrass + r + 0.45) return true;
+        for (const m of _minorsNear) {
+          if (Math.hypot(x - m.x, z - m.z) < U.siteClear + r) return true;
+        }
+        if (flats) for (const f of flats) {
+          // Boss flattening discs include a wide blend into surrounding woods.
+          // Preserve the actual arena and its approach below, not that blend halo.
+          if (typeof f.id === 'string' && f.id.startsWith('boss-ground:')) continue;
+          if (Math.hypot(x - f.x, z - f.z) < f.r * 0.86 + r) return true;
+        }
+        for (const s of bossSites) {
+          const dx = x - s.x, dz = z - s.z;
+          // Non-ambush art owns a 92 m square floor; the burrow fight owns its
+          // authored circular radius plus a visible preparation margin.
+          if (s.ambush ? Math.hypot(dx, dz) < (s.radius || 52) + 8 + r
+            : Math.abs(dx) < 46 + r && Math.abs(dz) < 46 + r) return true;
+          if (!s.road?.hit) continue;
+          const ex = s.road.x - s.x, ez = s.road.z - s.z;
+          const t = clamp01((dx * ex + dz * ez) / Math.max(0.001, ex * ex + ez * ez));
+          if (Math.hypot(dx - ex * t, dz - ez * t) < 3.4 + r) return true;
+        }
+        for (const t of storyTargets) {
+          if (Math.hypot(x - t.x, z - t.z) < 3.0 + r) return true;
+        }
+        for (let side = 0; side < 5; side++) {
+          const px = x + (side === 1 ? r : side === 2 ? -r : 0);
+          const pz = z + (side === 3 ? r : side === 4 ? -r : 0);
+          if ((hasSight && places.sightClear(px, pz)) || (hasPad && wilds.padClear(px, pz))
+            || this._travelWaterClear(px, pz) || stories?.clearsTrees?.(px, pz)) return true;
+        }
+        return false;
+      };
+
+      const softPlant = (x, z, key, bracken = false) => {
+        if (x < ox || z < oz || x >= ox + CH || z >= oz + CH) return false;
+        if (bracken ? counts.fern - fernBefore >= COLONY_FERN_CAP : counts.shrub >= UNDER_CAP.shrub) return false;
+        const qx = Math.floor(x * 11), qz = Math.floor(z * 11);
+        const scale = hashI(qx, qz, S + key + 3);
+        const width = bracken ? 0.96 + scale * 0.43 : 1.12 + scale * 0.66;
+        const stretch = 0.84 + hashI(qx, qz, S + key + 17) * 0.28;
+        const radius = width * (bracken ? brackenRadius : shrubRadius * Math.max(stretch, 1 / stretch)) + 0.08;
+        if (madeGround(x, z, radius)) return false;
+        if (trunkNear(x, z, x, z, radius * 0.76)) return false;
+        for (let i = 0; i < softSpots.length; i += 3) {
+          if (Math.hypot(x - softSpots[i], z - softSpots[i + 1]) < (radius + softSpots[i + 2]) * 0.56) return false;
+        }
+        const y = terrain.heightAt(x, z);
+        if (slope2(x, z, y) > 0.18) return false;
+        if (typeof terrain.iceLevelAt === 'function' && terrain.iceLevelAt(x, z) > y + 0.02) return false;
+        // Query all authored tops, including low floor slabs and roofs. Inflating
+        // the support radius compensates its foot-contact factor of 0.55.
+        if (hasSupport && collision.supportHeight(x, z, y + 0.10, radius / 0.55, 40) > y + 0.04) return false;
+        const yaw = hashI(qx, qz, S + key + 7) * TAU;
+        const v = 0.84 + hashI(qx, qz, S + key + 11) * 0.26;
+        if (bracken) {
+          const height = width * (0.96 + hashI(qx, qz, S + key + 13) * 0.22);
+          put('fern', x, y - 0.025, z, yaw, 0, width, height, width,
+            PAL.fern[0] * v * FERN_TINT_MUL * floorTint[0],
+            PAL.fern[1] * v * FERN_TINT_MUL * floorTint[1],
+            PAL.fern[2] * v * FERN_TINT_MUL * floorTint[2]);
+        } else {
+          // Most growth reaches hip/chest height. Width and height vary separately
+          // so the same asymmetric template also reads as low spreading brush.
+          const height = (0.78 + hashI(qx, qz, S + key + 13) ** 1.5 * 0.72)
+            * (regionId === 3 ? 0.76 : 1);
+          put('shrub', x, y - 0.025, z, yaw, 0, width * stretch, height, width / stretch,
+            v * (0.91 + floorTint[0] * 0.09), v * (0.92 + floorTint[1] * 0.08),
+            v * (0.90 + floorTint[2] * 0.10));
+        }
+        softSpots.push(x, z, radius);
+        return true;
+      };
+
+      // Companions grow alongside existing objects without changing those objects.
+      // Three offset plants form an uneven bank, leaving both log ends approachable.
+      for (let i = 0; i < counts.log; i++) {
+        const b = i * UNDER_STRIDE, m = _underBuf.log;
+        const x = m[b + 12], z = m[b + 14], qx = Math.round(x), qz = Math.round(z);
+        if (hashI(qx, qz, S + 851) > 0.76) continue;
+        const length = Math.hypot(m[b], m[b + 2]);
+        const ux = m[b] / length, uz = m[b + 2] / length;
+        const side = hashI(qx, qz, S + 853) > 0.5 ? 1 : -1;
+        for (let j = 0; j < 3; j++) {
+          const along = (j - 1) * length * 0.23;
+          const away = side * (1.18 + hashI(i, j, S + 857) * 0.55);
+          softPlant(x + ux * along - uz * away, z + uz * along + ux * away, 861 + j * 19, j === 1);
+        }
+      }
+      for (let i = 0; i < counts.boulder; i++) {
+        const b = i * UNDER_STRIDE, m = _underBuf.boulder;
+        const x = m[b + 12], z = m[b + 14], size = Math.hypot(m[b], m[b + 2]);
+        if (hashI(Math.round(x), Math.round(z), S + 877) > 0.66) continue;
+        const turn = hashI(i, Math.round(x + z), S + 881) * TAU;
+        for (let j = 0; j < 3; j++) {
+          const a = turn + (j - 1) * 0.72;
+          const d = size + 1.35 + (j & 1) * 0.30;
+          softPlant(x + Math.cos(a) * d, z + Math.sin(a) * d, 887 + j * 17, j === 0);
+        }
+      }
+
+      // Colonies share world-space anchors across chunk seams. Broken centres
+      // and wide spaces between anchors preserve open walking routes; neither
+      // grass density nor the forest-wide scatter changes.
+      const gx0 = Math.floor((ox - 5) / COLONY_CELL), gx1 = Math.ceil((ox + CH + 5) / COLONY_CELL);
+      const gz0 = Math.floor((oz - 5) / COLONY_CELL), gz1 = Math.ceil((oz + CH + 5) / COLONY_CELL);
+      for (let gz = gz0; gz < gz1; gz++) for (let gx = gx0; gx < gx1; gx++) {
+        const hx = (gx + 0.28 + hashI(gx, gz, S + 901) * 0.44) * COLONY_CELL;
+        const hz = (gz + 0.28 + hashI(gx, gz, S + 907) * 0.44) * COLONY_CELL;
+        const cover = this.coverAt(hx, hz);
+        const roadD = hasRoad ? roads.roadDistance(hx, hz) : Infinity;
+        const verge = smoothstep(excludeGrass + 2, excludeGrass + 6, roadD) * (1 - smoothstep(18, 29, roadD));
+        const edge = smoothstep(0.08, 0.28, cover) * (1 - smoothstep(0.66, 0.92, cover));
+        const regionMul = [1, 0.82, 0.68, 0.40][regionId] || 1;
+        const accept = Math.max(verge * (0.60 + cover * 0.20), edge * 0.34, cover * 0.055) * regionMul;
+        if (hashI(gx, gz, S + 911) > accept) continue;
+        const turn = hashI(gx, gz, S + 919) * TAU;
+        const ct = Math.cos(turn), st = Math.sin(turn);
+        for (let j = 0; j < 9; j++) {
+          const a = j * 2.3999632 + hashI(gx * 11 + j, gz, S + 929) * 0.48;
+          const d = Math.sqrt((j + 0.6) / 9);
+          const lx = Math.cos(a) * d * 4.1, lz = Math.sin(a) * d * 2.8;
+          if (Math.abs(lx) < 0.82) continue;
+          softPlant(hx + lx * ct - lz * st, hz + lx * st + lz * ct, 937 + j * 23, j % 3 === 1);
         }
       }
     }
@@ -3506,6 +3716,7 @@ export class Flora {
       // already covering) and it does NOT hide with the ferns at fernRadius - a drift is
       // opaque and still reads at 40 m where an alpha-cut fern card does not.
       const isLitter = s.kind === 'litter';
+      const isShrub = s.kind === 'shrub';
       const mesh = new THREE.InstancedMesh(this.underGeo[s.kind], isFern ? this.matGrass : this.matNear, s.count);
       mesh.name = 'flora-under-' + s.kind + '-' + rec.id;
       mesh.instanceMatrix.array.set(s.mat);
@@ -3517,8 +3728,8 @@ export class Flora {
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       mesh.receiveShadow = true;
-      mesh.castShadow = !isFern && !isLitter;
-      mesh.userData.casts = !isFern && !isLitter;
+      mesh.castShadow = !isFern && !isLitter && !isShrub;
+      mesh.userData.casts = !isFern && !isLitter && !isShrub;
       mesh.userData.fern = isFern;
       this._setBounds(mesh, rec.underBounds);
       this.group.add(mesh);
@@ -4153,6 +4364,7 @@ export class Flora {
         fern: this._underCount.fern, log: this._underCount.log,
         stump: this._underCount.stump, boulder: this._underCount.boulder,
         litter: this._underCount.litter,
+        shrub: this._underCount.shrub,
       },
       understoryPass: {
         pending, chunks: P.chunks, ms: +P.ms.toFixed(1), maxMs: +P.maxMs.toFixed(2),

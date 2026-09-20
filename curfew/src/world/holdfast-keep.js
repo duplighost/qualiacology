@@ -1,5 +1,6 @@
 // The Holdfast is an occupied building. Its skin is permanent; floors, rooms and
 // fittings stream with the town. No solid decorative band crosses its interior.
+import * as THREE from 'three';
 import { kits, Kit, GLOW, ON_APRON } from './sites.js';
 import { P, solid, arch, banner, lantern, chair, chest, icicles, snowCap, crescent, inhabitedWindow, chamferedBlock } from './holdfast-town-art.js';
 import { furnishRoom } from './holdfast-town-houses.js';
@@ -34,6 +35,119 @@ function windowWall(k, api, axis, c, from, to, lo, hi, windows, outward) {
     arch(k, api, sx, sz, 1.80, head - 0.9 - lo, 0.76, 0.30, api.padY + lo, yaw);
   }
   wall(k, api, axis, c, cursor, to, sill, head);
+}
+
+/** The civic front has one tall central bay and two stepped shoulders. These
+ * additions stay outside the rooms; roof projections clear the occupied deck. */
+function keepMassing(k, y, height) {
+  const profile = (points, depth, x, z, colour) => {
+    const shape = new THREE.Shape();
+    points.forEach(([px, py], i) => i ? shape.lineTo(px, py) : shape.moveTo(px, py));
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, {depth,steps:1,bevelEnabled:false,curveSegments:1});
+    geo.setIndex(Array.from({length:geo.attributes.position.count}, (_, i) => i));
+    geo.translate(0, 0, -depth / 2);
+    k.solid.at(geo, colour, x, y, z);
+  };
+  const rake = (ax, ay, bx, by, depth, z, width, colour) => {
+    const dx = bx - ax, dy = by - ay, length = Math.hypot(dx, dy);
+    k.solid.box(length, width, depth, (ax + bx) / 2, y + (ay + by) / 2, z, colour, 0, 0, Math.atan2(dy, dx));
+  };
+  const pitchedCap = (x, base, width, rise, front, rear, colour) => {
+    const half = width / 2;
+    for (const side of [-1, 1]) {
+      rake(x + side * half, base, x, base + rise, front - rear, (front + rear) / 2, .19, colour);
+      rake(x + side * half, base + .10, x, base + rise + .10, .22, front + .04, .22, P.edge);
+    }
+    k.solid.box(.23,.20,front-rear+.16,x,y+base+rise+.12,(front+rear)/2,P.darkStone);
+  };
+
+  // The entrance pediment begins above the original arch. Deep corbels grow
+  // from its existing piers, leaving the full 5.2 m doorway and street clear.
+  for (const side of [-1, 1]) {
+    for (let course = 0; course < 4; course++) {
+      const depth = .62 + course * .25;
+      chamferedBlock(k.solid,.72+course*.12,.28,depth,side*3.13,y+3.78+course*.29,
+        -.20+course*.10,course%2?P.stone:P.edge,0,.045);
+    }
+  }
+  chamferedBlock(k.solid,9.70,.35,1.70,0,y+4.93,.34,P.darkStone,0,.065);
+  chamferedBlock(k.solid,10.02,.24,1.94,0,y+5.20,.40,P.edge,0,.052);
+  profile([[-4.76,5.28],[0,7.15],[4.76,5.28]],.64,0,.76,P.stone);
+  for (const side of [-1, 1]) {
+    rake(side*4.90,5.25,0,7.24,.82,.79,.28,P.edge);
+    rake(side*4.40,5.46,0,7.09,.15,1.17,.08,P.darkStone);
+  }
+  chamferedBlock(k.solid,10.0,.11,.15,0,y+5.41,1.27,P.stone,0,.025);
+
+  // Strong returns around the existing centre windows read as a deeper volume,
+  // while the banners at x +/-5 retain their full width and original positions.
+  for (const side of [-1, 1]) {
+    const x = side * 3.43;
+    for (const [lo,hi,width,depth] of [[7.10,12.43,1.00,1.82],[12.82,25.04,.92,1.63],[25.43,37.77,.84,1.47]]) {
+      chamferedBlock(k.solid,width,hi-lo,depth,x,y+(lo+hi)/2,-.20,P.stone,0,.10);
+      k.solid.box(.14,hi-lo-.18,.12,x+side*(width/2-.09),y+(lo+hi)/2,.59,P.edge);
+    }
+  }
+  for (const high of [12.60,25.20,37.92]) {
+    chamferedBlock(k.solid,7.95,.40,2.05,0,y+high,-.04,P.edge,0,.055);
+    k.solid.box(7.62,.17,1.84,0,y+high-.29,-.04,P.darkStone);
+    for (const x of [-3.45,-2.10,2.10,3.45]) chamferedBlock(k.solid,.35,.48,.53,x,y+high-.49,.53,P.stone,0,.045);
+  }
+
+  // Side bays have lower, stepped roofs. Their returns flank the real window
+  // openings; the hoods fit in the empty masonry between pairs of floors.
+  for (const side of [-1, 1]) {
+    for (const px of [6.72,12.18]) {
+      for (const [lo,hi,width,depth] of [[4.95,12.35,1.30,1.74],[12.95,24.95,1.03,1.42],[25.55,37.52,.79,1.06]]) {
+        chamferedBlock(k.solid,width,hi-lo,depth,side*px,y+(lo+hi)/2,-.24,P.stone,0,.105);
+        chamferedBlock(k.solid,width+.18,.27,depth+.17,side*px,y+hi-.03,-.20,P.edge,0,.05);
+      }
+    }
+    const cx = side * 9.45;
+    for (const [base,rise] of [[12.65,.72],[25.25,.72],[37.86,1.75]]) {
+      chamferedBlock(k.solid,6.70,.32,2.02,cx,y+base-.22,-.03,P.edge,0,.055);
+      profile([[-3.35,base],[0,base+rise],[3.35,base]],.35,cx,1.02,P.darkStone);
+      pitchedCap(cx,base,6.94,rise,1.25,-1.12,P.slate);
+      for (const dx of [-2.70,-1.58,1.58,2.70]) {
+        chamferedBlock(k.solid,.32,.46,.62,cx+dx,y+base-.57,.38,P.stone,0,.045);
+      }
+    }
+  }
+
+  // A steep stone gable breaks the broad flat skyline. Its front is outside
+  // the parapet. Only its slate roof reaches over the deck, above 41.1 m;
+  // the roof floor is at 37.8 m and the stair landing begins at x=5.8.
+  const shoulder = height + 3.46, peak = height + 11.02;
+  profile([[-4.42,height+.15],[-4.42,shoulder],[0,peak],[4.42,shoulder],[4.42,height+.15]],.84,0,.06,P.stone);
+  pitchedCap(0,shoulder,9.30,peak-shoulder,.78,-4.85,P.slate);
+  for (const side of [-1, 1]) {
+    rake(side*4.39,shoulder+.04,0,peak+.07,.55,.64,.31,P.edge);
+    rake(side*3.98,shoulder+.14,0,peak-.30,.15,.58,.10,P.darkStone);
+    chamferedBlock(k.solid,.39,2.96,.36,side*4.26,y+height+1.48,.47,P.edge,0,.055);
+  }
+  // Blind tracery repeats the keep's carved crescent language, without adding
+  // a luminous window, a light slot, or a new interactive symbol.
+  k.solid.cyl(1.12,1.12,.12,28,0,y+height+5.00,.54,P.darkStone,0,Math.PI/2);
+  k.solid.at(new THREE.TorusGeometry(1.15,.105,6,28),P.edge,0,y+height+5.00,.66);
+  crescent(k.cloth,0,y+height+5.00,.69,.74,0,P.edge,.07);
+  for (const x of [-1.64,1.64]) {
+    chamferedBlock(k.solid,.56,1.84,.10,x,y+height+1.72,.53,P.darkStone,0,.06);
+    k.solid.box(.065,1.56,.10,x,y+height+1.72,.63,P.edge);
+  }
+  chamferedBlock(k.solid,.31,.70,.39,0,y+peak+.40,.09,P.edge,0,.055);
+
+  // Crown the existing corner towers within their 1.55 m collider cylinders.
+  // Broad stepped bands and short corbels put a real base beneath each cone.
+  for (const z of [-25.85,-2.15]) for (const x of [-13.6,13.6]) {
+    k.solid.cyl(1.46,1.32,.38,12,x,y+height+4.18,z,P.edge);
+    k.solid.cyl(1.53,1.46,.30,12,x,y+height+4.52,z,P.stone);
+    k.solid.cyl(1.53,1.53,.13,12,x,y+height+4.76,z,P.edge);
+    for (let i=0;i<8;i++) {
+      const a=i*Math.PI/4,px=x+Math.sin(a)*1.29,pz=z+Math.cos(a)*1.29;
+      k.solid.box(.25,.56,.30,px,y+height+3.91,pz,P.darkStone,a);
+    }
+  }
 }
 
 export function buildHoldfastKeepLandmark(api) {
@@ -80,8 +194,9 @@ export function buildHoldfastKeepLandmark(api) {
   }
   chamferedBlock(k.solid,7.24,.27,.62,0,y+4.65,-.16,P.edge,0,.045);
   chamferedBlock(k.solid,7.62,.20,.88,0,y+4.87,-.13,P.stone,0,.035);
-  k.solid.cyl(.52,.52,.10,20,0,y+5.50,-.83,P.darkStone,0,Math.PI/2);
-  crescent(k.cloth,0,y+5.5,-.72,.34,0,P.edge,.035);
+  // Purely decorative moon relief, now seated on the deeper entrance pediment.
+  k.solid.cyl(.52,.52,.10,20,0,y+5.83,1.15,P.darkStone,0,Math.PI/2);
+  crescent(k.cloth,0,y+5.83,1.21,.34,0,P.edge,.035);
   // Carved moon medallions and paired ribs give the front a hierarchy of bays.
   for(const x of[-5,5]){
     for(const dx of[-.30,.30])k.solid.cyl(.11,.16,29.6,8,x+dx,y+18.6,-.79,P.edge);
@@ -113,6 +228,7 @@ export function buildHoldfastKeepLandmark(api) {
       k.solid.box(0.8, 0.65, 0.85, side * 14.6, y + height + 1.42, z, P.edge);
     }
   }
+  keepMassing(k, y, height);
   // The existing hinged paid/fought gate remains on the permanent landmark node.
   for (const side of [-1, 1]) {
     const leaf = new Kit(), reach = 4.9;
