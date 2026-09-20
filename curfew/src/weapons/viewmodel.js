@@ -47,6 +47,7 @@ import { TAU, DEG, clamp, clamp01, lerp, ease, Spring, Spring3, sway2 } from '..
 import CFG from '../config.js';
 import {buildClimbingHand,climbingHandMaterials,placeClimbingHand} from './climbing-hands.js';
 import {buildPourRig} from './pour-hands.js';
+import { SURFACE_RELIEF_GLSL } from '../world/surface-relief.js';
 
 // Small bevels carry a moving light edge on the stock, receiver and grip.
 function bevelBox(w,h,d) {
@@ -496,30 +497,41 @@ const VM_GRADE_HELPERS = /* glsl */`
  * finishes.js already carries), so it holds still on the gun as the gun moves. The hands, the
  * pour rig, the glass and the dot are 0: untouched. */
 const VM_SURF_COLOR = /* glsl */`
+  float vmSurfaceGrain = 0.0;
+  float vmSurfaceWear = 0.5;
+  float vmSurfaceHeight = 0.0;
   if (uVmSurf > 0.5) {
     vec3 sp = vFinishPosition;
+    float footprint = max(length(dFdx(sp)), length(dFdy(sp)));
+    float detailFade = 1.0 - smoothstep(0.0003, 0.0018, footprint);
     if (uVmSurf < 1.5) {
       float wav = vmNoise3(sp * vec3(9.0, 9.0, 2.2)) * 0.020 + vmNoise3(sp * vec3(40.0, 40.0, 7.0)) * 0.004;
       float lines = sin((sp.y * 0.92 + sp.x * 0.39 + wav) * 1150.0);
       float grain = smoothstep(0.55, 1.0, lines);
       float figure = vmNoise3(sp * vec3(26.0, 26.0, 5.0));
-      diffuseColor.rgb *= mix(1.10, 0.80, figure) * (1.0 - 0.30 * grain);
+      float fibre = vmNoise3(sp * vec3(850.0, 850.0, 28.0));
+      vmSurfaceGrain = grain;
+      vmSurfaceWear = figure;
+      vmSurfaceHeight = (fibre - 0.5) * 0.000065 * detailFade - grain * 0.00009;
+      diffuseColor.rgb *= mix(1.13, 0.82, figure) * (1.0 - 0.22 * grain);
+      diffuseColor.rgb *= vec3(1.04, 1.0, 0.94);
     } else {
-      float n = vmNoise3(sp * 55.0) * 0.6 + vmNoise3(sp * 190.0) * 0.4;
-      diffuseColor.rgb *= 0.94 + 0.12 * n;
+      float broad = vmNoise3(sp * 46.0);
+      float machining = vmNoise3(sp * vec3(930.0, 930.0, 25.0));
+      vmSurfaceWear = broad;
+      vmSurfaceGrain = machining;
+      vmSurfaceHeight = (machining - 0.5) * 0.000012 * detailFade;
+      diffuseColor.rgb *= mix(0.89, 1.12, broad) * (1.0 + (machining - 0.5) * 0.055 * detailFade);
     }
   }
 `;
-// Roughness only ever goes UP from the tuned value (ART.md's measured lobe): a breakup that
-// polished spots below it lifted the gun's brightest pixels past its value ceiling.
+// Pores and retained oil interrupt a satin highlight. A uniformly near-one
+// roughness erased the difference between blued steel, wood and rubber.
 const VM_SURF_ROUGH = /* glsl */`
   if (uVmSurf > 1.5) {
-    float rn = vmNoise3(vFinishPosition * 38.0) * 0.65 + vmNoise3(vFinishPosition * 150.0) * 0.35;
-    roughnessFactor = clamp(roughnessFactor * (1.0 + 0.16 * rn), 0.05, 1.0);
+    roughnessFactor = clamp(roughnessFactor + (vmSurfaceWear - 0.5) * 0.13 + (vmSurfaceGrain - 0.5) * 0.055, 0.34, 0.96);
   } else if (uVmSurf > 0.5) {
-    float wv = vmNoise3(vFinishPosition * vec3(9.0, 9.0, 2.2)) * 0.020;
-    float ln = smoothstep(0.55, 1.0, sin((vFinishPosition.y * 0.92 + vFinishPosition.x * 0.39 + wv) * 1150.0));
-    roughnessFactor = clamp(roughnessFactor + 0.08 * ln, 0.05, 1.0);
+    roughnessFactor = clamp(roughnessFactor + vmSurfaceGrain * 0.12 - (1.0 - vmSurfaceWear) * 0.06, 0.40, 0.94);
   }
 `;
 
@@ -752,14 +764,15 @@ export class Viewmodel {
           '#include <common>\n' +
           'uniform float uVmTime, uVmContrastFrom, uVmContrastTo, uVmContrast;\n' +
           'uniform float uVmBlackFloor, uVmGrain, uVmVignette, uVmOn, uVmSurf;\n' +
-          'uniform vec2 uVmResolution;\n' + VM_GRADE_HELPERS)
+          'uniform vec2 uVmResolution;\n' + VM_GRADE_HELPERS + '\n' + SURFACE_RELIEF_GLSL)
         .replace('#include <color_fragment>', '#include <color_fragment>\n' + VM_SURF_COLOR)
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + VM_SURF_ROUGH)
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = countyReliefNormal(-vViewPosition, normal, vmSurfaceHeight);')
         .replace('#include <colorspace_fragment>',
           '#include <colorspace_fragment>\n' + VM_GRADE_TAIL);
     };
     // CONSTANT, and identical across all four materials: they share one program.
-    mat.customProgramCacheKey = () => 'curfew-vm-grade-2';
+    mat.customProgramCacheKey = () => 'curfew-vm-machined-3';
     finishMaterial(mat, 0);
     mat.needsUpdate = true;
   }
@@ -893,43 +906,23 @@ export class Viewmodel {
     // CFG.render.budget.programsMax — and is measured by the integrator; nothing in this
     // file asserts a number of its own.
     //
-    // ROUGHNESS IS THE ART DECISION, not the colour. A flat BoxGeometry face has one
-    // normal across its whole area, so at roughness 0.33 the receiver's top plate sat at
-    // the peak of the specular lobe ALL AT ONCE and clipped to white — 9.7% of that one
-    // mesh's pixels were at or above 200 and its max was 243. At 0.64 the same face peaks
-    // at 126 and the highlight becomes a gradient across the plate instead of a cutout.
-    // Per-mesh means, before -> after: receiver 35.0 -> 21.4, floorplate 45.1 -> 25.6,
-    // comb 34.0 -> 21.0, scope tube 8.2 -> 3.6.
-    //
-    // ROUND TWO: 0.64 -> 0.84 and metalness 0.62 -> 0.40. Measured, gun pixels, frame A, hip:
-    //   roughness  0.64   0.78   0.84   0.90        (metalness 0.62, key 1.25, ambient 2.2)
-    //   gun p95   102.1   49.7   36.6   31.5
-    //   gun max     125   66.6   51.8     51
-    // The response is monotonic and steep, which is what a lobe-width lever looks like; 0.84
-    // is chosen rather than 0.90 because the last step buys 0.8 of max and costs the edge
-    // that says "metal". Metalness comes down with it so the key's DIFFUSE can carry the
-    // body — at metalness 0.62 the diffuse term is scaled by 0.38 and the gun could only be
-    // lit by specular, which is the whole fault of round one's frame.
-    //
-    // ROUND 20: AND THE PARAGRAPH ABOVE HAD NOT BEEN APPLIED. It publishes a measured sweep,
-    // concludes "0.84 is chosen rather than 0.90", says metalness comes down to 0.40 with it —
-    // and the line under it shipped 0.78 / 0.55, which is the row the same table scores at
-    // p95 49.7 against 36.6. A round wrote up a change and shipped a different one; the
-    // sweep is that round's own evidence, so it is applied here as it stands rather than
-    // re-derived. The gun is 13% of every frame this game has ever drawn and was the
-    // second-brightest large shape in it (ART.md 6.1).
-    const wood = new THREE.MeshStandardMaterial({ color: 0x522d15, roughness: 0.90, metalness: 0.00 });
-    const blued = new THREE.MeshStandardMaterial({ color: 0x181d24, roughness: 0.84, metalness: 0.40 });
-    const matte = new THREE.MeshStandardMaterial({ color: 0x171b20, roughness: 0.92, metalness: 0.06 });
+    // Dark bluing, oiled walnut and rubber have different highlight widths.
+    // Small worn steel edges supply restrained mechanical definition; the key,
+    // rim and torch intensities remain shared with the existing weapon rig.
+    const wood = new THREE.MeshStandardMaterial({ color: 0x684126, roughness: 0.68, metalness: 0.00 });
+    const blued = new THREE.MeshStandardMaterial({ color: 0x2b3540, roughness: 0.57, metalness: 0.52 });
+    const matte = new THREE.MeshStandardMaterial({ color: 0x20272e, roughness: 0.79, metalness: 0.08 });
     const brassM = new THREE.MeshStandardMaterial({ color: 0x7a5a24, roughness: 0.42, metalness: 0.80 });
-    this._mats = [wood, blued, matte, brassM];
+    const edgeSteel = new THREE.MeshStandardMaterial({ color: 0x56616a, roughness: 0.42, metalness: 0.68 });
+    this._mats = [wood, blued, matte, brassM, edgeSteel];
     for (const m of this._mats) this._grade(m);
     // r3: the surfaces (VM_SURF_*), and how much of the night sky each one gives back once the
     // scene has the world's reflection map (init()).
-    wood.userData.vmSurf.value = 1; blued.userData.vmSurf.value = 2; matte.userData.vmSurf.value = 2;
-    wood.envMapIntensity = 0.25; blued.envMapIntensity = 0.9; matte.envMapIntensity = 0.45; brassM.envMapIntensity = 1.0;
+    wood.userData.vmSurf.value = 1; blued.userData.vmSurf.value = 2; matte.userData.vmSurf.value = 2; edgeSteel.userData.vmSurf.value = 2;
+    wood.envMapIntensity = 0.38; blued.envMapIntensity = 1.0; matte.envMapIntensity = 0.38; brassM.envMapIntensity = 1.0; edgeSteel.envMapIntensity = 0.82;
     this._finishMats = [...this._mats];
     for (let i=0;i<this._finishMats.length;i++) this._finishMats[i].userData.finishUniforms.uFinishStrength.value = i===2?.72:i===3?.48:1;
+    edgeSteel.userData.finishUniforms.uFinishStrength.value = 0.46;
     // A visible alternating grip communicates the held-Space movement without a tutorial.
     this.climbHands=[];
     const handMaterials=climbingHandMaterials();
@@ -988,13 +981,15 @@ export class Viewmodel {
       return geo;
     };
 
-    // Shared unlit materials, ONE instance each, so the carbine adds no material of its own:
-    // the port shadow, the coated glass and the amber dot are the same objects on both guns.
+    // Shared port shadow, coated glass and amber dot on both rifle optics.
     this._portMat = new THREE.MeshBasicMaterial({ color: 0x04060a });
-    this._glassMat = new THREE.MeshBasicMaterial({
-      color: 0x16283a, transparent: true, opacity: 0.10, depthWrite: false,
-      side: THREE.DoubleSide,
+    this._glassMat = new THREE.MeshStandardMaterial({
+      color: 0x315d66, roughness: 0.20, metalness: 0.32,
+      transparent: true, opacity: 0.12, depthWrite: false,
+      side: THREE.DoubleSide, envMapIntensity: 1.5,
     });
+    this._grade(this._glassMat);
+    this._mats.push(this._glassMat);
     this._dotMat = new THREE.MeshBasicMaterial({
       // Six percent under the Round-8 value: the old 125-luma peak missed the 120 ceiling
       // while the dot's footprint/readability already passed.
@@ -1010,7 +1005,7 @@ export class Viewmodel {
     carbineGroup.name = 'vm-carbine';
     carbineGroup.visible = false;
     this.gun.add(carbineGroup);
-    this.guns.bolt = this._buildBolt(boltGroup, { add, tube, ridgedBox, wood, blued, matte });
+    this.guns.bolt = this._buildBolt(boltGroup, { add, tube, ridgedBox, wood, blued, matte, edgeSteel });
     this.guns.carbine = this._buildCarbine(carbineGroup, { add, tube, ridgedBox, blued, matte, brassM });
     // ROUND 6: the two rewards that had no picture. Same four materials, same kit.
     const shotgunGroup = new THREE.Group();
@@ -1067,9 +1062,9 @@ export class Viewmodel {
     }
   }
 
-  /** The M0 bolt rifle, exactly as it shipped. Returns the per-weapon record. */
+  /** The M0 bolt rifle. Returns the per-weapon record and original pose anchors. */
   _buildBolt(g, K) {
-    const { add, tube, wood, blued, matte } = K;
+    const { add, tube, wood, blued, matte, edgeSteel } = K;
     // r3: a sporting rifle, not a stack of boxes. The receiver is rounded; the barrel tapers from
     // 27 mm at the receiver to 19 mm at the muzzle and lies in a channel in the fore-end; the
     // stock is ONE piece drawn in profile, with a comb, a pistol grip and a rubber pad; the guard
@@ -1127,6 +1122,18 @@ export class Viewmodel {
     // the bolt's travel is legible against it in moonlight. (r3: lowered onto the flat of the
     // rounded receiver, where it used to stand 2 mm proud of the top edge.)
     add(g, bevelBox(0.002, 0.022, 0.070), this._portMat, 0.0255, 0.012, -0.010);
+    // A machined port lip, tang fasteners and small retaining pins supply real
+    // light-catching edges. They merge into one static hardware mesh below.
+    add(g, roundBar(0.0018, 0.0018, 0.068, 0.0005, 0.0004), edgeSteel, 0.0256, 0.0231, -0.010);
+    add(g, roundBar(0.0018, 0.0018, 0.068, 0.0005, 0.0004), blued, 0.0256, 0.0010, -0.010);
+    for (const z of [-0.104, 0.050]) {
+      const screw = add(g, new THREE.CylinderGeometry(0.0030, 0.0032, 0.0012, 16), edgeSteel, 0, 0.0320, z);
+      screw.name = 'vm-receiver-fastener';
+      add(g, bevelBox(0.0008, 0.00025, 0.0042), this._portMat, 0, 0.0327, z, 0, 0.22, 0);
+    }
+    for (const z of [-0.124, 0.053]) {
+      add(g, tube(0.0023, 0.0012, 12), edgeSteel, 0.0252, -0.011, z, 0, Math.PI / 2, 0);
+    }
 
     // scope. The reticle is a real illuminated dot: the gun has to be aimable
     // in a county with no daylight, and a black crosshair on a black hillside
@@ -1137,11 +1144,17 @@ export class Viewmodel {
     sg.position.set(0, SIGHT.y, 0);
     // Open at both ends, and DoubleSide so the far half of the bore wall still renders —
     // with front-face culling an open tube shows the world through its own sides and reads as
-    // a floating ring. `side` is render state, not a shader define, so this clone shares the
-    // matte program and costs no extra compile.
+    // a floating ring. This double-sided variant is present during boot warmup.
     const bore = matte.clone();
     bore.side = THREE.DoubleSide;
     bore.name = 'vm-bore';
+    // clone() omits the shader hooks. Reinstall them so the optic receives the
+    // same machined finish, grade and earned weapon finish as the receiver.
+    this._grade(bore);
+    bore.userData.vmSurf.value = 2;
+    bore.userData.finishUniforms.uFinishStrength.value = 0.64;
+    this._mats.push(bore);
+    this._finishMats.push(bore);
     add(sg, tube(0.0195, 0.200, 12, true), bore, 0, 0, -0.045);
     add(sg, tube(0.0260, 0.048, 12, true), bore, 0, 0, -0.152);   // objective bell
     add(sg, tube(0.0225, 0.036, 12, true), bore, 0, 0, 0.026);    // ocular
@@ -1156,14 +1169,27 @@ export class Viewmodel {
     shoulder(0.0195, 0.0225, 0.044, false);    // ocular, the end that faces you
     shoulder(0.0195, 0.0225, 0.008, true);
     shoulder(0.0195, 0.0260, -0.128, false);   // objective, the end that faces you
-    add(sg, new THREE.TorusGeometry(0.0250, 0.0014, 6, 40), matte, 0, 0, -0.176);   // objective lip
-    add(sg, new THREE.TorusGeometry(0.0200, 0.0009, 6, 40), matte, 0, 0, 0.055);    // eyepiece lip
+    add(sg, new THREE.TorusGeometry(0.0250, 0.0014, 6, 40), blued, 0, 0, -0.176);
+    add(sg, new THREE.TorusGeometry(0.0200, 0.0009, 6, 40), edgeSteel, 0, 0, 0.055);
+    // The dioptre ring has fine raised flutes, with a narrow worn witness edge.
+    // The original optical opening and sight axis are untouched.
+    for (const z of [0.0135, 0.0375]) {
+      add(sg, new THREE.TorusGeometry(0.0226, 0.00055, 5, 40), blued, 0, 0, z);
+    }
+    for (let i = 0; i < 40; i++) {
+      const angle = i / 40 * TAU;
+      add(sg, bevelBox(0.00125, 0.0008, 0.020), i % 5 === 0 ? edgeSteel : blued,
+        Math.sin(angle) * 0.02255, Math.cos(angle) * 0.02255, 0.0255, 0, 0, -angle);
+    }
     // r3: THE MOUNTS. Two blocks 16 mm tall used to stop 11 mm short of the receiver, so the
     // scope hung in the air over the rifle. Each is now a ring clamped round the tube and a base
     // that stands on the receiver (its top is 0.031; the scope's axis is SIGHT.y above the bore).
     for (const z of [-0.112, 0.004]) {
       add(sg, new THREE.TorusGeometry(0.0212, 0.0027, 8, 36), blued, 0, 0, z);
       add(sg, roundBar(0.020, 0.0235, 0.012, 0.003, 0.0015), blued, 0, 0.0305 + 0.0235 / 2 - SIGHT.y, z);
+      for (const side of [-1, 1]) {
+        add(sg, tube(0.0023, 0.0014, 12), edgeSteel, side * 0.0238, 0, z, 0, Math.PI / 2, 0);
+      }
     }
     // The ocular glass. At 0.30 over a CLOSED tube this was simply a darker lid; over an
     // open bore it is what a coated lens actually is — a faint cool tint you see the county

@@ -22,12 +22,32 @@ export function carSurfaces(seed=17){
   }
   const tex=(data,color=false)=>{const t=new THREE.DataTexture(data,size,size);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(3,3);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=4;if(color)t.colorSpace=THREE.SRGBColorSpace;t.needsUpdate=true;return t;};
   const map=tex(albedo,true),roughnessMap=tex(rough),normalMap=tex(normal);
-  const paint=new THREE.MeshStandardMaterial({color:0x536b61,map,roughnessMap,normalMap,normalScale:new THREE.Vector2(.22,.22),roughness:.78,metalness:.22});
+  // Upholstery has shallow, interlocking grain. Sharing enamel's gouges and
+  // straight scratches made the door card look like brown painted sheet metal.
+  const hideHeight=new Float32Array(size*size),hideRough=new Uint8Array(size*size*4),hideNormal=new Uint8Array(size*size*4);
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const gx=x/4,gy=y/4,cx=Math.floor(gx),cy=Math.floor(gy);let nearest=9,next=9;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const hx=(cx+dx+64)%64,hy=(cy+dy+64)%64;
+      const px=cx+dx+.16+hash(hx+217,hy+31)*.68,py=cy+dy+.16+hash(hx+93,hy+173)*.68;
+      const d=(gx-px)**2+(gy-py)**2;if(d<nearest){next=nearest;nearest=d;}else if(d<next)next=d;
+    }
+    const crease=Math.exp(-Math.max(0,next-nearest)*11),i=y*size+x,j=i*4;
+    hideHeight[i]=-.12*crease+(hash(x+97,y+139)-.5)*.013;
+    const r=Math.round((.79+crease*.15+hash(x+47,y+79)*.035)*255);hideRough.set([r,r,r,255],j);
+  }
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const sample=(a,b)=>hideHeight[((b+size)%size)*size+(a+size)%size];
+    const dx=(sample(x-1,y)-sample(x+1,y))*.9,dy=(sample(x,y-1)-sample(x,y+1))*.9,inv=1/Math.hypot(dx,dy,1);
+    hideNormal.set([Math.round((dx*inv*.5+.5)*255),Math.round((dy*inv*.5+.5)*255),Math.round((inv*.5+.5)*255),255],(y*size+x)*4);
+  }
+  const leatherRoughness=tex(hideRough),leatherNormal=tex(hideNormal);
+  const paint=new THREE.MeshStandardMaterial({color:0x536b61,map,roughnessMap,normalMap,normalScale:new THREE.Vector2(.22,.22),roughness:.78,metalness:.22,envMapIntensity:1.15});
   paint.name='car-weathered-enamel';
-  const chrome=new THREE.MeshStandardMaterial({color:0x9eaba8,roughnessMap,normalMap,normalScale:new THREE.Vector2(.08,.08),roughness:.47,metalness:.84});chrome.name='car-brushed-metal';
+  const chrome=new THREE.MeshStandardMaterial({color:0x9eaba8,roughnessMap,normalMap,normalScale:new THREE.Vector2(.08,.08),roughness:.42,metalness:.68});chrome.name='car-brushed-metal';
   const rubber=new THREE.MeshStandardMaterial({color:0x111819,roughnessMap,normalMap,normalScale:new THREE.Vector2(.3,.3),roughness:.97});rubber.name='car-rubber';
-  const leather=new THREE.MeshStandardMaterial({color:0x48332a,roughnessMap,normalMap,normalScale:new THREE.Vector2(.32,.32),roughness:.94});leather.name='car-leather';
-  const dark=new THREE.MeshStandardMaterial({color:0x142022,roughness:.85});dark.name='car-dashboard';
+  const leather=new THREE.MeshStandardMaterial({color:0x48332a,roughnessMap:leatherRoughness,normalMap:leatherNormal,normalScale:new THREE.Vector2(.23,.23),roughness:.84});leather.name='car-leather';
+  const dark=new THREE.MeshStandardMaterial({color:0x252c2a,roughness:.80});dark.name='car-dashboard';
   // Direct torch specular on a transparent Standard pane made a second sun in the
   // driver's view. Restrained tinted transmission keeps the windscreen readable.
   const glass=new THREE.MeshBasicMaterial({color:0x1b3335,transparent:true,opacity:.19,depthWrite:false,side:THREE.DoubleSide});glass.name='car-glass';
@@ -59,5 +79,5 @@ export function carSurfaces(seed=17){
   return{...materials,materials:Object.values(materials),glimmer,
     restored(on){paint.roughness=on?.36:.78;paint.metalness=on?.32:.22;paintRough0.v=paint.roughness;},
     setPaint(hex){if(hex>=0)paint.color.setHex(hex);},
-    dispose(){Object.values(materials).forEach(m=>m.dispose());[map,roughnessMap,normalMap].forEach(t=>t.dispose());}};
+    dispose(){Object.values(materials).forEach(m=>m.dispose());[map,roughnessMap,normalMap,leatherRoughness,leatherNormal].forEach(t=>t.dispose());}};
 }

@@ -1,7 +1,7 @@
 // The Holdfast is an occupied building. Its skin is permanent; floors, rooms and
 // fittings stream with the town. No solid decorative band crosses its interior.
-import { kits, Kit, GLOW, PANE_WINDOW, ON_APRON } from './sites.js';
-import { P, solid, arch, banner, lantern, chair, chest, icicles, snowCap, crescent } from './holdfast-town-art.js';
+import { kits, Kit, GLOW, ON_APRON } from './sites.js';
+import { P, solid, arch, banner, lantern, chair, chest, icicles, snowCap, crescent, inhabitedWindow, chamferedBlock } from './holdfast-town-art.js';
 import { furnishRoom } from './holdfast-town-houses.js';
 
 export const KEEP_LEVELS = [0, 6.3, 12.6, 18.9, 25.2, 31.5, 37.8];
@@ -26,10 +26,10 @@ function windowWall(k, api, axis, c, from, to, lo, hi, windows, outward) {
     wall(k, api, axis, c, cursor, centre - half, sill, head); cursor = centre + half;
     const x = axis === 'x' ? centre : c, z = axis === 'x' ? c : centre;
     const yaw = axis === 'x' ? (outward > 0 ? 0 : Math.PI) : outward * Math.PI / 2;
-    // Recessed amber glass, with actual deep window reveals and a narrow mullion.
-    k.glow.pane(1.58, Math.max(0.3, head - sill - 0.32), x, api.padY + (sill + head) / 2, z, PANE_WINDOW, yaw, 0, 4, 6);
+    // Each occupied room has its own lamplight, sash and interior silhouette.
+    inhabitedWindow(k,x,api.padY+(sill+head)/2,z,1.58,Math.max(.3,head-sill-.32),yaw,
+      lo*19+centre*7+c*11,.59);
     const sx = x + Math.sin(yaw) * 0.59, sz = z + Math.cos(yaw) * 0.59;
-    k.solid.box(0.11, head - sill, 0.18, sx, api.padY + (sill + head) / 2, sz, P.darkStone, yaw);
     k.solid.box(2.45, 0.19, 1.24, x, api.padY + sill, z, P.edge, axis === 'x' ? 0 : Math.PI / 2);
     arch(k, api, sx, sz, 1.80, head - 0.9 - lo, 0.76, 0.30, api.padY + lo, yaw);
   }
@@ -56,7 +56,32 @@ export function buildHoldfastKeepLandmark(api) {
       snowCap(k,0,y+hi-.045,-14+side*13.02,30.6,.69,0,.13,floor+side);
       snowCap(k,side*15.02,y+hi-.045,-14,.65,26.9,0,.13,floor-side);
     }
+    // The occupied keep has three large architectural stages, rather than six equal
+    // brick slices. Projecting ledges and shadowed undersides group pairs of floors.
+    for (const x of [-14.35, -6.3, 6.3, 14.35]) {
+      const outer = Math.abs(x) > 10;
+      chamferedBlock(k.solid,outer ? .64 : .42,hi-lo-.39,outer ? .55 : .35,
+        x,y+(lo+hi)/2-.05,-.91,outer ? P.stone : P.darkStone,0,.055);
+      chamferedBlock(k.solid,outer ? .86 : .64,.27,.60,x,y+hi-.42,-.80,P.edge,0,.035);
+    }
+    if (floor % 2 === 1) {
+      chamferedBlock(k.solid,30.8,.30,.86,0,y+hi-.27,-.90,P.edge,0,.045);
+      k.solid.box(30.4,.115,.59,0,y+hi-.50,-.94,P.darkStone);
+      for (let x = -13.5; x <= 13.6; x += 3) {
+        chamferedBlock(k.solid,.36,.36,.48,x,y+hi-.67,-.91,P.stone,0,.035);
+      }
+    }
   }
+  // Carved entrance dress sits on the existing arch and leaves its clear opening intact.
+  for (const side of [-1, 1]) {
+    chamferedBlock(k.solid,.46,3.92,.40,side*3.12,y+2.05,-.18,P.stone,0,.052);
+    chamferedBlock(k.solid,.69,.24,.61,side*3.12,y+4.12,-.12,P.edge,0,.04);
+    chamferedBlock(k.solid,.62,.32,.56,side*3.12,y+.25,-.18,P.darkStone,0,.045);
+  }
+  chamferedBlock(k.solid,7.24,.27,.62,0,y+4.65,-.16,P.edge,0,.045);
+  chamferedBlock(k.solid,7.62,.20,.88,0,y+4.87,-.13,P.stone,0,.035);
+  k.solid.cyl(.52,.52,.10,20,0,y+5.50,-.83,P.darkStone,0,Math.PI/2);
+  crescent(k.cloth,0,y+5.5,-.72,.34,0,P.edge,.035);
   // Carved moon medallions and paired ribs give the front a hierarchy of bays.
   for(const x of[-5,5]){
     for(const dx of[-.30,.30])k.solid.cyl(.11,.16,29.6,8,x+dx,y+18.6,-.79,P.edge);

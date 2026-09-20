@@ -216,6 +216,19 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
     const box = (w, h, d, mat, x, y, z, ry) => {
       kitOf(mat).box(w, h, d, LX(x), LY(y), LZ(z), PALETTE[mat] || PALETTE.plaster, ry || 0);
     };
+    // Exterior cut stone. A shallow bevel gives broad mouldings a lit face and a dark
+    // underside without another material; it never emits collision or alters the plan.
+    const cutStone = (w, h, d, mat, x, y, z, ry = 0, bevel = 0.045) => {
+      const b = Math.min(bevel, w * 0.18, h * 0.18, d * 0.18);
+      const shape = new THREE.Shape(), hw = w / 2 - b, hh = h / 2 - b;
+      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, hh);
+      shape.lineTo(-hw, hh); shape.closePath();
+      const geometry = new THREE.ExtrudeGeometry(shape, { depth: d - b * 2, steps: 1,
+        bevelEnabled: true, bevelSegments: 1, bevelSize: b, bevelThickness: b, curveSegments: 1 });
+      geometry.translate(0, 0, -(d - b * 2) / 2);
+      if (!geometry.index) geometry.setIndex(Array.from({ length: geometry.attributes.position.count }, (_, i) => i));
+      S.at(geometry, PALETTE[mat] || PALETTE.stone, LX(x), LY(y), LZ(z), ry);
+    };
     /**
      * Only the faces of a box anyone can see (r3 polish). The trim and the inside of a window
      * sit against a wall or against glass: a Kit.box there spends half its twelve triangles on
@@ -461,6 +474,21 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
         // preserving the five panes that become a completion beacon.
         let hash = 0;
         for (let i = 0; i < key.length; i++) hash = ((hash * 31) + key.charCodeAt(i)) | 0;
+        if (!isAvery) {
+          const cs = Math.cos(ry), sn = Math.sin(ry);
+          const at = (a, yy, proud) => [gx + a * cs + proud * sn, yy, gz - a * sn + proud * cs];
+          // The glass remains at the bottom of the original hole. These projecting
+          // hoods, carved sills and jambs give every opening a genuine shadow pocket.
+          cutStone(w + .72,.23,.70,'stone',...at(0,y1+.22,t/2+.25),ry,.04);
+          box(w + .39,.11,.35,'stoneDark',...at(0,y1+.07,t/2+.10),ry);
+          cutStone(w + .49,.20,.55,'stone',...at(0,y0-.12,t/2+.17),ry,.035);
+          for (const side of [-1,1]) {
+            box(.15,h+.16,.22,'stone',...at(side*(w/2+.08),cy,t/2+.055),ry);
+            box(.034,h,.27,'stoneDark',...at(side*(w/2-.014),cy,.13),ry);
+            box(.20,.35,.39,'stoneDark',...at(side*(w/2+.23),y1-.055,t/2+.16),ry);
+          }
+          if (Math.abs(hash)%3===0) box(.23,.29,.27,'stone',...at(0,y1+.17,t/2+.49),ry);
+        }
         if (isAvery && LIT_WINDOWS.indexOf(key) < 0 && Math.abs(hash) % 4 === 0) {
           const proud = outward * (t * 0.5 + 0.10);
           for (const yy of [-0.24, 0.27]) {
@@ -1033,6 +1061,33 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       box(0.18, 0.42, ez1 - ez0 + 0.2, 'woodDark', ex0 - 0.05, eave - 0.1, 20);
       box(0.18, 0.42, ez1 - ez0 + 0.2, 'woodDark', ex1 + 0.05, eave - 0.1, 20);
       if (!averyExterior) box(rx1 - rx0 + 0.4, 0.3, 0.5, 'dark', 30, ridgeY + 0.05, rz);
+      if (!averyExterior) {
+        // A deep entablature gives the long facade an actual overhang. Broad cut-stone
+        // faces and shadowed dentils carry the detail at the road, before textures do.
+        for (const [x,z,width,yaw] of [[30,40.28,61.1,0],[30,-.28,61.1,Math.PI],
+          [-.28,20,40.8,-Math.PI/2],[60.28,20,40.8,Math.PI/2]]) {
+          const nx=Math.sin(yaw),nz=Math.cos(yaw),tx=Math.cos(yaw),tz=-Math.sin(yaw);
+          cutStone(width,.27,.62,'stone',x,eave-.43,z,yaw,.04);
+          cutStone(width+.24,.19,.87,'stone',x+nx*.08,eave-.17,z+nz*.08,yaw,.03);
+          box(width,.12,.37,'stoneDark',x-nx*.04,eave-.65,z-nz*.04,yaw);
+          const dentils=Math.floor(width/1.75);
+          for(let j=0;j<dentils;j++){
+            const off=(j-(dentils-1)/2)*1.75;
+            box(.27,.27,.38,'stone',x+tx*off,eave-.82,z+tz*off,yaw);
+          }
+          // The string course sits between window floors, with a water-shedding lip.
+          cutStone(width-.38,.21,.39,'stone',x-nx*.08,LV.first.floor-.20,z-nz*.08,yaw,.035);
+        }
+        for(const [x,z] of [[0,0],[60,0],[0,40],[60,40]]){
+          const sx=x===0?-1:1,sz=z===0?-1:1;
+          for(let row=0;row<11;row++){
+            const yy=.39+row*.64,wide=row%2?.70:1.04;
+            box(wide,.34,.27,row%3?'stone':'stoneDark',x-sx*(wide/2-.16),yy,z+sz*.18);
+            box(.27,.34,1.26-wide*.36,row%3?'stone':'stoneDark',x+sx*.18,yy,z-sz*.26);
+          }
+        }
+        for(const yy of [-2.1,-1.05])box(60.7,.11,.20,'stoneDark',30,yy,40.30);
+      }
       // Blackthorn carries four old stacks. Avery gets two short service chimneys; the
       // attached garage and glass sunroom will do the rest of its silhouette work.
       const roofAt = (x, z) => {
@@ -1064,6 +1119,18 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
         aabb(x-0.95,top,z-0.95,x+0.95,top+0.35,z+0.95,'stone',true);
         for (const [px, pz] of [[-0.35, -0.35], [0.35, 0.35]]) {
           S.tube(0.22, 0.22, 0.6, 8, LX(x + px), LY(top + 0.6), LZ(z + pz), PALETTE.dark);
+        }
+        if(!averyExterior){
+          // Corbelled brick crowns and collared pots break the four rectangular stacks.
+          cutStone(1.71,.18,1.71,'brick',x,top-.30,z,0,.03);
+          cutStone(1.83,.14,1.83,'stoneDark',x,top-.08,z,0,.025);
+          for(const [px,pz] of [[-.35,-.35],[.35,.35]]){
+            S.tube(.265,.24,.13,10,LX(x+px),LY(top+.88),LZ(z+pz),PALETTE.stoneDark);
+            S.tube(.245,.245,.08,10,LX(x+px),LY(top+.44),LZ(z+pz),PALETTE.stoneDark);
+          }
+          // Thin corner flashings tuck into the existing roof surface.
+          box(1.70,.08,.20,'metal',x,roofAt(x,z)+.10,z+.79);
+          box(.20,.08,1.70,'metal',x+.79,roofAt(x,z)+.10,z);
         }
       }
 
@@ -1134,13 +1201,50 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       } else {
         for (const sx of [-1, 1]) {
           const x = doorX + sx * 2.2, z = front + 0.9;
-          S.cyl(0.26, 0.30, 5.8, 10, LX(x), LY(-riser + 2.9), LZ(z), PALETTE.stone);
-          box(0.8, 0.25, 0.8, 'stone', x, -riser + 5.85, z);
+          // The old shafts stopped half a metre below their canopy. The fluted shaft,
+          // neck and capital now meet its underside, within the existing column footprint.
+          const shaftH=5.68+riser,shaft=new THREE.CylinderGeometry(.255,.29,shaftH,24,4);
+          const sp=shaft.attributes.position;
+          for(let i=0;i<sp.count;i++){
+            const px=sp.getX(i),pz=sp.getZ(i),r=Math.hypot(px,pz);
+            if(r<.001)continue;
+            const groove=1-.043*(.5+.5*Math.cos(Math.atan2(pz,px)*12));
+            sp.setX(i,px*groove);sp.setZ(i,pz*groove);
+          }
+          shaft.computeVertexNormals();S.at(shaft,PALETTE.stone,LX(x),LY(-riser+shaftH/2),LZ(z));
+          S.cyl(.34,.30,.15,24,LX(x),LY(5.66),LZ(z),PALETTE.stone);
+          S.cyl(.36,.34,.16,24,LX(x),LY(5.80),LZ(z),PALETTE.stoneDark);
+          cutStone(.80,.20,.80,'stone',x,5.90,z,0,.035);
+          S.cyl(.31,.34,.17,24,LX(x),LY(-riser+.085),LZ(z),PALETTE.stoneDark);
           circle(x, z, 0.32, -riser - 0.2, -riser + 6.0, 'stone');
         }
         box(6.2, 0.4, 2.4, 'stone', doorX, 6.2, front + 0.6);
         box(6.6, 0.24, 2.8, 'slate', doorX, 6.55, front + 0.6);
         aabb(doorX-3.3,6.0,front-0.8,doorX+3.3,6.67,front+2.0,'roof',true);
+        // A central triangular pediment makes the entrance a silhouette, not a shelf.
+        // It is carved facade dressing above the unchanged porch and door clearance.
+        const half=3.52,pedY=6.72,peak=2.04,pedZ=front+1.87;
+        const shape=new THREE.Shape();shape.moveTo(-half,0);shape.lineTo(half,0);shape.lineTo(0,peak);shape.closePath();
+        const pediment=new THREE.ExtrudeGeometry(shape,{depth:.29,steps:1,bevelEnabled:false});
+        if(!pediment.index)pediment.setIndex(Array.from({length:pediment.attributes.position.count},(_,i)=>i));
+        S.at(pediment,PALETTE.stoneDark,LX(doorX),LY(pedY),LZ(pedZ));
+        const rake=Math.hypot(half,peak),angle=Math.atan2(peak,half);
+        for(const side of [-1,1]){
+          S.box(rake+.20,.24,.50,LX(doorX+side*half/2),LY(pedY+peak/2),LZ(pedZ+.25),PALETTE.stone,0,0,-side*angle);
+          S.box(rake-.12,.075,.20,LX(doorX+side*half/2),LY(pedY+peak/2-.15),LZ(pedZ+.40),PALETTE.plinth,0,0,-side*angle);
+        }
+        cutStone(7.40,.23,.64,'stone',doorX,pedY+.035,pedZ+.16,0,.04);
+        for(let i=-5;i<=5;i++)box(.22,.20,.30,'stone',doorX+i*.62,6.43,front+1.91);
+        // A worn stone rosette in the tympanum, catching a narrow rim of moonlight.
+        S.cyl(.34,.34,.06,20,LX(doorX),LY(7.41),LZ(pedZ+.325),PALETTE.plinth,0,Math.PI/2);
+        for(let i=0;i<8;i++){
+          const a=i/8*Math.PI*2;
+          S.cyl(.075,.075,.055,8,LX(doorX+Math.cos(a)*.21),LY(7.41+Math.sin(a)*.21),LZ(pedZ+.365),PALETTE.stone,0,Math.PI/2);
+        }
+        for(const side of [-1,1]){
+          cutStone(.52,eave-.46,.27,'stone',doorX+side*4,.22+(eave-.46)/2,front+.095,0,.045);
+          cutStone(.85,.22,.45,'stone',doorX+side*4,eave-.36,front+.16,0,.035);
+        }
       }
       // TWO LANTERNS either side of the door, dark brass: the fixture lane lights the
       // claim, not these; they are the shape of a lit doorway waiting for power.

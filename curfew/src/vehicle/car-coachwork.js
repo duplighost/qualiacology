@@ -18,6 +18,25 @@ function rounded(w,h,d,r=.035){
   }return g;
 }
 
+// Upholstery needs a broad rolled edge, rather than the tiny enamel-panel bevel.
+// Concentrate the grid around each radius so a grazing cabin lamp catches a real
+// curved cushion, including the thin door pad. The maximum dimensions stay exact.
+function padded(w,h,d,r=.055){
+  r=Math.min(r,w*.46,h*.46,d*.46);
+  const g=new THREE.BoxGeometry(w,h,d,8,8,8),p=g.attributes.position,n=g.attributes.normal;
+  const v=new THREE.Vector3(),core=new THREE.Vector3();
+  for(let i=0;i<p.count;i++){
+    v.fromBufferAttribute(p,i);
+    for(const [axis,dim] of [['x',w],['y',h],['z',d]]){
+      const half=dim*.5,a=Math.abs(v[axis])/half;
+      v[axis]=Math.sign(v[axis])*(a<=.5?a*2*(half-r):(half-r)+(a-.5)*2*r);
+      core[axis]=Math.max(-half+r,Math.min(half-r,v[axis]));
+    }
+    v.sub(core).normalize();n.setXYZ(i,v.x,v.y,v.z);v.multiplyScalar(r).add(core);p.setXYZ(i,v.x,v.y,v.z);
+  }
+  return g;
+}
+
 export function buildCoachwork(spec){
   const {seed,door:doorAt,hinge,openMax,roofY,lampOffsets}=spec;
   const root=new THREE.Group();root.name='car';root.rotation.order='YXZ';
@@ -29,6 +48,8 @@ export function buildCoachwork(spec){
     let parts=group.get(mat);if(!parts)group.set(mat,parts=[]);parts.push(g);return g;
   };
   const box=(x,y,z,w,h,d,m=paint,rx=0,ry=0,rz=0,parent=root)=>collect(rounded(w,h,d),m,x,y,z,rx,ry,rz,parent);
+  const cushion=(x,y,z,w,h,d,m=leather,rx=0,ry=0,rz=0,parent=root)=>collect(padded(w,h,d),m,x,y,z,rx,ry,rz,parent);
+  const seam=(points,r=.0028,m=dark,parent=root)=>collect(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),Math.max(8,points.length*3),r,5,false),m,0,0,0,0,0,0,parent);
   const cylinder=(x,y,z,r,h,m=chrome,rx=0,rz=0,parent=root)=>collect(new THREE.CylinderGeometry(r,r,h,32),m,x,y,z,rx,0,rz,parent);
   const tube=(points,r,m=chrome,parent=root)=>collect(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),Math.max(8,points.length*8),r,8,false),m,0,0,0,0,0,0,parent);
   const sphere=(x,y,z,sx,sy,sz,m,parent=root)=>{const g=new THREE.SphereGeometry(1,32,16);g.scale(sx,sy,sz);return collect(g,m,x,y,z,0,0,0,parent);};
@@ -131,22 +152,83 @@ export function buildCoachwork(spec){
   const doorSkin=new THREE.ExtrudeGeometry(doorShape,{depth:.075,bevelEnabled:true,bevelSize:.015,bevelThickness:.01,bevelSegments:3});doorSkin.rotateY(-Math.PI/2);collect(doorSkin,paint,.025,0,0,0,0,0,door);
   box(-.062,1.04,.611,.018,.047,1.17,rubber,0,0,0,door);
   box(-.077,1.17,1.005,.035,.027,.15,chrome,0,0,0,door);
-  box(.052,1.021,.61,.035,.34,1.08,leather,0,0,0,door);
-  box(.097,1.142,.77,.087,.05,.26,dark,0,0,0,door);
+  // The door card is a moulded, layered part: the pocket and handles stand off a
+  // contoured backing, while a padded insert rolls into the window ledge.
+  const cardShape=new THREE.Shape();cardShape.moveTo(.12,1.184);cardShape.lineTo(1.125,1.214);
+  cardShape.quadraticCurveTo(1.17,1.212,1.17,1.165);cardShape.lineTo(1.17,.823);
+  cardShape.quadraticCurveTo(1.17,.790,1.12,.790);cardShape.lineTo(.27,.790);
+  cardShape.quadraticCurveTo(.20,.792,.13,.922);cardShape.quadraticCurveTo(.10,.969,.10,1.13);
+  cardShape.quadraticCurveTo(.10,1.18,.12,1.184);
+  const card=new THREE.ExtrudeGeometry(cardShape,{depth:.022,bevelEnabled:true,bevelSize:.012,bevelThickness:.006,bevelSegments:3,curveSegments:8});
+  card.rotateY(-Math.PI/2);collect(card,leather,.084,0,0,0,0,0,door);
+  seam([[.091,1.179,.15],[.091,1.196,.65],[.091,1.207,1.115],[.091,1.17,1.158],[.091,.83,1.158],[.091,.802,1.105],[.091,.802,.29],[.091,.934,.145],[.091,1.13,.118],[.091,1.179,.15]],.004,rubber,door);
+  cushion(.106,1.137,.69,.045,.112,.83,leather,0,0,0,door);
+  seam([[.131,1.090,.28],[.132,1.084,.60],[.131,1.100,1.06]],.0027,dark,door);
+  // Recessed latch, padded pull, window crank and the shadow inside a real pocket.
+  box(.106,1.142,.285,.012,.055,.15,dark,0,0,0,door);
+  box(.122,1.143,.28,.018,.016,.102,chrome,0,0,0,door);
+  for(const z of [.53,.87])box(.104,1.021,z,.032,.045,.047,dark,0,0,0,door);
+  cushion(.116,1.048,.70,.056,.054,.39,leather,0,0,0,door);
+  seam([[.146,1.047,.54],[.147,1.061,.62],[.147,1.061,.82],[.146,1.047,.87]],.0025,dark,door);
+  cylinder(.117,1.015,.25,.020,.026,chrome,0,Math.PI/2,door);
+  tube([[.134,1.015,.25],[.147,.993,.29],[.148,.972,.34]],.008,chrome,door);
+  cushion(.158,.972,.34,.040,.040,.047,dark,0,0,0,door);
+  box(.106,.876,.79,.018,.092,.49,dark,0,0,0,door);
+  cushion(.143,.844,.79,.068,.080,.54,leather,0,0,0,door);
+  seam([[.182,.875,.53],[.184,.884,.58],[.184,.884,1.01],[.181,.87,1.05]],.004,leather,door);
+  // Speaker slats and small fasteners use the door's existing material batches.
+  cylinder(.101,.943,.22,.061,.012,dark,0,Math.PI/2,door);
+  collect(new THREE.TorusGeometry(.061,.004,6,24),chrome,.109,.943,.22,0,Math.PI/2,0,door);
+  for(let k=-4;k<=4;k++){const y=k*.010,dz=Math.sqrt(.052*.052-y*y);box(.114,.943+y,.22,.004,.003,dz*2,rubber,0,0,0,door);}
+  for(const [y,z] of [[1.16,.14],[1.19,1.12],[.825,1.10],[.835,.29]])collect(new THREE.CylinderGeometry(.006,.006,.004,10),chrome,.099,y,z,0,0,Math.PI/2,door);
+  for(const y of [.94,1.15]){
+    box(.012,y,.055,.067,.032,.065,paint,0,0,0,door);
+    cylinder(.037,y,.037,.017,.064,chrome,0,0,door);
+    for(const dy of [-.027,.027])box(.037,y+dy,.037,.041,.008,.041,dark,0,0,0,door);
+  }
   const frame=[[0,1.242,.0],[.12,1.918,.03],[.115,1.927,1.19],[-.01,1.244,1.21]];
   for(let i=1;i<frame.length;i++)tube([frame[i-1],frame[i]],.021,paint,door);
+  tube([[.008,1.264,.035],[.119,1.896,.055],[.115,1.905,1.17],[.002,1.267,1.183]],.009,rubber,door);
+  box(.034,1.267,.61,.042,.030,1.10,rubber,0,0,0,door);
   const doorWindow=new THREE.BufferGeometry();doorWindow.setAttribute('position',new THREE.Float32BufferAttribute([0,1.278,.025,0,1.278,1.18,.108,1.90,1.16,.108,1.90,.052],3));doorWindow.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));doorWindow.setIndex([0,1,2,0,2,3]);doorWindow.computeVertexNormals();collect(doorWindow,glass,0,0,0,0,0,0,door);
   box(.05,.80,.62,.018,.02,.62,warm,0,0,0,door);box(-.83,.73,-.33,.035,.023,1.09,warm);
   // Cabin: soft-edged leather bolsters, stitch seams and satin dashboard.
-  box(0,.735,.44,1.62,.035,3.03,rubber);box(0,1.25,-1.053,1.58,.12,.24,dark);
+  tube([[-.892,.758,-.67],[-.889,.752,.26],[-.886,1.23,.314],[-.789,1.91,.277]],.012,rubber);
+  box(-.809,.749,-.27,.17,.014,.92,dark);
+  for(let n=0;n<5;n++)box(-.872+n*.028,.759,-.27,.008,.008,.84,chrome);
+  box(0,.735,.44,1.62,.035,3.03,rubber);cushion(0,1.25,-1.053,1.58,.12,.24,dark);
   box(0,1.155,-.976,1.53,.18,.08,leather);box(0,1.275,-.935,1.53,.014,.016,chrome);
-  for(const x of [-.43,.43]){
-    box(x,.99,-.21,.62,.15,.55,leather);box(x,1.26,.035,.62,.46,.16,leather,-.13);
-    for(const side of [-1,1]){sphere(x+side*.256,1.04,-.18,.063,.088,.27,leather);sphere(x+side*.254,1.265,.016,.060,.235,.085,leather);}
-    box(x,1.554,.075,.28,.13,.12,leather);
-    for(let n=-2;n<=2;n++)box(x+n*.085,1.255,-.062,.005,.30,.005,dark,-.13);
+  // The facing door and rear cabin have trim below the glass, not bare exterior
+  // sheet metal. Thin rolled ledges keep the original window apertures clear.
+  cushion(.817,1.075,-.27,.028,.225,1.04,leather);
+  cushion(.779,1.046,-.21,.054,.052,.39,leather);
+  box(.795,1.152,-.57,.013,.024,.11,chrome);
+  for(const side of [-1,1]){
+    cushion(side*.835,1.112,1.08,.030,.18,1.35,leather);
+    box(side*.840,1.233,1.08,.043,.023,1.37,rubber);
+    seam([[side*.816,1.032,.46],[side*.814,1.028,1.04],[side*.816,1.036,1.65]],.003,dark);
   }
-  box(0,.98,1.09,1.41,.14,.49,leather);box(0,1.215,1.37,1.41,.36,.15,leather,-.15);
+  seam([[.27,1.212,-.930],[.71,1.212,-.930],[.73,1.19,-.930],[.73,1.105,-.930],[.27,1.105,-.930]],.003,dark);
+  box(.50,1.195,-.916,.085,.012,.021,chrome);
+  for(const x of [-.43,.43]){
+    cushion(x,.99,-.21,.62,.15,.55,leather);cushion(x,1.26,.035,.62,.46,.16,leather,-.13);
+    for(const side of [-1,1]){sphere(x+side*.256,1.04,-.18,.063,.088,.27,leather);sphere(x+side*.254,1.265,.016,.060,.235,.085,leather);}
+    for(const side of [-1,1])cylinder(x+side*.089,1.502,.075,.009,.10,chrome);
+    cushion(x,1.563,.075,.31,.15,.15,leather);
+    for(let n=-2;n<=2;n++){
+      seam([[x+n*.083,1.065,-.405],[x+n*.083,1.069,-.26],[x+n*.083,1.066,-.09]],.0024,dark);
+      seam([[x+n*.083,1.094,-.026],[x+n*.083,1.26,-.048],[x+n*.083,1.43,-.070]],.0026,dark);
+    }
+    for(const side of [-1,1]){
+      seam([[x+side*.25,1.053,-.415],[x+side*.273,1.095,-.28],[x+side*.273,1.086,-.08],[x+side*.253,1.062,.048]],.0035,dark);
+      seam([[x+side*.24,1.067,-.066],[x+side*.288,1.15,-.058],[x+side*.288,1.36,-.031],[x+side*.24,1.474,.002]],.0035,dark);
+    }
+    seam([[x-.12,1.568,.003],[x-.095,1.619,.016],[x+.095,1.619,.016],[x+.12,1.568,.003]],.0024,dark);
+    // Buckles, adjustment rail and seat-back hinge tie the soft parts to the car.
+    box(x+.29,.939,-.02,.034,.09,.055,dark);box(x+.29,.984,-.021,.024,.014,.030,chrome);
+    for(const side of [-1,1]){box(x+side*.23,.867,-.20,.034,.04,.45,dark);cylinder(x+side*.294,1.09,.008,.033,.014,dark,0,Math.PI/2);}
+  }
+  cushion(0,.98,1.09,1.41,.14,.49,leather);cushion(0,1.215,1.37,1.41,.36,.15,leather,-.15);
   box(0,.895,1.78,1.56,.055,.62,dark);
   for(let n=-5;n<=5;n++)box(n*.115,1.21,1.279,.005,.23,.005,dark,-.15);
   box(0,.88,-.39,.14,.24,.80,dark);cylinder(.04,1.063,-.58,.012,.24,chrome,-.23);sphere(.04,1.184,-.611,.029,.034,.029,leather);

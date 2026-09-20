@@ -48,6 +48,7 @@ import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
 import { SNOW_FIELD_GLSL } from './snow-field.js';
 import { loadScannedSurface } from './scanned-materials.js';
 import { preloadPlaceSurfaceLibrary } from './place-surfaces.js';
+import { installRoadSurface, loadRoadSurfaceScan } from './road-surface.js';
 import {readableSurface} from '../art/surface-light.js';
 
 const CHUNK = CFG.world.CHUNK;                       // 64 m
@@ -368,6 +369,7 @@ export class Chunks {
 
   async init() {
     const placeSurfaces = preloadPlaceSurfaceLibrary().catch(error => { this._notes.push(error.message); });
+    const roadScan = loadRoadSurfaceScan(this.ctx.renderer).catch(error => { this._notes.push(error.message); return null; });
     const scene = this.ctx.scene;
     if (!scene) throw new Error('chunks: ctx.scene missing (gfx must be manifest #1)');
 
@@ -429,7 +431,8 @@ export class Chunks {
     //   3. a darker strip at each edge, so the road has an EDGE instead of a seam.
     // material.color is the crown's albedo and the texture scales down from it, so the
     // profile keeps eight bits of precision instead of quantising 0.007 into two of them.
-    this.matRoad = new THREE.MeshLambertMaterial({
+    this.matRoad = new THREE.MeshStandardMaterial({
+      roughness: 0.93, metalness: 0, envMapIntensity: 1.15,
       vertexColors: true,
       dithering: true,
       // ROUND 15, MEASURED, AND THEN MEASURED AGAIN.
@@ -455,9 +458,11 @@ export class Chunks {
     // and a colour BufferAttribute is read as working-space); a hex would be decoded from
     // sRGB and land somewhere else entirely.
     this.matRoad.color.setRGB(ROAD_CROWN[0], ROAD_CROWN[1], ROAD_CROWN[2], THREE.LinearSRGBColorSpace);
+    this.roadSurface = await roadScan;
     this.roadTex = this._buildRoadProfile();
     if (this.roadTex) this.matRoad.map = this.roadTex;
     this.matRoad.name = 'road-ribbon';
+    installRoadSurface(this.matRoad, this.matGround.userData.groundUniforms, this.roadSurface);
 
     this._startWorker();
 
@@ -1545,8 +1550,9 @@ export class Chunks {
    */
   setWeather(snow, wet) {
     const uni = this.matGround && this.matGround.userData.groundUniforms;
-    if (!uni || !uni.uWeather) return;
-    uni.uWeather.value.set(
+    const weather = uni?.uWeather || this.matRoad?.userData.roadUniforms?.uRoadWeather;
+    if (!weather) return;
+    weather.value.set(
       snow > 0 ? (snow > 1 ? 1 : snow) : 0,
       wet > 0 ? (wet > 1 ? 1 : wet) : 0,
     );
@@ -1598,7 +1604,7 @@ export class Chunks {
         // every 8 m along and that is invisible at this frequency; the thing that must not
         // repeat over a long straight rides the vertex colour instead (see _ribbonColors).
         // Zero-mean by construction — (h - 0.5) — so the road's value does not move.
-        const gk = dm <= ROAD_CROWN_HALF_M ? ROAD_GRAIN_CROWN : ROAD_GRAIN;
+        const gk = this.roadSurface ? 0 : dm <= ROAD_CROWN_HALF_M ? ROAD_GRAIN_CROWN : ROAD_GRAIN;
         let h = (x * 1597334677 + y * 3812015801 + 1013904223) | 0;
         h = (h ^ (h >>> 15)) | 0;
         h = Math.imul(h, 2246822519);
@@ -1924,6 +1930,7 @@ export class Chunks {
     if (this.matGround) { this.matGround.dispose(); this.matGround = null; }
     if (this.matRoad) { this.matRoad.dispose(); this.matRoad = null; }
     if (this.roadTex) { this.roadTex.dispose(); this.roadTex = null; }
+    if (this.roadSurface) { this.roadSurface.dispose(); this.roadSurface = null; }
     if (this.groundTex) { this.groundTex.dispose(); this.groundTex = null; }
     if (this.groundSurface) { this.groundSurface.dispose(); this.groundSurface = null; }
     this.group = null;

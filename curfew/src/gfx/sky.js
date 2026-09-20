@@ -288,6 +288,75 @@ const METEOR_PARK_Y = -60;        // below the horizon, never seen
 // spawn heading rather than to sit level, because a level band reads as a rendering seam.
 const BAND_AXIS = new THREE.Vector3(0.46, 0.38, -0.80).normalize();
 
+// Four seamless weather fields in one 512px texture. Baking their octaves once keeps
+// directional cloud lighting cheaper than repeatedly hashing noise at every sky pixel.
+// Linear data, never a colour map; the same field occludes stars and shapes valley mist.
+function weatherTexture() {
+  const size = 512;
+  const data = new Uint8Array(size * size * 4);
+  const octaves = [4, 8, 16, 32, 64, 128];
+  const weights = [0.30, 0.30, 0.20, 0.11, 0.06, 0.03];
+  for (let channel = 0; channel < 4; channel++) {
+    let seed = (0x913b2d + channel * 0x1f123bb5) >>> 0;
+    const fields = octaves.map(cells => {
+      const field = new Float32Array(cells * cells);
+      for (let i = 0; i < field.length; i++) {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        field[i] = seed / 4294967296;
+      }
+      return field;
+    });
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        let value = 0;
+        for (let o = 0; o < octaves.length; o++) {
+          const cells = octaves[o], mask = cells - 1, field = fields[o];
+          const px = x / size * cells, py = y / size * cells;
+          const ix = Math.floor(px), iy = Math.floor(py);
+          let fx = px - ix, fy = py - iy;
+          fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+          const a = field[(iy & mask) * cells + (ix & mask)];
+          const b = field[(iy & mask) * cells + ((ix + 1) & mask)];
+          const c = field[((iy + 1) & mask) * cells + (ix & mask)];
+          const d = field[((iy + 1) & mask) * cells + ((ix + 1) & mask)];
+          value += (a + (b - a) * fx + (c - a + (d - c - b + a) * fx) * fy) * weights[o];
+        }
+        data[(y * size + x) * 4 + channel] = Math.round(clamp01((value - 0.5) * 1.28 + 0.5) * 255);
+      }
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.name = 'county-weather-field';
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// Shared by the dome and the star vertices: a star disappears behind exactly the cloud
+// drawn over it. Cloud erosion comes from a separate field, so edges curl into the bank.
+const CLOUD_FIELD = /* glsl */`
+  uniform sampler2D uCloudField;
+  vec2 cloudUV(vec3 d) {
+    vec2 p = d.xz / max(0.12, d.y + 0.12);
+    vec2 drift = vec2(uTime * 0.00017, uTime * 0.00007);
+    vec2 warp = texture2D(uCloudField, p * 0.052 + drift * 0.43).gb - 0.5;
+    return p * 0.175 + warp * 0.13 + drift;
+  }
+  float cloudBody(vec2 p) {
+    vec4 field = texture2D(uCloudField, p);
+    return field.r * 1.12 - (1.0 - field.g) * 0.15 + (field.b - 0.5) * 0.08;
+  }
+  float cloudCover(float body, float elevation) {
+    float mass = smoothstep(0.40, 0.70, body);
+    return (1.0 - exp(-mass * 2.6 * max(uCloud, 0.0)))
+      * smoothstep(0.012, 0.12, elevation);
+  }
+`;
+
 /* MIST. Two flat sheets at an INVERSION ALTITUDE.
  *
  * THE FIRST VERSION OF THIS RODE THE GROUND UNDER THE CAMERA WITH A LONG LAG AND IT WAS
@@ -404,6 +473,7 @@ export class Sky {
     root.name = 'sky';
     root.frustumCulled = false;
     this.root = root;
+    this.cloudTexture = weatherTexture();
 
     /* ---- the dome ---------------------------------------------------------- */
     const domeMat = new THREE.ShaderMaterial({
@@ -420,6 +490,7 @@ export class Sky {
         uMoonPeak: { value: MOON_PEAK },
         uMoonPhase: { value: MOON_PHASE },
         uCloud: { value: 1.0 },      // 0 clears the deck; the clock may drive it later
+        uCloudField: { value: this.cloudTexture },
         uRidge: { value: 1.0 },
         uBand: { value: 0.055 },
         uBandAxis: { value: BAND_AXIS.clone() },
@@ -447,6 +518,7 @@ export class Sky {
         uniform float uCloud, uRidge, uBand, uFlash, uEastGlow;
         uniform float uTrueDawn;
         uniform vec3 uSunDir, uSunCol;
+        ${CLOUD_FIELD}
 
         float h21(vec2 p) {
           p = fract(p * vec2(127.31, 311.77));
@@ -496,26 +568,30 @@ export class Sky {
              * Projected onto a plane: xz / (y + k) crowds the deck toward the horizon
              * exactly the way a real overcast does, and the +k keeps the projection from
              * exploding to infinity along the horizon line. */
-            vec2 cp = vec2(d.x, d.z) / max(0.105, e + 0.105);
-            float cd = fbm4(cp * 3.4 + vec2(uTime * 0.0075, uTime * 0.0034));
-            // fbm4's amplitudes sum to 0.994, so cd is already 0..1 with a mean near 0.5 —
-            // which is why the threshold band straddles 0.5 instead of sitting above it. A
-            // band authored at 0.435-0.815 (the first pass) showed 2% coverage: measured on
-            // screen the sky came back completely flat, and that is the arithmetic of it.
-            float cov = smoothstep(0.455, 0.720, cd) * uCloud;
-            cov *= smoothstep(0.005, 0.105, e);           // into the haze at the horizon
-            // A moonlit cloud is paler than the sky; one away from the moon is darker.
-            //
-            // MEASURED, and the first pass had this badly wrong: at cloudLit uMoonCol * 0.26
-            // and a coverage band of 0.395-0.665 the deck owned about 70% of the sky at a
-            // band mean of 74 against ART.md 0.3 row 8's 26-34, and tests/shots/E-moon.png
-            // read as an overcast AFTERNOON. A cloud at night is barely brighter than the sky
-            // it hides; the pale only arrives within a few degrees of the moon itself.
-            vec3 cloudDark = mix(uZenith, uHorizon, 0.25) * 0.66;
-            vec3 cloudLit = uMoonCol * 0.155;
-            vec3 cloudCol = mix(cloudDark, cloudLit, pow(ml, 2.2));
-            // the silver lining: the thin edge of a bank in front of the moon
-            cloudCol += uMoonCol * 0.17 * pow(ml, 9.0) * smoothstep(0.60, 0.44, cd);
+            vec2 cp = cloudUV(d);
+            float cd = cloudBody(cp);
+            float cov = cloudCover(cd, e);
+            // Two probes toward the moon give the bank a lit shoulder and a shaded belly.
+            // This is directional density lighting, without a full-screen ray march.
+            vec2 lightStep = normalize(md.xz + vec2(0.0001)) * 0.020;
+            float ahead = cloudBody(cp + lightStep);
+            float farAhead = cloudBody(cp + lightStep * 2.7);
+            float shoulder = clamp((cd - ahead) * 5.8 + 0.24, 0.0, 1.0);
+            float occlusion = exp(-max(0.0, farAhead - 0.42) * 5.0);
+            float moonReach = pow(ml, 2.4);
+            float silver = pow(ml, 14.0) * (1.0 - smoothstep(0.46, 0.69, cd));
+            vec3 cloudDark = mix(uZenith, uHorizon, 0.22) * (0.45 + shoulder * 0.24);
+            vec3 cloudCol = cloudDark + uMoonCol * moonReach
+              * (0.013 + shoulder * occlusion * 0.060 + silver * 0.070);
+
+            // Higher, slower ice-cloud ribbons cross the low banks at a different bearing.
+            // Their low opacity preserves open sky instead of filling every gap with haze.
+            vec2 highUV = vec2(d.x - d.z * 0.32, d.z + d.x * 0.32)
+              / max(0.18, e + 0.18) * vec2(0.033, 0.19);
+            float cirrus = texture2D(uCloudField, highUV + vec2(-uTime * 0.000055, 0.37)).a;
+            float veil = smoothstep(0.56, 0.75, cirrus) * smoothstep(0.025, 0.18, e)
+              * min(uCloud, 1.0) * 0.22;
+            col = mix(col, mix(uHorizon, uMoonCol * 0.12, pow(ml, 5.0)), veil);
 
             /* ---- THE MILKY WAY -------------------------------------------------
              * uBandAxis is the POLE of the band, so the band is every direction
@@ -540,8 +616,8 @@ export class Sky {
                 float term = smoothstep(-0.09, 0.13,
                                         u + uMoonPhase * sqrt(max(0.0, 1.0 - v * v)));
                 float limb = 0.70 + 0.30 * sqrt(max(0.0, 1.0 - min(1.0, rr * rr)));
-                float maria = 0.84 + 0.16 * fbm3(vec2(u, v) * 2.7 + 4.0);
-                float seas = mix(1.0, 0.76, smoothstep(0.46, 0.63, vn2(vec2(u, v) * 1.3 + 9.0)));
+              float maria = 0.70 + 0.30 * fbm3(vec2(u, v) * 2.7 + 4.0);
+              float seas = mix(1.0, 0.59, smoothstep(0.40, 0.63, vn2(vec2(u, v) * 1.3 + 9.0)));
                 vec3 moon = uMoonCol * (uMoonPeak * limb * maria * seas);
                 col = mix(col, moon, disc * term * (1.0 - cov * 0.85));
               }
@@ -584,9 +660,15 @@ export class Sky {
               float rNear = vn2(circ * 1.7 + 71.0) * 0.64 + vn2(circ * 4.3 + 97.0) * 0.25
                           + vn2(circ * 9.9 + 131.0) * 0.11;
               float crestF = 0.022 + rFar * 0.082;
-              float crestN = 0.006 + rNear * 0.049;
+              float crestN = 0.006 + rNear * 0.049 + vn2(circ * 103.0) * 0.0018;
+              // A third, more distant range gives the horizon overlapping depths. It
+              // remains close to the horizon value, while the nearer wooded ridge is dark.
+              float rBack = vn2(circ * 2.1 + 143.0) * 0.70 + vn2(circ * 7.3 + 163.0) * 0.30;
+              float crestB = 0.048 + rBack * 0.075;
+              float kB = (1.0 - smoothstep(crestB - 0.007, crestB + 0.005, e)) * base;
               float kF = (1.0 - smoothstep(crestF - 0.0060, crestF + 0.0035, e)) * base;
               float kN = (1.0 - smoothstep(crestN - 0.0050, crestN + 0.0030, e)) * base;
+              col = mix(col, mix(uHorizon, uZenith, 0.12) * 0.84, kB * 0.62);
               col = mix(col, mix(uHorizon, uZenith, 0.30) * 0.70, kF * 0.86);
               col = mix(col, mix(uHorizon, uZenith, 0.55) * 0.40, kN * 0.90);
             }
@@ -698,15 +780,23 @@ export class Sky {
     this._meteorRng = this.ctx.rng.fork('sky.meteor');
     this._meteorT = this._meteorSpan(METEOR_GAP_S);
     const starMat = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uOpacity: { value: 1 } },
+      uniforms: {
+        uTime: { value: 0 }, uOpacity: { value: 1 },
+        uCloud: domeMat.uniforms.uCloud,
+        uCloudField: domeMat.uniforms.uCloudField,
+      },
       vertexShader: /* glsl */`
         attribute vec2 aStar;
         varying vec3 vColor;
         varying float vTwinkle;
-        uniform float uTime;
+        uniform float uTime, uCloud;
+        ${CLOUD_FIELD}
         void main() {
           vColor = color;
           vTwinkle = 0.86 + 0.14 * sin(uTime * 0.7 + aStar.y);
+          vec3 skyDir = normalize(position);
+          float cover = cloudCover(cloudBody(cloudUV(skyDir)), skyDir.y);
+          vTwinkle *= exp(-cover * 4.8) * smoothstep(0.015, 0.14, skyDir.y);
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = clamp(aStar.x, 0.7, 3.4);
           gl_Position = projectionMatrix * mv;
@@ -773,7 +863,7 @@ export class Sky {
    * the shader source, so a clone links nothing new. Measured with tools/programs.mjs.
    */
   _buildMist(scene) {
-    const geo = new THREE.PlaneGeometry(MIST_R * 2, MIST_R * 2, 1, 1);
+    const geo = new THREE.PlaneGeometry(MIST_R * 2, MIST_R * 2, 24, 24);
     geo.rotateX(-Math.PI / 2);
     this.mistGeo = geo;
 
@@ -781,6 +871,7 @@ export class Sky {
       uniforms: {
         uTime: { value: 0 },
         uCam: { value: new THREE.Vector3() },
+        uCloudField: { value: this.cloudTexture },
         uMoonDir: { value: new THREE.Vector3(0, 1, 0) },
         // Shares the sky's ONE horizon Color, so the mist can never drift away from the sky
         // it is lit by (the fog law, one level down).
@@ -808,8 +899,13 @@ export class Sky {
       },
       vertexShader: /* glsl */`
         varying vec3 vW;
+        uniform sampler2D uCloudField;
+        uniform vec3 uCam;
+        uniform float uTime;
         void main() {
           vec4 w = modelMatrix * vec4(position, 1.0);
+          float billow = texture2D(uCloudField, w.xz * 0.005 + vec2(uTime * 0.00009, 0.0)).g;
+          w.y = min(w.y + (billow - 0.5) * 1.25, uCam.y - 0.30);
           vW = w.xyz;
           gl_Position = projectionMatrix * viewMatrix * w;
         }`,
@@ -818,6 +914,7 @@ export class Sky {
         uniform vec3 uCam, uMoonDir, uCol, uMoonCol;
         uniform vec2 uDrift;
         uniform float uTime, uAmt, uScale, uFar, uNear;
+        uniform sampler2D uCloudField;
 
         float h21(vec2 p) {
           p = fract(p * vec2(127.31, 311.77));
@@ -837,13 +934,13 @@ export class Sky {
           float dist = length(rel);
           if (dist > uFar) discard;
 
-          // banks, not a sheet: one coarse octave decides WHERE there is mist at all and a
-          // finer one gives its edge a shape. Two noise reads, not four — this shader runs
-          // over a large part of the lower frame and Alex plays on a phone.
-          vec2 p = vW.xz * uScale + uDrift * uTime * 0.010;
-          float bank = vn2(p * 0.34 - uDrift * uTime * 0.0035);
-          float grain = vn2(p * 1.9);
-          float dens = smoothstep(0.44, 0.80, bank * 0.78 + grain * 0.40);
+          // World-anchored banks: a broad current bends the fine wisps, and a different
+          // wind speed at each height makes their silhouettes slide across one another.
+          vec2 p = vW.xz * uScale * 0.14 + uDrift * uTime * 0.00065;
+          vec4 current = texture2D(uCloudField, p * 0.37 - uDrift * uTime * 0.00021);
+          vec4 detail = texture2D(uCloudField, p + (current.gb - 0.5) * 0.10);
+          float dens = smoothstep(0.44, 0.74, current.r * 0.78 + detail.g * 0.35);
+          dens *= 0.72 + 0.28 * detail.b;
 
           float a = dens * uAmt;
           // never white out the lens: the sheet dissolves as it comes up to eye height
@@ -865,7 +962,8 @@ export class Sky {
           // fog at night — it is what put the mist above the sky on the moon side of every
           // frame. Halved, and the exponent tightened so the pale is confined to the few
           // degrees around the moon bearing where a real bank actually glows.
-          vec3 col = mix(uCol * 0.86, uMoonCol * 0.30, pow(ml, 4.0) * 0.60);
+          vec3 col = mix(uCol * (0.70 + detail.b * 0.22), uMoonCol * 0.22,
+            pow(ml, 5.0) * 0.48 * (1.0 - dens * 0.35));
           gl_FragColor = vec4(col, a);
         }`,
       transparent: true,
@@ -882,6 +980,7 @@ export class Sky {
       if (i > 0) {
         // a clone gets fresh uniform objects; the shared horizon Color must be re-shared
         mat.uniforms.uCol.value = this.horizon;
+        mat.uniforms.uCloudField.value = this.cloudTexture;
         mat.uniforms.uAmt.value = L.aMax;
         mat.uniforms.uScale.value = L.scale;
         mat.uniforms.uDrift.value.set(L.drift[0], L.drift[1]);
@@ -1206,6 +1305,7 @@ export class Sky {
       this.mist = null;
     }
     if (this.mistGeo) { this.mistGeo.dispose(); this.mistGeo = null; }
+    if (this.cloudTexture) { this.cloudTexture.dispose(); this.cloudTexture = null; }
   }
 
   /**
