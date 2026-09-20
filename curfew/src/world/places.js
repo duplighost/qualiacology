@@ -1307,9 +1307,9 @@ export class Places {
       uWeather: { value: new THREE.Vector2(0, 0) },
       uSnowCol: { value: new THREE.Color().setRGB(WX_SNOW[0], WX_SNOW[1], WX_SNOW[2], THREE.LinearSRGBColorSpace) },
     };
-    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-physical-5');
-    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-physical-5');
-    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-physical-5');
+    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-physical-6');
+    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-physical-6');
+    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-physical-6');
 
     this.matGlow = new THREE.MeshBasicMaterial({
       vertexColors: true, fog: false, transparent: true, opacity: 1,

@@ -2652,7 +2652,7 @@ export class Flora {
 
     return {
       id, cx, cz, trees: n, streams, cards, bounds,
-      nearMeshes: null, grass: null, grassWanted: false,
+      nearMeshes: null, grass: null, grassBuilt: false, grassWanted: false,
       under: [], underCount: 0, underMeshes: null, underBounds: null,
       dMin: 0, dMax: 0,
     };
@@ -3265,8 +3265,8 @@ export class Flora {
       }
 
       const wantGrass = rec.dMin < grassR;
-      if (wantGrass && !rec.grass && grassBudget > 0) { this._buildGrass(rec); grassBudget--; }
-      else if (rec.grass && rec.dMin > grassR * 1.6) this._dropGrass(rec);
+      if (wantGrass && !rec.grassBuilt && !rec.grass && grassBudget > 0) { this._buildGrass(rec); grassBudget--; }
+      else if ((rec.grassBuilt || rec.grass) && rec.dMin > grassR * 1.6) this._dropGrass(rec);
     }
 
     // --- per 2x2 group: mid ring ------------------------------------------
@@ -3603,7 +3603,7 @@ export class Flora {
   }
 
   _buildGrass(rec) {
-    if (rec.grass) return;
+    if (rec.grassBuilt || rec.grass) return;
     const terrain = this._sys('terrain');
     if (!terrain || typeof terrain.heightAt !== 'function') return;
     const roads = this._sys('roads');
@@ -3732,7 +3732,9 @@ export class Flora {
         n++;
       }
     }
-    if (!n) { rec.grass = null; return; }
+    // An empty planting pass is a completed resident result too. City pads can
+    // reject every candidate; retrying that same work each step stalls the town.
+    if (!n) { rec.grass = null; rec.grassBuilt = true; return; }
 
     const mesh = new THREE.InstancedMesh(this.grassGeo, this.matGrass, n);
     mesh.name = 'flora-grass-' + rec.id;
@@ -3748,9 +3750,11 @@ export class Flora {
     this._setBounds(mesh, [ox - 1, rec.bounds[1] - 0.1, oz - 1, ox + CH + 1, rec.bounds[4] + 2, oz + CH + 1]);
     this.group.add(mesh);
     rec.grass = mesh;
+    rec.grassBuilt = true;
   }
 
   _dropGrass(rec) {
+    rec.grassBuilt = false;
     if (!rec.grass) return;
     this.group.remove(rec.grass);
     rec.grass.dispose();
@@ -4063,12 +4067,12 @@ export class Flora {
     for (const [sk, s] of this.supers) { s.dirty = true; this._dirtySupers.add(sk); }
   }
 
-  /** Drop and relay every resident grass card now, with no budget. For the A/B in
+  /** Drop and relay every resident grass result, including empty chunks, with no budget. For the A/B in
    *  tests/wilds.mjs after flipping roofExclude; never called by the game. */
   rebuildGrass() {
     let n = 0;
     for (const rec of this.chunks.values()) {
-      if (!rec.grass) continue;
+      if (!rec.grassBuilt && !rec.grass) continue;
       this._dropGrass(rec);
       this._buildGrass(rec);
       n++;

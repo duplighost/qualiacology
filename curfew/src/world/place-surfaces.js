@@ -878,17 +878,33 @@ export function patchPlaceSurfaceLighting(shader, material) {
       'vec4 countyPlasterSample(sampler2D tex, vec2 uv, vec2 offsetA, vec2 offsetB, float blend) {',
       '  return mix(texture2D(tex, uv + offsetA), texture2D(tex, uv + offsetB), blend);',
       '}',
+      // Derivatives are evaluated before the zero-gradient branch at the call
+      // site, keeping them valid across a fragment quad. This is the same relief
+      // reconstruction as countyReliefNormal with already evaluated derivatives.
+      'vec3 countyLayerNormal(vec3 surfaceNormal, vec3 dx, vec3 dy, vec2 gradient) {',
+      '  vec3 rx = cross(dy, surfaceNormal), ry = cross(surfaceNormal, dx);',
+      '  float determinant = dot(dx, rx);',
+      '  vec3 slope = sign(determinant) * (gradient.x * rx + gradient.y * ry);',
+      '  return normalize(max(abs(determinant), 0.00000001) * surfaceNormal - slope);',
+      '}',
     ].join('\n'))
     .replace('#include <map_fragment>', [
       'vec2 countyWallPlane = vec2(vPlaceWorld.x + vPlaceWorld.z * 0.73, vPlaceWorld.y);',
       // Plaster damage has no regular bond to preserve. Two continuously blended
       // texture phases remove the four-metre wallpaper repeat; colour, height and
       // roughness use the SAME phases, so visible failures keep their real relief.
-      'float countyPhase = countyMaterialNoise(countyWallPlane * 0.13) * 8.0;',
-      'float countyPhaseId = floor(countyPhase);',
-      'vec2 countyOffsetA = vec2(countyMaterialHash(vec2(countyPhaseId, 17.0)), countyMaterialHash(vec2(countyPhaseId, 49.0))) * 2.0;',
-      'vec2 countyOffsetB = vec2(countyMaterialHash(vec2(countyPhaseId + 1.0, 17.0)), countyMaterialHash(vec2(countyPhaseId + 1.0, 49.0))) * 2.0;',
-      'float countyPhaseMix = smoothstep(0.18, 0.82, fract(countyPhase));',
+      'vec2 countyOffsetA = vec2(0.0), countyOffsetB = vec2(0.0);',
+      'float countyPhaseMix = 0.0, countyFloor = 0.0;',
+      // This condition is uniform for the whole material, so metal, masonry and
+      // timber avoid eight hashes and the interpolation for unused plaster UVs.
+      'if (uPlaceSurfaceType < 0.5) {',
+      '  float countyPhase = countyMaterialNoise(countyWallPlane * 0.13) * 8.0;',
+      '  float countyPhaseId = floor(countyPhase);',
+      '  countyOffsetA = vec2(countyMaterialHash(vec2(countyPhaseId, 17.0)), countyMaterialHash(vec2(countyPhaseId, 49.0))) * 2.0;',
+      '  countyOffsetB = vec2(countyMaterialHash(vec2(countyPhaseId + 1.0, 17.0)), countyMaterialHash(vec2(countyPhaseId + 1.0, 49.0))) * 2.0;',
+      '  countyPhaseMix = smoothstep(0.18, 0.82, fract(countyPhase));',
+      '  countyFloor = smoothstep(0.62, 0.91, vWxUp);',
+      '}',
       '#ifdef USE_MAP',
       'if (uPlaceSurfaceType < 0.5) {',
       '  diffuseColor *= countyPlasterSample(map, vMapUv, countyOffsetA, countyOffsetB, countyPhaseMix);',
@@ -898,7 +914,6 @@ export function patchPlaceSurfaceLighting(shader, material) {
       '#endif',
       'float countyMacro = countyMaterialNoise(vPlaceWorld.xz * 0.045 + vPlaceWorld.y * 0.011);',
       'float countyWeathering = countyMaterialNoise(countyWallPlane * vec2(0.37, 0.062));',
-      'float countyFloor = (1.0 - step(0.5, uPlaceSurfaceType)) * smoothstep(0.62, 0.91, vWxUp);',
       'float countyFloorRelief = 0.0;',
       'if (countyFloor > 0.001) {',
       // Horizontal plaster is a paved slab, never a wall's repeated brick peel.
@@ -916,8 +931,12 @@ export function patchPlaceSurfaceLighting(shader, material) {
     .replace('#include <color_fragment>', [
       '#include <color_fragment>',
       'float countyWall = 1.0 - smoothstep(0.35, 0.78, vWxUp);',
-      'float countyFoot = (1.0 - smoothstep(0.06, 0.8 + countyMacro * 1.15, max(vPlaceLocalY, 0.0))) * countyWall;',
-      'float countyRunnel = smoothstep(0.55, 0.79, countyMaterialNoise(countyWallPlane * vec2(2.3, 0.10) + countyMacro * 0.7)) * countyWall;',
+      'float countyFoot = 0.0, countyRunnel = 0.0;',
+      // No derivatives or texture LOD inside this face-orientation branch.
+      'if (countyWall > 0.0) {',
+      '  countyFoot = (1.0 - smoothstep(0.06, 0.8 + countyMacro * 1.15, max(vPlaceLocalY, 0.0))) * countyWall;',
+      '  countyRunnel = smoothstep(0.55, 0.79, countyMaterialNoise(countyWallPlane * vec2(2.3, 0.10) + countyMacro * 0.7)) * countyWall;',
+      '}',
       'float countyTone = mix(0.86, 1.08, countyMacro) * mix(0.90, 1.025, countyWeathering);',
       'diffuseColor.rgb *= countyTone * (1.0 - countyFoot * 0.21 - countyRunnel * 0.14);',
     ].join('\n'))
@@ -930,9 +949,12 @@ export function patchPlaceSurfaceLighting(shader, material) {
       '#endif',
       'countyPhysical = mix(countyPhysical, vec4(0.62, 0.88, 1.0, 0.0), countyFloor);',
       'countyPhysical.g = max(0.35, countyPhysical.g - countyRunnel * 0.065);',
-      'float countyPocket = 1.0 - smoothstep(0.42, 0.82, countyPhysical.r);',
-      'float countyWet = uWeather.y * (1.0 - countySnowCover)',
-      '  * (smoothstep(0.08, 0.80, vWxUp) * mix(0.54, 1.0, countyPocket) + countyRunnel * 0.28);',
+      'float countyWet = 0.0;',
+      'if (uWeather.y > 0.0) {',
+      '  float countyPocket = 1.0 - smoothstep(0.42, 0.82, countyPhysical.r);',
+      '  countyWet = uWeather.y * (1.0 - countySnowCover)',
+      '    * (smoothstep(0.08, 0.80, vWxUp) * mix(0.54, 1.0, countyPocket) + countyRunnel * 0.28);',
+      '}',
       'roughnessFactor = mix(countyPhysical.g, 0.22, countyWet);',
       'roughnessFactor = mix(roughnessFactor, mix(0.94, 0.72, countySnowCrest), countySnowCover);',
     ].join('\n'))
@@ -957,8 +979,18 @@ export function patchPlaceSurfaceLighting(shader, material) {
       '#endif',
       // Water fills the finest grain. Snow is a layer with its own wind-shaped
       // relief, so a white roof no longer reflects the boards buried beneath it.
-      'normal = normalize(mix(normal, nonPerturbedNormal, max(countyFloor, max(countyWet * 0.26, countySnowCover * 0.92))));',
-      'normal = countyReliefNormal(-vViewPosition, normal, countyFloorRelief * countyFloor * (1.0 - countySnowCover) + countySnowHeight * countySnowCover);',
+      'float countyNormalFill = max(countyFloor, max(countyWet * 0.26, countySnowCover * 0.92));',
+      'if (countyNormalFill > 0.0) normal = normalize(mix(normal, nonPerturbedNormal, countyNormalFill));',
+      // Only plaster can produce slab relief; snow availability is also uniform.
+      // Dry stone, wood and steel skip the entire additional derivative layer.
+      'if (uPlaceSurfaceType < 0.5 || uWeather.x > 0.0) {',
+      '  float countyLayerHeight = countyFloorRelief * countyFloor * (1.0 - countySnowCover) + countySnowHeight * countySnowCover;',
+      '  vec2 countyLayerGradient = vec2(dFdx(countyLayerHeight), dFdy(countyLayerHeight));',
+      '  vec3 countyLayerDx = dFdx(-vViewPosition), countyLayerDy = dFdy(-vViewPosition);',
+      '  if (any(notEqual(countyLayerGradient, vec2(0.0)))) {',
+      '    normal = countyLayerNormal(normal, countyLayerDx, countyLayerDy, countyLayerGradient);',
+      '  }',
+      '}',
     ].join('\n'))
     .replace('#include <aomap_fragment>', [
       '#include <aomap_fragment>',
