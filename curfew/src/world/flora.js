@@ -426,9 +426,10 @@ const BIOME_GRASS_ACCEPT = Object.freeze([0.32, 0.56, 0.38, 0.18]);
 const BIOME_GRASS_WIDTH = Object.freeze([[0.60, 1.04], [0.68, 1.18], [0.47, 0.86], [0.42, 0.76]]);
 const BIOME_GRASS_HEIGHT = Object.freeze([[0.24, 0.62], [0.32, 0.81], [0.49, 0.97], [0.17, 0.43]]);
 const BIOME_GRASS_TINT = Object.freeze([
-  Object.freeze([0.70, 0.84, 0.90]),   // pine floor: sparse, low, cold
+  // Moonlight supplies the cool cast; the plants retain olive/dry-leaf albedo.
+  Object.freeze([0.91, 0.83, 0.55]),   // pine floor: muted olive among leaf litter
   Object.freeze([1.14, 1.00, 0.67]),   // field: broad tawny seed heads
-  Object.freeze([0.62, 0.91, 0.92]),   // fen: tall blue-green rushes
+  Object.freeze([0.78, 0.89, 0.59]),   // fen: greener rushes with weathered tips
   Object.freeze([0.84, 0.79, 0.69]),   // ridge: short weathered straw
 ]);
 
@@ -933,17 +934,21 @@ function blobGeometry(cx, cy, cz, radius, detail, col, tint, wind, squash, seed,
 /** A point on the baked three-reach trunk. Boot-time only. */
 function trunkPointAt(rec, f) {
   const path = rec.trunkPath;
-  const u = clamp01(f) * (path.length - 1);
-  const i = Math.min(path.length - 2, Math.floor(u));
-  const t = u - i, a = path[i], b = path[i + 1];
+  const y = clamp01(f) * rec.trunkH;
+  let i = 0;
+  while (i < path.length - 2 && path[i + 1].y < y) i++;
+  const a = path[i], b = path[i + 1];
+  const t = clamp01((y - a.y) / Math.max(0.001, b.y - a.y));
   return {
     x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t),
   };
 }
 
 function trunkRadiusAt(rec, f) {
-  const top = rec.kind === 'snag' ? 0.10 : rec.kind === 'conifer' ? 0.28 : 0.34;
-  return rec.trunkR * lerp(1, top, Math.pow(clamp01(f), 0.84));
+  const top = rec.kind === 'snag' ? 0.10 : rec.kind === 'conifer' ? 0.045 : 0.065;
+  // Keep weight low on the bole and taper into the upper branch hierarchy.
+  // The recipe radius and centreline still own the exact same trunk collider.
+  return rec.trunkR * lerp(1, top, Math.pow(clamp01(f), 1.24));
 }
 
 // A spray is a volume of small leaves. Lighting every card with its flat sheet
@@ -970,13 +975,16 @@ function softenFoliageNormals(geo, cx, cy, cz, width, height, strength = 0.72) {
 
 // Branch-attached needle and leaf sprays. The atlas supplies the fine boundary; angled
 // cards give volume instead of one camera-facing billboard. Trunks keep opaque atlas UVs.
-function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed, turn = 0, conifer = false, lod = 0, atlasCell = -1) {
+function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed, turn = 0, conifer = false, lod = 0, atlasCell = -1, cardCount = 0) {
   const parts = [];
   const cell = FOLIAGE_CELLS[atlasCell >= 0 ? atlasCell : conifer ? (seed & 1) : 2];
   // Spend the old sheet subdivisions on separate small branchlets. Same triangle
   // count, but fine alpha detail now occupies a believable physical leaf scale.
-  const count = conifer ? (lod ? 8 : 12) : (lod ? 12 : 24);
-  const scale = conifer ? 0.48 : (lod ? 0.39 : 0.34);
+  const defaultCount = conifer ? (lod ? 8 : 12) : (lod ? 12 : 24);
+  const count = cardCount || defaultCount;
+  // Fewer cards represent each complete mid-distance lobe, rather than deleting
+  // entire lobes. Keep the lobe's projected leaf area when reducing its cards.
+  const scale = (conifer ? 0.48 : (lod ? 0.39 : 0.34)) * Math.sqrt(defaultCount / count);
   for (let i = 0; i < count; i++) {
     const width = radius * (conifer ? 2.42 : 2.56) * scale * (0.89 + hashI(i, 101, seed) * 0.22);
     const height = radius * (conifer ? 2.00 : 2.06) * scale * Math.max(0.72, squash)
@@ -1021,15 +1029,16 @@ function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed,
 }
 
 function coniferCrownGeometry(rec, lod, seed) {
-  const parts = [], tiers = lod ? 6 : 10;
+  const parts = [], tiers = 10;
   const cell = FOLIAGE_CELLS[rec.ai % 2];
   const crownBase = [0.28, 0.34, 0.36, 0.25][rec.ai % 4];
   const crownWidth = [0.215, 0.185, 0.205, 0.240][rec.ai % 4];
   const base = rec.trunkH * crownBase, span = rec.trunkH * (0.99 - crownBase);
   const spacing = span / 9;
   for (let j = 0; j < tiers; j++) {
-    // Mid trees retain six of the SAME whorls, including both silhouette ends.
-    const tier = lod ? [0, 2, 4, 6, 8, 9][j] : j;
+    // Keep every height in both LODs. Dropping alternate whorls turned a full
+    // near crown into separated shelves and bare shaft at middle distance.
+    const tier = j;
     const f = tier / 9;
     const y = base + span * f + (hashI(tier, 91, seed) - 0.5) * spacing * 0.48;
     const r = rec.trunkH * crownWidth * Math.pow(1 - f * 0.96, 0.72)
@@ -1039,7 +1048,7 @@ function coniferCrownGeometry(rec, lod, seed) {
     // must never be one magnified frond: that draws giant combs against the sky.
     const fans = lod ? 3 : 6;
     for (let k = 0; k < fans; k++) {
-      const limb = lod ? k * 2 : k;
+      const limb = lod ? k * 2 + (tier & 1) : k;
       const angle = rec.leanDir + tier * 2.3999632 + limb * TAU / 6
         + (hashI(tier, limb + 31, seed) - 0.5) * 0.42;
       const exposure = 0.87 + Math.cos(angle - rec.leanDir) * 0.13;
@@ -1053,7 +1062,7 @@ function coniferCrownGeometry(rec, lod, seed) {
         const bz = anchor.z + sa * reach * q;
         const by = branchY + Math.sin(q * Math.PI) * reach * 0.16 - q * q * reach * 0.22;
         const size = Math.max(spacing * 0.36, reach * (0.54 - q * 0.13))
-          * (0.86 + hashI(tier * 41 + b, limb + 103, seed) * 0.24);
+          * (0.86 + hashI(tier * 41 + b, limb + 103, seed) * 0.24) * (lod ? 1.18 : 1);
         for (let face = 0; face < 2; face++) {
           const width = size * 1.38, height = size * 1.90;
           const g = new THREE.PlaneGeometry(width, height);
@@ -1093,15 +1102,25 @@ function coniferCrownGeometry(rec, lod, seed) {
           const ni = g.toNonIndexed(); g.dispose(); parts.push(ni);
         }
       }
-      if (!lod && k % 2 === 0 && j < tiers - 2) {
-        parts.push(segmentGeometry(anchor.x, y, anchor.z,
-          anchor.x + ca * reach * 0.87, y - reach * 0.11, anchor.z + sa * reach * 0.87,
-          rec.trunkR * (0.14 - f * 0.08), 0.018, 3, rec.bark, 0.15, 0.52));
+      if (!lod && k % 3 === 0 && j < tiers - 2) {
+        const q = 0.46, end = 0.87;
+        const mx = anchor.x + ca * reach * q, mz = anchor.z + sa * reach * q;
+        const my = branchY + Math.sin(q * Math.PI) * reach * 0.16 - q * q * reach * 0.22;
+        const ey = branchY + Math.sin(end * Math.PI) * reach * 0.16 - end * end * reach * 0.22;
+        const radius = rec.trunkR * (0.14 - f * 0.08);
+        // The support follows the live bough's droop; it no longer cuts a
+        // straight spoke through the needles. Fewer complete boughs offset
+        // the extra segment, keeping the near geometry increase small.
+        parts.push(segmentGeometry(anchor.x, branchY, anchor.z, mx, my, mz,
+          radius, radius * 0.48, 3, rec.bark, 0.15, 0.34));
+        parts.push(segmentGeometry(mx, my, mz,
+          anchor.x + ca * reach * end, ey, anchor.z + sa * reach * end,
+          radius * 0.48, 0.007, 3, rec.bark, 0.34, 0.52));
       }
     }
     // A small inner spray fills the junction; its needles stay at the same scale
     // as the outer limbs, instead of becoming a second full-sized tree billboard.
-    if (j < tiers - 1 && (!lod || j % 2 === 0)) {
+    if (j < tiers - 1 && (!lod || j % 3 === 0)) {
       const core = Math.max(spacing * 0.44, Math.min(r * 0.24, 0.68));
       parts.push(foliageSprayGeometry(anchor.x, y - spacing * 0.26, anchor.z,
         core, rec.leaf, 0.90 + f * 0.15, 0.42 + f * 0.3, 1.05,
@@ -1222,16 +1241,13 @@ function buildTemplateGeometry(rec, lod, seed) {
   const radial = lod === 0 ? 10 : 5;
   const tH = rec.trunkH, tR = rec.trunkR;
 
-  // Three unequal reaches, a fast base taper and six broad flutes. The bottom reach gets one
-  // extra axial ring so the flare curves back inside the original trunk radius; the collider
-  // therefore remains exactly the same circle even though the silhouette no longer is.
-  const path = rec.trunkPath;
-  // Mid LOD keeps the bend but joins the first two reaches: player-height bark belongs inside
-  // 72 m, and shipping those axial rings through thousands of mid instances buys no pixel.
-  const reaches = lod === 0 ? [[0, 1], [1, 2], [2, 3]] : [[0, 2], [2, 3]];
-  for (let i = 0; i < reaches.length; i++) {
-    const a = path[reaches[i][0]], b = path[reaches[i][1]];
-    const f0 = a.y / tH, f1 = b.y / tH;
+  // Put the existing extra near ring at the root flare, where it changes the
+  // silhouette. A ring halfway up the old 0.32H reach could only make a cone.
+  // Every centre still lies on the unchanged recipe/collider centreline.
+  const rings = lod === 0 ? [0, Math.min(0.055, 0.55 / tH), 0.32, 0.70, 1] : [0, 0.70, 1];
+  for (let i = 0; i < rings.length - 1; i++) {
+    const f0 = rings[i], f1 = rings[i + 1];
+    const a = trunkPointAt(rec, f0), b = trunkPointAt(rec, f1);
     let r0 = trunkRadiusAt(rec, f0), r1 = trunkRadiusAt(rec, f1);
     // ROUND 15: the flare is bigger AND much shorter (see the curve in segmentGeometry),
     // so the base spreads and the shaft above it does not.
@@ -1243,9 +1259,9 @@ function buildTemplateGeometry(rec, lod, seed) {
     // you can walk right up to is the whole point of item 11.
     if (flare) r0 /= 1 + rough;
     parts.push(segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
-      r0, r1, i === reaches.length - 1 ? Math.max(3, radial - 1) : radial,
+      r0, r1, i === rings.length - 2 ? Math.max(3, radial - 1) : radial,
       rec.bark, lerp(0, 0.10, f0), lerp(0.04, 0.18, f1), {
-        axial: lod === 0 && i === 0 ? 2 : 1,
+        axial: 1,
         rough,
         flare, kind: rec.kind, seed: seed + rec.barkSeed, part: i,
       }));
@@ -1311,72 +1327,95 @@ function buildTemplateGeometry(rec, lod, seed) {
     // Conifer limbs are already built by coniferCrownGeometry. The legacy recipe
     // left thick bare rods through those crowns, often ending beyond any foliage.
     if (rec.kind === 'conifer') continue;
-    if (lod > 0 && (rec.kind === 'snag' ? (i & 1) : (i % 3) !== 0)) continue;
+    if (lod > 0 && rec.kind === 'snag' && (i & 1)) continue;
     const anchor = trunkPointAt(rec, br.f);
     const ay = anchor.y;
     const ax = anchor.x, az = anchor.z;
-    const bx = ax + Math.cos(br.ang) * br.reach;
+    const ca = Math.cos(br.ang), sa = Math.sin(br.ang);
+    const bend = (hashI(i, 311, seed) - 0.5) * br.reach * 0.34;
+    const mx = ax + ca * br.reach * 0.48 - sa * bend;
+    const my = ay + br.up * br.reach * 0.64 + br.reach * 0.10;
+    const mz = az + sa * br.reach * 0.48 + ca * bend;
+    const bx = ax + ca * br.reach - sa * bend * 0.55;
     const by = ay + br.up * br.reach;
-    const bz = az + Math.sin(br.ang) * br.reach;
-    parts.push(segmentGeometry(ax, ay, az, bx, by, bz, br.r, br.r * 0.45,
-      Math.max(3, radial - 2), rec.bark, 0.18, 0.50,
-      { rough: 0.045, kind: rec.kind, seed: seed + 401, part: i }));
-    // ROUND 15, item 10: "branches that break down rather than ending in rounded masses".
-    // Every branch was one straight segment from trunk to tip. One fork off each of them at
-    // LOD0, anchored at 0.55 of the primary's reach and turning away and up, is six
-    // triangles and it is the difference between a spoke and a limb. LOD1 is untouched.
+    const bz = az + sa * br.reach + ca * bend * 0.55;
+    const limbRadius = Math.min(br.r, trunkRadiusAt(rec, br.f) * 0.62);
+    const limbSides = lod === 0 && rec.kind !== 'snag' ? 4 : 3;
+    // Rising shoulders, a lateral bend and a fine outer twig replace straight
+    // spokes. Both LODs keep the scaffold; only the cross section is simplified.
+    parts.push(segmentGeometry(ax, ay, az, mx, my, mz, limbRadius, limbRadius * 0.48,
+      limbSides, rec.bark, 0.18, 0.36,
+      { rough: 0.055, kind: rec.kind, seed: seed + 401, part: i }));
+    parts.push(segmentGeometry(mx, my, mz, bx, by, bz, limbRadius * 0.48, limbRadius * 0.055,
+      limbSides, rec.bark, 0.36, 0.62,
+      { rough: 0.045, kind: rec.kind, seed: seed + 409, part: i }));
+    const fa = br.ang + ((i & 1) ? 0.70 : -0.78);
+    const fr = br.reach * (0.44 + hashI(i, 317, seed) * 0.12);
+    const fx = mx + Math.cos(fa) * fr;
+    const fy = my + (br.up + 0.20) * fr;
+    const fz = mz + Math.sin(fa) * fr;
     if (lod === 0) {
-      const fa = br.ang + ((i & 1) ? 0.74 : -0.68);
-      const fAt = 0.55, fr = br.reach * 0.46;
-      const fx = ax + Math.cos(br.ang) * br.reach * fAt;
-      const fy = ay + br.up * br.reach * fAt;
-      const fz = az + Math.sin(br.ang) * br.reach * fAt;
-      parts.push(segmentGeometry(fx, fy, fz,
-        fx + Math.cos(fa) * fr, fy + (br.up + 0.30) * fr, fz + Math.sin(fa) * fr,
-        br.r * 0.52, br.r * 0.16, 3, rec.bark, 0.30, 0.62,
+      const qx = lerp(mx, fx, 0.5), qz = lerp(mz, fz, 0.5);
+      const qy = lerp(my, fy, 0.5) + fr * 0.11;
+      parts.push(segmentGeometry(mx, my, mz, qx, qy, qz,
+        limbRadius * 0.42, limbRadius * 0.19, 3, rec.bark, 0.34, 0.50,
         { rough: 0.04, kind: rec.kind, seed: seed + 613, part: 20 + i }));
+      parts.push(segmentGeometry(qx, qy, qz, fx, fy, fz,
+        limbRadius * 0.19, limbRadius * 0.035, 3, rec.bark, 0.50, 0.72,
+        { rough: 0.03, kind: rec.kind, seed: seed + 619, part: 20 + i }));
     }
-    const puffMin = rec.kind === 'conifer' ? 0.45 : 0.5;
-    if (rec.blobsOnBranch && br.f >= puffMin && lod === 0) {
-      // A three-plane spray follows the fork's bearing and leaves gaps through
-      // the limb instead of ending it in a solid low-poly ball.
-      const conifer = rec.kind === 'conifer';
-      parts.push(foliageSprayGeometry(bx, by, bz, br.reach * (conifer ? 0.24 : 0.48), rec.leaf,
-        0.86 + (i % 3) * 0.09, 0.70, conifer ? 0.55 : 0.92, seed + i * 13,
-        br.ang, conifer, lod, rec.kind === 'birch' ? 2 : 3));
+    if (rec.kind !== 'snag') {
+      const cell = rec.kind === 'birch' ? 2 : 3;
+      const tint = 0.86 + (i % 3) * 0.09;
+      if (lod === 0) {
+        // Overlapping sprays start at the shoulder and continue through both
+        // forks. An isolated ball only at the tip leaves an artificial bare rod.
+        parts.push(foliageSprayGeometry(mx, my, mz, br.reach * 0.35, rec.leaf,
+          tint * 0.90, 0.48, 0.90, seed + i * 13 + 3, br.ang, false, lod, cell, 8));
+        parts.push(foliageSprayGeometry(lerp(mx, bx, 0.78), lerp(my, by, 0.78), lerp(mz, bz, 0.78),
+          br.reach * 0.37, rec.leaf, tint, 0.70, 0.90, seed + i * 13 + 7, br.ang, false, lod, cell, 8));
+        parts.push(foliageSprayGeometry(fx, fy, fz, br.reach * 0.31, rec.leaf,
+          tint * 1.06, 0.72, 0.86, seed + i * 13 + 11, fa, false, lod, cell, 6));
+      } else {
+        parts.push(foliageSprayGeometry(lerp(mx, bx, 0.50), lerp(my, by, 0.50), lerp(mz, bz, 0.50),
+          br.reach * 0.48, rec.leaf, tint, 0.66, 0.98, seed + i * 13,
+          br.ang, false, lod, cell, 4));
+      }
     }
   }
 
   if (rec.kind === 'conifer') parts.push(coniferCrownGeometry(rec, lod, seed));
   for (let i = 0; rec.kind !== 'conifer' && i < rec.canopy.length; i++) {
     const cn = rec.canopy[i];
-    // thin the crown at LOD1: a lobed tier keeps its first lobe, an old-style crown keeps 2 in 3
-    if (lod > 0) {
-      if (cn.lobe !== undefined) { if (cn.lobe > 0) continue; }
-      else if (rec.canopy.length > 3 && (i % 3) === 1) continue;
-    }
+    // Preserve every crown lobe in the mid silhouette. Reducing cards within
+    // each lobe retains the tree's envelope instead of losing two thirds of it.
+    const cy = cn.y - tH * (rec.kind === 'birch' ? 0.055 : 0.075);
     // A crown belongs to a limb. The old lobes could be metres from the nearest
     // branch; wind made those unsupported balls look like floating objects.
     if (lod === 0) {
-      const anchor = trunkPointAt(rec, Math.min(0.96, cn.y / tH - 0.13));
-      parts.push(segmentGeometry(anchor.x, anchor.y, anchor.z, cn.x, cn.y, cn.z,
-        tR * 0.18, tR * 0.035, 3, rec.bark, 0.30, cn.wind * 0.8));
+      const anchor = trunkPointAt(rec, Math.min(0.93, cy / tH - 0.14));
+      const mx = lerp(anchor.x, cn.x, 0.45), mz = lerp(anchor.z, cn.z, 0.45);
+      const my = lerp(anchor.y, cy, 0.65);
+      const radius = Math.min(tR * 0.17, trunkRadiusAt(rec, anchor.y / tH) * 0.48);
+      parts.push(segmentGeometry(anchor.x, anchor.y, anchor.z, mx, my, mz,
+        radius, radius * 0.42, 3, rec.bark, 0.30, cn.wind * 0.5));
+      parts.push(segmentGeometry(mx, my, mz, cn.x, cy, cn.z,
+        radius * 0.42, radius * 0.07, 3, rec.bark, cn.wind * 0.5, cn.wind * 0.8));
     }
-    parts.push(foliageSprayGeometry(cn.x, cn.y, cn.z, cn.r * 1.10, rec.leaf,
-      cn.tint, cn.wind, cn.squash, seed + i * 29, cn.turn, false, lod, rec.kind === 'birch' ? 2 : 3));
+    parts.push(foliageSprayGeometry(cn.x, cy, cn.z, cn.r * 1.10, rec.leaf,
+      cn.tint, cn.wind, cn.squash, seed + i * 29, cn.turn, false, lod,
+      rec.kind === 'birch' ? 2 : 3, lod === 0 ? 17 : 5));
   }
-  // ROUND 15, item 11: "convincing trunk bases, roots connecting trees to ground". Three
-  // spurs leaving the base and running out and DOWN past y = 0, so the 0.25 m instance sink
-  // buries their tips whatever the terrain does underneath. Three radial segments each: six
-  // triangles a spur, eighteen a template, and only at LOD0 — this is a thing you see from
-  // two metres or not at all.
+  // Four short, uneven buttresses sink into the ground. Their tips stay inside
+  // the old three-spur footprint; they add no root colliders or path obstacles.
   if (lod === 0) {
-    for (let i = 0; i < 3; i++) {
-      const a = rec.leanDir + 0.7 + i * (TAU / 3) + (rec.barkSeed % 9) * 0.09;
+    for (let i = 0; i < 4; i++) {
+      const a = rec.leanDir + 0.7 + i * (TAU / 4) + (hashI(i, 337, seed) - 0.5) * 0.60;
+      const reach = tR * (1.25 + hashI(i, 347, seed) * 0.40);
       parts.push(segmentGeometry(
-        Math.cos(a) * tR * 0.20, tR * 0.42, Math.sin(a) * tR * 0.20,
-        Math.cos(a) * tR * 1.85, -0.34, Math.sin(a) * tR * 1.85,
-        tR * 0.34, tR * 0.07, 3, rec.bark, 0, 0.02,
+        Math.cos(a) * tR * 0.20, tR * (0.62 + hashI(i, 353, seed) * 0.22), Math.sin(a) * tR * 0.20,
+        Math.cos(a) * reach, -0.34, Math.sin(a) * reach,
+        tR * 0.31, tR * 0.04, 3, rec.bark, 0, 0.02,
         { rough: 0.06, kind: rec.kind, seed: seed + 509, part: 40 + i }));
     }
   }

@@ -767,8 +767,8 @@ function makeTexture(style, asHeight) {
   return textureFromData(style, asHeight, data);
 }
 
-function textureFromData(style, asHeight, data) {
-  const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat, THREE.UnsignedByteType);
+function textureFromData(style, asHeight, data, size = SIZE) {
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
   tex.name = (asHeight ? 'place-bump-' : 'place-surface-') + style;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.LinearFilter;
@@ -780,6 +780,29 @@ function textureFromData(style, asHeight, data) {
   tex.colorSpace = THREE.NoColorSpace;
   tex.needsUpdate = true;
   return tex;
+}
+
+// Service hardware is rolled or forged steel, not corrugated sheet. A small
+// neutral pair preserves authored paint colors and supplies shallow pits plus
+// oxidized roughness. It shares the existing mapped place/weather program.
+export function createSmoothSteelSurface() {
+  const size = 128, color = new Uint8Array(size * size * 4), physical = new Uint8Array(color.length);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const p = (y * size + x) * 4;
+    const oxide = noise(x * 4, y * 4, 9, 9, 9041);
+    const grain = hash2(x, y, 9049), pit = Math.max(0, grain - .91) / .09;
+    const tone = Math.round(222 - oxide * 12 - pit * 5);
+    color[p] = tone; color[p+1] = tone; color[p+2] = tone; color[p+3] = 255;
+    physical[p] = Math.round(184 + (grain - .5) * 3 - pit * 5);
+    physical[p+1] = Math.round((.60 + oxide * .16 + pit * .06) * 255);
+    physical[p+2] = Math.round((1 - pit * .055) * 255);
+    physical[p+3] = Math.round((.42 - oxide * .16) * 255);
+  }
+  const albedo = textureFromData('metal', false, color, size);
+  const response = textureFromData('metal', true, physical, size);
+  albedo.userData.surface = 'smoothSteel';
+  response.userData.physicalChannels = 'height/roughness/cavity/metalness';
+  return { albedo, physical: response, dispose() { albedo.dispose(); response.dispose(); } };
 }
 
 // The height sampler only reads R. Its other channels now carry the material's

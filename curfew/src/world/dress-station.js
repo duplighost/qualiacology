@@ -403,7 +403,7 @@ function palletStack(k, api) {
  * crates.  The open -Z face points at the same arrival side as the shop doorway and old
  * roadside sign.  Nothing in here is a fake completion fixture or a promoted shed.
  */
-function serviceBay(k, api) {
+function serviceBay(k, api, smoothSteel) {
   const x = -23.0, z = -0.2, w = 10.2, d = 9.6, h = 4.65;
   const hw = w * 0.5, hd = d * 0.5, y = api.padY;
   const wall = D.enamel, rib = C.rust, block = [0.102, 0.096, 0.086];
@@ -454,11 +454,11 @@ function serviceBay(k, api) {
       z + (i % 2 ? 0.10 : -0.10), i % 2 ? D.conduit : C.rust, 0, 0, -sx * Math.atan2(1.75, (w + 0.75) / 2));
   }
   for (const vx of [x - 2.6, x + 2.15]) {
-    k.cyl(0.18, 0.18, 1.25, 10, vx, y + h + 1.70, z + 1.2, D.conduit);
-    k.tube(0.48, 0.34, 0.22, 12, vx, y + h + 2.30, z + 1.2, C.rust);
+    smoothSteel.cyl(0.18, 0.18, 1.25, 10, vx, y + h + 1.70, z + 1.2, D.conduit);
+    smoothSteel.tube(0.48, 0.34, 0.22, 12, vx, y + h + 2.30, z + 1.2, C.rust);
     for (let i = 0; i < 6; i++) {
       const a = i * Math.PI / 3;
-      k.box(0.07, 0.03, 0.64, vx + Math.sin(a) * 0.27, y + h + 2.42,
+      smoothSteel.box(0.07, 0.03, 0.64, vx + Math.sin(a) * 0.27, y + h + 2.42,
         z + 1.2 + Math.cos(a) * 0.27, D.conduit, -a);
     }
   }
@@ -466,8 +466,8 @@ function serviceBay(k, api) {
   // The shutter housing it rolls up into, and a battered frame. THE SHUTTER ITSELF IS NOT
   // HERE: world/garage-opening.js owns it, because on a fresh night it is CLOSED and rolls up
   // once, and a thing that moves cannot live in a merged static mesh.
-  k.box(w + 0.25, 0.36, 0.42, x, y + h - 0.12, z - hd, C.rust);
-  for (const sx of [-1, 1]) k.box(0.42, h, 0.48, x + sx * hw, y + h * 0.5, z - hd, C.rust);
+  smoothSteel.box(w + 0.25, 0.36, 0.42, x, y + h - 0.12, z - hd, C.rust);
+  for (const sx of [-1, 1]) smoothSteel.box(0.42, h, 0.48, x + sx * hw, y + h * 0.5, z - hd, C.rust);
 
   // THE ELEVEN REWIRE. The two-post lift, the half-repaired estate car, the loose wheel and
   // their three colliders are GONE: this is where the real car stands now, on the first night
@@ -477,44 +477,46 @@ function serviceBay(k, api) {
   // What replaces them is the furniture of a night shift: a floor drain, a wall clock that
   // can be redrawn, a bench radio with one warm pip, a work-lamp housing over the bay, and
   // a rack for the two cans of gas.
-  k.cyl(0.26, 0.26, 0.05, 12, x, y + 0.025, z - 1.1, D.conduit);
-  for (let i = 0; i < 5; i++) k.box(0.42, 0.03, 0.035, x, y + 0.055, z - 1.28 + i * 0.09, C.rust);
+  smoothSteel.cyl(0.26, 0.26, 0.05, 12, x, y + 0.025, z - 1.1, D.conduit);
+  for (let i = 0; i < 5; i++) smoothSteel.box(0.42, 0.03, 0.035, x, y + 0.055, z - 1.28 + i * 0.09, C.rust);
   // the work-lamp housing, over the middle of the bay. The LIGHT is a borrowed rover, never
   // a constructed one; this is the shade it hangs in.
-  k.cyl(0.015, 0.015, 0.62, 6, x, y + h - 0.32, z, D.conduit);
-  k.tube(0.42, 0.26, 0.24, 12, x, y + h - 0.70, z, C.rust);
+  smoothSteel.cyl(0.015, 0.015, 0.62, 6, x, y + h - 0.32, z, D.conduit);
+  smoothSteel.tube(0.42, 0.26, 0.24, 12, x, y + h - 0.70, z, C.rust);
   k.box(0.30, 0.09, 0.30, x, y + h - 0.84, z, D.liningUp);
   // the bench radio, on the workbench at the back wall
-  k.box(0.34, 0.16, 0.12, x - 3.60, y + 0.94, z + hd - 0.75, D.conduit);
-  k.box(0.22, 0.045, 0.02, x - 3.60, y + 0.96, z + hd - 0.82, C.rust);
+  smoothSteel.box(0.34, 0.16, 0.12, x - 3.60, y + 0.94, z + hd - 0.75, D.conduit);
+  smoothSteel.box(0.22, 0.045, 0.02, x - 3.60, y + 0.96, z + hd - 0.82, C.rust);
   // the can rack, back-right corner, where world/gas.js puts two cans
   const canX = x + 3.40, canZ = z + hd - 1.05;
-  for (const sx of [-0.55, 0.55]) k.box(0.07, 0.72, 0.07, canX + sx, y + 0.36, canZ, C.rust);
+  for (const sx of [-0.55, 0.55]) smoothSteel.box(0.07, 0.72, 0.07, canX + sx, y + 0.36, canZ, C.rust);
   k.box(1.24, 0.06, 0.40, canX, y + 0.06, canZ, D.timber);
-  k.box(1.24, 0.06, 0.08, canX, y + 0.70, canZ, C.rust);
+  smoothSteel.box(1.24, 0.06, 0.08, canX, y + 0.70, canZ, C.rust);
   api.emit({ kind: 'obb', x: canX, z: canZ, halfX: 0.64, halfZ: 0.24, yaw: 0,
     y0: y - 0.2, y1: y + 0.10, tag: 'wood', standable: true });
 
   // Workbench, pegboard and individually silhouetted tools on the back wall.
   k.box(4.30, 0.86, 0.78, x - 2.45, y + 0.43, z + hd - 0.75, D.timber);
   k.box(4.45, 1.48, 0.11, x - 2.45, y + 1.62, z + hd - 0.31, D.liningUp);
-  for (let i = 0; i < 34; i++) k.cyl(0.018, 0.018, 0.045, 5,
+  for (let i = 0; i < 34; i++) smoothSteel.cyl(0.018, 0.018, 0.045, 5,
     x - 4.35 + (i % 9) * 0.47, y + 1.02 + ((i / 9) | 0) * 0.36,
     z + hd - 0.23, D.conduit, 0, Math.PI * 0.5, 0);
   const tools = [[-3.8, 1.65, 0.62, 0.08], [-3.0, 1.78, 0.48, -0.18], [-2.0, 1.52, 0.72, 0.20], [-1.2, 1.72, 0.54, -0.05]];
   for (const [tx, ty, len, lean] of tools) {
-    k.box(0.07, len, 0.05, x + tx, y + ty, z + hd - 0.20, C.rust, 0, 0, lean);
-    k.box(0.30, 0.10, 0.07, x + tx + Math.sin(lean) * len * 0.42,
+    smoothSteel.box(0.07, len, 0.05, x + tx, y + ty, z + hd - 0.20, C.rust, 0, 0, lean);
+    smoothSteel.box(0.30, 0.10, 0.07, x + tx + Math.sin(lean) * len * 0.42,
       y + ty + Math.cos(lean) * len * 0.42, z + hd - 0.20, D.conduit, 0, 0, lean);
   }
   api.emit({ kind: 'obb', x: x - 2.45, z: z + hd - 0.75, halfX: 2.20, halfZ: 0.42,
     yaw: 0, y0: y - 0.2, y1: y + 0.9, tag: 'wood', standable: true });
 
+  serviceBayConstruction(smoothSteel, x, y, z, hw, hd, h);
+
   // Tyre rack and oil drums make the outside flank dense without blocking the refuge route.
   const rackX = x - hw - 1.25, rackZ = z + 0.9;
-  for (const sx of [-0.52, 0.52]) k.box(0.09, 2.05, 0.09, rackX + sx, y + 1.02, rackZ, C.rust);
+  for (const sx of [-0.52, 0.52]) smoothSteel.box(0.09, 2.05, 0.09, rackX + sx, y + 1.02, rackZ, C.rust);
   for (const yy of [0.48, 1.25, 1.92]) {
-    k.box(1.25, 0.08, 0.08, rackX, y + yy, rackZ, C.rust);
+    smoothSteel.box(1.25, 0.08, 0.08, rackX, y + yy, rackZ, C.rust);
     for (const lx of [-0.36, 0, 0.36]) k.tube(0.28, 0.17, 0.15, 10,
       rackX + lx, y + yy + 0.18, rackZ, D.tyre, 0, Math.PI * 0.5, 0);
   }
@@ -522,11 +524,153 @@ function serviceBay(k, api) {
     y0: y - 0.2, y1: y + 2.15, tag: 'metal', climbable: false });
   for (let i = 0; i < 4; i++) {
     const dx = x - hw - 1.05 + (i & 1) * 0.82, dz = z - 2.5 - ((i / 2) | 0) * 0.78;
-    k.cyl(0.31, 0.31, 0.82, 10, dx, y + 0.41, dz, i % 2 ? C.rust : D.enamel);
-    k.cyl(0.25, 0.25, 0.025, 10, dx, y + 0.83, dz, D.conduit);
+    smoothSteel.cyl(0.31, 0.31, 0.82, 10, dx, y + 0.41, dz, i % 2 ? C.rust : D.enamel);
+    smoothSteel.cyl(0.25, 0.25, 0.025, 10, dx, y + 0.83, dz, D.conduit);
     api.emit({ kind: 'circle', x: dx, z: dz, r: 0.33, y0: y - 0.2, y1: y + 0.84,
       tag: 'metal', standable: true });
   }
+}
+
+/** Workshop fittings stay on the existing walls, roof and bench. Every part joins
+ * the smooth-steel batch; sheet cladding keeps its separate corrugated scan. */
+function serviceBayConstruction(k, x, y, z, hw, hd, h) {
+  const steel = [0.078, 0.084, 0.084], edge = [0.124, 0.130, 0.126];
+  const enamel = [0.085, 0.105, 0.097], recess = [0.027, 0.032, 0.032];
+  const worn = [0.154, 0.150, 0.134];
+  const line = (a, b, width, depth, col) => {
+    const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b);
+    const delta = end.sub(start), length = delta.length();
+    const geo = new THREE.BoxGeometry(width, length, depth);
+    geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.divideScalar(length)));
+    geo.translate(start.x + delta.x * length / 2, start.y + delta.y * length / 2, start.z + delta.z * length / 2);
+    k.push(geo, col);
+  };
+  const sideBox = (side, along, high, wide, tall, deep, inset, col) =>
+    k.box(deep, tall, wide, x + side * (hw - inset), y + high, z + along, col);
+
+  // Rolled channels carry the sheet wall: broad webs and narrow returned edges,
+  // all inside the existing 24 cm wall collider. The clock sits between columns.
+  for (const side of [-1, 1]) {
+    for (const along of [-hd + .30, -2.85, 2.85, hd - .30]) {
+      sideBox(side, along, (h + .73) / 2, .20, h - .73, .048, .207, steel);
+      for (const lip of [-.102, .102]) sideBox(side, along + lip, (h + .73) / 2, .025, h - .73, .085, .197, edge);
+      for (const high of [.92, 3.37, h - .27]) {
+        sideBox(side, along, high, .28, .19, .025, .225, steel);
+        for (const dz of [-.085, .085]) k.cyl(.023, .023, .014, 6,
+          x + side * (hw - .244), y + high, z + along + dz, edge, 0, 0, Math.PI / 2);
+      }
+    }
+    for (const high of [.76, 3.37, h - .13]) {
+      sideBox(side, 0, high, hd * 2 - .32, .11, .054, .21, steel);
+      sideBox(side, 0, high + .058, hd * 2 - .32, .019, .078, .20, edge);
+    }
+    // Raised seams turn the corrugated field into bolted sheet bays.
+    for (const along of [-3.85, -1.72, .41, 2.54]) {
+      sideBox(side, along, 2.0, .026, 2.40, .035, .231, D.conduit);
+      for (const high of [1.02, 3.04]) k.cyl(.013, .013, .011, 6,
+        x + side * (hw - .253), y + high, z + along, steel, 0, 0, Math.PI / 2);
+    }
+  }
+
+  // Two exposed roof trusses make the ceiling a supported volume. The lowest
+  // member is above 4.3 m, leaving the lamp, car, and player headroom clear.
+  for (const along of [-2.95, 2.70]) {
+    k.box(hw * 2 - .32, .17, .14, x, y + h - .23, z + along, steel);
+    k.box(hw * 2 - .28, .035, .22, x, y + h - .32, z + along, edge);
+    const apex = [x, y + h + 1.56, z + along];
+    for (const side of [-1, 1]) {
+      const foot = [x + side * (hw - .20), y + h - .11, z + along];
+      line(foot, apex, .13, .16, steel);
+      line([x + side * 2.55, y + h - .17, z + along], apex, .068, .085, D.conduit);
+      k.box(.32, .36, .025, foot[0] - side * .04, foot[1] - .12, foot[2] - .095, edge);
+    }
+    k.box(.095, 1.69, .105, x, y + h + .60, z + along, steel);
+    k.box(.38, .25, .025, x, y + h - .19, z + along - .12, edge);
+  }
+
+  // A recessed roller cover and paired guide cheeks give the existing shutter
+  // a machine housing. Nothing enters its ten-metre opening or moving slats.
+  k.box(hw * 2 - .10, .28, .12, x, y + h - .12, z - hd + .255, recess);
+  k.box(hw * 2 + .20, .048, .17, x, y + h + .06, z - hd + .30, steel);
+  k.box(hw * 2 + .16, .032, .12, x, y + h - .28, z - hd + .29, edge);
+  for (const side of [-1, 1]) {
+    k.box(.11, h - .18, .10, x + side * (hw - .025), y + h / 2, z - hd + .27, recess);
+    k.box(.06, h - .20, .12, x + side * (hw + .055), y + h / 2, z - hd + .34, steel);
+    for (const high of [.38, 1.68, 3.05, 4.15]) {
+      k.box(.25, .13, .07, x + side * hw, y + high, z - hd + .305, steel);
+      k.cyl(.026, .026, .022, 6, x + side * (hw + .07), y + high, z - hd + .36, edge, 0, Math.PI / 2);
+    }
+  }
+
+  // Surface conduit links the work corner to the overhead supply. It passes
+  // above the clock and terminates in a plain closed enclosure, without a prompt.
+  const wallX = x - hw + .275;
+  k.cyl(.023, .023, hd * 2 - .8, 8, wallX, y + 3.08, z, edge, 0, Math.PI / 2);
+  for (const along of [-3.72, -2.1, -.45, 1.20, 2.85, 4.05]) {
+    sideBox(-1, along, 3.08, .10, .12, .02, .25, steel);
+    sideBox(-1, along, 3.08, .035, .078, .063, .279, D.conduit);
+  }
+  sideBox(-1, 2.65, 3.08, .24, .23, .075, .28, steel);
+  sideBox(-1, 2.65, 3.08, .185, .175, .028, .329, enamel);
+  k.cyl(.023, .023, 1.12, 8, wallX, y + 2.38, z + 2.65, edge);
+  sideBox(-1, 2.65, 1.72, .32, .38, .10, .28, steel);
+  sideBox(-1, 2.65, 1.72, .26, .31, .028, .343, enamel);
+  for (const high of [1.60, 1.84]) sideBox(-1, 2.65, high, .11, .016, .013, .365, recess);
+
+  // The clock's face stays untouched at 30 cm off the wall; a shallow housing
+  // and one circular rim give its existing dial a physical edge without covering it.
+  k.cyl(.287, .287, .054, 32, x - hw + .267, y + 2.45, z - 1.20, steel, 0, 0, Math.PI / 2);
+  k.at(new THREE.TorusGeometry(.287, .012, 6, 32), worn,
+    x - hw + .306, y + 2.45, z - 1.20, Math.PI / 2);
+
+  // The small service-tool rail is beside the clock, never behind its dial.
+  // Dark backing, a real lip and three unequal forged spanners keep the shape
+  // legible under the existing lamp without brightly coloured workshop clutter.
+  sideBox(-1, .72, 1.88, 1.64, .91, .04, .264, recess);
+  for (const high of [1.405, 2.355]) sideBox(-1, .72, high, 1.73, .05, .047, .292, steel);
+  for (const along of [-.13, 1.57]) sideBox(-1, along, 1.88, .045, .93, .05, .292, steel);
+  sideBox(-1, .72, 2.18, 1.54, .07, .035, .309, edge);
+  for (const [along, length, radius] of [[.12, .39, .056], [.51, .49, .067], [.93, .57, .077]]) {
+    const top = 2.14, bottom = top - length;
+    k.box(.028, length - .08, .046, x - hw + .337, y + (top + bottom) / 2, z + along, edge);
+    k.at(new THREE.TorusGeometry(radius, .016, 5, 14, Math.PI * 1.48), edge,
+      x - hw + .337, y + top, z + along, Math.PI / 2, 0, -.74);
+    k.at(new THREE.TorusGeometry(radius * .72, .016, 5, 14), steel,
+      x - hw + .337, y + bottom, z + along, Math.PI / 2);
+    k.cyl(.012, .012, .063, 6, x - hw + .32, y + top + .024, z + along, worn, 0, 0, Math.PI / 2);
+  }
+  // One screwdriver and its steel hanger occupy the narrow end of the rail.
+  k.cyl(.032, .026, .17, 8, x - hw + .339, y + 2.04, z + 1.29, D.timber);
+  k.cyl(.011, .011, .20, 6, x - hw + .339, y + 1.855, z + 1.29, edge);
+  sideBox(-1, 1.29, 1.744, .024, .03, .014, .339, worn);
+
+  // Existing bench: a rolled worktop, inset drawer units and worn pull rails.
+  // Cabinet fronts stay within a few centimetres of the original solid block.
+  const benchZ = z + hd - .75;
+  k.box(4.34, .044, .79, x - 2.45, y + .866, benchZ, steel);
+  k.box(4.31, .065, .024, x - 2.45, y + .825, benchZ - .393, edge);
+  for (const offset of [-3.61, -1.30]) {
+    k.box(1.81, .70, .018, x + offset, y + .425, benchZ - .399, recess);
+    for (let row = 0; row < 3; row++) {
+      const high = .20 + row * .223;
+      k.box(1.69, .196, .024, x + offset, y + high, benchZ - .416, enamel);
+      k.box(1.28, .022, .038, x + offset, y + high + .058, benchZ - .443, steel);
+      k.box(1.13, .012, .014, x + offset, y + high + .053, benchZ - .468, worn);
+    }
+  }
+  for (const high of [.88, 2.37]) k.box(4.50, .053, .075, x - 2.45, y + high, z + hd - .22, steel);
+  for (const dx of [-4.69, -.21]) k.box(.052, 1.49, .075, x + dx, y + 1.62, z + hd - .22, steel);
+  // A compact vise sits entirely over the existing bench; the radio remains clear.
+  const viceX = x - .72, viceZ = benchZ - .04;
+  k.cyl(.16, .17, .066, 12, viceX, y + .916, viceZ, steel);
+  k.box(.27, .18, .24, viceX, y + 1.025, viceZ, enamel);
+  for (const dz of [-.126, .116]) {
+    k.box(.32, .09, .068, viceX, y + 1.136, viceZ + dz, steel);
+    k.box(.29, .024, .014, viceX, y + 1.163, viceZ + dz + (dz < 0 ? .037 : -.037), worn);
+  }
+  k.cyl(.030, .030, .33, 8, viceX, y + 1.00, viceZ - .17, edge, 0, Math.PI / 2);
+  k.cyl(.013, .013, .25, 8, viceX, y + 1.00, viceZ - .34, steel, 0, 0, .16);
+  for (const high of [-.121, .121]) k.cyl(.024, .024, .028, 8, viceX + Math.sin(.16) * high, y + 1 + Math.cos(.16) * high, viceZ - .34, edge);
 }
 
 /**
@@ -1179,6 +1323,7 @@ export const DRESS = {
     void out;
     const k = kits();
     const s = k.solid;
+    const smoothSteel = kits().solid;
     apronEdge(s, api);
     kerbLine(s, api);
     canopyDetail(s, api, k.glow);
@@ -1190,13 +1335,13 @@ export const DRESS = {
     hoseReel(s, api);
     wheelieBins(s, api);
     palletStack(s, api);
-    serviceBay(s, api);
+    serviceBay(s, api, smoothSteel);
     roadsideCrown(s, api);
     fallenBoard(s, api);
     cladPumps(s, api);
     eastWall(s, api);
     shopInterior(s, api);
-    return { solid: s.build(), glow: k.glow.empty() ? null : k.glow.build() };
+    return { solid: s.build(), smoothSteel: smoothSteel.build(), glow: k.glow.empty() ? null : k.glow.build() };
   },
 };
 

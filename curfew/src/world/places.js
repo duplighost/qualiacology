@@ -64,7 +64,7 @@ import {
 import { BUILDERS, MINOR_BUILDERS, apron, majorApproach, GLOW } from './sites.js';
 import { SNOW_FIELD_GLSL } from './snow-field.js';
 import {
-  createPlaceSurfaceLibrary, disposePlaceSurfaceLibrary, placeSurfaceFor, placeBumpFor, projectPlaceSurfaceUVs, patchPlaceSurfaceLighting,
+  createPlaceSurfaceLibrary, disposePlaceSurfaceLibrary, createSmoothSteelSurface, placeSurfaceFor, placeBumpFor, projectPlaceSurfaceUVs, patchPlaceSurfaceLighting,
 } from './place-surfaces.js';
 // Round 7 and Round 9 dress modules add to the county without editing this file. Each exports
 // a plain map; this file only looks things up in them, and each module owns its own geometry.
@@ -1263,6 +1263,7 @@ export class Places {
     this._built = true;
 
     this.surfaceTextures = createPlaceSurfaceLibrary();
+    this.smoothSteelSurface = createSmoothSteelSurface();
     this.matBody = new THREE.MeshStandardMaterial({
       roughness:.86,metalness:.025,
       vertexColors: true, dithering: true,
@@ -1962,6 +1963,19 @@ export class Places {
       m.castShadow = true; m.receiveShadow = true;
       g.add(m);
     }
+    // Explicit rolled/forged hardware shares the body/weather program, with its
+    // own shallow steel response instead of the site's corrugated wall scan.
+    if (out.smoothSteel) {
+      projectPlaceSurfaceUVs(out.smoothSteel);
+      const steelMat = clonePlaceMaterial(this.matBody);
+      steelMat.map = this.smoothSteelSurface.albedo;
+      steelMat.bumpMap = this.smoothSteelSurface.physical;
+      steelMat.bumpScale = .007;
+      const steel = new THREE.Mesh(out.smoothSteel, steelMat);
+      steel.name = 'body-smooth-steel-' + d.id;
+      steel.castShadow = true; steel.receiveShadow = true;
+      g.add(steel);
+    }
     // r3 (manor lane): THE TIMBER CHANNEL. manor.js hands back its boards, joinery and
     // furniture on their own so they stop wearing the manor's brick-peel plaster map. A clone
     // of matBody with the barn's timber map: the same program, one more draw.
@@ -2022,6 +2036,7 @@ export class Places {
    */
   _dress(d, rec, api, out) {
     let solid = out.solid, glow = out.glow, people = out.people;
+    let smoothSteel = out.smoothSteel || null;
     // ROUND 19: the SECOND glow channel. `glow` is "your lamps", switched on by the claim
     // (see _applyState's windows loop); `glowLive` is somebody else's fire and burns from
     // the moment the chunk streams in. A market lantern, a cooking fire and a lit window in
@@ -2038,6 +2053,7 @@ export class Places {
       if (!ex) continue;
       if (ex.people) people = people ? mergeGeometries([people, ex.people], false) : ex.people;
       if (ex.solid) solid = solid ? mergeGeometries([solid, ex.solid], false) : ex.solid;
+      if (ex.smoothSteel) smoothSteel = smoothSteel ? mergeGeometries([smoothSteel, ex.smoothSteel], false) : ex.smoothSteel;
       if (ex.glow) glow = glow ? mergeGeometries([glow, ex.glow], false) : ex.glow;
       if (ex.glowLive) live = live ? mergeGeometries([live, ex.glowLive], false) : ex.glowLive;
       if (ex.glowColour && !out.glowColour) out.glowColour = ex.glowColour;
@@ -2057,6 +2073,7 @@ export class Places {
       if (ex2.glow) glow = glow ? mergeGeometries([glow, ex2.glow], false) : ex2.glow;
     }
     out.people = people;
+    if (smoothSteel !== out.smoothSteel) { out.smoothSteel = smoothSteel; if (smoothSteel) smoothSteel.computeBoundingSphere(); }
     if (solid !== out.solid) { out.solid = solid; if (solid) solid.computeBoundingSphere(); }
     if (glow !== out.glow) { out.glow = glow; if (glow) glow.computeBoundingSphere(); }
     if (live !== out.glowLive) { out.glowLive = live; if (live) live.computeBoundingSphere(); }
@@ -4167,6 +4184,8 @@ export class Places {
     if (this.matLand) this.matLand.dispose();
     disposePlaceSurfaceLibrary(this.surfaceTextures);
     this.surfaceTextures = null;
+    this.smoothSteelSurface?.dispose();
+    this.smoothSteelSurface = null;
     if (this.matGlow) this.matGlow.dispose();
     // No AudioContext to close: this system never opens one. See _drainWhispers.
   }

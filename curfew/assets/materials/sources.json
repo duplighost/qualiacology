@@ -4,6 +4,53 @@
   "retrieved": "2026-09-12",
   "materials": [
     {
+      "id": "forest_leaves_02",
+      "title": "Forest Leaves 02",
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "source": "https://polyhaven.com/a/forest_leaves_02",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "metadataSource": "https://api.polyhaven.com/info/forest_leaves_02",
+      "retrieved": "2026-09-20",
+      "sourceResolution": [
+        1024,
+        1024
+      ],
+      "bakedResolution": [
+        1024,
+        1024
+      ],
+      "physicalSizeMetres": [
+        3.0009725093841553,
+        3.0009801387786865
+      ],
+      "transform": "sRGB diffuse converted to linear with restrained overall color cast and 0.5 multiplier midpoint, flipped rows for DataTexture. Source 16-bit displacement reduced to 8-bit height and packed with roughness/AO. Two aligned world-space scan phases retain the measured 3.001 metre scale while breaking tile repetition. Relief filtered by pixel footprint.",
+      "sourceFiles": {
+        "forest_leaves_02_diffuse_1k.jpg": {
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_leaves_02/forest_leaves_02_diffuse_1k.jpg",
+          "bytes": 437891,
+          "sha256": "2bac85cdc76927fa7dc311037bbbc4dfa2633ea56eb0a24c9cabe163a68c9aa5"
+        },
+        "forest_leaves_02_disp_1k.png": {
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/forest_leaves_02/forest_leaves_02_disp_1k.png",
+          "bytes": 1706571,
+          "sha256": "c5d626de38deda9fcbdb00f53f1898698bef11d264b8a2bdeb4fdcd42d399e90"
+        },
+        "forest_leaves_02_rough_1k.jpg": {
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_leaves_02/forest_leaves_02_rough_1k.jpg",
+          "bytes": 192523,
+          "sha256": "3d2163acb9e22801caa4d34cb3e9bb443dfd0e6f2bebbd559c61e9b14f945dd4"
+        },
+        "forest_leaves_02_ao_1k.jpg": {
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_leaves_02/forest_leaves_02_ao_1k.jpg",
+          "bytes": 436343,
+          "sha256": "b11e01b3c5d1ca4e1d4770f7cde2849e60589e37719f8ea667f607c2a07445ed"
+        }
+      }
+    },
+    {
       "id": "Asphalt030",
       "title": "Asphalt 030",
       "authors": ["ambientCG"],
@@ -96,6 +143,19 @@
     }
   ],
   "generatedAssets": [
+    {
+      "file": "terrain-forest-v1.bin.gz",
+      "provenance": "CC0 Poly Haven Forest Leaves 02 by Rob Tuytel; original source map URLs and SHA-256 digests above.",
+      "source": "tools/bake-terrain-scan.py",
+      "regenerate": "py -3 tools/bake-terrain-scan.py",
+      "resolution": [
+        1024,
+        1024
+      ],
+      "encoding": "Gzip; TSCAN001 header, RGB linear albedo multiplier, RGB packed height/roughness/AO. Expanded into two shared RGBA textures at runtime, replacing the former Forest Ground 04 pair.",
+      "compressedBytes": 5744866,
+      "sha256": "cfbd58b6529c3ff186a7f370517a093fb662c32fae5664e54ec4656be68be760"
+    },
     {
       "file": "place-surfaces-v1.bin.gz",
       "provenance": "Original procedural timber, masonry and rock plus CC0 ambientCG CorrugatedSteel009 and Plaster007 scans. Per-source attribution, licenses and original file digests appear above.",
