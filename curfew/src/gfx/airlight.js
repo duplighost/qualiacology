@@ -196,6 +196,7 @@ const VERT = /* glsl */`
   varying vec3 vTone;
   varying vec3 vNrm;
   varying vec3 vView;
+  varying vec3 vWorld;
   void main() {
     vCore = aCore;
     vSoft = aSoft;
@@ -213,6 +214,7 @@ const VERT = /* glsl */`
       vTone *= instanceColor;
     #endif
     vec4 mv = modelViewMatrix * wp;
+    vWorld = (modelMatrix * wp).xyz;
     vView = -mv.xyz;
     vNrm = normalMatrix * nrm;
     gl_Position = projectionMatrix * mv;
@@ -223,11 +225,14 @@ const VERT = /* glsl */`
 // dimmed to nothing without being moved out of the frame. uGain is the master.
 const FRAG = /* glsl */`
   uniform float uGain;
+  uniform float uTime;
+  uniform sampler2D uCloudField;
   varying float vCore;
   varying float vSoft;
   varying vec3 vTone;
   varying vec3 vNrm;
   varying vec3 vView;
+  varying vec3 vWorld;
   void main() {
     float thick = 1.0;
     if (vSoft > 0.001) {
@@ -235,6 +240,15 @@ const FRAG = /* glsl */`
       thick = pow(clamp(ndv, 0.0, 1.0) + 1e-4, vSoft);
     }
     float a = vCore * thick * uGain;
+    // Only the long beam volumes catch slowly moving eddies. World coordinates keep
+    // the air in place as the torch sweeps through it; the beam never wears a texture.
+    if (vSoft > 0.5 && vSoft < 2.5) {
+      vec2 drift = vec2(uTime * 0.0016, -uTime * 0.0011);
+      float broad = texture2D(uCloudField, vWorld.xz * 0.028 + drift).g;
+      float fine = texture2D(uCloudField,
+        vWorld.xy * 0.063 + vec2(vWorld.z * 0.017, 0.0) - drift * 0.65).b;
+      a *= 0.62 + 0.76 * smoothstep(0.26, 0.74, broad * 0.70 + fine * 0.30);
+    }
     gl_FragColor = vec4(vTone * a, 1.0);
   }
 `;
@@ -330,6 +344,7 @@ export class AirLight {
     // Per-frame dynamic volumes, cleared at the top of every present().
     this._live = [];
     this._mist = 0;
+    this._time = 0;
     // Scratch. The hot path allocates nothing.
     this._m = new THREE.Matrix4();
     this._q = new THREE.Quaternion();
@@ -355,7 +370,11 @@ export class AirLight {
     if (!scene) throw new Error('airlight: no ctx.scene');
 
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { uGain: { value: GAIN } },
+      uniforms: {
+        uGain: { value: GAIN },
+        uTime: { value: 0 },
+        uCloudField: { value: this.ctx.systems?.get('sky')?.cloudTexture || null },
+      },
       vertexShader: VERT,
       fragmentShader: FRAG,
       transparent: true,
@@ -436,6 +455,7 @@ export class AirLight {
   /* --------------------------------------------------------------- step -- */
 
   step(dt) {
+    this._time += dt;
     // Sources fade in and out rather than pop. This is the only state the step owns.
     for (const s of this._src.values()) {
       const want = s.on > 0 ? 1 : 0;
@@ -585,6 +605,16 @@ export class AirLight {
         this._src.set(key, s);
       }
       s.x = this._v.x; s.y = this._v.y; s.z = this._v.z;
+      // The rendering light pool can fill otherwise idle seats from an authored
+      // building window. Its gameplay light handles and safety zones stay separate.
+      s.surfaceLight = /^(body-glow|land-glow)/.test(mesh.name || '') && r > 0.18 && r < 2.5;
+      s.lightRadius = r;
+      s.nx = 0; s.ny = 0; s.nz = 0;
+      const normals = geo.attributes.normal;
+      if (normals && k.pi >= 0) {
+        this._v2.fromBufferAttribute(normals, k.pi).transformDirection(mesh.matrixWorld);
+        s.nx = this._v2.x; s.ny = this._v2.y; s.nz = this._v2.z;
+      }
       s.r = clamp(r * HALO_MUL, HALO_MIN, HALO_MAX);
       s.cr = cr; s.cg = cg; s.cb = cb;
       s.on = on;
@@ -607,6 +637,7 @@ export class AirLight {
   present() {
     const live = this._live;
     if (!this.mat) { live.length = 0; return; }
+    this.mat.uniforms.uTime.value = this._time;
     const cam = this.ctx.camera;
     if (!cam) { live.length = 0; return; }
 

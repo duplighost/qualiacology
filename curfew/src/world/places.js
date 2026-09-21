@@ -64,7 +64,7 @@ import {
 import { BUILDERS, MINOR_BUILDERS, apron, majorApproach, GLOW } from './sites.js';
 import { SNOW_FIELD_GLSL } from './snow-field.js';
 import {
-  createPlaceSurfaceLibrary, disposePlaceSurfaceLibrary, placeSurfaceFor, placeBumpFor, projectPlaceSurfaceUVs,
+  createPlaceSurfaceLibrary, disposePlaceSurfaceLibrary, createSmoothSteelSurface, placeSurfaceFor, placeBumpFor, projectPlaceSurfaceUVs, patchPlaceSurfaceLighting,
 } from './place-surfaces.js';
 // Round 7 and Round 9 dress modules add to the county without editing this file. Each exports
 // a plain map; this file only looks things up in them, and each module owns its own geometry.
@@ -83,6 +83,7 @@ import { DRESS as DRESS_HOLDFAST } from './holdfast-dress.js';
 import { DRESS as DRESS_REFUGES } from './destination-refuges.js';
 import { DRESS as DRESS_ESTATES } from './estate-details.js';
 import { STAGED_BUILDERS } from './staged.js';
+import { installStationFloor } from './station-floor.js';
 import { SPECIES } from '../enemies/species.js';
 
 // ROUND 21: weather's snow colour, shared with chunks.js's ground so a yard and the field it
@@ -110,7 +111,7 @@ function _installPlaceSnow(mat, uni, cacheKey) {
 
     shader.vertexShader = shader.vertexShader.replace(
       '#include <common>',
-      '#include <common>\nvarying float vWxUp;\nvarying vec2 vWxPos;'
+      '#include <common>\nvarying float vWxUp;\nvarying vec2 vWxPos;\nvarying vec3 vPlaceWorld;\nvarying float vPlaceLocalY;'
     );
     shader.vertexShader = shader.vertexShader.replace(
       '#include <uv_vertex>',
@@ -120,7 +121,9 @@ function _installPlaceSnow(mat, uni, cacheKey) {
         // is cut into drift the SAME way and the seam between them is not a change of
         // weather. A place node carries its own position and yaw, so this has to come off
         // the model matrix and cannot be read from the local position.
-        'vWxPos = ( modelMatrix * vec4( position, 1.0 ) ).xz;'].join('\n')
+        'vPlaceWorld = ( modelMatrix * vec4( position, 1.0 ) ).xyz;',
+        'vPlaceLocalY = position.y;',
+        'vWxPos = vPlaceWorld.xz;'].join('\n')
     );
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <common>',
@@ -129,11 +132,17 @@ function _installPlaceSnow(mat, uni, cacheKey) {
         'uniform vec3 uSnowCol;',
         'varying float vWxUp;',
         'varying vec2 vWxPos;',
+        'varying vec3 vPlaceWorld;',
+        'varying float vPlaceLocalY;',
         SNOW_FIELD_GLSL].join('\n')
     );
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <color_fragment>',
       ['#include <color_fragment>',
+        'float countySnowCover = 0.0;',
+        'float countySnowHeight = 0.0;',
+        'float countySnowCrest = 0.0;',
+        'diffuseColor.rgb *= 1.0 - uWeather.y * (1.0 - uWeather.x) * 0.13;',
         '{',
         '  float wSnow = uWeather.x;',
         '  if ( wSnow > 0.001 ) {',
@@ -147,25 +156,33 @@ function _installPlaceSnow(mat, uni, cacheKey) {
         // sheet of flat snow in the game.
         '    float wUp = smoothstep( 0.58, 0.94, vWxUp );',
         '    vec4 wS = countySnow( vWxPos, wSnow, -0.06, wUp );',
+        '    countySnowCover = clamp(wS.x * 0.82, 0.0, 1.0);',
+        '    countySnowHeight = wS.w;',
+        '    countySnowCrest = wS.z;',
         '    diffuseColor.rgb = mix( diffuseColor.rgb, countySnowColour( uSnowCol, wS.y ), clamp( wS.x * 0.82, 0.0, 1.0 ) );',
         '  }',
         '}'].join('\n')
     );
-    if(mat.isMeshStandardMaterial){
-      // Rain pools unevenly on stone and timber. Relief controls the wet sheen;
-      // clothing keeps its diffuse response and snow dries the surface again.
-      shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',
-        '#include <roughnessmap_fragment>\nfloat countyWet=uWeather.y*(1.0-uWeather.x)*smoothstep(.08,.8,vWxUp);\nroughnessFactor=mix(roughnessFactor,.27,countyWet);');
-      shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',
-        '#include <color_fragment>\ndiffuseColor.rgb*=1.0-uWeather.y*(1.0-uWeather.x)*.13;');
-    }
+    patchPlaceSurfaceLighting(shader, mat);
     mat.userData.wxShaderPatched = {
       up: shader.vertexShader.indexOf('vWxUp = normalize') > -1,
       snow: shader.fragmentShader.indexOf('countySnowColour( uSnowCol, wS.y )') > -1,
+      physical: !mat.isMeshStandardMaterial || shader.fragmentShader.includes('countyPhysical = texture2D'),
     };
   };
   mat.customProgramCacheKey = () => cacheKey;
   mat.needsUpdate = true;
+}
+
+// THREE.Material.clone() deliberately does not copy compile callbacks. Every
+// destination chooses its own texture through a clone, so reinstall the shared
+// weather response and its live uniforms on that clone before it is rendered.
+export function clonePlaceMaterial(source) {
+  const material = source.clone();
+  if (source.userData.wxUniforms) {
+    _installPlaceSnow(material, source.userData.wxUniforms, source.customProgramCacheKey());
+  }
+  return material;
 }
 
 /**
@@ -1247,6 +1264,7 @@ export class Places {
     this._built = true;
 
     this.surfaceTextures = createPlaceSurfaceLibrary();
+    this.smoothSteelSurface = createSmoothSteelSurface();
     this.matBody = new THREE.MeshStandardMaterial({
       roughness:.86,metalness:.025,
       vertexColors: true, dithering: true,
@@ -1284,39 +1302,16 @@ export class Places {
     });
     this.matLand.name = 'place-landmark';
 
-    // ROUND 21 — SNOW LIES ON THE PLACES TOO.
-    //
-    // The county's floor is chunks.js's matGround and weather paints it there. Everything a
-    // destination is made of — its yard, its walls, its ROOFS — is these two materials, and
-    // without this a snowed county has a dark disc and a bare roof at all 21 majors. The
-    // yard is the worse of the two: sites.js's apron() is a 40-110 m disc of made ground and
-    // it would read as a hole rather than as a yard.
-    //
-    // Snow only. Buildings do not take the wet darkening: a wet wall is a different effect
-    // from a wet field and guessing at it would be worse than leaving it.
-    //
-    // THE CACHE KEYS ARE NOT OPTIONAL, AND THEY ARE ALSO THE BUDGET.
-    //
-    // matPeople is a clone of matBody taken above, and three's default cache key does not
-    // know that one of them now compiles a different shader — two materials with the same key
-    // and different source get served each other's program. The first cut gave all three
-    // their own key and the county went from 92 programs to 94, which is exactly
-    // CFG.render.budget.programsMax and no headroom at all.
-    //
-    // So matPeople gets the SAME injection and the SAME key as matBody. That is honest rather
-    // than a dodge: they are the same Lambert with the same defines and differ only in which
-    // texture is bound, which is a uniform. And the effect is right — snow settles on the
-    // shoulders of anyone standing out in it.
-    //
-    // matLand keeps its own key because it genuinely is a different program: fog:false is a
-    // define, so it could never have shared one.
+    // Weather uniforms stay shared across every destination clone. Bodies and
+    // landmarks have distinct keys because their fog defines differ; the Lambert
+    // people shader is already a distinct Three program through its material type.
     this.wxUniforms = {
       uWeather: { value: new THREE.Vector2(0, 0) },
       uSnowCol: { value: new THREE.Color().setRGB(WX_SNOW[0], WX_SNOW[1], WX_SNOW[2], THREE.LinearSRGBColorSpace) },
     };
-    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-2');
-    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-2');
-    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-2');
+    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-physical-7');
+    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-physical-7');
+    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-physical-7');
 
     this.matGlow = new THREE.MeshBasicMaterial({
       vertexColors: true, fog: false, transparent: true, opacity: 1,
@@ -1389,9 +1384,10 @@ export class Places {
     }
     if (out && out.solid) {
       projectPlaceSurfaceUVs(out.solid);
-      const surfaceMat = this.matLand.clone();
+      const surfaceMat = clonePlaceMaterial(this.matLand);
       surfaceMat.map = placeSurfaceFor(this.surfaceTextures, d);
       surfaceMat.bumpMap = placeBumpFor(this.surfaceTextures, d);
+      surfaceMat.envMapIntensity = d.landmarkEnvironment ?? 1;
       const m = new THREE.Mesh(out.solid, surfaceMat);
       m.name = 'land-' + d.id;
       m.castShadow = false;          // a 77 m spire is never inside the 70 m shadow radius
@@ -1418,7 +1414,7 @@ export class Places {
         // 'brazier' is a glow that does not turn — the guttering fire ART 4.2 asks for at
         // the cathedral's spire tip, on this same shared additive material. No new light.
         const isGlow = mv.role === 'beam' || mv.role === 'brazier';
-        const mat = isGlow ? this.matGlow.clone() : this.matLand.clone();
+        const mat = isGlow ? this.matGlow.clone() : clonePlaceMaterial(this.matLand);
         if (isGlow) { mat.color.set(mv.colour || GLOW.white); mat.opacity = 0; }
         const mesh = new THREE.Mesh(mv.geo, mat);
         mesh.name = 'land-' + mv.role + '-' + d.id;
@@ -1505,7 +1501,7 @@ export class Places {
     if (!rec.moving) rec.moving = [];
 
     if (touch) {
-      const solidMat = rec.solid ? rec.solid.material : this.matLand.clone();
+      const solidMat = rec.solid ? rec.solid.material : clonePlaceMaterial(this.matLand);
       const body = new THREE.Mesh(fixtureSolid(d.kind), solidMat);
       body.name = 'land-fixture-' + d.id;
       body.position.set(lx, ly, lz);
@@ -1943,9 +1939,15 @@ export class Places {
       // its own surface there instead of the shared plaster map: a clone, same program.
       let apMat = this.matBody;
       if (d.apronSurface) {
-        apMat = this.matBody.clone();
+        apMat = clonePlaceMaterial(this.matBody);
         apMat.map = placeSurfaceFor(this.surfaceTextures, d);
         apMat.bumpMap = placeBumpFor(this.surfaceTextures, d);
+      }
+      if (d.id === 'filling-station') {
+        if (apMat === this.matBody) apMat = clonePlaceMaterial(this.matBody);
+        const roadScan = this._sys('chunks')?.roadSurface || null;
+        if (roadScan) projectPlaceSurfaceUVs(ap, 2.2);
+        installStationFloor(apMat, roadScan);
       }
       const m = new THREE.Mesh(ap, apMat);
       m.name = 'apron-' + d.id;
@@ -1961,7 +1963,7 @@ export class Places {
     let glowMesh = null;
     if (out.solid) {
       projectPlaceSurfaceUVs(out.solid);
-      const surfaceMat = this.matBody.clone();
+      const surfaceMat = clonePlaceMaterial(this.matBody);
       surfaceMat.map = placeSurfaceFor(this.surfaceTextures, d);
       surfaceMat.bumpMap = placeBumpFor(this.surfaceTextures, d);
       const m = new THREE.Mesh(out.solid, surfaceMat);
@@ -1969,12 +1971,25 @@ export class Places {
       m.castShadow = true; m.receiveShadow = true;
       g.add(m);
     }
+    // Explicit rolled/forged hardware shares the body/weather program, with its
+    // own shallow steel response instead of the site's corrugated wall scan.
+    if (out.smoothSteel) {
+      projectPlaceSurfaceUVs(out.smoothSteel);
+      const steelMat = clonePlaceMaterial(this.matBody);
+      steelMat.map = this.smoothSteelSurface.albedo;
+      steelMat.bumpMap = this.smoothSteelSurface.physical;
+      steelMat.bumpScale = .007;
+      const steel = new THREE.Mesh(out.smoothSteel, steelMat);
+      steel.name = 'body-smooth-steel-' + d.id;
+      steel.castShadow = true; steel.receiveShadow = true;
+      g.add(steel);
+    }
     // r3 (manor lane): THE TIMBER CHANNEL. manor.js hands back its boards, joinery and
     // furniture on their own so they stop wearing the manor's brick-peel plaster map. A clone
     // of matBody with the barn's timber map: the same program, one more draw.
     if (out.timber) {
-      projectPlaceSurfaceUVs(out.timber);
-      const tm = this.matBody.clone();
+      if (!out.timber.userData.authoredSurfaceUVs) projectPlaceSurfaceUVs(out.timber);
+      const tm = clonePlaceMaterial(this.matBody);
       tm.map = placeSurfaceFor(this.surfaceTextures, 'barn');
       tm.bumpMap = placeBumpFor(this.surfaceTextures, 'barn');
       const mt = new THREE.Mesh(out.timber, tm);
@@ -2029,6 +2044,8 @@ export class Places {
    */
   _dress(d, rec, api, out) {
     let solid = out.solid, glow = out.glow, people = out.people;
+    let smoothSteel = out.smoothSteel || null;
+    let timber = out.timber || null;
     // ROUND 19: the SECOND glow channel. `glow` is "your lamps", switched on by the claim
     // (see _applyState's windows loop); `glowLive` is somebody else's fire and burns from
     // the moment the chunk streams in. A market lantern, a cooking fire and a lit window in
@@ -2045,6 +2062,12 @@ export class Places {
       if (!ex) continue;
       if (ex.people) people = people ? mergeGeometries([people, ex.people], false) : ex.people;
       if (ex.solid) solid = solid ? mergeGeometries([solid, ex.solid], false) : ex.solid;
+      if (ex.smoothSteel) smoothSteel = smoothSteel ? mergeGeometries([smoothSteel, ex.smoothSteel], false) : ex.smoothSteel;
+      if (ex.timber) {
+        const authored = !!ex.timber.userData.authoredSurfaceUVs && (!timber || !!timber.userData.authoredSurfaceUVs);
+        timber = timber ? mergeGeometries([timber, ex.timber], false) : ex.timber;
+        timber.userData.authoredSurfaceUVs = authored;
+      }
       if (ex.glow) glow = glow ? mergeGeometries([glow, ex.glow], false) : ex.glow;
       if (ex.glowLive) live = live ? mergeGeometries([live, ex.glowLive], false) : ex.glowLive;
       if (ex.glowColour && !out.glowColour) out.glowColour = ex.glowColour;
@@ -2064,6 +2087,8 @@ export class Places {
       if (ex2.glow) glow = glow ? mergeGeometries([glow, ex2.glow], false) : ex2.glow;
     }
     out.people = people;
+    if (timber !== out.timber) { out.timber = timber; if (timber) timber.computeBoundingSphere(); }
+    if (smoothSteel !== out.smoothSteel) { out.smoothSteel = smoothSteel; if (smoothSteel) smoothSteel.computeBoundingSphere(); }
     if (solid !== out.solid) { out.solid = solid; if (solid) solid.computeBoundingSphere(); }
     if (glow !== out.glow) { out.glow = glow; if (glow) glow.computeBoundingSphere(); }
     if (live !== out.glowLive) { out.glowLive = live; if (live) live.computeBoundingSphere(); }
@@ -3993,7 +4018,7 @@ export class Places {
   /**
    * ROUND 21 — world/weather.js's one door here. Two floats into a uniform shared by the body
    * and landmark materials, so every destination in the county answers a front at once. The
-   * wet channel is carried but unused: buildings take snow only, see _installPlaceSnow.
+   * wet channel darkens and smooths exposed surfaces; snow replaces their response.
    */
   setWeather(snow, wet) {
     if (!this.wxUniforms) return;
@@ -4089,7 +4114,7 @@ export class Places {
     const sc = at ? at.scale : 1;
     const geo = prizeCase(d.reward);
     if (!geo) return;
-    const mat = rec.solid ? rec.solid.material : this.matLand.clone();
+    const mat = rec.solid ? rec.solid.material : clonePlaceMaterial(this.matLand);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = 'land-prize-' + d.id;
     mesh.position.set(lx, fx.ly, lz);
@@ -4174,6 +4199,8 @@ export class Places {
     if (this.matLand) this.matLand.dispose();
     disposePlaceSurfaceLibrary(this.surfaceTextures);
     this.surfaceTextures = null;
+    this.smoothSteelSurface?.dispose();
+    this.smoothSteelSurface = null;
     if (this.matGlow) this.matGlow.dispose();
     // No AudioContext to close: this system never opens one. See _drainWhispers.
   }

@@ -23,6 +23,22 @@ const indexed = geometry => {
   return geometry;
 };
 
+// Small real bevels keep a stone edge visible in grazing light. This joins an existing
+// solid batch; unlike a wall primitive it deliberately emits no new collider.
+export function chamferedBlock(kit, w, h, d, x, y, z, colour, yaw = 0, bevel = 0.045) {
+  const b = Math.min(bevel, w * 0.18, h * 0.18, d * 0.18);
+  const shape = new THREE.Shape();
+  const hw = w / 2 - b, hh = h / 2 - b;
+  shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, hh);
+  shape.lineTo(-hw, hh); shape.closePath();
+  const geometry = indexed(new THREE.ExtrudeGeometry(shape, {
+    depth: d - b * 2, steps: 1, bevelEnabled: true, bevelSegments: 1,
+    bevelSize: b, bevelThickness: b, curveSegments: 1,
+  }));
+  geometry.translate(0, 0, -(d - b * 2) / 2);
+  kit.at(geometry, colour, x, y, z, yaw);
+}
+
 // The emblem is real crescent-shaped relief, not a bright circle painted on a square.
 export function crescent(k, x, y, z, radius, yaw, col = P.moon, depth = 0.025) {
   const shape = new THREE.Shape();
@@ -226,6 +242,106 @@ export function stucco(k, w,h,d,x,y,z,col,yaw=0,seed=1) {
     const relief=(fine-.5)*.011;p.setXYZ(i,px+normal.getX(i)*relief,py+normal.getY(i)*relief,pz+normal.getZ(i)*relief);
   }
   geo.computeVertexNormals();k.cloth.at(geo,col,x,y,z,yaw);geo.setAttribute('color',new THREE.Float32BufferAttribute(cs,3));
+}
+
+// An occupied room seen through old glass. The frame, reveal, curtains and sill objects
+// all join the town's existing batches; nothing here changes a wall or its collision.
+// Position is the glass plane, with local +Z facing out of the building.
+export function inhabitedWindow(k, x, y, z, w, h, yaw, seed, reveal = 0.13) {
+  const random = driftRng(Math.round(seed * 47 + x * 11 + z * 17));
+  const kind = Math.floor(random(1) * 5), cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const glow = k.live || k.glow;
+  const point = (px, py, pz) => [x + px * cy + pz * sy, y + py, z - px * sy + pz * cy];
+  const box = (kit, ww, hh, dd, px, py, pz, colour) => kit.box(ww, hh, dd, ...point(px, py, pz), colour, yaw);
+  const timber = random(2) > 0.5 ? [0.065, 0.052, 0.042] : [0.047, 0.057, 0.062];
+  const frame = [timber[0] * 1.6, timber[1] * 1.6, timber[2] * 1.6];
+  box(k.cloth, w + 0.025, h + 0.025, 0.028, 0, 0, -0.017, [0.012, 0.017, 0.024]);
+
+  // A room lights the whole rectangular opening, with a narrow dirty border. The old
+  // broad vignette made every opening look like the same circular orange lamp.
+  const brightness = 0.62 + random(3) * 0.35;
+  const lampSide = random(4) > 0.5 ? 1 : -1;
+  const pane = glow.pane(w, h, ...point(0, 0, 0.002), (u, v) => {
+    const edge = Math.min(1, Math.max(0, (1 - Math.max(Math.abs(u), Math.abs(v))) / 0.07));
+    const room = 0.17 + 0.12 * (v * 0.5 + 0.5) + 0.045 * lampSide * u;
+    const uneven = 0.91 + 0.09 * Math.sin(u * 4.3 + seed) * Math.sin(v * 3.1 + seed * 0.7);
+    return edge * room * brightness * uneven;
+  }, yaw, 0, 4, 6);
+  // Put the outer interior vertices near the frame. A uniform coarse grid would
+  // stretch the edge fade across a quarter of the opening and turn it round again.
+  const vertices = pane.attributes.position;
+  for (let i = 0; i < vertices.count; i++) {
+    let u = ((vertices.getX(i) - x) * cy - (vertices.getZ(i) - z) * sy) / (w / 2);
+    let v = (vertices.getY(i) - y) / (h / 2);
+    if (Math.abs(u) < 0.999) u *= 1.84;
+    if (Math.abs(v) < 0.999) v *= 1.395;
+    vertices.setXYZ(i, ...point(u * w / 2, v * h / 2, 0.002));
+  }
+  // Existing live/glow batches are ember-coloured. Compensate in the vertices so these
+  // windows read as lamplit cream, while the nearby fires keep their authored orange.
+  const tones = [[0.76, 2.35, 7.5], [0.70, 2.62, 9.8], [0.88, 2.17, 6.1]];
+  const tone = tones[Math.floor(random(5) * tones.length)];
+  const colours = pane.attributes.color;
+  for (let i = 0; i < colours.count; i++) {
+    const gain = colours.getX(i);
+    colours.setXYZ(i, gain * tone[0], gain * tone[1], gain * tone[2]);
+  }
+
+  // Deep side cheeks stay dark; the thin outer bead catches grazing lantern light.
+  for (const side of [-1, 1]) {
+    box(k.cloth, 0.075, h + 0.12, reveal + 0.05, side * (w / 2 + 0.035), 0, reveal / 2, timber);
+    box(k.cloth, 0.095, h + 0.22, 0.055, side * (w / 2 + 0.055), 0, reveal + 0.022, frame);
+    box(k.cloth, w + 0.20, 0.09, 0.07, 0, side * (h / 2 + 0.05), reveal + 0.025, frame);
+  }
+  const sash = reveal + 0.009;
+  box(k.cloth, 0.043, h + 0.04, 0.065, 0, 0, sash, timber);
+  const cross = h > 2.3 ? [h * -0.23, h * 0.21] : [h * (random(6) * 0.12 - 0.06)];
+  for (const yy of cross) box(k.cloth, w, 0.041, 0.064, 0, yy, sash, timber);
+  // The small brass sash catch is an occasional glint, below the crossbar.
+  box(k.cloth, 0.076, 0.025, 0.027, 0, cross[0] - 0.042, sash + 0.044, [0.19, 0.139, 0.067]);
+
+  const curtain = (side, width) => {
+    const geometry = new THREE.PlaneGeometry(width, h * 0.98, 3, 5);
+    const p = geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const v = p.getY(i) / h + 0.5, u = p.getX(i) / width + 0.5;
+      const pull = 0.50 + 0.50 * Math.pow(Math.abs(v - 0.43) * 1.7, 1.2);
+      p.setX(i, side * (w / 2 - width * u * pull));
+      p.setZ(i, 0.021 + Math.sin(u * Math.PI * 7) * 0.008);
+    }
+    if (side > 0) {
+      const indices = geometry.index;
+      for (let i = 0; i < indices.count; i += 3) {
+        const b = indices.getX(i + 1);
+        indices.setX(i + 1, indices.getX(i + 2)); indices.setX(i + 2, b);
+      }
+    }
+    geometry.computeVertexNormals();
+    k.cloth.at(geometry, kind === 2 ? [0.090, 0.071, 0.054] : [0.058, 0.066, 0.070], x, y, z, yaw);
+  };
+  if (kind === 1 || kind === 2) {
+    curtain(-1, w * (0.27 + random(7) * 0.15));
+    if (kind === 2) curtain(1, w * 0.31);
+  } else if (kind === 3) {
+    const blindH = h * (0.19 + random(8) * 0.21);
+    box(k.cloth, w * 0.99, blindH, 0.023, 0, h / 2 - blindH / 2, 0.023, [0.103, 0.094, 0.078]);
+    box(k.cloth, 0.009, blindH + h * 0.18, 0.012, w * 0.40, h / 2 - blindH * 0.55, 0.043, P.paper);
+  }
+
+  // Quiet interior silhouettes make adjacent rooms different without adding fake people.
+  const baseY = -h / 2 + 0.06, objectX = w * (random(9) * 0.44 - 0.22);
+  if (kind === 0 || kind === 4) {
+    for (let book = 0; book < 3; book++) {
+      const bh = Math.min(h * 0.23, 0.17 + random(12 + book) * 0.16);
+      box(k.cloth, 0.052 + book * 0.006, bh, 0.034, objectX + book * 0.067, baseY + bh / 2, 0.026,
+        book === 1 ? P.purple : P.wood);
+    }
+  } else if (kind === 1) {
+    k.cloth.cyl(0.065, 0.052, 0.12, 6, ...point(objectX, baseY + 0.06, 0.035), P.cutWood);
+    box(k.cloth, 0.012, 0.24, 0.012, objectX, baseY + 0.23, 0.032, [0.035, 0.049, 0.039]);
+    for (const side of [-1, 1]) box(k.cloth, 0.095, 0.035, 0.013,
+      objectX + side * 0.046, baseY + 0.24 + side * 0.025, 0.034, [0.036, 0.057, 0.043]);
+  }
 }
 
 export function icicles(k, x, y, z, length, yaw, rng) {
