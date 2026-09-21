@@ -80,6 +80,9 @@ import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
 import { loadScannedSurface } from './scanned-materials.js';
 import { FOLIAGE_CELLS, loadFoliageImage, packFoliageAtlas } from './flora-atlas.js';
 import { GROUND_CELLS, makeGroundCoverTexture } from './flora-groundcover.js';
+import { guardPointLightLoop } from '../gfx/light-loop.js';
+
+const TREE_LIGHTING = guardPointLightLoop(THREE.ShaderChunk.lights_fragment_begin);
 
 // ---------------------------------------------------------------------------
 // Local constants that want to be in config.js. Requested in docs/HANDOFF.md;
@@ -1983,27 +1986,7 @@ export class Flora {
       shader.uniforms.uBandNear = uni.uBandNear;
       shader.uniforms.uBandFar = uni.uBandFar;
 
-      // r161 evaluates every rover at every surviving leaf fragment, even when
-      // parked, dark or beyond its finite cutoff. Preserve the original lighting
-      // body for every contributing light; negative RGB is deliberately nonzero.
-      // The small outward margin keeps float rounding at the range boundary on
-      // the original path. No sampler or derivative is added to either guard.
-      const pointStart = '\t\tgetPointLightInfo( pointLight, geometryPosition, directLight );';
-      const pointEnd = '\t\tRE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
-      const treeLights = THREE.ShaderChunk.lights_fragment_begin
-        .replace(pointStart, [
-          '\t\tif ( pointLight.color != vec3( 0.0 ) ) {',
-          '\t\t\tvec3 countyPointDelta = pointLight.position - geometryPosition;',
-          '\t\t\tbool countyPointHasCutoff = pointLight.distance > 0.0;',
-          '\t\t\t#ifdef LEGACY_LIGHTS',
-          '\t\t\tcountyPointHasCutoff = countyPointHasCutoff && pointLight.decay > 0.0;',
-          '\t\t\t#endif',
-          '\t\t\tif ( !countyPointHasCutoff || dot( countyPointDelta, countyPointDelta )',
-          '\t\t\t  <= pointLight.distance * pointLight.distance * 1.000001 ) {',
-          pointStart,
-        ].join('\n'))
-        .replace(pointEnd, pointEnd + '\n\t\t\t}\n\t\t}');
-      shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', treeLights);
+      shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', TREE_LIGHTING);
 
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',

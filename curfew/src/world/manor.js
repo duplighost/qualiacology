@@ -962,6 +962,83 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
     // ---- THE EXTERIOR: what the donor never had ----------------------------------------
     // The plinth (the lifted cellar's outside), the roof, the chimneys, the steps and the
     // porch. All landmark: this is the silhouette.
+    function blackthornPavilions(eave, front, doorX) {
+      // Three broad frontispieces interrupt the long hip/eave, keeping the room shell
+      // and every opening behind them. The high gables start beyond z=41.25: the hip's
+      // walkable edge ends at 40.7, with room for the player's radius between the two.
+      // These are masonry parapets, not false rooms standing on the climbable roof.
+      const prism = (points, depth, mat, x, y, z) => {
+        const shape = new THREE.Shape();
+        points.forEach(([px,py],i) => i ? shape.lineTo(px,py) : shape.moveTo(px,py));
+        shape.closePath();
+        const geo = new THREE.ExtrudeGeometry(shape, { depth, steps:1, bevelEnabled:false, curveSegments:1 });
+        if (!geo.index) geo.setIndex(Array.from({length:geo.attributes.position.count},(_,i)=>i));
+        S.at(geo,PALETTE[mat],LX(x),LY(y),LZ(z));
+      };
+      const gable = (x, half, peak, central) => {
+        const base = eave + .03, back = 41.32, face = 41.78;
+        // Solid kneelers and a low shoulder carry the rising crown. A recessed
+        // tympanum makes one calm plane inside its broad, weather-shedding coping.
+        prism([[-half,0],[half,0],[half,.46],[0,peak],[-half,.46]],.46,'facade',x,base,back);
+        cutStone(half*2+.60,.25,.91,'stone',x,base+.025,41.78,0,.045);
+        box(half*2-.32,.11,.48,'stoneDark',x,base+.25,41.88);
+        const rake = Math.hypot(half,peak-.46),angle = Math.atan2(peak-.46,half);
+        for(const side of [-1,1]) {
+          S.box(rake+.24,.27,.86,LX(x+side*half/2),LY(base+(peak+.46)/2),LZ(face+.015),PALETTE.stone,0,0,-side*angle);
+          S.box(rake-.24,.095,.18,LX(x+side*half/2),LY(base+(peak+.46)/2-.20),LZ(face+.055),PALETTE.stoneDark,0,0,-side*angle);
+          cutStone(.70,.56,.88,'stone',x+side*half,base+.20,41.79,0,.055);
+          cutStone(.94,.18,1.02,'stone',x+side*half,base+.52,41.83,0,.03);
+        }
+        // Only the central pavilion carries a blind oculus. Its dark recess is
+        // masonry relief, not a new pane, light or interaction symbol.
+        if(central) {
+          const yy=base+1.64;
+          S.cyl(.69,.69,.075,24,LX(x),LY(yy),LZ(face+.045),PALETTE.stoneDark,0,Math.PI/2);
+          const rim=new THREE.TorusGeometry(.71,.105,4,28);
+          S.at(rim,PALETTE.stone,LX(x),LY(yy),LZ(face+.115));
+          box(.11,1.16,.13,'stone',x,yy,face+.15);
+          box(1.16,.11,.13,'stone',x,yy,face+.15);
+          cutStone(.56,.31,.72,'stone',x,base+peak+.065,41.79,0,.045);
+        }
+      };
+      const shoulder = (x0,x1,central) => {
+        const width=x1-x0,mid=(x0+x1)/2;
+        // Wide returns read as pavilion depth from the road. Their lower corbels
+        // begin above yard head height; beside the stairs they begin above the
+        // raised landing as well. Nothing extends into the front door route.
+        for(const x of [x0,x1]) {
+          const y0=central?2.65:-.38, y1=eave-.55, depth=central?1.06:.94;
+          cutStone(central?1.15:1.06,y1-y0,depth,'facade',x,(y0+y1)/2,front+depth/2-.025,0,.11);
+          cutStone(central?1.37:1.24,.25,depth+.13,'stone',x,y0+.02,front+depth/2+.02,0,.035);
+          cutStone(central?1.47:1.36,.26,depth+.34,'stone',x,y1-.02,front+depth/2+.10,0,.045);
+          // A shallow inset down each pier holds the wall plane behind the caps.
+          box(.48,y1-y0-.80,.035,'stoneDark',x,(y0+y1)/2,front+depth+.018);
+          for(const yy of [3.80,4.06])if(yy>y0+.30)
+            cutStone(central?1.30:1.19,.105,depth+.15,'stone',x,yy,front+depth/2+.035,0,.018);
+        }
+        // These links stay below the original hip surface. Only the separate
+        // parapet above them stands higher than the roof, entirely beyond its edge.
+        cutStone(width+1.24,.32,1.52,'stone',mid,eave-.35,40.94,0,.05);
+        cutStone(width+1.58,.18,1.92,'stone',mid,eave-.10,41.07,0,.028);
+        box(width+.54,.15,1.19,'stoneDark',mid,eave-.61,40.89);
+        if(!central) {
+          cutStone(width-.18,.20,.87,'stone',mid,LV.first.floor-.18,40.63,0,.035);
+          // Each three-window group rests on one projecting apron, not more
+          // little repeated pediments. It remains below the existing lower sills.
+          cutStone(width-.18,.25,.74,'stone',mid,.58,40.53,0,.04);
+          box(width-.58,.26,.36,'plinth',mid,.32,40.34);
+        }
+      };
+      shoulder(doorX-4,doorX+4,true);
+      gable(doorX,4.68,4.20,true);
+      // Existing window centres are 3,7,11 ... 59. The outer groups follow those
+      // actual openings, so their piers sit in masonry rather than across glass.
+      for(const [x0,x1] of [[1,13],[49,60.30]]) {
+        shoulder(x0,x1,false);
+        gable((x0+x1)/2,(x1-x0)/2+.16,2.64,false);
+      }
+    }
+
     function buildExterior() {
       if (!isLand) return;
       // THE PLINTH runs from the lowest ground under the footprint to the ground floor,
@@ -1245,6 +1322,7 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
           cutStone(.52,eave-.46,.27,'stone',doorX+side*4,.22+(eave-.46)/2,front+.095,0,.045);
           cutStone(.85,.22,.45,'stone',doorX+side*4,eave-.36,front+.16,0,.035);
         }
+        blackthornPavilions(eave,front,doorX);
       }
       // TWO LANTERNS either side of the door, dark brass: the fixture lane lights the
       // claim, not these; they are the shape of a lit doorway waiting for power.

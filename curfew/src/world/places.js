@@ -162,7 +162,7 @@ function _installPlaceSnow(mat, uni, cacheKey) {
         '  }',
         '}'].join('\n')
     );
-    if (mat.isMeshStandardMaterial) patchPlaceSurfaceLighting(shader, mat);
+    patchPlaceSurfaceLighting(shader, mat);
     mat.userData.wxShaderPatched = {
       up: shader.vertexShader.indexOf('vWxUp = normalize') > -1,
       snow: shader.fragmentShader.indexOf('countySnowColour( uSnowCol, wS.y )') > -1,
@@ -176,7 +176,7 @@ function _installPlaceSnow(mat, uni, cacheKey) {
 // THREE.Material.clone() deliberately does not copy compile callbacks. Every
 // destination chooses its own texture through a clone, so reinstall the shared
 // weather response and its live uniforms on that clone before it is rendered.
-function clonePlaceMaterial(source) {
+export function clonePlaceMaterial(source) {
   const material = source.clone();
   if (source.userData.wxUniforms) {
     _installPlaceSnow(material, source.userData.wxUniforms, source.customProgramCacheKey());
@@ -1308,9 +1308,9 @@ export class Places {
       uWeather: { value: new THREE.Vector2(0, 0) },
       uSnowCol: { value: new THREE.Color().setRGB(WX_SNOW[0], WX_SNOW[1], WX_SNOW[2], THREE.LinearSRGBColorSpace) },
     };
-    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-physical-6');
-    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-physical-6');
-    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-physical-6');
+    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-physical-7');
+    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-physical-7');
+    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-physical-7');
 
     this.matGlow = new THREE.MeshBasicMaterial({
       vertexColors: true, fog: false, transparent: true, opacity: 1,
@@ -1386,6 +1386,7 @@ export class Places {
       const surfaceMat = clonePlaceMaterial(this.matLand);
       surfaceMat.map = placeSurfaceFor(this.surfaceTextures, d);
       surfaceMat.bumpMap = placeBumpFor(this.surfaceTextures, d);
+      surfaceMat.envMapIntensity = d.landmarkEnvironment ?? 1;
       const m = new THREE.Mesh(out.solid, surfaceMat);
       m.name = 'land-' + d.id;
       m.castShadow = false;          // a 77 m spire is never inside the 70 m shadow radius
@@ -1980,7 +1981,7 @@ export class Places {
     // furniture on their own so they stop wearing the manor's brick-peel plaster map. A clone
     // of matBody with the barn's timber map: the same program, one more draw.
     if (out.timber) {
-      projectPlaceSurfaceUVs(out.timber);
+      if (!out.timber.userData.authoredSurfaceUVs) projectPlaceSurfaceUVs(out.timber);
       const tm = clonePlaceMaterial(this.matBody);
       tm.map = placeSurfaceFor(this.surfaceTextures, 'barn');
       tm.bumpMap = placeBumpFor(this.surfaceTextures, 'barn');
@@ -2037,6 +2038,7 @@ export class Places {
   _dress(d, rec, api, out) {
     let solid = out.solid, glow = out.glow, people = out.people;
     let smoothSteel = out.smoothSteel || null;
+    let timber = out.timber || null;
     // ROUND 19: the SECOND glow channel. `glow` is "your lamps", switched on by the claim
     // (see _applyState's windows loop); `glowLive` is somebody else's fire and burns from
     // the moment the chunk streams in. A market lantern, a cooking fire and a lit window in
@@ -2054,6 +2056,11 @@ export class Places {
       if (ex.people) people = people ? mergeGeometries([people, ex.people], false) : ex.people;
       if (ex.solid) solid = solid ? mergeGeometries([solid, ex.solid], false) : ex.solid;
       if (ex.smoothSteel) smoothSteel = smoothSteel ? mergeGeometries([smoothSteel, ex.smoothSteel], false) : ex.smoothSteel;
+      if (ex.timber) {
+        const authored = !!ex.timber.userData.authoredSurfaceUVs && (!timber || !!timber.userData.authoredSurfaceUVs);
+        timber = timber ? mergeGeometries([timber, ex.timber], false) : ex.timber;
+        timber.userData.authoredSurfaceUVs = authored;
+      }
       if (ex.glow) glow = glow ? mergeGeometries([glow, ex.glow], false) : ex.glow;
       if (ex.glowLive) live = live ? mergeGeometries([live, ex.glowLive], false) : ex.glowLive;
       if (ex.glowColour && !out.glowColour) out.glowColour = ex.glowColour;
@@ -2073,6 +2080,7 @@ export class Places {
       if (ex2.glow) glow = glow ? mergeGeometries([glow, ex2.glow], false) : ex2.glow;
     }
     out.people = people;
+    if (timber !== out.timber) { out.timber = timber; if (timber) timber.computeBoundingSphere(); }
     if (smoothSteel !== out.smoothSteel) { out.smoothSteel = smoothSteel; if (smoothSteel) smoothSteel.computeBoundingSphere(); }
     if (solid !== out.solid) { out.solid = solid; if (solid) solid.computeBoundingSphere(); }
     if (glow !== out.glow) { out.glow = glow; if (glow) glow.computeBoundingSphere(); }

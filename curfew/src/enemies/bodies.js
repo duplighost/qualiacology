@@ -92,7 +92,7 @@ const TINT_CEIL = 1.14;
    ========================================================================== */
 
 // A constant cache key so every shell material in the game links exactly once.
-const SHELL_CACHE_KEY = 'curfew-body-shell-v3-diffuse';
+const SHELL_CACHE_KEY = 'curfew-body-shell-v4-diffuse';
 
 // GLSL. No backtick appears anywhere inside these template literals, not even
 // in a comment (the project law). No identifier named flat, half or sat.

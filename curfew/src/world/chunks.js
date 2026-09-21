@@ -401,7 +401,7 @@ export class Chunks {
     const groundCompile=this.matGround.onBeforeCompile;
     readableSurface(this.matGround);const groundLightCompile=this.matGround.onBeforeCompile;
     this.matGround.onBeforeCompile=shader=>{groundCompile(shader);groundLightCompile(shader);};
-    this.matGround.customProgramCacheKey=()=> 'curfew-ground-forest-scan-5';
+    this.matGround.customProgramCacheKey=()=> 'curfew-ground-forest-scan-6';
     try {
       this.groundSurface = await loadTerrainSurfaceScan(this.ctx.renderer);
       const scans = this.matGround.userData.groundUniforms;
@@ -1501,7 +1501,7 @@ export class Chunks {
     // ROUND 21: bumped to -2. The cache key is what stops three compiling a second program
     // per material variant, and it has to change when the SOURCE changes or a warm cache
     // from an earlier build could hand this material the pre-weather program.
-    mat.customProgramCacheKey = () => 'curfew-ground-forest-scan-5';
+    mat.customProgramCacheKey = () => 'curfew-ground-forest-scan-6';
     mat.needsUpdate = true;
   }
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {FullScreenQuad} from 'three/addons/postprocessing/Pass.js';
+import {VIEW_POSITION_GLSL} from './depth-position.js';
 
 // Integrate moonlight through the current shadow map. Scene depth ends each ray
 // at the first visible surface; buildings and the moving canopy shade the air.
@@ -24,10 +25,9 @@ export class MoonAirField {
         uniform mat4 uInvProjection,uCameraWorld,uShadowMatrix;
         uniform vec3 uEye,uToMoon,uRadiance;
         uniform float uDensity,uGain,uReady;
+        ${VIEW_POSITION_GLSL}
         void main(){
-          float depth=textureLod(tDepth,vUv,0.0).r;
-          vec4 vp=uInvProjection*vec4(vUv*2.0-1.0,depth*2.0-1.0,1.0);
-          vec3 p=vp.xyz/max(vp.w,.00001);
+          vec3 p=positionAt(vUv);
           float viewDepth=min(-p.z,200.0);
           gl_FragColor=vec4(0.0,0.0,0.0,viewDepth);
           if(uReady<.5 || uGain<=0.0)return;

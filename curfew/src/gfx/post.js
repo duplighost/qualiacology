@@ -17,8 +17,8 @@
 // everything under ~0.2 sinks toward black — which is exactly MARROW's unreadable moonlit
 // distance and cost a round to find. Dark must read as SHAPE, not as void.
 //
-// The Bayer dither is not decoration: a frame that is almost entirely between 0 and 0.05
-// quantises to two or three distinct 8-bit levels and bands in visible rings.
+// Sub-byte dither breaks up display quantisation without putting a repeating
+// row pattern over the image. Keep its per-pixel sequence independent of grain.
 //
 // GLSL laws honoured here: no backtick anywhere inside a template literal (it closes the JS
 // string and the page dies with a lineless error naming no file), and no identifier named
@@ -185,10 +185,17 @@ const GradeShader = {
       return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
     }
 
-    // 4x4 ordered Bayer, built from floats only. GLSL ES 1.00 forbids dynamic indexing of
-    // a local array and has no integer bit ops, so the usual lookup table is not portable.
-    float bayer2(vec2 a) { a = floor(a); return fract(a.x * 0.5 + a.y * a.y * 0.75); }
-    float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+    // The old ordered 4x4 plate had alternating row means, visible as horizontal
+    // lines over smooth night gradients. WebGL2 integer mixing gives each pixel
+    // a stable, unbiased sub-byte offset with no short repeating row or column.
+    float displayDither(vec2 pixel) {
+      uvec2 p = uvec2(pixel);
+      uint h = p.x + p.y * 65537u;
+      h = (h ^ (h >> 16u)) * 0x7feb352du;
+      h = (h ^ (h >> 15u)) * 0x846ca68bu;
+      h ^= h >> 16u;
+      return float(h & 0x00ffffffu) / 16777216.0 - 0.5;
+    }
 
     void main() {
       // --- CHROMATIC ABERRATION (D18): the lens comes apart under dread ---------
@@ -293,7 +300,7 @@ const GradeShader = {
       // Tension may roughen the image, but must not erase fine surfaces with
       // a full-screen noise plate when the night gets dangerous.
       col += gr * (uGrain + uDread * 0.012) * gw;
-      col += (bayer4(gl_FragCoord.xy) - 0.5) / 255.0;
+      col += displayDither(gl_FragCoord.xy) / 255.0;
 
       gl_FragColor = vec4(max(col, 0.0), 1.0);
     }`,

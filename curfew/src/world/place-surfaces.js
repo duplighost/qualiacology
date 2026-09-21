@@ -9,6 +9,9 @@
 // to those structures; stains never double as a height field.
 import * as THREE from 'three';
 import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
+import { guardPointLightLoop } from '../gfx/light-loop.js';
+
+const PLACE_LIGHTING = guardPointLightLoop(THREE.ShaderChunk.lights_fragment_begin);
 
 const SIZE = 512;
 const COLOR_STYLES = ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt', 'avery', 'naturalRock'];
@@ -858,8 +861,10 @@ function packPhysicalChannels(lib) {
   }
 }
 
-/** Apply the packed response after the shared place weather shader is installed. */
+/** Guard shared lights, then apply Standard's packed response after place weather. */
 export function patchPlaceSurfaceLighting(shader, material) {
+  shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', PLACE_LIGHTING);
+  if (!material.isMeshStandardMaterial) return;
   const family = material.map?.name?.replace('place-surface-', '') || 'plaster';
   const surfaceType = ['plaster', 'salt', 'avery'].includes(family) ? 0
     : family === 'timber' ? 2 : ['metal', 'industrial'].includes(family) ? 3 : 1;

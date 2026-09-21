@@ -1,18 +1,12 @@
 import * as THREE from 'three';
 import {Pass, FullScreenQuad} from 'three/addons/postprocessing/Pass.js';
 import {MoonAirField} from './moon-air.js';
+import {VIEW_POSITION_GLSL as POSITION} from './depth-position.js';
 
 // Contact shading and restrained first-bounce light from visible luminous surfaces.
 // Half-resolution neighborhoods are reconstructed along depth edges. No history
 // buffer: moving foliage, doors and muzzle flashes cannot leave ghost trails.
 const VERTEX = `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
-const POSITION = `
-  vec3 positionAt(vec2 uv){
-    float d=textureLod(tDepth,uv,0.0).r;
-    vec4 p=uInvProjection*vec4(uv*2.0-1.0,d*2.0-1.0,1.0);
-    return p.xyz/max(.00001,p.w);
-  }
-`;
 export class ContactDepthPass extends Pass {
   constructor(ctx){
     super();this.ctx=ctx;this.air=new MoonAirField(ctx);

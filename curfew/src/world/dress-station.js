@@ -53,6 +53,7 @@
 import * as THREE from 'three';
 import { C, kits, groundY, gableFloor, ON_APRON } from './sites.js';
 import { STATION_PYLON } from './opening-layout.js';
+import { StationTimberKit, bevelStock } from './station-exterior-geometry.js';
 
 /* ==========================================================================
    ANCHORS — the three places refuge.js needs, in the station's LOCAL frame.
@@ -254,16 +255,22 @@ function abandonedCar(k, api) {
   const put = (lx, lz) => [cx + lx * cy + lz * sy, cz - lx * sy + lz * cy];
   const g = groundY(api, cx, cz);
   // body: sill slab, cabin, bonnet, boot
-  k.box(1.86, 0.52, 4.30, cx, g + 0.62, cz, D.paint, yaw);
-  k.box(1.66, 0.62, 2.10, cx, g + 1.18, cz - 0.10, D.paint, yaw);
-  k.box(1.80, 0.22, 1.30, cx, g + 0.94, cz + 1.62, D.paint, yaw);        // bonnet
-  k.box(1.78, 0.26, 1.10, cx, g + 0.96, cz - 1.68, D.paint, yaw);        // boot lid
+  k.at(bevelStock(1.86, .52, 4.30, .075), D.paint, cx, g + .62, cz, yaw);
+  // A raked cabin replaces the rectangular loaf, within the same body envelope.
+  const cabin = new THREE.BoxGeometry(1.66, .62, 2.10), cp = cabin.attributes.position;
+  for (let i = 0; i < cp.count; i++) if (cp.getY(i) > 0) {
+    cp.setX(i, cp.getX(i) * .85); cp.setZ(i, cp.getZ(i) * .64 - .04);
+  }
+  cabin.computeVertexNormals();
+  k.at(cabin, D.paint, cx, g + 1.18, cz - .10, yaw);
+  k.at(bevelStock(1.80, .22, 1.30, .065), D.paint, cx + sy * 1.62, g + .94, cz + cy * 1.62, yaw);
+  k.at(bevelStock(1.78, .26, 1.10, .06), D.paint, cx - sy * 1.68, g + .96, cz - cy * 1.68, yaw);
   // glass: dark, so the cabin is a hole and not a highlight
   {
     const [wx, wz] = put(0, 0.98);
-    k.box(1.52, 0.50, 0.06, wx, g + 1.22, wz, C.glass, yaw);             // windscreen
+    k.box(1.43, 0.49, 0.035, wx - sy * .24, g + 1.20, wz - cy * .24, C.glass, yaw, -.53); // raked windscreen
     const [rx, rz] = put(0, -1.14);
-    k.box(1.48, 0.46, 0.06, rx, g + 1.22, rz, C.glass, yaw);
+    k.box(1.41, 0.45, 0.035, rx + sy * .16, g + 1.19, rz + cy * .16, C.glass, yaw, .53);
   }
   // wheels, and the near-front one up on the apron lip
   for (const [wx0, wz0, lift] of [[-0.86, 1.34, 0.10], [0.86, 1.34, 0], [-0.86, -1.32, 0], [0.86, -1.32, 0]]) {
@@ -716,7 +723,7 @@ function cladPumps(k, api) {
   for (const iz of [-2.4, 2.4]) {
     for (const px of [-0.9, 0.9]) {
       // the shroud, 0.78 x 1.56 x 0.58 over a 0.75 x 1.55 x 0.55 body
-      k.box(0.78, 1.56, 0.58, px, y + 1.05, iz, D.pump, 0);
+      k.at(bevelStock(.78, 1.56, .58, .024), D.pump, px, y + 1.05, iz);
       // a brand band across the top third and a kick plate at the bottom: three horizontals,
       // so a dark box is a machine and not a monolith
       k.box(0.80, 0.16, 0.60, px, y + 1.62, iz, D.pumpBand, 0);
@@ -734,17 +741,18 @@ function cladPumps(k, api) {
         k.box(0.14, 0.08, 0.10, px + 0.27, y + 1.16, iz + s * 0.31, D.conduit, 0); // its holster
       }
       // the cap over it, and the hose hook on the outboard side
-      k.box(0.86, 0.06, 0.66, px, y + 1.86, iz, C.slate, 0);
+      k.at(bevelStock(.86, .09, .66, .038), D.enamel, px, y + 1.845, iz);
       k.cyl(0.028, 0.028, 0.18, 6, px + (px > 0 ? 0.42 : -0.42), y + 1.30, iz, D.conduit, 0, 0, Math.PI * 0.5);
-      // the hose, off the nozzle and down to the kerb in three sags
+      // One continuous hose hangs from the holster, instead of disconnected rods.
       const nz = iz - 0.34;
-      for (let i = 0; i < 5; i++) {
-        const t = i / 4;
-        const hx = px + 0.26 - t * 0.10;
-        const hy = y + 0.95 - t * t * 0.62;
-        const hz = nz - t * 0.26;
-        k.cyl(0.026, 0.026, 0.28, 5, hx, hy, hz, C.dark, 0, 0.9 - t * 0.5, 0.25);
-      }
+      const hose = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(px + .26, y + 1.10, nz),
+        new THREE.Vector3(px + .37, y + .71, nz - .08),
+        new THREE.Vector3(px + .22, y + .38, nz - .20),
+        new THREE.Vector3(px - .04, y + .46, nz - .20),
+        new THREE.Vector3(px - .12, y + .99, nz + .02),
+      ]);
+      k.push(new THREE.TubeGeometry(hose, 12, .026, 5, false), C.dark);
     }
     // the island's own kerb face, darkened, so the pale plaster kerb is not a light strip
     k.box(3.64, 0.32, 1.54, 0, y + 0.15, iz, D.pump, 0);
@@ -1133,6 +1141,19 @@ function canopyDetail(k, api, glow) {
   const under = api.padY + ch - 0.275;          // padY + 4.325, the slab's underside
   const top = api.padY + ch + 0.275;            // padY + 4.875
 
+  // Folded fascia, with a recessed enamel field and a dark drip return. These
+  // broad planes read from the yard; the existing walkable slab remains intact.
+  const enamel = [.19, .202, .18], edge = [.095, .105, .108];
+  for (const side of [-1, 1]) {
+    k.at(bevelStock(13.16, .54, .16, .034), enamel, 0, api.padY + 4.59, side * 4.56);
+    k.at(bevelStock(.16, .54, 9.10, .034), enamel, side * 6.56, api.padY + 4.59, 0);
+    k.box(13.15, .085, .09, 0, api.padY + 4.36, side * 4.615, edge);
+    k.box(.09, .085, 9.1, side * 6.615, api.padY + 4.36, 0, edge);
+    for (const x of [-4.9, -1.63, 1.63, 4.9]) {
+      k.box(3.12, .29, .015, x, api.padY + 4.62, side * 4.646, D.enamel);
+    }
+  }
+
   // (1) A RECESSED SOFFIT BORDER. Four dark bands 0.42 m in from the rim, hung 0.06 under
   // the slab, so the ceiling has a coffer with a real reveal and the plaster in the middle
   // is the part the strip lights pick out. That is item 16's "a light side and a shadow
@@ -1324,24 +1345,25 @@ export const DRESS = {
     const k = kits();
     const s = k.solid;
     const smoothSteel = kits().solid;
+    const timber = new StationTimberKit();
     apronEdge(s, api);
     kerbLine(s, api);
-    canopyDetail(s, api, k.glow);
+    canopyDetail(smoothSteel, api, k.glow);
     contactStains(s, api);
     wetSheen(k.glow, api);
     wetPatches(s, api);
-    abandonedCar(s, api);
+    abandonedCar(smoothSteel, api);
     spilledCrate(s, api);
-    hoseReel(s, api);
-    wheelieBins(s, api);
-    palletStack(s, api);
+    hoseReel(smoothSteel, api);
+    wheelieBins(smoothSteel, api);
+    palletStack(timber, api);
     serviceBay(s, api, smoothSteel);
-    roadsideCrown(s, api);
-    fallenBoard(s, api);
-    cladPumps(s, api);
+    roadsideCrown(smoothSteel, api);
+    fallenBoard(timber, api);
+    cladPumps(smoothSteel, api);
     eastWall(s, api);
     shopInterior(s, api);
-    return { solid: s.build(), smoothSteel: smoothSteel.build(), glow: k.glow.empty() ? null : k.glow.build() };
+    return { solid: s.build(), smoothSteel: smoothSteel.build(), timber: timber.build(), glow: k.glow.empty() ? null : k.glow.build() };
   },
 };
 
