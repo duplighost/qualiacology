@@ -195,6 +195,9 @@ const RECOMMIT_MISS = 0.85;       // a whiff costs less than a landed bite
 const RING_SPIN = 0.30;           // rad/s: 0.55x a circling body, so the ring drifts
 const FLINCH_BUDGET = 0.180;      // seconds between body flinches, so a burst is not a seizure
 const _moonWorld = new THREE.Vector3();
+// The notice flare: how long the eyes hold the moment they find you, and how far they go.
+const NOTICE_S = 0.9;
+const NOTICE_GAIN = 2.6;
 const OFFICER_GO_S = 0.7;      // s the Pale takes to be taken
 const OFFICER_GO_RISE = 2.4;   // m it climbs while it folds
 const STAGGER_T = 0.620, STAGGER_IMMUNITY = 2.2, STAGGER_WINDOW = 0.40;
@@ -1611,7 +1614,7 @@ export class Enemies {
 
     e.alive = true;
     e.dead = false;
-    e.goingHome=false;e.homecomingT=0;e.departSink=0;e.officerSeen=false;e.officerGaze=0;e.officerGoT=0;e.wardenWorkT=0;
+    e.goingHome=false;e.homecomingT=0;e.departSink=0;e.officerSeen=false;e.officerGaze=0;e.officerGoT=0;e.noticeT=0;e._awarePrev=false;e.wardenWorkT=0;
     // C14 (2026-09-17): an authored person's face, palette and hair. The PEOPLE lane's human
     // rig record answers setAppearance(look); every other rig has no such method and is left
     // alone. Right after the body is bound, before anything reads it.
@@ -1867,6 +1870,15 @@ export class Enemies {
       if (e.committed) this._commit++;
       if (e.aware > 0 && e.def.owner === OWNER.PRESSURE) this._awareNow++;
       if (e.hunt) this._huntNow++;
+      // THE MOMENT IT SEES YOU. Everything this lane draws already reacts to a WINDUP - the
+      // eyes go to three and a half on telegraph() - and nothing at all marked the beat
+      // before it, which is the one that actually frightens anybody: you are walking, and a
+      // pair of eyes out in the dark turns on because it has found you. It is a single
+      // edge on `aware`, timed here because present() has no dt, and drawn in present().
+      const awareNow = e.aware > 0;
+      if (awareNow && !e._awarePrev) e.noticeT = NOTICE_S;
+      e._awarePrev = awareNow;
+      if (e.noticeT > 0) e.noticeT = Math.max(0, e.noticeT - dt);
       // C11: the nearest Warden, 0..1 over WARDEN_NEAR_R, in the same pass (six slots at most).
       if (e.species === 'warden') {
         const k = 1 - Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) / WARDEN_NEAR_R;
@@ -4440,6 +4452,15 @@ export class Enemies {
       // THE PALE'S WITHDRAWAL. Eased in, so it hangs for an instant and then goes: it is
       // being taken, not walking off. The fold keeps its feet with it rather than stretching
       // the body away from the ground.
+      // The notice flare, drawn. A fast rise and a slower fall: it SNAPS on and eases out,
+      // because the other way round is a lamp warming up and this is a thing noticing you.
+      if (typeof e.built.noticeGlow === 'function') {
+        if (e.noticeT > 0) {
+          const k = e.noticeT / NOTICE_S;
+          e.built.noticeGlow(k < 0.75 ? k / 0.75 : (1 - k) / 0.25);
+        } else if (e._noticeWasLit) { e.built.noticeGlow(0); }
+        e._noticeWasLit = e.noticeT > 0;
+      }
       if(e.officerGoT>0){
         const k=clamp01(e.officerGoT/OFFICER_GO_S),q=k*k;
         g.position.y+=q*OFFICER_GO_RISE;
@@ -4755,7 +4776,7 @@ function makeRecord(id, species, def, built, rng) {
     // 2026-09-17.
     //   carHoldT        seconds an INCAR_BLOCKED body has spent at a shut car door (D12)
     //   standingStepT / lastSeenDist / witnessCd / obsPrev   the Standing Kind's ears (Horror 15)
-    carHoldT: 0, officerSeen: false, officerGaze: 0, officerGoT: 0, goingHome: false, homecomingT: 0, departSink: 0, wardenWorkT: 0,
+    carHoldT: 0, officerSeen: false, officerGaze: 0, officerGoT: 0, noticeT: 0, _awarePrev: false, goingHome: false, homecomingT: 0, departSink: 0, wardenWorkT: 0,
     standingStepT: 0, lastSeenDist: -1, witnessCd: 0, obsPrev: false,
     slot: -1,
     // Where this body was last hurt, and whether it was hurt by a swing. Both

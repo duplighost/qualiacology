@@ -28,6 +28,7 @@ const RIM_GAIN = 0.20;     // swept 0.055 / 0.20 / 0.45 against the same four bo
                            // 0.055 is four hundredths of light and they are flat black holes,
                            // 0.45 turns them teal and rubbery and stops being a night, 0.20 is
                            // where the shoulders, the load and the ribs come back.
+const NOTICE_EYE = 3.4;    // x the eye's base colour at the peak of the notice flare
 const WET_GAIN = 0.28;      // the damp glint off hide, on the moon's half-vector
 /** The moon in VIEW space, shared by every shell material. enemies.js writes it. */
 const MOON_VIEW = { value: new THREE.Vector3(0.4, 0.85, 0.3).normalize() };
@@ -1885,6 +1886,19 @@ export function buildBody(key, rng) {
 
     /** 0 = held back in the dark, 1 = fully lit. THE REVEAL BUDGET. */
     reveal(v) { setReveal(shell, v); },
+
+    /**
+     * THE NOTICE FLARE. 0..1, and it is NOT the telegraph: the telegraph is a windup, this
+     * is the half-second before anything has been decided, when it has simply found you.
+     * Eyes only, no rim - a body that brightens all over when it sees you reads as a
+     * status effect, a pair of eyes that comes up out of the dark reads as being seen.
+     * Written straight over the eye colour, so whichever of the two ran last wins and
+     * neither has to know about the other.
+     */
+    noticeGlow(v) {
+      const g = 1 + v * (NOTICE_EYE - 1);
+      eyeMat.color.setRGB(eyeBase.r * g, eyeBase.g * g, eyeBase.b * g);
+    },
 
     /** 0..1 windup charge: x2 emissive on the shootable part + the eyes. */
     telegraph(v) {

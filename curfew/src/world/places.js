@@ -453,6 +453,12 @@ const SHOOT_GLINT_SCALE = 1.6;
 // the torch off: 6 cd / decay 0.85 gives a 1.42x whole-frame beat with only 1.35% over 150.
 // It changes only the existing PointLight's decay uniform: no extra light or program.
 const CLAIM_LAMP_I = 6.0;
+const WAKE_LAMP_I = 2.1;          // the wrong light, before the place is yours (see _lampStep)
+// ...and it falls off far harder than the yard lamp. At the claim lamp's 0.85 the wisp
+// reached the whole of the Garden of Rest and washed the frame teal, which reads as a
+// colour filter over the game rather than as a light burning in a place. 1.7 makes it a
+// POOL: bright where it stands, gone a few metres out, and the mist above it does the rest.
+const WAKE_LAMP_DECAY = 1.7;
 const CLAIM_LAMP_DECAY = 0.85;
 const CLAIM_LAMP_OUT = 0.9;       // m in front of the post, along its facing
 const CLAIM_LAMP_Y = 2.1;         // m above the fixture's foot: the head of the post
@@ -963,6 +969,7 @@ export class Places {
     this._usePrev = false;
     this._ignitions = [];
     this._lamp = null;            // the yard lamp's rover handle, or null (see _lampStep)
+    this._lampWarm = null;        // true once the place is claimed and the light has turned
     this._lampId = null;
     this.claimStarts = 0;         // counters for tests: holds begun, refused, completed
     this.claimRefusals = 0;
@@ -3405,20 +3412,55 @@ export class Places {
    * dynamic light exists here.
    */
   _lampStep(held) {
-    const rec = held && this.claimed.has(held.id) ? this.nodes.get(held.id) : null;
+    // THE WAKE, and it is the answer to why an arrival was never frightening. This borrowed
+    // ONE rover and it borrowed it only for a place you had already CLAIMED - so every
+    // destination in the county, on the one approach that should be the worst moment it
+    // has, was unlit. That is what the twenty-five approach shots were showing: not bad
+    // architecture, an absence of any light at all until after you had won.
+    //
+    // So a place is lit BEFORE you take it, and lit wrongly. GLOW.wisp against the yard
+    // lamp's filament orange, a third of its intensity, and it GUTTERS - three
+    // incommensurate rates so it never repeats, and a hard stutter on top that drops it to
+    // a fifth for a moment, which is the thing a steady sine can never do. It reads as
+    // something already burning in there. Claim the place and the same rover warms to the
+    // yard lamp: the light stops being theirs.
+    //
+    // Still ONE rover either way. The census is untouched and the pool's eight seats take
+    // no more pressure than they did.
+    const rec = held ? this.nodes.get(held.id) : null;
     const fx = rec && rec.fixture && rec.fixture.how === 'touch' ? rec.fixture : null;
     const wantId = fx ? held.id : null;
+    const claimed = !!(held && this.claimed.has(held.id));
     if (this._lamp && this._lampId !== wantId) {
       const lights = this._sys('lights');
       if (lights && typeof lights.release === 'function') lights.release(this._lamp);
-      this._lamp = null; this._lampId = null;
+      this._lamp = null; this._lampId = null; this._lampWarm = null;
     }
     if (wantId && !this._lamp) {
       const lights = this._sys('lights');
       if (!lights || typeof lights.borrow !== 'function') return;
-      const h = lights.borrow('claim-lamp', fx.wx + fx.fwx * CLAIM_LAMP_OUT, fx.wy + CLAIM_LAMP_Y, fx.wz + fx.fwz * CLAIM_LAMP_OUT, GLOW.lamp, CLAIM_LAMP_I, 0);
-      if (h) { h.decay = CLAIM_LAMP_DECAY; this._lamp = h; this._lampId = wantId; }
+      const h = lights.borrow('claim-lamp',
+        fx.wx + fx.fwx * CLAIM_LAMP_OUT, fx.wy + CLAIM_LAMP_Y, fx.wz + fx.fwz * CLAIM_LAMP_OUT,
+        claimed ? GLOW.lamp : GLOW.wisp, claimed ? CLAIM_LAMP_I : WAKE_LAMP_I, 0);
+      if (h) { h.decay = claimed ? CLAIM_LAMP_DECAY : WAKE_LAMP_DECAY; this._lamp = h; this._lampId = wantId; this._lampWarm = claimed; }
     }
+    if (!this._lamp) return;
+    // Claiming it turns the light: same rover, warmed.
+    if (claimed !== this._lampWarm) {
+      this._lampWarm = claimed;
+      if (this._lamp.setColour) this._lamp.setColour(claimed ? GLOW.lamp : GLOW.wisp);
+      this._lamp.decay = claimed ? CLAIM_LAMP_DECAY : WAKE_LAMP_DECAY;
+    }
+    if (claimed) { if (this._lamp.setIntensity) this._lamp.setIntensity(CLAIM_LAMP_I); return; }
+    // THE GUTTER. Three rates that do not share a period, so the pattern never comes round,
+    // and a stutter keyed off a hash of the second so the drop lands at no rhythm at all.
+    const t = this._t;
+    let f = 0.70 + 0.20 * Math.sin(t * 5.7) + 0.13 * Math.sin(t * 11.3 + 1.7)
+      + 0.08 * Math.sin(t * 23.1 + 0.4);
+    const beat = Math.floor(t * 1.7);
+    const h = ((Math.imul(beat, 374761393) ^ 0x5f3a) >>> 0) / 4294967295;
+    if (h < 0.16) f *= 0.22 + h;
+    if (this._lamp.setIntensity) this._lamp.setIntensity(WAKE_LAMP_I * Math.max(0.05, f));
   }
 
   /** A sound at a point, through the audio lane's pooled door, and nothing if it is absent. */
