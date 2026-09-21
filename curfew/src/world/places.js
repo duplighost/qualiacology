@@ -83,6 +83,7 @@ import { DRESS as DRESS_HOLDFAST } from './holdfast-dress.js';
 import { DRESS as DRESS_REFUGES } from './destination-refuges.js';
 import { DRESS as DRESS_ESTATES } from './estate-details.js';
 import { STAGED_BUILDERS } from './staged.js';
+import { installStationFloor } from './station-floor.js';
 import { SPECIES } from '../enemies/species.js';
 
 // ROUND 21: weather's snow colour, shared with chunks.js's ground so a yard and the field it
@@ -1941,6 +1942,10 @@ export class Places {
         apMat = clonePlaceMaterial(this.matBody);
         apMat.map = placeSurfaceFor(this.surfaceTextures, d);
         apMat.bumpMap = placeBumpFor(this.surfaceTextures, d);
+      }
+      if (d.id === 'filling-station') {
+        if (apMat === this.matBody) apMat = clonePlaceMaterial(this.matBody);
+        installStationFloor(apMat);
       }
       const m = new THREE.Mesh(ap, apMat);
       m.name = 'apron-' + d.id;

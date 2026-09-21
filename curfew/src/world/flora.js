@@ -954,6 +954,138 @@ function trunkRadiusAt(rec, f) {
   return rec.trunkR * lerp(1, top, Math.pow(clamp01(f), 1.24));
 }
 
+// A bole is one surface. Independent open cylinders left different fluting,
+// normals, colours and wind weights on each side of the same horizontal join.
+// Share the rings before expanding for the existing merged tree batch.
+function connectedTrunkGeometry(rec, lod, seed) {
+  const sides = lod === 0 ? 10 : 5;
+  const rings = lod === 0 ? [0, Math.min(0.055, 0.55 / rec.trunkH), 0.32, 0.70, 1] : [0, 0.70, 1];
+  const rough = rec.kind === 'birch' ? 0.045 : rec.kind === 'snag' ? 0.11 : 0.075;
+  const flare = rec.kind === 'snag' ? 0.44 : 0.36;
+  const phase = (seed + rec.barkSeed) * 0.173;
+  const positions = [], colours = [], weights = [], uvs = [], indices = [];
+  const centres = rings.map(f => trunkPointAt(rec, f));
+  const direction = new THREE.Vector3(), rotation = new THREE.Quaternion(), point = new THREE.Vector3();
+  for (let row = 0; row < rings.length; row++) {
+    const f = rings[row], centre = centres[row];
+    const a = centres[Math.max(0, row - 1)], b = centres[Math.min(rings.length - 1, row + 1)];
+    direction.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize();
+    rotation.setFromUnitVectors(_yAxis, direction);
+    const base = row === 0, radius = trunkRadiusAt(rec, f) / (base ? 1 + rough : 1);
+    for (let i = 0; i <= sides; i++) {
+      const angle = i === sides ? 0 : i / sides * TAU;
+      const furrow = Math.sin(angle * 3 + phase) * 0.58
+        + Math.sin(angle * 5 - phase * 0.7 + f * 2.1) * 0.30
+        + Math.sin(f * TAU * 1.5 + phase) * 0.12;
+      const r = radius * (1 + rough * furrow + (base ? flare : 0));
+      point.set(Math.cos(angle) * r, 0, Math.sin(angle) * r).applyQuaternion(rotation);
+      positions.push(centre.x + point.x, centre.y + point.y, centre.z + point.z);
+      const grain = 0.5 + 0.5 * Math.sin(angle * (rec.kind === 'birch' ? 4 : 6)
+        + f * (rec.kind === 'snag' ? 8.5 : 3.2) + (seed + rec.barkSeed) * 0.119);
+      let shade = 0.68 + grain * 0.46;
+      if (rec.kind === 'birch') shade *= 1.08;
+      if (rec.kind === 'snag' && Math.sin(angle * 3 - f * 5 + phase) > 0.52) shade *= 0.68;
+      for (let c = 0; c < 3; c++) colours.push(rec.bark[c] * shade);
+      // Keep the rooted base fixed and retain the old reach-end wind curve.
+      // Sharing it removes the restart at each reach; branch roots remain
+      // embedded in the bole and keep their existing scaffold/tip motion.
+      weights.push(base ? 0 : 0.04 + f * 0.14);
+      uvs.push(i / sides * 0.96 + 0.02, 0.82 + f * 0.16);
+    }
+  }
+  for (let row = 0; row < rings.length - 1; row++) for (let i = 0; i < sides; i++) {
+    const a = row * (sides + 1) + i, b = a + sides + 1;
+    indices.push(a, b, a + 1, a + 1, b, b + 1);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
+  geometry.setAttribute('aWind', new THREE.Float32BufferAttribute(weights, 1));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  if (rec.kind === 'snag') {
+    // The exposed tip owns the snag's far-impostor height. Keep that exact
+    // original bound when the final cross-section gains its connecting side.
+    const a = trunkPointAt(rec, 0.70), b = trunkPointAt(rec, 1);
+    const tip = segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
+      trunkRadiusAt(rec, 0.70), trunkRadiusAt(rec, 1), sides - 1, rec.bark, 0, 0,
+      { rough, kind: rec.kind, seed: seed + rec.barkSeed, part: lod === 0 ? 3 : 1 });
+    tip.computeBoundingBox(); const maxY = tip.boundingBox.max.y; tip.dispose();
+    const p = geometry.attributes.position, start = (rings.length - 1) * (sides + 1);
+    let highest = start;
+    for (let i = start; i < p.count; i++) {
+      if (p.getY(i) > p.getY(highest)) highest = i;
+    }
+    for (let i = start; i < p.count; i++) p.setY(i, Math.min(p.getY(i), maxY));
+    p.setY(highest, maxY);
+    if (highest === start) p.setY(start + sides, maxY);
+    if (highest === start + sides) p.setY(start, maxY);
+  }
+  geometry.setIndex(indices); geometry.computeVertexNormals();
+  const normals = geometry.attributes.normal;
+  // The UV wrap needs duplicate vertices, but their surface normal stays shared.
+  for (let row = 0; row < rings.length; row++) {
+    const a = row * (sides + 1), b = a + sides;
+    direction.fromBufferAttribute(normals, a).add(point.fromBufferAttribute(normals, b)).normalize();
+    normals.setXYZ(a, direction.x, direction.y, direction.z);
+    normals.setXYZ(b, direction.x, direction.y, direction.z);
+  }
+  const shell = geometry.toNonIndexed(); geometry.dispose();
+  if (rec.kind !== 'birch') return shell;
+
+  // Birch lenticels are short broken marks, not separate sleeves around the
+  // trunk. Place each patch directly on the baked triangle, with its normal
+  // and wind interpolated from that surface so it cannot float away in a gust.
+  const patchPositions = [], patchNormals = [], patchColours = [], patchUVs = [], patchWind = [];
+  const shellP = shell.attributes.position, shellN = shell.attributes.normal;
+  const shellW = shell.attributes.aWind, shellUV = shell.attributes.uv;
+  const bary = new THREE.Vector3(), normal = new THREE.Vector3();
+  const sample = (f, angle) => {
+    let row = 0; while (row < rings.length - 2 && f > rings[row + 1]) row++;
+    const along = clamp01((f - rings[row]) / (rings[row + 1] - rings[row]));
+    const across = (angle / TAU % 1 + 1) % 1 * sides;
+    const side = Math.min(sides - 1, Math.floor(across)), u = across - side;
+    const second = u + along > 1;
+    const face = (row * sides + side) * 6 + (second ? 3 : 0);
+    // The loft's two triangles use (0,0),(0,1),(1,0) then
+    // (1,0),(0,1),(1,1), in angular/height coordinates.
+    if (second) bary.set(1 - along, 1 - u, along + u - 1);
+    else bary.set(1 - u - along, along, u);
+    point.set(0, 0, 0); normal.set(0, 0, 0); let wind = 0, uvX = 0, uvY = 0;
+    for (let k = 0; k < 3; k++) {
+      const w = bary.getComponent(k), id = face + k;
+      direction.fromBufferAttribute(shellP, id); point.addScaledVector(direction, w);
+      direction.fromBufferAttribute(shellN, id); normal.addScaledVector(direction, w);
+      wind += shellW.getX(id) * w; uvX += shellUV.getX(id) * w; uvY += shellUV.getY(id) * w;
+    }
+    normal.normalize(); point.addScaledVector(normal, 0.0015);
+    return { p: point.clone(), n: normal.clone(), wind, uv: [uvX, uvY] };
+  };
+  const count = lod === 0 ? 12 : 3;
+  for (let i = 0; i < count; i++) {
+    const f = 0.045 + hashI(i, 233, seed) * 0.42;
+    const angle = hashI(i, 239, seed) * TAU;
+    const span = 0.22 + hashI(i, 241, seed) * 0.54;
+    const height = (0.024 + hashI(i, 251, seed) * 0.052) / rec.trunkH;
+    const slant = (hashI(i, 257, seed) - 0.5) * height;
+    const corners = [sample(f, angle), sample(f + slant, angle + span),
+      sample(f + slant + height * 0.58, angle + span), sample(f + height, angle)];
+    const shade = 0.31 + hashI(i, 263, seed) * 0.20;
+    for (const k of [0, 3, 1, 1, 3, 2]) {
+      const v = corners[k]; patchPositions.push(v.p.x, v.p.y, v.p.z);
+      patchNormals.push(v.n.x, v.n.y, v.n.z); patchWind.push(v.wind); patchUVs.push(...v.uv);
+      for (let c = 0; c < 3; c++) patchColours.push(rec.bark[c] * shade);
+    }
+  }
+  const patches = new THREE.BufferGeometry();
+  patches.setAttribute('position', new THREE.Float32BufferAttribute(patchPositions, 3));
+  patches.setAttribute('normal', new THREE.Float32BufferAttribute(patchNormals, 3));
+  patches.setAttribute('color', new THREE.Float32BufferAttribute(patchColours, 3));
+  patches.setAttribute('aWind', new THREE.Float32BufferAttribute(patchWind, 1));
+  patches.setAttribute('uv', new THREE.Float32BufferAttribute(patchUVs, 2));
+  const merged = mergeGeometries([shell, patches], false); shell.dispose(); patches.dispose();
+  return merged;
+}
+
 // A spray is a volume of small leaves. Lighting every card with its flat sheet
 // normal exposes the construction whenever a lamp moves. Bend the normals round
 // the branch volume at bake time; this adds no vertices or per-frame work.
@@ -1234,56 +1366,10 @@ function makeFoliageAtlas(authoredImage = null) {
 /** Build one template's geometry from its recipe at a detail level (0 = near). */
 function buildTemplateGeometry(rec, lod, seed) {
   const parts = [];
-  // ART.md §2.5, measured: about 92% of a mid-LOD tree is canopy blobs, and the
-  // trunk - the thing the player actually reads - was SIXTEEN triangles.
-  // IcosahedronGeometry detail 2 = 320 faces, detail 1 = 80, detail 0 = 20, so
-  // the blob detail is the whole bill and the radial count is nearly free.
-  // Radial goes DOWN at LOD0 (7 -> 6) and UP at LOD1 (4 -> 5) on purpose: 8
-  // triangles per mid tree is what stops a trunk reading as a flat slab, and
-  // the document is explicit that this saving is not to be spent elsewhere.
-  const radial = lod === 0 ? 10 : 5;
+  // The connected near bole uses ten sides, the mid bole five. Branches and
+  // foliage below retain their existing geometry and attachment coordinates.
   const tH = rec.trunkH, tR = rec.trunkR;
-
-  // Put the existing extra near ring at the root flare, where it changes the
-  // silhouette. A ring halfway up the old 0.32H reach could only make a cone.
-  // Every centre still lies on the unchanged recipe/collider centreline.
-  const rings = lod === 0 ? [0, Math.min(0.055, 0.55 / tH), 0.32, 0.70, 1] : [0, 0.70, 1];
-  for (let i = 0; i < rings.length - 1; i++) {
-    const f0 = rings[i], f1 = rings[i + 1];
-    const a = trunkPointAt(rec, f0), b = trunkPointAt(rec, f1);
-    let r0 = trunkRadiusAt(rec, f0), r1 = trunkRadiusAt(rec, f1);
-    // ROUND 15: the flare is bigger AND much shorter (see the curve in segmentGeometry),
-    // so the base spreads and the shaft above it does not.
-    const flare = i === 0 ? (rec.kind === 'snag' ? 0.44 : 0.36) : 0;
-    const rough = rec.kind === 'birch' ? 0.045 : rec.kind === 'snag' ? 0.11 : 0.075;
-    // Divide out the FLUTING only, so the shaft keeps its radius. The flare itself is now
-    // allowed past the collider circle, exactly as the root spurs below are: it lives in
-    // the bottom half-metre, the collider is a circle with no vertical extent, and a base
-    // you can walk right up to is the whole point of item 11.
-    if (flare) r0 /= 1 + rough;
-    parts.push(segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
-      r0, r1, i === rings.length - 2 ? Math.max(3, radial - 1) : radial,
-      rec.bark, lerp(0, 0.10, f0), lerp(0.04, 0.18, f1), {
-        axial: 1,
-        rough,
-        flare, kind: rec.kind, seed: seed + rec.barkSeed, part: i,
-      }));
-  }
-
-  // Birch's identity has to survive at eye height. Four irregular dark collars sit just over
-  // the pale baked trunk; they use the same vertex-colour Lambert mesh, not another material
-  // or draw. The mid tree keeps only one collar to remain inside its triangle gate.
-  if (rec.kind === 'birch') {
-    const bands = lod === 0 ? [0.075, 0.14, 0.235, 0.37] : [0.20];
-    for (let i = 0; i < bands.length; i++) {
-      const f0 = bands[i], f1 = f0 + (0.028 + (i & 1) * 0.010);
-      const a = trunkPointAt(rec, f0), b = trunkPointAt(rec, f1);
-      const r0 = trunkRadiusAt(rec, f0) * 1.025, r1 = trunkRadiusAt(rec, f1) * 1.025;
-      parts.push(segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
-        r0, r1, Math.max(4, radial - 1), (i & 1) ? PAL.barkDark : PAL.barkSnag, 0.01, 0.05,
-        { rough: 0.025, kind: 'band', seed: seed + 211, part: i }));
-    }
-  }
+  parts.push(connectedTrunkGeometry(rec, lod, seed));
 
   // A snag ends in a split, not a sharpened pole. Its existing trunk is the tallest shard;
   // these one/two secondary splinters make the broken crown legible from the fen road.

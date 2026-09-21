@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {Pass, FullScreenQuad} from 'three/addons/postprocessing/Pass.js';
 import {MoonAirField} from './moon-air.js';
-import {VIEW_POSITION_GLSL as POSITION} from './depth-position.js';
+import {VIEW_POSITION_GLSL as POSITION, VIEW_NORMAL_GLSL as NORMAL} from './depth-position.js';
 
 // Contact shading and restrained first-bounce light from visible luminous surfaces.
 // Half-resolution neighborhoods are reconstructed along depth edges. No history
@@ -21,21 +21,20 @@ export class ContactDepthPass extends Pass {
       uniform float uProjectionY,uShadeCap,uReflectionStrength;
       varying vec2 vUv;
       ${POSITION}
+      ${NORMAL}
       void main(){
-        float depth=textureLod(tDepth,vUv,0.0).r;
+        float depth=depthAtPixel(pixelAt(vUv));
         if(depth>.999998){gl_FragColor=vec4(0.0);return;}
         vec3 p=positionAt(vUv);
         if(-p.z>155.0){gl_FragColor=vec4(0.0);return;}
-        vec2 px=1.0/uResolution;
-        vec3 dl=p-positionAt(vUv-vec2(px.x,0.0)),dr=positionAt(vUv+vec2(px.x,0.0))-p;
-        vec3 db=p-positionAt(vUv-vec2(0.0,px.y)),dt=positionAt(vUv+vec2(0.0,px.y))-p;
-        vec3 basis=cross(abs(dl.z)<abs(dr.z)?dl:dr,abs(db.z)<abs(dt.z)?db:dt);
-        vec3 n=basis/max(length(basis),.000001);
-        if(dot(n,-p)<0.0)n=-n;
+        vec3 n=surfaceNormalAt(vUv,p);
         float radius=clamp(1.05*uProjectionY/max(.5,-p.z),.001,.10);
         float occ=0.0;vec3 bounce=vec3(0.0);
+        // Decorrelate the sparse disk so an occluder cannot stamp sixteen
+        // repeated outlines. The edge-aware resolve below removes sample grain.
+        float rotation=6.28318530718*fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));
         for(int i=0;i<16;i++){
-          float a=float(i)*2.39996323;
+          float a=float(i)*2.39996323+rotation;
           float ring=.13+.87*sqrt((float(i)+.5)/16.0);
           vec2 uv=vUv+vec2(cos(a)*uResolution.y/uResolution.x,sin(a))*radius*ring;
           float inFrame=step(0.0,uv.x)*step(0.0,uv.y)*step(uv.x,1.0)*step(uv.y,1.0);
@@ -46,7 +45,7 @@ export class ContactDepthPass extends Pass {
           float reach=(1.0-smoothstep(.12,2.1,dist))*inFrame;
           occ+=facing*reach;
           // Excess radiance only: ordinary sky-lit walls cannot amplify themselves.
-          vec3 light=textureLod(tDiffuse,uv,0.0).rgb;
+          vec3 light=texelFetch(tDiffuse,pixelAt(uv),0).rgb;
           float peak=max(light.r,max(light.g,light.b));
           bounce+=min(light,vec3(4.0))*smoothstep(.65,1.8,peak)*facing*reach;
         }
@@ -65,18 +64,14 @@ export class ContactDepthPass extends Pass {
       uniform float uReflectionStrength;
       varying vec2 vUv;
       ${POSITION}
+      ${NORMAL}
       void main(){
-        if(textureLod(tDepth,vUv,0.0).r>.999998){gl_FragColor=vec4(0.0);return;}
+        if(depthAtPixel(pixelAt(vUv))>.999998){gl_FragColor=vec4(0.0);return;}
         vec3 p=positionAt(vUv);
         gl_FragColor=vec4(0.0,0.0,0.0,-p.z);
         float mask=clamp((.98-textureLod(tDiffuse,vUv,0.0).a)/.75,0.0,1.0);
         if(mask<.025 || uReflectionStrength<=0.0 || -p.z>100.0)return;
-        vec2 px=1.0/uResolution;
-        vec3 dl=p-positionAt(vUv-vec2(px.x,0.0)),dr=positionAt(vUv+vec2(px.x,0.0))-p;
-        vec3 db=p-positionAt(vUv-vec2(0.0,px.y)),dt=positionAt(vUv+vec2(0.0,px.y))-p;
-        vec3 basis=cross(abs(dl.z)<abs(dr.z)?dl:dr,abs(db.z)<abs(dt.z)?db:dt);
-        vec3 n=basis/max(length(basis),.000001);
-        if(dot(n,-p)<0.0)n=-n;
+        vec3 n=surfaceNormalAt(vUv,p);
         vec3 reflected=vec3(0.0);
         // Opaque wet surfaces write a mask into unused HDR alpha. The road
         // retains its filtered sky reflection when a ray leaves the screen.
@@ -123,42 +118,89 @@ export class ContactDepthPass extends Pass {
         uniform vec2 uFieldSize,uReflectionSize;
         varying vec2 vUv;
         ${POSITION}
-        vec3 airAt(float z){
+      ${NORMAL}
+float contactB2(float x) {
+  x = abs(x);
+  return x < 0.5 ? 0.75-x*x : 0.5*pow(max(0.0,1.5-x),2.0);
+}
+
+vec3 contactFacingNormal(vec3 dx, vec3 dy, vec3 p) {
+  vec3 n = cross(dx,dy);
+  n *= inversesqrt(max(dot(n,n),1e-20));
+  return dot(n,-p)<0.0 ? -n : n;
+}
+
+vec4 resolveContact(vec2 uv, vec3 p) {
+  vec3 centreNormal=surfaceNormalAt(uv,p);
+  vec2 cell=uv*uFieldSize-0.5;
+  ivec2 nearest=ivec2(floor(cell+0.5));
+  ivec2 last=ivec2(uFieldSize)-1;
+  vec3 positions[9];
+  vec4 values[9];
+  float spatial[9];
+  for(int y=0;y<3;y++)for(int x=0;x<3;x++){
+    int i=y*3+x;
+    ivec2 q=clamp(nearest+ivec2(x-1,y-1),ivec2(0),last);
+    vec2 sampleUV=(vec2(q)+0.5)/uFieldSize;
+    positions[i]=positionAt(sampleUV);
+    values[i]=texelFetch(tField,q,0);
+    vec2 delta=cell-vec2(nearest+ivec2(x-1,y-1));
+    spatial[i]=contactB2(delta.x)*contactB2(delta.y);
+  }
+  float tolerance=0.015+min(100.0,-p.z)*0.0015;
+  vec4 result=vec4(0.0);float total=0.0;
+  for(int y=0;y<3;y++)for(int x=0;x<3;x++){
+    int i=y*3+x;
+    vec3 s=positions[i];
+    // Reuse the nine positions for neighbour normals. No extra field-normal
+    // texture and no nine-times nested depth-normal reconstruction.
+    vec3 dl=s-positions[y*3+max(0,x-1)];
+    vec3 dr=positions[y*3+min(2,x+1)]-s;
+    vec3 db=s-positions[max(0,y-1)*3+x];
+    vec3 dt=positions[min(2,y+1)*3+x]-s;
+    vec3 dx=x==0?dr:(x==2?dl:(abs(dl.z)<abs(dr.z)?dl:dr));
+    vec3 dy=y==0?dt:(y==2?db:(abs(db.z)<abs(dt.z)?db:dt));
+    vec3 sampleNormal=contactFacingNormal(dx,dy,s);
+    float normalWeight=smoothstep(0.70,0.95,dot(centreNormal,sampleNormal));
+    float planeError=abs(dot(centreNormal,s-p));
+    float planeWeight=1.0-smoothstep(tolerance,3.0*tolerance,planeError);
+    float weight=spatial[i]*normalWeight*planeWeight;
+    result+=values[i]*weight;total+=weight;
+  }
+  // If the thin foreground surface has no matching coarse sample, a rear
+  // surface's occlusion/bounce does not belong to it.
+  return total>0.00001?result/total:vec4(0.0);
+}
+
+
+        vec4 airAt(float z){
           vec2 cell=vUv*uReflectionSize-.5,base=(floor(cell)+.5)/uReflectionSize,f=fract(cell);
-          vec3 air=vec3(0.0);float total=0.0;
+          vec4 air=vec4(0.0);float total=0.0;
           for(int y=0;y<2;y++)for(int x=0;x<2;x++){
             vec2 o=vec2(float(x),float(y)),uv=base+o/uReflectionSize,w=mix(1.0-f,f,o);
             vec4 a=textureLod(tAir,uv,0.0);
-            float dz=abs(a.a-min(-z,200.0)),weight=w.x*w.y/(1.0+dz*dz*65.0);
-            air+=a.rgb*weight;total+=weight;
+            float dz=abs(min(-positionAt(uv).z,200.0)-min(-z,200.0)),weight=w.x*w.y/(1.0+dz*dz*65.0);
+            // Filter extinction instead of transmission. Exactly clear air then
+            // stays exactly neutral even with very small edge weights.
+            air+=vec4(a.rgb,1.0-a.a)*weight;total+=weight;
           }
-          return air/max(total,.00001);
+          // A thin foreground silhouette may have no matching quarter-size
+          // sample. Missing air is transparent; alpha zero would blacken it.
+          return total>.00001?vec4(air.rgb/total,clamp(1.0-air.a/total,0.0,1.0)):vec4(0.0,0.0,0.0,1.0);
         }
         void main(){
           vec4 color=textureLod(tDiffuse,vUv,0.0);
           float z=positionAt(vUv).z;
-          vec3 air=airAt(z);
-          if(textureLod(tDepth,vUv,0.0).r>.999998){gl_FragColor=vec4(color.rgb+air,1.0);return;}
+          vec4 air=airAt(z);
+          if(depthAtPixel(pixelAt(vUv))>.999998){gl_FragColor=vec4(color.rgb*air.a+air.rgb,1.0);return;}
           float wet=clamp((.98-color.a)/.75,0.0,1.0);
-          vec2 cell=vUv*uFieldSize-.5;
-          vec2 base=(floor(cell)+.5)/uFieldSize;
-          vec2 f=fract(cell);
-          vec4 field=vec4(0.0);float total=0.0;
-          for(int y=0;y<2;y++)for(int x=0;x<2;x++){
-            vec2 o=vec2(float(x),float(y));
-            vec2 uv=base+o/uFieldSize;
-            vec2 w=mix(1.0-f,f,o);
-            float dz=abs(positionAt(uv).z-z);
-            float weight=w.x*w.y/(1.0+dz*dz*65.0);
-            field+=textureLod(tField,uv,0.0)*weight;total+=weight;
-          }
-          field/=max(total,.00001);
+          vec4 field=resolveContact(vUv,positionAt(vUv));
           float bright=max(color.r,max(color.g,color.b));
           color.rgb*=1.0-field.a*(1.0-smoothstep(.65,2.5,bright));
           color.rgb+=field.rgb*min(sqrt(max(color.rgb,vec3(0.0))),vec3(.6));
           if(wet>.025){
-            cell=vUv*uReflectionSize-.5;base=(floor(cell)+.5)/uReflectionSize;f=fract(cell);
-            vec3 reflected=vec3(0.0);total=0.0;
+            vec2 cell=vUv*uReflectionSize-.5,base=(floor(cell)+.5)/uReflectionSize,f=fract(cell);
+            vec3 reflected=vec3(0.0);float total=0.0;
             for(int y=0;y<2;y++)for(int x=0;x<2;x++){
               vec2 o=vec2(float(x),float(y)),uv=base+o/uReflectionSize,w=mix(1.0-f,f,o);
               vec4 r=textureLod(tReflection,uv,0.0);
@@ -169,7 +211,7 @@ export class ContactDepthPass extends Pass {
             // reflection RGB cannot bleed into an adjacent dry coplanar pixel.
             color.rgb+=reflected/max(total,.00001)*wet;
           }
-          color.rgb+=air; color.a=1.0;
+          color.rgb=color.rgb*air.a+air.rgb; color.a=1.0;
           gl_FragColor=color;
         }`});
     this.quad=new FullScreenQuad(this.material);

@@ -6,14 +6,21 @@ export function carSurfaces(seed=17){
   const size=256, height=new Float32Array(size*size);
   const albedo=new Uint8Array(size*size*4),rough=new Uint8Array(size*size*4),normal=new Uint8Array(size*size*4);
   const hash=(x,y)=>{let n=Math.imul(x+seed*17,374761393)^Math.imul(y+41,668265263);n=Math.imul(n^(n>>>13),1274126177);return((n^(n>>>16))>>>0)/4294967295;};
+  const field=(x,y,period)=>{
+    const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy);
+    const sample=(a,b)=>hash((a+period)%period,(b+period)%period);
+    const a=sample(ix,iy)*(1-sx)+sample(ix+1,iy)*sx,b=sample(ix,iy+1)*(1-sx)+sample(ix+1,iy+1)*sx;
+    return a*(1-sy)+b*sy;
+  };
   for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-    const i=y*size+x,j=i*4,n=hash(x,y),patch=hash(x>>4,y>>4);
-    const scratch=(x%71===0&&hash(x,y>>4)>.42)||(y%113===0&&x%49<32);
-    const pit=n>.972&&patch>.43;
-    const v=pit?.43:scratch?.73:.89+n*.11;
+    const i=y*size+x,j=i*4,n=hash(x,y),patch=field(x/64,y/64,4),orange=field(x/4,y/4,64);
+    // Aged enamel is still a continuous coating. Broad oxidation varies its
+    // polish; isolated pinholes interrupt it, without a ruler-straight scratch grid.
+    const pit=n>.994&&patch>.52;
+    const v=pit?.67:.91+patch*.065+n*.018;
     albedo.set([Math.round(v*255),Math.round(v*255),Math.round(v*255),255],j);
-    const r=Math.round((pit?.98:scratch?.82:.68+n*.20)*255);rough.set([r,r,r,255],j);
-    height[i]=pit?-.8:scratch?-.24:(n-.5)*.04;
+    const r=Math.round((pit?.96:.58+patch*.28+n*.035)*255);rough.set([r,r,r,255],j);
+    height[i]=pit?-.16:(orange-.5)*.025+(n-.5)*.006;
   }
   for(let y=0;y<size;y++)for(let x=0;x<size;x++){
     const get=(a,b)=>height[((b+size)%size)*size+(a+size)%size];
@@ -48,9 +55,21 @@ export function carSurfaces(seed=17){
   const rubber=new THREE.MeshStandardMaterial({color:0x111819,roughnessMap,normalMap,normalScale:new THREE.Vector2(.3,.3),roughness:.97});rubber.name='car-rubber';
   const leather=new THREE.MeshStandardMaterial({color:0x48332a,roughnessMap:leatherRoughness,normalMap:leatherNormal,normalScale:new THREE.Vector2(.23,.23),roughness:.84});leather.name='car-leather';
   const dark=new THREE.MeshStandardMaterial({color:0x252c2a,roughness:.80});dark.name='car-dashboard';
-  // Direct torch specular on a transparent Standard pane made a second sun in the
-  // driver's view. Restrained tinted transmission keeps the windscreen readable.
-  const glass=new THREE.MeshBasicMaterial({color:0x1b3335,transparent:true,opacity:.19,depthWrite:false,side:THREE.DoubleSide});glass.name='car-glass';
+  // The glazing reflects the same filtered sky as the body. A thin transparent
+  // pane has no opaque diffuse layer; bound the point-source glint so the carried
+  // torch cannot become a second sun in the driver's view. No transmission pass.
+  const glass=new THREE.MeshStandardMaterial({color:0x738d89,roughness:.17,metalness:0,envMapIntensity:1.4,transparent:true,opacity:.19,depthWrite:false,side:THREE.DoubleSide});glass.name='car-glass';
+  glass.forceSinglePass=true;
+  glass.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
+      float paneFacing=abs(dot(normalize(normal),normalize(vViewPosition)));
+      float paneFresnel=pow(1.0-clamp(paneFacing,0.0,1.0),5.0);
+      outgoingLight=reflectedLight.indirectSpecular*1.35+
+        (reflectedLight.directSpecular/(vec3(1.0)+reflectedLight.directSpecular))*.12;
+      diffuseColor.a*=.50+paneFresnel*2.5;
+      #include <opaque_fragment>`);
+  };
+  glass.customProgramCacheKey=()=> 'car-thin-glazing-1';
   const warm=new THREE.MeshStandardMaterial({color:0xffd19b,emissive:0xffb66f,emissiveIntensity:.28,roughness:.45});warm.name='car-courtesy';
   const materials={paint,chrome,rubber,leather,dark,glass,warm};
   // THE ELEVEN REWIRE. restored() no longer sets a COLOUR: the colour is Ari's (vehicle/

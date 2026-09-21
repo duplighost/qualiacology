@@ -1015,6 +1015,25 @@ export class Sky {
     }
   }
 
+  // Keep the original sheets as a direct-render fallback. Normal post rendering
+  // integrates these same authored heights/winds against scene depth instead.
+  _depthMistActive() {
+    const post=this.ctx.systems?.get('post');
+    return !!(post?.enabled&&post.contact?.air?.depthMistEnabled);
+  }
+
+  refreshMistVisibility() {
+    const dawn=this.dome?.material.uniforms.uTrueDawn.value||0;
+    const visible=!dawn&&!this._depthMistActive();
+    for(const m of this.mist||[])m.mesh.visible=visible;
+  }
+
+  mistVolume() {
+    if(!this._depthMistActive()||!this.mist||this._mistYCurr===null
+      ||this.dome?.material.uniforms.uTrueDawn.value>0)return null;
+    return this.mist;
+  }
+
   /** Weather knobs, for the clock or a test. Both are 0..1 multipliers on what is authored. */
   setCloud(k) { if (this.dome) this.dome.material.uniforms.uCloud.value = Math.max(0, k); }
   setRidge(k) { if (this.dome) this.dome.material.uniforms.uRidge.value = Math.max(0, k); }
@@ -1165,7 +1184,7 @@ export class Sky {
   setTrueDawn(amount) {
     const k = clamp01(amount), u = this.dome.material.uniforms;
     u.uTrueDawn.value = k;
-    if (!k) { u.uMoonPeak.value=MOON_PEAK;u.uMoonGlow.value=.18;for(const m of this.mist||[])m.mesh.visible=true;return; }
+    if (!k) { u.uMoonPeak.value=MOON_PEAK;u.uMoonGlow.value=.18;this.refreshMistVisibility();return; }
     // The very same indigo, rose and gold stops as Emmett's projection.
     const t = .22 + .56 * k;
     let i = 0;
@@ -1276,6 +1295,7 @@ export class Sky {
     this._presentMeteor(alpha);
 
     if (!this.mist || this._mistYCurr === null) return;
+    this.refreshMistVisibility();
     const y = lerp(this._mistYPrev, this._mistYCurr, clamp01(alpha));
     // THE CEILING CLAMP. Whatever the terrain says, a mist sheet above the eye is not mist.
     // This is the one line that stops the first pass's pale wall from ever coming back, and
