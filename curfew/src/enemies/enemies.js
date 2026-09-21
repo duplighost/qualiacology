@@ -196,6 +196,8 @@ const RING_SPIN = 0.30;           // rad/s: 0.55x a circling body, so the ring d
 const FLINCH_BUDGET = 0.180;      // seconds between body flinches, so a burst is not a seizure
 const _moonWorld = new THREE.Vector3();
 // The notice flare: how long the eyes hold the moment they find you, and how far they go.
+const SHINE_LO = 0.52, SHINE_HI = 0.95;  // the cone the shine answers in
+const SHINE_MOON = 0.22;   // what is left of it with the torch off
 const CARRY_RANGE = 95;    // m: past this a carried lamp is released to the pool
 const NOTICE_S = 0.9;
 const NOTICE_GAIN = 2.6;
@@ -4379,6 +4381,7 @@ export class Enemies {
       }
       _moonWorld.transformDirection(cam.matrixWorldInverse);
       setMoonView(_moonWorld.x, _moonWorld.y, _moonWorld.z);
+      this._torchLit = !!(lights && typeof lights.torchOn === 'function' && lights.torchOn());
     }
 
     // the warm-up parked one of every species in the world to compile its
@@ -4511,9 +4514,24 @@ export class Enemies {
       // THE PALE'S WITHDRAWAL. Eased in, so it hangs for an instant and then goes: it is
       // being taken, not walking off. The fold keeps its feet with it rather than stretching
       // the body away from the ground.
+      if (typeof e.built.eyeHold === 'function') e.built.eyeHold(dist);
+      // EYESHINE. Retroreflection needs the light beside your own eye, which here is the
+      // torch, so a hound at the edge of an unlit night is dark and the same hound in the
+      // beam is two discs. It is keyed to how square-on its head is to you and it does
+      // NOTHING side-on, so one quartering across the grass flashes as it swings past and
+      // goes out again. Corpses are skipped: deathGlow owns the eyes once a thing is down,
+      // and a dead animal must not answer a beam.
+      if (e.def.eyeshine && e.alive && typeof e.built.eyeshine === 'function') {
+        const bx = -Math.sin(yaw), bz = -Math.cos(yaw);        // the body's own facing
+        const hx = camX - x, hz = camZ - z;
+        const inv = 1 / Math.max(0.001, Math.sqrt(hx * hx + hz * hz));
+        const align = (bx * hx + bz * hz) * inv;
+        const sq = align < SHINE_LO ? 0 : align > SHINE_HI ? 1
+          : (align - SHINE_LO) / (SHINE_HI - SHINE_LO);
+        e.built.eyeshine(sq * sq * (3 - 2 * sq) * (this._torchLit ? 1 : SHINE_MOON));
+      }
       // The notice flare, drawn. A fast rise and a slower fall: it SNAPS on and eases out,
       // because the other way round is a lamp warming up and this is a thing noticing you.
-      if (typeof e.built.eyeHold === 'function') e.built.eyeHold(dist);
       if (typeof e.built.noticeGlow === 'function') {
         if (e.noticeT > 0) {
           const k = e.noticeT / NOTICE_S;

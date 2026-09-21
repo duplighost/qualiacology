@@ -31,6 +31,8 @@ const RIM_GAIN = 0.20;     // swept 0.055 / 0.20 / 0.45 against the same four bo
 const EYE_HOLD_M = 11;      // m: inside this an eye is drawn at its own size
 const EYE_HOLD_MAX = 2.6;   // x: and never grows past this, however far away it is
 const NOTICE_EYE = 3.4;    // x the eye's base colour at the peak of the notice flare
+const EYE_MAX = 5.0;       // the ceiling on notice x telegraph x shine composed
+const SHINE_EYE = 4.2;     // x at full-on: an animal's eyes are a mirror, not a lamp
 const WET_GAIN = 0.28;      // the damp glint off hide, on the moon's half-vector
 /** The moon in VIEW space, shared by every shell material. enemies.js writes it. */
 const MOON_VIEW = { value: new THREE.Vector3(0.4, 0.85, 0.3).normalize() };
@@ -1922,23 +1924,58 @@ export function buildBody(key, rng) {
     reveal(v) { setReveal(shell, v); },
 
     /**
+     * THREE THINGS DRIVE THE EYES AND THEY ARE NOT ALLOWED TO FIGHT. The notice flare, the
+     * attack telegraph and the animal shine all used to write eyeMat.color directly, so
+     * whichever ran last that frame won and the other two vanished - which is exactly the
+     * frame you least want to lose one of them, because they all fire at close range on
+     * the same body. They are three FACTORS now, composed here, and each setter touches
+     * only its own.
+     */
+    _eyeNotice: 1, _eyeTele: 1, _eyeShine: 1,
+    _applyEye() {
+      // CAPPED, because these compose and the moment they all want to fire is the same
+      // moment: a hound that finds you while it is square-on and lit would be 3.4 x 4.2 -
+      // over fourteen times a base that is already above the bloom threshold, which is not
+      // an eye, it is a headlight. EYE_MAX is the most any of this is allowed to reach.
+      const g = Math.min(EYE_MAX, this._eyeNotice * this._eyeTele * this._eyeShine);
+      eyeMat.color.setRGB(eyeBase.r * g, eyeBase.g * g, eyeBase.b * g);
+    },
+
+    /**
      * THE NOTICE FLARE. 0..1, and it is NOT the telegraph: the telegraph is a windup, this
      * is the half-second before anything has been decided, when it has simply found you.
      * Eyes only, no rim - a body that brightens all over when it sees you reads as a
      * status effect, a pair of eyes that comes up out of the dark reads as being seen.
-     * Written straight over the eye colour, so whichever of the two ran last wins and
-     * neither has to know about the other.
      */
     noticeGlow(v) {
-      const g = 1 + v * (NOTICE_EYE - 1);
-      eyeMat.color.setRGB(eyeBase.r * g, eyeBase.g * g, eyeBase.b * g);
+      this._eyeNotice = 1 + v * (NOTICE_EYE - 1);
+      this._applyEye();
+    },
+
+    /**
+     * EYESHINE, for the animals only. 0..1 of how square-on the thing is to you.
+     *
+     * A dog's eyes in a torch beam are not a light, they are a MIRROR - the tapetum behind
+     * the retina throws your own beam back at you, which is why an animal at the edge of a
+     * headlight is two discs and nothing else. That is retroreflection, so it is keyed to
+     * how directly the head is turned at you and it does nothing at all when the thing is
+     * side-on. A hound quartering across the grass flashes once as it swings past you and
+     * goes dark again, and that is the entire effect.
+     *
+     * Only the animals have it. A poacher's eyes do not do this and should not: it is the
+     * cleanest line in the roster between the things that are people and the things that
+     * are not.
+     */
+    eyeshine(v) {
+      this._eyeShine = 1 + v * (SHINE_EYE - 1);
+      this._applyEye();
     },
 
     /** 0..1 windup charge: x2 emissive on the shootable part + the eyes. */
     telegraph(v) {
       setRimGain(shell, RIM_GAIN * (1 + v * (RIM_TELEGRAPH - 1) * 3.0));
-      const g = 1 + v * 2.4;
-      eyeMat.color.setRGB(eyeBase.r * g, eyeBase.g * g, eyeBase.b * g);
+      this._eyeTele = 1 + v * 2.4;
+      this._applyEye();
     },
 
     /** 1 -> 0 over 2.6 s so dead reads against alive across a field. */
