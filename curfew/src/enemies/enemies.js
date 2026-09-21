@@ -196,6 +196,7 @@ const RING_SPIN = 0.30;           // rad/s: 0.55x a circling body, so the ring d
 const FLINCH_BUDGET = 0.180;      // seconds between body flinches, so a burst is not a seizure
 const _moonWorld = new THREE.Vector3();
 // The notice flare: how long the eyes hold the moment they find you, and how far they go.
+const CARRY_RANGE = 95;    // m: past this a carried lamp is released to the pool
 const NOTICE_S = 0.9;
 const NOTICE_GAIN = 2.6;
 const OFFICER_GO_S = 0.7;      // s the Pale takes to be taken
@@ -1825,6 +1826,7 @@ export class Enemies {
     if (!p) { if (this.ctx.shared) this.ctx.shared.wardenNear = 0; return; }
     const black = this._phase() === PHASE.BLACK;
     this._standDownGates(dt,p);
+    this._carryStep(dt, p);
     // ROUND 22: the lit pools. One array read, one scan for the player, per step.
     {
       const sh = this.ctx.shared;
@@ -2340,6 +2342,56 @@ export class Enemies {
       }
     }
     return false;
+  }
+
+  /**
+   * THE CARRIED LIGHTS. A body with def.carry holds a rover at a point on its own body,
+   * and it is the first thing in the county to carry its own light.
+   *
+   * Every light a body has ever had here was something ELSE lighting it: the moon, the
+   * torch, a yard lamp. What makes the Warden the most frightening thing in the roster is
+   * not that it glows - it does not, its brightest pixels are its eyes and nothing more -
+   * it is that it is two points of light with two and a half metres of dark above them.
+   * A lamp a body carries is that idea made literal and moving: a light in the trees that
+   * is not yours, arriving.
+   *
+   * Borrowed, never created, so the census is untouched and the pool's own seating rule
+   * handles the case of several of them at once - the nearest eight win and the rest go
+   * dark, which is the correct failure. It goes out the moment the body dies, because a
+   * lamp still burning over a corpse is a prop and a lamp going out is an event.
+   */
+  _carryStep(dt, p) {
+    const lights = this._sys('lights');
+    if (!lights || typeof lights.borrow !== 'function') return;
+    for (let i = 0; i < this.all.length; i++) {
+      const e = this.all[i];
+      const c = e.def && e.def.carry;
+      if (!c) continue;
+      const want = e.alive && !e.down && e.built && e.built.group.visible
+        && Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) < CARRY_RANGE;
+      if (!want) {
+        if (e.carryH) { lights.release(e.carryH); e.carryH = null; }
+        continue;
+      }
+      if (!e.carryH) {
+        e.carryH = lights.borrow('carry-lamp', e.pos.x, e.pos.y + c.y, e.pos.z, c.colour, c.intensity, 0);
+        if (e.carryH) e.carryH.decay = c.decay;
+        e.carryPhase = (e.id % 97) * 0.41;
+      }
+      if (!e.carryH) continue;
+      // Carried on the body, so it swings with the yaw rather than sitting in world axes.
+      const cy = Math.cos(e.yaw), sy = Math.sin(e.yaw);
+      e.carryH.setPosition(
+        e.pos.x + c.x * cy + c.z * sy,
+        e.pos.y + c.y,
+        e.pos.z - c.x * sy + c.z * cy);
+      // A carried flame is never steady and it is never a strobe: a slow swing from the
+      // walk, a faster guttering on top, and a floor so it cannot blink out.
+      e.carryPhase += dt;
+      const f = 0.84 + 0.10 * Math.sin(e.carryPhase * 2.3)
+        + 0.07 * Math.sin(e.carryPhase * 7.9 + 1.1);
+      e.carryH.setIntensity(c.intensity * Math.max(0.45, f));
+    }
   }
 
   _stepOfficer(e, dt, p) {
@@ -3675,6 +3727,13 @@ export class Enemies {
   }
 
   _release(e) {
+    // The lamp goes out with the body, here as well as in _carryStep: a record handed back
+    // to the pool must not keep a rover seated on somebody else's behalf.
+    if (e.carryH) {
+      const lights = this._sys('lights');
+      if (lights && typeof lights.release === 'function') lights.release(e.carryH);
+      e.carryH = null;
+    }
     e.alive = false;
     e.dead = true;
     e.alerted = false;
@@ -4777,7 +4836,7 @@ function makeRecord(id, species, def, built, rng) {
     // 2026-09-17.
     //   carHoldT        seconds an INCAR_BLOCKED body has spent at a shut car door (D12)
     //   standingStepT / lastSeenDist / witnessCd / obsPrev   the Standing Kind's ears (Horror 15)
-    carHoldT: 0, officerSeen: false, officerGaze: 0, officerGoT: 0, noticeT: 0, _awarePrev: false, goingHome: false, homecomingT: 0, departSink: 0, wardenWorkT: 0,
+    carHoldT: 0, officerSeen: false, officerGaze: 0, officerGoT: 0, noticeT: 0, _awarePrev: false, carryH: null, carryPhase: 0, goingHome: false, homecomingT: 0, departSink: 0, wardenWorkT: 0,
     standingStepT: 0, lastSeenDist: -1, witnessCd: 0, obsPrev: false,
     slot: -1,
     // Where this body was last hurt, and whether it was hurt by a swing. Both
