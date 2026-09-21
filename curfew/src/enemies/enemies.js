@@ -47,7 +47,7 @@ import { clamp, clamp01, damp, dampAngle, TAU } from '../engine/math.js';
 import {
   SPECIES, ROSTER, POOL, OWNER, PHASE, PRESSURE_ROSTER, DREAD_ROSTER, validate,
 } from './species.js';
-import { buildBody, makeImpostor, makeBasic, whiteTex, REVEAL } from './bodies.js';
+import { buildBody, makeImpostor, makeBasic, whiteTex, REVEAL, setMoonView } from './bodies.js';
 import {
   NAV, steer, progress, resetProgress, relocate, observed, lit, visible, seesBeam,
   groundY, followGround, SepGrid, faceYaw, bearingDot, aimAngle,
@@ -194,6 +194,7 @@ const BREAKOFF_MUL = 1.75;
 const RECOMMIT_MISS = 0.85;       // a whiff costs less than a landed bite
 const RING_SPIN = 0.30;           // rad/s: 0.55x a circling body, so the ring drifts
 const FLINCH_BUDGET = 0.180;      // seconds between body flinches, so a burst is not a seizure
+const _moonWorld = new THREE.Vector3();
 const OFFICER_GO_S = 0.7;      // s the Pale takes to be taken
 const OFFICER_GO_RISE = 2.4;   // m it climbs while it folds
 const STAGGER_T = 0.620, STAGGER_IMMUNITY = 2.2, STAGGER_WINDOW = 0.40;
@@ -4294,6 +4295,20 @@ export class Enemies {
     const cam = this.ctx.camera;
     if (!cam) return;
     const camX = cam.position.x, camY = cam.position.y, camZ = cam.position.z;
+
+    // THE MOON, IN VIEW SPACE, ONCE. Every shell material shares one handle for this
+    // (bodies.js MOON_VIEW), so the rim on every body in the county is a single write.
+    {
+      const lights = this._sys('lights');
+      const moon = lights && lights.moon;
+      if (moon && moon.position && moon.target && moon.target.position) {
+        _moonWorld.copy(moon.position).sub(moon.target.position).normalize();
+      } else {
+        _moonWorld.set(0.4, 0.85, 0.3).normalize();
+      }
+      _moonWorld.transformDirection(cam.matrixWorldInverse);
+      setMoonView(_moonWorld.x, _moonWorld.y, _moonWorld.z);
+    }
 
     // the warm-up parked one of every species in the world to compile its
     // shader at boot; this is where that is undone, on the first presented

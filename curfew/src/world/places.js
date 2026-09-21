@@ -88,6 +88,11 @@ import { SPECIES } from '../enemies/species.js';
 
 // ROUND 21: weather's snow colour, shared with chunks.js's ground so a yard and the field it
 // sits in are the same white. Read once, here, and never inside a build loop.
+// The destination air (see _destinationAir). Swept by eye from the approach shots.
+const MIST_NEAR_M = 46;     // m: inside this the place is in its own weather
+const MIST_FAR_M = 180;     // m: outside this the county's ordinary mist
+const MIST_NEAR_MUL = 4.6;  // x the authored mist at the pad
+const MIST_EASE_HZ = 0.70;  // s^-1: a place arrives, it does not switch on
 const WX_SNOW = (CFG.world.weather && CFG.world.weather.snowCol) || [0.33, 0.345, 0.385];
 
 /**
@@ -3003,6 +3008,46 @@ export class Places {
   /* ------------------------------------------------------------------ *
    * step — discovery, claiming, and everything that turns.
    * ------------------------------------------------------------------ */
+  /**
+   * THE PLACES BREATHE. ALEX, 2026-09-21: the destinations should be "spectacular... but also
+   * horrifying and scary in some way."
+   *
+   * Photographed from their own approaches first (tests/shots/dest/), and the diagnosis was
+   * not the architecture - the manor has a real facade, the choir vault has its arches, the
+   * black rib has its ribs. Every one of them is EVENLY LIT. Twenty-five places, all sitting
+   * in the same flat mid-blue, reading as grey models at dusk rather than as somewhere you
+   * should not be.
+   *
+   * The cheapest thing that fixes that is already in the engine and had never been called:
+   * sky.setMistScale, a door left open by the governor lane with no caller anywhere in the
+   * county. So the county's own volumetric mist THICKENS around a destination as you come
+   * to it, up to MIST_NEAR_MUL at the pad and back to 1 in the woods, eased so a car does
+   * not drive through a wall of it. The moon is already integrated through that mist, so the
+   * places get their god-rays, their pooled floor and their depth for one uniform and no
+   * draw. It costs nothing per place and every place is different inside it.
+   */
+  _destinationAir(dt) {
+    const sky = this._sys && this._sys('sky');
+    if (!sky || typeof sky.setMistScale !== 'function') return;
+    const p = this._sys('player');
+    if (!p || !p.pos) return;
+    let near = Infinity;
+    for (const rec of this.nodes.values()) {
+      const dx = rec.def.x - p.pos.x, dz = rec.def.z - p.pos.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < near) near = d2;
+    }
+    near = Math.sqrt(near);
+    // 1 outside MIST_FAR_M, MIST_NEAR_MUL inside MIST_NEAR_M, smooth between.
+    const t = Math.max(0, Math.min(1, (MIST_FAR_M - near) / (MIST_FAR_M - MIST_NEAR_M)));
+    const want = 1 + (MIST_NEAR_MUL - 1) * t * t * (3 - 2 * t);
+    // Eased in seconds, not metres: at 23 m/s the raw curve is a wall arriving in two
+    // seconds and it reads as a weather change rather than as somewhere getting closer.
+    this._destAir = this._destAir === undefined ? want : this._destAir;
+    this._destAir += (want - this._destAir) * (1 - Math.exp(-dt * MIST_EASE_HZ));
+    sky.setMistScale(this._destAir);
+  }
+
   step(dt) {
     this._t += dt;
 
@@ -3014,6 +3059,7 @@ export class Places {
     // The props below keep turning through boot on purpose: they want to be warm.
     if (this.ctx && this.ctx.ready) this._proximity(dt);
     if (this.ctx && this.ctx.ready) this._castStep();
+    if (this.ctx && this.ctx.ready) this._destinationAir(dt);
     this._stepGates(dt);   // ROUND 19: the Holdfast's leaves, if they are moving
 
     // --- the things that turn --------------------------------------------

@@ -23,7 +23,15 @@ const SEAM = 0x08090a;
 const REVEAL_NEAR = 6.0;    // metres: inside this a body is held back
 const REVEAL_FAR = 11.0;    // metres: past this it is fully lit
 const REVEAL_FLOOR = 0.34;  // albedo multiplier at point-blank, uncommitted
-const RIM_GAIN = 0.055;     // how much cold edge light holds the silhouette
+// MEASURED by sweeping it against the same body at 3 m: see the note on SHELL_RIM.
+const RIM_GAIN = 0.20;     // swept 0.055 / 0.20 / 0.45 against the same four bodies at 3 m:
+                           // 0.055 is four hundredths of light and they are flat black holes,
+                           // 0.45 turns them teal and rubbery and stops being a night, 0.20 is
+                           // where the shoulders, the load and the ribs come back.
+const WET_GAIN = 0.28;      // the damp glint off hide, on the moon's half-vector
+/** The moon in VIEW space, shared by every shell material. enemies.js writes it. */
+const MOON_VIEW = { value: new THREE.Vector3(0.4, 0.85, 0.3).normalize() };
+export function setMoonView(x, y, z) { MOON_VIEW.value.set(x, y, z); }
 const RIM_TELEGRAPH = 2.0;  // x2 on the windup — THE TELEGRAPH LAW's emissive half
 
 /* THE GLINT, and it is the one number in this file that was measured wrong.
@@ -92,14 +100,16 @@ const TINT_CEIL = 1.14;
    ========================================================================== */
 
 // A constant cache key so every shell material in the game links exactly once.
-const SHELL_CACHE_KEY = 'curfew-body-shell-v4-diffuse';
+const SHELL_CACHE_KEY = 'curfew-body-shell-v4-diffuse-moonrim-wet';
 
 // GLSL. No backtick appears anywhere inside these template literals, not even
 // in a comment (the project law). No identifier named flat, half or sat.
 const SHELL_DECL = `#include <common>
 uniform vec3 uRim;
 uniform float uRimGain;
-uniform float uReveal;`;
+uniform float uReveal;
+uniform vec3 uMoonView;
+uniform float uWetGain;`;
 
 const SHELL_REVEAL = `#include <color_fragment>
 diffuseColor.rgb *= uReveal;`;
@@ -108,10 +118,30 @@ diffuseColor.rgb *= uReveal;`;
 // vViewPosition and lights_lambert_pars_fragment declares it (verified against
 // vendor/three.module.min.js on 2026-09-02), and vNormal exists because these
 // materials never set flatShading.
+// THE RIM IS THE MOON'S, NOT THE VIEWER'S. It used to be a bare view-facing fresnel at a
+// gain of 0.055, which is a peak contribution of about four hundredths: invisible, and the
+// bodies read as flat holes with glowing eyes and no form at all. Photographed at 3 m in
+// tests/shots/fear/ before this, every one of them is an untextured black mass.
+//
+// A fresnel alone cannot be raised to fix that - turn it up and the whole outline lights
+// evenly, which is a neon toy and is what the note on ART.md 5.4 was guarding against. So
+// the fresnel is now WEIGHTED BY THE MOON: an edge facing the moon takes the light, an edge
+// facing away keeps a quarter of it so the far side is drawn but not lit. That is a real
+// light on a real shape, it can carry a much larger gain without brightening the body's
+// mass, and it is the same thing that fixed the trunks (world/flora.js, uRimAmt).
 const SHELL_RIM = `#include <emissivemap_fragment>
 float rimF = 1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0);
 rimF = rimF * rimF * rimF;
-totalEmissiveRadiance += uRim * rimF * uRimGain;`;
+float rimMoon = smoothstep(-0.30, 0.60, dot(normalize(vNormal), normalize(uMoonView)));
+totalEmissiveRadiance += uRim * rimF * uRimGain * (0.22 + 0.78 * rimMoon);
+// AND THE HIDE IS WET. A tight lobe about the moon's half-vector - one dot and one pow, no
+// specular model, MeshLambert has none - so damp skin and oiled leather catch a hard little
+// glint where a dry cloth mass would catch nothing. It is the difference between a shape cut
+// out of the dark and a thing with a body temperature. It rides the SAME bump the diffuse
+// does, so it breaks up over the authored hide rather than sliding across it as one sheet.
+vec3 wetH = normalize(normalize(uMoonView) + normalize(vViewPosition));
+float wet = pow(max(dot(normalize(vNormal), wetH), 0.0), 48.0);
+totalEmissiveRadiance += uRim * wet * uWetGain;`;
 
 function shellCompile(shader) {
   this.userData.surfaceCompile.call(this, shader);
@@ -119,6 +149,10 @@ function shellCompile(shader) {
   shader.uniforms.uRim = { value: ud.rim };
   shader.uniforms.uRimGain = { value: ud.rimGain };
   shader.uniforms.uReveal = { value: ud.reveal };
+  // ONE shared handle for every body in the county: the moon does not differ per corpse,
+  // and a single write a frame then reaches all of them (see setMoonView).
+  shader.uniforms.uMoonView = MOON_VIEW;
+  shader.uniforms.uWetGain = { value: ud.wetGain };
   ud.uniforms = shader.uniforms;          // the live handle: reveal is driven per frame
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', SHELL_DECL)
@@ -157,6 +191,7 @@ export function makeShell(tintR, tintG, tintB) {
   // RIM_GAIN stays 0.055 exactly as 5.4 requires.
   m.userData.rim = new THREE.Color(0.49, 0.755, 0.715);
   m.userData.rimGain = RIM_GAIN;
+  m.userData.wetGain = WET_GAIN;
   m.userData.reveal = 1;
   readableSurface(m);
   m.userData.surfaceCompile=m.onBeforeCompile;
