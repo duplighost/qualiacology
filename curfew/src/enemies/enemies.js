@@ -4454,6 +4454,7 @@ export class Enemies {
       // the body away from the ground.
       // The notice flare, drawn. A fast rise and a slower fall: it SNAPS on and eases out,
       // because the other way round is a lamp warming up and this is a thing noticing you.
+      if (typeof e.built.eyeHold === 'function') e.built.eyeHold(dist);
       if (typeof e.built.noticeGlow === 'function') {
         if (e.noticeT > 0) {
           const k = e.noticeT / NOTICE_S;

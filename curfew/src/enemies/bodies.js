@@ -28,6 +28,8 @@ const RIM_GAIN = 0.20;     // swept 0.055 / 0.20 / 0.45 against the same four bo
                            // 0.055 is four hundredths of light and they are flat black holes,
                            // 0.45 turns them teal and rubbery and stops being a night, 0.20 is
                            // where the shoulders, the load and the ribs come back.
+const EYE_HOLD_M = 11;      // m: inside this an eye is drawn at its own size
+const EYE_HOLD_MAX = 2.6;   // x: and never grows past this, however far away it is
 const NOTICE_EYE = 3.4;    // x the eye's base colour at the peak of the notice flare
 const WET_GAIN = 0.28;      // the damp glint off hide, on the moon's half-vector
 /** The moon in VIEW space, shared by every shell material. enemies.js writes it. */
@@ -1800,6 +1802,11 @@ export function buildBody(key, rng) {
   const eyeMat = makeBasic(whiteTex(), new THREE.Color(def.eye).multiplyScalar(EYE_EMISSIVE));
   const eyeMesh = new THREE.Mesh(set.eyes, eyeMat);
   eyeMesh.frustumCulled = true;
+  eyeMesh.userData.k = 1;
+  // The eyes' own centre in body space, for eyeHold.
+  set.eyes.computeBoundingBox();
+  const eyeC = set.eyes.boundingBox
+    ? set.eyes.boundingBox.getCenter(new THREE.Vector3()) : new THREE.Vector3();
   group.add(eyeMesh);
 
   // contact shadow: unlit, dark, depth-write off. It is what stops a body from
@@ -1881,8 +1888,35 @@ export function buildBody(key, rng) {
     scale: 1 + (rng.next() * 2 - 1) * 0.09,     // +-9% per instance
     shellMat: shell,
     eyeMat,
+    eyeMesh,
     contactMat,
     eyeBase,
+
+    /**
+     * EYES THAT CARRY. A pair of eyes in the dark is the whole signal at the range you
+     * actually meet these things, and at 18 m in moonlight - photographed, the range every
+     * encounter in the woods happens at - they had gone sub-pixel and vanished. They were
+     * doing their work only in a torch beam at arm's length, which is the one place you
+     * already know exactly what you are looking at.
+     *
+     * This does NOT brighten them: buildStanding's note is explicit that this roster has no
+     * beacon eyes and it is right. It holds their APPARENT size instead, growing the mesh
+     * with distance past EYE_HOLD_M so two points of light stay two points of light rather
+     * than disappearing between pixels, and capping so a body at fifty metres does not
+     * acquire headlamps. The notice flare then lands where it is worth landing.
+     */
+    eyeHold(dist) {
+      const k = dist <= EYE_HOLD_M ? 1 : Math.min(EYE_HOLD_MAX, dist / EYE_HOLD_M);
+      if (k === eyeMesh.userData.k) return;
+      eyeMesh.userData.k = k;
+      // ABOUT THEIR OWN CENTRE, not the body's origin. set.eyes is authored in body space
+      // with its vertices up at head height, and the mesh's origin is the FEET - so a plain
+      // scale of 2.6 would carry the eyes two and a half metres into the air above the
+      // head. For a point p scaled about c, p' = k*p + c*(1-k): the scale is k and the
+      // position is the centre times one minus k, which puts them back exactly.
+      eyeMesh.scale.setScalar(k);
+      eyeMesh.position.set(eyeC.x * (1 - k), eyeC.y * (1 - k), eyeC.z * (1 - k));
+    },
 
     /** 0 = held back in the dark, 1 = fully lit. THE REVEAL BUDGET. */
     reveal(v) { setReveal(shell, v); },
