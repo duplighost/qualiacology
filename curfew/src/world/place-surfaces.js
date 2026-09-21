@@ -1,75 +1,23 @@
-// CURFEW — destination surfaces.
+// Shared destination materials, projected in metres rather than stretched per mesh.
+// The offline bake stores nine albedos and five structural heights at 512 square,
+// followed by measured physical channels and normals for steel, plaster and stone.
+// Shared shader code adds world-space weathering, building-foot damp,
+// horizontal mineral paving, rain pooling and snow relief without new draw calls.
 //
-// Destination geometry is intentionally assembled from a small, cheap procedural kit, but
-// cheap geometry must not mean blank prototype walls. This module supplies eight deterministic
-// sampled materials and projects their UVs in metres so a forty-metre cathedral wall has many
-// courses while a door still has recognisable grain. The maps are shared; per-site material clones
-// reuse those textures and the mapped shader variants that places.js warms at boot.
-//
-// ROUND 16 — THE RESOLUTION AND STRUCTURE PASS. Three things were measured wrong and are
-// now fixed. All three were visible in a 2x2 tile dump of the generator (the pictures are in
-// the round report), which is the only way to judge a texture: a wall in a night frame is
-// four pixels of evidence.
-//
-//   1. 256 px over a 4 m tile is 1.56 cm per texel. Two metres from a wall that is about
-//      nine screen pixels per texel at 1280 wide, so every family read as a blur with a
-//      pattern in it. Every image is now 512, which is 0.78 cm per texel. Measured cost is
-//      in the note above createPlaceSurfaceLibrary; it is paid once, at boot, on the CPU.
-//   2. The stone was a machine-perfect running bond: ONE block size, 62 x 28 px, repeated
-//      without variation. Real masonry has a course table and a stone table. It has them now
-//      (see buildMasonry) — thirteen courses of different heights, blocks of different widths
-//      within each course, roughly one course in four laid in noticeably bigger stones, and a
-//      per-stone tone. That is the "second frequency of stone" the wall was missing.
-//   3. The timber grain was a sine in X on a board that runs in X — so the grain striped
-//      ACROSS every plank instead of along it. The grain is now anisotropic noise, long in x
-//      and fine in y, with knots, which is what makes a plank read as a plank.
-//
-// ROUND 17 — THE PASS THAT LOOKED AT ROUND 16. Round 16 was committed unreviewed. Its three
-// structural claims hold up in a dump, and its arithmetic was re-derived here and matches:
-// 13 courses of 21-40 cm, stones 26-73 cm (56-158 cm in a big course), boards of 25 cm, a
-// 19 cm rib pitch, a 21 x 7 cm brick substrate. What it did NOT survive is being looked at
-// from two metres, which is the distance every one of these images exists for. Five faults,
-// all of them visible in a 256-texel crop of the generator:
-//
-//   1. TIMBER PEEL WAS CAMOUFLAGE. fbm2(x, y, 9, 9) is continuous in y, so one 45 cm island
-//      of bare wood ran across five boards and straight over the lap shadow between them,
-//      and its edge faded over thirty texels. Brown blobs on a cream board — on every barn,
-//      chapel, mill and steeple in the county. Paint is now per board (see timberPeel) and
-//      the edge is three texels, not thirty.
-//   2. PLASTER PEEL HAD THE SAME DISEASE, ramp *7 over the same field. Render is a 12 mm
-//      skin; where it is gone you see brick and you see it AT ONCE. The ramp is *60 now,
-//      with a contact shadow in the step, and the height image steps with it.
-//   3. THE CRACKS WERE PEN LINES. The level set of a four-cell field is smooth, so every
-//      crack was a three-metre arc: a contour map, not a failure in render. The field is
-//      domain-warped before it is levelled, which is what makes a crack wander and fork.
-//   4. THE DAMP WAS A RULED LINE, constant in x at a fixed height, and the image tiles — so
-//      a nine-metre castle wall carried a horizontal grey rule across it every four metres.
-//      tideline() gives it a ragged edge. The REPEAT is not fixable here; see the note there.
-//   5. NOTHING READ AT TWO METRES. Stone faces were flat grey between the joints; timber had
-//      one grain octave 102 texels long and nothing at a plank's own line spacing. There is
-//      now a 15 cm weathering mottle on the stone face, a signed 3.3 cm line grain on the
-//      timber, per-joint mortar tone, and water tracking DOWN from the bed joints.
-//
-// Every family holds its round 16 mean luminance to within 3 counts (the numbers are in the
-// note above createPlaceSurfaceLibrary) while its standard deviation is up 3-9: this is more
-// structure at the same brightness, which is the only kind this file is allowed to add,
-// because places.js multiplies these maps by vertex colours in the 0.03-0.05 range and the
-// mean is the building's brightness in the county.
-//
-// SCALE, checked against the real thing at the default 4 m per tile (0.78 cm per texel):
-//   stone      courses 21-40 cm, stones 26-73 cm (and 56-158 cm in a big course) — ashlar
-//   timber     boards 25 cm, grain lines 3.3 cm — clapboard/weatherboard
-//   metal      rib pitch 19 cm, sheet cover width 1 m, fastener lines every 66 cm — cladding
-//   plaster    render over a 21 x 7 cm brick substrate that shows where the render is lost
-// projectPlaceSurfaceUVs is also called at 7 m (the station apron), 3.2 m (a compound floor)
-// and 1.8-2.8 m (wilds props); the families hold up across that range because every feature
-// above is a real-world size at 4 m rather than a number that looked right in a dump.
-
+// At the default four-metre projection: irregular stone courses, weatherboards
+// 25 cm, scanned corrugations 13 cm and chipped lime render. Wear stays subordinate
+// to those structures; stains never double as a height field.
 import * as THREE from 'three';
+import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
+import { guardPointLightLoop } from '../gfx/light-loop.js';
+
+const PLACE_LIGHTING = guardPointLightLoop(THREE.ShaderChunk.lights_fragment_begin);
 
 const SIZE = 512;
 const COLOR_STYLES = ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt', 'avery', 'naturalRock'];
 const HEIGHT_STYLES = ['timber', 'stone', 'metal', 'plaster', 'naturalRock'];
+const BASE_BYTES = SIZE * SIZE * 32;
+const SCAN_BYTES = 8 + SIZE * SIZE * 15;
 let prebaked = null, preload = null;
 
 // These maps are deterministic and need not run millions of noise samples on every
@@ -82,7 +30,10 @@ export async function preloadPlaceSurfaceLibrary() {
     const response = await fetch(url);
     if (!response.ok) throw new Error('place surfaces: asset HTTP ' + response.status);
     const bytes = new Uint8Array(await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
-    if (bytes.length !== SIZE * SIZE * 32) throw new Error('place surfaces: invalid baked data length');
+    if (bytes.length !== BASE_BYTES + SCAN_BYTES) throw new Error('place surfaces: invalid baked data length');
+    if (String.fromCharCode(...bytes.subarray(BASE_BYTES, BASE_BYTES + 8)) !== 'PSCAN002') {
+      throw new Error('place surfaces: invalid scan channel header');
+    }
     prebaked = bytes;
     return true;
   })();
@@ -177,7 +128,7 @@ function fbm2(x, y, cx, cy, salt) {
 /* --------------------------------------------------------------------------
    THE MASONRY TABLES.
 
-   A wall is not a grid. Thirteen courses whose heights are hashed, not equal; within each
+   A wall is not a grid. Eleven courses whose heights are hashed, not equal; within each
    course a run of stones whose widths are hashed, not equal; and roughly one course in four
    laid in stones nearly twice as wide, which is the second frequency that stops a castle
    reading as one block size. Both tables are normalised to land on exactly SIZE so the tile
@@ -189,7 +140,7 @@ function fbm2(x, y, cx, cy, salt) {
    approximating it, and the arris darkening (the dirt and contact shadow in the last few
    millimetres before a joint) is one array lookup rather than a second pattern.
    -------------------------------------------------------------------------- */
-const COURSE_N = 13;
+const COURSE_N = 11;
 const COURSES = [];
 const ROW_OF = new Uint8Array(SIZE);
 const EDGE_Y = new Uint8Array(SIZE);
@@ -197,7 +148,7 @@ const EDGE_Y = new Uint8Array(SIZE);
 function buildMasonry() {
   const raw = new Float32Array(COURSE_N);
   let sum = 0;
-  for (let i = 0; i < COURSE_N; i++) { raw[i] = 0.70 + hash2(i, 3, 907) * 0.66; sum += raw[i]; }
+  for (let i = 0; i < COURSE_N; i++) { raw[i] = 0.64 + hash2(i, 3, 907) * 0.84; sum += raw[i]; }
   const hs = new Int32Array(COURSE_N);
   let acc = 0;
   for (let i = 0; i < COURSE_N; i++) { hs[i] = Math.max(18, Math.round(raw[i] / sum * SIZE)); acc += hs[i]; }
@@ -207,7 +158,7 @@ function buildMasonry() {
   for (let i = 0; i < COURSE_N; i++) {
     const h = hs[i];
     const big = hash2(i, 11, 1319) > 0.72;          // the second frequency
-    const base = big ? 137 : 74;                    // texels: 107 cm and 58 cm at 4 m/tile
+    const base = big ? 164 : 92;                    // substantial dressed stone, with occasional long headers
     const n = Math.max(3, Math.round(SIZE / base));
     const rw = new Float32Array(n);
     let s2 = 0;
@@ -300,26 +251,9 @@ const TIMBER_LINE = 120;
 const PEEL_T = 0.662;
 function timberPeel(x, row, edge) { return fbm2(x, edge + row * 137, 7, 40, 97); }
 
-/* --------------------------------------------------------------------------
-   THE TIDELINE.
-
-   Rising damp lives at the foot of a wall, and v=0 is the foot, so every family darkens its
-   bottom rows. Round 16 did that with a straight ruled edge at a fixed height, constant in x
-   — and the image tiles, so a nine-metre castle wall got a horizontal grey rule across it
-   every four metres. A tideline on a real wall is ragged: it follows the mortar and the
-   splash. The height is now modulated by a five-cell noise in x (0.62-1.38 of nominal), so
-   the repeat is a wavering stain rather than a drawn line.
-
-   It cannot fix the repeat itself: the damp still comes back every tile because a tiling
-   texture has no idea how tall its wall is. That needs a second UV channel or a vertex-colour
-   gradient in places.js, which this lane does not own — it is written up as blocked.
-   -------------------------------------------------------------------------- */
-function tideline(x, y, h0, salt) {
-  const h = h0 * (0.62 + 0.76 * noise(x, 0, 5, 1, salt + 7));
-  if (y >= h) return 0;
-  const band = 1 - y / h;
-  return band * band * (0.40 + 0.60 * noise(x, y, 9, 4, salt));
-}
+// Rising damp belongs to the building's actual foot. It is now applied in world
+// space by the material shader, so it cannot repeat every four metres upstairs.
+function tideline() { return 0; }
 
 /* --------------------------------------------------------------------------
    COLOUR.
@@ -335,7 +269,7 @@ function stonePixel(x, y, moss) {
   const ci = ROW_OF[y];
   const c = COURSES[ci];
   const ex = c.edgeX[x], ey = EDGE_Y[y];
-  const e = ex < ey ? ex : ey;
+  const e = (ex < ey ? ex : ey) + (noise(x, y, 74, 74, 4811) - 0.5) * 1.35;
 
   const broad = noise(x, y, 8, 8, 11);
   const grit = noise(x, y, 96, 96, 29);
@@ -347,7 +281,7 @@ function stonePixel(x, y, moss) {
   const damp = tideline(x, y, 78, 71);
   const foot = y < 96 ? 1 - y / 96 : 0;                   // moss climbs higher than the wet
 
-  if (e < 3) {
+  if (e < 1.15) {
     // Not every joint is full. A castle has repointed lengths, blown lengths and lengths
     // where the mortar has washed back into the wall, and one flat grey for all of them was
     // the thing that made the round 16 dump read as a garden wall from a catalogue.
@@ -355,7 +289,7 @@ function stonePixel(x, y, moss) {
     // that stops a curtain wall reading as one machined grid. Measured: stone stdev 37.0 -> 40.2
     // at a mean 1.5 counts under round 16, which is inside the value law.
     const jv = (hash2(ci, c.blockOf[x], 5501) - 0.5) * 44 - Math.max(0, noise(x, y, 12, 12, 5507) - 0.60) * 90;
-    const v = 104 + jv + broad * 30 + (grit - 0.5) * 14 - damp * 22;
+    const v = 147 + jv * 0.52 + broad * 22 + (grit - 0.5) * 10 - damp * 22;
     let r = v, g = v - 1, b = v - 4;
     if (moss) {
       const m = Math.min(1, (0.62 + foot * 0.5) * Math.max(0, noise(x, y, 7, 7, 113) - 0.40) * 2.1);
@@ -365,13 +299,16 @@ function stonePixel(x, y, moss) {
   }
 
   const id = c.blockOf[x];
-  const tone = (hash2(id, ci, 4801) - 0.5) * 32;          // this stone, not its neighbour
-  const warm = (hash2(id, ci, 907) - 0.5) * 11;
+  const tone = (hash2(id, ci, 4801) - 0.5) * 48;
+  const warm = (hash2(id, ci, 907) - 0.5) * 20;
   // and a minority of stones are simply soaked, or were replaced with something darker. The
   // top 28% of the hash, graded so there is no hard population split.
   const dark = Math.max(0, hash2(id, ci, 6151) - 0.72) * 3.57;
   let v = 219 + tone - dark * 26 + (broad - 0.5) * 20 + (face - 0.5) * 38 + (grit - 0.5) * 16 + (hash2(x, y, 61) - 0.5) * 9;
-  if (e < 10) v -= (1 - (e - 3) / 7) * 34;                // the arris: dirt in the joint
+  if (e < 5) v -= (1 - (e - 1.15) / 3.85) * 22;
+  // A cleft face retains directional bedding. It carries a restrained mineral
+  // figure in colour and the same shallow ridges in the height field below.
+  v += (noise(x + broad * 8, y, 3, 74, 4871) - 0.5) * 12;
   const chip = noise(x, y, 64, 64, 131);
   if (chip > 0.80 && e < 18) v -= (chip - 0.80) * 200;    // a broken face
 
@@ -561,6 +498,12 @@ function substrate(x, y) {
   return [v + 18, v - 4, v - 17];
 }
 
+// Render fails in a few connected patches. A fine chipped boundary belongs to a
+// broad failure; independent metre-wide blobs in every repeat read as wallpaper.
+function plasterLoss(x, y) {
+  return fbm2(x, y, 3, 3, 67) + (noise(x, y, 31, 31, 673) - 0.5) * 0.052;
+}
+
 function plasterPixel(x, y, salt) {
   const trowel = fbm2(x, y, 5, 3, salt ? 181 : 31);        // long sweeps of the float
   const grit = noise(x, y, 110, 110, 53);
@@ -569,19 +512,19 @@ function plasterPixel(x, y, salt) {
 
   const damp = tideline(x, y, 86, 149);
 
-  const peel = fbm2(x, y, 7, 7, salt ? 229 : 67);
+  const peel = plasterLoss(x, y);
   let r, g, b;
-  if (peel > 0.60) {
+  if (peel > 0.665) {
     // A HARD EDGE, and a shadow in the step. Render is a 12 mm skin: where it has come off
     // the wall you see brick, and you see it immediately. The old *7 spread that transition
     // over about thirty texels — twenty-three centimetres of render dissolving into brick —
     // which is what made the round 16 plaster read as camouflage rather than as damage.
-    const p = Math.min(1, (peel - 0.607) * 60);
+    const p = Math.min(1, Math.max(0, (peel - 0.665) * 72));
     const s = substrate(x, y);
     r = v + (s[0] - v) * p; g = v + (s[1] - v) * p; b = v + (s[2] - v) * p;
     if (p < 0.42) { const l = (1 - p / 0.42) * 26; r -= l; g -= l; b -= l * 0.92; }
   } else {
-    if (peel > 0.565) v += (peel - 0.565) * 380;           // the lip of the render at the break
+    if (peel > 0.645) v += (peel - 0.645) * 220;
     r = v; g = v - 2; b = v - 6;
     // WATER OUT OF THE HOLE. A wall with the render off it wets through, and the water leaves
     // at the bottom of the bare patch and runs down the sound render below. One extra sample
@@ -589,15 +532,16 @@ function plasterPixel(x, y, salt) {
     // there, this texel is under a hole. It is the plaster family's version of the stone's
     // weep and the cladding's bolt streak, and it is the last of the four families whose
     // drips started at a column the noise picked rather than at a thing you can see.
-    const over = fbm2(x, y + 22, 7, 7, salt ? 229 : 67);
-    const run = Math.min(1, Math.max(0, (over - 0.585) * 16))
+    const over = plasterLoss(x, y + 22);
+    const run = Math.min(1, Math.max(0, (over - 0.652) * 24))
       * Math.max(0, noise(x, y, 24, 3, 383) - 0.42) * 2.0;
     r -= run * 42; g -= run * 39; b -= run * 33;
   }
 
   const cd = crackMap()[y * SIZE + x];
-  if (cd < 2) { r -= 96; g -= 95; b -= 92; }
-  else if (cd < 5) { const t = 1 - (cd - 2) / 3; r -= 24 * t; g -= 24 * t; b -= 23 * t; }
+  const stress = Math.min(1, Math.max(0, (peel - 0.43) * 4.5));
+  if (cd < 1) { r -= 48 * stress; g -= 47 * stress; b -= 45 * stress; }
+  else if (cd < 3) { const t = (1 - (cd - 1) / 2) * stress; r -= 10 * t; g -= 10 * t; b -= 9 * t; }
 
   r -= damp * (salt ? 66 : 52); g -= damp * (salt ? 52 : 47); b -= damp * (salt ? 44 : 41);
   if (salt && fine > 0.975) { r = 254; g = 253; b = 246; } // salt bloom off the sea
@@ -647,13 +591,14 @@ function stoneHeight(x, y) {
   const ci = ROW_OF[y];
   const c = COURSES[ci];
   const ex = c.edgeX[x], ey = EDGE_Y[y];
-  const e = ex < ey ? ex : ey;
+  const e = (ex < ey ? ex : ey) + (noise(x, y, 74, 74, 4811) - 0.5) * 1.35;
   const broad = noise(x, y, 8, 8, 11);
-  if (e < 3) return 92 + broad * 24;                       // the joint, recessed
+  if (e < 1.15) return 140 + broad * 18;                   // narrow, recessed lime mortar
   const id = c.blockOf[x];
   let h = 208 + (hash2(id, ci, 4801) - 0.5) * 18 + (broad - 0.5) * 14
     + (noise(x, y, 26, 26, 353) - 0.5) * 12 + (noise(x, y, 96, 96, 29) - 0.5) * 10;
-  if (e < 10) h -= (1 - (e - 3) / 7) * 42;                 // the stone's own bevel
+  h += (noise(x + broad * 8, y, 3, 74, 4871) - 0.5) * 11;
+  if (e < 5) h -= (1 - (e - 1.15) / 3.85) * 31;
   const chip = noise(x, y, 64, 64, 131);
   if (chip > 0.80 && e < 18) h -= (chip - 0.80) * 220;
   return h;
@@ -711,21 +656,22 @@ function plasterHeight(x, y) {
   const trowel = fbm2(x, y, 5, 3, 31);
   const fine = hash2(x, y, 7);
   let h = 208 + (trowel - 0.5) * 12 + (fine - 0.5) * 9;    // sand grain, shallow
-  const peel = fbm2(x, y, 7, 7, 67);
-  if (peel > 0.60) {
+  const peel = plasterLoss(x, y);
+  if (peel > 0.665) {
     // *24, the same ramp as the colour, so the step down to the brick and the visible edge
     // of the render are the same three texels rather than nearly the same thirty.
-    const p = Math.min(1, (peel - 0.607) * 60);
+    const p = Math.min(1, Math.max(0, (peel - 0.665) * 72));
     // the render is a real 12 mm skin: where it is gone the wall steps BACK, and the brick
     // behind it has its own joints
     const rowH = 9, bw = 28;
     const row = (y / rowH) | 0;
     const joint = (y - row * rowH) < 2 || wrap(x + (row & 1) * 14, bw) < 2;
     h -= p * (joint ? 62 : 34);
-  } else if (peel > 0.565) h += (peel - 0.565) * 260;      // the lip at the break
+  } else if (peel > 0.645) h += (peel - 0.645) * 200;
   const cd = crackMap()[y * SIZE + x];
-  if (cd < 2) h -= 92;                                     // the groove
-  else if (cd < 4) h -= (1 - (cd - 2) / 2) * 20;
+  const stress = Math.min(1, Math.max(0, (peel - 0.43) * 4.5));
+  if (cd < 1) h -= 38 * stress;
+  else if (cd < 3) h -= (1 - (cd - 1) / 2) * 12 * stress;
   return h;
 }
 
@@ -824,8 +770,8 @@ function makeTexture(style, asHeight) {
   return textureFromData(style, asHeight, data);
 }
 
-function textureFromData(style, asHeight, data) {
-  const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat, THREE.UnsignedByteType);
+function textureFromData(style, asHeight, data, size = SIZE) {
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
   tex.name = (asHeight ? 'place-bump-' : 'place-surface-') + style;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.LinearFilter;
@@ -839,9 +785,261 @@ function textureFromData(style, asHeight, data) {
   return tex;
 }
 
+// Service hardware is rolled or forged steel, not corrugated sheet. A small
+// neutral pair preserves authored paint colors and supplies shallow pits plus
+// oxidized roughness. It shares the existing mapped place/weather program.
+export function createSmoothSteelSurface() {
+  const size = 128, color = new Uint8Array(size * size * 4), physical = new Uint8Array(color.length);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const p = (y * size + x) * 4;
+    const oxide = noise(x * 4, y * 4, 9, 9, 9041);
+    const grain = hash2(x, y, 9049), pit = Math.max(0, grain - .91) / .09;
+    const tone = Math.round(222 - oxide * 12 - pit * 5);
+    color[p] = tone; color[p+1] = tone; color[p+2] = tone; color[p+3] = 255;
+    physical[p] = Math.round(184 + (grain - .5) * 3 - pit * 5);
+    physical[p+1] = Math.round((.60 + oxide * .16 + pit * .06) * 255);
+    physical[p+2] = Math.round((1 - pit * .055) * 255);
+    physical[p+3] = Math.round((.42 - oxide * .16) * 255);
+  }
+  const albedo = textureFromData('metal', false, color, size);
+  const response = textureFromData('metal', true, physical, size);
+  albedo.userData.surface = 'smoothSteel';
+  response.userData.physicalChannels = 'height/roughness/cavity/metalness';
+  return { albedo, physical: response, dispose() { albedo.dispose(); response.dispose(); } };
+}
+
+// The height sampler only reads R. Its other channels now carry the material's
+// physical response instead of three redundant copies of height: G roughness,
+// B cavity visibility, A exposed metal. Derive these from the same authored
+// structure and colour so a rust stain is rough, a painted board catches light,
+// and mortar stays porous. No extra texture, sampler, UV or shader family.
+function packPhysicalChannels(lib) {
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  for (const family of HEIGHT_STYLES) {
+    const surface = lib[family].image.data;
+    const texture = lib[family + '-bump'];
+    const data = texture.image.data;
+    for (let p = 0; p < data.length; p += 4) {
+      const h = data[p] / 255;
+      const r = surface[p] / 255, g = surface[p + 1] / 255, b = surface[p + 2] / 255;
+      const value = (r + g + b) / 3;
+      // The local height deficit identifies recesses without mistaking a whole
+      // darker stone or a broad timber grain for a crevice.
+      const texel = p / 4, x = texel % SIZE, y = (texel / SIZE) | 0;
+      const left = (y * SIZE + (x + SIZE - 2) % SIZE) * 4;
+      const right = (y * SIZE + (x + 2) % SIZE) * 4;
+      const down = (((y + SIZE - 2) % SIZE) * SIZE + x) * 4;
+      const up = (((y + 2) % SIZE) * SIZE + x) * 4;
+      const adjacent = (data[left] + data[right] + data[down] + data[up]) / 1020;
+      const cavity = clamp01((adjacent - h) * 2.8);
+      let roughness, metal = 0;
+      if (family === 'metal') {
+        // Oxide has a warmer albedo than zinc. Recessed laps and accumulated
+        // dirt remain rough even where the rest of a sheet is reflective.
+        const oxide = clamp01((r - b - 0.015) * 5.0);
+        const dirt = clamp01((0.69 - value) * 2.5);
+        const coating = Math.max(oxide, dirt * 0.72);
+        roughness = 0.37 + coating * 0.48 + cavity * 0.08;
+        metal = (1 - coating) * 0.64;
+      } else if (family === 'timber') {
+        const bare = clamp01((0.68 - value) * 4.0);
+        roughness = 0.59 + bare * 0.29 + cavity * 0.12;
+      } else if (family === 'stone') {
+        const mortar = clamp01((0.69 - h) * 4.0);
+        roughness = 0.76 + mortar * 0.18 + (1 - value) * 0.06;
+      } else if (family === 'naturalRock') {
+        roughness = 0.80 + (1 - h) * 0.12 + cavity * 0.05;
+      } else {
+        roughness = 0.87 + (1 - h) * 0.09 + cavity * 0.03;
+      }
+      data[p + 1] = Math.round(clamp01(roughness) * 255);
+      data[p + 2] = Math.round((1 - cavity * 0.21) * 255);
+      data[p + 3] = Math.round(clamp01(metal) * 255);
+    }
+    texture.userData.physicalChannels = 'height/roughness/cavity/metalness';
+    texture.needsUpdate = true;
+  }
+}
+
+/** Guard shared lights, then apply Standard's packed response after place weather. */
+export function patchPlaceSurfaceLighting(shader, material) {
+  shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', PLACE_LIGHTING);
+  if (!material.isMeshStandardMaterial) return;
+  const family = material.map?.name?.replace('place-surface-', '') || 'plaster';
+  const surfaceType = ['plaster', 'salt', 'avery'].includes(family) ? 0
+    : family === 'timber' ? 2 : ['metal', 'industrial'].includes(family) ? 3 : 1;
+  shader.uniforms.uPlaceSurfaceType = { value: surfaceType };
+  shader.uniforms.uPlaceScanNormal = { value: material.map?.userData?.scanNormal || material.bumpMap };
+  shader.uniforms.uPlaceHasScan = { value: material.map?.userData?.scanNormal ? 1 : 0 };
+  shader.uniforms.uPlaceMetalKeep = material.userData.metalCoat || (material.userData.metalCoat = { value: 0.58 });
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', [
+      '#include <common>', SURFACE_RELIEF_GLSL,
+      'uniform float uPlaceSurfaceType;',
+      'uniform float uPlaceMetalKeep;',
+      'float countyMaterialHash(vec2 p) {',
+      '  vec3 q = fract(vec3(p.xyx) * 0.1031);',
+      '  q += dot(q, q.yzx + 33.33);',
+      '  return fract((q.x + q.y) * q.z);',
+      '}',
+      'float countyMaterialNoise(vec2 p) {',
+      '  vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
+      '  return mix(mix(countyMaterialHash(i), countyMaterialHash(i+vec2(1.0,0.0)), f.x),',
+      '    mix(countyMaterialHash(i+vec2(0.0,1.0)), countyMaterialHash(i+vec2(1.0)), f.x), f.y);',
+      '}',
+      'uniform sampler2D uPlaceScanNormal;',
+      'uniform float uPlaceHasScan;',
+      'vec3 countyScanNormal(vec3 position, vec3 surfNormal, vec2 uv, vec2 encoded) {',
+      '  vec3 q0 = dFdx(position), q1 = dFdy(position);',
+      '  vec2 st0 = dFdx(uv), st1 = dFdy(uv);',
+      '  vec3 q1p = cross(q1, surfNormal), q0p = cross(surfNormal, q0);',
+      '  vec3 T = q1p * st0.x + q0p * st1.x;',
+      '  vec3 B = q1p * st0.y + q0p * st1.y;',
+      '  float scale = inversesqrt(max(max(dot(T,T), dot(B,B)), 0.00000001));',
+      '  vec2 xy = encoded * 2.0 - 1.0;',
+      '  vec3 tangentNormal = normalize(vec3(xy, sqrt(max(0.001, 1.0 - dot(xy,xy)))));',
+      '  #ifdef DOUBLE_SIDED',
+      '    T *= gl_FrontFacing ? 1.0 : -1.0; B *= gl_FrontFacing ? 1.0 : -1.0;',
+      '  #endif',
+      '  return normalize(mat3(T * scale, B * scale, surfNormal) * tangentNormal);',
+      '}',
+      'vec4 countyPlasterSample(sampler2D tex, vec2 uv, vec2 offsetA, vec2 offsetB, float blend) {',
+      '  return mix(texture2D(tex, uv + offsetA), texture2D(tex, uv + offsetB), blend);',
+      '}',
+      // Derivatives are evaluated before the zero-gradient branch at the call
+      // site, keeping them valid across a fragment quad. This is the same relief
+      // reconstruction as countyReliefNormal with already evaluated derivatives.
+      'vec3 countyLayerNormal(vec3 surfaceNormal, vec3 dx, vec3 dy, vec2 gradient) {',
+      '  vec3 rx = cross(dy, surfaceNormal), ry = cross(surfaceNormal, dx);',
+      '  float determinant = dot(dx, rx);',
+      '  vec3 slope = sign(determinant) * (gradient.x * rx + gradient.y * ry);',
+      '  return normalize(max(abs(determinant), 0.00000001) * surfaceNormal - slope);',
+      '}',
+    ].join('\n'))
+    .replace('#include <map_fragment>', [
+      'vec2 countyWallPlane = vec2(vPlaceWorld.x + vPlaceWorld.z * 0.73, vPlaceWorld.y);',
+      // Plaster damage has no regular bond to preserve. Two continuously blended
+      // texture phases remove the four-metre wallpaper repeat; colour, height and
+      // roughness use the SAME phases, so visible failures keep their real relief.
+      'vec2 countyOffsetA = vec2(0.0), countyOffsetB = vec2(0.0);',
+      'float countyPhaseMix = 0.0, countyFloor = 0.0;',
+      // This condition is uniform for the whole material, so metal, masonry and
+      // timber avoid eight hashes and the interpolation for unused plaster UVs.
+      'if (uPlaceSurfaceType < 0.5) {',
+      '  float countyPhase = countyMaterialNoise(countyWallPlane * 0.13) * 8.0;',
+      '  float countyPhaseId = floor(countyPhase);',
+      '  countyOffsetA = vec2(countyMaterialHash(vec2(countyPhaseId, 17.0)), countyMaterialHash(vec2(countyPhaseId, 49.0))) * 2.0;',
+      '  countyOffsetB = vec2(countyMaterialHash(vec2(countyPhaseId + 1.0, 17.0)), countyMaterialHash(vec2(countyPhaseId + 1.0, 49.0))) * 2.0;',
+      '  countyPhaseMix = smoothstep(0.18, 0.82, fract(countyPhase));',
+      '  countyFloor = smoothstep(0.62, 0.91, vWxUp);',
+      '}',
+      '#ifdef USE_MAP',
+      'if (uPlaceSurfaceType < 0.5) {',
+      '  diffuseColor *= countyPlasterSample(map, vMapUv, countyOffsetA, countyOffsetB, countyPhaseMix);',
+      '} else {',
+      '  #include <map_fragment>',
+      '}',
+      '#endif',
+      'float countyMacro = countyMaterialNoise(vPlaceWorld.xz * 0.045 + vPlaceWorld.y * 0.011);',
+      'float countyWeathering = countyMaterialNoise(countyWallPlane * vec2(0.37, 0.062));',
+      'float countyFloorRelief = 0.0;',
+      'if (countyFloor > 0.001) {',
+      // Horizontal plaster is a paved slab, never a wall's repeated brick peel.
+      // Aggregate is filtered by the world-space pixel footprint before it can
+      // turn into distant shimmer; the metre-scale wear remains visible.
+      '  float footprint = max(length(dFdx(vPlaceWorld)), length(dFdy(vPlaceWorld)));',
+      '  float fineFade = 1.0 - smoothstep(0.025, 0.15, footprint);',
+      '  float aggregate = countyMaterialNoise(vPlaceWorld.xz * 19.0);',
+      '  float wear = countyMaterialNoise(vPlaceWorld.xz * 0.63);',
+      '  float slab = 0.72 + (wear - 0.5) * 0.12 + (aggregate - 0.5) * 0.13 * fineFade;',
+      '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(slab * 0.99, slab, slab * 0.985), countyFloor);',
+      '  countyFloorRelief = (aggregate - 0.5) * 0.003 * fineFade + (wear - 0.5) * 0.009;',
+      '}',
+    ].join('\n'))
+    .replace('#include <color_fragment>', [
+      '#include <color_fragment>',
+      'float countyWall = 1.0 - smoothstep(0.35, 0.78, vWxUp);',
+      'float countyFoot = 0.0, countyRunnel = 0.0;',
+      // No derivatives or texture LOD inside this face-orientation branch.
+      'if (countyWall > 0.0) {',
+      '  countyFoot = (1.0 - smoothstep(0.06, 0.8 + countyMacro * 1.15, max(vPlaceLocalY, 0.0))) * countyWall;',
+      '  countyRunnel = smoothstep(0.55, 0.79, countyMaterialNoise(countyWallPlane * vec2(2.3, 0.10) + countyMacro * 0.7)) * countyWall;',
+      '}',
+      'float countyTone = mix(0.86, 1.08, countyMacro) * mix(0.90, 1.025, countyWeathering);',
+      'diffuseColor.rgb *= countyTone * (1.0 - countyFoot * 0.21 - countyRunnel * 0.14);',
+    ].join('\n'))
+    .replace('#include <roughnessmap_fragment>', [
+      '#include <roughnessmap_fragment>',
+      'vec4 countyPhysical = vec4(0.7, roughnessFactor, 1.0, 0.0);',
+      '#ifdef USE_BUMPMAP',
+      '  if (uPlaceSurfaceType < 0.5) countyPhysical = countyPlasterSample(bumpMap, vBumpMapUv, countyOffsetA, countyOffsetB, countyPhaseMix);',
+      '  else countyPhysical = texture2D(bumpMap, vBumpMapUv);',
+      '#endif',
+      'countyPhysical = mix(countyPhysical, vec4(0.62, 0.88, 1.0, 0.0), countyFloor);',
+      'countyPhysical.g = max(0.35, countyPhysical.g - countyRunnel * 0.065);',
+      'float countyWet = 0.0;',
+      'if (uWeather.y > 0.0) {',
+      '  float countyPocket = 1.0 - smoothstep(0.42, 0.82, countyPhysical.r);',
+      '  countyWet = uWeather.y * (1.0 - countySnowCover)',
+      '    * (smoothstep(0.08, 0.80, vWxUp) * mix(0.54, 1.0, countyPocket) + countyRunnel * 0.28);',
+      '}',
+      'roughnessFactor = mix(countyPhysical.g, 0.22, countyWet);',
+      'roughnessFactor = mix(roughnessFactor, mix(0.94, 0.72, countySnowCrest), countySnowCover);',
+    ].join('\n'))
+    .replace('#include <metalnessmap_fragment>', [
+      '#include <metalnessmap_fragment>',
+      // The scan supplies the zinc/oxide boundaries; an old county building also
+      // carries a matte dust coat. Retaining that diffuse layer lets dim room
+      // light describe the sheet between its narrow specular ridges.
+      'metalnessFactor = countyPhysical.a * uPlaceMetalKeep * (1.0 - countySnowCover);',
+    ].join('\n'))
+    .replace('#include <normal_fragment_maps>', [
+      'if (uPlaceHasScan > 0.5) {',
+      '  vec2 countyNormalXY;',
+      '  if (uPlaceSurfaceType < 0.5) countyNormalXY = countyPlasterSample(uPlaceScanNormal, vBumpMapUv, countyOffsetA, countyOffsetB, countyPhaseMix).rg;',
+      '  else countyNormalXY = texture2D(uPlaceScanNormal, vBumpMapUv).rg;',
+      '  normal = countyScanNormal(-vViewPosition, nonPerturbedNormal, vBumpMapUv, countyNormalXY);',
+      '} else if (uPlaceSurfaceType >= 0.5) {',
+      '  #include <normal_fragment_maps>',
+      '}',
+      '#ifdef USE_BUMPMAP',
+      // The legible step scales with the material's own relief: countyPhysical.r is 0..1,
+      // so bumpScale IS the amplitude, and 1/84 of it is the ratio the bark scan needed
+      // (see surface-relief.js). Without it the corrugated bay roof and the workshop floor
+      // wear hard black and white bands at grazing pitch - the stripes that move with the
+      // camera - because one pixel there spans a whole rib and dFdx stops being a slope.
+      'else { normal = countyReliefNormal(-vViewPosition, nonPerturbedNormal, countyPhysical.r * bumpScale, max(bumpScale * 0.012, 0.00002)); }',
+      '#endif',
+      // Water fills the finest grain. Snow is a layer with its own wind-shaped
+      // relief, so a white roof no longer reflects the boards buried beneath it.
+      'float countyNormalFill = max(countyFloor, max(countyWet * 0.26, countySnowCover * 0.92));',
+      'if (countyNormalFill > 0.0) normal = normalize(mix(normal, nonPerturbedNormal, countyNormalFill));',
+      // Only plaster can produce slab relief; snow availability is also uniform.
+      // Dry stone, wood and steel skip the entire additional derivative layer.
+      'if (uPlaceSurfaceType < 0.5 || uWeather.x > 0.0) {',
+      '  float countyLayerHeight = countyFloorRelief * countyFloor * (1.0 - countySnowCover) + countySnowHeight * countySnowCover;',
+      '  vec2 countyLayerGradient = vec2(dFdx(countyLayerHeight), dFdy(countyLayerHeight));',
+      '  vec3 countyLayerDx = dFdx(-vViewPosition), countyLayerDy = dFdy(-vViewPosition);',
+      '  if (any(notEqual(countyLayerGradient, vec2(0.0)))) {',
+      '    normal = countyLayerNormal(normal, countyLayerDx, countyLayerDy, countyLayerGradient);',
+      '  }',
+      '}',
+    ].join('\n'))
+    .replace('#include <aomap_fragment>', [
+      '#include <aomap_fragment>',
+      'float countyCavity = mix(countyPhysical.b, 1.0, countySnowCover);',
+      'reflectedLight.indirectDiffuse *= countyCavity;',
+      'reflectedLight.indirectSpecular *= sqrt(countyCavity);',
+    ].join('\n'))
+    .replace('#include <dithering_fragment>', [
+      '#include <dithering_fragment>',
+      'gl_FragColor.a = 0.98 - clamp(countyWet * smoothstep(0.85, 0.99, vWxUp) * (1.0 - countySnowCover), 0.0, 1.0) * 0.75;',
+    ].join('\n'));
+}
+
 /**
- * Fourteen 512 x 512 images: nine colour, five height. Natural rock has its own
- * pair because the Quarry's live frame showed masonry coursing on its geology.
+ * Seventeen 512 x 512 images: nine colour, five packed height/response and three
+ * measured tangent normals. Natural rock retains its own pair for the Quarry.
  *
  * COST. Round 16's note here said 300-340 ms against 206 ms for twelve 256s — "four times the
  * texels for about 1.6x the time". That is wrong and the correction matters, because it was
@@ -875,6 +1073,40 @@ export function createPlaceSurfaceLibrary() {
       data[p + 3] = 255;
     }
     lib[key] = textureFromData(style, asHeight, data);
+  }
+  packPhysicalChannels(lib);
+  if (prebaked) {
+    // Scan data overrides estimates after the procedural families have been packed.
+    // Normal XY adds one shared sampler, with a uniform branch for every material;
+    // it does not split the destination shader into additional program variants.
+    let scanOffset = BASE_BYTES + 8;
+    for (const family of ['metal', 'plaster', 'stone']) {
+      const response = lib[family + '-bump'].image.data;
+      const normal = new Uint8Array(SIZE * SIZE * 4);
+      for (let p = 0; p < response.length; p += 4) {
+        response[p + 1] = prebaked[scanOffset++];
+        response[p + 2] = prebaked[scanOffset++];
+        response[p + 3] = prebaked[scanOffset++];
+        normal[p] = prebaked[scanOffset++];
+        normal[p + 1] = prebaked[scanOffset++];
+        normal[p + 2] = normal[p + 3] = 255;
+      }
+      const normalTexture = textureFromData(family, false, normal);
+      normalTexture.name = 'place-scan-normal-' + family;
+      lib[family + '-normal'] = normalTexture;
+      lib[family + '-bump'].userData.physicalSource = 'ambientCG';
+      for (const style of COLOR_STYLES.filter(style => BUMP_OF[style] === family)) {
+        lib[style].userData.scanNormal = normalTexture;
+        if (family === 'metal') lib[style].repeat.set(2, 1);
+        // Bricks089 covers 2.2 x 1.1 m. Repeat against the common 4 m
+        // projection without rotating its courses or stretching its normals.
+        if (family === 'stone') lib[style].repeat.set(4 / 2.2, 4 / 1.1);
+      }
+      // The steel scan is 2:1 before rotation: a 2 x 4 metre repeat keeps its
+      // photographic aspect and narrow rib spacing within the existing 4 m UVs.
+      if (family === 'metal') lib[family + '-bump'].repeat.set(2, 1);
+      if (family === 'stone') lib[family + '-bump'].repeat.set(4 / 2.2, 4 / 1.1);
+    }
   }
   // The renderer owns the expanded texels now; release the packed working copy.
   prebaked = null;

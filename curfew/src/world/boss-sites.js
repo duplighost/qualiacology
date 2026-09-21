@@ -22,7 +22,9 @@ function sign(root,text,x,y,z,yaw=0){if(typeof document==='undefined')return;
 export class BossSites {
  static id='boss-sites';
  constructor(ctx){this.ctx=ctx;this.sites=[];this.release=false;this.inside=false;this.loaded=false;this.time=0;
-  for(const def of BOSSES){const y=addFlat({id:'boss-ground:'+def.id,x:def.x,z:def.z,radius:def.ambush?102:74,blend:.78});const road=def.id==='underkeep'||def.ambush?null:nearestRoadInfo(def.x,def.z,200);this.sites.push({...def,y,road,art:null,anchors:[],supplyUsed:false});}
+  // Road queries reuse one scratch object. Each site owns its approach snapshot,
+  // so later terrain and decorative planting queries cannot move that approach.
+  for(const def of BOSSES){const y=addFlat({id:'boss-ground:'+def.id,x:def.x,z:def.z,radius:def.ambush?102:74,blend:.78});const road=def.id==='underkeep'||def.ambush?null:{...nearestRoadInfo(def.x,def.z,200)};this.sites.push({...def,y,road,art:null,anchors:[],supplyUsed:false});}
  }
  _sys(id){return this.ctx.systems.get(id);}
  clearsTrees(x,z){for(const s of this.sites){if(Math.hypot(x-s.x,z-s.z)<(s.ambush?98:58))return true;if(!s.road?.hit)continue;const dx=s.road.x-s.x,dz=s.road.z-s.z,den=dx*dx+dz*dz,t=Math.max(0,Math.min(1,((x-s.x)*dx+(z-s.z)*dz)/den));if(Math.hypot(x-s.x-dx*t,z-s.z-dz*t)<4.5)return true;}return false;}

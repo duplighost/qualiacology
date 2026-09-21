@@ -869,6 +869,10 @@ API.teleport = (x, z, yaw) => {
   // first or the next step yanks the yaw straight back.
   if (cam) { cam.yaw = y; if (cam.init) cam.init(); }
   if (p && p.teleport) p.teleport(Number(x) || 0, Number(z) || 0, y);
+  // The shadow map runs on the off beat (gfx.render); a jump is the one moment its
+  // previous contents describe somewhere else entirely.
+  const g = ctx.systems.get('gfx');
+  if (g && g.refreshShadows) g.refreshShadows();
   acc = 0;
   ctx.time.alpha = 0;
   presentAll(1);

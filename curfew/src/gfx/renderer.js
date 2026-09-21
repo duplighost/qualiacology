@@ -184,10 +184,27 @@ export class Gfx {
   render() {
     const r = this.renderer;
     r.info.reset();                       // frame totals, see autoReset note above
+    // THE SHADOW MAP ON THE OFF BEAT. MEASURED at the Holdfast approach: 782 draws a frame,
+    // of which only 384 are the picture - the other 398 are the county being drawn a second
+    // time into the moon's depth map. Nothing in that map is worth 60 Hz. The moon does not
+    // move, the box only slides with the player, and the fastest thing in it is a branch in
+    // the wind; a map one frame stale is 16 ms of lag on a shadow edge, which is under a
+    // pixel at walking pace and invisible at any pace.
+    //
+    // needsUpdate is a one-shot: three clears it after the pass, so setting it on alternate
+    // frames is exactly a 30 Hz shadow map. The first frames are forced, because the very
+    // first pass is the one nothing can be drawn without.
+    r.shadowMap.autoUpdate = false;
+    if (this._shadowBeat === undefined) this._shadowBeat = 0;
+    if (this._shadowBeat < 3 || (this._shadowBeat & 1) === 0) r.shadowMap.needsUpdate = true;
+    this._shadowBeat++;
     const post = this.ctx.systems && this.ctx.systems.get('post');
     if (post && post.enabled) post.render();
     else r.render(this.scene, this.camera);
   }
+
+  /** Force the next frame's shadow pass — after a teleport, a cut or a load. */
+  refreshShadows() { this._shadowBeat = 0; }
 
   /** For window.__CURFEW.frameStats(). renderer.info totals for the whole frame. */
   stats() {

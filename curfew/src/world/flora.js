@@ -74,10 +74,15 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import CFG from '../config.js';
 import { clamp, clamp01, lerp, smoothstep, noise1D, TAU } from '../engine/math.js';
-import { ImpostorBank, IMPOSTOR_FROM, coveragePreservingChain } from './impostors.js';
+import { ImpostorBank, IMPOSTOR_FROM } from './impostors.js';
 import { planTravelWaters } from './wilds.js';
 import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
 import { loadScannedSurface } from './scanned-materials.js';
+import { FOLIAGE_CELLS, loadFoliageImage, packFoliageAtlas } from './flora-atlas.js';
+import { GROUND_CELLS, makeGroundCoverTexture } from './flora-groundcover.js';
+import { guardPointLightLoop } from '../gfx/light-loop.js';
+
+const TREE_LIGHTING = guardPointLightLoop(THREE.ShaderChunk.lights_fragment_begin);
 
 // ---------------------------------------------------------------------------
 // Local constants that want to be in config.js. Requested in docs/HANDOFF.md;
@@ -87,19 +92,8 @@ const NEAR_RING_M = 72;      // -> CFG.flora.nearRing. ART.md §2.5, was 96.
 const PLANT_CELL = 2.6;      // m; 1/2.6^2 = 0.148 trees/m^2 ceiling, which is
                              // exactly the "measured affordable to 0.150" note
                              // beside CFG.flora.treeDensity.
-// ROUND 16, THE LIST item 12 — LESS UNIFORM GROUND. Alex's reviewer: "better vegetation,
-// not simply more vegetation." Grass was a FLAT Bernoulli accept per cell: the same
-// probability in a clearing, under a closed canopy and in the middle of a fern bed, which
-// is why the floor reads as one even scatter from the spawn to the ridge.
-//
-// GRASS_CELL 1.15 -> 0.94 raises the CANDIDATE density by 1.50x (0.756 -> 1.132 cells/m2)
-// and the meadow field below then takes most of them away again. The point is the
-// DISTRIBUTION, not the count: where a meadow lands the floor is now 1.50x thicker than
-// the old flat rate, and between meadows there is real bare ground. MEASURED over 300k
-// county samples (the field survey, not a guess): the combined multiplier means 0.407, so
-// the resident card count lands at ~0.61x the old one while 15% of the county sits above
-// 0.75 of full density. 0.94 also tiles 64 m to within 8 cm; 1.15 left a 75 cm dead strip
-// at every chunk edge.
+// Candidate density stays fixed. A broad meadow field and smaller verge colonies
+// shape the accepted plants; their meshes only exist inside the near grass ring.
 const GRASS_CELL = 0.94;     // m
 const GRASS_ACCEPT = 0.60;
 // THE MEADOW FIELD. Sampled at WORLD x/z — NEVER at the chunk-local cell index, or the
@@ -139,7 +133,7 @@ const FERN_BED_GAIN = 1.30;
 // against a ground of 38.9. That old value match made every torch-lit blade clip into the
 // same pale picket fence. 1.65 keeps the floor a darker layer under the canopy; the biome
 // tint/height signatures above now do the separation instead of raw brightness.
-const GRASS_TINT_MUL = 1.65;
+const GRASS_TINT_MUL = 1.50;
 
 // ---------------------------------------------------------------------------
 // THE FORM TERM. ART.md §0.3's derived gate: "lit side : shadow side across one
@@ -354,42 +348,8 @@ const PAL = {
   // blob (tests/shots/r6F-understory-torch.png, first pass). A rock is lit by the torch
   // from arm's length far more often than a cliff is; a step under the ridge ground.
   stone: [0.108, 0.104, 0.100],
-  // ROUND 16, item 12. LEAF LITTER. The county floor had no litter at all: a trunk met an
-  // unbroken plane of ground albedo and the torch pool was one flat disc of it (see
-  // tests/shots/flora-r16-before-open-ground.png — 63.6 mean, and not one feature in it).
-  //
-  // MEASURED, AND THEN MEASURED AGAIN. The first pass authored this at [0.116, 0.094,
-  // 0.055] — the leafDry family, chosen because that is what fell off these trees — and it
-  // was WRONG by the only test that counts, the picture: tests/shots/flora-r16-litab2-on.png
-  // against -off.png shows the drifts reading as pale golden PLATES, plainly brighter than
-  // the ground they lie on and the same value as the trunks. The arithmetic explains it and
-  // the reasoning that authored it had missed two multipliers: matNear applies the FORM
-  // TERM (x1.22 on an up-facing normal), and the per-vertex jitter and the per-instance
-  // tint stack on top of it, so 0.116 arrived on screen as 0.14-0.20 against a pines ground
-  // of 0.096 — up to 2.1x in red under a warm torch.
-  //
-  // Re-derived against the terrain's real albedo (terrain.js REGIONS[0].ground =
-  // [0.096, 0.116, 0.08], Rec.709 luma 0.1092) and then SETTLED BY A DIFFERENTIAL MASK,
-  // because the arithmetic was only ever a starting point. Two compositor captures of the
-  // identical pose, litter on and off, diffed: the changed pixels ARE the litter and the
-  // same pixels in the off frame are the ground it replaced.
-  //   PAL.litter            litter luma   ground under it   RATIO
-  //   [0.116,0.094,0.055]   (first pass, plainly brighter — see the -litab2- shots)
-  //   [0.060,0.049,0.031]        46.9            55.3        0.848
-  //   [0.052,0.042,0.027]        44.1            53.7        0.821   <- shipped
-  // Note that a 0.87x cut on the albedo only moved the ratio 0.848 -> 0.821: there is an
-  // ambient and fog floor under this, so going darker stops buying contrast and only
-  // drains the colour out of it. THE NIGHT-VALUE LAW, applied to the floor: a drift of
-  // leaves is DARKER than the ground it lies on (0.82) and warm where the county is
-  // blue-grey — measured, litter reads rgb 41/45/42 against a ground of 47/56/52 — and
-  // that hue difference at a gentle value difference is what makes it read as ground
-  // rather than as an object lying on the ground.
-  litter: [0.052, 0.042, 0.027],
 };
-// A per-instance multiplier that turns the litter template into WET BARE EARTH: cooler, and
-// 0.44x the ground's luma where leaf litter is 0.62x. One geometry, two populations, no
 // extra draw call and no new material.
-const SOIL_MUL = [0.70, 0.76, 0.93];
 
 // Species archetypes. `kind` drives the silhouette; the county is 42% Pines so
 // the bank is conifer-heavy on purpose (DESIGN §2 region table).
@@ -430,15 +390,15 @@ const BIOME_TINT = Object.freeze([
 // bearing in _pack, so its trunks agree about the weather instead of forming another plumb
 // colonnade. This changes no positions, radii, counts, colliders, stride or runtime program.
 const BIOME_LEAN_MUL = Object.freeze([1.0, 1.0, 1.18, 1.68]);
-// The floor has to change with the canopy or four forests still read as one carpet of pale
-// spikes. These alter the same crossed-card grass instances—no extra mesh or material.
+// Each region scales and tints the same clustered grass geometry.
 const BIOME_GRASS_ACCEPT = Object.freeze([0.32, 0.56, 0.38, 0.18]);
-const BIOME_GRASS_WIDTH = Object.freeze([[0.27, 0.48], [0.38, 0.66], [0.24, 0.44], [0.21, 0.36]]);
-const BIOME_GRASS_HEIGHT = Object.freeze([[0.22, 0.55], [0.30, 0.74], [0.52, 1.06], [0.16, 0.40]]);
+const BIOME_GRASS_WIDTH = Object.freeze([[0.60, 1.04], [0.68, 1.18], [0.47, 0.86], [0.42, 0.76]]);
+const BIOME_GRASS_HEIGHT = Object.freeze([[0.24, 0.62], [0.32, 0.81], [0.49, 0.97], [0.17, 0.43]]);
 const BIOME_GRASS_TINT = Object.freeze([
-  Object.freeze([0.70, 0.84, 0.90]),   // pine floor: sparse, low, cold
+  // Moonlight supplies the cool cast; the plants retain olive/dry-leaf albedo.
+  Object.freeze([0.91, 0.83, 0.55]),   // pine floor: muted olive among leaf litter
   Object.freeze([1.14, 1.00, 0.67]),   // field: broad tawny seed heads
-  Object.freeze([0.62, 0.91, 0.92]),   // fen: tall blue-green rushes
+  Object.freeze([0.78, 0.89, 0.59]),   // fen: greener rushes with weathered tips
   Object.freeze([0.84, 0.79, 0.69]),   // ridge: short weathered straw
 ]);
 
@@ -498,6 +458,7 @@ const _yAxis = new THREE.Vector3(0, 1, 0);
 const _segA = new THREE.Vector3();
 const _segB = new THREE.Vector3();
 const _segDir = new THREE.Vector3();
+const _groundNormal = new THREE.Vector3();
 const _segQuat = new THREE.Quaternion();
 const _segMat = new THREE.Matrix4();
 
@@ -942,56 +903,222 @@ function blobGeometry(cx, cy, cz, radius, detail, col, tint, wind, squash, seed,
 /** A point on the baked three-reach trunk. Boot-time only. */
 function trunkPointAt(rec, f) {
   const path = rec.trunkPath;
-  const u = clamp01(f) * (path.length - 1);
-  const i = Math.min(path.length - 2, Math.floor(u));
-  const t = u - i, a = path[i], b = path[i + 1];
+  const y = clamp01(f) * rec.trunkH;
+  let i = 0;
+  while (i < path.length - 2 && path[i + 1].y < y) i++;
+  const a = path[i], b = path[i + 1];
+  const t = clamp01((y - a.y) / Math.max(0.001, b.y - a.y));
   return {
     x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t),
   };
 }
 
 function trunkRadiusAt(rec, f) {
-  const top = rec.kind === 'snag' ? 0.10 : rec.kind === 'conifer' ? 0.28 : 0.34;
-  return rec.trunkR * lerp(1, top, Math.pow(clamp01(f), 0.84));
+  const top = rec.kind === 'snag' ? 0.10 : rec.kind === 'conifer' ? 0.045 : 0.065;
+  // Keep weight low on the bole and taper into the upper branch hierarchy.
+  // The recipe radius and centreline still own the exact same trunk collider.
+  return rec.trunkR * lerp(1, top, Math.pow(clamp01(f), 1.24));
+}
+
+// A bole is one surface. Independent open cylinders left different fluting,
+// normals, colours and wind weights on each side of the same horizontal join.
+// Share the rings before expanding for the existing merged tree batch.
+function connectedTrunkGeometry(rec, lod, seed) {
+  const sides = lod === 0 ? 10 : 5;
+  const rings = lod === 0 ? [0, Math.min(0.055, 0.55 / rec.trunkH), 0.32, 0.70, 1] : [0, 0.70, 1];
+  const rough = rec.kind === 'birch' ? 0.045 : rec.kind === 'snag' ? 0.11 : 0.075;
+  const flare = rec.kind === 'snag' ? 0.44 : 0.36;
+  const phase = (seed + rec.barkSeed) * 0.173;
+  const positions = [], colours = [], weights = [], uvs = [], indices = [];
+  const centres = rings.map(f => trunkPointAt(rec, f));
+  const direction = new THREE.Vector3(), rotation = new THREE.Quaternion(), point = new THREE.Vector3();
+  for (let row = 0; row < rings.length; row++) {
+    const f = rings[row], centre = centres[row];
+    const a = centres[Math.max(0, row - 1)], b = centres[Math.min(rings.length - 1, row + 1)];
+    direction.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize();
+    rotation.setFromUnitVectors(_yAxis, direction);
+    const base = row === 0, radius = trunkRadiusAt(rec, f) / (base ? 1 + rough : 1);
+    for (let i = 0; i <= sides; i++) {
+      const angle = i === sides ? 0 : i / sides * TAU;
+      const furrow = Math.sin(angle * 3 + phase) * 0.58
+        + Math.sin(angle * 5 - phase * 0.7 + f * 2.1) * 0.30
+        + Math.sin(f * TAU * 1.5 + phase) * 0.12;
+      const r = radius * (1 + rough * furrow + (base ? flare : 0));
+      point.set(Math.cos(angle) * r, 0, Math.sin(angle) * r).applyQuaternion(rotation);
+      positions.push(centre.x + point.x, centre.y + point.y, centre.z + point.z);
+      const grain = 0.5 + 0.5 * Math.sin(angle * (rec.kind === 'birch' ? 4 : 6)
+        + f * (rec.kind === 'snag' ? 8.5 : 3.2) + (seed + rec.barkSeed) * 0.119);
+      let shade = 0.68 + grain * 0.46;
+      if (rec.kind === 'birch') shade *= 1.08;
+      if (rec.kind === 'snag' && Math.sin(angle * 3 - f * 5 + phase) > 0.52) shade *= 0.68;
+      for (let c = 0; c < 3; c++) colours.push(rec.bark[c] * shade);
+      // Keep the rooted base fixed and retain the old reach-end wind curve.
+      // Sharing it removes the restart at each reach; branch roots remain
+      // embedded in the bole and keep their existing scaffold/tip motion.
+      weights.push(base ? 0 : 0.04 + f * 0.14);
+      uvs.push(i / sides * 0.96 + 0.02, 0.82 + f * 0.16);
+    }
+  }
+  for (let row = 0; row < rings.length - 1; row++) for (let i = 0; i < sides; i++) {
+    const a = row * (sides + 1) + i, b = a + sides + 1;
+    indices.push(a, b, a + 1, a + 1, b, b + 1);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
+  geometry.setAttribute('aWind', new THREE.Float32BufferAttribute(weights, 1));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  if (rec.kind === 'snag') {
+    // The exposed tip owns the snag's far-impostor height. Keep that exact
+    // original bound when the final cross-section gains its connecting side.
+    const a = trunkPointAt(rec, 0.70), b = trunkPointAt(rec, 1);
+    const tip = segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
+      trunkRadiusAt(rec, 0.70), trunkRadiusAt(rec, 1), sides - 1, rec.bark, 0, 0,
+      { rough, kind: rec.kind, seed: seed + rec.barkSeed, part: lod === 0 ? 3 : 1 });
+    tip.computeBoundingBox(); const maxY = tip.boundingBox.max.y; tip.dispose();
+    const p = geometry.attributes.position, start = (rings.length - 1) * (sides + 1);
+    let highest = start;
+    for (let i = start; i < p.count; i++) {
+      if (p.getY(i) > p.getY(highest)) highest = i;
+    }
+    for (let i = start; i < p.count; i++) p.setY(i, Math.min(p.getY(i), maxY));
+    p.setY(highest, maxY);
+    if (highest === start) p.setY(start + sides, maxY);
+    if (highest === start + sides) p.setY(start, maxY);
+  }
+  geometry.setIndex(indices); geometry.computeVertexNormals();
+  const normals = geometry.attributes.normal;
+  // The UV wrap needs duplicate vertices, but their surface normal stays shared.
+  for (let row = 0; row < rings.length; row++) {
+    const a = row * (sides + 1), b = a + sides;
+    direction.fromBufferAttribute(normals, a).add(point.fromBufferAttribute(normals, b)).normalize();
+    normals.setXYZ(a, direction.x, direction.y, direction.z);
+    normals.setXYZ(b, direction.x, direction.y, direction.z);
+  }
+  const shell = geometry.toNonIndexed(); geometry.dispose();
+  if (rec.kind !== 'birch') return shell;
+
+  // Birch lenticels are short broken marks, not separate sleeves around the
+  // trunk. Place each patch directly on the baked triangle, with its normal
+  // and wind interpolated from that surface so it cannot float away in a gust.
+  const patchPositions = [], patchNormals = [], patchColours = [], patchUVs = [], patchWind = [];
+  const shellP = shell.attributes.position, shellN = shell.attributes.normal;
+  const shellW = shell.attributes.aWind, shellUV = shell.attributes.uv;
+  const bary = new THREE.Vector3(), normal = new THREE.Vector3();
+  const sample = (f, angle) => {
+    let row = 0; while (row < rings.length - 2 && f > rings[row + 1]) row++;
+    const along = clamp01((f - rings[row]) / (rings[row + 1] - rings[row]));
+    const across = (angle / TAU % 1 + 1) % 1 * sides;
+    const side = Math.min(sides - 1, Math.floor(across)), u = across - side;
+    const second = u + along > 1;
+    const face = (row * sides + side) * 6 + (second ? 3 : 0);
+    // The loft's two triangles use (0,0),(0,1),(1,0) then
+    // (1,0),(0,1),(1,1), in angular/height coordinates.
+    if (second) bary.set(1 - along, 1 - u, along + u - 1);
+    else bary.set(1 - u - along, along, u);
+    point.set(0, 0, 0); normal.set(0, 0, 0); let wind = 0, uvX = 0, uvY = 0;
+    for (let k = 0; k < 3; k++) {
+      const w = bary.getComponent(k), id = face + k;
+      direction.fromBufferAttribute(shellP, id); point.addScaledVector(direction, w);
+      direction.fromBufferAttribute(shellN, id); normal.addScaledVector(direction, w);
+      wind += shellW.getX(id) * w; uvX += shellUV.getX(id) * w; uvY += shellUV.getY(id) * w;
+    }
+    normal.normalize(); point.addScaledVector(normal, 0.0015);
+    return { p: point.clone(), n: normal.clone(), wind, uv: [uvX, uvY] };
+  };
+  const count = lod === 0 ? 12 : 3;
+  for (let i = 0; i < count; i++) {
+    const f = 0.045 + hashI(i, 233, seed) * 0.42;
+    const angle = hashI(i, 239, seed) * TAU;
+    const span = 0.22 + hashI(i, 241, seed) * 0.54;
+    const height = (0.024 + hashI(i, 251, seed) * 0.052) / rec.trunkH;
+    const slant = (hashI(i, 257, seed) - 0.5) * height;
+    const corners = [sample(f, angle), sample(f + slant, angle + span),
+      sample(f + slant + height * 0.58, angle + span), sample(f + height, angle)];
+    const shade = 0.31 + hashI(i, 263, seed) * 0.20;
+    for (const k of [0, 3, 1, 1, 3, 2]) {
+      const v = corners[k]; patchPositions.push(v.p.x, v.p.y, v.p.z);
+      patchNormals.push(v.n.x, v.n.y, v.n.z); patchWind.push(v.wind); patchUVs.push(...v.uv);
+      for (let c = 0; c < 3; c++) patchColours.push(rec.bark[c] * shade);
+    }
+  }
+  const patches = new THREE.BufferGeometry();
+  patches.setAttribute('position', new THREE.Float32BufferAttribute(patchPositions, 3));
+  patches.setAttribute('normal', new THREE.Float32BufferAttribute(patchNormals, 3));
+  patches.setAttribute('color', new THREE.Float32BufferAttribute(patchColours, 3));
+  patches.setAttribute('aWind', new THREE.Float32BufferAttribute(patchWind, 1));
+  patches.setAttribute('uv', new THREE.Float32BufferAttribute(patchUVs, 2));
+  const merged = mergeGeometries([shell, patches], false); shell.dispose(); patches.dispose();
+  return merged;
+}
+
+// A spray is a volume of small leaves. Lighting every card with its flat sheet
+// normal exposes the construction whenever a lamp moves. Bend the normals round
+// the branch volume at bake time; this adds no vertices or per-frame work.
+function softenFoliageNormals(geo, cx, cy, cz, width, height, strength = 0.72) {
+  const p = geo.attributes.position, n = geo.attributes.normal;
+  const invW = 1 / Math.max(0.1, width), invH = 1 / Math.max(0.1, height);
+  for (let i = 0; i < p.count; i++) {
+    let nx = (p.getX(i) - cx) * invW;
+    let ny = (p.getY(i) - cy) * invH + 0.35;
+    let nz = (p.getZ(i) - cz) * invW;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    nx /= len; ny /= len; nz /= len;
+    // Keep the tiny folds but orient their normal toward the outside of the spray.
+    const sign = nx * n.getX(i) + ny * n.getY(i) + nz * n.getZ(i) < 0 ? -1 : 1;
+    nx = nx * strength + n.getX(i) * sign * (1 - strength);
+    ny = ny * strength + n.getY(i) * sign * (1 - strength);
+    nz = nz * strength + n.getZ(i) * sign * (1 - strength);
+    const norm = Math.hypot(nx, ny, nz) || 1;
+    n.setXYZ(i, nx / norm, ny / norm, nz / norm);
+  }
 }
 
 // Branch-attached needle and leaf sprays. The atlas supplies the fine boundary; angled
 // cards give volume instead of one camera-facing billboard. Trunks keep opaque atlas UVs.
-function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed, turn = 0, conifer = false, lod = 0) {
+function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed, turn = 0, conifer = false, lod = 0, atlasCell = -1, cardCount = 0) {
   const parts = [];
-  const count = conifer ? (lod ? 2 : 3) : (lod ? 3 : 6);
-  const scale = conifer ? 1 : (lod ? 0.78 : 0.64);
+  const cell = FOLIAGE_CELLS[atlasCell >= 0 ? atlasCell : conifer ? (seed & 1) : 2];
+  // Spend the old sheet subdivisions on separate small branchlets. Same triangle
+  // count, but fine alpha detail now occupies a believable physical leaf scale.
+  const defaultCount = conifer ? (lod ? 8 : 12) : (lod ? 12 : 24);
+  const count = cardCount || defaultCount;
+  // Fewer cards represent each complete mid-distance lobe, rather than deleting
+  // entire lobes. Keep the lobe's projected leaf area when reducing its cards.
+  const scale = (conifer ? 0.48 : (lod ? 0.39 : 0.34)) * Math.sqrt(defaultCount / count);
   for (let i = 0; i < count; i++) {
     const width = radius * (conifer ? 2.42 : 2.56) * scale * (0.89 + hashI(i, 101, seed) * 0.22);
     const height = radius * (conifer ? 2.00 : 2.06) * scale * Math.max(0.72, squash)
       * (0.88 + hashI(i, 103, seed) * 0.24);
-    const g = new THREE.PlaneGeometry(width, height, 2, 2);
-    // A shallow fold through the branch gives the moon more than one plane to light.
+    const g = new THREE.PlaneGeometry(width, height);
+    // A slight twist stops the twig face being a mathematically perfect rectangle.
     const p = g.attributes.position, u = g.attributes.uv;
     for (let j = 0; j < p.count; j++) {
       const x = p.getX(j), y = p.getY(j);
-      p.setZ(j, Math.abs(x) * -0.48 + (y / height) * (y / height) * radius * 0.28);
+      p.setZ(j, x * y / (width * height) * radius * 0.22);
       // Generous transparent gutter: an opaque bark mip must never leak into the tip
       // of a far foliage card and create a hard dark triangle in the sky.
       const across = hashI(i, 107, seed) > 0.5 ? 1 - u.getX(j) : u.getX(j);
-      u.setXY(j, (conifer ? 0.03 : 0.53) + across * 0.44, 0.02 + u.getY(j) * 0.34);
+      u.setXY(j, cell.x + across * cell.w, cell.y + u.getY(j) * cell.h);
     }
     g.rotateX((conifer ? -0.10 : -1.15) + hashI(i, 73, seed) * (conifer ? 0.42 : 2.30));
     g.rotateZ((hashI(i, 43, seed) - 0.5) * (conifer ? 0.46 : 1.10));
-    g.rotateY(turn + i * Math.PI / count + hashI(i, 17, seed) * 0.26);
+    g.rotateY(turn + i * 2.3999632 + hashI(i, 17, seed) * 0.42);
     const angle = turn + i * 2.3999632;
-    const spread = conifer ? 0 : radius * (lod ? 0.26 : 0.50);
+    const spread = radius * (conifer ? 0.40 : 0.78) * Math.sqrt((i + 0.5) / count);
     g.translate(cx + Math.cos(angle) * spread,
-      cy + (conifer ? 0 : (hashI(i, 83, seed) - 0.5) * radius * 0.76),
+      cy + (hashI(i, 83, seed) - 0.5) * radius * (conifer ? 1.25 : 1.08),
       cz + Math.sin(angle) * spread);
     g.computeVertexNormals();
+    softenFoliageNormals(g, cx, cy - radius * 0.16, cz, radius, radius * Math.max(0.8, squash));
     const ni = g.toNonIndexed(); g.dispose();
     const n = ni.attributes.position.count;
     const colours = new Float32Array(n * 3), weights = new Float32Array(n);
     for (let j = 0; j < n; j++) {
-      const shade = tint * (0.77 + hashI(i, 89, seed) * 0.34);
+      const localTip = clamp01((ni.attributes.uv.getY(j) - cell.y) / cell.h);
+      const shade = tint * (0.77 + hashI(i, 89, seed) * 0.34) * (0.78 + localTip * 0.25);
       colours[j * 3] = col[0] * shade; colours[j * 3 + 1] = col[1] * shade; colours[j * 3 + 2] = col[2] * shade;
-      weights[j] = wind;
+      weights[j] = wind * (0.60 + localTip * 0.40);
     }
     ni.setAttribute('color', new THREE.BufferAttribute(colours, 3));
     ni.setAttribute('aWind', new THREE.BufferAttribute(weights, 1));
@@ -1003,96 +1130,121 @@ function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed,
 }
 
 function coniferCrownGeometry(rec, lod, seed) {
-  const parts = [], tiers = lod ? 6 : 8;
-  const base = rec.trunkH * 0.30, span = rec.trunkH * 0.69;
-  const spacing = span / (tiers - 1);
+  const parts = [], tiers = 10;
+  const cell = FOLIAGE_CELLS[rec.ai % 2];
+  const crownBase = [0.28, 0.34, 0.36, 0.25][rec.ai % 4];
+  const crownWidth = [0.215, 0.185, 0.205, 0.240][rec.ai % 4];
+  const base = rec.trunkH * crownBase, span = rec.trunkH * (0.99 - crownBase);
+  const spacing = span / 9;
   for (let j = 0; j < tiers; j++) {
-    const f = j / (tiers - 1), y = base + span * f;
-    const r = rec.trunkH * 0.220 * Math.pow(1 - f * 0.96, 0.72)
-      * (0.86 + hashI(j, 97, seed) * 0.25);
+    // Keep every height in both LODs. Dropping alternate whorls turned a full
+    // near crown into separated shelves and bare shaft at middle distance.
+    const tier = j;
+    const f = tier / 9;
+    const y = base + span * f + (hashI(tier, 91, seed) - 0.5) * spacing * 0.48;
+    const r = rec.trunkH * crownWidth * Math.pow(1 - f * 0.96, 0.72)
+      * (0.82 + hashI(tier, 97, seed) * 0.32);
     const anchor = trunkPointAt(rec, y / rec.trunkH);
-    // Each whorl grows OUT from the trunk. The old crown repeated upright little
-    // trees on crossed sheets; real boughs hang in overlapping radial layers.
-    const fans = lod ? 3 : 5;
+    // Short needle sprays attach along a curved bough. A whole four-metre limb
+    // must never be one magnified frond: that draws giant combs against the sky.
+    const fans = lod ? 3 : 6;
     for (let k = 0; k < fans; k++) {
-      const angle = rec.leanDir + j * 2.3999632 + k * TAU / fans
-        + (hashI(j, k + 31, seed) - 0.5) * 0.34;
-      const reach = r * (0.86 + hashI(j, k + 41, seed) * 0.27);
-      const branchY = y + (hashI(j, k + 59, seed) - 0.5) * spacing * 0.48;
-      const g = new THREE.PlaneGeometry(reach * 1.50, reach, lod ? 1 : 2, 2);
-      const p = g.attributes.position, uv = g.attributes.uv;
-      const colors = new Float32Array(p.count * 3), weights = new Float32Array(p.count);
+      const limb = lod ? k * 2 + (tier & 1) : k;
+      const angle = rec.leanDir + tier * 2.3999632 + limb * TAU / 6
+        + (hashI(tier, limb + 31, seed) - 0.5) * 0.42;
+      const exposure = 0.87 + Math.cos(angle - rec.leanDir) * 0.13;
+      const reach = r * (0.74 + hashI(tier, limb + 41, seed) * 0.42) * exposure;
+      const branchY = y + (hashI(tier, limb + 59, seed) - 0.5) * spacing * 0.67;
       const ca = Math.cos(angle), sa = Math.sin(angle);
-      for (let v = 0; v < p.count; v++) {
-        const across = p.getX(v), along = uv.getY(v);
-        const run = reach * along;
-        const arch = Math.sin(along * Math.PI) * reach * 0.22;
-        const droop = along * along * reach * (0.22 + hashI(j, k + 51, seed) * 0.16);
-        p.setXYZ(v, anchor.x + ca * run - sa * across,
-          branchY + arch - droop - Math.abs(across) * 0.17,
-          anchor.z + sa * run + ca * across);
-        uv.setXY(v, 0.03 + uv.getX(v) * 0.44, 0.02 + along * 0.34);
-        const shade = (0.75 + f * 0.19 + along * 0.17)
-          * (0.88 + hashI(j, k + 67, seed) * 0.20);
-        for (let c = 0; c < 3; c++) colors[v * 3 + c] = rec.leaf[c] * shade;
-        weights[v] = 0.27 + f * 0.28 + along * 0.25;
+      // A complete needle-bearing branch is carried on one bent ribbon, not
+      // duplicated on a crossed pair at every station. Three unequal rolls
+      // retain a volumetric limb while cutting its near foliage from 16 to 12
+      // triangles. Mid uses flat ribbons and spends the saved triangles on
+      // continuous inner shoots, instead of losing the centre at alternate tiers.
+      const sprays = 3;
+      for (let b = 0; b < sprays; b++) {
+        const q = .20 + b * .30;
+        const bx = anchor.x + ca * reach * q;
+        const bz = anchor.z + sa * reach * q;
+        const by = branchY + Math.sin(q * Math.PI) * reach * 0.16 - q * q * reach * 0.22;
+        const size = Math.max(spacing * 0.36, reach * (0.54 - q * 0.13))
+          * (0.86 + hashI(tier * 41 + b, limb + 103, seed) * 0.24) * (lod ? 1.18 : 1);
+        {
+          const width = size * 1.80, height = size * 2.05;
+          const g = new THREE.PlaneGeometry(width, height, 1, lod ? 1 : 2);
+          const p = g.attributes.position, uv = g.attributes.uv;
+          const colours = new Float32Array(p.count * 3), weights = new Float32Array(p.count);
+          // The stem follows the limb in world space. Upright copies at every
+          // station made the crown a stack of little Christmas-tree silhouettes.
+          const scatterSeed = tier * 71 + b * 3;
+          const heading = angle + (hashI(scatterSeed, limb + 79, seed) - 0.5) * 0.48;
+          const pitch = -0.28 + hashI(scatterSeed, limb + 83, seed) * 0.50;
+          const roll = -.30 + b * 1.04
+            + (hashI(scatterSeed, limb + 89, seed) - 0.5) * 0.40;
+          const ch = Math.cos(heading), sh = Math.sin(heading);
+          const cp = Math.cos(pitch), sp = Math.sin(pitch);
+          const cr = Math.cos(roll), sr = Math.sin(roll);
+          const dx = ch * cp, dy = sp, dz = sh * cp;
+          const nx = -ch * sp, ny = cp, nz = -sh * sp;
+          const wx = -sh * cr + nx * sr, wy = ny * sr, wz = ch * cr + nz * sr;
+          const lateral = (hashI(scatterSeed, limb + 101, seed) - 0.5) * size * 0.36;
+          for (let v = 0; v < p.count; v++) {
+            const tip = uv.getY(v);
+            const across = p.getX(v), along = p.getY(v) + size * 0.24;
+            const fold = (across * along / (width * height) * .20
+              + Math.sin(tip * Math.PI) * .14) * size;
+            p.setXYZ(v, bx + dx * along + wx * (across + lateral) + nx * fold,
+              by + dy * along + wy * across + ny * fold,
+              bz + dz * along + wz * (across + lateral) + nz * fold);
+            uv.setXY(v, cell.x + uv.getX(v) * cell.w, cell.y + tip * cell.h);
+            const shade = (0.72 + q * 0.13 + f * 0.19 + tip * 0.12)
+              * (0.89 + hashI(tier * 41 + b, limb + 97, seed) * 0.20);
+            for (let c = 0; c < 3; c++) colours[v * 3 + c] = rec.leaf[c] * shade;
+            weights[v] = 0.22 + f * 0.22 + q * 0.19 + tip * 0.16;
+          }
+          g.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+          g.setAttribute('aWind', new THREE.BufferAttribute(weights, 1));
+          g.computeVertexNormals();
+          softenFoliageNormals(g, bx, by - size * 0.28, bz, size, size, 0.78);
+          const ni = g.toNonIndexed(); g.dispose(); parts.push(ni);
+        }
       }
-      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      g.setAttribute('aWind', new THREE.BufferAttribute(weights, 1));
-      g.computeVertexNormals();
-      const ni = g.toNonIndexed(); g.dispose(); parts.push(ni);
-      // A bough also has hanging secondary shoots. The upper fan alone becomes
-      // edge-on at eye level, which made even the radial version look skeletal.
-      // These folded skirts occupy the outer half of each limb, not the trunk.
-      // Upper whorls are closer in width, not shorter in needles. A minimum hanging
-      // length bridges the vertical gaps which made the crown look like stacked cones.
-      const hang = Math.max(reach * 0.90, spacing * 1.65)
-        * (0.86 + hashI(j, k + 61, seed) * 0.27);
-      const skirt = new THREE.PlaneGeometry(reach * 1.52, hang, lod ? 1 : 2, 2);
-      const sp = skirt.attributes.position, su = skirt.attributes.uv;
-      const sc = new Float32Array(sp.count * 3), sw = new Float32Array(sp.count);
-      for (let v = 0; v < sp.count; v++) {
-        const along = su.getY(v), across = sp.getX(v);
-        const run = reach * (0.64 - along * 0.27) - Math.abs(across) * 0.24;
-        sp.setXYZ(v, anchor.x + ca * run - sa * across,
-          branchY - hang * 0.74 + along * hang,
-          anchor.z + sa * run + ca * across);
-        su.setXY(v, 0.03 + su.getX(v) * 0.44, 0.02 + along * 0.34);
-        const shade = 0.81 + along * 0.15 + f * 0.11;
-        for (let c = 0; c < 3; c++) sc[v * 3 + c] = rec.leaf[c] * shade;
-        sw[v] = 0.45 + f * 0.21 + (1 - along) * 0.18;
-      }
-      skirt.setAttribute('color', new THREE.BufferAttribute(sc, 3));
-      skirt.setAttribute('aWind', new THREE.BufferAttribute(sw, 1));
-      skirt.computeVertexNormals();
-      const sn = skirt.toNonIndexed(); skirt.dispose(); parts.push(sn);
-      if (!lod && k % 2 === 0 && j < tiers - 2) {
-        parts.push(segmentGeometry(anchor.x, y, anchor.z,
-          anchor.x + ca * reach * 0.87, y - reach * 0.11, anchor.z + sa * reach * 0.87,
-          rec.trunkR * (0.14 - f * 0.08), 0.018, 3, rec.bark, 0.15, 0.52));
+      if (!lod && k % 3 === 0 && j < tiers - 2) {
+        const q = 0.46, end = 0.87;
+        const mx = anchor.x + ca * reach * q, mz = anchor.z + sa * reach * q;
+        const my = branchY + Math.sin(q * Math.PI) * reach * 0.16 - q * q * reach * 0.22;
+        const ey = branchY + Math.sin(end * Math.PI) * reach * 0.16 - end * end * reach * 0.22;
+        const radius = rec.trunkR * (0.14 - f * 0.08);
+        // The support follows the live bough's droop; it no longer cuts a
+        // straight spoke through the needles. Fewer complete boughs offset
+        // the extra segment, keeping the near geometry increase small.
+        parts.push(segmentGeometry(anchor.x, branchY, anchor.z, mx, my, mz,
+          radius, radius * 0.48, 3, rec.bark, 0.15, 0.34));
+        parts.push(segmentGeometry(mx, my, mz,
+          anchor.x + ca * reach * end, ey, anchor.z + sa * reach * end,
+          radius * 0.48, 0.007, 3, rec.bark, 0.34, 0.52));
       }
     }
-    // The inner shoots conceal the bole between successive radial whorls. These
-    // narrow folded sprays carry the same needle material and remain in one mesh.
-    if (j < tiers - 1 && (!lod || j % 2 === 0)) {
-      const core = Math.max(r * 0.39, spacing * 0.56);
+    // A small inner spray fills the junction; its needles stay at the same scale
+    // as the outer limbs, instead of becoming a second full-sized tree billboard.
+    if (j < tiers - 1) {
+      const core = Math.max(spacing * 0.44, Math.min(r * 0.24, 0.68));
       parts.push(foliageSprayGeometry(anchor.x, y - spacing * 0.26, anchor.z,
-        core, rec.leaf, 0.90 + f * 0.15, 0.42 + f * 0.3, 1.4,
-        seed + 4100 + j * 19, rec.leanDir + j * 2.3999632, true, 1));
+        core, rec.leaf, 0.90 + f * 0.15, 0.42 + f * 0.3, 1.05,
+        seed + 4100 + tier * 19, rec.leanDir + tier * 2.3999632, true, 1, rec.ai % 2, lod ? 6 : 0));
     }
   }
   const leader = trunkPointAt(rec, 0.958);
   parts.push(foliageSprayGeometry(leader.x, leader.y, leader.z, rec.trunkH * 0.047,
-    rec.leaf, 1.06, 0.79, 1.25, seed + 4999, rec.leanDir, true, lod));
+    rec.leaf, 1.06, 0.79, 1.25, seed + 4999, rec.leanDir, true, lod, rec.ai % 2));
   const merged = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
   return merged;
 }
 
-// One texture for the shared tree material: bark is opaque in the top 96 pixels;
-// needles/leaves occupy the bottom 176. The wide empty band prevents opaque bark
-// bleeding into minified foliage tips, even in the atlas's coarse mip levels.
-function makeFoliageAtlas() {
+// Author the bark strip and procedural fallback sprites. flora-atlas.js packs
+// these, or the generated photographic sprites, into four padded foliage cells.
+function makeFoliageAtlas(authoredImage = null) {
   const size = 1024;
   if (typeof document === 'undefined' || !document.createElement) {
     const data = new Uint8Array(size * size * 4); data.fill(255);
@@ -1116,23 +1268,42 @@ function makeFoliageAtlas() {
     g.strokeStyle = `rgb(${value},${value},${value})`; g.lineWidth = width;
     g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
   };
-  // Needle bough: a curved leader, uneven paired limbs and dense angled needles.
+  // A needle SPRAY, not a miniature symmetric pine tree. Short curved needles
+  // overlap irregular twigs with air between them; none is a squared-off line.
   // Keep every drawn needle/leaf inside the sampled rectangle. Cropping the drawing
   // to the card boundary makes even a transparent atlas look like square foliage.
-  g.save(); g.translate(32, 336); g.scale(0.75, 0.62);
-  line(128, 246, 124, 12, 3.2, 174);
-  for (let j = 0; j < 12; j++) {
-    const t = j / 12, y = 232 - t * 206;
+  g.save(); g.translate(25, 336); g.scale(0.80, 0.62);
+  g.lineCap = 'round';
+  const needle = (x, y, ex, ey, width, value) => {
+    const dx = ex - x, dy = ey - y, len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len * width, ny = dx / len * width;
+    g.fillStyle = `rgb(${value},${value},${value})`;
+    g.beginPath(); g.moveTo(x - nx, y - ny);
+    g.quadraticCurveTo(x + dx * 0.51 - nx * 1.3, y + dy * 0.51 - ny * 1.3, ex, ey);
+    g.quadraticCurveTo(x + dx * 0.51 + nx * 0.15, y + dy * 0.51 + ny * 0.15, x + nx, y + ny);
+    g.closePath(); g.fill();
+  };
+  g.strokeStyle = '#8f8f8f'; g.lineWidth = 2.5;
+  g.beginPath(); g.moveTo(128, 246); g.bezierCurveTo(132, 171, 111, 80, 125, 17); g.stroke();
+  for (let j = 0; j < 11; j++) {
+    const t = j / 11;
     for (const side of [-1, 1]) {
-      const reach = (1 - t * 0.81) * (91 + hashI(j, side + 9, 3907) * 21);
-      const ex = 127 + side * reach, ey = y - 27 - t * 13;
-      line(127, y + 3, ex, ey, 4.2, 153);
-      for (let k = 0; k < 18; k++) {
-        const q = (k + .5) / 18, bx = 127 + (ex - 127) * q, by = y + (ey - y) * q;
-        const len = 10 + hashI(j * 41 + k, side + 19, 3907) * 11;
-        const value = 182 + Math.floor(hashI(k, j + side, 3917) * 73);
-        line(bx, by, bx + side * len * .57, by - len, 2.15, value);
-        line(bx, by + 1, bx + side * len * .82, by + len * .42, 1.90, value - 14);
+      const y = 230 - t * 195 + (hashI(j, side + 31, 3907) - 0.5) * 15;
+      const rootX = 124 + Math.sin(t * 5.3) * 4;
+      const reach = (0.54 + Math.sin((t * 0.75 + 0.12) * Math.PI) * 0.43)
+        * (61 + hashI(j, side + 9, 3907) * 33) * (1 - t * 0.56);
+      const ex = rootX + side * reach, ey = y - 18 - hashI(j, side + 51, 3907) * 25;
+      line(rootX, y, ex, ey, 1.1 + (1 - t) * 0.7, 148);
+      for (let k = 0; k < 43; k++) {
+        const q = (k + hashI(j * 47 + k, side + 29, 3907)) / 43;
+        const bx = rootX + (ex - rootX) * q;
+        const by = y + (ey - y) * q + Math.sin(q * Math.PI) * 4;
+        const direction = hashI(j * 41 + k, side + 39, 3907) > 0.46 ? -1 : 1;
+        const len = 12 + hashI(j * 47 + k, side + 19, 3907) * 16;
+        const sweep = 0.15 + hashI(j * 47 + k, side + 47, 3907) * 0.80;
+        const value = 149 + Math.floor(hashI(k, j + side, 3917) * 99);
+        needle(bx, by, bx + side * len * sweep, by + direction * len * 0.83,
+          1.05 + hashI(k, j + side, 3997) * 0.82, value);
       }
     }
   }
@@ -1161,80 +1332,16 @@ function makeFoliageAtlas() {
     }
   }
   g.restore();
-  // Transparent texels must not average their black RGB into the needles. Use the
-  // same alpha-weighted, coverage-preserving filter as the distant tree bake.
-  const rgba = g.getImageData(0, 0, size, size).data;
-  const mips = coveragePreservingChain(new Uint8Array(rgba), size, size, 0.30 * 255);
-  const tex = new THREE.DataTexture(mips[0].data, size, size, THREE.RGBAFormat);
-  tex.flipY = true;
-  tex.generateMipmaps = false;
-  tex.mipmaps = mips;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.userData.sourceCanvas = canvas;
-  tex.needsUpdate = true;
-  tex.name = 'county-bark-needle-leaf-atlas'; tex.colorSpace = THREE.NoColorSpace;
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.anisotropy = 4;
-  return tex;
+  return packFoliageAtlas(canvas, authoredImage);
 }
 
 /** Build one template's geometry from its recipe at a detail level (0 = near). */
 function buildTemplateGeometry(rec, lod, seed) {
   const parts = [];
-  // ART.md §2.5, measured: about 92% of a mid-LOD tree is canopy blobs, and the
-  // trunk - the thing the player actually reads - was SIXTEEN triangles.
-  // IcosahedronGeometry detail 2 = 320 faces, detail 1 = 80, detail 0 = 20, so
-  // the blob detail is the whole bill and the radial count is nearly free.
-  // Radial goes DOWN at LOD0 (7 -> 6) and UP at LOD1 (4 -> 5) on purpose: 8
-  // triangles per mid tree is what stops a trunk reading as a flat slab, and
-  // the document is explicit that this saving is not to be spent elsewhere.
-  const radial = lod === 0 ? 10 : 5;
+  // The connected near bole uses ten sides, the mid bole five. Branches and
+  // foliage below retain their existing geometry and attachment coordinates.
   const tH = rec.trunkH, tR = rec.trunkR;
-
-  // Three unequal reaches, a fast base taper and six broad flutes. The bottom reach gets one
-  // extra axial ring so the flare curves back inside the original trunk radius; the collider
-  // therefore remains exactly the same circle even though the silhouette no longer is.
-  const path = rec.trunkPath;
-  // Mid LOD keeps the bend but joins the first two reaches: player-height bark belongs inside
-  // 72 m, and shipping those axial rings through thousands of mid instances buys no pixel.
-  const reaches = lod === 0 ? [[0, 1], [1, 2], [2, 3]] : [[0, 2], [2, 3]];
-  for (let i = 0; i < reaches.length; i++) {
-    const a = path[reaches[i][0]], b = path[reaches[i][1]];
-    const f0 = a.y / tH, f1 = b.y / tH;
-    let r0 = trunkRadiusAt(rec, f0), r1 = trunkRadiusAt(rec, f1);
-    // ROUND 15: the flare is bigger AND much shorter (see the curve in segmentGeometry),
-    // so the base spreads and the shaft above it does not.
-    const flare = i === 0 ? (rec.kind === 'snag' ? 0.44 : 0.36) : 0;
-    const rough = rec.kind === 'birch' ? 0.045 : rec.kind === 'snag' ? 0.11 : 0.075;
-    // Divide out the FLUTING only, so the shaft keeps its radius. The flare itself is now
-    // allowed past the collider circle, exactly as the root spurs below are: it lives in
-    // the bottom half-metre, the collider is a circle with no vertical extent, and a base
-    // you can walk right up to is the whole point of item 11.
-    if (flare) r0 /= 1 + rough;
-    parts.push(segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
-      r0, r1, i === reaches.length - 1 ? Math.max(3, radial - 1) : radial,
-      rec.bark, lerp(0, 0.10, f0), lerp(0.04, 0.18, f1), {
-        axial: lod === 0 && i === 0 ? 2 : 1,
-        rough,
-        flare, kind: rec.kind, seed: seed + rec.barkSeed, part: i,
-      }));
-  }
-
-  // Birch's identity has to survive at eye height. Four irregular dark collars sit just over
-  // the pale baked trunk; they use the same vertex-colour Lambert mesh, not another material
-  // or draw. The mid tree keeps only one collar to remain inside its triangle gate.
-  if (rec.kind === 'birch') {
-    const bands = lod === 0 ? [0.075, 0.14, 0.235, 0.37] : [0.20];
-    for (let i = 0; i < bands.length; i++) {
-      const f0 = bands[i], f1 = f0 + (0.028 + (i & 1) * 0.010);
-      const a = trunkPointAt(rec, f0), b = trunkPointAt(rec, f1);
-      const r0 = trunkRadiusAt(rec, f0) * 1.025, r1 = trunkRadiusAt(rec, f1) * 1.025;
-      parts.push(segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
-        r0, r1, Math.max(4, radial - 1), (i & 1) ? PAL.barkDark : PAL.barkSnag, 0.01, 0.05,
-        { rough: 0.025, kind: 'band', seed: seed + 211, part: i }));
-    }
-  }
+  parts.push(connectedTrunkGeometry(rec, lod, seed));
 
   // A snag ends in a split, not a sharpened pole. Its existing trunk is the tallest shard;
   // these one/two secondary splinters make the broken crown legible from the fen road.
@@ -1278,72 +1385,98 @@ function buildTemplateGeometry(rec, lod, seed) {
 
   for (let i = 0; i < rec.branches.length; i++) {
     const br = rec.branches[i];
-    if (lod > 0 && (rec.kind === 'snag' ? (i & 1) : (i % 3) !== 0)) continue;
+    // Conifer limbs are already built by coniferCrownGeometry. The legacy recipe
+    // left thick bare rods through those crowns, often ending beyond any foliage.
+    if (rec.kind === 'conifer') continue;
+    if (lod > 0 && rec.kind === 'snag' && (i & 1)) continue;
     const anchor = trunkPointAt(rec, br.f);
     const ay = anchor.y;
     const ax = anchor.x, az = anchor.z;
-    const bx = ax + Math.cos(br.ang) * br.reach;
+    const ca = Math.cos(br.ang), sa = Math.sin(br.ang);
+    const bend = (hashI(i, 311, seed) - 0.5) * br.reach * 0.34;
+    const mx = ax + ca * br.reach * 0.48 - sa * bend;
+    const my = ay + br.up * br.reach * 0.64 + br.reach * 0.10;
+    const mz = az + sa * br.reach * 0.48 + ca * bend;
+    const bx = ax + ca * br.reach - sa * bend * 0.55;
     const by = ay + br.up * br.reach;
-    const bz = az + Math.sin(br.ang) * br.reach;
-    parts.push(segmentGeometry(ax, ay, az, bx, by, bz, br.r, br.r * 0.45,
-      Math.max(3, radial - 2), rec.bark, 0.18, 0.50,
-      { rough: 0.045, kind: rec.kind, seed: seed + 401, part: i }));
-    // ROUND 15, item 10: "branches that break down rather than ending in rounded masses".
-    // Every branch was one straight segment from trunk to tip. One fork off each of them at
-    // LOD0, anchored at 0.55 of the primary's reach and turning away and up, is six
-    // triangles and it is the difference between a spoke and a limb. LOD1 is untouched.
+    const bz = az + sa * br.reach + ca * bend * 0.55;
+    const limbRadius = Math.min(br.r, trunkRadiusAt(rec, br.f) * 0.62);
+    const limbSides = lod === 0 && rec.kind !== 'snag' ? 4 : 3;
+    // Rising shoulders, a lateral bend and a fine outer twig replace straight
+    // spokes. Both LODs keep the scaffold; only the cross section is simplified.
+    parts.push(segmentGeometry(ax, ay, az, mx, my, mz, limbRadius, limbRadius * 0.48,
+      limbSides, rec.bark, 0.18, 0.36,
+      { rough: 0.055, kind: rec.kind, seed: seed + 401, part: i }));
+    parts.push(segmentGeometry(mx, my, mz, bx, by, bz, limbRadius * 0.48, limbRadius * 0.055,
+      limbSides, rec.bark, 0.36, 0.62,
+      { rough: 0.045, kind: rec.kind, seed: seed + 409, part: i }));
+    const fa = br.ang + ((i & 1) ? 0.70 : -0.78);
+    const fr = br.reach * (0.44 + hashI(i, 317, seed) * 0.12);
+    const fx = mx + Math.cos(fa) * fr;
+    const fy = my + (br.up + 0.20) * fr;
+    const fz = mz + Math.sin(fa) * fr;
     if (lod === 0) {
-      const fa = br.ang + ((i & 1) ? 0.74 : -0.68);
-      const fAt = 0.55, fr = br.reach * 0.46;
-      const fx = ax + Math.cos(br.ang) * br.reach * fAt;
-      const fy = ay + br.up * br.reach * fAt;
-      const fz = az + Math.sin(br.ang) * br.reach * fAt;
-      parts.push(segmentGeometry(fx, fy, fz,
-        fx + Math.cos(fa) * fr, fy + (br.up + 0.30) * fr, fz + Math.sin(fa) * fr,
-        br.r * 0.52, br.r * 0.16, 3, rec.bark, 0.30, 0.62,
+      const qx = lerp(mx, fx, 0.5), qz = lerp(mz, fz, 0.5);
+      const qy = lerp(my, fy, 0.5) + fr * 0.11;
+      parts.push(segmentGeometry(mx, my, mz, qx, qy, qz,
+        limbRadius * 0.42, limbRadius * 0.19, 3, rec.bark, 0.34, 0.50,
         { rough: 0.04, kind: rec.kind, seed: seed + 613, part: 20 + i }));
+      parts.push(segmentGeometry(qx, qy, qz, fx, fy, fz,
+        limbRadius * 0.19, limbRadius * 0.035, 3, rec.bark, 0.50, 0.72,
+        { rough: 0.03, kind: rec.kind, seed: seed + 619, part: 20 + i }));
     }
-    const puffMin = rec.kind === 'conifer' ? 0.45 : 0.5;
-    if (rec.blobsOnBranch && br.f >= puffMin && lod === 0) {
-      // A three-plane spray follows the fork's bearing and leaves gaps through
-      // the limb instead of ending it in a solid low-poly ball.
-      const conifer = rec.kind === 'conifer';
-      parts.push(foliageSprayGeometry(bx, by, bz, br.reach * (conifer ? 0.50 : 0.48), rec.leaf,
-        0.86 + (i % 3) * 0.09, 0.70, conifer ? 0.55 : 0.92, seed + i * 13,
-        br.ang, conifer, lod));
+    if (rec.kind !== 'snag') {
+      const cell = rec.kind === 'birch' ? 2 : 3;
+      const tint = 0.86 + (i % 3) * 0.09;
+      if (lod === 0) {
+        // Overlapping sprays start at the shoulder and continue through both
+        // forks. An isolated ball only at the tip leaves an artificial bare rod.
+        parts.push(foliageSprayGeometry(mx, my, mz, br.reach * 0.35, rec.leaf,
+          tint * 0.90, 0.48, 0.90, seed + i * 13 + 3, br.ang, false, lod, cell, 8));
+        parts.push(foliageSprayGeometry(lerp(mx, bx, 0.78), lerp(my, by, 0.78), lerp(mz, bz, 0.78),
+          br.reach * 0.37, rec.leaf, tint, 0.70, 0.90, seed + i * 13 + 7, br.ang, false, lod, cell, 8));
+        parts.push(foliageSprayGeometry(fx, fy, fz, br.reach * 0.31, rec.leaf,
+          tint * 1.06, 0.72, 0.86, seed + i * 13 + 11, fa, false, lod, cell, 6));
+      } else {
+        parts.push(foliageSprayGeometry(lerp(mx, bx, 0.50), lerp(my, by, 0.50), lerp(mz, bz, 0.50),
+          br.reach * 0.48, rec.leaf, tint, 0.66, 0.98, seed + i * 13,
+          br.ang, false, lod, cell, 4));
+      }
     }
   }
 
   if (rec.kind === 'conifer') parts.push(coniferCrownGeometry(rec, lod, seed));
   for (let i = 0; rec.kind !== 'conifer' && i < rec.canopy.length; i++) {
     const cn = rec.canopy[i];
-    // thin the crown at LOD1: a lobed tier keeps its first lobe, an old-style crown keeps 2 in 3
-    if (lod > 0) {
-      if (cn.lobe !== undefined) { if (cn.lobe > 0) continue; }
-      else if (rec.canopy.length > 3 && (i % 3) === 1) continue;
-    }
+    // Preserve every crown lobe in the mid silhouette. Reducing cards within
+    // each lobe retains the tree's envelope instead of losing two thirds of it.
+    const cy = cn.y - tH * (rec.kind === 'birch' ? 0.055 : 0.075);
     // A crown belongs to a limb. The old lobes could be metres from the nearest
     // branch; wind made those unsupported balls look like floating objects.
     if (lod === 0) {
-      const anchor = trunkPointAt(rec, Math.min(0.96, cn.y / tH - 0.13));
-      parts.push(segmentGeometry(anchor.x, anchor.y, anchor.z, cn.x, cn.y, cn.z,
-        tR * 0.18, tR * 0.035, 3, rec.bark, 0.30, cn.wind * 0.8));
+      const anchor = trunkPointAt(rec, Math.min(0.93, cy / tH - 0.14));
+      const mx = lerp(anchor.x, cn.x, 0.45), mz = lerp(anchor.z, cn.z, 0.45);
+      const my = lerp(anchor.y, cy, 0.65);
+      const radius = Math.min(tR * 0.17, trunkRadiusAt(rec, anchor.y / tH) * 0.48);
+      parts.push(segmentGeometry(anchor.x, anchor.y, anchor.z, mx, my, mz,
+        radius, radius * 0.42, 3, rec.bark, 0.30, cn.wind * 0.5));
+      parts.push(segmentGeometry(mx, my, mz, cn.x, cy, cn.z,
+        radius * 0.42, radius * 0.07, 3, rec.bark, cn.wind * 0.5, cn.wind * 0.8));
     }
-    parts.push(foliageSprayGeometry(cn.x, cn.y, cn.z, cn.r * 1.10, rec.leaf,
-      cn.tint, cn.wind, cn.squash, seed + i * 29, cn.turn, false, lod));
+    parts.push(foliageSprayGeometry(cn.x, cy, cn.z, cn.r * 1.10, rec.leaf,
+      cn.tint, cn.wind, cn.squash, seed + i * 29, cn.turn, false, lod,
+      rec.kind === 'birch' ? 2 : 3, lod === 0 ? 17 : 5));
   }
-  // ROUND 15, item 11: "convincing trunk bases, roots connecting trees to ground". Three
-  // spurs leaving the base and running out and DOWN past y = 0, so the 0.25 m instance sink
-  // buries their tips whatever the terrain does underneath. Three radial segments each: six
-  // triangles a spur, eighteen a template, and only at LOD0 — this is a thing you see from
-  // two metres or not at all.
+  // Four short, uneven buttresses sink into the ground. Their tips stay inside
+  // the old three-spur footprint; they add no root colliders or path obstacles.
   if (lod === 0) {
-    for (let i = 0; i < 3; i++) {
-      const a = rec.leanDir + 0.7 + i * (TAU / 3) + (rec.barkSeed % 9) * 0.09;
+    for (let i = 0; i < 4; i++) {
+      const a = rec.leanDir + 0.7 + i * (TAU / 4) + (hashI(i, 337, seed) - 0.5) * 0.60;
+      const reach = tR * (1.25 + hashI(i, 347, seed) * 0.40);
       parts.push(segmentGeometry(
-        Math.cos(a) * tR * 0.20, tR * 0.42, Math.sin(a) * tR * 0.20,
-        Math.cos(a) * tR * 1.85, -0.34, Math.sin(a) * tR * 1.85,
-        tR * 0.34, tR * 0.07, 3, rec.bark, 0, 0.02,
+        Math.cos(a) * tR * 0.20, tR * (0.62 + hashI(i, 353, seed) * 0.22), Math.sin(a) * tR * 0.20,
+        Math.cos(a) * reach, -0.34, Math.sin(a) * reach,
+        tR * 0.31, tR * 0.04, 3, rec.bark, 0, 0.02,
         { rough: 0.06, kind: rec.kind, seed: seed + 509, part: 40 + i }));
     }
   }
@@ -1360,122 +1493,6 @@ function buildTemplateGeometry(rec, lod, seed) {
 // alphaTest is an opaque black rectangle - PALEHOLLOW's bug, reproduced by the
 // forest spike on this exact machine.
 // ---------------------------------------------------------------------------
-function makeGrassTexture() {
-  // ROUND 20: 64 -> 128. At 64 a blade three texels wide is one texel after the first mip
-  // and a tuft two metres away rasterised into fat white splinters — photographed in
-  // tests/shots/vis-bark2/40-bark-torch.png, where the floor of the pines reads as scattered
-  // pale STARS rather than as grass.
-  const W = 128, H = 128;
-  let tex;
-  if (typeof document !== 'undefined' && document.createElement) {
-    const cv = document.createElement('canvas');
-    cv.width = W * 2; cv.height = H * 4;
-    const g = cv.getContext('2d');
-    g.clearRect(0, 0, cv.width, cv.height);
-    g.scale(2, 2);
-    // ROUND 20: ELEVEN blades, not six, and each one is DARK AT THE ROOT.
-    //
-    // A tuft of grass at night is not a uniform value: the bottom of it is inside the tuft's
-    // own shadow and the tip is the only part with any sky on it. Every blade here was one
-    // flat fill, so the card was as bright where it met the ground as at its tip, which is
-    // the single reason it read as a splinter of light instead of as a plant. The gradient
-    // is 0.30 of the flat value at the root to 1.0 at the tip; with the card's own root at
-    // the ground, that is also a free contact shadow on the floor beneath it.
-    for (let b = 0; b < 11; b++) {
-      const x0 = 8 + hashI(b, 3, 991) * (W - 16);
-      const bend = (hashI(b, 7, 991) - 0.5) * 49;
-      const wBase = 3.4 + hashI(b, 11, 991) * 3.2;
-      const top = 10 + hashI(b, 13, 991) * 30;
-      // NEUTRAL, deliberately. ART.md §0.5 rations saturation to the lamp, the
-      // aviation red, the stack embers, the fen wisps and the eye glints -
-      // "everything else is a value, not a colour" - and this blade was green
-      // TWICE: once here (g x1.06, b x0.78) and once in PAL.grass
-      // [0.128, 0.144, 0.096], multiplied together because the map's RGB IS the
-      // diffuse term (vertexColors is false). tests/shots/fv-s23-B.png shows the
-      // result: bright green splinters, the only saturated thing in a frame that
-      // is otherwise one blue-grey. Neutral here costs ~2.8% of luminance
-      // (0.2126 + 0.7152*1.06 + 0.0722*0.78 = 1.028) and hands the hue to
-      // PAL.grass, which is the one place it should live.
-      const v = 132 + hashI(b, 17, 991) * 84;
-      // Root to tip. The canvas is drawn top-down and the blade's ROOT is at y = H.
-      const grad = g.createLinearGradient(0, H, 0, top);
-      const lo = (v * 0.30) | 0;
-      grad.addColorStop(0, 'rgb(' + lo + ',' + lo + ',' + lo + ')');
-      grad.addColorStop(0.42, 'rgb(' + ((v * 0.66) | 0) + ',' + ((v * 0.66) | 0) + ',' + ((v * 0.66) | 0) + ')');
-      grad.addColorStop(1, 'rgb(' + (v | 0) + ',' + (v | 0) + ',' + (v | 0) + ')');
-      g.fillStyle = grad;
-      g.beginPath();
-      g.moveTo(x0 - wBase * 0.5, H);
-      g.quadraticCurveTo(x0 - wBase * 0.25 + bend * 0.5, H * 0.5, x0 + bend, top);
-      g.quadraticCurveTo(x0 + wBase * 0.25 + bend * 0.5, H * 0.5, x0 + wBase * 0.5, H);
-      g.closePath();
-      g.fill();
-    }
-    // The bottom half is a real pinnate fern frond. Ferns previously reused
-    // the lawn texture, so nine broad sheets became a bundle of grass knives.
-    g.save(); g.translate(0, H);
-    g.strokeStyle = '#6d7167'; g.lineWidth = 1.35;
-    g.beginPath(); g.moveTo(64, 128); g.quadraticCurveTo(60, 64, 67, 9); g.stroke();
-    for (let row = 0; row < 13; row++) {
-      const y = 113 - row * 7.8, t = row / 13;
-      for (const side of [-1, 1]) {
-        const length = (1 - t * 0.84) * (40 + hashI(row, side + 11, 5323) * 10);
-        const start = 64 + Math.sin(t * 2.8) * 3;
-        const end = start + side * length;
-        const ey = y - 9 - t * 6, breadth = 4.0 + (1 - t) * 4.8;
-        const shade = Math.floor(116 + t * 58 + hashI(row, side + 17, 5333) * 24);
-        g.fillStyle = `rgb(${shade},${shade},${shade})`;
-        g.beginPath(); g.moveTo(start, y);
-        g.bezierCurveTo(start + side * length * 0.33, y - breadth,
-          end - side * 7, ey - breadth * 0.42, end, ey);
-        g.bezierCurveTo(end - side * 8, ey + breadth * 0.55,
-          start + side * length * 0.37, y + breadth * 0.48, start, y);
-        g.fill();
-        g.strokeStyle = '#646d5f'; g.lineWidth = 0.45;
-        g.beginPath(); g.moveTo(start, y); g.lineTo(end, ey); g.stroke();
-      }
-    }
-    g.restore();
-    const rgba = g.getImageData(0, 0, cv.width, cv.height).data;
-    const mips = coveragePreservingChain(new Uint8Array(rgba), cv.width, cv.height, CFG.flora.alphaTest * 255);
-    tex = new THREE.DataTexture(mips[0].data, cv.width, cv.height, THREE.RGBAFormat);
-    tex.flipY = true; tex.mipmaps = mips; tex.generateMipmaps = false;
-  } else {
-    // Headless (a node import of this module). Same shape, no canvas.
-    const data = new Uint8Array(W * H * 4);
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const o = (y * W + x) * 4;
-        const blade = Math.abs(((x + Math.sin(y * 0.09) * 5) % 11) - 5.5);
-        const taper = 1 - y / H;
-        const on = blade < 1.6 - taper * 1.0 ? 255 : 0;
-        data[o] = 174; data[o + 1] = 174; data[o + 2] = 174; data[o + 3] = on;   // neutral, see above
-      }
-    }
-    tex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat, THREE.UnsignedByteType);
-  }
-  tex.name = 'curfew-grass-alpha';
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.generateMipmaps = !tex.mipmaps.length;
-  tex.anisotropy = 4;
-  // THE LAW: canvas-generated textures get NoColorSpace or sRGB decode crushes
-  // dark albedo.
-  //
-  // This comment used to end "this one is a cutout mask, so the RGB is barely
-  // used at all - the vertex colour carries the grass value." THAT WAS WRONG and
-  // ART.md §2.1 names it: vertexColors is false on matGrass (correctly, to avoid
-  // the PALEHOLLOW black-rectangle bug), so nothing else supplies a diffuse
-  // term and this map's RGB - 0.59 to 0.94, read LINEAR - IS the albedo, in
-  // series with the per-instance tint. A x16 on the tint and a 0.59-0.94 map
-  // multiplied out to an effective albedo of ~1.4, i.e. grass that reflected
-  // more light than fell on it. Both halves are now sized on purpose.
-  tex.colorSpace = THREE.NoColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-}
-
 // ---------------------------------------------------------------------------
 // THE UNDERSTORY (ROUND 6, lane F). Alex: "The woods hardly has anything in it."
 //
@@ -1492,7 +1509,6 @@ function makeGrassTexture() {
 //   log      matNear   (bark, the form term, the near-band dissolve)          2 standable OBBs
 //   stump    matNear                                                          standable circle
 //   boulder  matNear                                                          standable circle
-//   litter   matNear   (ROUND 16: leaf drifts round trunks, bare soil)        no collider
 //
 // Nothing here is a new material: matGrass and matNear already exist and are linked at
 // boot, so the understory costs zero programs. tests/wilds.mjs asserts that.
@@ -1502,26 +1518,14 @@ function makeGrassTexture() {
 // 29 visible understory meshes over ~10 near chunks, so a fifth kind buys the whole floor
 // layer for about ten draws. It emits NO collider on purpose: it is 6 cm of dead leaves.
 // ---------------------------------------------------------------------------
-const UNDER_KINDS = ['fern', 'log', 'stump', 'boulder', 'litter'];
+const UNDER_KINDS = ['fern', 'log', 'stump', 'boulder', 'shrub'];
 // The grass-over-the-roof probe (see _buildGrass): a top this far over the ground is a roof.
 const ROOF_OVER = 2.4;
 const ROOF_PROBE_RISE = 40;
 const GRASS_PROBE_R = 0.30;
-const UNDER_CAP = { fern: 1200, log: 96, stump: 96, boulder: 96, litter: 280 };
-// ROUND 16, item 12. The litter layer's own numbers.
-const LITTER_COLLAR_P = 0.52;     // of this chunk's trunks get a drift at the foot
-const LITTER_SOIL_CELL = 4.6;     // m; one bare-soil candidate per cell
-const LITTER_SOIL_P = 0.52;
-const LITTER_SOIL_FLOOR = 0.18;   // soil MOSTLY where the meadow gave out - but a bare scrape
-                                  // happens in a meadow too, and the first pass at 0.06 left
-                                  // the open ground with nothing on it at all (MEASURED from
-                                  // tests/shots/flora-r16-litab3-on.png: not one soil patch in
-                                  // the whole torch pool).
-const LITTER_SLOPE_MAX = 0.09;    // a drift does not cling to a bank. 0.34 in terrain's slope
-                                  // metric is a 48 degree face, and a 2 m patch tilted onto
-                                  // one reads as a leaning SLAB, not as ground. 0.09 is 24
-                                  // degrees: leaves collect on gentle ground and wash off a bank.
-const LITTER_GRAD_E = 0.9;        // m; the two forward samples the conforming tilt is built from
+const UNDER_CAP = { fern: 1200, log: 96, stump: 96, boulder: 96, shrub: 96 };
+const COLONY_CELL = 16;            // separated 4-8 m colonies leave open routes between them
+const COLONY_FERN_CAP = 48;        // added bracken shares the existing fern instance batch
 const UNDER_STRIDE = 16;
 // THE UNDERSTORY IS PLANTED OFF THE chunk:built FRAME (round 6 repair, MEASURED 2026-09-03
 // on the verifier's 23 m/s drive, 185 chunk builds, loaded machine): planted inside the
@@ -1560,29 +1564,77 @@ function finishGeo(geo, col, wind, jitter, topCol, topFrom) {
   return ni;
 }
 
-/** A fern clump: seven fronds leaning outward from one root, y in [0, 1] so the grass
- *  material's tip weight and rim shrink read it exactly as they read a blade card. Unit
- *  size; the instance matrix carries the 0.6-1.1 m spread. 7 x 4 = 28 triangles. */
+/** Nine differently arched fronds, 144 triangles as before. The grass material
+ * supplies shared wind and distance shrink; placement supplies the plant size. */
 function makeFernGeometry() {
   const parts = [];
   for (let i = 0; i < 9; i++) {
     const g = new THREE.PlaneGeometry(0.70, 1.0, 2, 4);
     const p = g.attributes.position, uv = g.attributes.uv;
+    const c = GROUND_CELLS[2 + i % 2];
+    const length = 0.65 + hashI(i, 3, 8341) * 0.40;
+    const arch = 0.35 + hashI(i, 7, 8341) * 0.31;
+    const curl = (hashI(i, 11, 8341) - 0.5) * 0.30;
     for (let j = 0; j < p.count; j++) {
       const t = uv.getY(j), x = p.getX(j);
-      p.setXYZ(j, x, Math.sin(t * 1.93) * (0.64 + (i % 3) * 0.12),
-        t * 0.82 - Math.abs(x) * 0.23);
-      uv.setY(j, uv.getY(j) * 0.49 + 0.005);
+      // Mature fronds hang beyond their highest point. Different arch/length
+      // and lateral curl break the old perfectly radial set of identical spikes.
+      p.setXYZ(j, x * (0.76 + i % 3 * 0.09) + curl * t * t,
+        Math.sin(t * 2.36) * arch + (1 - Math.abs(x) * 2) * t * 0.05,
+        t * length - Math.abs(x) * 0.19);
+      uv.setXY(j, c.x + uv.getX(j) * c.w, c.y + t * c.h);
     }
-    g.rotateY(i * 2.3999632 + 0.4);                // golden angle: never two fronds aligned
+    g.rotateY(i * 2.3999632 + hashI(i, 19, 8341) * 0.62);
     g.computeVertexNormals();
+    const n = g.attributes.normal;
+    for (let j = 0; j < n.count; j++) {
+      _groundNormal.set(n.getX(j) * 0.48, Math.abs(n.getY(j)) * 0.48 + 0.72, n.getZ(j) * 0.48).normalize();
+      n.setXYZ(j, _groundNormal.x, _groundNormal.y, _groundNormal.z);
+    }
+    g.setAttribute('aGroundDetail', new THREE.Float32BufferAttribute(new Float32Array(p.count), 1));
     parts.push(g);
   }
   const merged = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
-  merged.computeBoundingBox();
-  merged.computeBoundingSphere();
+  merged.computeBoundingBox(); merged.computeBoundingSphere();
   return merged;
+}
+
+/** Soft young growth: three flexible stems with overlapping leafy shoulders.
+ * Uses the tree atlas/material, 108 triangles, and no physical obstacle. */
+function makeShrubGeometry() {
+  const parts = [];
+  const stems = [
+    [-0.12, 0.06, -0.25, 0.51, 0.10, -0.39, 1.04, 0.16],
+    [0.11, -0.05, 0.26, 0.39, -0.16, 0.46, 0.73, -0.10],
+    [0.01, 0.11, 0.06, 0.64, 0.15, 0.20, 1.19, 0.25],
+  ];
+  for (let i = 0; i < stems.length; i++) {
+    const [x, z, mx, my, mz, tx, ty, tz] = stems[i];
+    parts.push(segmentGeometry(x, 0, z, mx, my, mz, 0.017, 0.009, 3,
+      PAL.barkRed, 0, 0.13, { rough: 0.02, kind: 'broad', seed: 8021 + i }));
+    parts.push(segmentGeometry(mx, my, mz, tx, ty, tz, 0.009, 0.002, 3,
+      PAL.barkRed, 0.13, 0.35, { rough: 0.02, kind: 'broad', seed: 8039 + i }));
+  }
+  const lobes = [
+    [-0.26, 0.64, 0.12, 0.42, 2],
+    [0.36, 0.57, -0.10, 0.43, 3],
+    [0.15, 0.99, 0.23, 0.38, 2],
+    [-0.02, 0.31, -0.05, 0.39, 3],
+  ];
+  for (let i = 0; i < lobes.length; i++) {
+    const [x, y, z, r, cell] = lobes[i];
+    const leaf = i === 1 ? PAL.leafDry : PAL.leaf;
+    parts.push(foliageSprayGeometry(x, y, z, r, leaf, 0.86 + i * 0.035,
+      0.19 + y * 0.18, 0.88, 8101 + i * 31, i * 2.3999632, false, 0, cell, 9));
+  }
+  const geo = mergeGeometries(parts, false);
+  for (const part of parts) part.dispose();
+  geo.computeBoundingBox();
+  const height = geo.boundingBox.max.y;
+  geo.scale(1 / height, 1 / height, 1 / height);
+  geo.computeBoundingBox(); geo.computeBoundingSphere();
+  return geo;
 }
 
 /** A deadfall log, unit length along +X, resting on y = 0, radius 1 (the instance matrix
@@ -1616,71 +1668,6 @@ function makeStumpGeometry() {
   return finishGeo(g, PAL.barkDark, 0.0, 0.10, PAL.cut, 0.98);
 }
 
-/**
- * ROUND 16, item 12. A DRIFT OF LEAF LITTER: one low dome with a second lobe pushed off
- * its centre, so a patch reads as swept leaves rather than as a painted disc.
- *
- * THE FAILURES THIS SHAPE EXISTS TO AVOID, all of them the "working but invisible" disease
- * in its floor-layer form, and the last two of them SHIPPED in this round's first pass
- * before a screenshot caught them:
- *   1. A flat disc laid ON the terrain z-fights it and flickers.
- *   2. A flat disc on ANY slope floats one edge and buries the other. So the instance is
- *      tilted onto the ground's own normal at plant time (see _plantUnderstory).
- *   3. At 8 rim segments and a rim radius varying only +-19%, a drift read as a hard-edged
- *      OCTAGONAL PLATE (tests/shots/flora-r16-litab2-on.png). Twelve segments and a rim
- *      that varies 0.55-1.17 of nominal make the outline ragged.
- *   4. AND THE REAL ONE: any solid decal on a solid ground has a HARD SILHOUETTE, because
- *      matNear has no alpha and buying one would cost a program this workflow does not
- *      have. So the drift is not a disc at all — it is a shallow CONE THAT CROSSES THE
- *      GROUND. Its centre stands 7.5 cm proud, its inner ring is authored 5.5-8.5 cm BELOW
- *      y = 0 and its rim 30-46 cm below. What you see is the part above the waterline, so
- *      the visible outline is the INTERSECTION with the terrain — set by the ground's own
- *      micro-relief and by the instance's tilt, not by the geometry's rim — and it is a
- *      different ragged shape on every instance in the county for free. The cone crosses
- *      at about 8.5 degrees, which is transverse enough to keep the crossing band inside
- *      one depth bucket instead of shimmering.
- *
- * Unit radius; the instance matrix carries the 1.0-2.6 m spread in x/z and a fixed rise in
- * y (about 0.47 of the nominal radius ends up above ground). 12 + 7 = 19 rim segments x 3
- * triangles = 57 triangles. The winding is (centre, rim[i+1], rim[i]) for the fan, which
- * puts the normal on +Y: with C = origin, A at theta and B at theta + step,
- * (B - C) x (A - C) = +Y.
- */
-function makeLitterGeometry(seed) {
-  const pos = [];
-  let hk = 0;
-  const rnd = () => hashI(hk++, seed, seed + 17);
-  const lobe = (cx, cz, rad, rise, n) => {
-    const rim = [], inner = [];
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * TAU + rnd() * 0.34;
-      const r = rad * (0.55 + rnd() * 0.62);
-      const rx = cx + Math.cos(a) * r, rz = cz + Math.sin(a) * r;
-      rim.push([rx, -0.30 - rnd() * 0.16, rz]);
-      inner.push([cx + (rx - cx) * 0.90, -0.055 - rnd() * 0.030, cz + (rz - cz) * 0.90]);
-    }
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const ii = inner[i], ij = inner[j], ri = rim[i], rj = rim[j];
-      pos.push(cx, rise, cz, ij[0], ij[1], ij[2], ii[0], ii[1], ii[2]);
-      pos.push(ii[0], ii[1], ii[2], ij[0], ij[1], ij[2], ri[0], ri[1], ri[2]);
-      pos.push(ij[0], ij[1], ij[2], rj[0], rj[1], rj[2], ri[0], ri[1], ri[2]);
-    }
-  };
-  lobe(0, 0, 1.0, 0.075, 12);
-  lobe(0.48, -0.34, 0.42, 0.062, 7);
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
-  // Non-indexed, so this gives FLAT per-face normals - which is what we want: every facet
-  // of the drift takes a slightly different value from the form term and the torch, and the
-  // patch mottles instead of reading as one painted ellipse.
-  g.computeVertexNormals();
-  // jitter 0.17 on the vertices, and the two lobe centres (the only vertices above 0.043)
-  // take a colour 1.16x the rest: a heap of dry leaves is palest where it is deepest, and
-  // that inner gradient is what stops the top reading as one flat tone.
-  return finishGeo(g, PAL.litter, 0.0, 0.17,
-    [PAL.litter[0] * 1.16, PAL.litter[1] * 1.16, PAL.litter[2] * 1.16], 0.058);
-}
 
 /** A boulder: the canopy blob generator with a stone colour and a flat squash, centred so
  *  the bottom quarter is buried. Unit radius. */
@@ -1774,6 +1761,7 @@ export class Flora {
     this._mode = 'wait';         // wait -> events | self
     this._waited = 0;
     this._built = false;
+    this._acceptChunkEvents = false;
     this._notes = [];
 
     const hy = CFG.flora.lodHysteresis;
@@ -1792,6 +1780,7 @@ export class Flora {
       uMoonView: { value: new THREE.Vector3(0, 0, 1) },
       uGlowColor: { value: new THREE.Vector3(0.42, 0.55, 0.86) },   // cold moon, linear
       uGlowAmt: { value: 0.55 },
+      uRimAmt: { value: 0.50 },
       // The form term's strength, 0 = off. A UNIFORM and not a GLSL constant on
       // purpose: with six lanes landing edits into the same build, two runs ten
       // minutes apart are not a controlled A/B - the first attempt at this term
@@ -1807,7 +1796,9 @@ export class Flora {
     // flora (8), so if main.js constructs-and-inits in one pass the first
     // chunk:built can already have fired. init() also sweeps forEachResident.
     if (ctx && ctx.bus && ctx.bus.on) {
-      ctx.bus.on('chunk:built', (p) => { if (p) this.buildChunk(p.cx, p.cz, p.id); });
+      ctx.bus.on('chunk:built', (p) => {
+        if (p && this._acceptChunkEvents) this.buildChunk(p.cx, p.cz, p.id);
+      });
       ctx.bus.on('chunk:disposed', (p) => { if (p) this.disposeChunk(p.id); });
     }
   }
@@ -1816,7 +1807,13 @@ export class Flora {
   // boot
   // -------------------------------------------------------------------------
   async init() {
+    // Select the map before the distant trees are baked. Chunks created earlier
+    // are picked up by forEachResident below; their planting still happens once.
+    try { this._foliageImage = await loadFoliageImage(); }
+    catch (_) { this._note('foliage image unavailable; procedural atlas retained'); }
     this._ensureBuilt();
+    this._foliageImage = null;
+    this._acceptChunkEvents = true;
     try {
       this.barkSurface = await loadScannedSurface('bark_brown_02', this.ctx.renderer);
       if (this.barkSurface) {
@@ -1880,33 +1877,38 @@ export class Flora {
     }
 
     // --- materials -------------------------------------------------------
-    this.foliageTex = makeFoliageAtlas();
+    try { this.foliageTex = makeFoliageAtlas(this._foliageImage); }
+    catch (error) {
+      this._note(error.message + '; procedural atlas retained');
+      this.foliageTex = makeFoliageAtlas();
+    }
     this.barkScan = {
       uBarkScan: { value: this.foliageTex }, uBarkHeight: { value: this.foliageTex },
       uBarkMean: { value: new THREE.Vector3(1, 1, 1) }, uBarkReady: { value: 0 },
     };
     this.matNear = this._makeTreeMaterial(0);
     this.matMid = this._makeTreeMaterial(1);
-    this.grassTex = makeGrassTexture();
+    this.grassTex = makeGroundCoverTexture();
     this.matGrass = this._makeGrassMaterial();
     this.grassGeo = this._makeGrassGeometry();
 
     // --- the understory templates (ROUND 6) ---------------------------------
     this.underGeo = {
       fern: makeFernGeometry(),
+      shrub: makeShrubGeometry(),
       log: makeLogGeometry(),
       stump: makeStumpGeometry(),
       boulder: makeBoulderGeometry(this.seed + 977),
-      litter: makeLitterGeometry(this.seed + 631),
     };
-    // Logs, stone and litter also use matNear: they must never sample a leaf cutout.
+    // Logs, stone and bare soil also use matNear: they must never sample a leaf cutout.
     for (const kind of UNDER_KINDS) {
       if (kind === 'fern') continue;
       const geo = this.underGeo[kind];
       if (!geo) continue;
       const bark = new Float32Array(geo.attributes.position.count);
-      if (kind === 'log' || kind === 'stump') bark.fill(1);
+      if (kind === 'log' || kind === 'stump' || kind === 'shrub') bark.fill(1);
       geo.setAttribute('aBark', new THREE.BufferAttribute(bark, 1));
+      if (kind === 'shrub') continue; // twig bark and leaf UVs already address the tree atlas
       let uv = geo.attributes.uv;
       if (!uv) {
         uv = new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2);
@@ -1914,7 +1916,7 @@ export class Flora {
       }
       for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.75, 0.89);
     }
-    this._underCount = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0 };
+    this._underCount = { fern: 0, log: 0, stump: 0, boulder: 0, shrub: 0 };
 
     // --- impostor atlas ---------------------------------------------------
     const ok = this.impostors.bake(this.templates.map((t) => ({
@@ -1957,10 +1959,13 @@ export class Flora {
       shader.uniforms.uMoonView = this.wind.uMoonView;
       shader.uniforms.uGlowColor = this.wind.uGlowColor;
       shader.uniforms.uGlowAmt = this.wind.uGlowAmt;
+      shader.uniforms.uRimAmt = this.wind.uRimAmt;
       shader.uniforms.uFormAmt = this.wind.uFormAmt;
       shader.uniforms.uTier = uni.uTier;
       shader.uniforms.uBandNear = uni.uBandNear;
       shader.uniforms.uBandFar = uni.uBandFar;
+
+      shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', TREE_LIGHTING);
 
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
@@ -1975,6 +1980,7 @@ export class Flora {
           'attribute float aWind;',
           'attribute float aBark;',
           'varying float vFWind;',
+          'varying float vFoliage;',
           // ROUND 20 — BARK. See the long note beside BARK_SCALE.
           'varying vec3 vBarkP;',
           'varying float vBarkK;',
@@ -1986,6 +1992,7 @@ export class Flora {
         [
           '#include <begin_vertex>',
           'vFWind = aWind;',
+          'vFoliage = 1.0 - smoothstep(0.76, 0.80, uv.y);',
           // TEMPLATE-LOCAL position, taken BEFORE the wind sway and before the instance
           // matrix, so the grain is nailed to the wood: an instanced pattern taken from
           // world position swims as the tree moves and shears as it is scaled.
@@ -2027,6 +2034,13 @@ export class Flora {
           '    transformed.x += sw * aWind * amp;',
           '    transformed.z += cos(ph * 0.85 + 0.6) * aWind * amp * 0.7;',
           '    transformed.y -= abs(sw) * aWind * amp * 0.15;',
+          // Leaf tips flutter independently inside the slower whole-tree sway.
+          // The detail fades before the mid ring can turn it into shimmer.
+          '    float detail = vFoliage * aWind * amp * 0.13',
+          '      * (1.0 - smoothstep(20.0, 70.0, dcam));',
+          '    float twig = dot(position, vec3(2.71, 1.83, 3.17)) + ph;',
+          '    transformed.x += sin(twig + uTime * 3.7) * detail;',
+          '    transformed.z += cos(twig * 1.31 + uTime * 2.9) * detail;',
           '  }',
           '}',
         ].join('\n')
@@ -2039,12 +2053,14 @@ export class Flora {
           'uniform vec3 uMoonView;',
           'uniform vec3 uGlowColor;',
           'uniform float uGlowAmt;',
+          'uniform float uRimAmt;',
           'uniform float uFormAmt;',
           'uniform sampler2D uBarkScan;',
           'uniform sampler2D uBarkHeight;',
           'uniform vec3 uBarkMean;',
           'uniform float uBarkReady;',
           'varying float vFWind;',
+          'varying float vFoliage;',
           'varying vec3 vBarkP;',
           'varying float vBarkK;',
           SURFACE_RELIEF_GLSL,
@@ -2078,6 +2094,17 @@ export class Flora {
           '  return mix(mix(a, b, f.y), mix(c, d, f.y), f.z);',
           '}',
         ].join('\n')
+      );
+
+      // Volume normals describe the outside of the spray on either card face.
+      // Three's ordinary double-sided flip is correct for bark, but would turn
+      // a back-facing leaf card's whole crown normal inward.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_begin>',
+        '#include <normal_fragment_begin>\n'
+          + '#ifdef DOUBLE_SIDED\n'
+          + 'normal *= mix(1.0, gl_FrontFacing ? 1.0 : -1.0, vFoliage);\n'
+          + '#endif'
       );
 
       // THE FORM TERM (see the note beside FORM_SHADOW). Injected immediately
@@ -2129,7 +2156,7 @@ export class Flora {
           '    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.64, 0.91, 0.47), moss * 0.52);',
           '  }',
           '}',
-          'normal = countyReliefNormal(-vViewPosition, normal, countyBarkHeight);',
+          'normal = countyReliefNormal(-vViewPosition, normal, countyBarkHeight, 0.00055);',
           '{',
           '  vec3 nrm = normalize(normal);',
           '  vec3 mdir = normalize(uMoonView);',
@@ -2138,7 +2165,9 @@ export class Flora {
           '  float side = clamp(ndm * ' + FORM_RAMP.toFixed(3) + ' + ' + FORM_BIAS.toFixed(3) + ', 0.0, 1.0);',
           '  float form = mix(' + FORM_SHADOW.toFixed(3) + ', ' + FORM_LIT.toFixed(3) + ', side);',
           '  form *= mix(' + FORM_EDGE.toFixed(3) + ', 1.0, ndv);',
-          '  diffuseColor.rgb *= mix(1.0, form, uFormAmt);',
+          // The curvature term belongs to solid wood. Applying its strong rim
+          // darkening to a leaf spray makes every folded card a black triangle.
+          '  diffuseColor.rgb *= mix(1.0, form, uFormAmt * mix(1.0, 0.35, vFoliage));',
           '}',
           '#include <lights_lambert_fragment>',
         ].join('\n')
@@ -2156,7 +2185,24 @@ export class Flora {
           '  vec3 vvv = normalize(vViewPosition);',
           '  float trans = pow(max(dot(-vvv, mlv), 0.0), 3.0);',
           '  float wrapT = max(0.0, dot(normal, mlv) * 0.5 + 0.5);',
-          '  totalEmissiveRadiance += uGlowColor * (trans * 0.9 + wrapT * 0.12) * uGlowAmt * diffuseColor.rgb * vFWind;',
+          // outgoingLight is already assembled at this stage in Three r161;
+          // changing totalEmissiveRadiance here used to contribute zero pixels.
+          '  outgoingLight += uGlowColor * (trans * 0.75 + wrapT * 0.10)',
+          '    * uGlowAmt * diffuseColor.rgb * vFWind * vFoliage;',
+          // THE MOON ON THE SILHOUETTE. The form term above multiplies a trunk's edges by
+          // FORM_EDGE to make it read as a cylinder, and it does - but it also welds every
+          // trunk to the one standing behind it, which is why the closed woods read as one
+          // flat dark mass while the same trees against open sky read beautifully. This is
+          // the missing separation, and it is light rather than albedo: it rides on the
+          // moon's own colour, only on the side the moon is on, only where the surface has
+          // turned away from the eye, and only on WOOD - a leaf card has no silhouette of
+          // its own worth lighting and already has the translucency above.
+          '  float ndvR = abs(dot(normalize(normal), vvv));',
+          '  float rim = pow(1.0 - ndvR, 3.6) * smoothstep(-0.35, 0.55, dot(normalize(normal), mlv));',
+          // A thin branch is grazing along its whole length, so an unweighted rim lights
+          // the entire twig instead of its edge and the crown fills with white spears.
+          // vFWind already knows how twig-like a vertex is - it is why the tips move.
+          '  outgoingLight += uGlowColor * rim * uRimAmt * (1.0 - vFoliage) * (1.0 - vFWind * 0.55);',
           '}',
           '#include <opaque_fragment>',
         ].join('\n')
@@ -2167,7 +2213,7 @@ export class Flora {
     // SAME key on purpose: the injected code is identical and only the uniform
     // values differ, so they SHOULD share one program - that is 1 program for
     // the near and mid rings instead of 2.
-    mat.customProgramCacheKey = () => 'curfew-tree-relief-2';
+    mat.customProgramCacheKey = () => 'curfew-tree-volume-6';
     return mat;
   }
 
@@ -2195,6 +2241,10 @@ export class Flora {
       shader.uniforms.uWind = this.wind.uWind;
       shader.uniforms.uGust = this.wind.uGust;
       shader.uniforms.uGrassR = uni.uGrassR;
+      // These normals describe the rounded plant volume, not a paper sheet's
+      // front/back faces. Keep the same sky-facing volume on both sides.
+      shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_begin>',
+        '#include <normal_fragment_begin>\n#ifdef DOUBLE_SIDED\nnormal *= faceDirection;\n#endif');
 
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
@@ -2204,6 +2254,7 @@ export class Flora {
           'uniform float uWind;',
           'uniform float uGust;',
           'uniform float uGrassR;',
+          'attribute float aGroundDetail;',
         ].join('\n')
       );
 
@@ -2226,29 +2277,45 @@ export class Flora {
           // a transparent grass ring is a sorting bill and a haze of grey.
           '  float dc = length(cameraPosition.xz - ganc.xz);',
           '  transformed *= 1.0 - smoothstep(uGrassR * 0.72, uGrassR, dc);',
+          '  transformed *= 1.0 - aGroundDetail * smoothstep(15.0, 24.0, dc);',
           '}',
         ].join('\n')
       );
     };
-    mat.customProgramCacheKey = () => 'curfew-grass';
+    mat.customProgramCacheKey = () => 'curfew-groundcover-2';
     return mat;
   }
 
-  /** One crossed-quad blade card, y in [0,1]. 8 triangles. */
+  /** Six offset tufts, still 24 triangles. Small root leaves shrink out before
+   * the three main clumps; there is no second draw or transparent blend layer. */
   _makeGrassGeometry() {
-    const a = new THREE.PlaneGeometry(1, 1, 2, 3);
-    a.translate(0, 0.5, 0);
-    const p = a.attributes.position, uv = a.attributes.uv;
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), y = p.getY(i);
-      p.setXYZ(i, x * (0.58 + y * 0.42), y, y * y * 0.28 - Math.abs(x) * 0.19);
-      uv.setY(i, 0.505 + uv.getY(i) * 0.49);
+    const parts = [];
+    for (let k = 0; k < 6; k++) {
+      const detail = k >= 3;
+      const g = new THREE.PlaneGeometry(detail ? 0.63 : 0.78, 1, 1, 2);
+      const p = g.attributes.position, uv = g.attributes.uv;
+      const c = GROUND_CELLS[k % 2];
+      const yaw = k * 2.3999632 + 0.24, h = detail ? 0.37 + (k % 3) * 0.09 : 0.74 + k * 0.13;
+      const offset = detail ? 0.23 : 0.13;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), t = uv.getY(i);
+        p.setXYZ(i, x * (0.78 + t * 0.22), t * h,
+          t * t * (detail ? 0.34 : 0.17) - Math.abs(x) * 0.10);
+        uv.setXY(i, c.x + uv.getX(i) * c.w, c.y + t * c.h);
+      }
+      g.rotateY(yaw); g.translate(Math.cos(yaw + 0.7) * offset, 0, Math.sin(yaw + 0.7) * offset);
+      const n = g.attributes.normal;
+      for (let i = 0; i < p.count; i++) {
+        // Round tuft normals receive sky light together instead of alternately
+        // exposing six bright and black billboard faces as the camera turns.
+        _groundNormal.set(p.getX(i) * 0.60, 0.72 + uv.getY(i) * 0.12, p.getZ(i) * 0.60).normalize();
+        n.setXYZ(i, _groundNormal.x, _groundNormal.y, _groundNormal.z);
+      }
+      g.setAttribute('aGroundDetail', new THREE.Float32BufferAttribute(new Float32Array(p.count).fill(detail ? 1 : 0), 1));
+      parts.push(g);
     }
-    a.computeVertexNormals();
-    const b = a.clone();
-    b.rotateY(1.97);
-    const g = mergeGeometries([a, b], false);
-    a.dispose(); b.dispose();
+    const g = mergeGeometries(parts, false);
+    for (const p of parts) p.dispose();
     g.computeBoundingSphere();
     return g;
   }
@@ -2664,7 +2731,7 @@ export class Flora {
 
     return {
       id, cx, cz, trees: n, streams, cards, bounds,
-      nearMeshes: null, grass: null, grassWanted: false,
+      nearMeshes: null, grass: null, grassBuilt: false, grassWanted: false,
       under: [], underCount: 0, underMeshes: null, underBounds: null,
       dMin: 0, dMax: 0,
     };
@@ -2812,7 +2879,7 @@ export class Flora {
       return false;
     };
 
-    const counts = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0 };
+    const counts = { fern: 0, log: 0, stump: 0, boulder: 0, shrub: 0 };
     let minY = Infinity, maxY = -Infinity;
     const put = (kind, x, y, z, yaw, tilt, sx, sy, sz, tr, tg, tb) => {
       const k = counts[kind];
@@ -2868,6 +2935,8 @@ export class Flora {
           if (onPad(wx, wz)) continue;
           if (slope2(wx, wz, wy) > 0.62) continue;
           const size = lerp(U.fernSize[0], U.fernSize[1], hashI(gx, gz, S + 104)) * fernScale;
+          if (hasRoad && roads.roadDistance(wx, wz) < excludeGrass + size * 0.90) continue;
+          if (trunkNear(wx, wz, wx, wz, size * 0.55)) continue;
           const yaw = hashI(gx, gz, S + 105) * TAU;
           const v = (0.74 + hashI(gx, gz, S + 106) * 0.50 - cover * 0.10) * FERN_TINT_MUL;
           // the frond template spreads ~1.2 units across at unit height; fern is wider than tall
@@ -3006,93 +3075,176 @@ export class Flora {
       }
     }
 
-    // --- ROUND 16, THE LIST item 12: leaf litter and exposed soil ---------------------
-    // The county floor had NOTHING on it. A trunk met an unbroken plane of ground albedo
-    // and the torch pool was one flat disc of that plane
-    // (tests/shots/flora-r16-before-open-ground.png: luma mean 63.6 and not one feature in
-    // it). Two populations, ONE geometry, ONE InstancedMesh, no collider:
-    //   - a drift of leaves at the foot of half this chunk's trunks, which is the only
-    //     thing that has ever softened the hard cylinder-into-plane join at a tree base;
-    //   - bare wet earth where the meadow field gave out, so "no grass here" reads as
-    //     ground rather than as absence.
+    // --- ROUND 16's LEAF LITTER AND EXPOSED SOIL: REMOVED -----------------------------
+    // Two populations shared one fan geometry on matNear: a drift at the foot of half a
+    // chunk's trunks, and bare earth where the meadow field gave out. Both were added
+    // because the county floor had NOTHING on it - a trunk met an unbroken plane of ground
+    // albedo and the torch pool was one flat disc of it.
+    //
+    // The floor is now a scanned forest bed, and against it neither population survives
+    // inspection, because matNear gives them ONE reserved white texel and no texture at
+    // all. MEASURED in the close-trunk pose: the drift rendered luma 163 against a ground
+    // of 69 - 2.4x, where its own note asks for 0.62x - so every tree in the county stood
+    // in a pale plate, and on ground that falls away from a trunk (10 cm over 1.67 m on
+    // the instance sampled) the cone never reaches the terrain that was supposed to cut
+    // it, so the whole rim showed and the plate was a STAR. That is the shape in Alex's
+    // screenshots. Corrected to 0.70x it is a flat patch; the soil at its authored 0.44x
+    // renders luma 18 against 43 and reads as a hole; a leaf cutout at this size is giant
+    // torn leaves. By the value where the edge stops being a boundary, both contribute
+    // nothing. So they are deleted rather than tuned, and the scanned ground's own bare
+    // and mossy passages carry the variation they were invented to supply.
+
+    // --- young growth: broken colonies on margins and beside fallen timber ----------
+    // This soft layer has no colliders. Its complete footprint clears made surfaces;
+    // the existing logs, stumps, rocks and their collision emission above stay intact.
     {
-      const eG = LITTER_GRAD_E;
-      /**
-       * Lay one drift, CONFORMED TO THE GROUND'S OWN NORMAL. put() composes the Euler as
-       * YZX, i.e. Ry(yaw) * Rz(tilt) * Rx(0), so local +Y lands at
-       * (-sin t cos a, cos t, sin t sin a). With t = atan(g) and a = atan2(-hz, hx) that
-       * is exactly the surface normal (-hx, 1, -hz)/sqrt(1+g^2) of a heightfield whose
-       * gradient is (hx, hz). Without this a 2 m disc floats one edge 25 cm off any bank
-       * it lands on, which is the flat-decal failure this project has already paid for
-       * twice this round (the station apron, the road ribbons).
-       *
-       * The spin comes from the same gradient, so a drift's long axis follows the local
-       * fall of the ground: free variety that is also correct. On ground flat enough for
-       * the gradient to be meaningless the tilt is zero, so any yaw is as right as any
-       * other and a hash supplies it.
-       */
-      const drift = (x, z, rad, flatY, hSeed, tr, tg, tb) => {
-        const y = terrain.heightAt(x, z);
-        const hx = (terrain.heightAt(x + eG, z) - y) / eG;
-        const hz = (terrain.heightAt(x, z + eG) - y) / eG;
-        const g = Math.sqrt(hx * hx + hz * hz);
-        if (1 - 1 / Math.sqrt(g * g + 1) > LITTER_SLOPE_MAX) return;
-        const a = g > 2e-3 ? Math.atan2(-hz, hx) : hashI(Math.round(x * 4), Math.round(z * 4), hSeed) * TAU;
-        // area-preserving stretch, the same trick the trunks got this round: a drift is an
-        // ellipse, never a compass circle
-        const st = 0.78 + hashI(Math.round(x * 4), Math.round(z * 4), hSeed + 1) * 0.52;
-        // The Y scale is ABSOLUTE, not rad * flatY: coupling the rise to the spread would
-        // make a 2.3 m soil patch a 12 cm mound instead of a piece of ground.
-        put('litter', x, y + 0.015, z, a, Math.atan(g), rad * st, flatY, rad / st, tr, tg, tb);
+      const fernBefore = counts.fern;
+      const softSpots = [];
+      const horizontalRadius = geo => {
+        const p = geo.attributes.position;
+        let r = 0;
+        for (let i = 0; i < p.count; i++) r = Math.max(r, Math.hypot(p.getX(i), p.getZ(i)));
+        return r;
+      };
+      const shrubRadius = horizontalRadius(this.underGeo.shrub);
+      const brackenRadius = horizontalRadius(this.underGeo.fern);
+      const bossSites = this._sys('boss-sites')?.sites || [];
+      const stories = this._sys('world-stories');
+      const storyTargets = stories?.targets || [];
+      const hasSupport = collision && typeof collision.supportHeight === 'function';
+
+      const madeGround = (x, z, r) => {
+        if (hasRoad && roads.roadDistance(x, z) < excludeGrass + r + 0.45) return true;
+        for (const m of _minorsNear) {
+          if (Math.hypot(x - m.x, z - m.z) < U.siteClear + r) return true;
+        }
+        if (flats) for (const f of flats) {
+          // Boss flattening discs include a wide blend into surrounding woods.
+          // Preserve the actual arena and its approach below, not that blend halo.
+          if (typeof f.id === 'string' && f.id.startsWith('boss-ground:')) continue;
+          if (Math.hypot(x - f.x, z - f.z) < f.r * 0.86 + r) return true;
+        }
+        for (const s of bossSites) {
+          const dx = x - s.x, dz = z - s.z;
+          // Non-ambush art owns a 92 m square floor; the burrow fight owns its
+          // authored circular radius plus a visible preparation margin.
+          if (s.ambush ? Math.hypot(dx, dz) < (s.radius || 52) + 8 + r
+            : Math.abs(dx) < 46 + r && Math.abs(dz) < 46 + r) return true;
+          if (!s.road?.hit) continue;
+          const ex = s.road.x - s.x, ez = s.road.z - s.z;
+          const t = clamp01((dx * ex + dz * ez) / Math.max(0.001, ex * ex + ez * ez));
+          if (Math.hypot(dx - ex * t, dz - ez * t) < 3.4 + r) return true;
+        }
+        for (const t of storyTargets) {
+          if (Math.hypot(x - t.x, z - t.z) < 3.0 + r) return true;
+        }
+        for (let side = 0; side < 5; side++) {
+          const px = x + (side === 1 ? r : side === 2 ? -r : 0);
+          const pz = z + (side === 3 ? r : side === 4 ? -r : 0);
+          if ((hasSight && places.sightClear(px, pz)) || (hasPad && wilds.padClear(px, pz))
+            || this._travelWaterClear(px, pz) || stories?.clearsTrees?.(px, pz)) return true;
+        }
+        return false;
       };
 
-      // (1) the collar: a drift at the foot of this chunk's trunks. Every one of these
-      // inherits the TREE's exclusions - road, sight corridor, pad, water - because it is
-      // centred on a trunk that already passed all four in the planting loop. That is why
-      // there is no test here: tests/wilds.mjs asserts every understory instance's centre
-      // against the road field and the pads, and a trunk centre satisfies both by
-      // construction (plantExclude.tree is the same 7.05 m the suite reads).
-      for (let i = 0; i < nTrees; i++) {
-        if (counts.litter >= UNDER_CAP.litter) break;
-        const o = i * 3;
-        const tx = _trunkBuf[o], tz = _trunkBuf[o + 1], trad = _trunkBuf[o + 2];
-        const qx = Math.round(tx * 4), qz = Math.round(tz * 4);
-        const hc = hashI(qx, qz, S + 141);
-        if (hc > LITTER_COLLAR_P) continue;
-        // A fat trunk sheds a wider drift than a sapling. NOMINAL radius: only about 0.47
-        // of it clears the ground (the cone crosses the terrain, see makeLitterGeometry),
-        // so 1.0-1.7 nominal is a visible drift 0.5-1.9 m across. The first pass used
-        // (0.74 + trad*2.1) on a geometry that showed ALL of its radius and put a 4 m plate
-        // round a mature trunk, which is a clearing, not a collar.
-        const rad = (0.62 + trad * 1.80) * (0.80 + hashI(qx, qz, S + 142) * 0.52);
-        const v = 0.86 + hashI(qx, qz, S + 143) * 0.20;
-        drift(tx, tz, rad, 1.0, S + 144, v, v * 0.99, v * 0.97);
+      const softPlant = (x, z, key, bracken = false) => {
+        if (x < ox || z < oz || x >= ox + CH || z >= oz + CH) return false;
+        if (bracken ? counts.fern - fernBefore >= COLONY_FERN_CAP : counts.shrub >= UNDER_CAP.shrub) return false;
+        // THE ROAD, and it has to be tested HERE rather than at the colony anchor. The loop
+        // below weights an anchor by its distance from the road on purpose - a verge is
+        // where this stuff grows - but it then scatters nine plants up to 4.1 m off that
+        // anchor, and a plant 4 m road-ward of a legal anchor is standing in the road.
+        // MEASURED: 15 of 20123 resident instances, which is what tests/wilds.mjs has been
+        // reporting. The suite reads the grass exclusion for a frond and the tree exclusion
+        // for a shrub, which are the two this plants, so it asks the same question of each.
+        if (hasRoad && roads.roadDistance(x, z) < (bracken ? excludeGrass : excludeTree)) return false;
+        const qx = Math.floor(x * 11), qz = Math.floor(z * 11);
+        const scale = hashI(qx, qz, S + key + 3);
+        const width = bracken ? 0.96 + scale * 0.43 : 1.12 + scale * 0.66;
+        const stretch = 0.84 + hashI(qx, qz, S + key + 17) * 0.28;
+        const radius = width * (bracken ? brackenRadius : shrubRadius * Math.max(stretch, 1 / stretch)) + 0.08;
+        if (madeGround(x, z, radius)) return false;
+        if (trunkNear(x, z, x, z, radius * 0.76)) return false;
+        for (let i = 0; i < softSpots.length; i += 3) {
+          if (Math.hypot(x - softSpots[i], z - softSpots[i + 1]) < (radius + softSpots[i + 2]) * 0.56) return false;
+        }
+        const y = terrain.heightAt(x, z);
+        if (slope2(x, z, y) > 0.18) return false;
+        if (typeof terrain.iceLevelAt === 'function' && terrain.iceLevelAt(x, z) > y + 0.02) return false;
+        // Query all authored tops, including low floor slabs and roofs. Inflating
+        // the support radius compensates its foot-contact factor of 0.55.
+        if (hasSupport && collision.supportHeight(x, z, y + 0.10, radius / 0.55, 40) > y + 0.04) return false;
+        const yaw = hashI(qx, qz, S + key + 7) * TAU;
+        const v = 0.84 + hashI(qx, qz, S + key + 11) * 0.26;
+        if (bracken) {
+          const height = width * (0.96 + hashI(qx, qz, S + key + 13) * 0.22);
+          put('fern', x, y - 0.025, z, yaw, 0, width, height, width,
+            PAL.fern[0] * v * FERN_TINT_MUL * floorTint[0],
+            PAL.fern[1] * v * FERN_TINT_MUL * floorTint[1],
+            PAL.fern[2] * v * FERN_TINT_MUL * floorTint[2]);
+        } else {
+          // Most growth reaches hip/chest height. Width and height vary separately
+          // so the same asymmetric template also reads as low spreading brush.
+          const height = (0.78 + hashI(qx, qz, S + key + 13) ** 1.5 * 0.72)
+            * (regionId === 3 ? 0.76 : 1);
+          put('shrub', x, y - 0.025, z, yaw, 0, width * stretch, height, width / stretch,
+            v * (0.91 + floorTint[0] * 0.09), v * (0.92 + floorTint[1] * 0.08),
+            v * (0.90 + floorTint[2] * 0.10));
+        }
+        softSpots.push(x, z, radius);
+        return true;
+      };
+
+      // Companions grow alongside existing objects without changing those objects.
+      // Three offset plants form an uneven bank, leaving both log ends approachable.
+      for (let i = 0; i < counts.log; i++) {
+        const b = i * UNDER_STRIDE, m = _underBuf.log;
+        const x = m[b + 12], z = m[b + 14], qx = Math.round(x), qz = Math.round(z);
+        if (hashI(qx, qz, S + 851) > 0.76) continue;
+        const length = Math.hypot(m[b], m[b + 2]);
+        const ux = m[b] / length, uz = m[b + 2] / length;
+        const side = hashI(qx, qz, S + 853) > 0.5 ? 1 : -1;
+        for (let j = 0; j < 3; j++) {
+          const along = (j - 1) * length * 0.23;
+          const away = side * (1.18 + hashI(i, j, S + 857) * 0.55);
+          softPlant(x + ux * along - uz * away, z + uz * along + ux * away, 861 + j * 19, j === 1);
+        }
+      }
+      for (let i = 0; i < counts.boulder; i++) {
+        const b = i * UNDER_STRIDE, m = _underBuf.boulder;
+        const x = m[b + 12], z = m[b + 14], size = Math.hypot(m[b], m[b + 2]);
+        if (hashI(Math.round(x), Math.round(z), S + 877) > 0.66) continue;
+        const turn = hashI(i, Math.round(x + z), S + 881) * TAU;
+        for (let j = 0; j < 3; j++) {
+          const a = turn + (j - 1) * 0.72;
+          const d = size + 1.35 + (j & 1) * 0.30;
+          softPlant(x + Math.cos(a) * d, z + Math.sin(a) * d, 887 + j * 17, j === 0);
+        }
       }
 
-      // (2) bare soil, keyed to the INVERSE of the meadow field and squared, so earth shows
-      // through where the grass has genuinely given out rather than everywhere at a low
-      // rate. Flatter than a leaf drift (0.62 on the rise) because it is ground, not litter.
-      const cellS = LITTER_SOIL_CELL;
-      const sx0 = Math.floor(ox / cellS), sx1 = Math.ceil((ox + CH) / cellS);
-      const sz0 = Math.floor(oz / cellS), sz1 = Math.ceil((oz + CH) / cellS);
-      for (let gz = sz0; gz < sz1; gz++) {
-        if (counts.litter >= UNDER_CAP.litter) break;
-        for (let gx = sx0; gx < sx1; gx++) {
-          const h3 = hashI(gx, gz, S + 153);
-          if (h3 > LITTER_SOIL_P) continue;
-          const wx = (gx + 0.14 + hashI(gx, gz, S + 151) * 0.72) * cellS;
-          const wz = (gz + 0.14 + hashI(gx, gz, S + 152) * 0.72) * cellS;
-          if (wx < ox || wz < oz || wx >= ox + CH || wz >= oz + CH) continue;
-          const bare = 1 - this.meadowAt(wx, wz);
-          const cm = LITTER_SOIL_FLOOR + (1 - LITTER_SOIL_FLOOR) * bare * bare;
-          if (h3 > LITTER_SOIL_P * cm) continue;
-          if (hasRoad && roads.roadDistance(wx, wz) < excludeTree) continue;
-          if (hasSight && places.sightClear(wx, wz)) continue;
-          if (onPad(wx, wz)) continue;
-          if (trunkNear(wx, wz, wx, wz, 0.9)) continue;      // the collars already own the feet
-          const rad = lerp(0.95, 2.60, hashI(gx, gz, S + 154));
-          const v = 0.88 + hashI(gx, gz, S + 155) * 0.18;
-          drift(wx, wz, rad, 0.62, S + 156, v * SOIL_MUL[0], v * SOIL_MUL[1], v * SOIL_MUL[2]);
+      // Colonies share world-space anchors across chunk seams. Broken centres
+      // and wide spaces between anchors preserve open walking routes; neither
+      // grass density nor the forest-wide scatter changes.
+      const gx0 = Math.floor((ox - 5) / COLONY_CELL), gx1 = Math.ceil((ox + CH + 5) / COLONY_CELL);
+      const gz0 = Math.floor((oz - 5) / COLONY_CELL), gz1 = Math.ceil((oz + CH + 5) / COLONY_CELL);
+      for (let gz = gz0; gz < gz1; gz++) for (let gx = gx0; gx < gx1; gx++) {
+        const hx = (gx + 0.28 + hashI(gx, gz, S + 901) * 0.44) * COLONY_CELL;
+        const hz = (gz + 0.28 + hashI(gx, gz, S + 907) * 0.44) * COLONY_CELL;
+        const cover = this.coverAt(hx, hz);
+        const roadD = hasRoad ? roads.roadDistance(hx, hz) : Infinity;
+        const verge = smoothstep(excludeGrass + 2, excludeGrass + 6, roadD) * (1 - smoothstep(18, 29, roadD));
+        const edge = smoothstep(0.08, 0.28, cover) * (1 - smoothstep(0.66, 0.92, cover));
+        const regionMul = [1, 0.82, 0.68, 0.40][regionId] || 1;
+        const accept = Math.max(verge * (0.60 + cover * 0.20), edge * 0.34, cover * 0.055) * regionMul;
+        if (hashI(gx, gz, S + 911) > accept) continue;
+        const turn = hashI(gx, gz, S + 919) * TAU;
+        const ct = Math.cos(turn), st = Math.sin(turn);
+        for (let j = 0; j < 9; j++) {
+          const a = j * 2.3999632 + hashI(gx * 11 + j, gz, S + 929) * 0.48;
+          const d = Math.sqrt((j + 0.6) / 9);
+          const lx = Math.cos(a) * d * 4.1, lz = Math.sin(a) * d * 2.8;
+          if (Math.abs(lx) < 0.82) continue;
+          softPlant(hx + lx * ct - lz * st, hz + lx * st + lz * ct, 937 + j * 23, j % 3 === 1);
         }
       }
     }
@@ -3275,8 +3427,8 @@ export class Flora {
       }
 
       const wantGrass = rec.dMin < grassR;
-      if (wantGrass && !rec.grass && grassBudget > 0) { this._buildGrass(rec); grassBudget--; }
-      else if (rec.grass && rec.dMin > grassR * 1.6) this._dropGrass(rec);
+      if (wantGrass && !rec.grassBuilt && !rec.grass && grassBudget > 0) { this._buildGrass(rec); grassBudget--; }
+      else if ((rec.grassBuilt || rec.grass) && rec.dMin > grassR * 1.6) this._dropGrass(rec);
     }
 
     // --- per 2x2 group: mid ring ------------------------------------------
@@ -3472,11 +3624,10 @@ export class Flora {
     const out = [];
     for (const s of rec.under) {
       const isFern = s.kind === 'fern';
-      // ROUND 16: litter is 6 cm of dead leaves lying flat on the ground. It never casts
       // (a caster lying on the floor spends a shadow-map draw to darken the pixel it is
       // already covering) and it does NOT hide with the ferns at fernRadius - a drift is
       // opaque and still reads at 40 m where an alpha-cut fern card does not.
-      const isLitter = s.kind === 'litter';
+      const isShrub = s.kind === 'shrub';
       const mesh = new THREE.InstancedMesh(this.underGeo[s.kind], isFern ? this.matGrass : this.matNear, s.count);
       mesh.name = 'flora-under-' + s.kind + '-' + rec.id;
       mesh.instanceMatrix.array.set(s.mat);
@@ -3488,8 +3639,8 @@ export class Flora {
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       mesh.receiveShadow = true;
-      mesh.castShadow = !isFern && !isLitter;
-      mesh.userData.casts = !isFern && !isLitter;
+      mesh.castShadow = !isFern && !isShrub;
+      mesh.userData.casts = !isFern && !isShrub;
       mesh.userData.fern = isFern;
       this._setBounds(mesh, rec.underBounds);
       this.group.add(mesh);
@@ -3613,7 +3764,7 @@ export class Flora {
   }
 
   _buildGrass(rec) {
-    if (rec.grass) return;
+    if (rec.grassBuilt || rec.grass) return;
     const terrain = this._sys('terrain');
     if (!terrain || typeof terrain.heightAt !== 'function') return;
     const roads = this._sys('roads');
@@ -3648,6 +3799,19 @@ export class Flora {
     const grassHeight = BIOME_GRASS_HEIGHT[regionId] || BIOME_GRASS_HEIGHT[0];
     const grassTint = BIOME_GRASS_TINT[regionId] || BIOME_GRASS_TINT[0];
 
+    // Grass has a larger spread now. Reject its entire footprint around local
+    // and adjacent chunk trunks, including the boundary between two chunks.
+    const trunks = [];
+    for (const other of this.chunks.values()) {
+      if (Math.abs(other.cx - rec.cx) > 1 || Math.abs(other.cz - rec.cz) > 1) continue;
+      const cards = other.cards;
+      for (let i = 0; cards && i < other.trees; i++) {
+        const tpl = this.templates[cards.tpl[i] | 0];
+        const scale = tpl.halfWidth > 0 ? cards.size[i * 2] / tpl.halfWidth : 1;
+        trunks.push(cards.pos[i * 3], cards.pos[i * 3 + 2], tpl.trunkR * scale);
+      }
+    }
+
     const cap = nx * nx;
     const mat = new Float32Array(cap * 16);
     const tint = new Float32Array(cap * 3);
@@ -3656,31 +3820,40 @@ export class Flora {
       for (let gx = 0; gx < nx; gx++) {
         const ix = rec.cx * nx + gx, iz = rec.cz * nx + gz;
         const hg = hashI(ix, iz, this.seed + 21);
-        if (hg > grassAccept) continue;             // free: over the biome's ceiling
+        if (hg > 0.84) continue;                    // bounded verge + meadow ceiling
         const wx = ox + (gx + hashI(ix, iz, this.seed + 22)) * cell;
         const wz = oz + (gz + hashI(ix, iz, this.seed + 23)) * cell;
-        // ROUND 16, THE LIST item 12. THIS was the flat Bernoulli: one probability for the
-        // whole county, so the floor was an even scatter from the spawn to the ridge.
-        // Two fields now shape it, and the ORDER IS THE COST (the same rule the understory
-        // pass is written to): the 2-octave meadow first, because it rejects the most, and
-        // the 3-octave cover field only for what survived it. Everything expensive — the
-        // road field, the water, the pads, the apron, heightAt, supportHeight — is still
-        // below both, and now runs on ~40% as many candidates as before.
+        const w = lerp(grassWidth[0], grassWidth[1], hashI(ix, iz, this.seed + 25));
+        const footprint = w * 0.68;
+        const roadD = hasRoad ? roads.roadDistance(wx, wz) : Infinity;
+        if (roadD < exclude + footprint) continue;
+        // The broad meadow field remains. A second 6-12 m colony field gives
+        // road verges connected clumps with bare breaks between them instead
+        // of a thin uniform scatter. This mesh exists only inside the 42 m ring.
         const mMul = GRASS_PATCH_FLOOR + (1 - GRASS_PATCH_FLOOR) * this.meadowAt(wx, wz);
-        if (hg > grassAccept * mMul) continue;
-        // Grass is a light-hungry plant: thin under a shut canopy, thick in the open. This
-        // is the layer that never asked coverAt() at all until round 16.
         const gCover = this.coverAt(wx, wz);
-        if (hg > grassAccept * mMul * (1 - GRASS_COVER_THIN * gCover)) continue;
-        if (hasRoad && roads.roadDistance(wx, wz) < exclude) continue;
+        const colony = smoothstep(0.30, 0.69, vnoise2(wx * 0.105, wz * 0.105, this.seed + 781));
+        const verge = 1 - smoothstep(exclude + 4, exclude + 12, roadD);
+        const accept = grassAccept * mMul * (1 - GRASS_COVER_THIN * gCover)
+          + 0.40 * verge * (0.16 + 0.84 * colony)
+          + grassAccept * 0.20 * colony * (1 - gCover * 0.5);
+        if (hg > Math.min(0.84, accept)) continue;
         if (this._travelWaterClear(wx, wz)) continue;
-        if (hasPad && wilds.padClear(wx, wz)) continue;
+        if (hasPad && (wilds.padClear(wx, wz) || wilds.padClear(wx + footprint, wz)
+          || wilds.padClear(wx - footprint, wz) || wilds.padClear(wx, wz + footprint)
+          || wilds.padClear(wx, wz - footprint))) continue;
+        let trunkOverlap = false;
+        for (let i = 0; i < trunks.length; i += 3) {
+          const dx = wx - trunks[i], dz = wz - trunks[i + 1], radius = trunks[i + 2] + footprint;
+          if (dx * dx + dz * dz < radius * radius) { trunkOverlap = true; break; }
+        }
+        if (trunkOverlap) continue;
         if (flats) {
           let onApron = false;
           for (let i = 0; i < flats.length; i++) {
             const fl = flats[i];
             const fdx = wx - fl.x, fdz = wz - fl.z;
-            const rr = fl.r * 0.86;
+            const rr = fl.r * 0.86 + footprint;
             const d2 = fdx * fdx + fdz * fdz;
             if (d2 >= rr * rr) continue;
             const inner = rr - EDGE_FEATHER;
@@ -3693,15 +3866,15 @@ export class Flora {
         const wy = terrain.heightAt(wx, wz);
         if (hasSupport && collision.supportHeight(wx, wz, wy + ROOF_OVER + 0.48, GRASS_PROBE_R, ROOF_PROBE_RISE) > wy + ROOF_OVER) continue;
         const yaw = hashI(ix, iz, this.seed + 24) * TAU;
-        const w = lerp(grassWidth[0], grassWidth[1], hashI(ix, iz, this.seed + 25));
-        const h = lerp(grassHeight[0], grassHeight[1], hashI(ix, iz, this.seed + 26));
+        const h = lerp(grassHeight[0], grassHeight[1], hashI(ix, iz, this.seed + 26) ** 1.35)
+          * (0.84 + colony * 0.16);
         const c = Math.cos(yaw), sn = Math.sin(yaw);
         const b = n * 16;
         mat[b] = c * w; mat[b + 2] = -sn * w;
         mat[b + 5] = h;
         mat[b + 8] = sn * w; mat[b + 10] = c * w;
         mat[b + 12] = wx; mat[b + 13] = wy - 0.04; mat[b + 14] = wz; mat[b + 15] = 1;
-        const v = 0.72 + hashI(ix, iz, this.seed + 27) * 0.56;
+        const v = 0.76 + hashI(ix, iz, this.seed + 27) * 0.40;
         // ART.md §2.1. This multiplier was 16, and that was a BUG, not a look.
         // PAL.grass is a linear albedo in the same family as the pines ground
         // ([0.096, 0.116, 0.08]); x16 made the instance colour 2.05, and
@@ -3720,7 +3893,9 @@ export class Flora {
         n++;
       }
     }
-    if (!n) { rec.grass = null; return; }
+    // An empty planting pass is a completed resident result too. City pads can
+    // reject every candidate; retrying that same work each step stalls the town.
+    if (!n) { rec.grass = null; rec.grassBuilt = true; return; }
 
     const mesh = new THREE.InstancedMesh(this.grassGeo, this.matGrass, n);
     mesh.name = 'flora-grass-' + rec.id;
@@ -3733,12 +3908,14 @@ export class Flora {
     mesh.updateMatrix();
     mesh.castShadow = false;
     mesh.receiveShadow = true;
-    this._setBounds(mesh, [ox, rec.bounds[1], oz, ox + CH, rec.bounds[1] + 2, oz + CH]);
+    this._setBounds(mesh, [ox - 1, rec.bounds[1] - 0.1, oz - 1, ox + CH + 1, rec.bounds[4] + 2, oz + CH + 1]);
     this.group.add(mesh);
     rec.grass = mesh;
+    rec.grassBuilt = true;
   }
 
   _dropGrass(rec) {
+    rec.grassBuilt = false;
     if (!rec.grass) return;
     this.group.remove(rec.grass);
     rec.grass.dispose();
@@ -4025,6 +4202,10 @@ export class Flora {
       if (lights.moon && lights.moon.color) {
         const i = clamp(lights.moon.intensity / Math.max(0.001, CFG.lights.moon.intensity), 0, 2);
         _tintCol.copy(lights.moon.color);
+        this.wind.uGlowAmt.value = 0.55 * i;
+        // The rim IS the moon: no moon, no silver edge.
+        this.wind.uRimAmt.value = 0.50 * i;
+        this.wind.uGlowColor.value.set(_tintCol.r * 0.72, _tintCol.g * 0.78, _tintCol.b * 0.86);
         this.impostors.setTint(0.55 + _tintCol.r * 0.45 * i, 0.55 + _tintCol.g * 0.45 * i, 0.55 + _tintCol.b * 0.45 * i);
       }
     }
@@ -4049,12 +4230,12 @@ export class Flora {
     for (const [sk, s] of this.supers) { s.dirty = true; this._dirtySupers.add(sk); }
   }
 
-  /** Drop and relay every resident grass card now, with no budget. For the A/B in
+  /** Drop and relay every resident grass result, including empty chunks, with no budget. For the A/B in
    *  tests/wilds.mjs after flipping roofExclude; never called by the game. */
   rebuildGrass() {
     let n = 0;
     for (const rec of this.chunks.values()) {
-      if (!rec.grass) continue;
+      if (!rec.grassBuilt && !rec.grass) continue;
       this._dropGrass(rec);
       this._buildGrass(rec);
       n++;
@@ -4095,7 +4276,7 @@ export class Flora {
       understory: {
         fern: this._underCount.fern, log: this._underCount.log,
         stump: this._underCount.stump, boulder: this._underCount.boulder,
-        litter: this._underCount.litter,
+        shrub: this._underCount.shrub,
       },
       understoryPass: {
         pending, chunks: P.chunks, ms: +P.ms.toFixed(1), maxMs: +P.maxMs.toFixed(2),

@@ -1,10 +1,31 @@
 import * as THREE from 'three';
 import {Kit} from './sites.js';
 import {projectPlaceSurfaceUVs} from './place-surfaces.js';
+import {clonePlaceMaterial} from './places.js';
+import {StationTimberKit,longitudinalWoodUV,bevelStock} from './station-exterior-geometry.js';
 import {OPENING as O,openingRoadPoint} from './opening-layout.js';
 
 const WOOD=[.125,.084,.05], PALE=[.28,.23,.15], IRON=[.064,.075,.082], RUST=[.13,.065,.034];
-const SOIL=[.07,.064,.047], STONE=[.13,.14,.138], _q=new THREE.Quaternion(),_v=new THREE.Vector3();
+const STONE=[.13,.14,.138], _q=new THREE.Quaternion(),_v=new THREE.Vector3();
+const TANK=[.075,.102,.103], ZINC=[.22,.235,.23], CUT=[.18,.126,.072];
+
+// Separate material ownership, with one merged mesh per actual substance.
+// Breakable fence ranges stay in the timber kit throughout the split.
+class OpeningExteriorKit extends Kit{
+  constructor(){super();this.channels={timber:new StationTimberKit(),metal:new Kit(),mineral:new Kit()};}
+  channel(col){return col===STONE?this.channels.mineral:
+    col===IRON||col===RUST||col===TANK||col===ZINC?this.channels.metal:this.channels.timber;}
+  at(g,col,x,y,z,ry,rx,rz){return this.channel(col).at(g,col,x,y,z,ry,rx,rz);}
+  box(w,h,d,x,y,z,col,ry,rx,rz){return this.channel(col).box(w,h,d,x,y,z,col,ry,rx,rz);}
+  push(g,col){return this.channel(col).push(g,col);}
+  open(){for(const k of Object.values(this.channels))k.open();return this;}
+  close(...args){for(const k of Object.values(this.channels))k.close(...args);return this;}
+}
+
+export function buildOpeningExterior(api,roads){
+  const k=new OpeningExteriorKit();tower(k,api);groundLoop(k,api,roads);
+  return Object.fromEntries(Object.entries(k.channels).map(([name,kit])=>[name,kit.build()]));
+}
 
 // All body-sized geometry and its collider come from the same dimensions.
 function box(k,api,w,h,d,x,y,z,col=WOOD,tag='wood',standable=true){
@@ -14,6 +35,7 @@ function box(k,api,w,h,d,x,y,z,col=WOOD,tag='wood',standable=true){
 function beam(k,a,b,width,col=WOOD){
   const v=new THREE.Vector3(b[0]-a[0],b[1]-a[1],b[2]-a[2]);
   const g=new THREE.BoxGeometry(width,v.length(),width);
+  if(col===WOOD||col===PALE)longitudinalWoodUV(g,1,a[0]*.17+a[2]*.11);
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));
   g.translate((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);k.push(g,col);
 }
@@ -90,7 +112,7 @@ function tower(k,api){
     k.box(2.16,.085,.10,x,y+h,z+4.81,PALE);
     for(const dx of [-.94,.94])k.box(.055,.46,.035,x+dx,y+h-.2,z+4.80,IRON);
   }
-  k.cyl(2.0,2.0,3.35,32,x,y+13.82,z,[.075,.102,.103]);
+  k.cyl(2.0,2.0,3.35,32,x,y+13.82,z,TANK);
   api.emit({kind:'circle',x,z,r:2,y0:y+12,y1:y+15.5,tag:'metal',standable:true});
   for(const h of [12.2,12.8,14.7,15.48])k.tube(2.05,2.05,.13,32,x,y+h,z,IRON);
   for(let i=0;i<32;i++){const a=i*Math.PI/16;k.cyl(.018,.018,3.2,4,x+Math.sin(a)*2.01,y+13.82,z+Math.cos(a)*2.01,IRON);}
@@ -107,26 +129,51 @@ function tower(k,api){
 
 function groundLoop(k,api,roads){
   const ground=(x,z)=>api.heightAt(api.wx(x,z),api.wz(x,z));
-  // The path hugs the natural ground. It is a footpath, not another drivable ribbon.
+  // Edge stones mark the loop. The apron and terrain own its continuous surface;
+  // a raised soil ribbon here would cover the forecourt with forest leaf litter.
   for(let n=1;n<O.path.length;n++){
     const a=O.path[n-1],b=O.path[n],len=Math.hypot(b[0]-a[0],b[1]-a[1]),steps=Math.ceil(len/.6);
     for(let i=0;i<steps;i++){
       const t=(i+.5)/steps,x=a[0]+(b[0]-a[0])*t,z=a[1]+(b[1]-a[1])*t;
       if(roads.roadDistance(api.wx(x,z),api.wz(x,z))<4.4)continue;
-      const gy=ground(x,z),r=1.15+.10*Math.sin(i*2.17);
-      k.cyl(r,r,.035,9,x,gy+.035,z,SOIL);
-      if(i%3===0)for(const s of [-1,1])k.box(.17,.08,.18,x+s*r,ground(x+s*r,z)+.04,z,STONE);
+      const r=1.15+.10*Math.sin(i*2.17),nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
+      if(i%5===0)for(const s of [-1,1]){
+        const ex=x+nx*s*r,ez=z+nz*s*r;k.box(.13,.045,.22,ex,ground(ex,ez)+.023,ez,STONE,i*.73);
+      }
     }
   }
   // Open timber woodstore: a dry recess, a bench, stacked split logs, and a reward within.
   const sx=2,sz=-20,y=ground(sx,sz);
   for(const dx of [-2,2])for(const dz of [-1.5,1.5])box(k,api,.20,2.45,.20,sx+dx,y+1.225,sz+dz,WOOD);
   box(k,api,4.3,.16,3.6,sx,y+2.5,sz,IRON,'metal');
-  for(let i=0;i<9;i++)k.box(.43,.07,3.72,sx-1.92+i*.48,y+2.62,sz,i%3?WOOD:RUST);
+  // Folded metal over a continuous deck, inside the original overhang and top.
+  k.at(bevelStock(4.28,.065,3.58,.022),ZINC,sx,y+2.612,sz);
+  for(const side of [-1,1]){
+    k.box(4.3,.19,.055,sx,y+2.48,sz+side*1.765,IRON);
+    k.box(.055,.19,3.55,sx+side*2.12,y+2.48,sz,IRON);
+    k.box(4.02,.18,.18,sx,y+2.29,sz+side*1.47,WOOD);
+  }
+  for(const dx of [-1.38,-.44,.53,1.43]){
+    k.box(.032,.018,3.55,sx+dx,y+2.645,sz,ZINC);
+    k.box(.10,.13,3.05,sx+dx,y+2.345,sz,WOOD);
+  }
   box(k,api,4.0,1.8,.14,sx,y+.9,sz-1.5,WOOD);
-  for(let i=0;i<11;i++)k.box(.09,1.9,.10,sx-1.9+i*.38,y+.95,sz-1.57,PALE);
-  for(let i=0;i<12;i++)k.cyl(.12,.14,1.25,7,sx-1.3,y+.15+Math.floor(i/3)*.24,sz-.7+(i%3)*.24,WOOD,0,0,Math.PI/2);
-  box(k,api,1.6,.65,1.2,sx-1.15,y+.32,sz-.5,WOOD);
+  for(let i=0;i<12;i++){
+    const h=1.74+(i%4)*.035,col=i%4===0?CUT:WOOD;
+    k.box(.316,h,.042,sx-1.825+i*.331,y+h*.5,sz-1.586,col);
+  }
+  // Real split ends and uneven courses, in the same log-stack volume.
+  for(let i=0;i<15;i++){
+    const row=Math.floor(i/5),slot=i%5,len=1.10+.13*Math.sin(i*2.3),radius=.125+(i%3)*.008;
+    const lx=sx-1.14,ly=y+.15+row*.205,lz=sz-.96+slot*.224;
+    k.cyl(radius,radius*.92,len,6,lx,ly,lz,WOOD,0,0,Math.PI/2);
+    for(const side of [-1,1])k.cyl(radius*.82,radius*.82,.008,6,lx+side*(len*.5+.005),ly,lz,CUT,0,0,Math.PI/2);
+  }
+  // Keep the original solid stack collision, but stop its opaque box hiding all
+  // of the separately shaped logs. The visible cradle sits inside that volume.
+  api.emit({kind:'obb',x:sx-1.15,z:sz-.5,halfX:1.6/2,halfZ:1.2/2,yaw:0,
+    y0:y+.32-.65/2,y1:y+.32+.65/2,tag:'wood',standable:true});
+  k.box(1.6,.06,1.2,sx-1.15,y+.03,sz-.5,WOOD);
   // A fallen trunk hides a box but leaves a generous approach on either end.
   const lx=29,lz=-20,ly=ground(lx,lz);
   k.cyl(.5,.35,4.8,11,lx,ly+.5,lz,[.073,.058,.04],0,0,Math.PI/2);
@@ -148,7 +195,7 @@ function groundLoop(k,api,roads){
     for(const side of[-1,1]){
       const wx=p.x-p.tz*side*(p.width*.5+.35),wz=p.z+p.tx*side*(p.width*.5+.35),dx=wx-O.x,dz=wz-O.z;
       const x=dx*cy-dz*sy,z=dx*sy+dz*cy;
-      k.box(.09,.022,1.3,x,ground(x,z)+.055,z,PALE,Math.atan2(p.tx,p.tz)-yaw);
+      (k.channels?.mineral||k).box(.09,.022,1.3,x,ground(x,z)+.055,z,PALE,Math.atan2(p.tx,p.tz)-yaw);
     }
   }
 }
@@ -162,10 +209,21 @@ export class Opening {
     const api=places._apiFor(n.def,n,'opening','station-opening');this.api=api;
     // The root uses the same local coordinates as the shop; geometry already carries Y.
     this.root.position.set(O.x,0,O.z);this.root.rotation.y=n.yaw;this.ctx.scene.add(this.root);
-    const k=new Kit();tower(k,api);groundLoop(k,api,this._sys('roads'));
-    const g=k.build();projectPlaceSurfaceUVs(g,2.6);this.geometries.push(g);
-    const mat=places.matBody.clone();mat.map=places.surfaceTextures.timber;mat.bumpMap=places.surfaceTextures['timber-bump'];
-    this.materials.push(mat);const mesh=new THREE.Mesh(g,mat);mesh.castShadow=true;mesh.receiveShadow=true;this.root.add(mesh);
+    const exterior=buildOpeningExterior(api,this._sys('roads'));
+    for(const [channel,g]of Object.entries(exterior)){
+      if(!g)continue;
+      const mat=clonePlaceMaterial(places.matBody);
+      if(channel==='metal'){
+        mat.map=places.smoothSteelSurface.albedo;mat.bumpMap=places.smoothSteelSurface.physical;mat.bumpScale=.007;
+      }else{
+        const family=channel==='timber'?'timber':'naturalRock';
+        mat.map=places.surfaceTextures[family];mat.bumpMap=places.surfaceTextures[family+'-bump'];
+      }
+      if(channel!=='timber')projectPlaceSurfaceUVs(g,4);
+      this.materials.push(mat);
+      const mesh=this._mesh(g,mat,'opening-exterior-'+channel);
+      mesh.castShadow=true;mesh.receiveShadow=true;
+    }
     this._trees();this._papers();this._room();this._lanterns();this._weather();
     if(this._sys('progress').flag('opening:night'))this.nightT=20;
     // THE ELEVEN REWIRE. Alex: "on a fresh game the car exists, parked in the Filling Station

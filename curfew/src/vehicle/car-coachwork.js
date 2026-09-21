@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {carSurfaces} from './car-surfaces.js';
 import {buildCarFittings} from './car-fittings.js';
+import {curvedSidePanel,pressedFrame} from './car-shell-geometry.js';
 
 const clamp=v=>Math.max(0,Math.min(1,v));
 function rounded(w,h,d,r=.035){
@@ -18,6 +19,25 @@ function rounded(w,h,d,r=.035){
   }return g;
 }
 
+// Upholstery needs a broad rolled edge, rather than the tiny enamel-panel bevel.
+// Concentrate the grid around each radius so a grazing cabin lamp catches a real
+// curved cushion, including the thin door pad. The maximum dimensions stay exact.
+function padded(w,h,d,r=.055){
+  r=Math.min(r,w*.46,h*.46,d*.46);
+  const g=new THREE.BoxGeometry(w,h,d,8,8,8),p=g.attributes.position,n=g.attributes.normal;
+  const v=new THREE.Vector3(),core=new THREE.Vector3();
+  for(let i=0;i<p.count;i++){
+    v.fromBufferAttribute(p,i);
+    for(const [axis,dim] of [['x',w],['y',h],['z',d]]){
+      const half=dim*.5,a=Math.abs(v[axis])/half;
+      v[axis]=Math.sign(v[axis])*(a<=.5?a*2*(half-r):(half-r)+(a-.5)*2*r);
+      core[axis]=Math.max(-half+r,Math.min(half-r,v[axis]));
+    }
+    v.sub(core).normalize();n.setXYZ(i,v.x,v.y,v.z);v.multiplyScalar(r).add(core);p.setXYZ(i,v.x,v.y,v.z);
+  }
+  return g;
+}
+
 export function buildCoachwork(spec){
   const {seed,door:doorAt,hinge,openMax,roofY,lampOffsets}=spec;
   const root=new THREE.Group();root.name='car';root.rotation.order='YXZ';
@@ -29,9 +49,25 @@ export function buildCoachwork(spec){
     let parts=group.get(mat);if(!parts)group.set(mat,parts=[]);parts.push(g);return g;
   };
   const box=(x,y,z,w,h,d,m=paint,rx=0,ry=0,rz=0,parent=root)=>collect(rounded(w,h,d),m,x,y,z,rx,ry,rz,parent);
+  const cushion=(x,y,z,w,h,d,m=leather,rx=0,ry=0,rz=0,parent=root)=>collect(padded(w,h,d),m,x,y,z,rx,ry,rz,parent);
+  const seam=(points,r=.0028,m=dark,parent=root)=>collect(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),Math.max(8,points.length*3),r,5,false),m,0,0,0,0,0,0,parent);
   const cylinder=(x,y,z,r,h,m=chrome,rx=0,rz=0,parent=root)=>collect(new THREE.CylinderGeometry(r,r,h,32),m,x,y,z,rx,0,rz,parent);
   const tube=(points,r,m=chrome,parent=root)=>collect(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),Math.max(8,points.length*8),r,8,false),m,0,0,0,0,0,0,parent);
   const sphere=(x,y,z,sx,sy,sz,m,parent=root)=>{const g=new THREE.SphereGeometry(1,32,16);g.scale(sx,sy,sz);return collect(g,m,x,y,z,0,0,0,parent);};
+  const frame=(a,b,width,depth,normal,m=paint,parent=root)=>collect(pressedFrame(a,b,{width,depth,bevel:Math.min(.008,depth*.2),normal}),m,0,0,0,0,0,0,parent);
+  // A pane is derived from its four frame corners, rather than a rotated rectangle
+  // whose lean and width disagree with the tapered steel aperture.
+  const pane=(corners,parent=root,bow=0,direction=[0,0,1])=>{
+    const g=new THREE.BufferGeometry(),p=[],uv=[],idx=[],nx=12,ny=6;
+    const c=corners.map(v=>new THREE.Vector3(...v)),a=new THREE.Vector3(),b=new THREE.Vector3(),q=new THREE.Vector3();
+    for(let y=0;y<=ny;y++)for(let x=0;x<=nx;x++){
+      const u=x/nx,v=y/ny;a.copy(c[0]).lerp(c[1],u);b.copy(c[3]).lerp(c[2],u);q.copy(a).lerp(b,v);
+      const k=bow*16*u*(1-u)*v*(1-v);p.push(q.x+direction[0]*k,q.y+direction[1]*k,q.z+direction[2]*k);uv.push(u,v);
+    }
+    for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){const a=y*(nx+1)+x,b=a+nx+1;idx.push(a,a+1,b,a+1,b+1,b);}
+    g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();collect(g,glass,0,0,0,0,0,0,parent);
+    for(let i=0;i<4;i++)collect(new THREE.TubeGeometry(new THREE.LineCurve3(c[i],c[(i+1)%4]),1,.006,6,false),rubber,0,0,0,0,0,0,parent);
+  };
   const flush=()=>{for(const [parent,groups]of batches)for(const [mat,parts]of groups){
     const flat=parts.map(g=>g.index?g.toNonIndexed():g),geo=mergeGeometries(flat,false);
     if(!geo)throw new Error('car coachwork merge failed: '+mat.name);
@@ -60,14 +96,20 @@ export function buildCoachwork(spec){
       const back=new THREE.Shape();back.moveTo(.30,.61);back.lineTo(.30,1.24);back.lineTo(1.91,1.22);back.quadraticCurveTo(2.12,1.15,2.10,.65);back.lineTo(1.83,.61);back.absarc(1.275,.4,.57,Math.PI*.13,Math.PI*.87,false);back.lineTo(.30,.61);panels.push(back);
       box(-.90,.685,-.205,.10,.11,1.01,paint);
     }else panels.push(shape);
-    for(const contour of panels){const g=new THREE.ExtrudeGeometry(contour,{depth:.08,bevelEnabled:true,bevelSize:.025,bevelThickness:.015,bevelSegments:3,curveSegments:28});g.rotateY(-Math.PI/2);collect(g,paint,side*.88,0,0);}
+    for(const contour of panels)collect(curvedSidePanel(contour,{side}),paint);
     // The seam and lower rubber rubbing strip follow the car rather than its lighting.
     box(side*.94,.71,0,.025,.045,1.22,rubber);
-    if(side>0){box(side*.937,1.035,-.33,.013,.046,1.20,rubber);box(side*.951,1.17,.06,.035,.027,.15,chrome);}
-    box(side*.94,1.04,1.22,.018,.047,1.27,rubber);
+    if(side>0){box(side*.966,1.035,-.33,.013,.046,1.20,rubber);box(side*.951,1.17,.06,.035,.027,.15,chrome);}
+    box(side*.966,1.04,1.22,.018,.047,1.27,rubber);
     for(const z of [-1.275,1.275]){
       const points=[];for(let i=0;i<=22;i++){const a=Math.PI*.12+i/22*Math.PI*.76;points.push([side*.951,.4+Math.sin(a)*.564,z+Math.cos(a)*.564]);}
-      tube(points,.022,chrome);box(side*.90,.38,z+.51,.07,.36,.065,rubber);
+      collect(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),32,.022,6,false),chrome);
+      box(side*.90,.38,z+.51,.07,.36,.065,rubber);
+      // A recessed, open wheelhouse joins the arch to the floor; the tyre retains
+      // its complete original swept volume and the opening is still the same cut.
+      const liner=new THREE.CylinderGeometry(.535,.535,.25,36,1,true,0,Math.PI);
+      for(let i=0;i<liner.index.count;i+=3){const b=liner.index.getX(i+1);liner.index.setX(i+1,liner.index.getX(i+2));liner.index.setX(i+2,b);}
+      liner.computeVertexNormals();liner.rotateZ(Math.PI*.5);collect(liner,rubber,side*.77,.4,z);
     }
     // Rain gutter, thin waist trim, roof rails and drain channels.
     tube([[side*.79,1.965,-.86],[side*.80,1.982,-.30],[side*.80,1.982,1.52],[side*.76,1.952,1.88]],.017,chrome);
@@ -107,18 +149,29 @@ export function buildCoachwork(spec){
   box(0,1.924,.47,1.48,.018,2.69,dark);
   box(0,1.914,-.97,1.51,.041,.048,chrome);box(0,1.245,-1.09,1.75,.053,.082,dark);
   for(const side of [-1,1]){
-    tube([[side*.881,1.24,-1.067],[side*.743,1.899,-.978]],.028,paint);
-    tube([[side*.86,1.25,1.955],[side*.754,1.907,1.831]],.035,paint);
-    tube([[side*.917,1.244,.34],[side*.797,1.95,.29]],.022,paint);
-    tube([[side*.915,1.244,1.13],[side*.797,1.95,1.10]],.018,paint);
+    frame([side*.881,1.24,-1.067],[side*.743,1.899,-.978],.054,.048,[side,0,0]);
+    frame([side*.86,1.25,1.955],[side*.754,1.907,1.831],.082,.058,[side,0,0]);
+    frame([side*.917,1.244,.34],[side*.797,1.95,.29],.060,.048,[side,0,0]);
+    frame([side*.915,1.244,1.13],[side*.797,1.95,1.10],.047,.041,[side,0,0]);
     // Side windows are quadrilateral planes with the taper of the actual roof.
-    const window=(z0,z1)=>{
-      const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([side*.91,1.275,z0,side*.91,1.275,z1,side*.79,1.91,z1-.03,side*.79,1.91,z0+.03],3));g.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();collect(g,glass);
-    };if(side>0)window(-.96,.28);window(.38,1.07);window(1.16,1.84);
+    if(side>0)pane([[.899,1.276,-1.026],[.907,1.276,.300],[.790,1.916,.262],[.748,1.887,-.945]],root,.003,[1,0,0]);
+    pane([[side*.909,1.278,.382],[side*.907,1.278,1.095],[side*.791,1.916,1.070],[side*.792,1.916,.326]],root,.003,[side,0,0]);
+    pane([[side*.907,1.278,1.166],[side*.854,1.278,1.911],[side*.754,1.886,1.805],[side*.791,1.916,1.131]],root,.003,[side,0,0]);
   }
-  const front=new THREE.PlaneGeometry(1.57,.66);collect(front,glass,0,1.586,-1.037,-.137);
-  const rear=new THREE.PlaneGeometry(1.49,.64);collect(rear,glass,0,1.58,1.922,.18);
-  box(0,.994,2.066,1.73,.47,.11,paint);box(0,.741,2.15,1.84,.10,.10,chrome);
+  pane([[-.847,1.278,-1.062],[.847,1.278,-1.062],[.714,1.886,-.979],[-.714,1.886,-.979]],root,.008,[0,0,-1]);
+  pane([[-.825,1.282,1.943],[.825,1.282,1.943],[.719,1.885,1.836],[-.719,1.885,1.836]],root,.006,[0,0,1]);
+  frame([-.747,1.909,1.831],[.747,1.909,1.831],.054,.044,[0,0,1]);
+  frame([-.854,1.255,1.951],[.854,1.255,1.951],.043,.040,[0,0,1]);
+  loft([[1.924,1.25,.837,0],[1.990,1.231,.866,.008],[2.086,1.219,.850,.012]],paint);
+  // A stamped tailgate has a shallow crown, returned edges and a recessed plate
+  // field. Its lamps, handle and bumper keep their original attachment points.
+  const tail=new THREE.BoxGeometry(1.73,.47,.065,24,12,1),tp=tail.attributes.position;
+  for(let i=0;i<tp.count;i++){
+    const x=tp.getX(i),y=tp.getY(i),z=tp.getZ(i),sx=x/.865,sy=y/.235;
+    if(z>0){const crown=.032*(1-sx*sx)*(1-sy*sy),recess=.018*Math.exp(-Math.pow(x/.31,6)-Math.pow((y+.004)/.10,6));tp.setZ(i,z+crown-recess);}
+    tp.setX(i,x*(1-.018*Math.pow(Math.abs(sy),4)));
+  }
+  tail.computeVertexNormals();collect(tail,paint,0,.994,2.070);box(0,.741,2.15,1.84,.10,.10,chrome);
   box(0,.99,2.131,.39,.15,.016,dark);box(0,1.139,2.138,.27,.027,.019,chrome);
   const tailMat=new THREE.MeshStandardMaterial({color:0x6c160d,emissive:0xff3820,emissiveIntensity:0,roughness:.32});tailMat.name='car-tail-lamps';extraMaterials.push(tailMat);
   for(const x of [-.73,.73]){box(x,1.04,2.135,.155,.255,.036,rubber);box(x,1.08,2.158,.119,.134,.019,tailMat);box(x,.971,2.158,.119,.047,.018,warm);for(let i=0;i<6;i++)box(x,1.03+i*.022,2.172,.108,.003,.002,chrome);}
@@ -128,25 +181,85 @@ export function buildCoachwork(spec){
   // Hinged driver's door includes its own window and interior card.
   const door=new THREE.Group();door.name='car-door';door.position.set(hinge.x,hinge.y,hinge.z);root.add(door);
   const doorShape=new THREE.Shape([new THREE.Vector2(.02,1.205),new THREE.Vector2(1.22,1.24),new THREE.Vector2(1.22,.74),new THREE.Vector2(.25,.74),new THREE.Vector2(.02,.91)]);
-  const doorSkin=new THREE.ExtrudeGeometry(doorShape,{depth:.075,bevelEnabled:true,bevelSize:.015,bevelThickness:.01,bevelSegments:3});doorSkin.rotateY(-Math.PI/2);collect(doorSkin,paint,.025,0,0,0,0,0,door);
-  box(-.062,1.04,.611,.018,.047,1.17,rubber,0,0,0,door);
+  const doorSkin=curvedSidePanel(doorShape,{side:-1,longitudinalProfile:null});doorSkin.translate(-hinge.x,0,0);collect(doorSkin,paint,0,0,0,0,0,0,door);
+  box(-.073,1.04,.611,.018,.047,1.17,rubber,0,0,0,door);
   box(-.077,1.17,1.005,.035,.027,.15,chrome,0,0,0,door);
-  box(.052,1.021,.61,.035,.34,1.08,leather,0,0,0,door);
-  box(.097,1.142,.77,.087,.05,.26,dark,0,0,0,door);
-  const frame=[[0,1.242,.0],[.12,1.918,.03],[.115,1.927,1.19],[-.01,1.244,1.21]];
-  for(let i=1;i<frame.length;i++)tube([frame[i-1],frame[i]],.021,paint,door);
-  const doorWindow=new THREE.BufferGeometry();doorWindow.setAttribute('position',new THREE.Float32BufferAttribute([0,1.278,.025,0,1.278,1.18,.108,1.90,1.16,.108,1.90,.052],3));doorWindow.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));doorWindow.setIndex([0,1,2,0,2,3]);doorWindow.computeVertexNormals();collect(doorWindow,glass,0,0,0,0,0,0,door);
+  // The door card is a moulded, layered part: the pocket and handles stand off a
+  // contoured backing, while a padded insert rolls into the window ledge.
+  const cardShape=new THREE.Shape();cardShape.moveTo(.12,1.184);cardShape.lineTo(1.125,1.214);
+  cardShape.quadraticCurveTo(1.17,1.212,1.17,1.165);cardShape.lineTo(1.17,.823);
+  cardShape.quadraticCurveTo(1.17,.790,1.12,.790);cardShape.lineTo(.27,.790);
+  cardShape.quadraticCurveTo(.20,.792,.13,.922);cardShape.quadraticCurveTo(.10,.969,.10,1.13);
+  cardShape.quadraticCurveTo(.10,1.18,.12,1.184);
+  const card=new THREE.ExtrudeGeometry(cardShape,{depth:.022,bevelEnabled:true,bevelSize:.012,bevelThickness:.006,bevelSegments:3,curveSegments:8});
+  card.rotateY(-Math.PI/2);collect(card,leather,.084,0,0,0,0,0,door);
+  seam([[.091,1.179,.15],[.091,1.196,.65],[.091,1.207,1.115],[.091,1.17,1.158],[.091,.83,1.158],[.091,.802,1.105],[.091,.802,.29],[.091,.934,.145],[.091,1.13,.118],[.091,1.179,.15]],.004,rubber,door);
+  cushion(.106,1.137,.69,.045,.112,.83,leather,0,0,0,door);
+  seam([[.131,1.090,.28],[.132,1.084,.60],[.131,1.100,1.06]],.0027,dark,door);
+  // Recessed latch, padded pull, window crank and the shadow inside a real pocket.
+  box(.106,1.142,.285,.012,.055,.15,dark,0,0,0,door);
+  box(.122,1.143,.28,.018,.016,.102,chrome,0,0,0,door);
+  for(const z of [.53,.87])box(.104,1.021,z,.032,.045,.047,dark,0,0,0,door);
+  cushion(.116,1.048,.70,.056,.054,.39,leather,0,0,0,door);
+  seam([[.146,1.047,.54],[.147,1.061,.62],[.147,1.061,.82],[.146,1.047,.87]],.0025,dark,door);
+  cylinder(.117,1.015,.25,.020,.026,chrome,0,Math.PI/2,door);
+  tube([[.134,1.015,.25],[.147,.993,.29],[.148,.972,.34]],.008,chrome,door);
+  cushion(.158,.972,.34,.040,.040,.047,dark,0,0,0,door);
+  box(.106,.876,.79,.018,.092,.49,dark,0,0,0,door);
+  cushion(.143,.844,.79,.068,.080,.54,leather,0,0,0,door);
+  seam([[.182,.875,.53],[.184,.884,.58],[.184,.884,1.01],[.181,.87,1.05]],.004,leather,door);
+  // Speaker slats and small fasteners use the door's existing material batches.
+  cylinder(.101,.943,.22,.061,.012,dark,0,Math.PI/2,door);
+  collect(new THREE.TorusGeometry(.061,.004,6,24),chrome,.109,.943,.22,0,Math.PI/2,0,door);
+  for(let k=-4;k<=4;k++){const y=k*.010,dz=Math.sqrt(.052*.052-y*y);box(.114,.943+y,.22,.004,.003,dz*2,rubber,0,0,0,door);}
+  for(const [y,z] of [[1.16,.14],[1.19,1.12],[.825,1.10],[.835,.29]])collect(new THREE.CylinderGeometry(.006,.006,.004,10),chrome,.099,y,z,0,0,Math.PI/2,door);
+  for(const y of [.94,1.15]){
+    box(.012,y,.055,.067,.032,.065,paint,0,0,0,door);
+    cylinder(.037,y,.037,.017,.064,chrome,0,0,door);
+    for(const dy of [-.027,.027])box(.037,y+dy,.037,.041,.008,.041,dark,0,0,0,door);
+  }
+  const doorFrame=[[0,1.242,.0],[.12,1.918,.03],[.115,1.927,1.19],[-.01,1.244,1.21]];
+  for(let i=1;i<doorFrame.length;i++)frame(doorFrame[i-1],doorFrame[i],.036,.031,[-1,0,0],paint,door);
+  box(.034,1.267,.61,.042,.030,1.10,rubber,0,0,0,door);
+  pane([[.004,1.278,.030],[.004,1.278,1.178],[.109,1.901,1.164],[.111,1.895,.054]],door,.002,[-1,0,0]);
   box(.05,.80,.62,.018,.02,.62,warm,0,0,0,door);box(-.83,.73,-.33,.035,.023,1.09,warm);
   // Cabin: soft-edged leather bolsters, stitch seams and satin dashboard.
-  box(0,.735,.44,1.62,.035,3.03,rubber);box(0,1.25,-1.053,1.58,.12,.24,dark);
+  tube([[-.892,.758,-.67],[-.889,.752,.26],[-.886,1.23,.314],[-.789,1.91,.277]],.012,rubber);
+  box(-.809,.749,-.27,.17,.014,.92,dark);
+  for(let n=0;n<5;n++)box(-.872+n*.028,.759,-.27,.008,.008,.84,chrome);
+  box(0,.735,.44,1.62,.035,3.03,rubber);cushion(0,1.25,-1.053,1.58,.12,.24,dark);
   box(0,1.155,-.976,1.53,.18,.08,leather);box(0,1.275,-.935,1.53,.014,.016,chrome);
-  for(const x of [-.43,.43]){
-    box(x,.99,-.21,.62,.15,.55,leather);box(x,1.26,.035,.62,.46,.16,leather,-.13);
-    for(const side of [-1,1]){sphere(x+side*.256,1.04,-.18,.063,.088,.27,leather);sphere(x+side*.254,1.265,.016,.060,.235,.085,leather);}
-    box(x,1.554,.075,.28,.13,.12,leather);
-    for(let n=-2;n<=2;n++)box(x+n*.085,1.255,-.062,.005,.30,.005,dark,-.13);
+  // The facing door and rear cabin have trim below the glass, not bare exterior
+  // sheet metal. Thin rolled ledges keep the original window apertures clear.
+  cushion(.817,1.075,-.27,.028,.225,1.04,leather);
+  cushion(.779,1.046,-.21,.054,.052,.39,leather);
+  box(.795,1.152,-.57,.013,.024,.11,chrome);
+  for(const side of [-1,1]){
+    cushion(side*.835,1.112,1.08,.030,.18,1.35,leather);
+    box(side*.840,1.233,1.08,.043,.023,1.37,rubber);
+    seam([[side*.816,1.032,.46],[side*.814,1.028,1.04],[side*.816,1.036,1.65]],.003,dark);
   }
-  box(0,.98,1.09,1.41,.14,.49,leather);box(0,1.215,1.37,1.41,.36,.15,leather,-.15);
+  seam([[.27,1.212,-.930],[.71,1.212,-.930],[.73,1.19,-.930],[.73,1.105,-.930],[.27,1.105,-.930]],.003,dark);
+  box(.50,1.195,-.916,.085,.012,.021,chrome);
+  for(const x of [-.43,.43]){
+    cushion(x,.99,-.21,.62,.15,.55,leather);cushion(x,1.26,.035,.62,.46,.16,leather,-.13);
+    for(const side of [-1,1]){sphere(x+side*.256,1.04,-.18,.063,.088,.27,leather);sphere(x+side*.254,1.265,.016,.060,.235,.085,leather);}
+    for(const side of [-1,1])cylinder(x+side*.089,1.502,.075,.009,.10,chrome);
+    cushion(x,1.563,.075,.31,.15,.15,leather);
+    for(let n=-2;n<=2;n++){
+      seam([[x+n*.083,1.065,-.405],[x+n*.083,1.069,-.26],[x+n*.083,1.066,-.09]],.0024,dark);
+      seam([[x+n*.083,1.094,-.026],[x+n*.083,1.26,-.048],[x+n*.083,1.43,-.070]],.0026,dark);
+    }
+    for(const side of [-1,1]){
+      seam([[x+side*.25,1.053,-.415],[x+side*.273,1.095,-.28],[x+side*.273,1.086,-.08],[x+side*.253,1.062,.048]],.0035,dark);
+      seam([[x+side*.24,1.067,-.066],[x+side*.288,1.15,-.058],[x+side*.288,1.36,-.031],[x+side*.24,1.474,.002]],.0035,dark);
+    }
+    seam([[x-.12,1.568,.003],[x-.095,1.619,.016],[x+.095,1.619,.016],[x+.12,1.568,.003]],.0024,dark);
+    // Buckles, adjustment rail and seat-back hinge tie the soft parts to the car.
+    box(x+.29,.939,-.02,.034,.09,.055,dark);box(x+.29,.984,-.021,.024,.014,.030,chrome);
+    for(const side of [-1,1]){box(x+side*.23,.867,-.20,.034,.04,.45,dark);cylinder(x+side*.294,1.09,.008,.033,.014,dark,0,Math.PI/2);}
+  }
+  cushion(0,.98,1.09,1.41,.14,.49,leather);cushion(0,1.215,1.37,1.41,.36,.15,leather,-.15);
   box(0,.895,1.78,1.56,.055,.62,dark);
   for(let n=-5;n<=5;n++)box(n*.115,1.21,1.279,.005,.23,.005,dark,-.15);
   box(0,.88,-.39,.14,.24,.80,dark);cylinder(.04,1.063,-.58,.012,.24,chrome,-.23);sphere(.04,1.184,-.611,.029,.034,.029,leather);
@@ -215,11 +328,13 @@ export function buildCoachwork(spec){
   // (z 1.845) the quarter runs clean from y 0.61 to the waist, so the filler door goes
   // there: a portrait door on the rear quarter, which is where an estate keeps one anyway.
   const fillerRing=new THREE.MeshStandardMaterial({color:0x1d2426,emissive:0xffcf8e,emissiveIntensity:0,roughness:.42,metalness:.55});fillerRing.name='car-filler-ring';extraMaterials.push(fillerRing);
-  const FX=.900,FY=.95,FZ=1.93;
+  // The pressing now rolls outward here. Keep the fixture's Y/Z and gameplay
+  // target, and stand its backing off the new shoulder rather than burying it.
+  const FX=.935,FY=.95,FZ=1.93;
   box(FX,FY,FZ,.026,.360,.230,dark,0,0,0);                       // the shadow gap round it
   box(FX+.020,FY,FZ,.026,.310,.185,chrome,0,0,0);                // the door, proud and pale
   cylinder(FX+.038,FY,FZ,.082,.022,dark,0,Math.PI/2);            // the recess the cap sits in
-  collect(new THREE.TorusGeometry(.082,.013,8,26),fillerRing,FX+.052,FY,FZ,0,0,Math.PI/2);
+  collect(new THREE.TorusGeometry(.082,.013,8,26),fillerRing,FX+.052,FY,FZ,0,Math.PI/2,0);
   cylinder(FX+.058,FY,FZ,.064,.024,chrome,0,Math.PI/2);          // the cap itself
   for(let n=0;n<6;n++){const a=n/6*Math.PI*2;box(FX+.070,FY+Math.sin(a)*.040,FZ+Math.cos(a)*.040,.010,.018,.018,dark,0,0,0);}
   cylinder(FX+.072,FY,FZ,.019,.012,dark,0,Math.PI/2);

@@ -42,9 +42,22 @@ export const CFG = {
     far: 900,
     exposure: 1.15,         // ACESFilmic
     shadow: {
-      size: 2048,           // sharper branch, rail and boss silhouettes at desktop resolution
-      distance: 70,         // casters only inside this radius [design §8]
-      torchSize: 1024,
+      // MEASURED 2026-09-20 in the densest understory pose, torch on, vsync off, nothing
+      // else on the GPU (tools/_shadowcost.mjs, not kept). The whole frame was 33.0 ms;
+      // skipping the shadow pass took it to 24.0. Of that 9 ms, the MOON MAP'S RESOLUTION
+      // was 4.6 on its own - 2048 cost 30.4 ms and 1024 cost 25.8 - while dropping again
+      // to 512 bought only 0.4 more, and the torch's own 1024 was worth 0.3. That shape
+      // says the cost is FILL, not casters: the county's foliage is alpha-tested, so every
+      // leaf card runs a real fragment shader and discards inside the depth pass, and four
+      // times the shadow texels is four times that work.
+      //
+      // So the map halves and the box halves with it, and the texel gets FINER rather than
+      // coarser: 140 m over 2048 was 6.8 cm, 96 m over 1024 is 9.4 cm at the near end where
+      // a shadow is read, against 13.7 cm if the box had been left alone. Casters past 48 m
+      // lose their moon shadow, which at this fog density is about half dissolved already.
+      size: 1024,
+      distance: 48,         // casters only inside this radius [design §8]
+      torchSize: 1024,      // measured worth 0.3 ms; leave it
     },
     bloom: { strength: 0.22, radius: 0.5, threshold: 1.05 },  // [vigil post]
     grade: {
@@ -560,8 +573,10 @@ export const CFG = {
     // ('the house feels empty' meant lighting, twice). A sweep of hemi/ambient/albedo
     // against the ground and treeline bands settled here: ground 27, treeline 20, under
     // 8% black. Dark enough to want the torch, light enough to read as shape.
-    hemi:  { sky: 0x6b82ad, ground: 0x241f18, intensity: 6.8 },
-    ambient: { colour: 0x44556e, intensity: 1.55 },
+    // Cool silver skylight preserves the original fill luminance while letting
+    // stone, bark and snow retain their own colour instead of one blue wash.
+    hemi:  { sky: 0x93a2b0, ground: 0x241f18, intensity: 4.4 },
+    ambient: { colour: 0x73808e, intensity: 0.66 },
     // ROUND 16, THE LIGHT LANE — "LIGHT POOLS WITH REAL LIGHT AND SHADOW SIDES".
     //
     // Every lamp in the county that is a LIGHT rather than an emissive panel is a borrowed
