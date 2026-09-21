@@ -112,6 +112,7 @@ export const SPECIES = {
      an attack DURING a pause — move OR attack, never both.
      donor: vigil/src/enemies/species.js:16-24 (thrall) — Alex played this. */
   hound: {
+    eyeshine: true,              // an animal's eyes are a mirror; see bodies.js eyeshine()
     id: 'hound', form: FORM.QUADRUPED, owner: OWNER.PRESSURE, xp: 20,
     phases: ALL_PHASES,
     hp: 55, dmg: 22, radius: 0.42, height: 1.10, mass: 46,
@@ -332,6 +333,7 @@ export const SPECIES = {
      the longest thing on it — the wings come up and hold, which is a silhouette change you
      can read at range in the dark, and it is 0.46 s against the law's 0.32. */
   moth: {
+    eyeshine: true,              // an animal's eyes are a mirror; see bodies.js eyeshine()
     id: 'moth', form: FORM.MOTH, owner: OWNER.PRESSURE, xp: 55,
     phases: ALL_PHASES,
     hp: 62, dmg: 20, radius: 0.46, height: 1.15, mass: 24,
@@ -374,6 +376,7 @@ export const SPECIES = {
      engage[0] is 4 m: inside that it is too close to launch and rings back out first,
      which is the "overshoot and circle" Alex will actually see. */
   runner: {
+    eyeshine: true,              // an animal's eyes are a mirror; see bodies.js eyeshine()
     id: 'runner', form: FORM.QUADRUPED, owner: OWNER.PRESSURE, xp: 70,
     phases: NIGHT_ONLY,
     hp: 40, dmg: 24, radius: 0.40, height: 0.80, mass: 34,
@@ -419,6 +422,7 @@ export const SPECIES = {
      The director's roster does not name it and it is not DREAD, so nothing spawns one in the
      open: only a nest does. */
   spider: {
+    eyeshine: true,              // an animal's eyes are a mirror; see bodies.js eyeshine()
     id: 'spider', form: FORM.SPIDER, owner: OWNER.PRESSURE, xp: 60,
     phases: ALL_PHASES,
     hp: 75, dmg: 18, radius: 0.56, height: 0.92, mass: 60,
