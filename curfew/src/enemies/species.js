@@ -153,6 +153,10 @@ export const SPECIES = {
     deathNoise: 34,                         // popping is loud: wakes 30-40 m
     countsAs: 1,
     eye: 0xbfd2e8, cloth: 0x14161a, skin: 0x1b1a18, bone: 0x3a3630,
+    // A CANDLE ON THE BIER. Cold, weak and low - it lights the load it is carrying and
+    // almost nothing else, so what you see coming is the thing on the stretcher rather
+    // than the thing carrying it.
+    carry: { colour: 0xcfe2ff, intensity: 3.8, decay: 1.75, x: -0.02, y: 1.34, z: 0.30 },
   },
 
   /* -------------------------------------------------------------- HUNTER --
@@ -203,6 +207,13 @@ export const SPECIES = {
     deathNoise: 18,
     countsAs: 1,
     eye: 0xffcf8a, cloth: 0x181614, skin: 0x241f1c, bone: 0x38332c,
+    // IT CARRIES A LAMP. Nothing in this county has ever carried its own light, and a
+    // light moving through the trees that is not yours is the most frightening thing a
+    // night forest has. It also tells the truth about this one: the poacher is the only
+    // ordinary man out here, and a man hunting at night carries a lamp. It reads as a
+    // person long before it reads as a threat, which is worse. Hung off the pack, on the
+    // side the sling is not.
+    carry: { colour: 0xffb469, intensity: 5.2, decay: 1.25, x: 0.26, y: 1.08, z: -0.14 },
   },
 
   /* ---------------------------------------------------------------- PALE --
