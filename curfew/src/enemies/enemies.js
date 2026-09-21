@@ -194,6 +194,8 @@ const BREAKOFF_MUL = 1.75;
 const RECOMMIT_MISS = 0.85;       // a whiff costs less than a landed bite
 const RING_SPIN = 0.30;           // rad/s: 0.55x a circling body, so the ring drifts
 const FLINCH_BUDGET = 0.180;      // seconds between body flinches, so a burst is not a seizure
+const OFFICER_GO_S = 0.7;      // s the Pale takes to be taken
+const OFFICER_GO_RISE = 2.4;   // m it climbs while it folds
 const STAGGER_T = 0.620, STAGGER_IMMUNITY = 2.2, STAGGER_WINDOW = 0.40;
 const STAGGER_FRACTION = 0.35;    // of max hp inside the window
 const DEATH_GLOW_S = 2.6;         // the law: dead-vs-alive must read across a field
@@ -1608,7 +1610,7 @@ export class Enemies {
 
     e.alive = true;
     e.dead = false;
-    e.goingHome=false;e.homecomingT=0;e.departSink=0;e.officerSeen=false;e.officerGaze=0;e.wardenWorkT=0;
+    e.goingHome=false;e.homecomingT=0;e.departSink=0;e.officerSeen=false;e.officerGaze=0;e.officerGoT=0;e.wardenWorkT=0;
     // C14 (2026-09-17): an authored person's face, palette and hair. The PEOPLE lane's human
     // rig record answers setAppearance(look); every other rig has no such method and is left
     // alone. Right after the body is bound, before anything reads it.
@@ -2344,7 +2346,15 @@ export class Enemies {
     const seen=e.dist<60&&observed(this.ctx,e.pos.x,eye,e.pos.z,.92,60);
     if(seen&&!e.officerSeen){e.officerSeen=true;this.ctx.bus.emit('lore:sighting',{species:'pale'});}
     e.officerGaze=seen?(e.officerGaze||0)+dt:0;
-    if(e.dist<12||e.officerGaze>=1.5)this._release(e);
+    // ALEX, 2026-09-21: "the ones that disappear on the road and stuff should actually not
+    // disappear more instantly. they should have an animation." This line used to be a bare
+    // _release: the Pale stopped existing between two frames, inside 12 m, in full view. It
+    // now WITHDRAWS - taken straight up, folding as it goes (present() reads officerGoT) -
+    // and is only released when there is nothing left to see.
+    if(e.officerGoT>0||e.dist<12||e.officerGaze>=1.5){
+      e.officerGoT=(e.officerGoT||0)+dt;
+      if(e.officerGoT>=OFFICER_GO_S)this._release(e);
+    }
   }
 
   _stepHomecoming(e, dt, p) {
@@ -4412,6 +4422,14 @@ export class Enemies {
         g.rotation.x=-Math.PI*.5*clamp01(e.homecomingT/3);
         g.position.y+=.14*clamp01(e.homecomingT/3);
       }
+      // THE PALE'S WITHDRAWAL. Eased in, so it hangs for an instant and then goes: it is
+      // being taken, not walking off. The fold keeps its feet with it rather than stretching
+      // the body away from the ground.
+      if(e.officerGoT>0){
+        const k=clamp01(e.officerGoT/OFFICER_GO_S),q=k*k;
+        g.position.y+=q*OFFICER_GO_RISE;
+        g.scale.y*=1-q*0.55;
+      }
       if (e.flinchT < 0.35) {
         const f = e.flinchT < 0.09 ? e.flinchT / 0.09 : 1 - (e.flinchT - 0.09) / 0.26;
         g.position.x += e.flinch.x * f;
@@ -4722,7 +4740,7 @@ function makeRecord(id, species, def, built, rng) {
     // 2026-09-17.
     //   carHoldT        seconds an INCAR_BLOCKED body has spent at a shut car door (D12)
     //   standingStepT / lastSeenDist / witnessCd / obsPrev   the Standing Kind's ears (Horror 15)
-    carHoldT: 0, officerSeen: false, officerGaze: 0, goingHome: false, homecomingT: 0, departSink: 0, wardenWorkT: 0,
+    carHoldT: 0, officerSeen: false, officerGaze: 0, officerGoT: 0, goingHome: false, homecomingT: 0, departSink: 0, wardenWorkT: 0,
     standingStepT: 0, lastSeenDist: -1, witnessCd: 0, obsPrev: false,
     slot: -1,
     // Where this body was last hurt, and whether it was hurt by a swing. Both

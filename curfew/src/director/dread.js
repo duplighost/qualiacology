@@ -47,6 +47,7 @@
 // three different values, which is how a budget stops meaning anything.
 
 import * as THREE from 'three';
+import { VISIONS, buildVisionAtlas, cellOffset, ATLAS_COLS, ATLAS_ROWS } from './visions.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import CFG from '../config.js';
 import { clamp, clamp01, TAU } from '../engine/math.js';
@@ -99,8 +100,22 @@ export const DREAD_TABLE = Object.freeze({
   watcherMin: 16, watcherMax: 26,      // [eaten-path events.js:425]
   watcherGone: 8,                      // the withdrawal distance — the gut punch
   watcherTtlMin: 9, watcherTtlMax: 16, // [eaten-path events.js:436]
-  watcherFade: 0.35,                   // [eaten-path events.js:456]
+  watcherFade: 0.62,                   // was 0.35 [eaten-path events.js:456]; see watcherDrop
   watcherDwell: 2.6,                   // seconds of held attention before it lets go
+  // ALEX, 2026-09-21: "it would be cool if they all did that scary thing that happens at the
+  // beginning of the game. like when leaving the garage one always pops up like, from the top
+  // in a scary way" — and "the ones that disappear on the road and stuff should actually not
+  // disappear more instantly. they should have an animation."
+  //
+  // So the watcher ARRIVES and LEAVES instead of switching on and off. It comes down out of
+  // the dark over the road the way the opening's drop comes out of the gable, and when it
+  // goes it is TAKEN UPWARD rather than deleted: the fade is the same dissolve it always
+  // had, but it is climbing while it dissolves, so the last thing you see is it going up.
+  // Both are short on purpose. A slow drop is a lift arriving; this is 0.26 s.
+  watcherDrop: 3.6,                    // m above its stand that it falls from
+  watcherDropS: 0.26,                  // s of fall, eased out hard so it lands rather than floats
+  watcherRise: 2.2,                    // m it climbs while it dissolves
+  watcherLandHush: 0.16,               // s of world-hush the landing buys
   runnerAheadMin: 12, runnerAheadMax: 20,  // [eaten-path events.js:479]
   runnerDurMin: 0.7, runnerDurMax: 1.1,    // [eaten-path events.js:485]
   runnerHalf: 6.5,                     // metres either side of the crossing point
@@ -152,7 +167,7 @@ export const DREAD_TABLE = Object.freeze({
   // from the car it stands on the verge 48-72 m ahead and the withdrawal is the PASSING.
   watcherCarMin: 48, watcherCarMax: 72,
   watcherCarLat: [3.0, 5.5],           // m off the road heading: the verge, not the lane
-  watcherCarFade: 0.12,                // s: gone the frame it leaves the cone, not a dissolve
+  watcherCarFade: 0.34,                // was 0.12 and read as a cut; it now climbs as it goes
   // D3: the watcher withdraws under a HELD torch beam — base behaviour (was the Resolve perk).
   // Longer than the perk's dwell was: 3.5 s of beam before it gives, and it gives as a withdrawal.
   watcherResolveS: 3.5,
@@ -170,6 +185,23 @@ export const DREAD_TABLE = Object.freeze({
   mirageEveryS: 720, miragePerCycle: 2,
   mirageRoadMin: 60, mirageCoverMin: 0.6, miragePlaceClear: 120,
   mirageGone: 14,
+  // THE VISIONS (visions.js). A separate, looser family from the two built mirages above:
+  // they cost one quad, they can never be walked into, and Alex asked for them to be a
+  // REGULAR feature of the woods rather than a twice-a-night event - "a few things like
+  // that. but variety. you can't get the same one too often." So the clock is minutes
+  // rather than the mirage family's twelve, the budget is per night, and a ring of the
+  // last two shown is refused outright: with six pictures that is a one-in-four repeat at
+  // worst and never twice running.
+  visionEveryS: 165, visionPerCycle: 7, visionNoRepeat: 2,
+  visionAheadMin: 30, visionAheadMax: 66,   // m: past the trunks, inside the fog's reach
+  visionLatMax: 42,                          // m off the bearing, so it is not always dead ahead
+  visionRoadMin: 22, visionCoverMin: 0.34,   // woods, but not the deep-cover gate the oasis needs
+  visionWidth: [16, 27],                     // m across; the quad is square and sits on the ground
+  visionRetries: 40,                         // more than refuseRetries: a clear sightline in closed pines is rare
+  visionRise: 0.42,                          // of its width, how far its foot sits below eye level
+  visionIn: 1.7, visionOut: 2.2,             // s to arrive and to stop having been there
+  visionPeak: 0.82,                          // the most opaque a lie is allowed to be
+  visionDrift: 0.012,                        // uv/s of sway, the hazy-video wobble
   oasisAheadMin: 45, oasisAheadMax: 80,  // m ahead: far enough to walk toward, near enough to read
   oasisTtl: 150,                       // s it waits before it gives up on you
   oasisIntensity: 34,                  // cd, borrowed: warm light on the sand
@@ -217,6 +249,7 @@ const D = DREAD_TABLE;
 // painting eyes on trunks; the mirages are rarer than anything else here by design.
 const KIND_COOLDOWN = Object.freeze({
   eyes: 90,
+  vision: 165,
   oasis: 720, laughter: 720,
   'pale-from-eyes': 240,     // C13
 });
@@ -274,10 +307,11 @@ const MENU = Object.freeze([
   { kind: 'door', w: 8, heavy: false },
   { kind: 'eyes', w: 6, heavy: false },      // D14: was 14, and see KIND_COOLDOWN
   { kind: 'lantern', w: 8, heavy: false },
-  { kind: 'watcher', w: 10, heavy: true },
-  { kind: 'runner', w: 8, heavy: true },
+  { kind: 'watcher', w: 6, heavy: true },   // was 10; see watcherDrop - each one is an event now
+  { kind: 'runner', w: 6, heavy: true },    // was 8
   { kind: 'prints', w: 8, heavy: true },
   // D14: the hallucinations. Heavy (a picture on the screen), and behind _mirageRefusal.
+  { kind: 'vision', w: 9, heavy: true },   // visions.js; its own gate, see _visionRefusal
   { kind: 'oasis', w: 4, heavy: true, mirage: true },
   { kind: 'laughter', w: 4, heavy: true, mirage: true },
 ]);
@@ -426,7 +460,7 @@ export class Dread {
       this._offs.push(bus.on('eyeshine:approached', (p) => this._onEyesApproached(p)));
       this._offs.push(bus.on('pacer:turned', (p) => this._onPacerTurned(p)));
       // The mirage budget is per night: a new dusk (never the boot announcement) resets it.
-      this._offs.push(bus.on('phase:changed', (p) => { if (p && p.phase === 'dusk' && p.prev) this.mirageThisCycle = 0; }));
+      this._offs.push(bus.on('phase:changed', (p) => { if (p && p.phase === 'dusk' && p.prev) { this.mirageThisCycle = 0; this.visionThisCycle = 0; } }));
     }
   }
 
@@ -624,6 +658,29 @@ export class Dread {
     const water = new THREE.Mesh(waterGeo, this.matWater); water.frustumCulled = false; this.oasis.group.add(water);
     this.oasis.group.visible = false;
     this.root.add(this.oasis.group);
+
+    /* ---- THE VISIONS. One quad, one atlas, six pictures. See visions.js for why none of
+            this is built in three dimensions. It is the only mapped material this file owns,
+            so it is the only one that does not share the others' program - measured at boot,
+            94 of a 116 ceiling before it. ---------------------------------------------- */
+    this.visionTex = buildVisionAtlas();
+    this.visionTex.repeat.set(1 / ATLAS_COLS, 1 / ATLAS_ROWS);
+    this.matVision = new THREE.MeshBasicMaterial({
+      map: this.visionTex, transparent: true, opacity: 0, depthWrite: false,
+      fog: false, side: THREE.FrontSide, toneMapped: false,
+    });
+    this.matVision.name = 'dread-vision';
+    this.vision = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matVision);
+    this.vision.frustumCulled = false;
+    this.vision.visible = false;
+    this.root.add(this.vision);
+    this.visionS = {
+      on: false, i: -1, x: 0, y: 0, z: 0, t: 0, hold: 0, fade: 0, gone: false,
+      w: 1, drift: 0, near: 30,
+    };
+    this.visionRecent = [];        // the last few shown, so the same lie is not told twice
+    this.visionThisCycle = 0;
+    this.lastVisionAt = -1e9;
 
     /* ---- D14: THE LAUGHTER. Five figures on the watcher's geometry in the Pale's porcelain
             on ONE shared clone, so one opacity write fades all five; each sways on its own
@@ -1212,6 +1269,7 @@ export class Dread {
       case 'watcher': ok = this._beatWatcher(); break;
       case 'runner': ok = this._beatRunner(); break;
       case 'prints': ok = this._beatPrints(); break;
+      case 'vision': ok = this._beatVision(); break;
       case 'oasis': ok = this._beatOasis(); break;
       case 'laughter': ok = this._beatLaughter(); break;
       default: ok = false;
@@ -1399,6 +1457,7 @@ export class Dread {
       S.on = true; S.x = v.x; S.y = v.y; S.z = v.z;
       S.t = 0; S.observed = 0; S.seen = false;
       S.vanishing = false; S.vt = 0; S.approached = false; S.sway = this.rng.next() * TAU;
+      S.dropT = 0; S.landed = false;
       S.car = inCar; S.beamT = 0;
       S.ttl = D.watcherTtlMin + this.rng.next() * (D.watcherTtlMax - D.watcherTtlMin);
       this.watcher.position.set(S.x, S.y, S.z);
@@ -1906,6 +1965,7 @@ export class Dread {
     this._stepEyes(d);
     this._stepLantern(d);
     this._stepOasis(d);
+    this._stepVision(d);
     this._stepLaughter(d);
     this.pacer?.step(d);
     this.ledgerKeeper?.step(d);
@@ -2371,6 +2431,17 @@ export class Dread {
     const S = this.watcherS;
     if (!S.on) return;
     S.t += d;
+    // THE FALL. present() reads dropT for the offset; this is the clock under it, and the
+    // landing is the one moment it makes a sound - a short hush and a thump under the ear's
+    // own placement call, so the drop is felt even at the edge of sight.
+    if (!S.landed) {
+      S.dropT = (S.dropT || 0) + d;
+      if (S.dropT >= D.watcherDropS) {
+        S.landed = true;
+        this.hush(D.watcherLandHush);
+        this.answer('drop-impact', S.x, S.y + 0.2, S.z, 0.5);
+      }
+    }
     this._player(_pos);
     const dxz = Math.hypot(_pos.x - S.x, _pos.z - S.z);
 
@@ -2571,13 +2642,41 @@ export class Dread {
 
     const S = this.watcherS;
     if (S.on) {
+      // THE ARRIVAL AND THE WITHDRAWAL ARE MOVEMENT, NOT A SWITCH. It falls the last few
+      // metres into its stand, and on the way out it is taken straight up while it
+      // dissolves. Both are offsets on the same y the beat chose, so nothing else in this
+      // file has to know: placement, sight, the 8 m gut punch and the ear all still read
+      // S.y. A cubic ease-out on the fall lands it hard instead of floating it down; the
+      // climb is eased IN, so it hangs for an instant and then goes.
+      const fallK = D.watcherDropS > 0 ? Math.min(1, (S.dropT || 0) / D.watcherDropS) : 1;
+      const fall = (1 - fallK) * (1 - fallK) * (1 - fallK) * D.watcherDrop;
+      const riseK = S.vanishing
+        ? Math.min(1, S.vt / Math.max(0.001, S.car ? D.watcherCarFade : D.watcherFade)) : 0;
+      const climb = riseK * riseK * D.watcherRise;
       // It breathes very slightly, so it is not a decal — but it never steps toward you.
-      this.watcher.position.set(S.x, S.y + Math.sin(S.sway) * 0.006, S.z);
+      this.watcher.position.set(S.x, S.y + fall + climb + Math.sin(S.sway) * 0.006, S.z);
       this._player(_pos);
       this.watcher.rotation.y = Math.atan2(_pos.x - S.x, _pos.z - S.z);
       this.matWatcher.opacity = S.vanishing ? Math.max(0, 1 - S.vt / (S.car ? D.watcherCarFade : D.watcherFade)) : 1;
       this.matFace.opacity = this.matWatcher.opacity;
       this.watcher.visible = this.matWatcher.opacity > 0.002;
+    }
+
+    // THE VISION. Square to the eye, fading in and out, and never quite still: the uv
+    // drift and the breath on the opacity are the whole "hazy video" of it. It turns on
+    // yaw ONLY - tilting it to face a camera that is looking down would lift its foot off
+    // the ground and it would read as a poster hanging in the trees.
+    const V = this.visionS;
+    if (V.on) {
+      this._player(_pos);
+      this.vision.position.set(V.x, V.y + V.w * D.visionRise, V.z);
+      this.vision.rotation.set(0, Math.atan2(_pos.x - V.x, _pos.z - V.z), 0);
+      const inK = Math.min(1, V.t / Math.max(0.001, D.visionIn));
+      const outK = V.gone ? Math.min(1, V.fade / Math.max(0.001, D.visionOut)) : 0;
+      const breath = 0.88 + 0.12 * Math.sin(V.drift * 1.7);
+      this.matVision.opacity = D.visionPeak * inK * (1 - outK) * breath;
+      this.visionTex.offset.x += Math.sin(V.drift * 0.7) * D.visionDrift * 0.0016;
+      this.vision.visible = this.matVision.opacity > 0.004;
     }
 
     // D14: THE OASIS. The palms sway, the glow breathes; collapsing, they go to nothing.
@@ -2669,6 +2768,118 @@ export class Dread {
   /* =========================================== D14: THE HALLUCINATIONS ===== */
 
   /** The mirage family's own gate, over the menu's. '' when one may play, else the reason. */
+  /** The visions' own gate. Looser than the mirage family's: see D.visionEveryS. */
+  _visionRefusal() {
+    if (this.visionS.on) return 'busy';
+    if (this.clock - this.lastVisionAt < D.visionEveryS) return 'cooldown';
+    if (this.visionThisCycle >= D.visionPerCycle) return 'cycle';
+    this._player(_pos);
+    const roads = this._sys('roads');
+    if (roads && typeof roads.roadDistance === 'function'
+      && roads.roadDistance(_pos.x, _pos.z) < D.visionRoadMin) return 'road';
+    const flora = this._sys('flora');
+    const cover = flora && typeof flora.coverAt === 'function' ? flora.coverAt(_pos.x, _pos.z) : 0;
+    if (cover < D.visionCoverMin) return 'cover';
+    if (this._hasNearbyPlace(D.miragePlaceClear * 0.5)) return 'place';
+    return '';
+  }
+
+  /**
+   * THE VISION. A picture at 52-86 m, on the ground, square to you. It never moves, it is
+   * never lit, it cannot be reached: closing inside its own `near` ends it, which is the
+   * only honest way to lose an argument with a hallucination.
+   */
+  _beatVision() {
+    if (this._visionRefusal() !== '') return false;
+    if (!VISIONS.length) return false;
+    // Pick one that is not in the recent ring. With six and a ring of two this always finds
+    // one; the guard is for a future roster short enough to exhaust.
+    let pick = -1;
+    for (let a = 0; a < 12; a++) {
+      const c = (this.rng.next() * VISIONS.length) | 0;
+      if (this.visionRecent.indexOf(c) === -1) { pick = c; break; }
+    }
+    if (pick < 0) pick = (this.rng.next() * VISIONS.length) | 0;
+    const V = VISIONS[pick];
+    const S = this.visionS;
+    // BEST OF N, NOT FIRST-THAT-PASSES. Two things were learned the hard way here.
+    //
+    // A THRESHOLD ON COVER CANNOT WORK. MEASURED with tools/_visionwhy.mjs: standing in
+    // closed pines, SIXTY of sixty candidate spots inside 66 m came back over any clearing
+    // threshold worth having, and the beat simply never fired in the one place Alex asked
+    // for it. In open woodland 59 of 60 passed. A gate tuned for one of those is broken for
+    // the other, so there is no gate: every candidate is SCORED and the best one wins.
+    //
+    // AND THE SIGHTLINE MUST BE TESTED LOW. The first version tested at 0.42 of the quad's
+    // width - about nine metres up - which threads between the crowns and reports a clear
+    // view of a picture whose whole lower half is behind trunks. The test points are at a
+    // quarter of the width now, which is where the thing you are looking at actually is.
+    let best = null;
+    for (let a = 0; a < D.visionRetries; a++) {
+      const d = D.visionAheadMin + this.rng.next() * (D.visionAheadMax - D.visionAheadMin);
+      const lat = (this.rng.next() - 0.5) * 2 * D.visionLatMax;
+      const p = this._aheadPoint(d, lat);
+      const ground = this._groundAt(p.x, p.z);
+      if (!Number.isFinite(ground)) { this.stats.refusedPlacement++; continue; }
+      const w = D.visionWidth[0] + this.rng.next() * (D.visionWidth[1] - D.visionWidth[0]);
+      const eyeY = ground + w * 0.25;
+      const bear = Math.atan2(p.x - _pos.x, p.z - _pos.z);
+      const bx = Math.cos(bear), bz = -Math.sin(bear);
+      let clear = 0;
+      for (let k = -1; k <= 1; k++) {
+        if (this.watching(p.x + bx * w * 0.33 * k, eyeY, p.z + bz * w * 0.33 * k, 0.42, 150)) clear++;
+      }
+      if (clear < 2) { this.stats.refusedPlacement++; continue; }
+      const flora = this._sys('flora');
+      const cover = flora && typeof flora.coverAt === 'function' ? flora.coverAt(p.x, p.z) : 0;
+      // A clearing is worth more than a long throw, and a long throw is worth something:
+      // the far ones read as landscape, the near ones as an intrusion.
+      const score = clear * 2 - cover * 3 + d * 0.012;
+      if (!best || score > best.score) best = { x: p.x, y: ground, z: p.z, w, score };
+    }
+    if (best) {
+      S.on = true; S.i = pick; S.gone = false;
+      S.x = best.x; S.y = best.y; S.z = best.z;
+      S.t = 0; S.fade = 0; S.drift = this.rng.next() * TAU;
+      S.near = V.near;
+      S.w = best.w;
+      S.hold = V.hold[0] + this.rng.next() * (V.hold[1] - V.hold[0]);
+      const off = cellOffset(pick);
+      this.visionTex.offset.set(off.x, off.y);
+      this.vision.scale.set(S.w, S.w, 1);
+      this.vision.position.set(S.x, S.y + S.w * D.visionRise, S.z);
+      this.matVision.opacity = 0;
+      this.vision.visible = true;
+      this.visionRecent.push(pick);
+      while (this.visionRecent.length > D.visionNoRepeat) this.visionRecent.shift();
+      this.lastVisionAt = this.clock;
+      this.visionThisCycle++;
+      // The ear places it first, the same as the watcher does.
+      this.answer(V.sound, S.x, S.y + S.w * 0.3, S.z, 0.40);
+      return true;
+    }
+    S.on = false;
+    return false;
+  }
+
+  _stepVision(d) {
+    const S = this.visionS;
+    if (!S.on) return;
+    S.t += d;
+    S.drift += d;
+    this._player(_pos);
+    const dxz = Math.hypot(_pos.x - S.x, _pos.z - S.z);
+    // It gives up if you get close enough to resolve it, if it has had its time, or if the
+    // night ends under it.
+    if (!S.gone && (dxz < S.near || S.t > S.hold + D.visionIn)) S.gone = true;
+    if (S.gone) {
+      S.fade += d;
+      if (S.fade > D.visionOut) {
+        S.on = false; this.vision.visible = false; this.matVision.opacity = 0;
+      }
+    }
+  }
+
   _mirageRefusal() {
     const sh = this.ctx.shared;
     if (sh && sh.inCar) return 'in-car';                       // never from the car
