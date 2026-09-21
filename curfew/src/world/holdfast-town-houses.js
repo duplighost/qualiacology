@@ -1,5 +1,5 @@
-import { groundY, shell, gableFloor, glowColumn, PANE_WINDOW, ON_APRON } from './sites.js';
-import { P, solid, banner, icicles, lantern, chair, chest, arch, snowCap, stucco } from './holdfast-town-art.js';
+import { groundY, shell, gableFloor, glowColumn, ON_APRON } from './sites.js';
+import { P, solid, banner, icicles, lantern, chair, chest, arch, snowCap, stucco, inhabitedWindow, chamferedBlock } from './holdfast-town-art.js';
 
 export function furnishRoom(k, api, b, y) {
   const cy = Math.cos(b.yaw), sy = Math.sin(b.yaw), P2 = (x, z) => [b.x + x * cy + z * sy, b.z - x * sy + z * cy];
@@ -152,9 +152,7 @@ export function building(k, api, b, rng) {
     const wx=side*b.w*.29,wy=row?Math.min(b.h-1.35,4.90):1.85;
     put(k.solid,1.55,1.95,.20,wx,wy,front-.27,P.darkStone);
     const[gx,gz]=P2(wx,front-.395);
-    k.live.pane(1.12,1.47,gx,y+wy,gz,PANE_WINDOW,b.yaw+Math.PI,0,4,5);
-    put(k.cloth,.075,1.66,.23,wx,wy,front-.405,timber);
-    put(k.cloth,1.34,.075,.23,wx,wy,front-.405,timber);
+    inhabitedWindow(k,gx,y+wy,gz,1.12,1.47,b.yaw+Math.PI,hash+row*17+side*31);
     put(k.solid,1.82,.18,.57,wx,wy-.99,front-.32,P.edge);
     put(k.solid,1.82,.21,.42,wx,wy+1.02,front-.30,P.edge);
     for(const ss of[-1,1])put(k.cloth,.37,1.79,.18,wx+ss*.92,wy,front-.34,hash%3?P.purple:P.cloth);
@@ -168,9 +166,7 @@ export function building(k, api, b, rng) {
   const faceWindow=(ux,uz,angle,wy,wide=1.02)=>{
     const[x,z]=P2(ux,uz),a=b.yaw+angle,nx=Math.sin(a),nz=Math.cos(a);
     k.solid.box(wide+.38,1.95,.19,x+nx*.255,y+wy,z+nz*.255,P.darkStone,a);
-    k.live.pane(wide,1.43,x+nx*.365,y+wy,z+nz*.365,PANE_WINDOW,a,0,4,5);
-    k.cloth.box(.06,1.65,.20,x+nx*.38,y+wy,z+nz*.38,timber,a);
-    k.cloth.box(wide+.18,.07,.20,x+nx*.38,y+wy,z+nz*.38,timber,a);
+    inhabitedWindow(k,x+nx*.365,y+wy,z+nz*.365,wide,1.43,a,hash+ux*13+uz*7+wy*29);
     k.solid.box(wide+.65,.19,.47,x+nx*.28,y+wy-1.04,z+nz*.28,P.edge,a);
     k.solid.box(wide+.55,.17,.32,x+nx*.29,y+wy+1.03,z+nz*.29,P.edge,a);
     snowCap(k,x+nx*.31,y+wy+1.125,z+nz*.31,wide+.67,.39,a,.10,hash+wy);
@@ -193,6 +189,31 @@ export function building(k, api, b, rng) {
   }
   for(const xx of[-b.w*.28,b.w*.28])for(const wy of b.h>5.6?[1.85,4.85]:[1.85])faceWindow(xx,b.d/2,0,wy);
   const[backX,backZ]=P2(0,b.d/2+.27);k.cloth.box(b.w+.22,.20,.22,backX,y+3.23,backZ,timber,b.yaw);
+  // Supported eaves give the broad upper wall a shadow and a real edge. Some houses
+  // have a cut-stone fascia; others keep their exposed timber rafter ends.
+  const stoneEave=hash%3===0;
+  const[eaveX,eaveZ]=P2(0,front-.28);
+  chamferedBlock(stoneEave?k.solid:k.cloth,b.w+.52,.19,.48,eaveX,y+b.h-.08,eaveZ,
+    stoneEave?P.edge:timber,b.yaw,.028);
+  const supports=Math.max(3,Math.round(b.w/2.35));
+  for(let i=0;i<supports;i++){
+    const xx=-b.w/2+.55+i*(b.w-1.1)/(supports-1),[sx,sz]=P2(xx,front-.32);
+    chamferedBlock(stoneEave?k.solid:k.cloth,.17,.32,.34,sx,y+b.h-.32,sz,
+      stoneEave?P.stone:P.cutWood,b.yaw,.023);
+  }
+  if(!b.terrace){
+    // The gutter and its brackets follow the facade's own coordinate frame. A selected
+    // corner downpipe interrupts the repeated masonry bays without another material.
+    const[gx,gz]=P2(0,front-.38);
+    k.cloth.tube(.085,.085,b.w+.48,6,gx,y+b.h+.035,gz,P.iron,b.yaw,0,Math.PI/2);
+    const pipeX=(hash%2?1:-1)*(b.w/2-.40),[px,pz]=P2(pipeX,front-.50),pipeH=b.h-.53;
+    k.cloth.tube(.053,.053,pipeH,6,px,y+.30+pipeH/2,pz,P.iron,b.yaw);
+    const[jx,jz]=P2(pipeX,front-.44);
+    k.cloth.tube(.059,.059,.28,6,jx,y+b.h-.11,jz,P.iron,b.yaw,Math.PI/4);
+    const[ox,oz]=P2(pipeX,front-.57);
+    k.cloth.tube(.059,.059,.20,6,ox,y+.29,oz,P.iron,b.yaw,Math.PI/2);
+    for(const yy of[.65,b.h*.48,b.h-.60])put(k.cloth,.15,.048,.15,pipeX,yy,front-.475,P.iron);
+  }
   // Supported roof terraces are actual addresses reached from the high streets.
   if(b.terrace){
     solid(k,api,b.w+.60,.30,b.d+.60,b.x,y+b.h-.15,b.z,P.edge,b.yaw,'floor');
@@ -218,8 +239,7 @@ export function building(k, api, b, rng) {
       const uz=(hash%2?1:-1)*b.d*.26,[x,z]=P2(b.w*.21,uz),base=y+b.h+rise*(1-Math.abs(uz)/((b.d+.75)/2));
       const angle=b.yaw+(uz>0?0:Math.PI),nx=Math.sin(angle),nz=Math.cos(angle);
       solid(k,api,1.7,1.15,1.05,x,base+.35,z,P.darkStone,b.yaw);
-      k.live.pane(.78,.71,x+nx*.55,base+.53,z+nz*.55,PANE_WINDOW,angle,0,4,4);
-      k.cloth.box(.06,.88,.11,x+nx*.59,base+.53,z+nz*.59,timber,angle);
+      inhabitedWindow(k,x+nx*.55,base+.53,z+nz*.55,.78,.71,angle,hash+103,.07);
       k.solid.gable(1.96,1.35,base+.94,.68,x,0,z,P.slate,b.yaw);
       gableFloor(api,x,z,1.96,1.35,base+.94,.68,b.yaw);
       snowCap(k,x,base+1.01,z,1.88,1.28,b.yaw,.11,hash,(x)=>.68*(1-Math.abs(x)/.98));
@@ -237,6 +257,8 @@ export function building(k, api, b, rng) {
   }
   const[bx,bz]=P2(-b.w*.30,front-.66);banner(k,bx,y+Math.min(b.h-.2,4.4),bz,.72,1.55,b.yaw+Math.PI);
   const[lx,lz]=P2(dw/2+.48,front-.51);lantern(k,lx,y+2.70,lz,b.yaw+Math.PI);
+  put(k.cloth,.16,.49,.055,dw/2+.48,2.85,front-.265,P.iron);
+  put(k.cloth,.07,.065,.34,dw/2+.48,2.95,front-.42,P.iron);
   for(let i=0;i<8;i++){
     const[fx,fz]=P2(-b.w/2+.75+i%4*.28,front-.71);
     k.cloth.cyl(.11,.12,.64,6,fx,y+.13+Math.floor(i/4)*.24,fz,P.cutWood,b.yaw,Math.PI/2);

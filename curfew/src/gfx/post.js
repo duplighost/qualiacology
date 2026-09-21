@@ -17,8 +17,8 @@
 // everything under ~0.2 sinks toward black — which is exactly MARROW's unreadable moonlit
 // distance and cost a round to find. Dark must read as SHAPE, not as void.
 //
-// The Bayer dither is not decoration: a frame that is almost entirely between 0 and 0.05
-// quantises to two or three distinct 8-bit levels and bands in visible rings.
+// Sub-byte dither breaks up display quantisation without putting a repeating
+// row pattern over the image. Keep its per-pixel sequence independent of grain.
 //
 // GLSL laws honoured here: no backtick anywhere inside a template literal (it closes the JS
 // string and the page dies with a lineless error naming no file), and no identifier named
@@ -152,18 +152,20 @@ const GradeShader = {
     // is a SHOULDER now instead of a ceiling: nothing clips to paper (255 still lands at
     // 184) and the range from 128 up is available again. Measured after, frame by frame, in
     // docs/ROUND-7/HANDOFF-E.md.
-    uKnee: { value: 0.50 },
-    uShoulder: { value: 0.90 },
+    // ACES already supplies the photographic shoulder. Preserve its luminous
+    // windows and lamp cores; only the last display highlights need protection.
+    uKnee: { value: 0.78 },
+    uShoulder: { value: 1.0 },
     uBlackFloor: { value: G.blackFloor },
     uGrain: { value: G.grain },
     uVignette: { value: G.vignette },
     // ROUND 7 lane E: local contrast. See the shader.
-    uLocal: { value: 0.34 },
+    uLocal: { value: 0.20 },
     // D18 — chromatic aberration, the BASE term. The shader adds uDread * 0.002 and
     // uPulse * 0.004 on top. 0.0009 of the half-frame is 0.6 px at the corner of a 1280
     // frame: invisible at rest, which is the point — the lens only comes apart when the
     // director says so. A uniform (not a literal) so a tool can zero it like uGrain.
-    uAberr: { value: 0.0009 },
+    uAberr: { value: 0.0 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -183,10 +185,17 @@ const GradeShader = {
       return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
     }
 
-    // 4x4 ordered Bayer, built from floats only. GLSL ES 1.00 forbids dynamic indexing of
-    // a local array and has no integer bit ops, so the usual lookup table is not portable.
-    float bayer2(vec2 a) { a = floor(a); return fract(a.x * 0.5 + a.y * a.y * 0.75); }
-    float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+    // The old ordered 4x4 plate had alternating row means, visible as horizontal
+    // lines over smooth night gradients. WebGL2 integer mixing gives each pixel
+    // a stable, unbiased sub-byte offset with no short repeating row or column.
+    float displayDither(vec2 pixel) {
+      uvec2 p = uvec2(pixel);
+      uint h = p.x + p.y * 65537u;
+      h = (h ^ (h >> 16u)) * 0x7feb352du;
+      h = (h ^ (h >> 15u)) * 0x846ca68bu;
+      h ^= h >> 16u;
+      return float(h & 0x00ffffffu) / 16777216.0 - 0.5;
+    }
 
     void main() {
       // --- CHROMATIC ABERRATION (D18): the lens comes apart under dread ---------
@@ -194,7 +203,7 @@ const GradeShader = {
       // offset that grows with uDread and uPulse, so a stinger or the black hour's pulse
       // fringes the edges of the frame for a beat and a calm frame shows nothing. Sampled
       // BEFORE local contrast so the fringe is graded like everything else. Zero programs.
-      vec2 ab = (vUv - 0.5) * (uAberr + uDread * 0.002 + uPulse * 0.004);
+      vec2 ab = (vUv - 0.5) * (uAberr + uDread * 0.00065 + uPulse * 0.002);
       vec3 col = texture2D(tDiffuse, vUv).rgb;
       col.r = texture2D(tDiffuse, vUv + ab).r;
       col.b = texture2D(tDiffuse, vUv - ab).b;
@@ -225,6 +234,8 @@ const GradeShader = {
       // --- shadow-protected filmic contrast -------------------------------------
       vec3 curved = (col - 0.5) * (uContrast + uPulse * 0.06 + uDread * 0.10) + 0.5;
       col = mix(col, curved, smoothstep(uContrastFrom, uContrastTo, lum));
+      col = max(col, vec3(0.0));
+      lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
 
       // --- highlight shoulder ---------------------------------------------------
       // The mirror image of the shadow protection above, and the answer to the one thing
@@ -247,7 +258,7 @@ const GradeShader = {
 
       // --- split tone: cool shadows, warm highlights [still postfx.js:32-34] ----
       float hi = smoothstep(0.28, 0.88, lum);
-      col = mix(col * vec3(0.90, 0.95, 1.07), col * vec3(1.07, 1.01, 0.90), hi);
+      col = mix(col * vec3(0.97, 0.985, 1.025), col * vec3(1.025, 1.005, 0.975), hi);
 
       // --- halation on the brightest spots only --------------------------------
       col += vec3(1.0, 0.72, 0.42) * smoothstep(0.66, 1.10, lum) * (0.02 + uPulse * 0.10);
@@ -286,8 +297,10 @@ const GradeShader = {
       float g2 = hash12(gl_FragCoord.xy + vec2(uTime * 97.0, uTime * 23.0));
       float gr = (g1 - 0.5) * 0.74 + (g2 - 0.5) * 0.26;
       float gw = 0.26 + 0.96 * smoothstep(0.012, 0.13, lum) * (1.0 - smoothstep(0.40, 0.92, lum));
-      col += gr * (uGrain + uDread * 0.045) * gw;
-      col += (bayer4(gl_FragCoord.xy) - 0.5) / 255.0;
+      // Tension may roughen the image, but must not erase fine surfaces with
+      // a full-screen noise plate when the night gets dangerous.
+      col += gr * (uGrain + uDread * 0.012) * gw;
+      col += displayDither(gl_FragCoord.xy) / 255.0;
 
       gl_FragColor = vec4(max(col, 0.0), 1.0);
     }`,

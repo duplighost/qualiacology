@@ -183,6 +183,9 @@ export const MAJORS = Object.freeze([
     // (manor.js HZ) with its front on +Z, so the foot of its front steps lands on the road
     // end.
     id: 'blackthorn-manor', name: 'Blackthorn Manor',
+    // The front faces away from the moon. The filtered sky describes its broad
+    // cut-stone mouldings while its unclaimed rooms remain dark.
+    landmarkEnvironment: 4,
     // ROUND 7 (NEXT.md B1): the yard is a clearing. The footprint reaches 36 m from the
     // centre on the diagonal and the flat's level core is 32, so 44 clears the house and
     // its steps and leaves the pines standing at the edge of the lawn.

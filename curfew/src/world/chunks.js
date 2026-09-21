@@ -46,8 +46,9 @@ import { groundDetail, frostAt, heightAt, normalAt, flats, flatCount } from './t
 import { sinkholeDepthAt, quarryDepthAt } from './world-scars.js';
 import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
 import { SNOW_FIELD_GLSL } from './snow-field.js';
-import { loadScannedSurface } from './scanned-materials.js';
+import { loadTerrainSurfaceScan, TERRAIN_SURFACE_GLSL, TERRAIN_SURFACE_FRAGMENT, TERRAIN_ROUGHNESS_FRAGMENT } from './terrain-surface.js';
 import { preloadPlaceSurfaceLibrary } from './place-surfaces.js';
+import { installRoadSurface, loadRoadSurfaceScan } from './road-surface.js';
 import {readableSurface} from '../art/surface-light.js';
 
 const CHUNK = CFG.world.CHUNK;                       // 64 m
@@ -368,6 +369,7 @@ export class Chunks {
 
   async init() {
     const placeSurfaces = preloadPlaceSurfaceLibrary().catch(error => { this._notes.push(error.message); });
+    const roadScan = loadRoadSurfaceScan(this.ctx.renderer).catch(error => { this._notes.push(error.message); return null; });
     const scene = this.ctx.scene;
     if (!scene) throw new Error('chunks: ctx.scene missing (gfx must be manifest #1)');
 
@@ -399,13 +401,13 @@ export class Chunks {
     const groundCompile=this.matGround.onBeforeCompile;
     readableSurface(this.matGround);const groundLightCompile=this.matGround.onBeforeCompile;
     this.matGround.onBeforeCompile=shader=>{groundCompile(shader);groundLightCompile(shader);};
-    this.matGround.customProgramCacheKey=()=> 'curfew-ground-wet-relief-4';
+    this.matGround.customProgramCacheKey=()=> 'curfew-ground-forest-scan-6';
     try {
-      this.groundSurface = await loadScannedSurface('forest_ground_04', this.ctx.renderer);
+      this.groundSurface = await loadTerrainSurfaceScan(this.ctx.renderer);
       const scans = this.matGround.userData.groundUniforms;
       if (this.groundSurface && scans) {
         scans.uGroundScan.value = this.groundSurface.albedo;
-        scans.uGroundHeight.value = this.groundSurface.height;
+        scans.uGroundHeight.value = this.groundSurface.physical;
         scans.uGroundMean.value.copy(this.groundSurface.mean);
         scans.uGroundReady.value = 1;
       }
@@ -429,7 +431,8 @@ export class Chunks {
     //   3. a darker strip at each edge, so the road has an EDGE instead of a seam.
     // material.color is the crown's albedo and the texture scales down from it, so the
     // profile keeps eight bits of precision instead of quantising 0.007 into two of them.
-    this.matRoad = new THREE.MeshLambertMaterial({
+    this.matRoad = new THREE.MeshStandardMaterial({
+      roughness: 0.93, metalness: 0, envMapIntensity: 1.15,
       vertexColors: true,
       dithering: true,
       // ROUND 15, MEASURED, AND THEN MEASURED AGAIN.
@@ -455,9 +458,11 @@ export class Chunks {
     // and a colour BufferAttribute is read as working-space); a hex would be decoded from
     // sRGB and land somewhere else entirely.
     this.matRoad.color.setRGB(ROAD_CROWN[0], ROAD_CROWN[1], ROAD_CROWN[2], THREE.LinearSRGBColorSpace);
+    this.roadSurface = await roadScan;
     this.roadTex = this._buildRoadProfile();
     if (this.roadTex) this.matRoad.map = this.roadTex;
     this.matRoad.name = 'road-ribbon';
+    installRoadSurface(this.matRoad, this.matGround.userData.groundUniforms, this.roadSurface);
 
     this._startWorker();
 
@@ -1403,6 +1408,7 @@ export class Chunks {
           'varying float vGroundUp;',
           SURFACE_RELIEF_GLSL,
           SNOW_FIELD_GLSL,
+          TERRAIN_SURFACE_GLSL,
         ].join('\n')
       );
 
@@ -1410,48 +1416,7 @@ export class Chunks {
         '#include <map_fragment>',
         [
           '#include <map_fragment>',
-          // ROUND 21: hoisted out of the block below so the weather block after
-          // <color_fragment> can reuse the same grit instead of paying for a second fetch of
-          // the same texture. Weather has to run there and not here: <color_fragment> is
-          // where three applies the vertex colour, so at THIS point diffuseColor is still
-          // plain white and a snow mix against it would come out as ground x snow.
-          'float gTerr = 0.0, gNearF = 0.0, gUpF = 0.0, gRelief = 0.0;',
-          // ROUND 23 — what the snow block below leaves for the roughness and the normal,
-          // which three runs after <color_fragment>. Cover, how packed the crest is, and
-          // the snow's own surface height in metres.
-          'float wCoverF = 0.0, wCrestF = 0.0, wReliefF = 0.0;',
-          '{',
-          // Layer A is the grit, read straight. Layer B is the mottle, read with the world
-          // axes SWAPPED (a quarter turn) and offset, so the two tilings never line up.
-          // Both are taken into SIGNED space and SUMMED: mixing them would average their
-          // variances away, which is exactly how the first version of this vanished.
-          '  vec3 gSample = texture2D( uGroundMap, vGroundD.xy * uGroundParams.x ).rgb;',
-          '  float gGrit = gSample.r * 2.0 - 1.0;',
-          '  float gMott = texture2D( uGroundMap, vGroundD.yx * uGroundParams.y + 0.37 ).g * 2.0 - 1.0;',
-          '  float gT = (gGrit * uGroundMix.x + gMott * uGroundMix.y) * mix(1.0, 0.22, uGroundReady);',
-          '  float gNear = vGroundD.z;',
-          // Asymmetric: wet grit catching the sky can be strong, the shadow between stones
-          // must not reach the black the canopy term already owns. The difference between
-          // the two gains is also what pays back the mean a concave tone curve takes off a
-          // symmetric multiplier — see the note on GROUND_AMP_UP.
-          '  float gUp = max( gT, 0.0 ), gDn = min( gT, 0.0 );',
-          '  diffuseColor.rgb *= 1.0 + gNear * ( uGroundParams.z * gUp + uGroundParams.w * gDn );',
-          // And the bright half is WET: the only thing down there reflecting the sky, so it
-          // goes cool. Upward only, so nothing here can darken the ground.
-          '  float gWet = gUp * gNear;',
-          '  diffuseColor.g *= 1.0 + 0.06 * gWet;',
-          '  diffuseColor.b *= 1.0 + 0.20 * gWet;',
-          '  gTerr = gT; gNearF = gNear; gUpF = gUp;',
-          '  gRelief = gSample.b * gNear * 0.027;',
-          // A four-metre photographed patch: pine needles, twigs, grit and soil.
-          // The very broad procedural layer keeps the same tile from standing out.
-          '  vec2 scanUV = vGroundD.xy * 0.25;',
-          '  vec3 soilScan = texture2D(uGroundScan, scanUV).rgb / uGroundMean;',
-          '  float soilHeight = texture2D(uGroundHeight, scanUV).r;',
-          '  float scanFade = uGroundReady * (0.44 + gNear * 0.56);',
-          '  diffuseColor.rgb *= mix(vec3(1.0), clamp(soilScan, vec3(0.22), vec3(2.35)), scanFade);',
-          '  gRelief = mix(gRelief, soilHeight * 0.070 * gNear, uGroundReady);',
-          '}',
+          TERRAIN_SURFACE_FRAGMENT,
         ].join('\n')
       );
 
@@ -1513,7 +1478,9 @@ export class Chunks {
       // ROUND 23: and snow is not soil's roughness either. Powder is matte; the packed
       // windward crest is not, and that difference is the only specular a night field has.
       shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',
-        '#include <roughnessmap_fragment>\nfloat soilWet=uWeather.y*(1.0-uWeather.x)*smoothstep(.35,.92,vGroundUp);\nroughnessFactor=mix(.94,.29,soilWet*(.55+.45*smoothstep(-.25,.4,gTerr)));\nroughnessFactor=mix(roughnessFactor,mix(.93,.62,wCrestF),wCoverF);');
+        '#include <roughnessmap_fragment>\n' + TERRAIN_ROUGHNESS_FRAGMENT);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <aomap_fragment>',
+        '#include <aomap_fragment>\nreflectedLight.indirectDiffuse *= mix(gScanCavity, 1.0, wCoverF);');
 
       // A SELF-CHECK THAT SURVIVES THE SESSION. Both of these replacements are string
       // matches against three's own chunk names, and a silent miss is not a crash — it is a
@@ -1534,7 +1501,7 @@ export class Chunks {
     // ROUND 21: bumped to -2. The cache key is what stops three compiling a second program
     // per material variant, and it has to change when the SOURCE changes or a warm cache
     // from an earlier build could hand this material the pre-weather program.
-    mat.customProgramCacheKey = () => 'curfew-ground-relief-4';
+    mat.customProgramCacheKey = () => 'curfew-ground-forest-scan-6';
     mat.needsUpdate = true;
   }
 
@@ -1545,8 +1512,9 @@ export class Chunks {
    */
   setWeather(snow, wet) {
     const uni = this.matGround && this.matGround.userData.groundUniforms;
-    if (!uni || !uni.uWeather) return;
-    uni.uWeather.value.set(
+    const weather = uni?.uWeather || this.matRoad?.userData.roadUniforms?.uRoadWeather;
+    if (!weather) return;
+    weather.value.set(
       snow > 0 ? (snow > 1 ? 1 : snow) : 0,
       wet > 0 ? (wet > 1 ? 1 : wet) : 0,
     );
@@ -1598,7 +1566,7 @@ export class Chunks {
         // every 8 m along and that is invisible at this frequency; the thing that must not
         // repeat over a long straight rides the vertex colour instead (see _ribbonColors).
         // Zero-mean by construction — (h - 0.5) — so the road's value does not move.
-        const gk = dm <= ROAD_CROWN_HALF_M ? ROAD_GRAIN_CROWN : ROAD_GRAIN;
+        const gk = this.roadSurface ? 0 : dm <= ROAD_CROWN_HALF_M ? ROAD_GRAIN_CROWN : ROAD_GRAIN;
         let h = (x * 1597334677 + y * 3812015801 + 1013904223) | 0;
         h = (h ^ (h >>> 15)) | 0;
         h = Math.imul(h, 2246822519);
@@ -1924,6 +1892,7 @@ export class Chunks {
     if (this.matGround) { this.matGround.dispose(); this.matGround = null; }
     if (this.matRoad) { this.matRoad.dispose(); this.matRoad = null; }
     if (this.roadTex) { this.roadTex.dispose(); this.roadTex = null; }
+    if (this.roadSurface) { this.roadSurface.dispose(); this.roadSurface = null; }
     if (this.groundTex) { this.groundTex.dispose(); this.groundTex = null; }
     if (this.groundSurface) { this.groundSurface.dispose(); this.groundSurface = null; }
     this.group = null;

@@ -23,7 +23,7 @@
 
 import * as THREE from 'three';
 import { CFG } from '../config.js';
-import { clamp, clamp01, lerp, damp } from '../engine/math.js';
+import { clamp, clamp01, lerp, damp, smoothstep } from '../engine/math.js';
 
 // How many logical borrows can exist at once. More borrows than physical lights is the
 // point: the pool seats the 8 nearest and the rest wait, which is why an off-screen
@@ -225,6 +225,9 @@ const LIT_PLACE_FADE = 52;     // m: and out here its light does not reach you a
 
 // Module-level scratch. The hot path allocates nothing.
 const _dir = new THREE.Vector3();
+const _shadowRight = new THREE.Vector3();
+const _shadowUp = new THREE.Vector3();
+const _shadowAnchor = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _col = new THREE.Color();
 
@@ -277,6 +280,9 @@ export class Lights {
     this._seated = new Int32Array(CFG.lights.rovers.count);
     this._reseatTimer = 0;
     this._dirty = false;
+    this._surfaceSources = [];
+    this._surfaceLimit = 2;
+    this._surfaceTimer = 0;
     // OFF at boot. The first frame with it on was a blown-out white wall filling half the
     // screen — MARROW's "all I see is the flashlight on the wall", which cost that project a
     // round. The torch is a choice the player makes with F, and the dark has to be the thing
@@ -1198,12 +1204,9 @@ export class Lights {
 
     /* ---- the moon's ortho box follows the player --------------------------- */
     const D = CFG.render.shadow.distance;
-    // Quantise the anchor to whole shadow texels. Without this the shadow edges crawl
-    // over every surface as you walk, which reads as the ground shimmering.
+    // Snap in the LIGHT'S image plane. Snapping world x/y/z independently still
+    // slides diagonally through shadow texels and makes branches shimmer as you walk.
     const texel = (D * 2) / CFG.render.shadow.size;
-    const ax = Math.round(p.x / texel) * texel;
-    const az = Math.round(p.z / texel) * texel;
-    const ay = Math.round(p.y / texel) * texel;
     // The arc, not the const: clock drives it through setMoonArc() and the box has to
     // follow, or the black hour's low moon lights nothing it is supposed to.
     const elev = this._moonElev, azim = this._moonAzim;
@@ -1212,6 +1215,13 @@ export class Lights {
       Math.sin(elev),
       Math.cos(elev) * Math.sin(azim),
     );
+    _shadowRight.set(_dir.z, 0, -_dir.x).normalize();
+    _shadowUp.crossVectors(_dir, _shadowRight).normalize();
+    const lightX = p.dot(_shadowRight), lightY = p.dot(_shadowUp);
+    _shadowAnchor.copy(p)
+      .addScaledVector(_shadowRight, Math.round(lightX / texel) * texel - lightX)
+      .addScaledVector(_shadowUp, Math.round(lightY / texel) * texel - lightY);
+    const ax = _shadowAnchor.x, ay = _shadowAnchor.y, az = _shadowAnchor.z;
     this.moon.target.position.set(ax, ay, az);
     this.moon.position.set(ax + _dir.x * D * 2, ay + _dir.y * D * 2, az + _dir.z * D * 2);
 
@@ -1330,6 +1340,8 @@ export class Lights {
       light.intensity = v;
     }
 
+    this._lightAuthoredSurfaces(p, dt);
+
     /* ---- the torch's shadow map only renders while the torch shines (r3, perf) --------
        three re-renders a shadowed light's map every frame whatever its intensity, and the
        spot aims along the view with an 80 m reach: a full shadow pass of the near scene every
@@ -1341,6 +1353,43 @@ export class Lights {
       this.torch.shadow.autoUpdate = tl;
       if (tl) this.torch.shadow.needsUpdate = true;
       this._torchShadowLive = tl;
+    }
+  }
+
+  // Nearby windows illuminate their stone reveals and pavement using up to three
+  // idle rover slots. Authored gameplay lamps/muzzle flashes always own their seats.
+  // These are render-only fills: no borrow, safety-zone or player visibility changes.
+  _lightAuthoredSurfaces(p, dt) {
+    this._surfaceTimer -= dt;
+    const sources = this._surfaceSources;
+    if (this._surfaceTimer <= 0) {
+      this._surfaceTimer = .25;
+      const previous = sources.slice();
+      sources.length = 0;
+      const air = this.ctx.systems.get('airlight');
+      if (air) for (const s of air._src.values()) {
+        if (!s.surfaceLight || s.on * s.fade < .04) continue;
+        const dx=s.x-p.x,dy=s.y-p.y,dz=s.z-p.z;
+        const d2=dx*dx+dy*dy+dz*dz;
+        if (d2 > 24*24) continue;
+        s._surfaceDistance = d2;
+        s._surfaceScore = d2 * (previous.includes(s) ? .72 : 1);
+        let at=0;while(at<sources.length && sources[at]._surfaceScore<s._surfaceScore) at++;
+        sources.splice(at,0,s);if(sources.length>this._surfaceLimit)sources.pop();
+      }
+    }
+    let candidate=0;
+    for(let i=0;i<this.rovers.length && candidate<sources.length;i++){
+      // A distant logical borrower may still occupy a seat after its light has
+      // faded completely. The next frame restores that borrower before this pass.
+      if(this.rovers[i].intensity>.01)continue;
+      const s=sources[candidate++],light=this.rovers[i];
+      const d=Math.sqrt((s.x-p.x)**2+(s.y-p.y)**2+(s.z-p.z)**2);
+      const fade=1-smoothstep(15,24,d);
+      light.position.set(s.x+s.nx*.55,s.y+s.ny*.55,s.z+s.nz*.55);
+      light.color.setRGB(s.cr,s.cg,s.cb);
+      light.distance=9;light.decay=2;
+      light.intensity=(8+Math.min(1.6,s.lightRadius)*12)*s.on*s.fade*fade;
     }
   }
 
