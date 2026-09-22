@@ -22,9 +22,12 @@
 html,body{margin:0;height:100%;background:#05070b;overflow:hidden;color:#f2e7d2;
   font-family:"Iowan Old Style",Georgia,"Times New Roman",serif}
 canvas#game{display:block;width:100%;height:100%;outline:none;cursor:none}
+/* pointer-events NONE, always. This sits over the canvas, and with it taking
+   clicks the canvas never got one, the pointer never locked, and the mouse
+   never looked around. It is a mark on the glass, not a door. */
 #lock{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9;
-  background:rgba(4,6,10,.55);transition:opacity .45s}
-#lock.gone{opacity:0;pointer-events:none}
+  pointer-events:none;transition:opacity .45s}
+#lock.gone{opacity:0}
 #lock div{width:9px;height:9px;border:1px solid rgba(255,214,164,.75);transform:rotate(45deg);
   box-shadow:0 0 22px rgba(255,180,100,.35)}
 
@@ -86759,6 +86762,19 @@ hook.bootStage = 'ready';
 /* ---- input -------------------------------------------------------------- */
 
 const keys = new Set();
+
+/* PER-FRAME INPUT BUFFERING, so no press is ever eaten. A click that goes down
+   and up inside one frame — which at sixty frames a second is any quick flick —
+   used to reach the sim as no change at all, and the throw simply did not
+   happen. Every button transition is queued here and the loop hands the sim at
+   most one per 120 Hz step, in order, so it sees every one of them. */
+const queue = [];
+const press = (k, v) => {
+  const last = queue.length ? queue[queue.length - 1] : null;
+  if (last && last.k === k && last.v === v) return;
+  queue.push({ k, v });
+  if (queue.length > 64) queue.shift();
+};
 let pointerLocked = false;
 let paused = false;
 let pauseSel = 0;
@@ -86766,9 +86782,13 @@ let sensitivity = 1;
 
 const KEY_FORWARD = ['KeyW'], KEY_BACK = ['KeyS'], KEY_LEFT = ['KeyA'], KEY_RIGHT = ['KeyD'];
 
-canvas.addEventListener('click', () => {
+/* ON THE DOCUMENT, not the canvas. Anything the site puts over the canvas —
+   an overlay, a home pill, a scrim — would otherwise swallow the one click
+   that locks the pointer, and the mouse would never look around. */
+document.addEventListener('click', (e) => {
   audio.start();
   audio.resume();
+  if (e.target && e.target.closest && e.target.closest('a')) return;
   if (!pointerLocked && !paused) canvas.requestPointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
@@ -86782,12 +86802,12 @@ document.addEventListener('mousemove', (e) => {
 });
 document.addEventListener('mousedown', (e) => {
   if (paused || !pointerLocked) return;
-  if (e.button === 0) sim.input.lmb = true;
-  if (e.button === 2) sim.input.rmb = true;
+  if (e.button === 0) press('lmb', true);
+  if (e.button === 2) press('rmb', true);
 });
 document.addEventListener('mouseup', (e) => {
-  if (e.button === 0) sim.input.lmb = false;
-  if (e.button === 2) sim.input.rmb = false;
+  if (e.button === 0) press('lmb', false);
+  if (e.button === 2) press('rmb', false);
 });
 document.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -86808,7 +86828,7 @@ window.addEventListener('keydown', (e) => {
   if (['Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => { keys.delete(e.code); });
-window.addEventListener('blur', () => { keys.clear(); sim.input.lmb = false; sim.input.rmb = false; });
+window.addEventListener('blur', () => { keys.clear(); press('lmb', false); press('rmb', false); });
 window.addEventListener('resize', resize);
 
 function readKeys() {
@@ -86818,9 +86838,12 @@ function readKeys() {
   i.jump = keys.has('Space');
   i.sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
   i.crouch = keys.has('KeyC');
-  i.e = keys.has('KeyE');
   i.r = keys.has('KeyR') ? 1 : 0;
+  /* E is a tap, and a tap can land and lift inside one frame. */
+  const e = keys.has('KeyE');
+  if (e !== lastE) { press('e', e); lastE = e; }
 }
+let lastE = false;
 
 /* ---- pause and the place list ------------------------------------------- */
 
@@ -86874,8 +86897,15 @@ function frame(now) {
     acc += dt;
     /* Fixed at 120 Hz, so the feel does not change with frame rate. */
     let steps = 0;
-    while (acc >= STEP && steps < 8) { sim.step(STEP); acc -= STEP; steps++; }
-    if (steps >= 8) acc = 0;
+    while ((acc >= STEP || queue.length) && steps < 12) {
+      /* One queued transition per step, in order, so a press and its release
+         are never collapsed into nothing. */
+      if (queue.length) { const q = queue.shift(); sim.input[q.k] = q.v; }
+      sim.step(STEP);
+      acc = Math.max(0, acc - STEP);
+      steps++;
+    }
+    if (steps >= 12) acc = 0;
     const events = sim.takeEvents();
     if (events.length) view.consume(events);
     for (const e of events) if (e.t === 'run-end') onRunEnd(e.card);
@@ -87077,9 +87107,6 @@ document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement) hide(); else lock.classList.remove('gone');
 });
 document.getElementById('game').addEventListener('click', hide);
-document.addEventListener('pointerlockchange', () => {
-  document.body.classList.toggle('locked', !!document.pointerLockElement);
-});
 })();
 </script>
 </body></html>
