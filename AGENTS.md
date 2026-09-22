@@ -59,7 +59,6 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | kickmoon | `Projects\kick-ball-moonkick` (not `kick-ball`) | copy the `game/` runtime; keep the site's index.html shell |
 | pocket-sun | `Projects\pocket-sun` | `npm run build:site` then `npm run copy:site` there |
 | tideglass | `Projects	ideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
-| waitup | `Projectswaitup` | `node tools/build-site-copy.mjs --build` there; it writes the whole `index.html`, shell included. Never hand-edit the site copy |
 | spaceboarding | `Projects\spaceboarding` | copy `assets src styles.css vendor`; keep the site's index.html shell |
 | fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
 | vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
