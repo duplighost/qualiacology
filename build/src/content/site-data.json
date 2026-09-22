@@ -444,20 +444,6 @@
       "metaDescription": "Tideglass is a desktop action game in the browser: draw a chained glass weight through stained glass, turn the capstans to drop the water, and open a flooded glassworks to the sea.",
       "controls": "Desktop only · WASD move · hold LMB and draw the weight · hold RMB to raise it · Space double jump · hold E for a lifting ring · R reel in · arrows, middle drag or screen edge to turn the view",
       "actionLabel": "Play Tideglass"
-    },
-    {
-      "slug": "waitup",
-      "title": "Wait Up",
-      "descriptor": "First-person horror",
-      "group": "horror",
-      "featured": false,
-      "image": "/assets/games/waitup-card-clean.jpg",
-      "alt": "A dark clapboard house on a hill at night, its porch rail and picket fence lit orange, a cast-iron handbell glowing in the near hand under a field of stars",
-      "summary": "Halloween night on a hill above the water. Every porch light was left on for somebody who is not back yet, and they are going out one at a time as people give up. You have a bell with a live coal in it. Spin it, throw it, ring their porch and they keep waiting. Get down the hill before your own light goes out.",
-      "metaDescription": "Wait Up is a desktop first-person horror game in the browser: spin a cast-iron bell with a coal in it, throw it flat like a star, and ring the porches of a New England hill town before their lights go out.",
-      "controls": "Desktop only · WASD move · Shift sprint · hold LMB to spin, release to throw · LMB again calls it home or catches it · RMB steers it through one more thing, or yanks you to it · Space jump, hold to climb · C slide · E ring, light, take · hold R to start again · Esc for the places",
-      "actionLabel": "Play Wait Up",
-      "duration": "About three minutes a run"
     }
   ],
   "albums": [

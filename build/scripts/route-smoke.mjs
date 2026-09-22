@@ -27,6 +27,12 @@ const routes = [
 // from the shelf — asserted 404 so a stray file or redirect cannot quietly
 // bring one back.
 const retiredRoutes = [
+  "/waitup/",
+  "/waitup/index.html",
+  "/waitup.html",
+  "/wait",
+  "/bell",
+  "/porch",
   "/thurible/",
   "/thurible/index.html",
   "/thurible/game.js",
