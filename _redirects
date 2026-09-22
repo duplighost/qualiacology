@@ -163,3 +163,9 @@
 /winter           /winterline/  302
 /december         /winterline/  302
 /tide             /tideglass/  302
+
+# --- WAIT UP ---
+/waitup.html      /waitup/  301!
+/wait             /waitup/  302
+/bell             /waitup/  302
+/porch            /waitup/  302
