@@ -16,9 +16,9 @@
  },
  "class": "small",
  "dims": [
-  0.5152,
-  0.3198,
-  0.1168
+  0.4816,
+  0.3311,
+  0.0739
  ],
  "use": "a cardigan over a chair back",
  "modelled": true,
@@ -26,12 +26,12 @@
  "parts": [],
  "rigged": false,
  "animated": [],
- "processed": "2026-09-22",
+ "processed": "2026-09-26",
  "tools": "tools/blender/dress_pieces.py",
  "origin": [
-  0.0,
-  0.934,
-  -0.2788
+  -0.0009,
+  0.9258,
+  -0.2886
  ],
- "shippedBytes": 6263
+ "shippedBytes": 6191
 }

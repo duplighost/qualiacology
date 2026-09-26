@@ -50,17 +50,19 @@
    "clearcoat": 0
   }
  },
- "paper:pruitt/mask.devil": {
-  "files": {},
-  "paper": "pruitt/mask.devil",
+ "mask:devil": {
+  "files": {
+   "albedo": "mask.devil.albedo.dds",
+   "normal": "mask.devil.normal.ktx2"
+  },
   "gltf": {
    "baseColor": [
-    0.9,
-    0.88,
-    0.8,
+    1.0,
+    1.0,
+    1.0,
     1.0
    ],
-   "roughness": 0.7,
+   "roughness": 0.46,
    "metallic": 0.0,
    "alphaMode": "OPAQUE",
    "alphaCutoff": 0.5,
@@ -74,31 +76,16 @@
    "transmission": 0,
    "ior": 1.5,
    "clearcoat": 0
-  }
- },
- "flat:#2a1c12:0.4": {
-  "files": {},
-  "gltf": {
-   "baseColor": [
-    0.0189,
-    0.0078,
-    0.0029,
-    1.0
-   ],
-   "roughness": 0.4,
-   "metallic": 0.0,
-   "alphaMode": "OPAQUE",
-   "alphaCutoff": 0.5,
-   "doubleSided": false,
-   "emissive": [
-    0,
-    0,
-    0
-   ],
-   "emissiveStrength": 1,
-   "transmission": 0,
-   "ior": 1.5,
-   "clearcoat": 0
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": false,
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM"
   }
  }
 }

@@ -6,27 +6,27 @@
  "author": "OLLY OLLY",
  "bytes": 0,
  "triangles": {
-  "source": 2688,
-  "lod0": 2688,
+  "source": 21848,
+  "lod0": 21848,
   "lod1": null
  },
  "budget": {
-  "lod0": 8000,
+  "lod0": 26000,
   "lod1": null
  },
  "class": "large",
  "dims": [
-  1.4243,
-  0.2572,
-  1.3777
+  1.9781,
+  0.6262,
+  1.9357
  ],
- "use": "laundry under the chute (PLAN 4 row 1)",
+ "use": "laundry under the chute, a heap to land in (PLAN 4 row 1)",
  "modelled": true,
  "surface": "carpet",
  "parts": [],
  "rigged": false,
  "animated": [],
- "processed": "2026-09-22",
+ "processed": "2026-09-26",
  "tools": "tools/blender/dress_pieces.py",
- "shippedBytes": 19875
+ "shippedBytes": 90505
 }

@@ -25,6 +25,32 @@
    "clearcoat": 0
   }
  },
+ "lib:fabric.linen": {
+  "files": {},
+  "lib": "fabric.linen",
+  "gltf": {
+   "baseColor": [
+    0.85,
+    0.83,
+    0.78,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
  "set:chenille|double": {
   "files": {},
   "set": "chenille",

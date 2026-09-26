@@ -6,19 +6,19 @@
  "author": "OLLY OLLY",
  "bytes": 0,
  "triangles": {
-  "source": 6528,
-  "lod0": 6528,
+  "source": 7916,
+  "lod0": 7916,
   "lod1": null
  },
  "budget": {
-  "lod0": 8000,
+  "lod0": 10000,
   "lod1": null
  },
  "class": "furniture",
  "dims": [
-  1.7263,
+  1.6736,
   1.27,
-  2.2067
+  2.13
  ],
  "use": "Ruth's bed, chenille spread",
  "modelled": true,
@@ -26,7 +26,7 @@
  "parts": [],
  "rigged": false,
  "animated": [],
- "processed": "2026-09-22",
+ "processed": "2026-09-26",
  "tools": "tools/blender/dress_pieces.py",
- "shippedBytes": 32118
+ "shippedBytes": 34331
 }

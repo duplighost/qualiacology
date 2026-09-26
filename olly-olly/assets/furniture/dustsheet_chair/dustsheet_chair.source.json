@@ -6,8 +6,8 @@
  "author": "OLLY OLLY",
  "bytes": 0,
  "triangles": {
-  "source": 4232,
-  "lod0": 4232,
+  "source": 3404,
+  "lod0": 3404,
   "lod1": null
  },
  "budget": {
@@ -16,9 +16,9 @@
  },
  "class": "furniture",
  "dims": [
-  1.4104,
-  0.9563,
-  1.1841
+  1.2241,
+  0.9817,
+  1.2557
  ],
  "use": "armchair under a dust sheet",
  "modelled": true,
@@ -26,7 +26,7 @@
  "parts": [],
  "rigged": false,
  "animated": [],
- "processed": "2026-09-22",
+ "processed": "2026-09-26",
  "tools": "tools/blender/dress_pieces.py",
- "shippedBytes": 17195
+ "shippedBytes": 13964
 }

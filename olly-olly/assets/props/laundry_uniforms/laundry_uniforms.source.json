@@ -1,0 +1,32 @@
+{
+ "id": "laundry_uniforms",
+ "title": "laundry uniforms",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 8052,
+  "lod0": 8052,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 9000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.547,
+  0.1814,
+  0.5702
+ ],
+ "use": "Decker's team wash in a small heap on the folding table",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-26",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 41064
+}
