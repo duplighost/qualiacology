@@ -17,7 +17,7 @@
  "class": "furniture",
  "dims": [
   2.5357,
-  0.8691,
+  0.8741,
   1.5398
  ],
  "use": "dining table under a dust sheet",
@@ -26,7 +26,7 @@
  "parts": [],
  "rigged": false,
  "animated": [],
- "processed": "2026-09-22",
+ "processed": "2026-09-26",
  "tools": "tools/blender/dress_pieces.py",
- "shippedBytes": 21334
+ "shippedBytes": 21294
 }

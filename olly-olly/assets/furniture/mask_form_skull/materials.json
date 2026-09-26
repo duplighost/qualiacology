@@ -50,17 +50,19 @@
    "clearcoat": 0
   }
  },
- "paper:pruitt/mask.skull": {
-  "files": {},
-  "paper": "pruitt/mask.skull",
+ "mask:skull": {
+  "files": {
+   "albedo": "mask.skull.albedo.dds",
+   "normal": "mask.skull.normal.ktx2"
+  },
   "gltf": {
    "baseColor": [
-    0.9,
-    0.88,
-    0.8,
+    1.0,
+    1.0,
+    1.0,
     1.0
    ],
-   "roughness": 0.7,
+   "roughness": 0.46,
    "metallic": 0.0,
    "alphaMode": "OPAQUE",
    "alphaCutoff": 0.5,
@@ -74,6 +76,16 @@
    "transmission": 0,
    "ior": 1.5,
    "clearcoat": 0
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": false,
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM"
   }
  }
 }

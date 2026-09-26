@@ -6,19 +6,19 @@
  "author": "OLLY OLLY",
  "bytes": 0,
  "triangles": {
-  "source": 5128,
-  "lod0": 5128,
+  "source": 15383,
+  "lod0": 15383,
   "lod1": null
  },
  "budget": {
-  "lod0": 8000,
+  "lod0": 16000,
   "lod1": null
  },
  "class": "furniture",
  "dims": [
   0.35,
-  1.6999,
-  0.3614
+  1.7,
+  0.35
  ],
  "use": "a wolf rubber mask on a head form on its stand (the masque)",
  "modelled": true,
@@ -26,7 +26,7 @@
  "parts": [],
  "rigged": false,
  "animated": [],
- "processed": "2026-09-23",
+ "processed": "2026-09-26",
  "tools": "tools/blender/dress_pieces.py",
- "shippedBytes": 51386
+ "shippedBytes": 1202437
 }

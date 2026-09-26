@@ -6,12 +6,12 @@
  "author": "OLLY OLLY",
  "bytes": 0,
  "triangles": {
-  "source": 4012,
-  "lod0": 4012,
+  "source": 12707,
+  "lod0": 12707,
   "lod1": null
  },
  "budget": {
-  "lod0": 8000,
+  "lod0": 16000,
   "lod1": null
  },
  "class": "furniture",
@@ -26,7 +26,7 @@
  "parts": [],
  "rigged": false,
  "animated": [],
- "processed": "2026-09-23",
+ "processed": "2026-09-26",
  "tools": "tools/blender/dress_pieces.py",
- "shippedBytes": 35663
+ "shippedBytes": 1149285
 }

@@ -4,7 +4,7 @@
   "pine_tree_01": "no geometry downloaded (949 MB .bin skipped); bark and twig cards are in the material library",
   "fir_tree_01": "no geometry downloaded (.bin skipped); bark and twig cards are in the material library"
  },
- "bytes": 51760022,
+ "bytes": 51876011,
  "pieces": {
   "Barrel_01": {
    "class": "large",
@@ -52,9 +52,9 @@
    "tris": 2080,
    "trisLod1": null,
    "dims": [
-    0.8268,
-    0.5385,
-    0.368
+    0.8021,
+    0.4743,
+    0.3074
    ],
    "surface": "carpet",
    "parts": 1,
@@ -63,7 +63,7 @@
     "set:afghan|double"
    ],
    "colliders": 1,
-   "bytes": 10915,
+   "bytes": 10920,
    "use": "Ruth's afghan over her chair (fits ArmChair_01)",
    "warnings": [],
    "modelled": true
@@ -746,9 +746,9 @@
    "tris": 1080,
    "trisLod1": null,
    "dims": [
-    0.5152,
-    0.3198,
-    0.1168
+    0.4816,
+    0.3311,
+    0.0739
    ],
    "surface": "carpet",
    "parts": 1,
@@ -757,7 +757,7 @@
     "lib:fabric.knit-dark|double"
    ],
    "colliders": 1,
-   "bytes": 6838,
+   "bytes": 6827,
    "use": "a cardigan over a chair back",
    "warnings": [],
    "modelled": true
@@ -1963,26 +1963,52 @@
   },
   "laundry_pile": {
    "class": "large",
-   "tris": 2688,
+   "tris": 21848,
    "trisLod1": null,
    "dims": [
-    1.4243,
-    0.2572,
-    1.3777
+    1.9781,
+    0.6262,
+    1.9357
    ],
    "surface": "carpet",
    "parts": 1,
    "movable": [],
    "materials": [
-    "lib:fabric.linen|double",
-    "lib:fabric.knit-dark|double",
     "lib:fabric.sheet|double",
+    "lib:fabric.linen|double",
+    "lib:carpet.navy|double",
     "lib:fabric.wool-red|double",
-    "lib:carpet.navy|double"
+    "lib:fabric.knit-dark|double",
+    "lib:carpet.gold|double"
    ],
    "colliders": 1,
-   "bytes": 20322,
-   "use": "laundry under the chute (PLAN 4 row 1)",
+   "bytes": 91134,
+   "use": "laundry under the chute, a heap to land in (PLAN 4 row 1)",
+   "warnings": [],
+   "modelled": true
+  },
+  "laundry_uniforms": {
+   "class": "large",
+   "tris": 8052,
+   "trisLod1": null,
+   "dims": [
+    0.547,
+    0.1814,
+    0.5702
+   ],
+   "surface": "carpet",
+   "parts": 1,
+   "movable": [],
+   "materials": [
+    "lib:fabric.sheet|double",
+    "lib:carpet.navy|double",
+    "lib:fabric.knit-dark|double",
+    "lib:carpet.gold|double",
+    "lib:fabric.wool-red|double"
+   ],
+   "colliders": 1,
+   "bytes": 41695,
+   "use": "Decker's team wash in a small heap on the folding table",
    "warnings": [],
    "modelled": true
   },
@@ -2727,12 +2753,12 @@
   },
   "shawl_rocker": {
    "class": "small",
-   "tris": 2092,
+   "tris": 2128,
    "trisLod1": null,
    "dims": [
-    0.8352,
-    0.6334,
-    0.3408
+    0.516,
+    0.5883,
+    0.1981
    ],
    "surface": "carpet",
    "parts": 1,
@@ -2742,7 +2768,7 @@
     "lib:fabric.knit-dark"
    ],
    "colliders": 1,
-   "bytes": 12139,
+   "bytes": 15627,
    "use": "her shawl over the rocking chair (fits Rockingchair_01)",
    "warnings": [],
    "modelled": true
