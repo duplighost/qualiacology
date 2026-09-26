@@ -1,0 +1,30 @@
+{
+ "id": "lamp_table_off",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "lamp_table_off.0",
+   "part": "lamp_table_off",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.3145,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.1933,
+    "y": 0.3145,
+    "z": 0.1933
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  }
+ ]
+}

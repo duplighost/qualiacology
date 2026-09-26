@@ -1,0 +1,30 @@
+{
+ "id": "polaroid_camera",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "polaroid_camera.0",
+   "part": "polaroid_camera",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.05,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.1422,
+    "y": 0.05,
+    "z": 0.102
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "wooden_candlestick": {
+  "files": {
+   "albedo": "wooden_candlestick.albedo.dds",
+   "normal": "wooden_candlestick.normal.ktx2",
+   "orm": "wooden_candlestick.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 39.09,
+   "normalXY": 49.2,
+   "orm": {
+    "ao": 99,
+    "rough": 37.72,
+    "metal": 41.94
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.375,
+   "p99": 2.524
+  },
+  "specAA": true,
+  "seconds": 1.4,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

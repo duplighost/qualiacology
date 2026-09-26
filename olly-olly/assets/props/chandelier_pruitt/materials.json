@@ -1,0 +1,80 @@
+{
+ "lib:metal.brass": {
+  "files": {},
+  "lib": "metal.brass",
+  "gltf": {
+   "baseColor": [
+    0.7,
+    0.7,
+    0.7,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "glow:dome": {
+  "files": {},
+  "glow": "dome",
+  "gltf": {
+   "baseColor": [
+    1.0,
+    0.8,
+    0.55,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "glow:bulb": {
+  "files": {},
+  "glow": "bulb",
+  "gltf": {
+   "baseColor": [
+    1.0,
+    0.8,
+    0.55,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

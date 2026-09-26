@@ -1,0 +1,32 @@
+{
+ "id": "toilet",
+ "title": "toilet",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 836,
+  "lod0": 836,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.44,
+  0.83,
+  0.597
+ ],
+ "use": "toilet",
+ "modelled": true,
+ "surface": "tile",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 11500
+}

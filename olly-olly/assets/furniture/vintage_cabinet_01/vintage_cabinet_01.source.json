@@ -1,0 +1,118 @@
+{
+ "id": "vintage_cabinet_01",
+ "title": "Vintage Cabinet 01",
+ "url": "https://polyhaven.com/a/vintage_cabinet_01",
+ "licence": "CC0 1.0",
+ "author": "Rico Cilliers",
+ "bytes": 2870976,
+ "triangles": {
+  "source": 61096,
+  "lod0": 7995,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  2.021,
+  2.2355,
+  0.67
+ ],
+ "shippedBytes": 2543099,
+ "parts": [
+  {
+   "name": "vintage_cabinet_01",
+   "movable": false,
+   "tris": 3888,
+   "pivot": [
+    0,
+    0.0006,
+    -0.0571
+   ]
+  },
+  {
+   "name": "vintage_cabinet_01_door_02",
+   "movable": true,
+   "tris": 490,
+   "pivot": [
+    0.8885,
+    0.4884,
+    0.3014
+   ]
+  },
+  {
+   "name": "vintage_cabinet_01_door_01",
+   "movable": true,
+   "tris": 692,
+   "pivot": [
+    -0.9018,
+    1.6611,
+    0.0704
+   ]
+  },
+  {
+   "name": "vintage_cabinet_01_door_03",
+   "movable": true,
+   "tris": 763,
+   "pivot": [
+    0.2964,
+    1.7108,
+    0.0704
+   ]
+  },
+  {
+   "name": "vintage_cabinet_01_door_04",
+   "movable": true,
+   "tris": 692,
+   "pivot": [
+    0.9018,
+    1.6611,
+    0.0704
+   ]
+  },
+  {
+   "name": "vintage_cabinet_01_door_05",
+   "movable": true,
+   "tris": 490,
+   "pivot": [
+    -0.8885,
+    0.4884,
+    0.3014
+   ]
+  },
+  {
+   "name": "vintage_cabinet_01_door_06",
+   "movable": true,
+   "tris": 490,
+   "pivot": [
+    -0.4533,
+    0.4884,
+    0.3014
+   ]
+  },
+  {
+   "name": "vintage_cabinet_01_door_07",
+   "movable": true,
+   "tris": 490,
+   "pivot": [
+    0.4533,
+    0.4884,
+    0.3014
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "vintage_cabinet_01_door_02",
+  "vintage_cabinet_01_door_01",
+  "vintage_cabinet_01_door_03",
+  "vintage_cabinet_01_door_04",
+  "vintage_cabinet_01_door_05",
+  "vintage_cabinet_01_door_06",
+  "vintage_cabinet_01_door_07"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

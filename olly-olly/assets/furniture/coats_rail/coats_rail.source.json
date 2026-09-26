@@ -1,0 +1,32 @@
+{
+ "id": "coats_rail",
+ "title": "coats rail",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2164,
+  "lod0": 2164,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  2.0,
+  1.1714,
+  0.3228
+ ],
+ "use": "closet rail with the winter coats",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 19119
+}

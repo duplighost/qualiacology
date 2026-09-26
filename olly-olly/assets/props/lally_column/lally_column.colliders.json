@@ -1,0 +1,30 @@
+{
+ "id": "lally_column",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "lally_column.0",
+   "part": "lally_column",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.95,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.1,
+    "y": 0.95,
+    "z": 0.1
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

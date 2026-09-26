@@ -1,0 +1,30 @@
+{
+ "id": "radio_tube",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "radio_tube.0",
+   "part": "radio_tube",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.12,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.248,
+    "y": 0.12,
+    "z": 0.1314
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

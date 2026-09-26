@@ -1,0 +1,2172 @@
+{
+ "id": "modular_electricity_poles",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "modular_electricity_poles.bolt_large.0",
+   "part": "bolt_large",
+   "kind": "obb",
+   "c": {
+    "x": -0.2096,
+    "y": 2.099,
+    "z": 0.6449
+   },
+   "h": {
+    "x": 0.0106,
+    "y": 0.0092,
+    "z": 0.0058
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.bolt_small.0",
+   "part": "bolt_small",
+   "kind": "obb",
+   "c": {
+    "x": -0.2096,
+    "y": 1.9948,
+    "z": 0.6952
+   },
+   "h": {
+    "x": 0.0106,
+    "y": 0.005,
+    "z": 0.0056
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.cap.0",
+   "part": "cap",
+   "kind": "obb",
+   "c": {
+    "x": 0.7901,
+    "y": 4.97,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.0956,
+    "y": 0.16,
+    "z": 0.015
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_large_01.0",
+   "part": "connection_large_01",
+   "kind": "obb",
+   "c": {
+    "x": 3.4904,
+    "y": 4.9864,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.2537,
+    "z": 0.4261
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_large_02.0",
+   "part": "connection_large_02",
+   "kind": "obb",
+   "c": {
+    "x": 3.4904,
+    "y": 4.1864,
+    "z": 0.7234
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.2537,
+    "z": 0.2553
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_large_offset_01.0",
+   "part": "connection_large_offset_01",
+   "kind": "obb",
+   "c": {
+    "x": 1.9404,
+    "y": 4.9849,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.2522,
+    "z": 0.4261
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_large_offset_02.0",
+   "part": "connection_large_offset_02",
+   "kind": "obb",
+   "c": {
+    "x": 1.9404,
+    "y": 4.1849,
+    "z": 0.7234
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.2522,
+    "z": 0.2553
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_single_01.0",
+   "part": "connection_single_01",
+   "kind": "obb",
+   "c": {
+    "x": 0.7984,
+    "y": 3.7958,
+    "z": 0.6085
+   },
+   "h": {
+    "x": 0.086,
+    "y": 0.0535,
+    "z": 0.1341
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_single_02.0",
+   "part": "connection_single_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.7984,
+    "y": 4.0958,
+    "z": 0.6085
+   },
+   "h": {
+    "x": 0.086,
+    "y": 0.0535,
+    "z": 0.1341
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_single_03.0",
+   "part": "connection_single_03",
+   "kind": "obb",
+   "c": {
+    "x": 0.7901,
+    "y": 3.4,
+    "z": 0.6138
+   },
+   "h": {
+    "x": 0.04,
+    "y": 0.0629,
+    "z": 0.0613
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_small_01.0",
+   "part": "connection_small_01",
+   "kind": "obb",
+   "c": {
+    "x": 4.7904,
+    "y": 4.9847,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.35,
+    "y": 0.252,
+    "z": 0.4261
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.connection_small_02.0",
+   "part": "connection_small_02",
+   "kind": "obb",
+   "c": {
+    "x": 4.7904,
+    "y": 4.1847,
+    "z": 0.7234
+   },
+   "h": {
+    "x": 0.35,
+    "y": 0.252,
+    "z": 0.2553
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.fastener.0",
+   "part": "fastener",
+   "kind": "obb",
+   "c": {
+    "x": -0.0035,
+    "y": 1.5755,
+    "z": 0.5535
+   },
+   "h": {
+    "x": 0.724,
+    "y": 1.5287,
+    "z": 0.0204
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.fastener_bolt.0",
+   "part": "fastener_bolt",
+   "kind": "obb",
+   "c": {
+    "x": -0.2093,
+    "y": 1.9023,
+    "z": 0.6293
+   },
+   "h": {
+    "x": 0.0223,
+    "y": 0.0224,
+    "z": 0.0068
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.fastener_connection.0",
+   "part": "fastener_connection",
+   "kind": "obb",
+   "c": {
+    "x": 0.7756,
+    "y": 3.08,
+    "z": 0.5605
+   },
+   "h": {
+    "x": 0.0929,
+    "y": 0.015,
+    "z": 0.086
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.fastener_loop.0",
+   "part": "fastener_loop",
+   "kind": "obb",
+   "c": {
+    "x": -0.7176,
+    "y": 0.0492,
+    "z": 0.5534
+   },
+   "h": {
+    "x": 0.0171,
+    "y": 0.0161,
+    "z": 0.01
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.fastener_nut.0",
+   "part": "fastener_nut",
+   "kind": "obb",
+   "c": {
+    "x": -0.2086,
+    "y": 1.9004,
+    "z": 0.47
+   },
+   "h": {
+    "x": 0.0224,
+    "y": 0.0256,
+    "z": 0.0125
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.fuse_01.0",
+   "part": "fuse_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.2087,
+    "y": 4.0872,
+    "z": 0.7912
+   },
+   "h": {
+    "x": 0.2224,
+    "y": 0.2013,
+    "z": 0.1737
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.fuse_02.0",
+   "part": "fuse_02",
+   "kind": "obb",
+   "c": {
+    "x": -0.2097,
+    "y": 4.8544,
+    "z": 0.7913
+   },
+   "h": {
+    "x": 0.4693,
+    "y": 0.2356,
+    "z": 0.1747
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.insulator_01.0",
+   "part": "insulator_01",
+   "kind": "obb",
+   "c": {
+    "x": 2.2372,
+    "y": 1.8171,
+    "z": 0.8035
+   },
+   "h": {
+    "x": 0.0403,
+    "y": 0.1199,
+    "z": 0.1751
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.insulator_02.0",
+   "part": "insulator_02",
+   "kind": "obb",
+   "c": {
+    "x": 1.8865,
+    "y": 1.7962,
+    "z": 0.8035
+   },
+   "h": {
+    "x": 0.0395,
+    "y": 0.144,
+    "z": 0.1751
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.insulator_03.0",
+   "part": "insulator_03",
+   "kind": "obb",
+   "c": {
+    "x": 1.4917,
+    "y": 1.7615,
+    "z": 0.8035
+   },
+   "h": {
+    "x": 0.0448,
+    "y": 0.1756,
+    "z": 0.1751
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.insulator_cable_01.0",
+   "part": "insulator_cable_01",
+   "kind": "obb",
+   "c": {
+    "x": 2.2607,
+    "y": 1.7997,
+    "z": 0.4016
+   },
+   "h": {
+    "x": 0.0219,
+    "y": 0.1082,
+    "z": 0.2592
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.insulator_cable_02.0",
+   "part": "insulator_cable_02",
+   "kind": "obb",
+   "c": {
+    "x": 1.8747,
+    "y": 1.7463,
+    "z": 0.4006
+   },
+   "h": {
+    "x": 0.0328,
+    "y": 0.1612,
+    "z": 0.2607
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.insulator_cable_03.0",
+   "part": "insulator_cable_03",
+   "kind": "obb",
+   "c": {
+    "x": 1.509,
+    "y": 1.7666,
+    "z": 0.4001
+   },
+   "h": {
+    "x": 0.0247,
+    "y": 0.1402,
+    "z": 0.2603
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.insulators_large.0",
+   "part": "insulators_large",
+   "kind": "obb",
+   "c": {
+    "x": 3.4884,
+    "y": 1.763,
+    "z": 0.8035
+   },
+   "h": {
+    "x": 0.493,
+    "y": 0.1771,
+    "z": 0.1751
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.insulators_small.0",
+   "part": "insulators_small",
+   "kind": "obb",
+   "c": {
+    "x": 4.7873,
+    "y": 1.7625,
+    "z": 0.8055
+   },
+   "h": {
+    "x": 0.24,
+    "y": 0.1766,
+    "z": 0.1731
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.nail.0",
+   "part": "nail",
+   "kind": "obb",
+   "c": {
+    "x": -0.2103,
+    "y": 2.1977,
+    "z": 0.6339
+   },
+   "h": {
+    "x": 0.0093,
+    "y": 0.0054,
+    "z": 0.0056
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.nail_bent.0",
+   "part": "nail_bent",
+   "kind": "obb",
+   "c": {
+    "x": -0.2031,
+    "y": 2.3219,
+    "z": 0.634
+   },
+   "h": {
+    "x": 0.0094,
+    "y": 0.0227,
+    "z": 0.014
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.nut.0",
+   "part": "nut",
+   "kind": "obb",
+   "c": {
+    "x": -0.2096,
+    "y": 2.0991,
+    "z": 0.3925
+   },
+   "h": {
+    "x": 0.0103,
+    "y": 0.0069,
+    "z": 0.0044
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.pole.0",
+   "part": "pole",
+   "kind": "obb",
+   "c": {
+    "x": 5.9951,
+    "y": 3,
+    "z": 0.5582
+   },
+   "h": {
+    "x": 0.0725,
+    "y": 3,
+    "z": 0.0735
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.pole_large.0",
+   "part": "pole_large",
+   "kind": "obb",
+   "c": {
+    "x": 6.4802,
+    "y": 3.5,
+    "z": 0.5429
+   },
+   "h": {
+    "x": 0.0771,
+    "y": 3.5,
+    "z": 0.0748
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.pole_small.0",
+   "part": "pole_small",
+   "kind": "obb",
+   "c": {
+    "x": 5.48,
+    "y": 2.5,
+    "z": 0.5535
+   },
+   "h": {
+    "x": 0.074,
+    "y": 2.5,
+    "z": 0.0881
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.ring_large.0",
+   "part": "ring_large",
+   "kind": "obb",
+   "c": {
+    "x": -0.2112,
+    "y": 1.7,
+    "z": 0.5565
+   },
+   "h": {
+    "x": 0.0886,
+    "y": 0.02,
+    "z": 0.0811
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.ring_small.0",
+   "part": "ring_small",
+   "kind": "obb",
+   "c": {
+    "x": -0.2067,
+    "y": 1.8,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.support_large_01.0",
+   "part": "support_large_01",
+   "kind": "obb",
+   "c": {
+    "x": 3.4904,
+    "y": 3.2314,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.1986,
+    "z": 0.1415
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.support_large_02.0",
+   "part": "support_large_02",
+   "kind": "obb",
+   "c": {
+    "x": 3.4904,
+    "y": 2.4314,
+    "z": 0.586
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.1986,
+    "z": 0.1179
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.support_large_offset_01.0",
+   "part": "support_large_offset_01",
+   "kind": "obb",
+   "c": {
+    "x": 1.9404,
+    "y": 3.2314,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.1986,
+    "z": 0.1415
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.support_large_offset_02.0",
+   "part": "support_large_offset_02",
+   "kind": "obb",
+   "c": {
+    "x": 1.9404,
+    "y": 2.4314,
+    "z": 0.586
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.1986,
+    "z": 0.1179
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.support_small_01.0",
+   "part": "support_small_01",
+   "kind": "obb",
+   "c": {
+    "x": 4.7904,
+    "y": 3.2314,
+    "z": 0.551
+   },
+   "h": {
+    "x": 0.35,
+    "y": 0.1986,
+    "z": 0.14
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.support_small_02.0",
+   "part": "support_small_02",
+   "kind": "obb",
+   "c": {
+    "x": 4.7904,
+    "y": 2.4314,
+    "z": 0.586
+   },
+   "h": {
+    "x": 0.35,
+    "y": 0.1986,
+    "z": 0.1179
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.transformer_01.0",
+   "part": "transformer_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.3763,
+    "y": 3.0015,
+    "z": 0.5614
+   },
+   "h": {
+    "x": 0.2767,
+    "y": 0.3048,
+    "z": 0.1465
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.transformer_02.0",
+   "part": "transformer_02",
+   "kind": "obb",
+   "c": {
+    "x": -0.2098,
+    "y": 3.6591,
+    "z": 0.5867
+   },
+   "h": {
+    "x": 0.0875,
+    "y": 0.1488,
+    "z": 0.108
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_bolt_small_01.0",
+   "part": "preset_03_bolt_small_01",
+   "kind": "obb",
+   "c": {
+    "x": -5.577,
+    "y": 1.5926,
+    "z": 0.5467
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0073,
+    "z": 0.0104
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_bolt_small_02.0",
+   "part": "preset_03_bolt_small_02",
+   "kind": "obb",
+   "c": {
+    "x": -5.5869,
+    "y": 1.9643,
+    "z": 0.5517
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.005,
+    "z": 0.0107
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_bolt_small_03.0",
+   "part": "preset_03_bolt_small_03",
+   "kind": "obb",
+   "c": {
+    "x": -5.5807,
+    "y": 2.4778,
+    "z": 0.5897
+   },
+   "h": {
+    "x": 0.0055,
+    "y": 0.0068,
+    "z": 0.0094
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_bolt_small_04.0",
+   "part": "preset_03_bolt_small_04",
+   "kind": "obb",
+   "c": {
+    "x": -5.5899,
+    "y": 2.8774,
+    "z": 0.5261
+   },
+   "h": {
+    "x": 0.0055,
+    "y": 0.0069,
+    "z": 0.0134
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_bolt_small_05.0",
+   "part": "preset_03_bolt_small_05",
+   "kind": "obb",
+   "c": {
+    "x": -5.5768,
+    "y": 3.18,
+    "z": 0.5544
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0084,
+    "z": 0.0104
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_bolt_small_06.0",
+   "part": "preset_03_bolt_small_06",
+   "kind": "obb",
+   "c": {
+    "x": -5.587,
+    "y": 3.4283,
+    "z": 0.5474
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0066,
+    "z": 0.0107
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_cap.0",
+   "part": "preset_03_cap",
+   "kind": "obb",
+   "c": {
+    "x": -5.7099,
+    "y": 5.97,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.0956,
+    "y": 0.16,
+    "z": 0.015
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_connection_large_offset_01.0",
+   "part": "preset_03_connection_large_offset_01",
+   "kind": "obb",
+   "c": {
+    "x": -5.9596,
+    "y": 5.5849,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.2522,
+    "z": 0.4261
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_connection_single_01.0",
+   "part": "preset_03_connection_single_01",
+   "kind": "obb",
+   "c": {
+    "x": -5.7016,
+    "y": 3.8458,
+    "z": 0.6085
+   },
+   "h": {
+    "x": 0.086,
+    "y": 0.0535,
+    "z": 0.1341
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_connection_small_01_02.0",
+   "part": "preset_03_connection_small_01_02",
+   "kind": "obb",
+   "c": {
+    "x": -5.7096,
+    "y": 4.4864,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.35,
+    "y": 0.2537,
+    "z": 0.4261
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_fuse_01.0",
+   "part": "preset_03_fuse_01",
+   "kind": "obb",
+   "c": {
+    "x": -5.7104,
+    "y": 4.3872,
+    "z": 0.3138
+   },
+   "h": {
+    "x": 0.2224,
+    "y": 0.2013,
+    "z": 0.1737
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_nail_bent.0",
+   "part": "preset_03_nail_bent",
+   "kind": "obb",
+   "c": {
+    "x": -5.7031,
+    "y": 1.1219,
+    "z": 0.634
+   },
+   "h": {
+    "x": 0.0094,
+    "y": 0.0227,
+    "z": 0.014
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_pole.0",
+   "part": "preset_03_pole",
+   "kind": "obb",
+   "c": {
+    "x": -5.7049,
+    "y": 3,
+    "z": 0.5582
+   },
+   "h": {
+    "x": 0.0725,
+    "y": 3,
+    "z": 0.0735
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_ring_large_01.0",
+   "part": "preset_03_ring_large_01",
+   "kind": "obb",
+   "c": {
+    "x": -5.7112,
+    "y": 0.02,
+    "z": 0.5565
+   },
+   "h": {
+    "x": 0.0886,
+    "y": 0.02,
+    "z": 0.0811
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_ring_large_02.0",
+   "part": "preset_03_ring_large_02",
+   "kind": "obb",
+   "c": {
+    "x": -5.7112,
+    "y": 5.22,
+    "z": 0.5565
+   },
+   "h": {
+    "x": 0.0886,
+    "y": 0.02,
+    "z": 0.0811
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_ring_small_01.0",
+   "part": "preset_03_ring_small_01",
+   "kind": "obb",
+   "c": {
+    "x": -5.7067,
+    "y": 1.7,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_ring_small_02.0",
+   "part": "preset_03_ring_small_02",
+   "kind": "obb",
+   "c": {
+    "x": -5.7067,
+    "y": 1.8,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_ring_small_03.0",
+   "part": "preset_03_ring_small_03",
+   "kind": "obb",
+   "c": {
+    "x": -5.7067,
+    "y": 3.6,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_ring_small_04.0",
+   "part": "preset_03_ring_small_04",
+   "kind": "obb",
+   "c": {
+    "x": -5.7067,
+    "y": 4.74,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_03_transformer_01.0",
+   "part": "preset_03_transformer_01",
+   "kind": "obb",
+   "c": {
+    "x": -5.5429,
+    "y": 3.9215,
+    "z": 0.5436
+   },
+   "h": {
+    "x": 0.2767,
+    "y": 0.3048,
+    "z": 0.1465
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_cap.0",
+   "part": "preset_02_cap",
+   "kind": "obb",
+   "c": {
+    "x": -3.7099,
+    "y": 5.97,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.0956,
+    "y": 0.16,
+    "z": 0.015
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_connection_large_01.0",
+   "part": "preset_02_connection_large_01",
+   "kind": "obb",
+   "c": {
+    "x": -3.7096,
+    "y": 5.5864,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.2537,
+    "z": 0.4261
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_connection_single_01.0",
+   "part": "preset_02_connection_single_01",
+   "kind": "obb",
+   "c": {
+    "x": -3.7016,
+    "y": 3.8298,
+    "z": 0.6085
+   },
+   "h": {
+    "x": 0.086,
+    "y": 0.0535,
+    "z": 0.1341
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_connection_single_01_02.0",
+   "part": "preset_02_connection_single_01_02",
+   "kind": "obb",
+   "c": {
+    "x": -3.7024,
+    "y": 3.8609,
+    "z": 0.4967
+   },
+   "h": {
+    "x": 0.0872,
+    "y": 0.0535,
+    "z": 0.1341
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_connection_small_01.0",
+   "part": "preset_02_connection_small_01",
+   "kind": "obb",
+   "c": {
+    "x": -3.7096,
+    "y": 4.4847,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.35,
+    "y": 0.252,
+    "z": 0.4261
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_pole.0",
+   "part": "preset_02_pole",
+   "kind": "obb",
+   "c": {
+    "x": -3.7049,
+    "y": 3,
+    "z": 0.5582
+   },
+   "h": {
+    "x": 0.0725,
+    "y": 3,
+    "z": 0.0735
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_ring_large.0",
+   "part": "preset_02_ring_large",
+   "kind": "obb",
+   "c": {
+    "x": -3.7112,
+    "y": 0.02,
+    "z": 0.5565
+   },
+   "h": {
+    "x": 0.0886,
+    "y": 0.02,
+    "z": 0.0811
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_ring_large_02.0",
+   "part": "preset_02_ring_large_02",
+   "kind": "obb",
+   "c": {
+    "x": -3.7112,
+    "y": 5.22,
+    "z": 0.5565
+   },
+   "h": {
+    "x": 0.0886,
+    "y": 0.02,
+    "z": 0.0811
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_ring_small_01.0",
+   "part": "preset_02_ring_small_01",
+   "kind": "obb",
+   "c": {
+    "x": -3.7067,
+    "y": 1.69,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_ring_small_02.0",
+   "part": "preset_02_ring_small_02",
+   "kind": "obb",
+   "c": {
+    "x": -3.7067,
+    "y": 1.82,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_ring_small_03.0",
+   "part": "preset_02_ring_small_03",
+   "kind": "obb",
+   "c": {
+    "x": -3.7067,
+    "y": 3.68,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_ring_small_04.0",
+   "part": "preset_02_ring_small_04",
+   "kind": "obb",
+   "c": {
+    "x": -3.7067,
+    "y": 4.18,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_02_ring_small_05.0",
+   "part": "preset_02_ring_small_05",
+   "kind": "obb",
+   "c": {
+    "x": -3.7067,
+    "y": 4.74,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_01.0",
+   "part": "preset_01_bolt_small_01",
+   "kind": "obb",
+   "c": {
+    "x": -1.5775,
+    "y": 1.5715,
+    "z": 0.5636
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0064,
+    "z": 0.0111
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_02.0",
+   "part": "preset_01_bolt_small_02",
+   "kind": "obb",
+   "c": {
+    "x": -1.588,
+    "y": 2.0084,
+    "z": 0.5277
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0102,
+    "z": 0.0126
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_03.0",
+   "part": "preset_01_bolt_small_03",
+   "kind": "obb",
+   "c": {
+    "x": -1.5768,
+    "y": 2.4674,
+    "z": 0.5596
+   },
+   "h": {
+    "x": 0.0057,
+    "y": 0.0084,
+    "z": 0.0105
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_04.0",
+   "part": "preset_01_bolt_small_04",
+   "kind": "obb",
+   "c": {
+    "x": -1.5881,
+    "y": 2.8796,
+    "z": 0.5269
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0099,
+    "z": 0.0127
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_05.0",
+   "part": "preset_01_bolt_small_05",
+   "kind": "obb",
+   "c": {
+    "x": -1.5774,
+    "y": 3.196,
+    "z": 0.5711
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0106,
+    "z": 0.0085
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_06.0",
+   "part": "preset_01_bolt_small_06",
+   "kind": "obb",
+   "c": {
+    "x": -1.5869,
+    "y": 3.4832,
+    "z": 0.5419
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0077,
+    "z": 0.0054
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_07.0",
+   "part": "preset_01_bolt_small_07",
+   "kind": "obb",
+   "c": {
+    "x": -1.5874,
+    "y": 3.8956,
+    "z": 0.5702
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0096,
+    "z": 0.0086
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_08.0",
+   "part": "preset_01_bolt_small_08",
+   "kind": "obb",
+   "c": {
+    "x": -1.5778,
+    "y": 4.1746,
+    "z": 0.5343
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0106,
+    "z": 0.0107
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_bolt_small_09.0",
+   "part": "preset_01_bolt_small_09",
+   "kind": "obb",
+   "c": {
+    "x": -1.5774,
+    "y": 4.796,
+    "z": 0.5711
+   },
+   "h": {
+    "x": 0.0056,
+    "y": 0.0106,
+    "z": 0.0085
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_cap.0",
+   "part": "preset_01_cap",
+   "kind": "obb",
+   "c": {
+    "x": -1.7099,
+    "y": 5.97,
+    "z": 0.5525
+   },
+   "h": {
+    "x": 0.0956,
+    "y": 0.16,
+    "z": 0.015
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_connection_large_02.0",
+   "part": "preset_01_connection_large_02",
+   "kind": "obb",
+   "c": {
+    "x": -1.7096,
+    "y": 5.5864,
+    "z": 0.7234
+   },
+   "h": {
+    "x": 0.6,
+    "y": 0.2537,
+    "z": 0.2553
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_connection_single_01.0",
+   "part": "preset_01_connection_single_01",
+   "kind": "obb",
+   "c": {
+    "x": -1.7016,
+    "y": 3.8458,
+    "z": 0.6085
+   },
+   "h": {
+    "x": 0.086,
+    "y": 0.0535,
+    "z": 0.1341
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_connection_small_02.0",
+   "part": "preset_01_connection_small_02",
+   "kind": "obb",
+   "c": {
+    "x": -1.7096,
+    "y": 4.4847,
+    "z": 0.7234
+   },
+   "h": {
+    "x": 0.35,
+    "y": 0.252,
+    "z": 0.2553
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_fastener.0",
+   "part": "preset_01_fastener",
+   "kind": "obb",
+   "c": {
+    "x": -1.7103,
+    "y": 1.5755,
+    "z": -0.2414
+   },
+   "h": {
+    "x": 0.0207,
+    "y": 1.5287,
+    "z": 0.724
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_fastener_connection.0",
+   "part": "preset_01_fastener_connection",
+   "kind": "obb",
+   "c": {
+    "x": -1.7037,
+    "y": 3.08,
+    "z": 0.537
+   },
+   "h": {
+    "x": 0.0881,
+    "y": 0.015,
+    "z": 0.0921
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_fastener_loop.0",
+   "part": "preset_01_fastener_loop",
+   "kind": "obb",
+   "c": {
+    "x": -1.7104,
+    "y": 0.0492,
+    "z": -0.9555
+   },
+   "h": {
+    "x": 0.01,
+    "y": 0.0161,
+    "z": 0.0171
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_fuse_01.0",
+   "part": "preset_01_fuse_01",
+   "kind": "obb",
+   "c": {
+    "x": -1.7087,
+    "y": 4.3872,
+    "z": 0.7912
+   },
+   "h": {
+    "x": 0.2224,
+    "y": 0.2013,
+    "z": 0.1737
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_fuse_02.0",
+   "part": "preset_01_fuse_02",
+   "kind": "obb",
+   "c": {
+    "x": -1.7097,
+    "y": 5.4544,
+    "z": 0.7913
+   },
+   "h": {
+    "x": 0.4693,
+    "y": 0.2356,
+    "z": 0.1747
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_nail_bent.0",
+   "part": "preset_01_nail_bent",
+   "kind": "obb",
+   "c": {
+    "x": -1.7031,
+    "y": 1.1219,
+    "z": 0.634
+   },
+   "h": {
+    "x": 0.0094,
+    "y": 0.0227,
+    "z": 0.014
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_pole.0",
+   "part": "preset_01_pole",
+   "kind": "obb",
+   "c": {
+    "x": -1.7049,
+    "y": 3,
+    "z": 0.5582
+   },
+   "h": {
+    "x": 0.0725,
+    "y": 3,
+    "z": 0.0735
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_ring_large.0",
+   "part": "preset_01_ring_large",
+   "kind": "obb",
+   "c": {
+    "x": -1.7112,
+    "y": 0.02,
+    "z": 0.5565
+   },
+   "h": {
+    "x": 0.0886,
+    "y": 0.02,
+    "z": 0.0811
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_ring_small.0",
+   "part": "preset_01_ring_small",
+   "kind": "obb",
+   "c": {
+    "x": -1.7067,
+    "y": 1.8,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_ring_small_01.0",
+   "part": "preset_01_ring_small_01",
+   "kind": "obb",
+   "c": {
+    "x": -1.7067,
+    "y": 1.7,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_ring_small_02.0",
+   "part": "preset_01_ring_small_02",
+   "kind": "obb",
+   "c": {
+    "x": -1.7067,
+    "y": 3.6,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_ring_small_03.0",
+   "part": "preset_01_ring_small_03",
+   "kind": "obb",
+   "c": {
+    "x": -1.7067,
+    "y": 4.74,
+    "z": 0.55
+   },
+   "h": {
+    "x": 0.0818,
+    "y": 0.01,
+    "z": 0.0853
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_transformer_01.0",
+   "part": "preset_01_transformer_01",
+   "kind": "obb",
+   "c": {
+    "x": -1.8763,
+    "y": 3.9215,
+    "z": 0.5614
+   },
+   "h": {
+    "x": 0.2767,
+    "y": 0.3048,
+    "z": 0.1465
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "modular_electricity_poles.preset_01_transformer_02.0",
+   "part": "preset_01_transformer_02",
+   "kind": "obb",
+   "c": {
+    "x": -1.7098,
+    "y": 5.0791,
+    "z": 0.5867
+   },
+   "h": {
+    "x": 0.0875,
+    "y": 0.1488,
+    "z": 0.108
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

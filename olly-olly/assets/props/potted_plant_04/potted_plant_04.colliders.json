@@ -1,0 +1,30 @@
+{
+ "id": "potted_plant_04",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "potted_plant_04.potted_plant_04.0",
+   "part": "potted_plant_04",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.1334,
+    "z": -0.0001
+   },
+   "h": {
+    "x": 0.084,
+    "y": 0.1338,
+    "z": 0.0923
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

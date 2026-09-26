@@ -1,0 +1,30 @@
+{
+ "id": "box_moving_l",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "box_moving_l.0",
+   "part": "box_moving_l",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.3094,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.2382,
+    "y": 0.3094,
+    "z": 0.238
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

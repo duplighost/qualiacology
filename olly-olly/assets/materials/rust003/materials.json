@@ -1,0 +1,46 @@
+{
+ "rust003": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "rust003.albedo.dds",
+   "normal": "rust003.normal.ktx2",
+   "orm": "rust003.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 41.28,
+   "normalXY": 49.09,
+   "orm": {
+    "ao": 99.0,
+    "rough": 40.71,
+    "metal": 42.39
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "metal": "metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.486,
+   "p99": 1.417
+  },
+  "specAA": false,
+  "seconds": 4.1
+ }
+}

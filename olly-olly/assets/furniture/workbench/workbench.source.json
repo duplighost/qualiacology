@@ -1,0 +1,32 @@
+{
+ "id": "workbench",
+ "title": "workbench",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 1948,
+  "lod0": 1948,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.8,
+  1.83,
+  0.83
+ ],
+ "use": "cellar workbench and pegboard",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 29738
+}

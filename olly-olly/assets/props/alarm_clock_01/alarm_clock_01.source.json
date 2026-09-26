@@ -1,0 +1,74 @@
+{
+ "id": "alarm_clock_01",
+ "title": "Alarm Clock 01",
+ "url": "https://polyhaven.com/a/alarm_clock_01",
+ "licence": "CC0 1.0",
+ "author": "Yann Kervran, James Ray Cock",
+ "bytes": 1657651,
+ "triangles": {
+  "source": 8985,
+  "lod0": 2997,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.1321,
+  0.1743,
+  0.0667
+ ],
+ "shippedBytes": 339301,
+ "parts": [
+  {
+   "name": "alarm_clock_01",
+   "movable": false,
+   "tris": 2858,
+   "pivot": [
+    0,
+    0.0658,
+    -0.0091
+   ]
+  },
+  {
+   "name": "houd_hand",
+   "movable": true,
+   "tris": 66,
+   "pivot": [
+    0,
+    0.0658,
+    -0.0091
+   ]
+  },
+  {
+   "name": "minute_hand",
+   "movable": true,
+   "tris": 50,
+   "pivot": [
+    0,
+    0.0658,
+    -0.0091
+   ]
+  },
+  {
+   "name": "second_hand",
+   "movable": true,
+   "tris": 23,
+   "pivot": [
+    0,
+    0.0658,
+    -0.0091
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "houd_hand",
+  "minute_hand",
+  "second_hand"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

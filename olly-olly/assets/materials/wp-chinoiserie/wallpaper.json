@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.5,
+  0.4481
+ ],
+ "use": "Wallpaper Fragment, 1815/25 (Paris)",
+ "source": {
+  "title": "Wallpaper Fragment, 1815/25 (Paris)",
+  "page": "https://www.artic.edu/artworks/13501",
+  "licence": "Public domain (Art Institute of Chicago, CC0 1.0)",
+  "author": "France, Paris",
+  "credit": "Gift of Robert Allerton; 1924.772",
+  "scan": "aic-13501-wallpaper-fragment-depose-au-tribunal-de-commerc.jpg",
+  "process": {
+   "lattice": [
+    [
+     1068.74,
+     0.5
+    ],
+    [
+     -0.07,
+     958.06
+    ]
+   ],
+   "score": [
+    0.02,
+    0.057
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    1069,
+    958
+   ],
+   "scale": 0.6626506024096385,
+   "blend": [
+    0.08,
+    0.08
+   ]
+  }
+ },
+ "shares": null
+}

@@ -1,0 +1,64 @@
+{
+ "id": "gate_latch_01",
+ "title": "Gate Latch 01",
+ "url": "https://polyhaven.com/a/gate_latch_01",
+ "licence": "CC0 1.0",
+ "author": "Desktoy",
+ "bytes": 2079695,
+ "triangles": {
+  "source": 5480,
+  "lod0": 2996,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.2051,
+  0.0854,
+  0.0747
+ ],
+ "shippedBytes": 328729,
+ "parts": [
+  {
+   "name": "gate_latch_01_frame",
+   "movable": true,
+   "tris": 1617,
+   "pivot": [
+    -0.071,
+    0.0368,
+    -0.0376
+   ]
+  },
+  {
+   "name": "gate_latch_01_latch",
+   "movable": true,
+   "tris": 735,
+   "pivot": [
+    0.0752,
+    0.0372,
+    -0.0317
+   ]
+  },
+  {
+   "name": "gate_latch_01_hook",
+   "movable": true,
+   "tris": 644,
+   "pivot": [
+    -0.0708,
+    0.0387,
+    -0.0223
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "gate_latch_01_frame",
+  "gate_latch_01_latch",
+  "gate_latch_01_hook"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

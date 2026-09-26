@@ -1,0 +1,63 @@
+{
+ "baseball_bat": {
+  "files": {
+   "albedo": "baseball_bat.albedo.dds",
+   "normal": "baseball_bat.normal.ktx2",
+   "orm": "baseball_bat.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 41.95,
+   "normalXY": 53.58,
+   "orm": {
+    "ao": 99,
+    "rough": 36.97,
+    "metal": 41.34
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.141,
+   "p99": 1.801
+  },
+  "specAA": true,
+  "seconds": 1.4,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

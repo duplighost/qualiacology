@@ -1,0 +1,155 @@
+{
+ "set:cardboard": {
+  "files": {},
+  "set": "cardboard",
+  "gltf": {
+   "baseColor": [
+    0.55,
+    0.4,
+    0.25,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#cdbb8a:0.22": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.6187,
+    0.5054,
+    0.259,
+    1.0
+   ],
+   "roughness": 0.22,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#2a1e12:0.9": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0189,
+    0.009,
+    0.0029,
+    1.0
+   ],
+   "roughness": 0.9,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#140d07:0.95": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0037,
+    0.0014,
+    0.0004,
+    1.0
+   ],
+   "roughness": 0.95,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "paper:hale/box.stamp": {
+  "files": {},
+  "paper": "hale/box.stamp",
+  "gltf": {
+   "baseColor": [
+    0.9,
+    0.88,
+    0.8,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "paper:hale/sam-keep": {
+  "files": {},
+  "paper": "hale/sam-keep",
+  "gltf": {
+   "baseColor": [
+    0.9,
+    0.88,
+    0.8,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

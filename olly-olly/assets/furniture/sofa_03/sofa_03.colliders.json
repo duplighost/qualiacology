@@ -1,0 +1,114 @@
+{
+ "id": "sofa_03",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "sofa_03.sofa_03.0",
+   "part": "sofa_03",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.5589,
+    "z": 0
+   },
+   "h": {
+    "x": 1.1705,
+    "y": 0.5589,
+    "z": 0.4625
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  },
+  {
+   "id": "sofa_03.sofa_03.1",
+   "part": "sofa_03",
+   "kind": "obb",
+   "c": {
+    "x": 1.268,
+    "y": 0.555,
+    "z": 0.0463
+   },
+   "h": {
+    "x": 0.0975,
+    "y": 0.3048,
+    "z": 0.4163
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  },
+  {
+   "id": "sofa_03.sofa_03.2",
+   "part": "sofa_03",
+   "kind": "obb",
+   "c": {
+    "x": -1.268,
+    "y": 0.555,
+    "z": 0.0463
+   },
+   "h": {
+    "x": 0.0975,
+    "y": 0.3048,
+    "z": 0.4163
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  },
+  {
+   "id": "sofa_03.sofa_03.3",
+   "part": "sofa_03",
+   "kind": "obb",
+   "c": {
+    "x": -1.2193,
+    "y": 0.3166,
+    "z": -0.4163
+   },
+   "h": {
+    "x": 0.0488,
+    "y": 0.0664,
+    "z": 0.0463
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  },
+  {
+   "id": "sofa_03.sofa_03.4",
+   "part": "sofa_03",
+   "kind": "obb",
+   "c": {
+    "x": 1.2193,
+    "y": 0.3166,
+    "z": -0.4163
+   },
+   "h": {
+    "x": 0.0488,
+    "y": 0.0664,
+    "z": 0.0463
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "television_02": {
+  "files": {
+   "albedo": "television_02.albedo.dds",
+   "normal": "television_02.normal.ktx2",
+   "orm": "television_02.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 41.13,
+   "normalXY": 49.32,
+   "orm": {
+    "ao": 99,
+    "rough": 38.24,
+    "metal": 37.04
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.291,
+   "p99": 2.471
+  },
+  "specAA": true,
+  "seconds": 5.2,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

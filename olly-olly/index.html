@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="OLLY OLLY is a first-person horror shooter set on one Halloween night on a New England street: twelve houses, a churchyard, a forest, and a tall figure in a bedsheet looking for you. Keyboard and mouse."><title>OLLY OLLY | Qualiacology</title>
+<link rel="canonical" href="https://qualiacology.com/olly-olly/">
+<meta property="og:site_name" content="Qualiacology"><meta property="og:type" content="website"><meta property="og:title" content="OLLY OLLY | Qualiacology"><meta property="og:description" content="One Halloween night on Alder Lane. Keyboard and mouse."><meta property="og:url" content="https://qualiacology.com/olly-olly/"><meta property="og:image" content="https://qualiacology.com/assets/games/olly-olly-card-clean.jpg"><meta property="og:image:width" content="1280"><meta property="og:image:height" content="720"><meta property="og:image:alt" content="Four figures in rubber Halloween masks, a skull, an old man, a devil and a ghoul, walking down a dark street at night with pillowcases, and a tall figure in a bedsheet standing behind them">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="OLLY OLLY | Qualiacology"><meta name="twitter:description" content="One Halloween night on Alder Lane. Keyboard and mouse."><meta name="twitter:image" content="https://qualiacology.com/assets/games/olly-olly-card-clean.jpg"><meta name="twitter:image:alt" content="Four figures in rubber Halloween masks, a skull, an old man, a devil and a ghoul, walking down a dark street at night with pillowcases, and a tall figure in a bedsheet standing behind them">
+<style>
+/* Home pill, top-right, on the title menu only: play is the canvas and nothing else. */
+.home-link{position:fixed;right:max(14px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));z-index:1000;display:inline-flex;align-items:center;min-height:34px;padding:0 13px;color:rgba(232,226,214,.86);text-decoration:none;font:800 11px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.14em;text-transform:uppercase;border:1px solid rgba(232,226,214,.3);border-radius:999px;background:rgba(6,6,8,.7);transition:opacity .16s ease}
+.home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(232,226,214,.8);outline:0}
+body.playing .home-link{opacity:0;visibility:hidden;pointer-events:none}
+</style>
+<script>
+addEventListener('DOMContentLoaded',()=>{const m=document.getElementById('menu'),f=()=>document.body.classList.toggle('playing',!m||m.hidden||!!document.pointerLockElement);
+if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden']});document.addEventListener('pointerlockchange',f);f();});
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <script type="module" crossorigin src="./assets/index-UG8kQCQC.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BlU2nG8F.css">
+</head>
+<body>
+<a class="home-link" href="/">Qualiacology</a>
+<canvas id="game" tabindex="-1" aria-label="OLLY OLLY game"></canvas>
+<div id="hud" hidden>
+  <div id="crosshair"></div>
+  <div id="hitmark"></div>
+</div>
+<div id="menu">
+  <div id="menu-inner">
+    <h1 id="title">OLLY OLLY</h1>
+    <button id="play" disabled>Loading</button>
+    <div id="load-bar"><div id="load-fill"></div></div>
+    <p id="night-card" class="night-card"></p>
+    <nav class="menu-links" aria-label="Title menu">
+      <button data-again hidden>AGAIN!</button>
+      <button id="new-night" hidden>New night</button>
+      <button data-panel="porches-panel">Porches</button>
+      <button data-panel="settings-panel">Settings</button>
+      <button data-panel="credits-panel">Credits</button>
+    </nav>
+  </div>
+  <div class="menu-signature">Alex · Qualiacology</div>
+</div>
+<div id="paused" hidden>
+  <div class="pause-inner">
+    <h2>Paused</h2>
+    <button id="resume" class="primary">Resume</button>
+    <nav class="menu-links" aria-label="Pause menu">
+      <button data-panel="porches-panel">Porches</button>
+      <button data-panel="settings-panel">Settings</button>
+      <button data-panel="credits-panel">Credits</button>
+      <button id="return-title">Title</button>
+    </nav>
+    <p class="small-note">Continue returns to your last rest point.</p>
+  </div>
+</div>
+<dialog id="settings-panel" aria-labelledby="settings-title">
+  <div class="panel-heading"><h2 id="settings-title">Settings</h2><button data-close aria-label="Close settings">Close</button></div>
+  <label class="setting" for="setting-master"><span>Volume</span><output for="setting-master" id="value-master">100%</output>
+    <input id="setting-master" type="range" min="0" max="100" step="1" value="100"></label>
+  <label class="setting" for="setting-music"><span>Music</span><output for="setting-music" id="value-music">100%</output>
+    <input id="setting-music" type="range" min="0" max="100" step="1" value="100"></label>
+  <label class="setting" for="setting-sensitivity"><span>Mouse sensitivity</span><output for="setting-sensitivity" id="value-sensitivity">1.00×</output>
+    <input id="setting-sensitivity" type="range" min="25" max="300" step="5" value="100"></label>
+  <details class="controls"><summary>Controls</summary>
+    <dl>
+      <dt>Move</dt><dd>W A S D / arrow keys</dd><dt>Look</dt><dd>Mouse</dd>
+      <dt>Sprint / crouch</dt><dd>Shift / C</dd><dt>Jump / climb</dt><dd>Space</dd>
+      <dt>Use</dt><dd>E</dd><dt>Fire / aim</dt><dd>Left / right mouse</dd>
+      <dt>Reload</dt><dd>R</dd><dt>Kick</dt><dd>V / middle mouse</dd>
+      <dt>Firecracker</dt><dd>Q</dd><dt>Flashlight</dt><dd>F</dd>
+      <dt>Weapons</dt><dd>1–4 / mouse wheel</dd><dt>Map</dt><dd>Tab</dd><dt>Pause</dt><dd>Esc</dd>
+    </dl>
+  </details>
+  <button id="reset-settings" class="quiet-button">Reset settings</button>
+</dialog>
+<dialog id="porches-panel" aria-labelledby="porches-title">
+  <div class="panel-heading"><h2 id="porches-title">Porches</h2><button data-close aria-label="Close porch records">Close</button></div>
+  <p class="porch-note">Ghost: all discoveries. Sweet: the candy. Heart: a clear without a hit. Bat: a clear under the target time.</p>
+  <table class="porch-records"><thead><tr><th scope="col">House</th><th scope="col">Ghost</th><th scope="col">Sweet</th><th scope="col">Heart</th><th scope="col">Bat</th><th scope="col">Best</th><th scope="col">Target</th></tr></thead><tbody id="porch-records"></tbody></table>
+  <p class="porch-note">Time starts when you enter. Continue keeps the clock and any hits. Earned decorations stay through new nights.</p>
+</dialog>
+<dialog id="credits-panel" aria-labelledby="credits-title">
+  <div class="panel-heading"><h2 id="credits-title">OLLY OLLY</h2><button data-close aria-label="Close credits">Close</button></div>
+  <p>A game by Alex · <a href="https://qualiacology.com" target="_blank" rel="noopener">Qualiacology</a></p>
+  <p class="credit-thanks">Thank you for playing.</p>
+  <h3>Models and animation</h3>
+  <p>AK74m — creationwasteland. Springfield Armory XD Mod.2 — raimeiyonke. Weapon animations — Cransh.
+    Remington 870 — 8sianDude / haoliu95. Eric Rigged 001 hands and character adaptations — Renderpeople.</p>
+  <p>Licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.
+    Adapted for Winterline and OLLY OLLY: weapon and hand extraction, materials, textures, posing and mechanics.
+    <a href="assets/weapons/ASSET-LICENSES.md" target="_blank" rel="noopener">Full weapon and hand credits</a> ·
+    <a href="assets/weapons/SHOTGUN-LICENSE.md" target="_blank" rel="noopener">Shotgun credits</a></p>
+  <h3>Sound and materials</h3>
+  <p>Free Firearm Sound Library — Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney.
+    Impact Sounds and RPG Audio — Kenney. World recordings — BigSoundBank.
+    Photographed materials and models — Poly Haven and ambientCG. CC0.</p>
+  <p><a href="assets/audio/guns/ASSET-LICENSES.md" target="_blank" rel="noopener">Recording credits and adaptations</a> ·
+    <a href="ASSET-LICENSES.md" target="_blank" rel="noopener">All asset credits</a> ·
+    <a href="THIRD-PARTY-NOTICES.txt" target="_blank" rel="noopener">Software notices</a></p>
+</dialog>
+<dialog id="new-night-panel" aria-labelledby="new-night-title">
+  <div class="panel-heading"><h2 id="new-night-title">New night</h2></div>
+  <p>Your current night will be replaced when you press Play.</p>
+  <div class="panel-actions"><button data-close>Cancel</button><button id="confirm-new-night" class="primary">New night</button></div>
+</dialog>
+<dialog id="again-panel" aria-labelledby="again-title">
+  <div class="panel-heading"><h2 id="again-title">AGAIN!</h2></div>
+  <p>Your guns, upgrades and movement stay. The night starts over. He remembers where you hid.</p>
+  <p id="again-card"></p>
+  <p>The completed night stays saved until you press Play.</p>
+  <div class="panel-actions"><button data-close>Cancel</button><button id="confirm-again" class="primary">AGAIN!</button></div>
+</dialog>
+</body>
+</html>

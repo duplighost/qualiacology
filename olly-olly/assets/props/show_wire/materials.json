@@ -1,0 +1,79 @@
+{
+ "flat:#8d9296:0.35:0.9": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.2716,
+    0.2932,
+    0.3112,
+    1.0
+   ],
+   "roughness": 0.35,
+   "metallic": 0.9,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:metal.iron": {
+  "files": {},
+  "lib": "metal.iron",
+  "gltf": {
+   "baseColor": [
+    0.2,
+    0.2,
+    0.2,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:wood.weathered": {
+  "files": {},
+  "lib": "wood.weathered",
+  "gltf": {
+   "baseColor": [
+    0.7,
+    0.7,
+    0.7,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

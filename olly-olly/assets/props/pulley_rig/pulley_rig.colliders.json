@@ -1,0 +1,30 @@
+{
+ "id": "pulley_rig",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "pulley_rig.0",
+   "part": "pulley_rig",
+   "kind": "obb",
+   "c": {
+    "x": 4.953,
+    "y": 1.922,
+    "z": -2.4785
+   },
+   "h": {
+    "x": 0.433,
+    "y": 0.928,
+    "z": 0.0885
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

@@ -1,0 +1,32 @@
+{
+ "id": "kitchen_stove",
+ "title": "kitchen stove",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 5572,
+  "lod0": 5572,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.76,
+  1.11,
+  0.719
+ ],
+ "use": "avocado range, coils and backguard",
+ "modelled": true,
+ "surface": "metal",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 77256
+}

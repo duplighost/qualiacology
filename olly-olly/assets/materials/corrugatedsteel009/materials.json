@@ -1,0 +1,47 @@
+{
+ "corrugatedsteel009": {
+  "size": [
+   1024,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "corrugatedsteel009.albedo.dds",
+   "normal": "corrugatedsteel009.normal.ktx2",
+   "orm": "corrugatedsteel009.orm.dds"
+  },
+  "bytes": {
+   "albedo": 349672,
+   "normal": 175264,
+   "orm": 87528
+  },
+  "psnr": {
+   "albedo": 38.35,
+   "normalXY": 42.89,
+   "orm": {
+    "ao": 33.35,
+    "rough": 32.18,
+    "metal": 32.54
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "metal": "metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.911,
+   "p99": 4.195
+  },
+  "specAA": true,
+  "seconds": 2.3
+ }
+}

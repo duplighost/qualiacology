@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.27,
+  0.6578
+ ],
+ "use": "Wild Tulip, 1884 (William Morris) (faded)",
+ "source": {
+  "title": "Wild Tulip, 1884 (William Morris)",
+  "page": "https://www.metmuseum.org/art/collection/search/375808",
+  "licence": "Public domain (The Met Open Access, CC0 1.0)",
+  "author": "William Morris (British, Walthamstow, London 1834\u20131896 Hammersmith, London)",
+  "credit": "Purchase, Edward C. Moore Jr. Gift, 1923; accession 23.163.4f",
+  "scan": "met-375808-wild-tulip.jpg",
+  "process": {
+   "lattice": [
+    [
+     724.36,
+     0.77
+    ],
+    [
+     -1.11,
+     1763.58
+    ]
+   ],
+   "score": [
+    0.597,
+    0.555
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    724,
+    1764
+   ],
+   "scale": 1.0,
+   "blend": [
+    0.08,
+    0.06
+   ]
+  }
+ },
+ "shares": "wp-tulip"
+}

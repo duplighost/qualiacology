@@ -1,0 +1,40 @@
+{
+ "id": "fancy_picture_frame_02",
+ "title": "Fancy Picture Frame 02",
+ "url": "https://polyhaven.com/a/fancy_picture_frame_02",
+ "licence": "CC0 1.0",
+ "author": "Rob Tuytel, Rico Cilliers",
+ "bytes": 1728120,
+ "triangles": {
+  "source": 35102,
+  "lod0": 3000,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.6608,
+  0.7708,
+  0.0894
+ ],
+ "shippedBytes": 636832,
+ "parts": [
+  {
+   "name": "fancy_picture_frame_02",
+   "movable": false,
+   "tris": 3000,
+   "pivot": [
+    0.0019,
+    0.391,
+    -0.0459
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

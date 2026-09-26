@@ -1,0 +1,32 @@
+{
+ "id": "lace_bay",
+ "title": "lace bay",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 5972,
+  "lod0": 5972,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  2.2487,
+  1.4331,
+  0.0985
+ ],
+ "use": "lace at her bay window, tied back so the lane shows",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 40958
+}

@@ -1,0 +1,40 @@
+{
+ "id": "wooden_picnic_table",
+ "title": "Wooden Picnic Table",
+ "url": "https://polyhaven.com/a/wooden_picnic_table",
+ "licence": "CC0 1.0",
+ "author": "Ulan Cabanilla",
+ "bytes": 4308296,
+ "triangles": {
+  "source": 10210,
+  "lod0": 7999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  2.241,
+  0.746,
+  3.0223
+ ],
+ "shippedBytes": 2489051,
+ "parts": [
+  {
+   "name": "wooden_picnic_table",
+   "movable": false,
+   "tris": 7999,
+   "pivot": [
+    0.0008,
+    0.0003,
+    -0.0096
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

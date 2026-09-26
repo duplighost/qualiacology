@@ -1,0 +1,32 @@
+{
+ "id": "stone_flats",
+ "title": "stone flats",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 196,
+  "lod0": 196,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  1.4,
+  0.9871,
+  0.3159
+ ],
+ "use": "three plywood gravestones for the show leaning on the wall",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 14221
+}

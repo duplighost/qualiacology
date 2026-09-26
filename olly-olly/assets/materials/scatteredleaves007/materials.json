@@ -1,0 +1,55 @@
+{
+ "scatteredleaves007": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": true,
+  "wrap": true,
+  "files": {
+   "albedo": "scatteredleaves007.albedo.dds",
+   "normal": "scatteredleaves007.normal.ktx2",
+   "orm": "scatteredleaves007.orm.dds"
+  },
+  "bytes": {
+   "albedo": 1398256,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 37.48,
+   "alpha": 40.55,
+   "normalXY": 46.82,
+   "orm": {
+    "ao": 99.0,
+    "rough": 44.96,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "alpha": "alpha.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.5888,
+   0.5888,
+   0.5888,
+   0.5888,
+   0.5889,
+   0.5889
+  ],
+  "normalErrorDeg": {
+   "mean": 0.55,
+   "p99": 2.068
+  },
+  "specAA": false,
+  "seconds": 5.3
+ }
+}

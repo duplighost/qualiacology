@@ -1,0 +1,204 @@
+{
+ "flat:#8d9294:0.42:0.85": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.2716,
+    0.2932,
+    0.3021,
+    1.0
+   ],
+   "roughness": 0.42,
+   "metallic": 0.85,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "paper:pruitt/label.paint": {
+  "files": {},
+  "paper": "pruitt/label.paint",
+  "gltf": {
+   "baseColor": [
+    0.9,
+    0.88,
+    0.8,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#161616:0.5": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0046,
+    0.0046,
+    0.0046,
+    1.0
+   ],
+   "roughness": 0.5,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#d9661a:0.45": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.7012,
+    0.1332,
+    0.0066,
+    1.0
+   ],
+   "roughness": 0.45,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#e6e0d0:0.5": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.7969,
+    0.7519,
+    0.6388,
+    1.0
+   ],
+   "roughness": 0.5,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#2e4a1e:0.5": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0231,
+    0.0658,
+    0.009,
+    1.0
+   ],
+   "roughness": 0.5,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#6b1010:0.45": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.148,
+    0.0023,
+    0.0023,
+    1.0
+   ],
+   "roughness": 0.45,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:wood.raw": {
+  "files": {},
+  "lib": "wood.raw",
+  "gltf": {
+   "baseColor": [
+    0.55,
+    0.45,
+    0.32,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "id": "lumber_rack",
+ "title": "lumber rack",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2948,
+  "lod0": 2948,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.725,
+  1.95,
+  0.5086
+ ],
+ "use": "a wall rack of lumber",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 45046
+}

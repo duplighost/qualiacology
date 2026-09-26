@@ -1,0 +1,130 @@
+{
+ "flat:#b4b6b8:0.25:1": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.4647,
+    0.4762,
+    0.4878,
+    1.0
+   ],
+   "roughness": 0.25,
+   "metallic": 1.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#6a4a2a:0.5": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.145,
+    0.0658,
+    0.0189,
+    1.0
+   ],
+   "roughness": 0.5,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:carpet.tan": {
+  "files": {},
+  "lib": "carpet.tan",
+  "gltf": {
+   "baseColor": [
+    0.7,
+    0.7,
+    0.7,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:carpet.navy": {
+  "files": {},
+  "lib": "carpet.navy",
+  "gltf": {
+   "baseColor": [
+    0.7,
+    0.7,
+    0.7,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:fabric.wool-red": {
+  "files": {},
+  "lib": "fabric.wool-red",
+  "gltf": {
+   "baseColor": [
+    0.5,
+    0.06,
+    0.06,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

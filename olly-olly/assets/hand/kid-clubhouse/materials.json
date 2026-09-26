@@ -1,0 +1,36 @@
+{
+ "kid-clubhouse": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": false,
+  "files": {
+   "albedo": "kid-clubhouse.albedo.dds",
+   "orm": "kid-clubhouse.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 35.59,
+   "orm": {
+    "ao": 99.0,
+    "rough": 48.12,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "kid-clubhouse_color.png",
+   "rough": "kid-clubhouse_roughness.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "orm": "DXT1"
+  },
+  "specAA": false,
+  "seconds": 5.8
+ }
+}

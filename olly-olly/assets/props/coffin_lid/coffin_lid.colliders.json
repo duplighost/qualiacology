@@ -1,0 +1,30 @@
+{
+ "id": "coffin_lid",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "coffin_lid.0",
+   "part": "coffin_lid",
+   "kind": "obb",
+   "c": {
+    "x": 0.2,
+    "y": 0.95,
+    "z": 0.008
+   },
+   "h": {
+    "x": 0.32,
+    "y": 0.95,
+    "z": 0.018
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

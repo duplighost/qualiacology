@@ -1,0 +1,15 @@
+{
+  "provider": "Picsart",
+  "model": "gemini-2.5-pro-tts",
+  "voice": "Charon",
+  "generated": "2026-09-24",
+  "requestId": "82f0e100-ce0f-41f5-88ef-c63f1e795fa8",
+  "sourceUrl": "https://gcdn.picsart.com/cloud-storage/077b8fde-c1e0-47c7-9296-7ff9ca092045.wav",
+  "sourceSha256": "3be3fa8be6b79b7dfeb93e61fedbf8a268d35fc9787d5895c0706d3c77ce151d",
+  "textSource": "src/game/canon.js CANON.campBroadcast",
+  "direction": "Relaxed local AM baseball announcer, warm dry baritone, natural pauses, no shouting, no music.",
+  "processing": "420-2650 Hz receiver, gentle compression, deterministic pink static, fades, mono 24 kHz Vorbis.",
+  "duration": 39.210958,
+  "outputSha256": "bc193ab7c2cc8ac8fe956bbe26d836ed59b6cad68892079e7f6de7e0637600d0",
+  "verification": "Generated take; mix and subjective performance require a listening pass."
+}

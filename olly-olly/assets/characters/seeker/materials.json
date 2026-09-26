@@ -1,0 +1,45 @@
+{
+ "cotton": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "cotton.albedo.dds",
+   "normal": "cotton.normal.ktx2",
+   "orm": "cotton.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 37.64,
+   "normalXY": 43.82,
+   "orm": {
+    "ao": 99.0,
+    "rough": 48.87,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "Fabric001_1K-JPG_Color.png",
+   "normal": "Fabric001_1K-JPG_NormalGL.png",
+   "rough": "Fabric001_1K-JPG_Roughness.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.926,
+   "p99": 2.195
+  },
+  "specAA": true,
+  "seconds": 9.3
+ }
+}

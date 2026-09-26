@@ -1,0 +1,88 @@
+{
+ "vintage_grandfather_clock_01": {
+  "files": {
+   "albedo": "vintage_grandfather_clock_01.albedo.dds",
+   "normal": "vintage_grandfather_clock_01.normal.ktx2",
+   "orm": "vintage_grandfather_clock_01.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 39.34,
+   "normalXY": 46.53,
+   "orm": {
+    "ao": 99,
+    "rough": 31.19,
+    "metal": 33.63
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.518,
+   "p99": 4.204
+  },
+  "specAA": false,
+  "seconds": 7,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "vintage_grandfather_clock_01_glass": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.4500000476837158,
+   "clearcoat": 0.800000011920929
+  }
+ }
+}

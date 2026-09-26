@@ -1,0 +1,46 @@
+{
+ "brass": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "brass.albedo.dds",
+   "normal": "brass.normal.ktx2",
+   "orm": "brass.orm.dds"
+  },
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 43.39,
+   "normalXY": 99.0,
+   "orm": {
+    "ao": 99.0,
+    "rough": 46.5,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "metal": "metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.0,
+   "p99": 0.0
+  },
+  "specAA": true,
+  "seconds": 1.4
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "id": "toilet",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "toilet.0",
+   "part": "toilet",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.415,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.22,
+    "y": 0.415,
+    "z": 0.2985
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  }
+ ]
+}

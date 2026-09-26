@@ -1,0 +1,32 @@
+{
+ "id": "tape_roll",
+ "title": "tape roll",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 424,
+  "lod0": 424,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.126,
+  0.0486,
+  0.126
+ ],
+ "use": "a roll of packing tape",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 7769
+}

@@ -1,0 +1,177 @@
+{
+ "id": "bolt_action_rifle_7_62",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "bolt_action_rifle_7_62.bolt_action_rifle_7_62_scope.0",
+   "part": "bolt_action_rifle_7_62_scope",
+   "kind": "obb",
+   "c": {
+    "x": -0.1875,
+    "y": 0.1796,
+    "z": -0.0142
+   },
+   "h": {
+    "x": 0.0539,
+    "y": 0.0253,
+    "z": 0.019
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "bolt_action_rifle_7_62.bolt_action_rifle_7_62_wrap.0",
+   "part": "bolt_action_rifle_7_62_wrap",
+   "kind": "obb",
+   "c": {
+    "x": -0.4615,
+    "y": 0.0733,
+    "z": -0.0069
+   },
+   "h": {
+    "x": 0.1137,
+    "y": 0.0559,
+    "z": 0.0201
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "bolt_action_rifle_7_62.bolt_action_rifle_7_62.0",
+   "part": "bolt_action_rifle_7_62",
+   "kind": "obb",
+   "c": {
+    "x": -0.4616,
+    "y": 0.0716,
+    "z": -0.0069
+   },
+   "h": {
+    "x": 0.1539,
+    "y": 0.0715,
+    "z": 0.0215
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "bolt_action_rifle_7_62.bolt_action_rifle_7_62.1",
+   "part": "bolt_action_rifle_7_62",
+   "kind": "obb",
+   "c": {
+    "x": 0.1539,
+    "y": 0.1234,
+    "z": -0.0069
+   },
+   "h": {
+    "x": 0.4616,
+    "y": 0.0555,
+    "z": 0.0215
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "bolt_action_rifle_7_62.bolt_action_rifle_7_62_bolt_b.0",
+   "part": "bolt_action_rifle_7_62_bolt_b",
+   "kind": "obb",
+   "c": {
+    "x": -0.2317,
+    "y": 0.1614,
+    "z": -0.0042
+   },
+   "h": {
+    "x": 0.0716,
+    "y": 0.0127,
+    "z": 0.0117
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "bolt_action_rifle_7_62.bolt_action_rifle_7_62_bolt_a.0",
+   "part": "bolt_action_rifle_7_62_bolt_a",
+   "kind": "obb",
+   "c": {
+    "x": -0.1941,
+    "y": 0.1459,
+    "z": 0.0086
+   },
+   "h": {
+    "x": 0.0613,
+    "y": 0.0223,
+    "z": 0.025
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "bolt_action_rifle_7_62.bolt_action_rifle_7_62_bullet_54mm.0",
+   "part": "bolt_action_rifle_7_62_bullet_54mm",
+   "kind": "obb",
+   "c": {
+    "x": -0.181,
+    "y": 0.0544,
+    "z": -0.007
+   },
+   "h": {
+    "x": 0.0384,
+    "y": 0.0071,
+    "z": 0.0074
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "bolt_action_rifle_7_62.bolt_action_rifle_7_62_trigger.0",
+   "part": "bolt_action_rifle_7_62_trigger",
+   "kind": "obb",
+   "c": {
+    "x": -0.2692,
+    "y": 0.0935,
+    "z": -0.0069
+   },
+   "h": {
+    "x": 0.0075,
+    "y": 0.0143,
+    "z": 0.0037
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

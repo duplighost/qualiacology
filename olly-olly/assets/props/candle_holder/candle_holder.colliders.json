@@ -1,0 +1,30 @@
+{
+ "id": "candle_holder",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "candle_holder.0",
+   "part": "candle_holder",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.03,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.078,
+    "y": 0.03,
+    "z": 0.064
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

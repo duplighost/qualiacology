@@ -1,0 +1,63 @@
+{
+ "large_iron_gate": {
+  "files": {
+   "albedo": "large_iron_gate.albedo.dds",
+   "normal": "large_iron_gate.normal.ktx2",
+   "orm": "large_iron_gate.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 42.22,
+   "normalXY": 46.32,
+   "orm": {
+    "ao": 99,
+    "rough": 38.44,
+    "metal": 40.46
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.484,
+   "p99": 3.929
+  },
+  "specAA": true,
+  "seconds": 5.4,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

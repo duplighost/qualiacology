@@ -1,0 +1,138 @@
+{
+ "hanging_picture_frame_01": {
+  "files": {
+   "albedo": "hanging_picture_frame_01.albedo.dds",
+   "normal": "hanging_picture_frame_01.normal.ktx2",
+   "orm": "hanging_picture_frame_01.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.46,
+   "normalXY": 60.87,
+   "orm": {
+    "ao": 99,
+    "rough": 40.22,
+    "metal": 40.87
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.044,
+   "p99": 0.637
+  },
+  "specAA": true,
+  "seconds": 1.6,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "hanging_picture_frame_01_artwork": {
+  "files": {
+   "albedo": "hanging_picture_frame_01_artwork.albedo.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904
+  },
+  "psnr": {
+   "albedo": 41.76
+  },
+  "format": {
+   "albedo": "DXT1"
+  },
+  "seconds": 1,
+  "factors": {
+   "roughness": 0.298,
+   "metalness": 0.298
+  },
+  "notes": [
+   "orm flat: factors"
+  ],
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "hanging_picture_frame_01_glass": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

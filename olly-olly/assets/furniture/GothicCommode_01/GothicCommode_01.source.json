@@ -1,0 +1,74 @@
+{
+ "id": "GothicCommode_01",
+ "title": "Gothic Commode 01",
+ "url": "https://polyhaven.com/a/GothicCommode_01",
+ "licence": "CC0 1.0",
+ "author": "Kirill Sannikov",
+ "bytes": 604161,
+ "triangles": {
+  "source": 3897,
+  "lod0": 3897,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.2014,
+  1.212,
+  0.5807
+ ],
+ "shippedBytes": 1254600,
+ "parts": [
+  {
+   "name": "GothicCommode_01",
+   "movable": false,
+   "tris": 1518,
+   "pivot": [
+    0.0011,
+    0,
+    -0.0012
+   ]
+  },
+  {
+   "name": "GothicCommode_01_door03",
+   "movable": true,
+   "tris": 628,
+   "pivot": [
+    -0.5008,
+    0.3563,
+    0.0043
+   ]
+  },
+  {
+   "name": "GothicCommode_01_door02",
+   "movable": true,
+   "tris": 628,
+   "pivot": [
+    -0.5008,
+    0.6668,
+    -0.015
+   ]
+  },
+  {
+   "name": "GothicCommode_01_door01",
+   "movable": true,
+   "tris": 1123,
+   "pivot": [
+    -0.5008,
+    0.9861,
+    -0.0003
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "GothicCommode_01_door03",
+  "GothicCommode_01_door02",
+  "GothicCommode_01_door01"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

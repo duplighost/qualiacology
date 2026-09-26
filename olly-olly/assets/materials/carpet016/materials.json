@@ -1,0 +1,46 @@
+{
+ "carpet016": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "carpet016.albedo.dds",
+   "normal": "carpet016.normal.ktx2",
+   "orm": "carpet016.orm.dds"
+  },
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.22,
+   "normalXY": 44.95,
+   "orm": {
+    "ao": 40.63,
+    "rough": 42.23,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.826,
+   "p99": 1.858
+  },
+  "specAA": true,
+  "seconds": 1.2
+ }
+}

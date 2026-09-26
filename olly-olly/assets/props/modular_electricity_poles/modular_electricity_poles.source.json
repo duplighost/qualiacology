@@ -1,0 +1,1060 @@
+{
+ "id": "modular_electricity_poles",
+ "title": "Modular Electricity Poles",
+ "url": "https://polyhaven.com/a/modular_electricity_poles",
+ "licence": "CC0 1.0",
+ "author": "James Ray Cock",
+ "bytes": 12423631,
+ "triangles": {
+  "source": 200610,
+  "lod0": 23945,
+  "lod1": 7977
+ },
+ "budget": {
+  "lod0": 24000,
+  "lod1": 8000
+ },
+ "class": "hero",
+ "dims": [
+  13.1169,
+  7,
+  1.9512
+ ],
+ "shippedBytes": 3164429,
+ "parts": [
+  {
+   "name": "bolt_large",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -0.2096,
+    2.1,
+    0.4725
+   ]
+  },
+  {
+   "name": "bolt_small",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -0.2096,
+    2,
+    0.5527
+   ]
+  },
+  {
+   "name": "cap",
+   "movable": false,
+   "tris": 19,
+   "pivot": [
+    0.7904,
+    4.9,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_large_01",
+   "movable": false,
+   "tris": 1600,
+   "pivot": [
+    3.4904,
+    5.1,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_large_02",
+   "movable": false,
+   "tris": 925,
+   "pivot": [
+    3.4904,
+    4.3,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_large_offset_01",
+   "movable": false,
+   "tris": 1648,
+   "pivot": [
+    2.1904,
+    5.1,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_large_offset_02",
+   "movable": false,
+   "tris": 925,
+   "pivot": [
+    2.1904,
+    4.3,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_single_01",
+   "movable": false,
+   "tris": 113,
+   "pivot": [
+    0.7904,
+    3.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_single_02",
+   "movable": false,
+   "tris": 113,
+   "pivot": [
+    0.7904,
+    4.1,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_single_03",
+   "movable": false,
+   "tris": 138,
+   "pivot": [
+    0.7904,
+    3.4,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_small_01",
+   "movable": false,
+   "tris": 1173,
+   "pivot": [
+    4.7904,
+    5.1,
+    0.5525
+   ]
+  },
+  {
+   "name": "connection_small_02",
+   "movable": false,
+   "tris": 672,
+   "pivot": [
+    4.7904,
+    4.3,
+    0.5525
+   ]
+  },
+  {
+   "name": "fastener",
+   "movable": false,
+   "tris": 215,
+   "pivot": [
+    0.7004,
+    3.0834,
+    0.5524
+   ]
+  },
+  {
+   "name": "fastener_bolt",
+   "movable": false,
+   "tris": 19,
+   "pivot": [
+    -0.2096,
+    1.9,
+    0.5277
+   ]
+  },
+  {
+   "name": "fastener_connection",
+   "movable": false,
+   "tris": 42,
+   "pivot": [
+    0.7904,
+    3.08,
+    0.5525
+   ]
+  },
+  {
+   "name": "fastener_loop",
+   "movable": false,
+   "tris": 16,
+   "pivot": [
+    -0.7176,
+    0.001,
+    0.5524
+   ]
+  },
+  {
+   "name": "fastener_nut",
+   "movable": false,
+   "tris": 28,
+   "pivot": [
+    -0.2096,
+    1.9,
+    0.5277
+   ]
+  },
+  {
+   "name": "fuse_01",
+   "movable": false,
+   "tris": 286,
+   "pivot": [
+    -0.2096,
+    4.3,
+    0.5525
+   ]
+  },
+  {
+   "name": "fuse_02",
+   "movable": false,
+   "tris": 437,
+   "pivot": [
+    -0.2096,
+    5.1,
+    0.5525
+   ]
+  },
+  {
+   "name": "insulator_01",
+   "movable": false,
+   "tris": 253,
+   "pivot": [
+    2.2404,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "insulator_02",
+   "movable": false,
+   "tris": 253,
+   "pivot": [
+    1.8904,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "insulator_03",
+   "movable": false,
+   "tris": 253,
+   "pivot": [
+    1.4904,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "insulator_cable_01",
+   "movable": false,
+   "tris": 29,
+   "pivot": [
+    2.2404,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "insulator_cable_02",
+   "movable": false,
+   "tris": 27,
+   "pivot": [
+    1.8904,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "insulator_cable_03",
+   "movable": false,
+   "tris": 29,
+   "pivot": [
+    1.4904,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "insulators_large",
+   "movable": false,
+   "tris": 759,
+   "pivot": [
+    3.4904,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "insulators_small",
+   "movable": false,
+   "tris": 506,
+   "pivot": [
+    4.7904,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "nail",
+   "movable": false,
+   "tris": 13,
+   "pivot": [
+    -0.2096,
+    2.2,
+    0.5525
+   ]
+  },
+  {
+   "name": "nail_bent",
+   "movable": false,
+   "tris": 23,
+   "pivot": [
+    -0.2096,
+    2.3,
+    0.5525
+   ]
+  },
+  {
+   "name": "nut",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -0.2096,
+    2.1,
+    0.4725
+   ]
+  },
+  {
+   "name": "pole",
+   "movable": false,
+   "tris": 43,
+   "pivot": [
+    5.9904,
+    0,
+    0.5525
+   ]
+  },
+  {
+   "name": "pole_large",
+   "movable": false,
+   "tris": 47,
+   "pivot": [
+    6.4904,
+    0,
+    0.5525
+   ]
+  },
+  {
+   "name": "pole_small",
+   "movable": false,
+   "tris": 33,
+   "pivot": [
+    5.4904,
+    0,
+    0.5525
+   ]
+  },
+  {
+   "name": "ring_large",
+   "movable": false,
+   "tris": 13,
+   "pivot": [
+    -0.2096,
+    1.7,
+    0.5525
+   ]
+  },
+  {
+   "name": "ring_small",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -0.2096,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "support_large_01",
+   "movable": false,
+   "tris": 254,
+   "pivot": [
+    3.4904,
+    3.4,
+    0.5525
+   ]
+  },
+  {
+   "name": "support_large_02",
+   "movable": false,
+   "tris": 166,
+   "pivot": [
+    3.4904,
+    2.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "support_large_offset_01",
+   "movable": false,
+   "tris": 254,
+   "pivot": [
+    2.1904,
+    3.4,
+    0.5525
+   ]
+  },
+  {
+   "name": "support_large_offset_02",
+   "movable": false,
+   "tris": 166,
+   "pivot": [
+    2.1904,
+    2.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "support_small_01",
+   "movable": false,
+   "tris": 244,
+   "pivot": [
+    4.7904,
+    3.4,
+    0.5525
+   ]
+  },
+  {
+   "name": "support_small_02",
+   "movable": false,
+   "tris": 166,
+   "pivot": [
+    4.7904,
+    2.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "transformer_01",
+   "movable": false,
+   "tris": 726,
+   "pivot": [
+    -0.2096,
+    2.924,
+    0.5525
+   ]
+  },
+  {
+   "name": "transformer_02",
+   "movable": false,
+   "tris": 123,
+   "pivot": [
+    -0.2096,
+    3.57,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_bolt_small_01",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -5.7096,
+    1.59,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_03_bolt_small_02",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -5.7096,
+    1.9724,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_03_bolt_small_03",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -5.7096,
+    2.4854,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_03_bolt_small_04",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -5.7096,
+    2.9027,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_03_bolt_small_05",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -5.7096,
+    3.1741,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_03_bolt_small_06",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -5.7096,
+    3.4266,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_03_cap",
+   "movable": false,
+   "tris": 19,
+   "pivot": [
+    -5.7096,
+    5.9,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_connection_large_offset_01",
+   "movable": false,
+   "tris": 1648,
+   "pivot": [
+    -5.7096,
+    5.7,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_connection_single_01",
+   "movable": false,
+   "tris": 113,
+   "pivot": [
+    -5.7096,
+    3.85,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_connection_small_01_02",
+   "movable": false,
+   "tris": 1174,
+   "pivot": [
+    -5.7096,
+    4.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_fuse_01",
+   "movable": false,
+   "tris": 286,
+   "pivot": [
+    -5.7096,
+    4.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_nail_bent",
+   "movable": false,
+   "tris": 23,
+   "pivot": [
+    -5.7096,
+    1.1,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_pole",
+   "movable": false,
+   "tris": 43,
+   "pivot": [
+    -5.7096,
+    0,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_ring_large_01",
+   "movable": false,
+   "tris": 13,
+   "pivot": [
+    -5.7096,
+    0.02,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_ring_large_02",
+   "movable": false,
+   "tris": 13,
+   "pivot": [
+    -5.7096,
+    5.22,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_ring_small_01",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -5.7096,
+    1.7,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_ring_small_02",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -5.7096,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_ring_small_03",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -5.7096,
+    3.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_ring_small_04",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -5.7096,
+    4.74,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_03_transformer_01",
+   "movable": false,
+   "tris": 726,
+   "pivot": [
+    -5.7096,
+    3.844,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_cap",
+   "movable": false,
+   "tris": 19,
+   "pivot": [
+    -3.7096,
+    5.9,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_connection_large_01",
+   "movable": false,
+   "tris": 1600,
+   "pivot": [
+    -3.7096,
+    5.7,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_connection_single_01",
+   "movable": false,
+   "tris": 113,
+   "pivot": [
+    -3.7096,
+    3.834,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_connection_single_01_02",
+   "movable": false,
+   "tris": 113,
+   "pivot": [
+    -3.7096,
+    3.865,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_connection_small_01",
+   "movable": false,
+   "tris": 1173,
+   "pivot": [
+    -3.7096,
+    4.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_pole",
+   "movable": false,
+   "tris": 43,
+   "pivot": [
+    -3.7096,
+    0,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_ring_large",
+   "movable": false,
+   "tris": 13,
+   "pivot": [
+    -3.7096,
+    0.02,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_ring_large_02",
+   "movable": false,
+   "tris": 13,
+   "pivot": [
+    -3.7096,
+    5.22,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_ring_small_01",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -3.7096,
+    1.69,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_ring_small_02",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -3.7096,
+    1.82,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_ring_small_03",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -3.7096,
+    3.68,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_ring_small_04",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -3.7096,
+    4.18,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_02_ring_small_05",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -3.7096,
+    4.74,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_01",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    1.59,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_02",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    2.02,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_03",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    2.46,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_04",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    2.89,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_05",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    3.19,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_06",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    3.49,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_07",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    3.89,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_08",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    4.19,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_bolt_small_09",
+   "movable": false,
+   "tris": 11,
+   "pivot": [
+    -1.7096,
+    4.79,
+    0.5477
+   ]
+  },
+  {
+   "name": "preset_01_cap",
+   "movable": false,
+   "tris": 19,
+   "pivot": [
+    -1.7096,
+    5.9,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_connection_large_02",
+   "movable": false,
+   "tris": 925,
+   "pivot": [
+    -1.7096,
+    5.7,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_connection_single_01",
+   "movable": false,
+   "tris": 113,
+   "pivot": [
+    -1.7096,
+    3.85,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_connection_small_02",
+   "movable": false,
+   "tris": 672,
+   "pivot": [
+    -1.7096,
+    4.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_fastener",
+   "movable": false,
+   "tris": 215,
+   "pivot": [
+    -1.7095,
+    3.0834,
+    0.4625
+   ]
+  },
+  {
+   "name": "preset_01_fastener_connection",
+   "movable": false,
+   "tris": 43,
+   "pivot": [
+    -1.7096,
+    3.08,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_fastener_loop",
+   "movable": false,
+   "tris": 16,
+   "pivot": [
+    -1.7095,
+    0.001,
+    -0.9555
+   ]
+  },
+  {
+   "name": "preset_01_fuse_01",
+   "movable": false,
+   "tris": 286,
+   "pivot": [
+    -1.7096,
+    4.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_fuse_02",
+   "movable": false,
+   "tris": 437,
+   "pivot": [
+    -1.7096,
+    5.7,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_nail_bent",
+   "movable": false,
+   "tris": 23,
+   "pivot": [
+    -1.7096,
+    1.1,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_pole",
+   "movable": false,
+   "tris": 43,
+   "pivot": [
+    -1.7096,
+    0,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_ring_large",
+   "movable": false,
+   "tris": 13,
+   "pivot": [
+    -1.7096,
+    0.02,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_ring_small",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -1.7096,
+    1.8,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_ring_small_01",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -1.7096,
+    1.7,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_ring_small_02",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -1.7096,
+    3.6,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_ring_small_03",
+   "movable": false,
+   "tris": 14,
+   "pivot": [
+    -1.7096,
+    4.74,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_transformer_01",
+   "movable": false,
+   "tris": 726,
+   "pivot": [
+    -1.7096,
+    3.844,
+    0.5525
+   ]
+  },
+  {
+   "name": "preset_01_transformer_02",
+   "movable": false,
+   "tris": 123,
+   "pivot": [
+    -1.7096,
+    4.99,
+    0.5525
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

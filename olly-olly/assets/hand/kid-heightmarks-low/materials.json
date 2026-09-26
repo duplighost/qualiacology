@@ -1,0 +1,45 @@
+{
+ "kid-heightmarks-low": {
+  "size": [
+   256,
+   1024
+  ],
+  "alpha": false,
+  "wrap": false,
+  "files": {
+   "albedo": "kid-heightmarks-low.albedo.dds",
+   "normal": "kid-heightmarks-low.normal.ktx2",
+   "orm": "kid-heightmarks-low.orm.dds"
+  },
+  "bytes": {
+   "albedo": 174920,
+   "normal": 350064,
+   "orm": 174920
+  },
+  "psnr": {
+   "albedo": 38.88,
+   "normalXY": 53.73,
+   "orm": {
+    "ao": 99.0,
+    "rough": 47.41,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "kid-heightmarks-low_color.png",
+   "normal": "kid-heightmarks-low_normal.png",
+   "rough": "kid-heightmarks-low_roughness.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.143,
+   "p99": 1.327
+  },
+  "specAA": true,
+  "seconds": 5.6
+ }
+}

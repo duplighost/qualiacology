@@ -1,0 +1,32 @@
+{
+ "id": "shelves_canning",
+ "title": "shelves canning",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 7836,
+  "lod0": 7836,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.22,
+  1.9,
+  0.36
+ ],
+ "use": "canning shelves with Ruth's jars",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 164066
+}

@@ -1,0 +1,32 @@
+{
+ "id": "hook_ollie",
+ "title": "hook ollie",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 1094,
+  "lod0": 1094,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.22,
+  0.12,
+  0.0853
+ ],
+ "use": "OLLIE hook, empty (PLAN 2.2)",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 10703
+}

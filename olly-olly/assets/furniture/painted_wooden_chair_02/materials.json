@@ -1,0 +1,63 @@
+{
+ "painted_wooden_chair_02": {
+  "files": {
+   "albedo": "painted_wooden_chair_02.albedo.dds",
+   "normal": "painted_wooden_chair_02.normal.ktx2",
+   "orm": "painted_wooden_chair_02.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 40.9,
+   "normalXY": 46.45,
+   "orm": {
+    "ao": 99,
+    "rough": 41.48,
+    "metal": 43.73
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.614,
+   "p99": 2.775
+  },
+  "specAA": true,
+  "seconds": 5.7,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

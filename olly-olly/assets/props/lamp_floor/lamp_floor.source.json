@@ -1,0 +1,32 @@
+{
+ "id": "lamp_floor",
+ "title": "lamp floor",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2052,
+  "lod0": 2052,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.5,
+  1.6,
+  0.5
+ ],
+ "use": "floor lamp; the shade glows with its house",
+ "modelled": true,
+ "surface": "metal",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 16405
+}

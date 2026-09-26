@@ -1,0 +1,63 @@
+{
+ "rock_moss_set_01": {
+  "files": {
+   "albedo": "rock_moss_set_01.albedo.dds",
+   "normal": "rock_moss_set_01.normal.ktx2",
+   "orm": "rock_moss_set_01.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.15,
+   "normalXY": 45.66,
+   "orm": {
+    "ao": 99,
+    "rough": 44.99,
+    "metal": 43.98
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.659,
+   "p99": 2.83
+  },
+  "specAA": false,
+  "seconds": 2.1,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

@@ -1,0 +1,74 @@
+{
+ "id": "large_iron_gate",
+ "title": "Large Iron Gate",
+ "url": "https://polyhaven.com/a/large_iron_gate",
+ "licence": "CC0 1.0",
+ "author": "Josh Dean",
+ "bytes": 3128181,
+ "triangles": {
+  "source": 38140,
+  "lod0": 19997,
+  "lod1": 4997
+ },
+ "budget": {
+  "lod0": 20000,
+  "lod1": 5000
+ },
+ "class": "hero",
+ "dims": [
+  2.9501,
+  2.9286,
+  0.0973
+ ],
+ "shippedBytes": 1372291,
+ "parts": [
+  {
+   "name": "large_iron_gate",
+   "movable": false,
+   "tris": 302,
+   "pivot": [
+    0,
+    0.0079,
+    -0.0128
+   ]
+  },
+  {
+   "name": "large_iron_gate_right_door",
+   "movable": true,
+   "tris": 9959,
+   "pivot": [
+    1.4336,
+    1.4643,
+    0.006
+   ]
+  },
+  {
+   "name": "large_iron_gate_bolt",
+   "movable": true,
+   "tris": 212,
+   "pivot": [
+    0,
+    0.0079,
+    -0.0128
+   ]
+  },
+  {
+   "name": "large_iron_gate_left_door",
+   "movable": true,
+   "tris": 9524,
+   "pivot": [
+    -1.4336,
+    1.4643,
+    -0.0063
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "large_iron_gate_right_door",
+  "large_iron_gate_bolt",
+  "large_iron_gate_left_door"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

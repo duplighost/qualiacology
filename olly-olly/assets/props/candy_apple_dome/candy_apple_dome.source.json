@@ -1,0 +1,32 @@
+{
+ "id": "candy_apple_dome",
+ "title": "candy apple dome",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2880,
+  "lod0": 2880,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.29,
+  0.358,
+  0.29
+ ],
+ "use": "June's 1996 candy apple under a glass cake dome, gone black (PLAN 4.2)",
+ "modelled": true,
+ "surface": "tile",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 22285
+}

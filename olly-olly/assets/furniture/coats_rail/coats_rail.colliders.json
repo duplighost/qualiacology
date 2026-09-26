@@ -1,0 +1,30 @@
+{
+ "id": "coats_rail",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "coats_rail.0",
+   "part": "coats_rail",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.5857,
+    "z": -0.0
+   },
+   "h": {
+    "x": 1.0,
+    "y": 0.5857,
+    "z": 0.1614
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

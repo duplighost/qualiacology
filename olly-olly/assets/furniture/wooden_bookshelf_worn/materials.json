@@ -1,0 +1,63 @@
+{
+ "wooden_bookshelf_worn": {
+  "files": {
+   "albedo": "wooden_bookshelf_worn.albedo.dds",
+   "normal": "wooden_bookshelf_worn.normal.ktx2",
+   "orm": "wooden_bookshelf_worn.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 37.45,
+   "normalXY": 43.92,
+   "orm": {
+    "ao": 99,
+    "rough": 41.32,
+    "metal": 41.26
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.739,
+   "p99": 3.682
+  },
+  "specAA": true,
+  "seconds": 5.2,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "id": "cutting_table",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "cutting_table.0",
+   "part": "cutting_table",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.4777,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.65,
+    "y": 0.4777,
+    "z": 0.375
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

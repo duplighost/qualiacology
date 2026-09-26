@@ -1,0 +1,32 @@
+{
+ "id": "canisters",
+ "title": "canisters",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 888,
+  "lod0": 888,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.418,
+  0.262,
+  0.148
+ ],
+ "use": "three avocado canisters",
+ "modelled": true,
+ "surface": "metal",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 16023
+}

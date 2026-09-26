@@ -1,0 +1,32 @@
+{
+ "id": "shrine_shelf",
+ "title": "shrine shelf",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 7710,
+  "lod0": 7710,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.5,
+  0.4564,
+  0.1803
+ ],
+ "use": "Irena's wall shrine over the sofa's end: the Sacred Heart, a saint, three votives lit",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 89899
+}

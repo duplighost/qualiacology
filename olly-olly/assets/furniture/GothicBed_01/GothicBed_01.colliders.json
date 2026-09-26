@@ -1,0 +1,156 @@
+{
+ "id": "GothicBed_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "GothicBed_01.GothicBed_01.0",
+   "part": "GothicBed_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.7943,
+    "z": -0.9836
+   },
+   "h": {
+    "x": 0.6757,
+    "y": 0.7396,
+    "z": 0.0364
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicBed_01.GothicBed_01.1",
+   "part": "GothicBed_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.6513,
+    "z": 0.9836
+   },
+   "h": {
+    "x": 0.6757,
+    "y": 0.5966,
+    "z": 0.0364
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicBed_01.GothicBed_01.2",
+   "part": "GothicBed_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.3293,
+    "z": 0
+   },
+   "h": {
+    "x": 0.6757,
+    "y": 0.2746,
+    "z": 0.9471
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicBed_01.GothicBed_01.3",
+   "part": "GothicBed_01",
+   "kind": "obb",
+   "c": {
+    "x": 0.7113,
+    "y": 0.2032,
+    "z": 0.0729
+   },
+   "h": {
+    "x": 0.0356,
+    "y": 0.1626,
+    "z": 0.9471
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicBed_01.GothicBed_01.4",
+   "part": "GothicBed_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.7113,
+    "y": 0.2362,
+    "z": 0.0729
+   },
+   "h": {
+    "x": 0.0356,
+    "y": 0.1537,
+    "z": 0.9471
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicBed_01.GothicBed_01.5",
+   "part": "GothicBed_01",
+   "kind": "obb",
+   "c": {
+    "x": 0.7113,
+    "y": 0.0788,
+    "z": -0.9836
+   },
+   "h": {
+    "x": 0.0356,
+    "y": 0.005,
+    "z": 0.0364
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicBed_01.GothicBed_01.6",
+   "part": "GothicBed_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.7113,
+    "y": 0.0875,
+    "z": -0.9836
+   },
+   "h": {
+    "x": 0.0356,
+    "y": 0.005,
+    "z": 0.0364
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

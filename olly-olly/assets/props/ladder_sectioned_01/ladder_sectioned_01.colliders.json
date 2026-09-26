@@ -1,0 +1,30 @@
+{
+ "id": "ladder_sectioned_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "ladder_sectioned_01.ladder_sectioned_01.0",
+   "part": "ladder_sectioned_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 1.0673,
+    "z": 0
+   },
+   "h": {
+    "x": 0.3308,
+    "y": 1.0671,
+    "z": 0.0888
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "CLIMBABLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

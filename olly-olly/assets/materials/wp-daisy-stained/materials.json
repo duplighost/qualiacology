@@ -1,0 +1,45 @@
+{
+ "wp-daisy-stained": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-daisy-stained.albedo.dds",
+   "normal": "wp-daisy-stained.normal.ktx2",
+   "orm": "wp-daisy-stained.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 39.07,
+   "normalXY": 66.47,
+   "orm": {
+    "ao": 99.0,
+    "rough": 47.31,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.068,
+   "p99": 0.144
+  },
+  "specAA": true,
+  "seconds": 4.2
+ }
+}

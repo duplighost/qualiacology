@@ -1,0 +1,32 @@
+{
+ "id": "witch_flying",
+ "title": "witch flying",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 7950,
+  "lod0": 7950,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  1.8017,
+  1.4427,
+  0.66
+ ],
+ "use": "the show's witch on her broom (she rides the wire; pivot at the trolley)",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 111781
+}

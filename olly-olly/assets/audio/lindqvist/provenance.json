@@ -1,0 +1,95 @@
+{
+  "provider": "Picsart",
+  "model": "gemini-2.5-pro-tts",
+  "voice": "Kore",
+  "requestId": "a4708f24-2dff-49ee-91ee-c0f226816b88",
+  "generated": "2026-09-24",
+  "sourceUrl": "https://gcdn.picsart.com/cloud-storage/8c8a14f2-a7b8-4c12-b071-78d509145ce8.wav",
+  "sourceSha256": "c23d4b084eb42b45df1a200f61ed1748aee65cec3d94a80c194a8be537b36355",
+  "direction": "Youthful, androgynous, quiet whisper into a toy walkie-talkie. Calm hide-and-seek count. No music.",
+  "spokenText": "Ninety. Ninety-one. Ninety-two. Ninety-three. Ninety-four. Ninety-five. Ninety-six. Ninety-seven. Ninety-eight. Ninety-nine.",
+  "processing": "Fixed phrase cuts; 260 Hz high pass / 3800 Hz low pass; short boundary fades; mono 24 kHz Vorbis.",
+  "verification": "CPU speech transcription found 90 through 99 in order; subjective voice and mix still need a human listening pass.",
+  "clips": [
+    {
+      "number": 90,
+      "start": 0.24,
+      "end": 1.14,
+      "duration": 0.9,
+      "file": "90.ogg",
+      "sha256": "caa65f12503193b23478089f84a247bdede278d7b611c50351f1f835633df00d"
+    },
+    {
+      "number": 91,
+      "start": 2.2,
+      "end": 3.44,
+      "duration": 1.24,
+      "file": "91.ogg",
+      "sha256": "b1bfd5b41fb7ddfda33b804f067ed481c8b49ea2c027a4d014a8d837397c35ff"
+    },
+    {
+      "number": 92,
+      "start": 4.47,
+      "end": 5.7,
+      "duration": 1.23,
+      "file": "92.ogg",
+      "sha256": "10a73744cdd867b94965867176481dec667d42e56679c2d958c839aaa3cbf3e8"
+    },
+    {
+      "number": 93,
+      "start": 6.64,
+      "end": 7.89,
+      "duration": 1.25,
+      "file": "93.ogg",
+      "sha256": "8958a72ed74f214ab5415a396ed65c0d723a6b427748a0fd8f3bcfc7075e5c7f"
+    },
+    {
+      "number": 94,
+      "start": 8.83,
+      "end": 10.11,
+      "duration": 1.28,
+      "file": "94.ogg",
+      "sha256": "69c8eb53046abd38e2461b519ec12617feff2c6d331e63f909c519e9b0768c2f"
+    },
+    {
+      "number": 95,
+      "start": 10.94,
+      "end": 12.32,
+      "duration": 1.38,
+      "file": "95.ogg",
+      "sha256": "3ce445cc3a1dcd010f92715ad3a65ed58438b01a0967c65d43329cc15d247cd7"
+    },
+    {
+      "number": 96,
+      "start": 13.09,
+      "end": 14.5,
+      "duration": 1.41,
+      "file": "96.ogg",
+      "sha256": "19ef41450138ad923eb608513773e5f9035bb735b4c96a522d4fc67c6a1a5d31"
+    },
+    {
+      "number": 97,
+      "start": 15.15,
+      "end": 16.47,
+      "duration": 1.32,
+      "file": "97.ogg",
+      "sha256": "b57da7690ec02a0456149c8d9e0763aab52e854aede2c98015943c306c8517cd"
+    },
+    {
+      "number": 98,
+      "start": 17.17,
+      "end": 18.48,
+      "duration": 1.31,
+      "file": "98.ogg",
+      "sha256": "e3db9abf0fc1cb8b4e051542ab942ca76047511c83fcbb303adfdd42bdc38ac8"
+    },
+    {
+      "number": 99,
+      "start": 19.15,
+      "end": 20.47,
+      "duration": 1.32,
+      "file": "99.ogg",
+      "sha256": "0e02ac3f480b486d0b2cdb0d6751505be936ce4f36f120e314a5ff73ddbd171c"
+    }
+  ]
+}

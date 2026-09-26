@@ -1,0 +1,32 @@
+{
+ "id": "fireplace_brick",
+ "title": "fireplace brick",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2384,
+  "lod0": 2384,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.74,
+  1.19,
+  0.785
+ ],
+ "use": "brick fireplace, mantel, andirons",
+ "modelled": true,
+ "surface": "stone",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 31133
+}

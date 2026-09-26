@@ -1,0 +1,206 @@
+{
+ "lib:brick.old-red": {
+  "files": {},
+  "lib": "brick.old-red",
+  "gltf": {
+   "baseColor": [
+    0.5,
+    0.22,
+    0.15,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#0e0c0b:0.95": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0017,
+    0.0012,
+    0.001,
+    1.0
+   ],
+   "roughness": 0.95,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#161211:0.95": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0046,
+    0.0029,
+    0.0026,
+    1.0
+   ],
+   "roughness": 0.95,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#141110:0.95": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0037,
+    0.0026,
+    0.0023,
+    1.0
+   ],
+   "roughness": 0.95,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#2a2522:0.95": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0189,
+    0.0143,
+    0.0119,
+    1.0
+   ],
+   "roughness": 0.95,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:wood.dark": {
+  "files": {},
+  "lib": "wood.dark",
+  "gltf": {
+   "baseColor": [
+    0.28,
+    0.18,
+    0.1,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:metal.iron": {
+  "files": {},
+  "lib": "metal.iron",
+  "gltf": {
+   "baseColor": [
+    0.2,
+    0.2,
+    0.2,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:bark.oak": {
+  "files": {},
+  "lib": "bark.oak",
+  "gltf": {
+   "baseColor": [
+    0.7,
+    0.7,
+    0.7,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

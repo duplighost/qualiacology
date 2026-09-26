@@ -1,0 +1,52 @@
+{
+  "source": "Renderpeople Eric Rigged 001 (body and scanned head); OLLY OLLY Jack clips; masks sculpted from the scan",
+  "restJointErrorMetres": 5.159896889405062e-07,
+  "removedFaceVertices": 4842,
+  "designs": [
+    "skull",
+    "old",
+    "devil",
+    "ghoul"
+  ],
+  "hooded": [
+    "ghoul",
+    "skull"
+  ],
+  "eyes": [
+    [
+      0.0125,
+      1.7252,
+      0.0914
+    ],
+    [
+      -0.048,
+      1.7244,
+      0.0875
+    ]
+  ],
+  "triangles": {
+    "MaskBody": 9825,
+    "MaskFace.skull": 8599,
+    "MaskFace.old": 6999,
+    "MaskFace.devil": 7579,
+    "MaskFace.ghoul": 6999,
+    "MaskHood": 3472,
+    "MaskCollar": 1344,
+    "MaskCape": 1560,
+    "MaskBag": 1566
+  },
+  "clips": [
+    "Climb",
+    "GetUp",
+    "Idle",
+    "Lunge",
+    "Rise",
+    "Run",
+    "Stagger",
+    "Swipe",
+    "Vault",
+    "Walk",
+    "Window"
+  ],
+  "bytes": 4527896
+}

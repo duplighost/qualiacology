@@ -1,0 +1,27 @@
+{
+ "flat:#3b2618:0.3": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0399,
+    0.0152,
+    0.0055,
+    1.0
+   ],
+   "roughness": 0.3,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

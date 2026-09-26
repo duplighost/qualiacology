@@ -1,0 +1,30 @@
+{
+ "id": "grandfather_clock_k",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "grandfather_clock_k.0",
+   "part": "grandfather_clock_k",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 1.2575,
+    "z": 0.178
+   },
+   "h": {
+    "x": 0.45,
+    "y": 1.2575,
+    "z": 0.178
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

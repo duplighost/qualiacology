@@ -1,0 +1,230 @@
+{
+ "id": "book_encyclopedia_set_01",
+ "title": "Book Encyclopedia Set 01",
+ "url": "https://polyhaven.com/a/book_encyclopedia_set_01",
+ "licence": "CC0 1.0",
+ "author": "John Malcolm",
+ "bytes": 3261046,
+ "triangles": {
+  "source": 67306,
+  "lod0": 3982,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 4000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.5516,
+  0.2374,
+  0.1636
+ ],
+ "shippedBytes": 570674,
+ "parts": [
+  {
+   "name": "book_encyclopedia_set_01_book01",
+   "movable": false,
+   "tris": 201,
+   "pivot": [
+    -0.2563,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book02",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.2217,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book03",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.1948,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book04",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.1686,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book05",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.1461,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book06",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.1252,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book07",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.1021,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book08",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.0784,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book09",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.0556,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book10",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.0328,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book11",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    -0.0116,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book12",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.0114,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book13",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.0439,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book14",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.0824,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book15",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.1196,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book16",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.1518,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book17",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.1849,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book18",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.2179,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book19",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.24,
+    0,
+    0.0815
+   ]
+  },
+  {
+   "name": "book_encyclopedia_set_01_book20",
+   "movable": false,
+   "tris": 199,
+   "pivot": [
+    0.2638,
+    0,
+    0.0815
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

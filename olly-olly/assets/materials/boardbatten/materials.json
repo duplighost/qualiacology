@@ -1,0 +1,46 @@
+{
+ "boardbatten": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "boardbatten.albedo.dds",
+   "normal": "boardbatten.normal.ktx2",
+   "orm": "boardbatten.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 43.73,
+   "normalXY": 51.66,
+   "orm": {
+    "ao": 44.77,
+    "rough": 40.65,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.325,
+   "p99": 3.533
+  },
+  "specAA": true,
+  "seconds": 5.3
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "id": "tree_stump_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "tree_stump_01.tree_stump_01.0",
+   "part": "tree_stump_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.0005,
+    "y": 0.2861,
+    "z": 0.0003
+   },
+   "h": {
+    "x": 0.7124,
+    "y": 0.2871,
+    "z": 0.7948
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

@@ -1,0 +1,30 @@
+{
+ "id": "bed_twin_kid",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "bed_twin_kid.0",
+   "part": "bed_twin_kid",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.5,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.6098,
+    "y": 0.5,
+    "z": 1.0371
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

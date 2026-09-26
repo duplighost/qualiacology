@@ -1,0 +1,32 @@
+{
+ "id": "rug_rect",
+ "title": "rug rect",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2444,
+  "lod0": 2444,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  1.8,
+  0.009,
+  2.7239
+ ],
+ "use": "a red wool rug",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 155431
+}

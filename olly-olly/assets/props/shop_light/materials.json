@@ -1,0 +1,229 @@
+{
+ "flat:#e2dccb:0.6": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.7667,
+    0.7227,
+    0.6055,
+    1.0
+   ],
+   "roughness": 0.6,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#1d1b18:0.7": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0084,
+    0.0072,
+    0.0055,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#1f1d1a:0.5:0.3": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0097,
+    0.0084,
+    0.0066,
+    1.0
+   ],
+   "roughness": 0.5,
+   "metallic": 0.3,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#27402f:0.35:0.2": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0161,
+    0.0478,
+    0.0242,
+    1.0
+   ],
+   "roughness": 0.35,
+   "metallic": 0.2,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "glow:dome": {
+  "files": {},
+  "glow": "dome",
+  "gltf": {
+   "baseColor": [
+    1.0,
+    0.8,
+    0.55,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#141414:0.5": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0037,
+    0.0037,
+    0.0037,
+    1.0
+   ],
+   "roughness": 0.5,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "glow:bulb": {
+  "files": {},
+  "glow": "bulb",
+  "gltf": {
+   "baseColor": [
+    1.0,
+    0.8,
+    0.55,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#8c7c52:0.3:1": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.2674,
+    0.2047,
+    0.0824,
+    1.0
+   ],
+   "roughness": 0.3,
+   "metallic": 1.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#6a4a2a:0.6": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.145,
+    0.0658,
+    0.0189,
+    1.0
+   ],
+   "roughness": 0.6,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

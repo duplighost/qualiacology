@@ -1,0 +1,40 @@
+{
+ "id": "Television_01",
+ "title": "Television 01",
+ "url": "https://polyhaven.com/a/Television_01",
+ "licence": "CC0 1.0",
+ "author": "Gabriel Radić",
+ "bytes": 531294,
+ "triangles": {
+  "source": 1918,
+  "lod0": 1918,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.6,
+  0.4568,
+  0.4708
+ ],
+ "shippedBytes": 1240627,
+ "parts": [
+  {
+   "name": "Television_01",
+   "movable": false,
+   "tris": 1918,
+   "pivot": [
+    0,
+    0,
+    0.023
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

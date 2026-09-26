@@ -1,0 +1,125 @@
+{
+ "sofa_03": {
+  "files": {
+   "albedo": "sofa_03.albedo.dds",
+   "normal": "sofa_03.normal.ktx2",
+   "orm": "sofa_03.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 40.63,
+   "normalXY": 47.37,
+   "orm": {
+    "ao": 99,
+    "rough": 40.7,
+    "metal": 39.91
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.386,
+   "p99": 3.574
+  },
+  "specAA": true,
+  "seconds": 5.4,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "sofa_03_fringe": {
+  "files": {
+   "albedo": "sofa_03.albedo.dds",
+   "normal": "sofa_03.normal.ktx2",
+   "orm": "sofa_03.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 40.63,
+   "normalXY": 47.37,
+   "orm": {
+    "ao": 99,
+    "rough": 40.7,
+    "metal": 39.91
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.386,
+   "p99": 3.574
+  },
+  "specAA": true,
+  "seconds": 5.4,
+  "factors": {},
+  "sharedWith": "sofa_03",
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

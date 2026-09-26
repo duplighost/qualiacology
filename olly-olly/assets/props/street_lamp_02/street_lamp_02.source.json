@@ -1,0 +1,40 @@
+{
+ "id": "street_lamp_02",
+ "title": "Street Lamp 02",
+ "url": "https://polyhaven.com/a/street_lamp_02",
+ "licence": "CC0 1.0",
+ "author": "Josh Dean",
+ "bytes": 1870246,
+ "triangles": {
+  "source": 20338,
+  "lod0": 20338,
+  "lod1": 4999
+ },
+ "budget": {
+  "lod0": 20000,
+  "lod1": 5000
+ },
+ "class": "hero",
+ "dims": [
+  0.3865,
+  1.675,
+  0.8068
+ ],
+ "shippedBytes": 1331250,
+ "parts": [
+  {
+   "name": "street_lamp_02",
+   "movable": false,
+   "tris": 20338,
+   "pivot": [
+    0,
+    0.3949,
+    -0.4034
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

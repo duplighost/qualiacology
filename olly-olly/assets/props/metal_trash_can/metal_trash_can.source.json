@@ -1,0 +1,52 @@
+{
+ "id": "metal_trash_can",
+ "title": "Metal Trash Can",
+ "url": "https://polyhaven.com/a/metal_trash_can",
+ "licence": "CC0 1.0",
+ "author": "GurJas Studios",
+ "bytes": 4994983,
+ "triangles": {
+  "source": 6428,
+  "lod0": 6428,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.778,
+  0.9062,
+  0.5563
+ ],
+ "shippedBytes": 599346,
+ "parts": [
+  {
+   "name": "metal_trash_can",
+   "movable": false,
+   "tris": 4880,
+   "pivot": [
+    0.0637,
+    -0.0001,
+    0
+   ]
+  },
+  {
+   "name": "metal_trash_can_lid",
+   "movable": true,
+   "tris": 1548,
+   "pivot": [
+    -0.3106,
+    0.2858,
+    0
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "metal_trash_can_lid"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

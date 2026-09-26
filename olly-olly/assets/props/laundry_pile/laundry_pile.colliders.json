@@ -1,0 +1,30 @@
+{
+ "id": "laundry_pile",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "laundry_pile.0",
+   "part": "laundry_pile",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.1286,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.7121,
+    "y": 0.1286,
+    "z": 0.6889
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

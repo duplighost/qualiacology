@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.5,
+  0.6411
+ ],
+ "use": "Trellis, 1864 (William Morris) (faded)",
+ "source": {
+  "title": "Trellis, 1864 (William Morris)",
+  "page": "https://www.metmuseum.org/art/collection/search/384020",
+  "licence": "Public domain (The Met Open Access, CC0 1.0)",
+  "author": "William Morris (British, Walthamstow, London 1834\u20131896 Hammersmith, London)",
+  "credit": "Purchase, Edward C. Moore Jr. Gift, 1923; accession 23.163.4h",
+  "scan": "met-384020-trellis.jpg",
+  "process": {
+   "lattice": [
+    [
+     1080.81,
+     0.5
+    ],
+    [
+     -1.47,
+     1386.06
+    ]
+   ],
+   "score": [
+    0.038,
+    0.806
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    1081,
+    1386
+   ],
+   "scale": 0.47450812918699503,
+   "blend": [
+    0.08,
+    0.08
+   ]
+  }
+ },
+ "shares": "wp-trellis"
+}

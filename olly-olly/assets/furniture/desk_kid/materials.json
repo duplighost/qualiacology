@@ -1,0 +1,79 @@
+{
+ "lib:floor.oak": {
+  "files": {},
+  "lib": "floor.oak",
+  "gltf": {
+   "baseColor": [
+    0.6,
+    0.45,
+    0.3,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "lib:trim.white": {
+  "files": {},
+  "lib": "trim.white",
+  "gltf": {
+   "baseColor": [
+    0.85,
+    0.85,
+    0.82,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#8a6a30:0.35:1": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.259,
+    0.145,
+    0.0254,
+    1.0
+   ],
+   "roughness": 0.35,
+   "metallic": 1.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

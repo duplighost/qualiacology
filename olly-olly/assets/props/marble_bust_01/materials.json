@@ -1,0 +1,63 @@
+{
+ "marble_bust_01": {
+  "files": {
+   "albedo": "marble_bust_01.albedo.dds",
+   "normal": "marble_bust_01.normal.ktx2",
+   "orm": "marble_bust_01.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.41,
+   "normalXY": 47.73,
+   "orm": {
+    "ao": 99,
+    "rough": 37.89,
+    "metal": 37.23
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.4,
+   "p99": 2.553
+  },
+  "specAA": false,
+  "seconds": 1.8,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

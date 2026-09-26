@@ -1,0 +1,32 @@
+{
+ "id": "rug_runner",
+ "title": "rug runner",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 1004,
+  "lod0": 1004,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.72,
+  0.009,
+  2.7212
+ ],
+ "use": "hall runner",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 64094
+}

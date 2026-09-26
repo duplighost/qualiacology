@@ -1,0 +1,46 @@
+{
+ "asphalt030": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "asphalt030.albedo.dds",
+   "normal": "asphalt030.normal.ktx2",
+   "orm": "asphalt030.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 32.86,
+   "normalXY": 44.17,
+   "orm": {
+    "ao": 40.86,
+    "rough": 44.42,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.886,
+   "p99": 2.27
+  },
+  "specAA": false,
+  "seconds": 4.1
+ }
+}

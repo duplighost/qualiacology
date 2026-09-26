@@ -1,0 +1,32 @@
+{
+ "id": "washer_70s",
+ "title": "washer 70s",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 892,
+  "lod0": 892,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.68,
+  1.11,
+  0.7369
+ ],
+ "use": "harvest-gold top-loading washer",
+ "modelled": true,
+ "surface": "metal",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 17058
+}

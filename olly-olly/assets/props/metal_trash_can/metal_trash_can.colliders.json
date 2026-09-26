@@ -1,0 +1,51 @@
+{
+ "id": "metal_trash_can",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "metal_trash_can.metal_trash_can.0",
+   "part": "metal_trash_can",
+   "kind": "obb",
+   "c": {
+    "x": 0.0635,
+    "y": 0.4531,
+    "z": 0
+   },
+   "h": {
+    "x": 0.3255,
+    "y": 0.4531,
+    "z": 0.2762
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "metal_trash_can.metal_trash_can_lid.0",
+   "part": "metal_trash_can_lid",
+   "kind": "obb",
+   "c": {
+    "x": -0.2972,
+    "y": 0.2778,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0918,
+    "y": 0.2701,
+    "z": 0.2781
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

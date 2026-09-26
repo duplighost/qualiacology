@@ -1,0 +1,40 @@
+{
+ "id": "ceramic_vase_01",
+ "title": "Ceramic Vase 01",
+ "url": "https://polyhaven.com/a/ceramic_vase_01",
+ "licence": "CC0 1.0",
+ "author": "James Ray Cock",
+ "bytes": 418457,
+ "triangles": {
+  "source": 10296,
+  "lod0": 2998,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.2039,
+  0.4005,
+  0.2046
+ ],
+ "shippedBytes": 328826,
+ "parts": [
+  {
+   "name": "ceramic_vase_01",
+   "movable": false,
+   "tris": 2998,
+   "pivot": [
+    0,
+    -0.0012,
+    0
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

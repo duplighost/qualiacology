@@ -1,0 +1,47 @@
+{
+ "woodsiding009n": {
+  "size": [
+   2048,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "woodsiding009n.albedo.dds",
+   "normal": "woodsiding009n.normal.ktx2",
+   "orm": "woodsiding009n.orm.dds"
+  },
+  "bytes": {
+   "albedo": 1398248,
+   "normal": 699568,
+   "orm": 87528
+  },
+  "psnr": {
+   "albedo": 40.59,
+   "normalXY": 46.96,
+   "orm": {
+    "ao": 40.19,
+    "rough": 39.14,
+    "metal": 52.86
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "metal": "metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.565,
+   "p99": 3.735
+  },
+  "specAA": false,
+  "seconds": 8.8
+ }
+}

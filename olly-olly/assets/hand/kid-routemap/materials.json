@@ -1,0 +1,45 @@
+{
+ "kid-routemap": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "kid-routemap.albedo.dds",
+   "orm": "kid-routemap.orm.dds"
+  },
+  "bytes": {
+   "albedo": 1398256,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 31.39,
+   "alpha": 59.48,
+   "orm": {
+    "ao": 99.0,
+    "rough": 35.44,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "kid-routemap_color.png",
+   "rough": "kid-routemap_roughness.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.9243,
+   0.9243,
+   0.9243,
+   0.9243,
+   0.9243,
+   0.9248
+  ],
+  "specAA": false,
+  "seconds": 10.4
+ }
+}

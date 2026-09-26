@@ -1,0 +1,32 @@
+{
+ "id": "fridge_70s",
+ "title": "fridge 70s",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2208,
+  "lod0": 2208,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.792,
+  1.68,
+  0.726
+ ],
+ "use": "avocado refrigerator, photos go on its door",
+ "modelled": true,
+ "surface": "metal",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 19442
+}

@@ -1,0 +1,193 @@
+{
+ "pistol-report": [
+  "pistol-report-0.ogg",
+  "pistol-report-1.ogg",
+  "pistol-report-2.ogg"
+ ],
+ "pistol-tail-out": [
+  "pistol-tail-out-0.ogg",
+  "pistol-tail-out-1.ogg"
+ ],
+ "carbine-report": [
+  "carbine-report-0.ogg",
+  "carbine-report-1.ogg",
+  "carbine-report-2.ogg"
+ ],
+ "carbine-tail-out": [
+  "carbine-tail-out-0.ogg",
+  "carbine-tail-out-1.ogg"
+ ],
+ "shotgun-report": [
+  "shotgun-report-0.ogg",
+  "shotgun-report-1.ogg",
+  "shotgun-report-2.ogg",
+  "shotgun-report-3.ogg"
+ ],
+ "shotgun-tail-out": [
+  "shotgun-tail-out-0.ogg",
+  "shotgun-tail-out-1.ogg",
+  "shotgun-tail-out-2.ogg"
+ ],
+ "rifle-report": [
+  "rifle-report-0.ogg",
+  "rifle-report-1.ogg",
+  "rifle-report-2.ogg",
+  "rifle-report-3.ogg"
+ ],
+ "rifle-tail-out": [
+  "rifle-tail-out-0.ogg",
+  "rifle-tail-out-1.ogg",
+  "rifle-tail-out-2.ogg"
+ ],
+ "pistol-tail-in": [
+  "pistol-tail-in-0.ogg",
+  "pistol-tail-in-1.ogg"
+ ],
+ "carbine-tail-in": [
+  "carbine-tail-in-0.ogg",
+  "carbine-tail-in-1.ogg"
+ ],
+ "shotgun-tail-in": [
+  "shotgun-tail-in-0.ogg",
+  "shotgun-tail-in-1.ogg"
+ ],
+ "rifle-tail-in": [
+  "rifle-tail-in-0.ogg",
+  "rifle-tail-in-1.ogg"
+ ],
+ "cracker-pop": [
+  "cracker-pop-0.ogg",
+  "cracker-pop-1.ogg",
+  "cracker-pop-2.ogg",
+  "cracker-pop-3.ogg",
+  "cracker-pop-4.ogg",
+  "cracker-pop-5.ogg"
+ ],
+ "bolt-up": [
+  "bolt-up.ogg"
+ ],
+ "bolt-back": [
+  "bolt-back.ogg"
+ ],
+ "bolt-fwd": [
+  "bolt-fwd.ogg"
+ ],
+ "bolt-down": [
+  "bolt-down.ogg"
+ ],
+ "pump-back": [
+  "pump-back.ogg"
+ ],
+ "pump-home": [
+  "pump-home.ogg"
+ ],
+ "mag-out": [
+  "mag-out.ogg"
+ ],
+ "mag-in": [
+  "mag-in.ogg"
+ ],
+ "slide-fwd": [
+  "slide-fwd.ogg"
+ ],
+ "shell-in": [
+  "shell-in-0.ogg",
+  "shell-in-1.ogg",
+  "shell-in-2.ogg"
+ ],
+ "dry-click": [
+  "dry-click.ogg"
+ ],
+ "active-hit": [
+  "active-hit.ogg"
+ ],
+ "switch": [
+  "switch.ogg"
+ ],
+ "hit-tick": [
+  "hit-tick-0.ogg",
+  "hit-tick-1.ogg",
+  "hit-tick-2.ogg"
+ ],
+ "head-tick": [
+  "head-tick.ogg"
+ ],
+ "kill-thunk": [
+  "kill-thunk.ogg"
+ ],
+ "kill-tone": [
+  "kill-tone.ogg"
+ ],
+ "brass": [
+  "brass-0.ogg",
+  "brass-1.ogg",
+  "brass-2.ogg",
+  "brass-3.ogg"
+ ],
+ "hull": [
+  "hull-0.ogg",
+  "hull-1.ogg",
+  "hull-2.ogg"
+ ],
+ "swing": [
+  "swing.ogg"
+ ],
+ "throw": [
+  "throw.ogg"
+ ],
+ "fuse": [
+  "fuse.ogg"
+ ],
+ "impact-wood": [
+  "impact-wood-0.ogg",
+  "impact-wood-1.ogg",
+  "impact-wood-2.ogg"
+ ],
+ "impact-plank": [
+  "impact-plank-0.ogg",
+  "impact-plank-1.ogg",
+  "impact-plank-2.ogg"
+ ],
+ "impact-soft": [
+  "impact-soft-0.ogg",
+  "impact-soft-1.ogg",
+  "impact-soft-2.ogg"
+ ],
+ "impact-punch": [
+  "impact-punch-0.ogg",
+  "impact-punch-1.ogg",
+  "impact-punch-2.ogg"
+ ],
+ "impact-metal": [
+  "impact-metal-0.ogg",
+  "impact-metal-1.ogg",
+  "impact-metal-2.ogg"
+ ],
+ "impact-dirt": [
+  "impact-dirt-0.ogg",
+  "impact-dirt-1.ogg",
+  "impact-dirt-2.ogg"
+ ],
+ "break-wood": [
+  "break-wood-0.ogg",
+  "break-wood-1.ogg",
+  "break-wood-2.ogg"
+ ],
+ "impact-glass": [
+  "impact-glass-0.ogg",
+  "impact-glass-1.ogg",
+  "impact-glass-2.ogg"
+ ],
+ "latch": [
+  "latch-0.ogg",
+  "latch-1.ogg"
+ ],
+ "cloth": [
+  "cloth-0.ogg",
+  "cloth-1.ogg"
+ ],
+ "pumpkin": [
+  "pumpkin-0.ogg",
+  "pumpkin-1.ogg"
+ ]
+}

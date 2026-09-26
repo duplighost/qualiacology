@@ -1,0 +1,186 @@
+{
+ "cassette_player_body": {
+  "files": {
+   "albedo": "cassette_player_body.albedo.dds",
+   "normal": "cassette_player_body.normal.ktx2",
+   "orm": "cassette_player_body.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.81,
+   "normalXY": 43.65,
+   "orm": {
+    "ao": 99,
+    "rough": 37.49,
+    "metal": 37.69
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.693,
+   "p99": 4.557
+  },
+  "specAA": true,
+  "seconds": 1.5,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "cassette_player_flap": {
+  "files": {
+   "albedo": "cassette_player_body.albedo.dds",
+   "normal": "cassette_player_body.normal.ktx2",
+   "orm": "cassette_player_body.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.81,
+   "normalXY": 43.65,
+   "orm": {
+    "ao": 99,
+    "rough": 37.49,
+    "metal": 37.69
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.693,
+   "p99": 4.557
+  },
+  "specAA": true,
+  "seconds": 1.5,
+  "factors": {},
+  "sharedWith": "cassette_player_body",
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "cassette_player_tape": {
+  "files": {
+   "albedo": "cassette_player_tape.albedo.dds",
+   "normal": "cassette_player_tape.normal.ktx2",
+   "orm": "cassette_player_tape.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 38.19,
+   "normalXY": 45.2,
+   "orm": {
+    "ao": 99,
+    "rough": 44.47,
+    "metal": 44.32
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.576,
+   "p99": 3.927
+  },
+  "specAA": true,
+  "seconds": 1.6,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

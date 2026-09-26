@@ -1,0 +1,173 @@
+{
+ "cardboard": {
+  "files": {
+   "albedo": "cardboard.albedo.dds",
+   "normal": "cardboard.normal.ktx2",
+   "orm": "cardboard.orm.dds"
+  },
+  "metres": 0.6,
+  "bytes": 1224112
+ },
+ "cardboard-worn": {
+  "files": {
+   "albedo": "cardboard-worn.albedo.dds",
+   "normal": "cardboard-worn.normal.ktx2",
+   "orm": "cardboard-worn.orm.dds"
+  },
+  "metres": 0.6,
+  "bytes": 1224112
+ },
+ "leather-cream": {
+  "files": {
+   "albedo": "leather-cream.albedo.dds",
+   "normal": "leather-cream.normal.ktx2",
+   "orm": "leather-cream.orm.dds"
+  },
+  "metres": 0.5,
+  "bytes": 1224112
+ },
+ "comforter": {
+  "files": {
+   "albedo": "comforter.albedo.dds",
+   "normal": "comforter.normal.ktx2",
+   "orm": "comforter.orm.dds"
+  },
+  "metres": 0.9,
+  "bytes": 1224112
+ },
+ "braided": {
+  "files": {
+   "albedo": "braided.albedo.dds",
+   "normal": "braided.normal.ktx2",
+   "orm": "braided.orm.dds"
+  },
+  "metres": 0.6,
+  "bytes": 1224112
+ },
+ "chenille": {
+  "files": {
+   "albedo": "chenille.albedo.dds",
+   "normal": "chenille.normal.ktx2",
+   "orm": "chenille.orm.dds"
+  },
+  "metres": 0.6,
+  "bytes": 1224112
+ },
+ "afghan": {
+  "files": {
+   "albedo": "afghan.albedo.dds",
+   "normal": "afghan.normal.ktx2",
+   "orm": "afghan.orm.dds"
+  },
+  "metres": 0.5,
+  "bytes": 1224112
+ },
+ "cabinet-oak": {
+  "files": {
+   "albedo": "cabinet-oak.albedo.dds",
+   "normal": "cabinet-oak.normal.ktx2",
+   "orm": "cabinet-oak.orm.dds"
+  },
+  "metres": 0.8,
+  "bytes": 1224112
+ },
+ "formica-gold": {
+  "files": {
+   "albedo": "formica-gold.albedo.dds",
+   "normal": "formica-gold.normal.ktx2",
+   "orm": "formica-gold.orm.dds"
+  },
+  "metres": 0.5,
+  "bytes": 1224112
+ },
+ "drape-gold": {
+  "files": {
+   "albedo": "drape-gold.albedo.dds",
+   "normal": "drape-gold.normal.ktx2",
+   "orm": "drape-gold.orm.dds"
+  },
+  "metres": 0.5,
+  "bytes": 1224112
+ },
+ "gingham": {
+  "files": {
+   "albedo": "gingham.albedo.dds",
+   "normal": "gingham.normal.ktx2",
+   "orm": "gingham.orm.dds"
+  },
+  "metres": 0.25,
+  "bytes": 1224112
+ },
+ "pine-joist": {
+  "files": {
+   "albedo": "pine-joist.albedo.dds",
+   "normal": "pine-joist.normal.ktx2",
+   "orm": "pine-joist.orm.dds"
+  },
+  "metres": 1.2,
+  "bytes": 1224112
+ },
+ "enamel-almond": {
+  "files": {
+   "albedo": "enamel-almond.albedo.dds",
+   "normal": "enamel-almond.normal.ktx2",
+   "orm": "enamel-almond.orm.dds"
+  },
+  "metres": 0.9,
+  "bytes": 1224112
+ },
+ "burlap": {
+  "files": {
+   "albedo": "burlap.albedo.dds",
+   "normal": "burlap.normal.ktx2",
+   "orm": "burlap.orm.dds"
+  },
+  "metres": 0.25,
+  "bytes": 1224112
+ },
+ "floral-plastic": {
+  "files": {
+   "albedo": "floral-plastic.albedo.dds",
+   "normal": "floral-plastic.normal.ktx2",
+   "orm": "floral-plastic.orm.dds"
+  },
+  "metres": 0.6,
+  "bytes": 1224112
+ },
+ "brocade-worn": {
+  "files": {
+   "albedo": "brocade-worn.albedo.dds",
+   "normal": "brocade-worn.normal.ktx2",
+   "orm": "brocade-worn.orm.dds"
+  },
+  "metres": 0.45,
+  "bytes": 1224112
+ },
+ "maple-bench": {
+  "files": {
+   "albedo": "maple-bench.albedo.dds",
+   "normal": "maple-bench.normal.ktx2",
+   "orm": "maple-bench.orm.dds"
+  },
+  "metres": 0.9,
+  "bytes": 1224112
+ },
+ "plywood-shop": {
+  "files": {
+   "albedo": "plywood-shop.albedo.dds",
+   "normal": "plywood-shop.normal.ktx2",
+   "orm": "plywood-shop.orm.dds"
+  },
+  "metres": 0.75,
+  "bytes": 1224112
+ },
+ "floral-cloth": {
+  "files": {
+   "albedo": "floral-cloth.albedo.dds",
+   "normal": "floral-cloth.normal.ktx2",
+   "orm": "floral-cloth.orm.dds"
+  },
+  "metres": 0.6,
+  "bytes": 1224112
+ }
+}

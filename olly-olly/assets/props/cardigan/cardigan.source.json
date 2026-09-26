@@ -1,0 +1,37 @@
+{
+ "id": "cardigan",
+ "title": "cardigan",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 1080,
+  "lod0": 1080,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.5152,
+  0.3198,
+  0.1168
+ ],
+ "use": "a cardigan over a chair back",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "origin": [
+  0.0,
+  0.934,
+  -0.2788
+ ],
+ "shippedBytes": 6263
+}

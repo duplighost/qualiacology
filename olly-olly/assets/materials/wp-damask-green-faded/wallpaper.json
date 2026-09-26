@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.5,
+  0.4965
+ ],
+ "use": "Wallpaper, ca. 1830 (woodblock) (faded)",
+ "source": {
+  "title": "Wallpaper, ca. 1830 (woodblock)",
+  "page": "https://www.metmuseum.org/art/collection/search/208146",
+  "licence": "Public domain (The Met Open Access, CC0 1.0)",
+  "author": "maker unknown",
+  "credit": "Purchase, Friends of European Sculpture and Decorative Arts Gifts, 1993; accession 1993.298",
+  "scan": "met-208146-wallpaper.jpg",
+  "process": {
+   "lattice": [
+    [
+     859.96,
+     0.97
+    ],
+    [
+     6.06,
+     854.21
+    ]
+   ],
+   "score": [
+    0.764,
+    0.799
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    860,
+    854
+   ],
+   "scale": 1.0,
+   "blend": [
+    0.08,
+    0.08
+   ]
+  }
+ },
+ "shares": "wp-damask-green"
+}

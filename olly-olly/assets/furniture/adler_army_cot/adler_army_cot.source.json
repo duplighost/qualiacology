@@ -1,0 +1,19 @@
+{
+  "id": "adler_army_cot",
+  "title": "adler army cot",
+  "author": "OLLY OLLY",
+  "modelled": true,
+  "url": "Authored locally in tools/blender/adler_props.py",
+  "licence": "Original OLLY OLLY geometry; existing library materials",
+  "class": "furniture",
+  "dims": [
+    0.79,
+    0.515,
+    2.0
+  ],
+  "surface": "carpet",
+  "triangles": {
+    "lod0": 8568
+  },
+  "parts": []
+}

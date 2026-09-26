@@ -1,0 +1,116 @@
+{
+ "boombox": {
+  "files": {
+   "albedo": "boombox.albedo.dds",
+   "normal": "boombox.normal.ktx2",
+   "orm": "boombox.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 39.77,
+   "normalXY": 50.32,
+   "orm": {
+    "ao": 99,
+    "rough": 40.07,
+    "metal": 38.71
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.261,
+   "p99": 2.188
+  },
+  "specAA": true,
+  "seconds": 1.3,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "boombox_speakers": {
+  "files": {
+   "albedo": "boombox_speakers.albedo.dds",
+   "orm": "boombox_speakers.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 37.81,
+   "orm": {
+    "ao": 99,
+    "rough": 42.88,
+    "metal": 25.04
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "orm": "DXT1"
+  },
+  "specAA": false,
+  "seconds": 1.2,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "MASK",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

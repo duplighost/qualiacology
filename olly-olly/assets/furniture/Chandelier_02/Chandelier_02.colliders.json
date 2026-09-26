@@ -1,0 +1,30 @@
+{
+ "id": "Chandelier_02",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "Chandelier_02.Chandelier_02.0",
+   "part": "Chandelier_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.0001,
+    "y": 0.4241,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.3396,
+    "y": 0.424,
+    "z": 0.3097
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

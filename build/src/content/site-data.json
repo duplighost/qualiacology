@@ -104,6 +104,19 @@
       "actionLabel": "Enter the city"
     },
     {
+      "slug": "olly-olly",
+      "title": "OLLY OLLY",
+      "descriptor": "Halloween first-person horror",
+      "group": "horror",
+      "featured": false,
+      "image": "/assets/games/olly-olly-card-clean.jpg",
+      "alt": "Four figures in rubber Halloween masks, a skull, an old man, a devil and a ghoul, walking down a dark street at night with pillowcases, and a tall figure in a bedsheet standing behind them",
+      "summary": "One Halloween night on Alder Lane. Twelve houses, a churchyard and a forest, scarecrows that get up off the lawns, trick-or-treaters in rubber masks, and something tall in a bedsheet looking for you. Keyboard and mouse.",
+      "metaDescription": "OLLY OLLY is a first-person horror shooter set on one Halloween night on a New England street: twelve houses, a churchyard, a forest, and a tall figure in a bedsheet looking for you.",
+      "controls": "WASD + mouse · Shift sprint · Space jump · C crouch · click fire, right click aim · 1-4 guns · R reload · V kick · Q firecrackers · F flashlight · E use · Tab map",
+      "actionLabel": "Go out"
+    },
+    {
       "slug": "i-seent-it",
       "title": "I SEENT IT",
       "descriptor": "Lunar custody arcade",

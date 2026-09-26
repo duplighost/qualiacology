@@ -1,0 +1,40 @@
+{
+ "id": "hanging_picture_frame_03",
+ "title": "Hanging Picture Frame 03",
+ "url": "https://polyhaven.com/a/hanging_picture_frame_03",
+ "licence": "CC0 1.0",
+ "author": "James Ray Cock",
+ "bytes": 1262176,
+ "triangles": {
+  "source": 24348,
+  "lod0": 3000,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.386,
+  0.5031,
+  0.0324
+ ],
+ "shippedBytes": 522460,
+ "parts": [
+  {
+   "name": "hanging_picture_frame_03",
+   "movable": false,
+   "tris": 3000,
+   "pivot": [
+    -0.0001,
+    0.2549,
+    -0.0163
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

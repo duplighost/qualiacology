@@ -1,0 +1,26 @@
+{
+ "wp-daisy-faded": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-daisy-faded.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 174904
+  },
+  "psnr": {
+   "albedo": 40.71
+  },
+  "sources": {
+   "albedo": "albedo.png"
+  },
+  "format": {
+   "albedo": "DXT1"
+  },
+  "seconds": 0.7
+ }
+}

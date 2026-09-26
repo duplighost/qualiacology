@@ -1,0 +1,40 @@
+{
+ "id": "cardboard_box_01",
+ "title": "Cardboard Box 01",
+ "url": "https://polyhaven.com/a/cardboard_box_01",
+ "licence": "CC0 1.0",
+ "author": "Rahul Chaudhary",
+ "bytes": 2168437,
+ "triangles": {
+  "source": 16952,
+  "lod0": 1999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 2000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.3872,
+  0.3414,
+  0.5155
+ ],
+ "shippedBytes": 583847,
+ "parts": [
+  {
+   "name": "cardboard_box_01",
+   "movable": false,
+   "tris": 1999,
+   "pivot": [
+    -0.001,
+    0.1834,
+    -0.0329
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

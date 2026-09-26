@@ -1,0 +1,63 @@
+{
+ "stone_fire_pit": {
+  "files": {
+   "albedo": "stone_fire_pit.albedo.dds",
+   "normal": "stone_fire_pit.normal.ktx2",
+   "orm": "stone_fire_pit.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 37.94,
+   "normalXY": 42.28,
+   "orm": {
+    "ao": 99,
+    "rough": 41.89,
+    "metal": 46.93
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.021,
+   "p99": 3.761
+  },
+  "specAA": false,
+  "seconds": 1.8,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

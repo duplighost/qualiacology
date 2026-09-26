@@ -1,0 +1,93 @@
+{
+ "id": "painted_wooden_sofa",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "painted_wooden_sofa.painted_wooden_sofa.0",
+   "part": "painted_wooden_sofa",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.6405,
+    "z": -0.3499
+   },
+   "h": {
+    "x": 1.2259,
+    "y": 0.6405,
+    "z": 0.0437
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_sofa.painted_wooden_sofa.1",
+   "part": "painted_wooden_sofa",
+   "kind": "obb",
+   "c": {
+    "x": 1.1821,
+    "y": 0.4945,
+    "z": 0.0437
+   },
+   "h": {
+    "x": 0.0438,
+    "y": 0.4945,
+    "z": 0.3499
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_sofa.painted_wooden_sofa.2",
+   "part": "painted_wooden_sofa",
+   "kind": "obb",
+   "c": {
+    "x": -1.1821,
+    "y": 0.4945,
+    "z": 0.0437
+   },
+   "h": {
+    "x": 0.0438,
+    "y": 0.4945,
+    "z": 0.3499
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_sofa.painted_wooden_sofa.3",
+   "part": "painted_wooden_sofa",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.4197,
+    "z": 0.0437
+   },
+   "h": {
+    "x": 1.1383,
+    "y": 0.1978,
+    "z": 0.3499
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

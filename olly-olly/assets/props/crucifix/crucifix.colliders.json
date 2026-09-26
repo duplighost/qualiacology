@@ -1,0 +1,30 @@
+{
+ "id": "crucifix",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "crucifix.0",
+   "part": "crucifix",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.2407,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.12,
+    "y": 0.2407,
+    "z": 0.0224
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

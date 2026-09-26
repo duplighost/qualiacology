@@ -1,0 +1,40 @@
+{
+ "id": "Barrel_01",
+ "title": "Barrel_01",
+ "url": "https://polyhaven.com/a/Barrel_01",
+ "licence": "CC0 1.0",
+ "author": "Jorge Camacho",
+ "bytes": 692947,
+ "triangles": {
+  "source": 2682,
+  "lod0": 2682,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.563,
+  0.88,
+  0.563
+ ],
+ "shippedBytes": 584378,
+ "parts": [
+  {
+   "name": "Barrel_01",
+   "movable": false,
+   "tris": 2682,
+   "pivot": [
+    0,
+    0.0066,
+    0
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

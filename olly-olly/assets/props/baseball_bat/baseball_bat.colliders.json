@@ -1,0 +1,30 @@
+{
+ "id": "baseball_bat",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "baseball_bat.baseball_bat.0",
+   "part": "baseball_bat",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.4566,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0318,
+    "y": 0.4566,
+    "z": 0.0318
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

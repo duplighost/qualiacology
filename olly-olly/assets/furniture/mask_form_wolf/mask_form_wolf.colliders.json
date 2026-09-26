@@ -1,0 +1,30 @@
+{
+ "id": "mask_form_wolf",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "mask_form_wolf.0",
+   "part": "mask_form_wolf",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.8499,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.175,
+    "y": 0.8499,
+    "z": 0.1807
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

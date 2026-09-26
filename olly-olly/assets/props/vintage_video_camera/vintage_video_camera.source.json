@@ -1,0 +1,40 @@
+{
+ "id": "vintage_video_camera",
+ "title": "Vintage Video Camera",
+ "url": "https://polyhaven.com/a/vintage_video_camera",
+ "licence": "CC0 1.0",
+ "author": "James Ray Cock, Jenelle van Heerden",
+ "bytes": 2710066,
+ "triangles": {
+  "source": 18682,
+  "lod0": 6000,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 6000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.0712,
+  0.1447,
+  0.1327
+ ],
+ "shippedBytes": 1158568,
+ "parts": [
+  {
+   "name": "vintage_video_camera",
+   "movable": false,
+   "tris": 6000,
+   "pivot": [
+    0.0016,
+    0.0018,
+    -0.0169
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

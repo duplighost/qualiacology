@@ -1,0 +1,26 @@
+{
+ "wp-willow-faded": {
+  "size": [
+   512,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-willow-faded.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 349672
+  },
+  "psnr": {
+   "albedo": 40.51
+  },
+  "sources": {
+   "albedo": "albedo.png"
+  },
+  "format": {
+   "albedo": "DXT1"
+  },
+  "seconds": 1.6
+ }
+}

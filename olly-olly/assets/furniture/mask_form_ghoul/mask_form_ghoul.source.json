@@ -1,0 +1,32 @@
+{
+ "id": "mask_form_ghoul",
+ "title": "mask form ghoul",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 3940,
+  "lod0": 3940,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.35,
+  1.6618,
+  0.35
+ ],
+ "use": "a ghoul rubber mask on a head form on its stand (the masque)",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 30674
+}

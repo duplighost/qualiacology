@@ -1,0 +1,30 @@
+{
+ "id": "fire_hydrant",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "fire_hydrant.fire_hydrant.0",
+   "part": "fire_hydrant",
+   "kind": "obb",
+   "c": {
+    "x": 0.0001,
+    "y": 0.4,
+    "z": 0.0003
+   },
+   "h": {
+    "x": 0.1372,
+    "y": 0.4001,
+    "z": 0.1586
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

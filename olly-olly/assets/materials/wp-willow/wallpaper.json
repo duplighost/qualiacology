@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.265,
+  0.4503
+ ],
+ "use": "Willow Bough, 1887 (William Morris)",
+ "source": {
+  "title": "Willow Bough, 1887 (William Morris)",
+  "page": "https://www.metmuseum.org/art/collection/search/384022",
+  "licence": "Public domain (The Met Open Access, CC0 1.0)",
+  "author": "William Morris (British, Walthamstow, London 1834\u20131896 Hammersmith, London)",
+  "credit": "Purchase, Edward C. Moore Jr. Gift, 1923; accession 23.163.4k",
+  "scan": "met-384022-willow-bough.jpg",
+  "process": {
+   "lattice": [
+    [
+     1133.57,
+     1.18
+    ],
+    [
+     5.77,
+     1926.74
+    ]
+   ],
+   "score": [
+    0.875,
+    0.885
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    1134,
+    1927
+   ],
+   "scale": 0.7840342124019958,
+   "blend": [
+    0.08,
+    0.08
+   ]
+  }
+ },
+ "shares": null
+}

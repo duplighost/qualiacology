@@ -1,0 +1,47 @@
+{
+ "planks027a": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "planks027a.albedo.dds",
+   "normal": "planks027a.normal.ktx2",
+   "orm": "planks027a.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 39.15,
+   "normalXY": 46.61,
+   "orm": {
+    "ao": 38.38,
+    "rough": 42.43,
+    "metal": 51.97
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "metal": "metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.495,
+   "p99": 3.494
+  },
+  "specAA": true,
+  "seconds": 4.8
+ }
+}

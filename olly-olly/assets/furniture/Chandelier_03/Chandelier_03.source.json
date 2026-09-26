@@ -1,0 +1,40 @@
+{
+ "id": "Chandelier_03",
+ "title": "Chandelier 03",
+ "url": "https://polyhaven.com/a/Chandelier_03",
+ "licence": "CC0 1.0",
+ "author": "Kirill Sannikov",
+ "bytes": 1364013,
+ "triangles": {
+  "source": 29301,
+  "lod0": 8000,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.7816,
+  1.0409,
+  0.7867
+ ],
+ "shippedBytes": 1299928,
+ "parts": [
+  {
+   "name": "Chandelier_03",
+   "movable": false,
+   "tris": 8000,
+   "pivot": [
+    -0.0013,
+    1.0406,
+    -0.0037
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

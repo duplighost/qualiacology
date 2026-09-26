@@ -1,0 +1,149 @@
+{
+ "vintage_cabinet_01_a": {
+  "files": {
+   "albedo": "vintage_cabinet_01_a.albedo.dds",
+   "normal": "vintage_cabinet_01_a.normal.ktx2",
+   "orm": "vintage_cabinet_01_a.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 43.27,
+   "normalXY": 51.15,
+   "orm": {
+    "ao": 99,
+    "rough": 41.82,
+    "metal": 41.17
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.239,
+   "p99": 1.87
+  },
+  "specAA": true,
+  "seconds": 5.1,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "vintage_cabinet_01_b": {
+  "files": {
+   "albedo": "vintage_cabinet_01_b.albedo.dds",
+   "normal": "vintage_cabinet_01_b.normal.ktx2",
+   "orm": "vintage_cabinet_01_b.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 43.51,
+   "normalXY": 57.09,
+   "orm": {
+    "ao": 99,
+    "rough": 39.76,
+    "metal": 38.88
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.077,
+   "p99": 1.187
+  },
+  "specAA": true,
+  "seconds": 5,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "vintage_cabinet_01_glass": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.029999999329447746,
+    0.029999999329447746,
+    0.029999999329447746,
+    0.30000001192092896
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 1
+  }
+ }
+}

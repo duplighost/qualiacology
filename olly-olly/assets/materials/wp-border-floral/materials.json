@@ -1,0 +1,45 @@
+{
+ "wp-border-floral": {
+  "size": [
+   256,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-border-floral.albedo.dds",
+   "normal": "wp-border-floral.normal.ktx2",
+   "orm": "wp-border-floral.orm.dds"
+  },
+  "bytes": {
+   "albedo": 87528,
+   "normal": 175264,
+   "orm": 87528
+  },
+  "psnr": {
+   "albedo": 33.89,
+   "normalXY": 54.58,
+   "orm": {
+    "ao": 99.0,
+    "rough": 47.9,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.26,
+   "p99": 0.67
+  },
+  "specAA": true,
+  "seconds": 1.0
+ }
+}

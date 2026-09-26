@@ -1,0 +1,30 @@
+{
+ "id": "concrete_cat_statue",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "concrete_cat_statue.concrete_cat_statue.0",
+   "part": "concrete_cat_statue",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.1415,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0765,
+    "y": 0.1415,
+    "z": 0.125
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "stone"
+  }
+ ]
+}

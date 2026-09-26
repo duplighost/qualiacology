@@ -1,0 +1,52 @@
+{
+ "flat:#ece8dc:0.2": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.8434,
+    0.8122,
+    0.7227,
+    1.0
+   ],
+   "roughness": 0.2,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#b8953a:0.4:0.7": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.4878,
+    0.3066,
+    0.0385,
+    1.0
+   ],
+   "roughness": 0.4,
+   "metallic": 0.7,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

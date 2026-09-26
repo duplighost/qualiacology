@@ -1,0 +1,72 @@
+{
+ "id": "street_lamp_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "street_lamp_01.street_lamp_01.0",
+   "part": "street_lamp_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 1.9382,
+    "z": 0
+   },
+   "h": {
+    "x": 0.2012,
+    "y": 1.9316,
+    "z": 0.1933
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "street_lamp_01.street_lamp_01.1",
+   "part": "street_lamp_01",
+   "kind": "obb",
+   "c": {
+    "x": 0.2767,
+    "y": 2.667,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0755,
+    "y": 0.0196,
+    "z": 0.0242
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "street_lamp_01.street_lamp_01.2",
+   "part": "street_lamp_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.2767,
+    "y": 2.667,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0755,
+    "y": 0.0196,
+    "z": 0.0242
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

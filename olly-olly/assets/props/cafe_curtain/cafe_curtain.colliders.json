@@ -1,0 +1,30 @@
+{
+ "id": "cafe_curtain",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "cafe_curtain.0",
+   "part": "cafe_curtain",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.2762,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.612,
+    "y": 0.2762,
+    "z": 0.0459
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

@@ -1,0 +1,46 @@
+{
+ "kid-hooks-sam": {
+  "size": [
+   1024,
+   512
+  ],
+  "alpha": false,
+  "wrap": false,
+  "files": {
+   "albedo": "kid-hooks-sam.albedo.dds",
+   "normal": "kid-hooks-sam.normal.ktx2",
+   "orm": "kid-hooks-sam.orm.dds"
+  },
+  "bytes": {
+   "albedo": 349672,
+   "normal": 699568,
+   "orm": 349672
+  },
+  "psnr": {
+   "albedo": 39.08,
+   "normalXY": 50.26,
+   "orm": {
+    "ao": 99.0,
+    "rough": 48.82,
+    "metal": 53.16
+   }
+  },
+  "sources": {
+   "albedo": "kid-hooks-sam_color.png",
+   "normal": "kid-hooks-sam_normal.png",
+   "rough": "kid-hooks-sam_roughness.png",
+   "metal": "kid-hooks-sam_metallic.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.252,
+   "p99": 2.242
+  },
+  "specAA": true,
+  "seconds": 6.2
+ }
+}

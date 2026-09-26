@@ -1,0 +1,53 @@
+{
+ "set:cabinet-oak": {
+  "files": {},
+  "set": "cabinet-oak",
+  "gltf": {
+   "baseColor": [
+    0.3,
+    0.17,
+    0.08,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#9c7a3a:0.3:1": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.3392,
+    0.1975,
+    0.0385,
+    1.0
+   ],
+   "roughness": 0.3,
+   "metallic": 1.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

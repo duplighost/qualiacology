@@ -1,0 +1,32 @@
+{
+ "id": "hale_cellar_overhead",
+ "title": "hale cellar overhead",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 4344,
+  "lod0": 4344,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  11.18,
+  1.275,
+  8.5
+ ],
+ "use": "Hale's cellar ceiling: joists, beam, ducts, flue, pipes",
+ "modelled": true,
+ "surface": "wood",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-25",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 132095
+}

@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.48,
+  1.2635
+ ],
+ "use": "Wall Panel: Toilette of Venus, 18th century",
+ "source": {
+  "title": "Wall Panel: Toilette of Venus, 18th century",
+  "page": "https://www.artic.edu/artworks/7998",
+  "licence": "Public domain (Art Institute of Chicago, CC0 1.0)",
+  "author": "France",
+  "credit": "Gift of David Adler, Jr.; 1923.152",
+  "scan": "aic-7998-wall-panel-toilette-of-venus.jpg",
+  "process": {
+   "lattice": [
+    [
+     388.94,
+     0.5
+    ],
+    [
+     0.79,
+     1023.99
+    ]
+   ],
+   "score": [
+    0.022,
+    0.62
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    389,
+    1024
+   ],
+   "scale": 1.0,
+   "blend": [
+    0.08,
+    0.08
+   ]
+  }
+ },
+ "shares": null
+}
