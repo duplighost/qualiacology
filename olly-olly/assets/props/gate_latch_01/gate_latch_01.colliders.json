@@ -1,0 +1,72 @@
+{
+ "id": "gate_latch_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "gate_latch_01.gate_latch_01_frame.0",
+   "part": "gate_latch_01_frame",
+   "kind": "obb",
+   "c": {
+    "x": -0.071,
+    "y": 0.0385,
+    "z": -0.0046
+   },
+   "h": {
+    "x": 0.0305,
+    "y": 0.0385,
+    "z": 0.0327
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "gate_latch_01.gate_latch_01_latch.0",
+   "part": "gate_latch_01_latch",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.0372,
+    "z": -0.0135
+   },
+   "h": {
+    "x": 0.1025,
+    "y": 0.0118,
+    "z": 0.0182
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "gate_latch_01.gate_latch_01_hook.0",
+   "part": "gate_latch_01_hook",
+   "kind": "obb",
+   "c": {
+    "x": -0.0708,
+    "y": 0.05,
+    "z": 0.0034
+   },
+   "h": {
+    "x": 0.0017,
+    "y": 0.0354,
+    "z": 0.034
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

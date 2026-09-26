@@ -1,0 +1,40 @@
+{
+ "id": "vintage_radio_transceiver",
+ "title": "Vintage Radio Transceiver",
+ "url": "https://polyhaven.com/a/vintage_radio_transceiver",
+ "licence": "CC0 1.0",
+ "author": "Mateusz Sadek",
+ "bytes": 6301480,
+ "triangles": {
+  "source": 42350,
+  "lod0": 4999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 5000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.5738,
+  0.434,
+  0.4138
+ ],
+ "shippedBytes": 2250045,
+ "parts": [
+  {
+   "name": "vintage_radio_transceiver",
+   "movable": false,
+   "tris": 4999,
+   "pivot": [
+    0.0506,
+    0.0699,
+    -0.057
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

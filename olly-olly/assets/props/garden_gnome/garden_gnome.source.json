@@ -1,0 +1,40 @@
+{
+ "id": "garden_gnome",
+ "title": "Garden Gnome",
+ "url": "https://polyhaven.com/a/garden_gnome",
+ "licence": "CC0 1.0",
+ "author": "Bhargav Kubal",
+ "bytes": 2454539,
+ "triangles": {
+  "source": 28858,
+  "lod0": 3999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 4000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.2576,
+  0.5994,
+  0.2102
+ ],
+ "shippedBytes": 598531,
+ "parts": [
+  {
+   "name": "garden_gnome",
+   "movable": false,
+   "tris": 3999,
+   "pivot": [
+    0.0149,
+    0.0001,
+    -0.0071
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

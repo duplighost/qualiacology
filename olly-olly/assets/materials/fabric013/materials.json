@@ -1,0 +1,55 @@
+{
+ "fabric013": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": true,
+  "wrap": true,
+  "files": {
+   "albedo": "fabric013.albedo.dds",
+   "normal": "fabric013.normal.ktx2",
+   "orm": "fabric013.orm.dds"
+  },
+  "bytes": {
+   "albedo": 349680,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 36.87,
+   "alpha": 43.33,
+   "normalXY": 41.02,
+   "orm": {
+    "ao": 99.0,
+    "rough": 41.63,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "alpha": "alpha.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.9538,
+   0.9538,
+   0.9539,
+   0.9539,
+   0.9551,
+   0.957
+  ],
+  "normalErrorDeg": {
+   "mean": 1.243,
+   "p99": 3.23
+  },
+  "specAA": true,
+  "seconds": 1.7
+ }
+}

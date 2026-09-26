@@ -1,0 +1,25 @@
+{
+  "note": "Sources of the street's decor assets (s2-street). Raw downloads live in work/asset-sources (never shipped); these are processed copies.",
+  "leaves": {
+    "made_by": "tools/decor/leaves.py",
+    "from": [
+      { "id": "LeafSet027", "page": "https://ambientcg.com/a/LeafSet027", "licence": "CC0 1.0", "author": "ambientCG (Lennart Demes)", "file": "LeafSet027_2K-JPG.zip" },
+      { "id": "LeafSet028", "page": "https://ambientcg.com/a/LeafSet028", "licence": "CC0 1.0", "author": "ambientCG (Lennart Demes)", "file": "LeafSet028_2K-JPG.zip" },
+      { "id": "LeafSet021", "page": "https://ambientcg.com/a/LeafSet021", "licence": "CC0 1.0", "author": "ambientCG (Lennart Demes)", "file": "LeafSet021_2K-JPG.zip" },
+      { "id": "LeafSet012", "page": "https://ambientcg.com/a/LeafSet012", "licence": "CC0 1.0", "author": "ambientCG (Lennart Demes)", "file": "LeafSet012_2K-JPG.zip" }
+    ]
+  },
+  "pumpkins": { "made_by": "tools/blender/decor_pumpkins.py", "from": "procedural (Blender 4.5), no downloads" },
+  "figures": { "made_by": "tools/blender/decor_figures.py", "from": "procedural (Blender 4.5), no downloads" },
+  "words": {
+    "made_by": "tools/decor/words.py",
+    "fonts_used_at_build_time_only": [
+      { "font": "Oswald", "licence": "SIL OFL 1.1", "source": "https://github.com/google/fonts/tree/main/ofl/oswald" },
+      { "font": "Caveat Brush", "licence": "SIL OFL 1.1", "source": "https://github.com/google/fonts/tree/main/ofl/caveatbrush" },
+      { "font": "Sedgwick Ave Display", "licence": "SIL OFL 1.1", "source": "https://github.com/google/fonts/tree/main/ofl/sedgwickavedisplay" },
+      { "font": "Gochi Hand", "licence": "SIL OFL 1.1", "source": "https://github.com/google/fonts/tree/main/ofl/gochihand" },
+      { "font": "Archivo Black", "licence": "SIL OFL 1.1", "source": "https://github.com/google/fonts/tree/main/ofl/archivoblack" }
+    ],
+    "poster": "a stand-in for the MISSING poster until s2-dress's paper props (public/assets/paper) land; words.js prefers theirs"
+  }
+}

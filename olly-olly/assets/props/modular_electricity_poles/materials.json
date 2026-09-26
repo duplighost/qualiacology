@@ -1,0 +1,124 @@
+{
+ "modular_electricity_poles": {
+  "files": {
+   "albedo": "modular_electricity_poles.albedo.dds",
+   "normal": "modular_electricity_poles.normal.ktx2",
+   "orm": "modular_electricity_poles.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 40.52,
+   "normalXY": 45.21,
+   "orm": {
+    "ao": 99,
+    "rough": 41.24,
+    "metal": 42.18
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.72,
+   "p99": 3.139
+  },
+  "specAA": true,
+  "seconds": 5.4,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "modular_electricity_poles_pieces": {
+  "files": {
+   "albedo": "modular_electricity_poles_pieces.albedo.dds",
+   "normal": "modular_electricity_poles_pieces.normal.ktx2",
+   "orm": "modular_electricity_poles_pieces.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 37.88,
+   "normalXY": 39.98,
+   "orm": {
+    "ao": 99,
+    "rough": 29.14,
+    "metal": 29.55
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.388,
+   "p99": 7.766
+  },
+  "specAA": true,
+  "seconds": 5.1,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

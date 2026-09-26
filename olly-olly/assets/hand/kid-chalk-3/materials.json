@@ -1,0 +1,35 @@
+{
+ "kid-chalk-3": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "kid-chalk-3.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 349680
+  },
+  "psnr": {
+   "albedo": 44.54,
+   "alpha": 47.98
+  },
+  "sources": {
+   "albedo": "kid-chalk-3_color.png"
+  },
+  "format": {
+   "albedo": "DXT5"
+  },
+  "coverage": [
+   0.0151,
+   0.0152,
+   0.0152,
+   0.0154,
+   0.0156,
+   0.0156
+  ],
+  "seconds": 2.3
+ }
+}

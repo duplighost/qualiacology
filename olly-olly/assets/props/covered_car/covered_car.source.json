@@ -1,0 +1,85 @@
+{
+ "id": "covered_car",
+ "title": "Covered Car",
+ "url": "https://polyhaven.com/a/covered_car",
+ "licence": "CC0 1.0",
+ "author": "MP",
+ "bytes": 2349276,
+ "triangles": {
+  "source": 12592,
+  "lod0": 12592,
+  "lod1": 4997
+ },
+ "budget": {
+  "lod0": 20000,
+  "lod1": 5000
+ },
+ "class": "hero",
+ "dims": [
+  1.789,
+  1.4111,
+  4.3803
+ ],
+ "shippedBytes": 1359500,
+ "parts": [
+  {
+   "name": "covered_car",
+   "movable": false,
+   "tris": 4528,
+   "pivot": [
+    -0.0102,
+    0,
+    0.0138
+   ]
+  },
+  {
+   "name": "covered_car_wheel_01",
+   "movable": true,
+   "tris": 2016,
+   "pivot": [
+    0.7098,
+    0.3,
+    1.2568
+   ]
+  },
+  {
+   "name": "covered_car_wheel_02",
+   "movable": true,
+   "tris": 2016,
+   "pivot": [
+    -0.7302,
+    0.3,
+    1.2568
+   ]
+  },
+  {
+   "name": "covered_car_wheel_03",
+   "movable": true,
+   "tris": 2016,
+   "pivot": [
+    -0.7202,
+    0.3,
+    -1.3232
+   ]
+  },
+  {
+   "name": "covered_car_wheel_04",
+   "movable": true,
+   "tris": 2016,
+   "pivot": [
+    0.6998,
+    0.3,
+    -1.3232
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "covered_car_wheel_01",
+  "covered_car_wheel_02",
+  "covered_car_wheel_03",
+  "covered_car_wheel_04"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

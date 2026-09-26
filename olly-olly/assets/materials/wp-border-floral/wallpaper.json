@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.12,
+  0.278
+ ],
+ "use": "Panel (floral border), 19th century",
+ "source": {
+  "title": "Panel (floral border), 19th century",
+  "page": "https://www.artic.edu/artworks/87105",
+  "licence": "Public domain (Art Institute of Chicago, CC0 1.0)",
+  "author": "Possibly United States",
+  "credit": "Bought from Nancy McClelland, Inc. Gift of Robert Allerton; 1926.248",
+  "scan": "aic-87105-panel.jpg",
+  "process": {
+   "lattice": [
+    [
+     331.9,
+     -5.89
+    ],
+    [
+     0.5,
+     769.44
+    ]
+   ],
+   "score": [
+    0.417,
+    0.179
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    332,
+    769
+   ],
+   "scale": 1.0,
+   "blend": [
+    0.08,
+    0.08
+   ]
+  }
+ },
+ "shares": null
+}

@@ -1,0 +1,30 @@
+{
+ "id": "sofa_02",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "sofa_02.sofa_02.0",
+   "part": "sofa_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.3547,
+    "z": 0
+   },
+   "h": {
+    "x": 0.9036,
+    "y": 0.3547,
+    "z": 0.4089
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "id": "GothicBed_01",
+ "title": "Gothic Bed 01",
+ "url": "https://polyhaven.com/a/GothicBed_01",
+ "licence": "CC0 1.0",
+ "author": "Kirill Sannikov",
+ "bytes": 1155213,
+ "triangles": {
+  "source": 18745,
+  "lod0": 18745,
+  "lod1": 5000
+ },
+ "budget": {
+  "lod0": 20000,
+  "lod1": 5000
+ },
+ "class": "hero",
+ "dims": [
+  1.4938,
+  1.5338,
+  2.04
+ ],
+ "shippedBytes": 2424700,
+ "parts": [
+  {
+   "name": "GothicBed_01",
+   "movable": false,
+   "tris": 18745,
+   "pivot": [
+    -0.0356,
+    0,
+    0.0331
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

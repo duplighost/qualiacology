@@ -1,0 +1,32 @@
+{
+ "id": "saint_hall",
+ "title": "saint hall",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 7950,
+  "lod0": 7950,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.416,
+  1.3888,
+  0.416
+ ],
+ "use": "the hall saint on her pedestal, worn faceless",
+ "modelled": true,
+ "surface": "stone",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 74371
+}

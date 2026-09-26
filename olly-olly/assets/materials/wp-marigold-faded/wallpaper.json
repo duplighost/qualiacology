@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.27,
+  0.27
+ ],
+ "use": "Marigold, 1875 (William Morris) (faded)",
+ "source": {
+  "title": "Marigold, 1875 (William Morris)",
+  "page": "https://www.metmuseum.org/art/collection/search/384018",
+  "licence": "Public domain (The Met Open Access, CC0 1.0)",
+  "author": "William Morris (British, Walthamstow, London 1834\u20131896 Hammersmith, London)",
+  "credit": "Purchase, Edward C. Moore Jr. Gift, 1923; accession 23.163.4c",
+  "scan": "met-384018-marigold.jpg",
+  "process": {
+   "lattice": [
+    [
+     1125.47,
+     -0.02
+    ],
+    [
+     -0.27,
+     1124.7
+    ]
+   ],
+   "score": [
+    0.5,
+    0.672
+   ],
+   "instances": 2,
+   "repaired": 0.0,
+   "cell_px": [
+    1125,
+    1125
+   ],
+   "scale": 0.7625649913344887,
+   "blend": [
+    0.08,
+    0.08
+   ]
+  }
+ },
+ "shares": "wp-marigold"
+}

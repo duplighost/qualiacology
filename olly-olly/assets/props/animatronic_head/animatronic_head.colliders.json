@@ -1,0 +1,30 @@
+{
+ "id": "animatronic_head",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "animatronic_head.0",
+   "part": "animatronic_head",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.1649,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.1,
+    "y": 0.1649,
+    "z": 0.1142
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

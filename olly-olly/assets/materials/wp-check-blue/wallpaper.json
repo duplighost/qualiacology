@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.2,
+  0.2014
+ ],
+ "use": "Wallpaper Fragment, 1820 (Dauptain et Soeur)",
+ "source": {
+  "title": "Wallpaper Fragment, 1820 (Dauptain et Soeur)",
+  "page": "https://www.artic.edu/artworks/13496",
+  "licence": "Public domain (Art Institute of Chicago, CC0 1.0)",
+  "author": "France, Dauptain et Soeur",
+  "credit": "Gift of Robert Allerton; 1924.770",
+  "scan": "aic-13496-wallpaper-fragment.jpg",
+  "process": {
+   "lattice": [
+    [
+     853.35,
+     0.44
+    ],
+    [
+     -4.72,
+     858.59
+    ]
+   ],
+   "score": [
+    0.609,
+    0.596
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    853,
+    859
+   ],
+   "scale": 1.0,
+   "blend": [
+    0.004,
+    0.004
+   ]
+  }
+ },
+ "shares": null
+}

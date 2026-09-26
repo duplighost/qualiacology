@@ -1,0 +1,40 @@
+{
+ "id": "painted_wooden_chair_02",
+ "title": "Painted Wooden Chair 02",
+ "url": "https://polyhaven.com/a/painted_wooden_chair_02",
+ "licence": "CC0 1.0",
+ "author": "Kirill Sannikov",
+ "bytes": 2396396,
+ "triangles": {
+  "source": 1246,
+  "lod0": 1246,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.6394,
+  1.2638,
+  0.6621
+ ],
+ "shippedBytes": 1235388,
+ "parts": [
+  {
+   "name": "painted_wooden_chair_02",
+   "movable": false,
+   "tris": 1246,
+   "pivot": [
+    0.0152,
+    0,
+    0.0322
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

@@ -1,0 +1,30 @@
+{
+ "id": "laundry_tub",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "laundry_tub.0",
+   "part": "laundry_tub",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 1.0,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.3,
+    "y": 1.0,
+    "z": 0.275
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "stone"
+  }
+ ]
+}

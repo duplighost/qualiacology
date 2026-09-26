@@ -1,0 +1,88 @@
+{
+ "Chandelier_03": {
+  "files": {
+   "albedo": "Chandelier_03.albedo.dds",
+   "normal": "Chandelier_03.normal.ktx2",
+   "orm": "Chandelier_03.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 41.75,
+   "normalXY": 44.36,
+   "orm": {
+    "ao": 99,
+    "rough": 37.28,
+    "metal": 34.41
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.726,
+   "p99": 3.942
+  },
+  "specAA": true,
+  "seconds": 5.3,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "Chandelier_03_glass": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.1715972125530243,
+    0.1715972125530243,
+    0.1715972125530243,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0.699999988079071,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

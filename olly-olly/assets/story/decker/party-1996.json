@@ -1,0 +1,38 @@
+{
+  "seconds": 8,
+  "fps": 24,
+  "size": [
+    480,
+    360
+  ],
+  "source": "tools/decker-tape.mjs + tools/blender/decker_tape.py",
+  "meshes": [
+    "src/world/houses/decker.js",
+    "src/world/decker-route.js",
+    "src/world/houses/kit/leaf.js",
+    "tools/blender/dress_lib.py"
+  ],
+  "audio": {
+    "original": true,
+    "dialogue": false,
+    "bell": false,
+    "knock": false,
+    "hissFrom": 1.32,
+    "peak": 0.02171787520750884,
+    "rms": 0.0033335567376470724
+  },
+  "shots": {
+    "party": [
+      0,
+      1.65
+    ],
+    "hall": [
+      1.65,
+      7.5
+    ],
+    "snow": [
+      7.5,
+      8
+    ]
+  }
+}

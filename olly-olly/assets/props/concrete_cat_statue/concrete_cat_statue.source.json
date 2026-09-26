@@ -1,0 +1,40 @@
+{
+ "id": "concrete_cat_statue",
+ "title": "Concrete Cat Statue",
+ "url": "https://polyhaven.com/a/concrete_cat_statue",
+ "licence": "CC0 1.0",
+ "author": "Rico Cilliers, Riley Queen",
+ "bytes": 3098337,
+ "triangles": {
+  "source": 11950,
+  "lod0": 8000,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.1529,
+  0.283,
+  0.25
+ ],
+ "shippedBytes": 597569,
+ "parts": [
+  {
+   "name": "concrete_cat_statue",
+   "movable": false,
+   "tris": 8000,
+   "pivot": [
+    0.0017,
+    0,
+    0.0248
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

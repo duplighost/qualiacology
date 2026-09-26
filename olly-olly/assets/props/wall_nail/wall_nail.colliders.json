@@ -1,0 +1,30 @@
+{
+ "id": "wall_nail",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "wall_nail.0",
+   "part": "wall_nail",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0058
+   },
+   "h": {
+    "x": 0.004,
+    "y": 0.0042,
+    "z": 0.0064
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

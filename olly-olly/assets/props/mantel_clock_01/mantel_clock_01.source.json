@@ -1,0 +1,40 @@
+{
+ "id": "mantel_clock_01",
+ "title": "Mantel Clock 01",
+ "url": "https://polyhaven.com/a/mantel_clock_01",
+ "licence": "CC0 1.0",
+ "author": "Yann Kervran, Rico Cilliers",
+ "bytes": 2427220,
+ "triangles": {
+  "source": 25721,
+  "lod0": 4000,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 4000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.3424,
+  0.1605,
+  0.1262
+ ],
+ "shippedBytes": 1125786,
+ "parts": [
+  {
+   "name": "mantel_clock_01",
+   "movable": false,
+   "tris": 4000,
+   "pivot": [
+    0,
+    -0.0005,
+    0
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

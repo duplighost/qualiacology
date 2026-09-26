@@ -1,0 +1,46 @@
+{
+ "tiles071": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "tiles071.albedo.dds",
+   "normal": "tiles071.normal.ktx2",
+   "orm": "tiles071.orm.dds"
+  },
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 39.78,
+   "normalXY": 43.39,
+   "orm": {
+    "ao": 36.17,
+    "rough": 32.75,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.778,
+   "p99": 3.172
+  },
+  "specAA": true,
+  "seconds": 1.2
+ }
+}

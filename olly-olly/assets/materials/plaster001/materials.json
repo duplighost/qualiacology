@@ -1,0 +1,45 @@
+{
+ "plaster001": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "plaster001.albedo.dds",
+   "normal": "plaster001.normal.ktx2",
+   "orm": "plaster001.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 43.47,
+   "normalXY": 44.41,
+   "orm": {
+    "ao": 99.0,
+    "rough": 49.33,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.845,
+   "p99": 2.347
+  },
+  "specAA": false,
+  "seconds": 4.0
+ }
+}

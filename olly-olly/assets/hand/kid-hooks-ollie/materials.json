@@ -1,0 +1,46 @@
+{
+ "kid-hooks-ollie": {
+  "size": [
+   1024,
+   512
+  ],
+  "alpha": false,
+  "wrap": false,
+  "files": {
+   "albedo": "kid-hooks-ollie.albedo.dds",
+   "normal": "kid-hooks-ollie.normal.ktx2",
+   "orm": "kid-hooks-ollie.orm.dds"
+  },
+  "bytes": {
+   "albedo": 349672,
+   "normal": 699568,
+   "orm": 349672
+  },
+  "psnr": {
+   "albedo": 39.34,
+   "normalXY": 50.15,
+   "orm": {
+    "ao": 99.0,
+    "rough": 49.05,
+    "metal": 53.04
+   }
+  },
+  "sources": {
+   "albedo": "kid-hooks-ollie_color.png",
+   "normal": "kid-hooks-ollie_normal.png",
+   "rough": "kid-hooks-ollie_roughness.png",
+   "metal": "kid-hooks-ollie_metallic.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.233,
+   "p99": 2.423
+  },
+  "specAA": true,
+  "seconds": 6.6
+ }
+}

@@ -1,0 +1,37 @@
+{
+ "id": "afghan",
+ "title": "afghan",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2080,
+  "lod0": 2080,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.8268,
+  0.5385,
+  0.368
+ ],
+ "use": "Ruth's afghan over her chair (fits ArmChair_01)",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "origin": [
+  0.0,
+  0.5245,
+  -0.2361
+ ],
+ "shippedBytes": 10324
+}

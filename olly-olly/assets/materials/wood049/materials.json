@@ -1,0 +1,45 @@
+{
+ "wood049": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wood049.albedo.dds",
+   "normal": "wood049.normal.ktx2",
+   "orm": "wood049.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 41.3,
+   "normalXY": 48.98,
+   "orm": {
+    "ao": 99.0,
+    "rough": 38.71,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.463,
+   "p99": 1.505
+  },
+  "specAA": true,
+  "seconds": 4.8
+ }
+}

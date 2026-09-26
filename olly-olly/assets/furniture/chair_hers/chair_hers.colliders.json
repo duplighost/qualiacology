@@ -1,0 +1,30 @@
+{
+ "id": "chair_hers",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "chair_hers.0",
+   "part": "chair_hers",
+   "kind": "obb",
+   "c": {
+    "x": -0.001,
+    "y": 0.5546,
+    "z": -0.001
+   },
+   "h": {
+    "x": 0.4786,
+    "y": 0.5546,
+    "z": 0.4589
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

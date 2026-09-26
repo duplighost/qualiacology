@@ -1,0 +1,124 @@
+{
+ "potted_plant_02_leaves": {
+  "files": {
+   "albedo": "potted_plant_02_leaves.albedo.dds",
+   "normal": "potted_plant_02_leaves.normal.ktx2",
+   "orm": "potted_plant_02_leaves.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 38.01,
+   "normalXY": 48.76,
+   "orm": {
+    "ao": 99,
+    "rough": 46.48,
+    "metal": 44.51
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.415,
+   "p99": 1.974
+  },
+  "specAA": false,
+  "seconds": 1.9,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "MASK",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "potted_plant_02_pot": {
+  "files": {
+   "albedo": "potted_plant_02_pot.albedo.dds",
+   "normal": "potted_plant_02_pot.normal.ktx2",
+   "orm": "potted_plant_02_pot.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 41.64,
+   "normalXY": 47.64,
+   "orm": {
+    "ao": 99,
+    "rough": 41.21,
+    "metal": 40.03
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.283,
+   "p99": 3.206
+  },
+  "specAA": false,
+  "seconds": 1.8,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

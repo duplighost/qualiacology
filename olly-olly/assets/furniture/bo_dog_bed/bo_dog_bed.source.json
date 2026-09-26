@@ -1,0 +1,19 @@
+{
+  "id": "bo_dog_bed",
+  "title": "bo dog bed",
+  "author": "OLLY OLLY",
+  "modelled": true,
+  "url": "Authored locally in tools/blender/adler_props.py",
+  "licence": "Original OLLY OLLY geometry; existing library materials",
+  "class": "furniture",
+  "dims": [
+    1.09,
+    0.215,
+    0.81
+  ],
+  "surface": "carpet",
+  "triangles": {
+    "lod0": 7040
+  },
+  "parts": []
+}

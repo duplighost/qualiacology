@@ -1,0 +1,219 @@
+{
+ "id": "tea_set_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "tea_set_01.tea_set_01_plate_large_square_01.0",
+   "part": "tea_set_01_plate_large_square_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.3652,
+    "y": 0.0089,
+    "z": -0.147
+   },
+   "h": {
+    "x": 0.0939,
+    "y": 0.009,
+    "z": 0.0949
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_cup_small_01.0",
+   "part": "tea_set_01_cup_small_01",
+   "kind": "obb",
+   "c": {
+    "x": 0.1348,
+    "y": 0.0371,
+    "z": 0.0901
+   },
+   "h": {
+    "x": 0.053,
+    "y": 0.034,
+    "z": 0.0659
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_saucer_circular_03.0",
+   "part": "tea_set_01_saucer_circular_03",
+   "kind": "obb",
+   "c": {
+    "x": 0.3848,
+    "y": 0.0082,
+    "z": -0.147
+   },
+   "h": {
+    "x": 0.0745,
+    "y": 0.008,
+    "z": 0.0745
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_plate_large_circular_03.0",
+   "part": "tea_set_01_plate_large_circular_03",
+   "kind": "obb",
+   "c": {
+    "x": -0.1152,
+    "y": 0.0088,
+    "z": -0.147
+   },
+   "h": {
+    "x": 0.0936,
+    "y": 0.0089,
+    "z": 0.0936
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_sugar_cup_01.0",
+   "part": "tea_set_01_sugar_cup_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.1152,
+    "y": 0.0369,
+    "z": 0.103
+   },
+   "h": {
+    "x": 0.0511,
+    "y": 0.0339,
+    "z": 0.0713
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_teapot_01.0",
+   "part": "tea_set_01_teapot_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.3651,
+    "y": 0.0617,
+    "z": 0.1077
+   },
+   "h": {
+    "x": 0.0828,
+    "y": 0.0615,
+    "z": 0.1345
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_cup_small_02.0",
+   "part": "tea_set_01_cup_small_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.3848,
+    "y": 0.0371,
+    "z": 0.0901
+   },
+   "h": {
+    "x": 0.053,
+    "y": 0.034,
+    "z": 0.0659
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_saucer_circular_04.0",
+   "part": "tea_set_01_saucer_circular_04",
+   "kind": "obb",
+   "c": {
+    "x": 0.1348,
+    "y": 0.0082,
+    "z": -0.147
+   },
+   "h": {
+    "x": 0.0745,
+    "y": 0.008,
+    "z": 0.0745
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_sugar_cup_01_lid.0",
+   "part": "tea_set_01_sugar_cup_01_lid",
+   "kind": "obb",
+   "c": {
+    "x": -0.1152,
+    "y": 0.0866,
+    "z": 0.103
+   },
+   "h": {
+    "x": 0.0491,
+    "y": 0.0169,
+    "z": 0.0492
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "tea_set_01.tea_set_01_teapot_01_lid.0",
+   "part": "tea_set_01_teapot_01_lid",
+   "kind": "obb",
+   "c": {
+    "x": -0.3652,
+    "y": 0.1402,
+    "z": 0.101
+   },
+   "h": {
+    "x": 0.0621,
+    "y": 0.0249,
+    "z": 0.0625
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  }
+ ]
+}

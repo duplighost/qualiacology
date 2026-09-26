@@ -1,0 +1,85 @@
+{
+ "id": "painted_wooden_cabinet",
+ "title": "Painted Wooden Cabinet",
+ "url": "https://polyhaven.com/a/painted_wooden_cabinet",
+ "licence": "CC0 1.0",
+ "author": "Kirill Sannikov",
+ "bytes": 1861779,
+ "triangles": {
+  "source": 2227,
+  "lod0": 2227,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.1947,
+  1.1819,
+  0.6166
+ ],
+ "shippedBytes": 1247166,
+ "parts": [
+  {
+   "name": "painted_wooden_cabinet",
+   "movable": false,
+   "tris": 1093,
+   "pivot": [
+    -0.0026,
+    0.0004,
+    -0.0259
+   ]
+  },
+  {
+   "name": "painted_wooden_cabinet_door_02",
+   "movable": true,
+   "tris": 404,
+   "pivot": [
+    0.5612,
+    0.5172,
+    0.2091
+   ]
+  },
+  {
+   "name": "painted_wooden_cabinet_door_01",
+   "movable": true,
+   "tris": 80,
+   "pivot": [
+    -0.5659,
+    0.5172,
+    0.195
+   ]
+  },
+  {
+   "name": "painted_wooden_cabinet_drawer_02",
+   "movable": true,
+   "tris": 325,
+   "pivot": [
+    0.2719,
+    1.0469,
+    0.2092
+   ]
+  },
+  {
+   "name": "painted_wooden_cabinet_drawer_01",
+   "movable": true,
+   "tris": 325,
+   "pivot": [
+    -0.2829,
+    1.0469,
+    0.2657
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "painted_wooden_cabinet_door_02",
+  "painted_wooden_cabinet_door_01",
+  "painted_wooden_cabinet_drawer_02",
+  "painted_wooden_cabinet_drawer_01"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

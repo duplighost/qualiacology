@@ -1,0 +1,40 @@
+{
+ "id": "gothic_statue",
+ "title": "Gothic Statue",
+ "url": "https://polyhaven.com/a/gothic_statue",
+ "licence": "CC0 1.0",
+ "author": "Benny Weimer",
+ "bytes": 3978633,
+ "triangles": {
+  "source": 27739,
+  "lod0": 20000,
+  "lod1": 5000
+ },
+ "budget": {
+  "lod0": 20000,
+  "lod1": 5000
+ },
+ "class": "hero",
+ "dims": [
+  1.4775,
+  1.7399,
+  1.5638
+ ],
+ "shippedBytes": 2489046,
+ "parts": [
+  {
+   "name": "gothic_statue",
+   "movable": false,
+   "tris": 20000,
+   "pivot": [
+    0.0155,
+    1.2078,
+    0.6796
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

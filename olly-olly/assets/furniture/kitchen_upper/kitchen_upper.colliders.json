@@ -1,0 +1,30 @@
+{
+ "id": "kitchen_upper",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "kitchen_upper.0",
+   "part": "kitchen_upper",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.39,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.31,
+    "y": 0.39,
+    "z": 0.184
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

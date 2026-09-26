@@ -1,0 +1,24 @@
+{
+  "colliders": [
+    {
+      "id": "adler_army_cot.0",
+      "kind": "obb",
+      "c": {
+        "x": 0,
+        "y": 0.25,
+        "z": 0
+      },
+      "h": {
+        "x": 0.39,
+        "y": 0.25,
+        "z": 1
+      },
+      "yaw": 0,
+      "tags": [
+        "SOLID",
+        "NOMANTLE"
+      ],
+      "surface": "carpet"
+    }
+  ]
+}

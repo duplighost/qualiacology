@@ -1,0 +1,57 @@
+{
+ "pine_twig": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "pine_twig.albedo.dds",
+   "normal": "pine_twig.normal.ktx2",
+   "orm": "pine_twig.orm.dds"
+  },
+  "bytes": {
+   "albedo": 1398256,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 38.69,
+   "alpha": 45.54,
+   "normalXY": 41.95,
+   "orm": {
+    "ao": 40.05,
+    "rough": 38.73,
+    "metal": 47.37
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "metal": "metal.png",
+   "alpha": "alpha.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.6789,
+   0.6789,
+   0.6789,
+   0.6789,
+   0.679,
+   0.6797
+  ],
+  "normalErrorDeg": {
+   "mean": 1.002,
+   "p99": 7.824
+  },
+  "specAA": false,
+  "seconds": 5.3
+ }
+}

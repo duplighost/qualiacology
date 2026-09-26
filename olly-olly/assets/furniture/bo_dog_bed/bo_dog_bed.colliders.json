@@ -1,0 +1,24 @@
+{
+  "colliders": [
+    {
+      "id": "bo_dog_bed.0",
+      "kind": "obb",
+      "c": {
+        "x": 0,
+        "y": 0.08,
+        "z": 0
+      },
+      "h": {
+        "x": 0.5,
+        "y": 0.08,
+        "z": 0.36
+      },
+      "yaw": 0,
+      "tags": [
+        "SOLID",
+        "NOMANTLE"
+      ],
+      "surface": "carpet"
+    }
+  ]
+}

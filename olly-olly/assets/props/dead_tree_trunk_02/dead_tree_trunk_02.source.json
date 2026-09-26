@@ -1,0 +1,40 @@
+{
+ "id": "dead_tree_trunk_02",
+ "title": "Dead Tree Trunk 02",
+ "url": "https://polyhaven.com/a/dead_tree_trunk_02",
+ "licence": "CC0 1.0",
+ "author": "Jenelle van Heerden, Rico Cilliers",
+ "bytes": 4906925,
+ "triangles": {
+  "source": 83128,
+  "lod0": 19999,
+  "lod1": 4999
+ },
+ "budget": {
+  "lod0": 20000,
+  "lod1": 5000
+ },
+ "class": "hero",
+ "dims": [
+  4.0525,
+  1.0567,
+  1.0562
+ ],
+ "shippedBytes": 1417860,
+ "parts": [
+  {
+   "name": "dead_tree_trunk_02",
+   "movable": false,
+   "tris": 19999,
+   "pivot": [
+    -0.1013,
+    0.3284,
+    -0.0272
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

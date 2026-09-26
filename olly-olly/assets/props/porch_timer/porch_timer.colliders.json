@@ -1,0 +1,30 @@
+{
+ "id": "porch_timer",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "porch_timer.0",
+   "part": "porch_timer",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.36,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.085,
+    "y": 0.36,
+    "z": 0.048
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

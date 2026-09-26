@@ -1,0 +1,32 @@
+{
+ "id": "chandelier_pruitt",
+ "title": "chandelier pruitt",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 5132,
+  "lod0": 5132,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.4816,
+  0.55,
+  0.4796
+ ],
+ "use": "the Pruitt front hall's brass gasolier, four frosted tulips (hangs at the hall light)",
+ "modelled": true,
+ "surface": "metal",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 60867
+}

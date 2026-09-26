@@ -1,0 +1,45 @@
+{
+ "paintedwood": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "paintedwood.albedo.dds",
+   "normal": "paintedwood.normal.ktx2",
+   "orm": "paintedwood.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 43.72,
+   "normalXY": 72.27,
+   "orm": {
+    "ao": 99.0,
+    "rough": 40.94,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.022,
+   "p99": 0.128
+  },
+  "specAA": false,
+  "seconds": 24.2
+ }
+}

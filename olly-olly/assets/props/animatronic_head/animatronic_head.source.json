@@ -1,0 +1,32 @@
+{
+ "id": "animatronic_head",
+ "title": "animatronic head",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 2950,
+  "lod0": 2950,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.2,
+  0.3285,
+  0.2285
+ ],
+ "use": "an animatronic skull on a bracket, jaw and eyes on linkages",
+ "modelled": true,
+ "surface": "metal",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 40162
+}

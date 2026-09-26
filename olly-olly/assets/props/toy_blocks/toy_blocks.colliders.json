@@ -1,0 +1,30 @@
+{
+ "id": "toy_blocks",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "toy_blocks.0",
+   "part": "toy_blocks",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.1281,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.468,
+    "y": 0.1281,
+    "z": 0.247
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

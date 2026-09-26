@@ -1,0 +1,63 @@
+{
+ "fire_hydrant": {
+  "files": {
+   "albedo": "fire_hydrant.albedo.dds",
+   "normal": "fire_hydrant.normal.ktx2",
+   "orm": "fire_hydrant.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 39.92,
+   "normalXY": 48.97,
+   "orm": {
+    "ao": 99,
+    "rough": 37.72,
+    "metal": 36.42
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.345,
+   "p99": 2.338
+  },
+  "specAA": false,
+  "seconds": 1.9,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

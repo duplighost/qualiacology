@@ -1,0 +1,43 @@
+{
+ "size": [
+  0.5,
+  0.5027
+ ],
+ "use": "Entrance-hall Wallpaper from the Collins House, ca. 1850",
+ "source": {
+  "title": "Entrance-hall Wallpaper from the Collins House, ca. 1850",
+  "page": "https://www.metmuseum.org/art/collection/search/339969",
+  "licence": "Public domain (The Met Open Access, CC0 1.0)",
+  "author": "Anonymous, American, 19th century",
+  "credit": "Gift of Mrs. Adrienne A. Sheridan, 1956; accession 56.599.10",
+  "scan": "met-339969-entrance-hall-wallpaper-from-the-collins-house.jpg",
+  "process": {
+   "lattice": [
+    [
+     1131.92,
+     0.02
+    ],
+    [
+     0.55,
+     1137.74
+    ]
+   ],
+   "score": [
+    0.082,
+    0.827
+   ],
+   "instances": 1,
+   "repaired": 0.0,
+   "cell_px": [
+    1132,
+    1138
+   ],
+   "scale": 1.0,
+   "blend": [
+    0.08,
+    0.08
+   ]
+  }
+ },
+ "shares": null
+}

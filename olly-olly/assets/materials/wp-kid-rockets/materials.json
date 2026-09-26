@@ -1,0 +1,45 @@
+{
+ "wp-kid-rockets": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-kid-rockets.albedo.dds",
+   "normal": "wp-kid-rockets.normal.ktx2",
+   "orm": "wp-kid-rockets.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 39.47,
+   "normalXY": 66.73,
+   "orm": {
+    "ao": 99.0,
+    "rough": 51.98,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.066,
+   "p99": 0.144
+  },
+  "specAA": true,
+  "seconds": 4.1
+ }
+}

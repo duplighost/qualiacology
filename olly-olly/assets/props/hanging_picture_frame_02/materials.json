@@ -1,0 +1,149 @@
+{
+ "hanging_picture_frame_02": {
+  "files": {
+   "albedo": "hanging_picture_frame_02.albedo.dds",
+   "normal": "hanging_picture_frame_02.normal.ktx2",
+   "orm": "hanging_picture_frame_02.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 36.52,
+   "normalXY": 59.71,
+   "orm": {
+    "ao": 99,
+    "rough": 41.51,
+    "metal": 40.17
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.066,
+   "p99": 0.525
+  },
+  "specAA": true,
+  "seconds": 1.9,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "hanging_picture_frame_02_artwork": {
+  "files": {
+   "albedo": "hanging_picture_frame_02_artwork.albedo.dds",
+   "normal": "hanging_picture_frame_02_artwork.normal.ktx2",
+   "orm": "hanging_picture_frame_02_artwork.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 38.54,
+   "normalXY": 67.04,
+   "orm": {
+    "ao": 99,
+    "rough": 45.41,
+    "metal": 42.93
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.039,
+   "p99": 0.265
+  },
+  "specAA": true,
+  "seconds": 1.3,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "hanging_picture_frame_02_glass": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

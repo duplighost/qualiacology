@@ -1,0 +1,40 @@
+{
+ "id": "sofa_03",
+ "title": "Sofa 03",
+ "url": "https://polyhaven.com/a/sofa_03",
+ "licence": "CC0 1.0",
+ "author": "Fran Calvente",
+ "bytes": 668033,
+ "triangles": {
+  "source": 8003,
+  "lod0": 8003,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  2.7312,
+  1.1183,
+  0.9251
+ ],
+ "shippedBytes": 1269083,
+ "parts": [
+  {
+   "name": "sofa_03",
+   "movable": false,
+   "tris": 8003,
+   "pivot": [
+    0,
+    -0.0006,
+    0.0013
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

@@ -1,0 +1,40 @@
+{
+ "id": "rubber_duck_toy",
+ "title": "Rubber Duck Toy",
+ "url": "https://polyhaven.com/a/rubber_duck_toy",
+ "licence": "CC0 1.0",
+ "author": "Plat251",
+ "bytes": 735058,
+ "triangles": {
+  "source": 4288,
+  "lod0": 1999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 2000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.2136,
+  0.2855,
+  0.3
+ ],
+ "shippedBytes": 580582,
+ "parts": [
+  {
+   "name": "rubber_duck_toy",
+   "movable": false,
+   "tris": 1999,
+   "pivot": [
+    0,
+    0,
+    -0.0039
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

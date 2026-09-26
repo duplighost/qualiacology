@@ -1,0 +1,45 @@
+{
+ "wallpaper002b": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wallpaper002b.albedo.dds",
+   "normal": "wallpaper002b.normal.ktx2",
+   "orm": "wallpaper002b.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 42.6,
+   "normalXY": 48.22,
+   "orm": {
+    "ao": 99.0,
+    "rough": 49.65,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.541,
+   "p99": 1.478
+  },
+  "specAA": false,
+  "seconds": 4.2
+ }
+}

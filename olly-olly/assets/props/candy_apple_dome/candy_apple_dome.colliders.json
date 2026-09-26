@@ -1,0 +1,30 @@
+{
+ "id": "candy_apple_dome",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "candy_apple_dome.0",
+   "part": "candy_apple_dome",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.179,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.145,
+    "y": 0.179,
+    "z": 0.145
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  }
+ ]
+}

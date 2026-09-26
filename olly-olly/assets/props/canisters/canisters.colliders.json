@@ -1,0 +1,30 @@
+{
+ "id": "canisters",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "canisters.0",
+   "part": "canisters",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.131,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.209,
+    "y": 0.131,
+    "z": 0.074
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

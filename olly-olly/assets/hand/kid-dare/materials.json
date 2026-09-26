@@ -1,0 +1,45 @@
+{
+ "kid-dare": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": false,
+  "files": {
+   "albedo": "kid-dare.albedo.dds",
+   "normal": "kid-dare.normal.ktx2",
+   "orm": "kid-dare.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 39.94,
+   "normalXY": 50.55,
+   "orm": {
+    "ao": 99.0,
+    "rough": 48.07,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "kid-dare_color.png",
+   "normal": "kid-dare_normal.png",
+   "rough": "kid-dare_roughness.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.316,
+   "p99": 1.916
+  },
+  "specAA": true,
+  "seconds": 12.3
+ }
+}

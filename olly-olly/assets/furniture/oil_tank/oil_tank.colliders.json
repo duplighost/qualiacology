@@ -1,0 +1,30 @@
+{
+ "id": "oil_tank",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "oil_tank.0",
+   "part": "oil_tank",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.86,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.76,
+    "y": 0.56,
+    "z": 0.345
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

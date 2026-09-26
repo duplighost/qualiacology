@@ -1,0 +1,124 @@
+{
+ "fancy_picture_frame_02": {
+  "files": {
+   "albedo": "fancy_picture_frame_02.albedo.dds",
+   "normal": "fancy_picture_frame_02.normal.ktx2",
+   "orm": "fancy_picture_frame_02.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 38.46,
+   "normalXY": 44.9,
+   "orm": {
+    "ao": 99,
+    "rough": 42.42,
+    "metal": 41.38
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.674,
+   "p99": 3.166
+  },
+  "specAA": true,
+  "seconds": 1.3,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "fancy_picture_frame_02_canvas": {
+  "files": {
+   "albedo": "fancy_picture_frame_02_canvas.albedo.dds",
+   "normal": "fancy_picture_frame_02_canvas.normal.ktx2",
+   "orm": "fancy_picture_frame_02_canvas.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 38.93,
+   "normalXY": 56.44,
+   "orm": {
+    "ao": 99,
+    "rough": 48.37,
+    "metal": 44.42
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.109,
+   "p99": 1.261
+  },
+  "specAA": true,
+  "seconds": 1.3,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

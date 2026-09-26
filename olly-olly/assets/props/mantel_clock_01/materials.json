@@ -1,0 +1,88 @@
+{
+ "mantel_clock_01": {
+  "files": {
+   "albedo": "mantel_clock_01.albedo.dds",
+   "normal": "mantel_clock_01.normal.ktx2",
+   "orm": "mantel_clock_01.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 41.27,
+   "normalXY": 48.39,
+   "orm": {
+    "ao": 99,
+    "rough": 37.02,
+    "metal": 38.6
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.373,
+   "p99": 2.472
+  },
+  "specAA": false,
+  "seconds": 4.4,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "mantel_clock_01_glass": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    0.30000001192092896
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.4500000476837158,
+   "clearcoat": 1
+  }
+ }
+}

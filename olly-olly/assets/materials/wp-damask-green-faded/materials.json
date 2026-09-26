@@ -1,0 +1,26 @@
+{
+ "wp-damask-green-faded": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-damask-green-faded.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 699192
+  },
+  "psnr": {
+   "albedo": 43.32
+  },
+  "sources": {
+   "albedo": "albedo.png"
+  },
+  "format": {
+   "albedo": "DXT1"
+  },
+  "seconds": 2.7
+ }
+}

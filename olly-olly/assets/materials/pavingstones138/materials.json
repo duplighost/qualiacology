@@ -1,0 +1,45 @@
+{
+ "pavingstones138": {
+  "size": [
+   512,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "pavingstones138.albedo.dds",
+   "normal": "pavingstones138.normal.ktx2",
+   "orm": "pavingstones138.orm.dds"
+  },
+  "bytes": {
+   "albedo": 349672,
+   "normal": 175264,
+   "orm": 87528
+  },
+  "psnr": {
+   "albedo": 33.7,
+   "normalXY": 46.93,
+   "orm": {
+    "ao": 99.0,
+    "rough": 44.66,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.549,
+   "p99": 2.187
+  },
+  "specAA": true,
+  "seconds": 2.4
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "id": "hanging_picture_frame_02",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "hanging_picture_frame_02.hanging_picture_frame_02.0",
+   "part": "hanging_picture_frame_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.25,
+    "z": 0
+   },
+   "h": {
+    "x": 0.3759,
+    "y": 0.25,
+    "z": 0.0165
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "id": "wooden_candlestick",
+ "title": "Wooden Candlestick",
+ "url": "https://polyhaven.com/a/wooden_candlestick",
+ "licence": "CC0 1.0",
+ "author": "Josh Dean",
+ "bytes": 8429072,
+ "triangles": {
+  "source": 212992,
+  "lod0": 2999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.0972,
+  0.2198,
+  0.0986
+ ],
+ "shippedBytes": 331611,
+ "parts": [
+  {
+   "name": "wooden_candlestick",
+   "movable": false,
+   "tris": 2999,
+   "pivot": [
+    0.0001,
+    0,
+    0.0001
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

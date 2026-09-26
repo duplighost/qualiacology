@@ -1,0 +1,40 @@
+{
+ "id": "potted_plant_02",
+ "title": "Potted Plant 02",
+ "url": "https://polyhaven.com/a/potted_plant_02",
+ "licence": "CC0 1.0",
+ "author": "Rico Cilliers",
+ "bytes": 2634698,
+ "triangles": {
+  "source": 69806,
+  "lod0": 7999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.7009,
+  0.842,
+  0.6578
+ ],
+ "shippedBytes": 1247461,
+ "parts": [
+  {
+   "name": "potted_plant_02",
+   "movable": false,
+   "tris": 7999,
+   "pivot": [
+    -0.0825,
+    0.3175,
+    -0.0419
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

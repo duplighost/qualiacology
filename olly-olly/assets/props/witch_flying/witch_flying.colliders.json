@@ -1,0 +1,30 @@
+{
+ "id": "witch_flying",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "witch_flying.0",
+   "part": "witch_flying",
+   "kind": "obb",
+   "c": {
+    "x": 0.1492,
+    "y": -0.332,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.9009,
+    "y": 0.7217,
+    "z": 0.33
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

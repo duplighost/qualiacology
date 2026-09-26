@@ -1,0 +1,30 @@
+{
+ "id": "fabric_bolts",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "fabric_bolts.0",
+   "part": "fabric_bolts",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.4529,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.25,
+    "y": 0.4529,
+    "z": 0.15
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

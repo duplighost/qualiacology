@@ -1,0 +1,30 @@
+{
+ "id": "hale_cellar_overhead",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "hale_cellar_overhead.0",
+   "part": "hale_cellar_overhead",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.6375,
+    "z": -0.0
+   },
+   "h": {
+    "x": 5.59,
+    "y": 0.6375,
+    "z": 4.25
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

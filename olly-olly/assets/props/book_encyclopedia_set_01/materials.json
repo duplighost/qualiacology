@@ -1,0 +1,116 @@
+{
+ "book_encyclopedia_set_01_cover": {
+  "files": {
+   "albedo": "book_encyclopedia_set_01_cover.albedo.dds",
+   "orm": "book_encyclopedia_set_01_cover.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 39.89,
+   "orm": {
+    "ao": 99,
+    "rough": 38.25,
+    "metal": 39.17
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "orm": "DXT1"
+  },
+  "specAA": false,
+  "seconds": 1.2,
+  "factors": {},
+  "notes": [
+   "normal flat: dropped"
+  ],
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "book_encyclopedia_set_01_paper": {
+  "files": {
+   "albedo": "book_encyclopedia_set_01_paper.albedo.dds",
+   "normal": "book_encyclopedia_set_01_paper.normal.ktx2"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840
+  },
+  "psnr": {
+   "albedo": 40.94,
+   "normalXY": 46.45
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM"
+  },
+  "normalErrorDeg": {
+   "mean": 0.634,
+   "p99": 2.699
+  },
+  "seconds": 1,
+  "factors": {
+   "roughness": 0.298,
+   "metalness": 0.298
+  },
+  "notes": [
+   "orm flat: factors"
+  ],
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

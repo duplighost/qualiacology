@@ -1,0 +1,108 @@
+{
+ "id": "bolt_action_rifle_7_62",
+ "title": "Bolt Action Rifle 7.62",
+ "url": "https://polyhaven.com/a/bolt_action_rifle_7_62",
+ "licence": "CC0 1.0",
+ "author": "Mateusz Sadek",
+ "bytes": 6040615,
+ "triangles": {
+  "source": 19985,
+  "lod0": 5997,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 6000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  1.2309,
+  0.205,
+  0.0668
+ ],
+ "shippedBytes": 1206324,
+ "parts": [
+  {
+   "name": "bolt_action_rifle_7_62_scope",
+   "movable": true,
+   "tris": 2037,
+   "pivot": [
+    -0.1813,
+    0.1753,
+    -0.0207
+   ]
+  },
+  {
+   "name": "bolt_action_rifle_7_62_wrap",
+   "movable": true,
+   "tris": 551,
+   "pivot": [
+    -0.4577,
+    0.0868,
+    -0.0073
+   ]
+  },
+  {
+   "name": "bolt_action_rifle_7_62",
+   "movable": true,
+   "tris": 2294,
+   "pivot": [
+    -0.5446,
+    0.0492,
+    -0.0069
+   ]
+  },
+  {
+   "name": "bolt_action_rifle_7_62_bolt_b",
+   "movable": true,
+   "tris": 326,
+   "pivot": [
+    -0.2176,
+    0.1595,
+    -0.0069
+   ]
+  },
+  {
+   "name": "bolt_action_rifle_7_62_bolt_a",
+   "movable": true,
+   "tris": 572,
+   "pivot": [
+    -0.2176,
+    0.1595,
+    -0.0069
+   ]
+  },
+  {
+   "name": "bolt_action_rifle_7_62_bullet_54mm",
+   "movable": true,
+   "tris": 186,
+   "pivot": [
+    -0.1811,
+    0.0542,
+    -0.0069
+   ]
+  },
+  {
+   "name": "bolt_action_rifle_7_62_trigger",
+   "movable": true,
+   "tris": 31,
+   "pivot": [
+    -0.5446,
+    0.0492,
+    -0.0069
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "bolt_action_rifle_7_62_scope",
+  "bolt_action_rifle_7_62_wrap",
+  "bolt_action_rifle_7_62",
+  "bolt_action_rifle_7_62_bolt_b",
+  "bolt_action_rifle_7_62_bolt_a",
+  "bolt_action_rifle_7_62_bullet_54mm",
+  "bolt_action_rifle_7_62_trigger"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

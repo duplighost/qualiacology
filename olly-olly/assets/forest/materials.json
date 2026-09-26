@@ -1,0 +1,89 @@
+{
+ "forest_cards": {
+  "size": [
+   2048,
+   1024
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "forest_cards.albedo.dds",
+   "normal": "forest_cards.normal.ktx2"
+  },
+  "bytes": {
+   "albedo": 2796368,
+   "normal": 2796752
+  },
+  "psnr": {
+   "albedo": 40.9,
+   "alpha": 41.21,
+   "normalXY": 44.37
+  },
+  "sources": {
+   "albedo": "cards_albedo.png",
+   "normal": "cards_normal.png",
+   "alpha": "cards_alpha.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "normal": "BC5_UNORM"
+  },
+  "coverage": [
+   0.1046,
+   0.1046,
+   0.1046,
+   0.1046,
+   0.1046,
+   0.105
+  ],
+  "normalErrorDeg": {
+   "mean": 0.483,
+   "p99": 6.05
+  },
+  "seconds": 31.4
+ },
+ "birch_bark": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "birch_bark.albedo.dds",
+   "normal": "birch_bark.normal.ktx2",
+   "orm": "birch_bark.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 39.92,
+   "normalXY": 40.42,
+   "orm": {
+    "ao": 41.63,
+    "rough": 43.47,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "birch_albedo.png",
+   "normal": "birch_normal.png",
+   "rough": "birch_rough.png",
+   "ao": "birch_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.389,
+   "p99": 9.199
+  },
+  "specAA": true,
+  "seconds": 26.0
+ }
+}

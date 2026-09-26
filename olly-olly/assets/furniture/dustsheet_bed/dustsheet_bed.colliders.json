@@ -1,0 +1,30 @@
+{
+ "id": "dustsheet_bed",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "dustsheet_bed.0",
+   "part": "dustsheet_bed",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.3039,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.7153,
+    "y": 0.3039,
+    "z": 1.3029
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

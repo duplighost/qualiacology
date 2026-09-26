@@ -1,0 +1,63 @@
+{
+ "cardboard_box_01": {
+  "files": {
+   "albedo": "cardboard_box_01.albedo.dds",
+   "normal": "cardboard_box_01.normal.ktx2",
+   "orm": "cardboard_box_01.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.12,
+   "normalXY": 43.96,
+   "orm": {
+    "ao": 99,
+    "rough": 44.61,
+    "metal": 50.3
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.751,
+   "p99": 4.361
+  },
+  "specAA": false,
+  "seconds": 1.9,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

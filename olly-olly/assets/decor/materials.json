@@ -1,0 +1,358 @@
+{
+ "leaves": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "leaves.albedo.dds",
+   "normal": "leaves.normal.ktx2",
+   "orm": "leaves.orm.dds"
+  },
+  "bytes": {
+   "albedo": 1398256,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 39.66,
+   "alpha": 46.42,
+   "normalXY": 50.0,
+   "orm": {
+    "ao": 99.0,
+    "rough": 48.65,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "leaves_color.png",
+   "normal": "leaves_normalgl.png",
+   "rough": "leaves_roughness.png",
+   "alpha": "leaves_opacity.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.1905,
+   0.1905,
+   0.1905,
+   0.1905,
+   0.1907,
+   0.1914
+  ],
+  "normalErrorDeg": {
+   "mean": 0.211,
+   "p99": 2.34
+  },
+  "specAA": true,
+  "seconds": 14.9
+ },
+ "pumpkins": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "pumpkins.albedo.dds",
+   "normal": "pumpkins.normal.ktx2",
+   "orm": "pumpkins.orm.dds"
+  },
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 5592944,
+   "orm": 2796344
+  },
+  "psnr": {
+   "albedo": 40.97,
+   "normalXY": 57.83,
+   "orm": {
+    "ao": 44.03,
+    "rough": 40.99,
+    "metal": 42.35
+   }
+  },
+  "sources": {
+   "albedo": "pumpkins_color.png",
+   "normal": "pumpkins_normalgl.png",
+   "rough": "pumpkins_roughness.png",
+   "ao": "pumpkins_ao.png",
+   "metal": "pumpkins_metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.077,
+   "p99": 0.872
+  },
+  "specAA": true,
+  "seconds": 45.3
+ },
+ "names": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "names.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 1398256
+  },
+  "psnr": {
+   "albedo": 42.56,
+   "alpha": 50.77
+  },
+  "sources": {
+   "albedo": "names_color.png",
+   "alpha": "names_opacity.png"
+  },
+  "format": {
+   "albedo": "DXT5"
+  },
+  "coverage": [
+   0.0342,
+   0.0342,
+   0.0342,
+   0.0342,
+   0.0344,
+   0.0352
+  ],
+  "seconds": 9.8
+ },
+ "adler-door": {
+  "size": [
+   1024,
+   512
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "adler-door.albedo.dds",
+   "orm": "adler-door.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699216,
+   "orm": 349672
+  },
+  "psnr": {
+   "albedo": 42.68,
+   "alpha": 53.24,
+   "orm": {
+    "ao": 99.0,
+    "rough": 48.08,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "adler-door_color.png",
+   "rough": "adler-door_roughness.png",
+   "alpha": "adler-door_opacity.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.5072,
+   0.5093,
+   0.5081,
+   0.5073,
+   0.5073,
+   0.5078
+  ],
+  "specAA": false,
+  "seconds": 7.7
+ },
+ "banner": {
+  "size": [
+   2048,
+   512
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "banner.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 1398288
+  },
+  "psnr": {
+   "albedo": 42.8,
+   "alpha": 99.0
+  },
+  "sources": {
+   "albedo": "banner_color.png",
+   "alpha": "banner_opacity.png"
+  },
+  "format": {
+   "albedo": "DXT5"
+  },
+  "coverage": [
+   0.9877,
+   0.9877,
+   0.9877,
+   0.9878,
+   0.9878,
+   0.9883
+  ],
+  "seconds": 9.7
+ },
+ "arrow": {
+  "size": [
+   1024,
+   512
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "arrow.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 699216
+  },
+  "psnr": {
+   "albedo": 42.45,
+   "alpha": 51.16
+  },
+  "sources": {
+   "albedo": "arrow_color.png",
+   "alpha": "arrow_opacity.png"
+  },
+  "format": {
+   "albedo": "DXT5"
+  },
+  "coverage": [
+   0.3312,
+   0.3324,
+   0.3324,
+   0.3315,
+   0.3315,
+   0.332
+  ],
+  "seconds": 5.3
+ },
+ "poster": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "poster.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 349680
+  },
+  "psnr": {
+   "albedo": 38.4,
+   "alpha": 51.48
+  },
+  "sources": {
+   "albedo": "poster_color.png",
+   "alpha": "poster_opacity.png"
+  },
+  "format": {
+   "albedo": "DXT5"
+  },
+  "coverage": [
+   0.9774,
+   0.9774,
+   0.9774,
+   0.9775,
+   0.9775,
+   0.9805
+  ],
+  "seconds": 6.1
+ },
+ "figures": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "figures.albedo.dds",
+   "normal": "figures.normal.ktx2",
+   "orm": "figures.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 36.16,
+   "normalXY": 55.97,
+   "orm": {
+    "ao": 32.22,
+    "rough": 30.81,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "figures_color.png",
+   "normal": "figures_normalgl.png",
+   "rough": "figures_roughness.png",
+   "ao": "figures_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.093,
+   "p99": 1.093
+  },
+  "specAA": true,
+  "seconds": 11.2
+ },
+ "proof": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "proof.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 349680
+  },
+  "psnr": {
+   "albedo": 40.35,
+   "alpha": 48.52
+  },
+  "sources": {
+   "albedo": "proof_color.png",
+   "alpha": "proof_opacity.png"
+  },
+  "format": {
+   "albedo": "DXT5"
+  },
+  "coverage": [
+   0.0284,
+   0.0284,
+   0.0284,
+   0.0286,
+   0.0293,
+   0.0312
+  ],
+  "seconds": 1.3
+ }
+}

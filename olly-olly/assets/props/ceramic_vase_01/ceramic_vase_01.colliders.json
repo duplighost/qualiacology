@@ -1,0 +1,30 @@
+{
+ "id": "ceramic_vase_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "ceramic_vase_01.ceramic_vase_01.0",
+   "part": "ceramic_vase_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.2004,
+    "z": 0
+   },
+   "h": {
+    "x": 0.102,
+    "y": 0.2002,
+    "z": 0.1023
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  }
+ ]
+}

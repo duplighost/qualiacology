@@ -1,0 +1,30 @@
+{
+ "id": "garden_gloves",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "garden_gloves.0",
+   "part": "garden_gloves",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.046,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.1076,
+    "y": 0.046,
+    "z": 0.1292
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

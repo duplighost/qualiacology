@@ -1,0 +1,51 @@
+{
+ "id": "painted_wooden_nightstand",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "painted_wooden_nightstand.painted_wooden_nightstand.0",
+   "part": "painted_wooden_nightstand",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.3078,
+    "z": -0.0028
+   },
+   "h": {
+    "x": 0.2523,
+    "y": 0.3078,
+    "z": 0.2516
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_nightstand.painted_wooden_nightstand_drawer.0",
+   "part": "painted_wooden_nightstand_drawer",
+   "kind": "obb",
+   "c": {
+    "x": 0.0022,
+    "y": 0.515,
+    "z": 0.0422
+   },
+   "h": {
+    "x": 0.1715,
+    "y": 0.0475,
+    "z": 0.2122
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "hem": 0.112,
+ "ghost": {
+  "sheetTris": 12637,
+  "bagTris": 676,
+  "sneakerTris": 448,
+  "headTris": 520
+ },
+ "costume": {
+  "tris": 9744,
+  "lowest": -0.802
+ },
+ "bowl": {
+  "bowlTris": 1040,
+  "candyTris": 4584
+ }
+}

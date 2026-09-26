@@ -1,0 +1,45 @@
+{
+ "wp-rose-gold": {
+  "size": [
+   512,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-rose-gold.albedo.dds",
+   "normal": "wp-rose-gold.normal.ktx2",
+   "orm": "wp-rose-gold.orm.dds"
+  },
+  "bytes": {
+   "albedo": 349672,
+   "normal": 175264,
+   "orm": 87528
+  },
+  "psnr": {
+   "albedo": 33.05,
+   "normalXY": 62.12,
+   "orm": {
+    "ao": 99.0,
+    "rough": 47.57,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.098,
+   "p99": 0.321
+  },
+  "specAA": true,
+  "seconds": 2.2
+ }
+}

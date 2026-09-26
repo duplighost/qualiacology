@@ -1,0 +1,32 @@
+{
+ "id": "holy_water_font",
+ "title": "holy water font",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 260,
+  "lod0": 260,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.09,
+  0.16,
+  0.077
+ ],
+ "use": "a holy-water font by the door",
+ "modelled": true,
+ "surface": "tile",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 8068
+}

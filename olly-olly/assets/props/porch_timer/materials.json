@@ -1,0 +1,153 @@
+{
+ "flat:#8a8e8a:0.45:0.6": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.259,
+    0.2758,
+    0.259,
+    1.0
+   ],
+   "roughness": 0.45,
+   "metallic": 0.6,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#9a9e98:0.4:0.6": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.3297,
+    0.3489,
+    0.3204,
+    1.0
+   ],
+   "roughness": 0.4,
+   "metallic": 0.6,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#e8e4d8:0.5": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.8122,
+    0.7818,
+    0.6941,
+    1.0
+   ],
+   "roughness": 0.5,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "paper:kowalski/timer.dial": {
+  "files": {},
+  "paper": "kowalski/timer.dial",
+  "gltf": {
+   "baseColor": [
+    0.9,
+    0.88,
+    0.8,
+    1.0
+   ],
+   "roughness": 0.7,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#2a2a2a:0.4:0.5": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0189,
+    0.0189,
+    0.0189,
+    1.0
+   ],
+   "roughness": 0.4,
+   "metallic": 0.5,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "flat:#1a1a1a:0.4": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.0066,
+    0.0066,
+    0.0066,
+    1.0
+   ],
+   "roughness": 0.4,
+   "metallic": 0.0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

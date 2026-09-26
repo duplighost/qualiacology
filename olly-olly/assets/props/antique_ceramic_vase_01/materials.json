@@ -1,0 +1,63 @@
+{
+ "antique_ceramic_vase_01": {
+  "files": {
+   "albedo": "antique_ceramic_vase_01.albedo.dds",
+   "normal": "antique_ceramic_vase_01.normal.ktx2",
+   "orm": "antique_ceramic_vase_01.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 36.17,
+   "normalXY": 61.43,
+   "orm": {
+    "ao": 99,
+    "rough": 44.08,
+    "metal": 42.3
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.048,
+   "p99": 0.653
+  },
+  "specAA": true,
+  "seconds": 1.5,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

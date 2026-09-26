@@ -1,0 +1,30 @@
+{
+ "id": "toaster",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "toaster.0",
+   "part": "toaster",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.1035,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.2207,
+    "y": 0.1035,
+    "z": 0.085
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

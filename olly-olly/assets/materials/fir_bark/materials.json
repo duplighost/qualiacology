@@ -1,0 +1,47 @@
+{
+ "fir_bark": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "fir_bark.albedo.dds",
+   "normal": "fir_bark.normal.ktx2",
+   "orm": "fir_bark.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 39.73,
+   "normalXY": 39.81,
+   "orm": {
+    "ao": 36.89,
+    "rough": 39.99,
+    "metal": 45.09
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "metal": "metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.479,
+   "p99": 4.207
+  },
+  "specAA": true,
+  "seconds": 4.9
+ }
+}

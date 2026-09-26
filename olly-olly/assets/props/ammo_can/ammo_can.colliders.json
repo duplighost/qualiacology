@@ -1,0 +1,30 @@
+{
+ "id": "ammo_can",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "ammo_can.0",
+   "part": "ammo_can",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.1146,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.145,
+    "y": 0.1146,
+    "z": 0.0825
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

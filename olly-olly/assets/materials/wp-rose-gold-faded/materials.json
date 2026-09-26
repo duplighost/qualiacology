@@ -1,0 +1,26 @@
+{
+ "wp-rose-gold-faded": {
+  "size": [
+   512,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-rose-gold-faded.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 349672
+  },
+  "psnr": {
+   "albedo": 38.01
+  },
+  "sources": {
+   "albedo": "albedo.png"
+  },
+  "format": {
+   "albedo": "DXT1"
+  },
+  "seconds": 1.3
+ }
+}

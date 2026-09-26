@@ -1,0 +1,73 @@
+{
+  "lib:fabric.linen|tint-bo-bolster": {
+    "files": {},
+    "gltf": {
+      "baseColor": [
+        0.28999999165534973,
+        0.22499999403953552,
+        0.1550000011920929,
+        1.0
+      ],
+      "roughness": 1.0,
+      "metallic": 0.0,
+      "emissive": [
+        0,
+        0,
+        0
+      ],
+      "emissiveStrength": 1,
+      "transmission": 0,
+      "alphaMode": "OPAQUE",
+      "alphaCutoff": 0.5,
+      "doubleSided": false
+    },
+    "lib": "fabric.linen"
+  },
+  "lib:fabric.linen|tint-bo-cushion": {
+    "files": {},
+    "gltf": {
+      "baseColor": [
+        0.41999998688697815,
+        0.36000001430511475,
+        0.27000001072883606,
+        1.0
+      ],
+      "roughness": 1.0,
+      "metallic": 0.0,
+      "emissive": [
+        0,
+        0,
+        0
+      ],
+      "emissiveStrength": 1,
+      "transmission": 0,
+      "alphaMode": "OPAQUE",
+      "alphaCutoff": 0.5,
+      "doubleSided": false
+    },
+    "lib": "fabric.linen"
+  },
+  "flat:bed.piping": {
+    "files": {},
+    "gltf": {
+      "baseColor": [
+        0.18000000715255737,
+        0.11999999731779099,
+        0.07000000029802322,
+        1.0
+      ],
+      "roughness": 1.0,
+      "metallic": 0.0,
+      "emissive": [
+        0,
+        0,
+        0
+      ],
+      "emissiveStrength": 1,
+      "transmission": 0,
+      "alphaMode": "OPAQUE",
+      "alphaCutoff": 0.5,
+      "doubleSided": false
+    }
+  }
+}

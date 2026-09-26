@@ -1,0 +1,114 @@
+{
+ "id": "painted_wooden_chair_02",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "painted_wooden_chair_02.painted_wooden_chair_02.0",
+   "part": "painted_wooden_chair_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.6188,
+    "z": 0.0118
+   },
+   "h": {
+    "x": 0.2969,
+    "y": 0.6188,
+    "z": 0.2956
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_chair_02.painted_wooden_chair_02.1",
+   "part": "painted_wooden_chair_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 1.1289,
+    "z": -0.3074
+   },
+   "h": {
+    "x": 0.3197,
+    "y": 0.1348,
+    "z": 0.0236
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_chair_02.painted_wooden_chair_02.2",
+   "part": "painted_wooden_chair_02",
+   "kind": "obb",
+   "c": {
+    "x": -0.3083,
+    "y": 1.1116,
+    "z": -0.2719
+   },
+   "h": {
+    "x": 0.0114,
+    "y": 0.1224,
+    "z": 0.0118
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_chair_02.painted_wooden_chair_02.3",
+   "part": "painted_wooden_chair_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.3083,
+    "y": 1.1116,
+    "z": -0.2719
+   },
+   "h": {
+    "x": 0.0114,
+    "y": 0.1224,
+    "z": 0.0118
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_chair_02.painted_wooden_chair_02.4",
+   "part": "painted_wooden_chair_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.5687,
+    "z": 0.3192
+   },
+   "h": {
+    "x": 0.274,
+    "y": 0.0163,
+    "z": 0.0118
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "id": "boombox",
+ "title": "Boombox",
+ "url": "https://polyhaven.com/a/boombox",
+ "licence": "CC0 1.0",
+ "author": "Thomas Paul Mouilleron",
+ "bytes": 3068296,
+ "triangles": {
+  "source": 10168,
+  "lod0": 2999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 3000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.7232,
+  0.4703,
+  0.1865
+ ],
+ "shippedBytes": 556616,
+ "parts": [
+  {
+   "name": "boombox",
+   "movable": false,
+   "tris": 2999,
+   "pivot": [
+    0,
+    0,
+    -0.0199
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

@@ -1,0 +1,114 @@
+{
+ "id": "television_02",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "television_02.television_02.0",
+   "part": "television_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.2057,
+    "z": 0.0981
+   },
+   "h": {
+    "x": 0.1999,
+    "y": 0.2057,
+    "z": 0.077
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "television_02.television_02.1",
+   "part": "television_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.1729,
+    "z": -0.049
+   },
+   "h": {
+    "x": 0.157,
+    "y": 0.1729,
+    "z": 0.07
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "television_02.television_02.2",
+   "part": "television_02",
+   "kind": "obb",
+   "c": {
+    "x": -0.1642,
+    "y": 0.1826,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0071,
+    "y": 0.163,
+    "z": 0.021
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "television_02.television_02.3",
+   "part": "television_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.1642,
+    "y": 0.1826,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0071,
+    "y": 0.163,
+    "z": 0.021
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "television_02.television_02.4",
+   "part": "television_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.1294,
+    "z": -0.1471
+   },
+   "h": {
+    "x": 0.1428,
+    "y": 0.1177,
+    "z": 0.028
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

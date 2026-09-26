@@ -1,0 +1,30 @@
+{
+ "id": "lace_panel",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "lace_panel.0",
+   "part": "lace_panel",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.6965,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.3744,
+    "y": 0.6965,
+    "z": 0.0289
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "carpet"
+  }
+ ]
+}

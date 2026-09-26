@@ -1,0 +1,30 @@
+{
+ "id": "washer_70s",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "washer_70s.0",
+   "part": "washer_70s",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.455,
+    "z": 0.0334
+   },
+   "h": {
+    "x": 0.34,
+    "y": 0.455,
+    "z": 0.33
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

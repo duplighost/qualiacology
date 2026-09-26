@@ -1,0 +1,45 @@
+{
+ "kid-sketch": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "kid-sketch.albedo.dds",
+   "orm": "kid-sketch.orm.dds"
+  },
+  "bytes": {
+   "albedo": 1398256,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 35.26,
+   "alpha": 54.13,
+   "orm": {
+    "ao": 99.0,
+    "rough": 40.14,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "kid-sketch_color.png",
+   "rough": "kid-sketch_roughness.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.9773,
+   0.9773,
+   0.9773,
+   0.9773,
+   0.9773,
+   0.9775
+  ],
+  "specAA": false,
+  "seconds": 16.4
+ }
+}

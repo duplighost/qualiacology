@@ -1,0 +1,72 @@
+{
+ "id": "alarm_clock_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "alarm_clock_01.alarm_clock_01.0",
+   "part": "alarm_clock_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.0873,
+    "z": 0
+   },
+   "h": {
+    "x": 0.066,
+    "y": 0.0868,
+    "z": 0.0333
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "alarm_clock_01.houd_hand.0",
+   "part": "houd_hand",
+   "kind": "obb",
+   "c": {
+    "x": 0.0057,
+    "y": 0.0489,
+    "z": 0.0161
+   },
+   "h": {
+    "x": 0.0104,
+    "y": 0.0209,
+    "z": 0.0003
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "alarm_clock_01.minute_hand.0",
+   "part": "minute_hand",
+   "kind": "obb",
+   "c": {
+    "x": -0.0212,
+    "y": 0.0764,
+    "z": 0.0155
+   },
+   "h": {
+    "x": 0.0256,
+    "y": 0.0149,
+    "z": 0.0003
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+{
+  "build": "tools/blender/husk_build.py",
+  "triangles": {
+    "torso": 9000,
+    "pelvis": 1600,
+    "torso.bone": 1080,
+    "torso.extra": 624,
+    "torso.veins": 1470,
+    "torso.sideface": 700,
+    "head": 4200,
+    "head.sockets": 420,
+    "head.eyes": 240,
+    "head.maw": 216,
+    "head.teeth": 160,
+    "head.hair": 2048,
+    "jaw": 900,
+    "jaw.teeth": 160,
+    "upperarm": 648,
+    "forearm": 648,
+    "hand": 1231,
+    "hand.claws": 64,
+    "thigh": 648,
+    "shin": 648,
+    "foot": 992
+  },
+  "bytes": 520552
+}

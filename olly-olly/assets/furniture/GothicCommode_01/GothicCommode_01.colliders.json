@@ -1,0 +1,156 @@
+{
+ "id": "GothicCommode_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "GothicCommode_01.GothicCommode_01.0",
+   "part": "GothicCommode_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.6131,
+    "z": 0
+   },
+   "h": {
+    "x": 0.6007,
+    "y": 0.599,
+    "z": 0.2903
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCommode_01.GothicCommode_01_door03.0",
+   "part": "GothicCommode_01_door03",
+   "kind": "obb",
+   "c": {
+    "x": -0.0002,
+    "y": 0.3563,
+    "z": 0.2279
+   },
+   "h": {
+    "x": 0.5005,
+    "y": 0.128,
+    "z": 0.0516
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCommode_01.GothicCommode_01_door03.1",
+   "part": "GothicCommode_01_door03",
+   "kind": "obb",
+   "c": {
+    "x": -0.0002,
+    "y": 0.3608,
+    "z": -0.0473
+   },
+   "h": {
+    "x": 0.5005,
+    "y": 0.0967,
+    "z": 0.2236
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCommode_01.GothicCommode_01_door02.0",
+   "part": "GothicCommode_01_door02",
+   "kind": "obb",
+   "c": {
+    "x": -0.0002,
+    "y": 0.6668,
+    "z": 0.2084
+   },
+   "h": {
+    "x": 0.5005,
+    "y": 0.128,
+    "z": 0.0516
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCommode_01.GothicCommode_01_door02.1",
+   "part": "GothicCommode_01_door02",
+   "kind": "obb",
+   "c": {
+    "x": -0.0002,
+    "y": 0.6717,
+    "z": -0.0665
+   },
+   "h": {
+    "x": 0.5005,
+    "y": 0.0964,
+    "z": 0.2234
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCommode_01.GothicCommode_01_door01.0",
+   "part": "GothicCommode_01_door01",
+   "kind": "obb",
+   "c": {
+    "x": -0.0002,
+    "y": 0.9861,
+    "z": 0.2361
+   },
+   "h": {
+    "x": 0.5005,
+    "y": 0.1279,
+    "z": 0.0338
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCommode_01.GothicCommode_01_door01.1",
+   "part": "GothicCommode_01_door01",
+   "kind": "obb",
+   "c": {
+    "x": -0.0002,
+    "y": 0.991,
+    "z": -0.034
+   },
+   "h": {
+    "x": 0.5005,
+    "y": 0.0964,
+    "z": 0.2364
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

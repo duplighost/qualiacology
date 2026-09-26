@@ -1,0 +1,32 @@
+{
+ "id": "burlap_body",
+ "title": "burlap body",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 7950,
+  "lod0": 7950,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  1.0103,
+  0.5741,
+  0.5655
+ ],
+ "use": "a half-stuffed burlap body lying on the bench end, a leg over its front edge",
+ "modelled": true,
+ "surface": "carpet",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-23",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 93141
+}

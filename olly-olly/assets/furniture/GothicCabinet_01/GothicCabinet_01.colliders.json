@@ -1,0 +1,156 @@
+{
+ "id": "GothicCabinet_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "GothicCabinet_01.GothicCabinet_01.0",
+   "part": "GothicCabinet_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 1.1853,
+    "z": -0.0299
+   },
+   "h": {
+    "x": 0.8596,
+    "y": 1.1756,
+    "z": 0.4779
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCabinet_01.GothicCabinet_01.1",
+   "part": "GothicCabinet_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.7675,
+    "y": 0.9443,
+    "z": 0.4779
+   },
+   "h": {
+    "x": 0.0921,
+    "y": 0.9103,
+    "z": 0.0299
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCabinet_01.GothicCabinet_01.2",
+   "part": "GothicCabinet_01",
+   "kind": "obb",
+   "c": {
+    "x": 0.7675,
+    "y": 0.9439,
+    "z": 0.4779
+   },
+   "h": {
+    "x": 0.0921,
+    "y": 0.9098,
+    "z": 0.0299
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCabinet_01.GothicCabinet_01_door4.0",
+   "part": "GothicCabinet_01_door4",
+   "kind": "obb",
+   "c": {
+    "x": 0.3599,
+    "y": 0.7418,
+    "z": 0.3833
+   },
+   "h": {
+    "x": 0.3624,
+    "y": 0.4468,
+    "z": 0.0238
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCabinet_01.GothicCabinet_01_door3.0",
+   "part": "GothicCabinet_01_door3",
+   "kind": "obb",
+   "c": {
+    "x": -0.3506,
+    "y": 0.7418,
+    "z": 0.3833
+   },
+   "h": {
+    "x": 0.3539,
+    "y": 0.4468,
+    "z": 0.0238
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCabinet_01.GothicCabinet_01_door2.0",
+   "part": "GothicCabinet_01_door2",
+   "kind": "obb",
+   "c": {
+    "x": 0.3599,
+    "y": 1.7458,
+    "z": 0.3833
+   },
+   "h": {
+    "x": 0.3624,
+    "y": 0.4468,
+    "z": 0.0238
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "GothicCabinet_01.GothicCabinet_01_door1.0",
+   "part": "GothicCabinet_01_door1",
+   "kind": "obb",
+   "c": {
+    "x": -0.3506,
+    "y": 1.7458,
+    "z": 0.3833
+   },
+   "h": {
+    "x": 0.3539,
+    "y": 0.4468,
+    "z": 0.0238
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

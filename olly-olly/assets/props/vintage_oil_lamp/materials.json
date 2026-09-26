@@ -1,0 +1,133 @@
+{
+ "vintage_oil_lamp": {
+  "files": {
+   "albedo": "vintage_oil_lamp.albedo.dds",
+   "normal": "vintage_oil_lamp.normal.ktx2",
+   "orm": "vintage_oil_lamp.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 38.15,
+   "normalXY": 47.74,
+   "orm": {
+    "ao": 99,
+    "rough": 32.65,
+    "metal": 33.07
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.354,
+   "p99": 3.251
+  },
+  "specAA": true,
+  "seconds": 1.3,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "vintage_oil_lamp_flame": {
+  "files": {
+   "albedo": "vintage_oil_lamp_flame.albedo.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904
+  },
+  "psnr": {
+   "albedo": 46.94
+  },
+  "format": {
+   "albedo": "DXT1"
+  },
+  "seconds": 0.8,
+  "factors": {},
+  "emissive": true,
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 0,
+   "metallic": 0,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    1,
+    1,
+    1
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.4500000476837158,
+   "clearcoat": 0
+  }
+ },
+ "vintage_oil_lamp_glass": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "BLEND",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

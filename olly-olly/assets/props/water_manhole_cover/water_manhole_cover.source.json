@@ -1,0 +1,40 @@
+{
+ "id": "water_manhole_cover",
+ "title": "Water Manhole Cover",
+ "url": "https://polyhaven.com/a/water_manhole_cover",
+ "licence": "CC0 1.0",
+ "author": "Raunox",
+ "bytes": 2333492,
+ "triangles": {
+  "source": 6301,
+  "lod0": 2500,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 2500,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.6912,
+  0.068,
+  0.6912
+ ],
+ "shippedBytes": 590474,
+ "parts": [
+  {
+   "name": "water_manhole_cover",
+   "movable": false,
+   "tris": 2500,
+   "pivot": [
+    0,
+    0.0288,
+    0
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

@@ -1,0 +1,30 @@
+{
+ "id": "hook_sam_jacket",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "hook_sam_jacket.0",
+   "part": "hook_sam_jacket",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.4075,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.3073,
+    "y": 0.4075,
+    "z": 0.0475
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

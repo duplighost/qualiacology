@@ -1,0 +1,30 @@
+{
+ "id": "saint_mary",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "saint_mary.0",
+   "part": "saint_mary",
+   "kind": "obb",
+   "c": {
+    "x": 0.0,
+    "y": 0.207,
+    "z": -0.0
+   },
+   "h": {
+    "x": 0.07,
+    "y": 0.207,
+    "z": 0.0689
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "stone"
+  }
+ ]
+}

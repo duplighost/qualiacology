@@ -1,0 +1,26 @@
+{
+ "wp-marigold-faded": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-marigold-faded.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 174904
+  },
+  "psnr": {
+   "albedo": 34.86
+  },
+  "sources": {
+   "albedo": "albedo.png"
+  },
+  "format": {
+   "albedo": "DXT1"
+  },
+  "seconds": 0.8
+ }
+}

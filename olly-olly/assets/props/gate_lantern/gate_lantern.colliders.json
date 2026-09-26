@@ -1,0 +1,30 @@
+{
+ "id": "gate_lantern",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "gate_lantern.0",
+   "part": "gate_lantern",
+   "kind": "obb",
+   "c": {
+    "x": -0.0,
+    "y": 0.81,
+    "z": -0.1784
+   },
+   "h": {
+    "x": 0.0133,
+    "y": 0.81,
+    "z": 0.014
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

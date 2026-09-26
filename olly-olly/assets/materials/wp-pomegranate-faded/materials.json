@@ -1,0 +1,26 @@
+{
+ "wp-pomegranate-faded": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-pomegranate-faded.albedo.dds"
+  },
+  "bytes": {
+   "albedo": 699192
+  },
+  "psnr": {
+   "albedo": 41.93
+  },
+  "sources": {
+   "albedo": "albedo.png"
+  },
+  "format": {
+   "albedo": "DXT1"
+  },
+  "seconds": 2.8
+ }
+}

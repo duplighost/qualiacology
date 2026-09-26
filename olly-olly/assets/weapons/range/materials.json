@@ -1,0 +1,90 @@
+{
+ "ground": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "ground.albedo.dds",
+   "normal": "ground.normal.ktx2",
+   "orm": "ground.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 31.44,
+   "normalXY": 37.28,
+   "orm": {
+    "ao": 33.16,
+    "rough": 34.86,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "Ground048_1K-JPG_Color.jpg",
+   "normal": "Ground048_1K-JPG_NormalGL.jpg",
+   "rough": "Ground048_1K-JPG_Roughness.jpg",
+   "ao": "Ground048_1K-JPG_AmbientOcclusion.jpg"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 2.045,
+   "p99": 4.948
+  },
+  "specAA": true,
+  "seconds": 12.4
+ },
+ "gravel": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "gravel.albedo.dds",
+   "normal": "gravel.normal.ktx2",
+   "orm": "gravel.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 36.1,
+   "normalXY": 36.27,
+   "orm": {
+    "ao": 30.67,
+    "rough": 35.76,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "Gravel022_1K-JPG_Color.jpg",
+   "normal": "Gravel022_1K-JPG_NormalGL.jpg",
+   "rough": "Gravel022_1K-JPG_Roughness.jpg",
+   "ao": "Gravel022_1K-JPG_AmbientOcclusion.jpg"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 2.447,
+   "p99": 8.977
+  },
+  "specAA": true,
+  "seconds": 11.2
+ }
+}

@@ -1,0 +1,40 @@
+{
+ "id": "television_02",
+ "title": "Television 02",
+ "url": "https://polyhaven.com/a/television_02",
+ "licence": "CC0 1.0",
+ "author": "Benny Weimer",
+ "bytes": 1239955,
+ "triangles": {
+  "source": 2310,
+  "lod0": 2310,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.3997,
+  0.4114,
+  0.3502
+ ],
+ "shippedBytes": 1239750,
+ "parts": [
+  {
+   "name": "television_02",
+   "movable": false,
+   "tris": 2310,
+   "pivot": [
+    0.0018,
+    0,
+    0.0532
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}
