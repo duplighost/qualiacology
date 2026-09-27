@@ -6,8 +6,8 @@
  "author": "OLLY OLLY",
  "bytes": 0,
  "triangles": {
-  "source": 4344,
-  "lod0": 4344,
+  "source": 4356,
+  "lod0": 4356,
   "lod1": null
  },
  "budget": {
@@ -26,7 +26,7 @@
  "parts": [],
  "rigged": false,
  "animated": [],
- "processed": "2026-09-25",
+ "processed": "2026-09-27",
  "tools": "tools/blender/dress_pieces.py",
- "shippedBytes": 132095
+ "shippedBytes": 132995
 }
