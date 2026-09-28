@@ -6217,6 +6217,35 @@
    }
   },
   {
+   "id": "adult-votives",
+   "size_m": [
+    0.23,
+    0.12
+   ],
+   "paper": "corrugated carton end, church-supply votives, 1997-2025",
+   "alpha": false,
+   "maker": "Henry Marsh, pencil: the label in 1997, one tally every year after",
+   "canon": "sextonVotives",
+   "surface": "box",
+   "note": "29 tallies in fives, '97 under the first and '25 under the last.",
+   "tex": [
+    1024,
+    512
+   ],
+   "files": [
+    "adult-votives.albedo.dds",
+    "adult-votives.orm.dds"
+   ],
+   "format": {
+    "albedo": "DXT1",
+    "orm": "DXT1"
+   },
+   "bytes": {
+    "albedo": 349672,
+    "orm": 87528
+   }
+  },
+  {
    "id": "adult-walt",
    "size_m": [
     0.9,
