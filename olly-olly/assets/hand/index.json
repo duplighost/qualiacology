@@ -4150,7 +4150,7 @@
     "text": "Oliver came. Alone.",
     "cap_mm": 10.1
    },
-   "note": "Open on her sill at the ribbon: 1995 | 1996. The page block is thick before the ribbon and thin after (two more spreads: adult-kowalski-2, -3).",
+   "note": "Open on her sill at the ribbon: 1996 | the page she kept for him (1997-2025). The page block is thick before the ribbon and thin after (two more spreads: adult-kowalski-2, -3).",
    "group": "adult-kowalski",
    "page": 0,
    "tex": [
@@ -7106,7 +7106,7 @@
    "canon": "routeMap",
    "surface": "wall",
    "tex": [
-    1024,
+    2048,
     1024
    ],
    "files": [
@@ -7114,7 +7114,7 @@
     "kid-routemap.orm.dds"
    ],
    "place": "hale story.routemap, Ollie's room",
-   "note": "Bottom-left corner torn off (alpha). Texture is 1024x1024 over 457x305 mm (non-square texels)."
+   "note": "Bottom-left corner torn off (alpha). Texture is 2048x1024 over 457x305 mm (non-square texels), for the small felt-tip labels when it is raised to the face."
   },
   {
    "id": "kid-routemap-corner",
