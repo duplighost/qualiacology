@@ -98,6 +98,73 @@
    }
   },
   {
+   "id": "adult-adler-wall",
+   "size_m": [
+    4.8188,
+    2.4094
+   ],
+   "paper": "green engineering graph paper, a card, ledger pages; 1997-2019, pinned",
+   "alpha": false,
+   "maker": "Adler: small capitals; an X over every searched 20 m square, each year in its own pen",
+   "canon": "none",
+   "surface": "wall",
+   "note": "An atlas, not one sheet: 5 x 5 map sheets at (i * 496, j * 394) px, then the key, the last square and two log pages (marks.extra: mm size, px origin). World x right, north up.",
+   "marks": {
+    "scale": "1:200",
+    "sheet_px": [
+     496,
+     394
+    ],
+    "grid": [
+     5,
+     5
+    ],
+    "ppm": 0.85,
+    "extra": {
+     "key": [
+      260.0,
+      560.0,
+      2496,
+      0
+     ],
+     "last": [
+      560.0,
+      560.0,
+      2733,
+      0
+     ],
+     "log.a": [
+      300.0,
+      440.0,
+      2496,
+      492
+     ],
+     "log.b": [
+      300.0,
+      440.0,
+      2767,
+      492
+     ]
+    }
+   },
+   "tex": [
+    4096,
+    2048
+   ],
+   "files": [
+    "adult-adler-wall.albedo.dds",
+    "adult-adler-wall.orm.dds"
+   ],
+   "format": {
+    "albedo": "DXT1",
+    "orm": "DXT1"
+   },
+   "bytes": {
+    "albedo": 5592552,
+    "orm": 1398248
+   }
+  },
+  {
    "id": "adult-calendar",
    "size_m": [
     0.28,
@@ -6266,6 +6333,328 @@
    "bytes": {
     "albedo": 699192,
     "orm": 174904
+   }
+  },
+  {
+   "id": "adult-walt-show",
+   "size_m": [
+    5.12,
+    2.56
+   ],
+   "paper": "blueprints, bond, yellow trace, sketch paper, masking tape",
+   "alpha": false,
+   "maker": "Walt Pruitt: pencil and carpenter's pencil drafting, block capitals; the show sheets printed as blueprints",
+   "canon": "none",
+   "surface": "wall",
+   "note": "An atlas: the 1996 show (master, plan, cues, eight details), a sketch for each year 1978-1995, and box labels 1978-1996 (marks.rects: mm size, px origin).",
+   "marks": {
+    "ppm": 0.8,
+    "rects": {
+     "master": [
+      1450.0,
+      1450.0,
+      0,
+      0
+     ],
+     "plan": [
+      1400.0,
+      1000.0,
+      1176,
+      0
+     ],
+     "cues": [
+      600.0,
+      900.0,
+      2312,
+      0
+     ],
+     "detail.0": [
+      450.0,
+      600.0,
+      2808,
+      0
+     ],
+     "detail.1": [
+      450.0,
+      600.0,
+      3184,
+      0
+     ],
+     "detail.2": [
+      450.0,
+      600.0,
+      3560,
+      0
+     ],
+     "detail.3": [
+      450.0,
+      600.0,
+      1176,
+      1488
+     ],
+     "detail.4": [
+      450.0,
+      600.0,
+      1552,
+      1488
+     ],
+     "detail.5": [
+      450.0,
+      600.0,
+      1928,
+      1488
+     ],
+     "detail.6": [
+      450.0,
+      600.0,
+      2304,
+      1488
+     ],
+     "detail.7": [
+      450.0,
+      600.0,
+      2680,
+      1488
+     ],
+     "year.1978": [
+      300.0,
+      400.0,
+      1176,
+      816
+     ],
+     "year.1979": [
+      300.0,
+      400.0,
+      1432,
+      816
+     ],
+     "year.1980": [
+      300.0,
+      400.0,
+      1688,
+      816
+     ],
+     "year.1981": [
+      300.0,
+      400.0,
+      1944,
+      816
+     ],
+     "year.1982": [
+      300.0,
+      400.0,
+      2200,
+      816
+     ],
+     "year.1983": [
+      300.0,
+      400.0,
+      2456,
+      816
+     ],
+     "year.1984": [
+      300.0,
+      400.0,
+      2712,
+      816
+     ],
+     "year.1985": [
+      300.0,
+      400.0,
+      2968,
+      816
+     ],
+     "year.1986": [
+      300.0,
+      400.0,
+      3224,
+      816
+     ],
+     "year.1987": [
+      300.0,
+      400.0,
+      3480,
+      816
+     ],
+     "year.1988": [
+      300.0,
+      400.0,
+      3736,
+      816
+     ],
+     "year.1989": [
+      300.0,
+      400.0,
+      1176,
+      1152
+     ],
+     "year.1990": [
+      300.0,
+      400.0,
+      1432,
+      1152
+     ],
+     "year.1991": [
+      300.0,
+      400.0,
+      1688,
+      1152
+     ],
+     "year.1992": [
+      300.0,
+      400.0,
+      1944,
+      1152
+     ],
+     "year.1993": [
+      300.0,
+      400.0,
+      2200,
+      1152
+     ],
+     "year.1994": [
+      300.0,
+      400.0,
+      2456,
+      1152
+     ],
+     "year.1995": [
+      300.0,
+      400.0,
+      2712,
+      1152
+     ],
+     "label.1978": [
+      270.0,
+      52.0,
+      8,
+      1176
+     ],
+     "label.1979": [
+      270.0,
+      52.0,
+      236,
+      1176
+     ],
+     "label.1980": [
+      270.0,
+      52.0,
+      8,
+      1226
+     ],
+     "label.1981": [
+      270.0,
+      52.0,
+      236,
+      1226
+     ],
+     "label.1982": [
+      270.0,
+      52.0,
+      8,
+      1276
+     ],
+     "label.1983": [
+      270.0,
+      52.0,
+      236,
+      1276
+     ],
+     "label.1984": [
+      270.0,
+      52.0,
+      8,
+      1326
+     ],
+     "label.1985": [
+      270.0,
+      52.0,
+      236,
+      1326
+     ],
+     "label.1986": [
+      270.0,
+      52.0,
+      8,
+      1376
+     ],
+     "label.1987": [
+      270.0,
+      52.0,
+      236,
+      1376
+     ],
+     "label.1988": [
+      270.0,
+      52.0,
+      8,
+      1426
+     ],
+     "label.1989": [
+      270.0,
+      52.0,
+      236,
+      1426
+     ],
+     "label.1990": [
+      270.0,
+      52.0,
+      8,
+      1476
+     ],
+     "label.1991": [
+      270.0,
+      52.0,
+      236,
+      1476
+     ],
+     "label.1992": [
+      270.0,
+      52.0,
+      8,
+      1526
+     ],
+     "label.1993": [
+      270.0,
+      52.0,
+      236,
+      1526
+     ],
+     "label.1994": [
+      270.0,
+      52.0,
+      8,
+      1576
+     ],
+     "label.1995": [
+      270.0,
+      52.0,
+      236,
+      1576
+     ],
+     "label.1996": [
+      270.0,
+      52.0,
+      8,
+      1626
+     ]
+    }
+   },
+   "tex": [
+    4096,
+    2048
+   ],
+   "files": [
+    "adult-walt-show.albedo.dds",
+    "adult-walt-show.orm.dds"
+   ],
+   "format": {
+    "albedo": "DXT1",
+    "orm": "DXT1"
+   },
+   "bytes": {
+    "albedo": 5592552,
+    "orm": 1398248
    }
   },
   {
