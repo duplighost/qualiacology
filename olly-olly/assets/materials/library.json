@@ -1055,6 +1055,74 @@
     "title": "Ground 048"
    }
   },
+  "hale-lino": {
+   "files": {
+    "albedo": "hale-lino/hale-lino.albedo.dds",
+    "normal": "hale-lino/hale-lino.normal.ktx2",
+    "orm": "hale-lino/hale-lino.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 1224112,
+   "metres": [
+    0.9144,
+    0.9144
+   ],
+   "mean": [
+    0.4085,
+    0.3086,
+    0.2291
+   ],
+   "use": "Ruth's kitchen: 1950s marbleized nine-inch tiles, oxblood and cream checker, waxed",
+   "source": {
+    "derived": "lino",
+    "from": [],
+    "licence": "CC0 1.0"
+   }
+  },
+  "kowalski-jodelka": {
+   "files": {
+    "albedo": "kowalski-jodelka/kowalski-jodelka.albedo.dds",
+    "normal": "kowalski-jodelka/kowalski-jodelka.normal.ktx2",
+    "orm": "kowalski-jodelka/kowalski-jodelka.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 1224112,
+   "metres": [
+    0.99,
+    0.99
+   ],
+   "mean": [
+    0.3289,
+    0.1706,
+    0.0706
+   ],
+   "use": "Irena's front room: jodelka, herringbone oak parquet, 7 x 35 cm blocks",
+   "source": {
+    "derived": "herringbone",
+    "from": [],
+    "licence": "CC0 1.0"
+   }
+  },
   "lattice": {
    "files": {
     "albedo": "lattice/lattice.albedo.dds",
@@ -1648,6 +1716,74 @@
     "licence": "CC0 1.0",
     "author": "ambientCG (Lennart Demes)",
     "donor": "curfew/work/visual-overhaul/material-research/Plaster007"
+   }
+  },
+  "pruitt-encaustic": {
+   "files": {
+    "albedo": "pruitt-encaustic/pruitt-encaustic.albedo.dds",
+    "normal": "pruitt-encaustic/pruitt-encaustic.normal.ktx2",
+    "orm": "pruitt-encaustic/pruitt-encaustic.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 1224112,
+   "metres": [
+    0.6,
+    0.6
+   ],
+   "mean": [
+    0.4004,
+    0.2677,
+    0.164
+   ],
+   "use": "Walt's front hall: Victorian encaustic geometric tile, 15 cm, terracotta, black, buff, a little blue",
+   "source": {
+    "derived": "encaustic",
+    "from": [],
+    "licence": "CC0 1.0"
+   }
+  },
+  "pruitt-stage": {
+   "files": {
+    "albedo": "pruitt-stage/pruitt-stage.albedo.dds",
+    "normal": "pruitt-stage/pruitt-stage.normal.ktx2",
+    "orm": "pruitt-stage/pruitt-stage.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 1224112,
+   "metres": [
+    1.4,
+    1.4
+   ],
+   "mean": [
+    0.0202,
+    0.0186,
+    0.0167
+   ],
+   "use": "Walt's workshop: black-painted stage boards, scuffs, scene-paint drips, spike tape",
+   "source": {
+    "derived": "stageboards",
+    "from": [],
+    "licence": "CC0 1.0"
    }
   },
   "rock001": {
@@ -3596,6 +3732,170 @@
     }
    }
   },
+  "wp-hale-hydrangea": {
+   "files": {
+    "albedo": "wp-hale-hydrangea/wp-hale-hydrangea.albedo.dds",
+    "normal": "wp-hale-hydrangea/wp-hale-hydrangea.normal.ktx2",
+    "orm": "wp-hale-hydrangea/wp-hale-hydrangea.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.6505,
+    0.6202,
+    0.5201
+   ],
+   "use": "Mophead hydrangeas, faded (designed, after 1950s American papers)",
+   "source": {
+    "title": "Mophead hydrangeas, faded (designed, after 1950s American papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-hale-rose-trellis": {
+   "files": {
+    "albedo": "wp-hale-rose-trellis/wp-hale-rose-trellis.albedo.dds",
+    "normal": "wp-hale-rose-trellis/wp-hale-rose-trellis.normal.ktx2",
+    "orm": "wp-hale-rose-trellis/wp-hale-rose-trellis.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.6283,
+    0.6191,
+    0.4835
+   ],
+   "use": "Climbing roses on a painted trellis (designed, after 1950s New England papers)",
+   "source": {
+    "title": "Climbing roses on a painted trellis (designed, after 1950s New England papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-hale-scenic": {
+   "files": {
+    "albedo": "wp-hale-scenic/wp-hale-scenic.albedo.dds",
+    "normal": "wp-hale-scenic/wp-hale-scenic.normal.ktx2",
+    "orm": "wp-hale-scenic/wp-hale-scenic.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    2048
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 1661040,
+   "metres": [
+    0.53,
+    1.06
+   ],
+   "mean": [
+    0.8088,
+    0.7186,
+    0.5557
+   ],
+   "use": "Early American scenic toile in barn red (designed, after 1950s American papers)",
+   "source": {
+    "title": "Early American scenic toile in barn red (designed, after 1950s American papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-hale-teakettle": {
+   "files": {
+    "albedo": "wp-hale-teakettle/wp-hale-teakettle.albedo.dds",
+    "normal": "wp-hale-teakettle/wp-hale-teakettle.normal.ktx2",
+    "orm": "wp-hale-teakettle/wp-hale-teakettle.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.7761,
+    0.6994,
+    0.5222
+   ],
+   "use": "Teakettles, percolators and cups, kitchen print (designed, after 1950s American papers)",
+   "source": {
+    "title": "Teakettles, percolators and cups, kitchen print (designed, after 1950s American papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
   "wp-kid-rockets": {
    "files": {
     "albedo": "wp-kid-rockets/wp-kid-rockets.albedo.dds",
@@ -3626,6 +3926,211 @@
    "use": "Rockets and planets, kids' bedroom print (designed after early-1990s American papers)",
    "source": {
     "title": "Rockets and planets, kids' bedroom print (designed after early-1990s American papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-kowalski-lily": {
+   "files": {
+    "albedo": "wp-kowalski-lily/wp-kowalski-lily.albedo.dds",
+    "normal": "wp-kowalski-lily/wp-kowalski-lily.normal.ktx2",
+    "orm": "wp-kowalski-lily/wp-kowalski-lily.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.5214,
+    0.3662,
+    0.3179
+   ],
+   "use": "Madonna lilies on old rose (designed, after 1920s-30s papers)",
+   "source": {
+    "title": "Madonna lilies on old rose (designed, after 1920s-30s papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-kowalski-pottery": {
+   "files": {
+    "albedo": "wp-kowalski-pottery/wp-kowalski-pottery.albedo.dds",
+    "normal": "wp-kowalski-pottery/wp-kowalski-pottery.normal.ktx2",
+    "orm": "wp-kowalski-pottery/wp-kowalski-pottery.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.7489,
+    0.7307,
+    0.6805
+   ],
+   "use": "Boleslawiec stamped-pottery kitchen paper, blue on white (designed, after the stoneware)",
+   "source": {
+    "title": "Boleslawiec stamped-pottery kitchen paper, blue on white (designed, after the stoneware)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-kowalski-rose-cross": {
+   "files": {
+    "albedo": "wp-kowalski-rose-cross/wp-kowalski-rose-cross.albedo.dds",
+    "normal": "wp-kowalski-rose-cross/wp-kowalski-rose-cross.normal.ktx2",
+    "orm": "wp-kowalski-rose-cross/wp-kowalski-rose-cross.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.6756,
+    0.5375,
+    0.316
+   ],
+   "use": "Prayer-book damask, roses and Greek crosses in an ogee, smoke-darkened (designed, after 1920s papers)",
+   "source": {
+    "title": "Prayer-book damask, roses and Greek crosses in an ogee, smoke-darkened (designed, after 1920s papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-kowalski-violet": {
+   "files": {
+    "albedo": "wp-kowalski-violet/wp-kowalski-violet.albedo.dds",
+    "normal": "wp-kowalski-violet/wp-kowalski-violet.normal.ktx2",
+    "orm": "wp-kowalski-violet/wp-kowalski-violet.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.471,
+    0.429,
+    0.4343
+   ],
+   "use": "Violet posies and ribbon on lilac-grey (designed, after 1930s-50s papers)",
+   "source": {
+    "title": "Violet posies and ribbon on lilac-grey (designed, after 1930s-50s papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-kowalski-wycinanki": {
+   "files": {
+    "albedo": "wp-kowalski-wycinanki/wp-kowalski-wycinanki.albedo.dds",
+    "normal": "wp-kowalski-wycinanki/wp-kowalski-wycinanki.normal.ktx2",
+    "orm": "wp-kowalski-wycinanki/wp-kowalski-wycinanki.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.7768,
+    0.6932,
+    0.5395
+   ],
+   "use": "Polish folk papercut (wycinanki), roosters, tulips and stars (designed, after Lowicz papercuts)",
+   "source": {
+    "title": "Polish folk papercut (wycinanki), roosters, tulips and stars (designed, after Lowicz papercuts)",
     "page": null,
     "licence": "CC0 1.0 (made for this game)",
     "author": "OLLY OLLY",
@@ -3886,6 +4391,211 @@
       0.004,
       0.004
      ]
+    }
+   }
+  },
+  "wp-pruitt-bat-damask": {
+   "files": {
+    "albedo": "wp-pruitt-bat-damask/wp-pruitt-bat-damask.albedo.dds",
+    "normal": "wp-pruitt-bat-damask/wp-pruitt-bat-damask.normal.ktx2",
+    "orm": "wp-pruitt-bat-damask/wp-pruitt-bat-damask.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.0556,
+    0.0226,
+    0.0359
+   ],
+   "use": "Victorian damask of bat wings and moths, plum-black (designed, after 1890s papers)",
+   "source": {
+    "title": "Victorian damask of bat wings and moths, plum-black (designed, after 1890s papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-pruitt-june": {
+   "files": {
+    "albedo": "wp-pruitt-june/wp-pruitt-june.albedo.dds",
+    "normal": "wp-pruitt-june/wp-pruitt-june.normal.ktx2",
+    "orm": "wp-pruitt-june/wp-pruitt-june.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.7997,
+    0.7081,
+    0.4943
+   ],
+   "use": "Sewing-room calico, rosebuds, ribbons, scissors and thimbles (designed, after 1970s papers)",
+   "source": {
+    "title": "Sewing-room calico, rosebuds, ribbons, scissors and thimbles (designed, after 1970s papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-pruitt-masks": {
+   "files": {
+    "albedo": "wp-pruitt-masks/wp-pruitt-masks.albedo.dds",
+    "normal": "wp-pruitt-masks/wp-pruitt-masks.normal.ktx2",
+    "orm": "wp-pruitt-masks/wp-pruitt-masks.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.1723,
+    0.0831,
+    0.0424
+   ],
+   "use": "Gilt comedy and tragedy masks in a diaper on oxblood (designed, after 1890s papers)",
+   "source": {
+    "title": "Gilt comedy and tragedy masks in a diaper on oxblood (designed, after 1890s papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-pruitt-moth-stripe": {
+   "files": {
+    "albedo": "wp-pruitt-moth-stripe/wp-pruitt-moth-stripe.albedo.dds",
+    "normal": "wp-pruitt-moth-stripe/wp-pruitt-moth-stripe.normal.ktx2",
+    "orm": "wp-pruitt-moth-stripe/wp-pruitt-moth-stripe.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 830864,
+   "metres": [
+    0.53,
+    0.53
+   ],
+   "mean": [
+    0.2438,
+    0.2262,
+    0.1523
+   ],
+   "use": "Victorian stripe in plum, sage and old gold with moths (designed, after 1890s papers)",
+   "source": {
+    "title": "Victorian stripe in plum, sage and old gold with moths (designed, after 1890s papers)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
+    }
+   }
+  },
+  "wp-pruitt-stageflat": {
+   "files": {
+    "albedo": "wp-pruitt-stageflat/wp-pruitt-stageflat.albedo.dds",
+    "normal": "wp-pruitt-stageflat/wp-pruitt-stageflat.normal.ktx2",
+    "orm": "wp-pruitt-stageflat/wp-pruitt-stageflat.orm.dds"
+   },
+   "format": {
+    "albedo": "DXT1",
+    "normal": "BC5_UNORM",
+    "orm": "DXT1"
+   },
+   "size": [
+    2048,
+    2048
+   ],
+   "alpha": false,
+   "wrap": true,
+   "bytes": 4369856,
+   "metres": [
+    1.06,
+    1.06
+   ],
+   "mean": [
+    0.2027,
+    0.1816,
+    0.2439
+   ],
+   "use": "Painted canvas stage flat, castle stone (designed, after scenic-shop practice)",
+   "source": {
+    "title": "Painted canvas stage flat, castle stone (designed, after scenic-shop practice)",
+    "page": null,
+    "licence": "CC0 1.0 (made for this game)",
+    "author": "OLLY OLLY",
+    "credit": null,
+    "scan": null,
+    "process": {
+     "designed": true,
+     "px_per_m": 1932
     }
    }
   },
@@ -6242,6 +6952,779 @@
    ],
    "tint": "#E8E2D6",
    "surface": "stone"
+  },
+  "wallpaper.hale-rose-trellis": {
+   "set": "wp-hale-rose-trellis",
+   "surface": "concrete"
+  },
+  "wallpaper.hale-scenic": {
+   "set": "wp-hale-scenic",
+   "surface": "concrete"
+  },
+  "wallpaper.hale-teakettle": {
+   "set": "wp-hale-teakettle",
+   "surface": "concrete"
+  },
+  "wallpaper.hale-hydrangea": {
+   "set": "wp-hale-hydrangea",
+   "surface": "concrete"
+  },
+  "wallpaper.pruitt-bat-damask": {
+   "set": "wp-pruitt-bat-damask",
+   "surface": "concrete"
+  },
+  "wallpaper.pruitt-moth-stripe": {
+   "set": "wp-pruitt-moth-stripe",
+   "surface": "concrete"
+  },
+  "wallpaper.pruitt-masks": {
+   "set": "wp-pruitt-masks",
+   "surface": "concrete"
+  },
+  "wallpaper.pruitt-june": {
+   "set": "wp-pruitt-june",
+   "surface": "concrete"
+  },
+  "wallpaper.pruitt-stageflat": {
+   "set": "wp-pruitt-stageflat",
+   "surface": "concrete"
+  },
+  "wallpaper.kowalski-rose-cross": {
+   "set": "wp-kowalski-rose-cross",
+   "surface": "concrete"
+  },
+  "wallpaper.kowalski-lily": {
+   "set": "wp-kowalski-lily",
+   "surface": "concrete"
+  },
+  "wallpaper.kowalski-wycinanki": {
+   "set": "wp-kowalski-wycinanki",
+   "surface": "concrete"
+  },
+  "wallpaper.kowalski-violet": {
+   "set": "wp-kowalski-violet",
+   "surface": "concrete"
+  },
+  "wallpaper.kowalski-pottery": {
+   "set": "wp-kowalski-pottery",
+   "surface": "concrete"
+  },
+  "floor.hale-lino": {
+   "set": "hale-lino",
+   "surface": "tile"
+  },
+  "floor.pruitt-encaustic": {
+   "set": "pruitt-encaustic",
+   "surface": "tile"
+  },
+  "floor.pruitt-stage": {
+   "set": "pruitt-stage",
+   "surface": "wood"
+  },
+  "floor.kowalski-parquet": {
+   "set": "kowalski-jodelka",
+   "surface": "wood"
+  },
+  "paint.hale-bayberry": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#8C9A87",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.hale-backhall": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#CBBFA6",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.hale-closet": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#D8D2C4",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.hale-sam": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#34425A",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "tile.hale-bath": {
+   "set": "tiles136b",
+   "scale": [
+    1.0,
+    1.0
+   ],
+   "tint": "#E3CF8A",
+   "tintNormalize": true,
+   "surface": "tile"
+  },
+  "tile.hale-bath-floor": {
+   "set": "tiles071",
+   "scale": [
+    0.5,
+    0.5
+   ],
+   "tint": "#545553",
+   "tintNormalize": true,
+   "surface": "tile"
+  },
+  "floor.hale-oak": {
+   "set": "woodfloor051",
+   "scale": [
+    1.4,
+    1.4
+   ],
+   "tint": "#CFC3AE",
+   "tintNormalize": true,
+   "roughness": 0.95,
+   "surface": "wood"
+  },
+  "floor.hale-pine": {
+   "set": "planks010n",
+   "scale": [
+    1.8,
+    1.8
+   ],
+   "tint": "#9FA3A3",
+   "tintNormalize": true,
+   "surface": "creaky"
+  },
+  "carpet.hale-rose": {
+   "set": "carpet013n",
+   "scale": [
+    1,
+    1
+   ],
+   "tint": "#B99A92",
+   "tintNormalize": true,
+   "surface": "carpet"
+  },
+  "carpet.hale-rust": {
+   "set": "carpet013n",
+   "scale": [
+    1,
+    1
+   ],
+   "tint": "#8A5A3C",
+   "tintNormalize": true,
+   "surface": "carpet"
+  },
+  "concrete.hale-cellar": {
+   "set": "concrete047a",
+   "scale": [
+    2,
+    2
+   ],
+   "tint": "#8A8C88",
+   "tintNormalize": true,
+   "roughness": 0.8,
+   "normalScale": 0.7,
+   "surface": "concrete"
+  },
+  "stone.hale-fieldstone": {
+   "set": "bricks089",
+   "scale": [
+    2.2,
+    1.1
+   ],
+   "tint": "#CEC8B8",
+   "tintNormalize": true,
+   "surface": "stone"
+  },
+  "trim.hale": {
+   "set": "paintedwood",
+   "scale": [
+    0.6,
+    0.6
+   ],
+   "tint": "#E4E2DA",
+   "tintNormalize": true,
+   "surface": "wood"
+  },
+  "panel.hale": {
+   "set": "paintedwood",
+   "scale": [
+    0.6,
+    0.6
+   ],
+   "tint": "#E4E2DA",
+   "tintNormalize": true,
+   "rotate": 90,
+   "surface": "wood"
+  },
+  "floor.pruitt-oak": {
+   "set": "woodfloor051",
+   "scale": [
+    1.1,
+    1.1
+   ],
+   "tint": "#6E5646",
+   "tintNormalize": true,
+   "roughness": 0.8,
+   "surface": "creaky"
+  },
+  "floor.pruitt-pine": {
+   "set": "woodfloor051",
+   "scale": [
+    2.2,
+    2.2
+   ],
+   "tint": "#9C8266",
+   "tintNormalize": true,
+   "roughness": 1.15,
+   "surface": "creaky"
+  },
+  "floor.pruitt-lino": {
+   "set": "marble012",
+   "scale": [
+    1.2,
+    1.2
+   ],
+   "tint": "#7E6B55",
+   "tintNormalize": true,
+   "normalScale": 0.2,
+   "roughness": 1.3,
+   "surface": "tile"
+  },
+  "concrete.pruitt-cellar": {
+   "set": "concrete035",
+   "scale": [
+    2,
+    2
+   ],
+   "tint": "#6F6A62",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "brick.pruitt-cellar": {
+   "set": "bricks026",
+   "scale": [
+    1.1,
+    1.1
+   ],
+   "tint": "#6E4638",
+   "tintNormalize": true,
+   "surface": "stone"
+  },
+  "paint.pruitt-oxblood": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#5A2A2A",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.pruitt-teal": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#2F4E4E",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.pruitt-darkroom": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#232124",
+   "tintNormalize": true,
+   "roughness": 1.1,
+   "surface": "concrete"
+  },
+  "paint.pruitt-library": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#26392E",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.pruitt-kitchen": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#D9C98E",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.pruitt-backhall": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#B9A98C",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.pruitt-spare": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#8F8699",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.pruitt-boxroom": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#A89A83",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.pruitt-belvedere": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#5B5A6E",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "tile.pruitt-bath": {
+   "set": "tiles136b",
+   "scale": [
+    1.0,
+    1.0
+   ],
+   "tint": "#3E5B4E",
+   "tintNormalize": true,
+   "surface": "tile"
+  },
+  "tile.pruitt-bath-floor": {
+   "set": "tiles071",
+   "scale": [
+    0.5,
+    0.5
+   ],
+   "tint": "#2B2A29",
+   "tintNormalize": true,
+   "surface": "tile"
+  },
+  "trim.pruitt": {
+   "set": "stainedwood",
+   "scale": [
+    0.6,
+    0.3
+   ],
+   "tint": "#40302A",
+   "tintNormalize": true,
+   "surface": "wood"
+  },
+  "panel.pruitt": {
+   "set": "stainedwood",
+   "scale": [
+    0.6,
+    0.3
+   ],
+   "tint": "#40302A",
+   "tintNormalize": true,
+   "rotate": 90,
+   "surface": "wood"
+  },
+  "tile.kowalski-quarry": {
+   "set": "tiles136b",
+   "scale": [
+    0.45,
+    0.45
+   ],
+   "tint": "#9E4E38",
+   "tintNormalize": true,
+   "roughness": 1.3,
+   "surface": "tile"
+  },
+  "floor.kowalski-oak": {
+   "set": "woodfloor051",
+   "scale": [
+    1.5,
+    1.5
+   ],
+   "tint": "#8E6A4E",
+   "tintNormalize": true,
+   "surface": "wood"
+  },
+  "carpet.kowalski-lilac": {
+   "set": "carpet013n",
+   "scale": [
+    1,
+    1
+   ],
+   "tint": "#9C8FA3",
+   "tintNormalize": true,
+   "surface": "carpet"
+  },
+  "floor.kowalski-pantry": {
+   "set": "marble012",
+   "scale": [
+    1.0,
+    1.0
+   ],
+   "tint": "#C9B99A",
+   "tintNormalize": true,
+   "normalScale": 0.2,
+   "roughness": 1.4,
+   "surface": "tile"
+  },
+  "dirt.kowalski": {
+   "set": "ground048",
+   "scale": [
+    2,
+    2
+   ],
+   "tint": "#4E3C30",
+   "tintNormalize": true,
+   "surface": "dirt"
+  },
+  "paint.kowalski-uphall": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#B89A62",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.kowalski-sewing": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#C9B9A0",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.kowalski-guest": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#A8B5A6",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.kowalski-pantry": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#D8CFB5",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "stone.kowalski-cellar": {
+   "set": "bricks087",
+   "scale": [
+    2,
+    2
+   ],
+   "tint": "#B8A48C",
+   "tintNormalize": true,
+   "roughness": 0.85,
+   "surface": "stone"
+  },
+  "stone.kowalski-lime": {
+   "set": "bricks089",
+   "scale": [
+    2.2,
+    1.1
+   ],
+   "tint": "#DAD4C5",
+   "tintNormalize": true,
+   "surface": "stone"
+  },
+  "brick.kowalski-vault": {
+   "set": "bricks023",
+   "scale": [
+    0.9,
+    0.9
+   ],
+   "tint": "#7A5A4A",
+   "tintNormalize": true,
+   "surface": "stone"
+  },
+  "tile.kowalski-bath": {
+   "set": "tiles136b",
+   "scale": [
+    1.0,
+    1.0
+   ],
+   "tint": "#CFC7B0",
+   "tintNormalize": true,
+   "surface": "tile"
+  },
+  "tile.kowalski-bath-floor": {
+   "set": "tiles071",
+   "scale": [
+    0.5,
+    0.5
+   ],
+   "tint": "#5C3B34",
+   "tintNormalize": true,
+   "surface": "tile"
+  },
+  "trim.kowalski": {
+   "set": "stainedwood",
+   "scale": [
+    0.6,
+    0.3
+   ],
+   "tint": "#4A3524",
+   "tintNormalize": true,
+   "surface": "wood"
+  },
+  "panel.kowalski": {
+   "set": "stainedwood",
+   "scale": [
+    0.6,
+    0.3
+   ],
+   "tint": "#4A3524",
+   "tintNormalize": true,
+   "rotate": 90,
+   "surface": "wood"
+  },
+  "paint.adler-drab": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#5F5E45",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "plaster.adler-stained": {
+   "set": "wallpaper002b",
+   "scale": [
+    1.5,
+    1.5
+   ],
+   "tint": "#A89A78",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.adler-nicotine": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#C7B27A",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "plaster.adler-stripped": {
+   "set": "wallpaper001c",
+   "scale": [
+    1.5,
+    1.5
+   ],
+   "tint": "#B8AD95",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "paint.adler-hall": {
+   "set": "paintedplaster017",
+   "scale": [
+    2,
+    2
+   ],
+   "normalScale": 0.4,
+   "tint": "#8A8468",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "tile.adler-bath": {
+   "set": "tiles136b",
+   "scale": [
+    1.0,
+    1.0
+   ],
+   "tint": "#AEB3A6",
+   "tintNormalize": true,
+   "surface": "tile"
+  },
+  "tile.adler-bath-floor": {
+   "set": "tiles071",
+   "scale": [
+    0.5,
+    0.5
+   ],
+   "tint": "#7E7F76",
+   "tintNormalize": true,
+   "surface": "tile"
+  },
+  "wood.adler-studs": {
+   "set": "wood049",
+   "scale": [
+    1.2,
+    1.2
+   ],
+   "tint": "#A08A6C",
+   "tintNormalize": true,
+   "surface": "wood"
+  },
+  "wood.adler-loft": {
+   "set": "planks027a",
+   "scale": [
+    2,
+    2
+   ],
+   "tint": "#8C7B66",
+   "tintNormalize": true,
+   "surface": "wood"
+  },
+  "stone.adler-cellar": {
+   "set": "bricks089",
+   "scale": [
+    2.2,
+    1.1
+   ],
+   "tint": "#8E8C84",
+   "tintNormalize": true,
+   "surface": "stone"
+  },
+  "floor.adler-boards": {
+   "set": "planks010n",
+   "scale": [
+    1.8,
+    1.8
+   ],
+   "tint": "#5E5F4E",
+   "tintNormalize": true,
+   "surface": "creaky"
+  },
+  "floor.adler-bedroom": {
+   "set": "woodfloor051",
+   "scale": [
+    1.6,
+    1.6
+   ],
+   "tint": "#A89272",
+   "tintNormalize": true,
+   "roughness": 1.2,
+   "surface": "creaky"
+  },
+  "floor.adler-lino": {
+   "set": "marble012",
+   "scale": [
+    1.5,
+    1.5
+   ],
+   "tint": "#6F7466",
+   "tintNormalize": true,
+   "normalScale": 0.1,
+   "roughness": 1.3,
+   "surface": "tile"
+  },
+  "concrete.adler-cellar": {
+   "set": "concrete047a",
+   "scale": [
+    2,
+    2
+   ],
+   "tint": "#7E7B74",
+   "tintNormalize": true,
+   "surface": "concrete"
+  },
+  "floor.adler-loft": {
+   "set": "planks027a",
+   "scale": [
+    2,
+    2
+   ],
+   "tint": "#7A6A58",
+   "tintNormalize": true,
+   "surface": "creaky"
+  },
+  "trim.adler": {
+   "set": "paintedwood",
+   "scale": [
+    0.6,
+    0.6
+   ],
+   "tint": "#6A6A50",
+   "tintNormalize": true,
+   "surface": "wood"
+  },
+  "brick.adler-passage": {
+   "set": "bricks023",
+   "scale": [
+    0.8,
+    0.8
+   ],
+   "tint": "#5A4A42",
+   "tintNormalize": true,
+   "roughness": 1.1,
+   "surface": "stone"
+  },
+  "floor.adler-passage": {
+   "set": "rock002",
+   "scale": [
+    1.5,
+    1.5
+   ],
+   "tint": "#5A4D3E",
+   "tintNormalize": true,
+   "roughness": 1.15,
+   "normalScale": 0.8,
+   "surface": "dirt"
   }
  },
  "aliases": {

@@ -1,0 +1,45 @@
+{
+ "wp-pruitt-bat-damask": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "wp-pruitt-bat-damask.albedo.dds",
+   "normal": "wp-pruitt-bat-damask.normal.ktx2",
+   "orm": "wp-pruitt-bat-damask.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 42.03,
+   "normalXY": 66.54,
+   "orm": {
+    "ao": 99.0,
+    "rough": 41.27,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.067,
+   "p99": 0.144
+  },
+  "specAA": true,
+  "seconds": 3.7
+ }
+}

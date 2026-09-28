@@ -1,7 +1,7 @@
 {
  "kid-routemap": {
   "size": [
-   1024,
+   2048,
    1024
   ],
   "alpha": true,
@@ -11,15 +11,15 @@
    "orm": "kid-routemap.orm.dds"
   },
   "bytes": {
-   "albedo": 1398256,
-   "orm": 699192
+   "albedo": 2796368,
+   "orm": 1398248
   },
   "psnr": {
-   "albedo": 31.39,
-   "alpha": 59.48,
+   "albedo": 30.77,
+   "alpha": 60.6,
    "orm": {
     "ao": 99.0,
-    "rough": 35.44,
+    "rough": 35.51,
     "metal": 99.0
    }
   },
@@ -36,10 +36,10 @@
    0.9243,
    0.9243,
    0.9243,
-   0.9243,
+   0.9244,
    0.9248
   ],
   "specAA": false,
-  "seconds": 10.4
+  "seconds": 18.9
  }
 }
