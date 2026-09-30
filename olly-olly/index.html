@@ -18,16 +18,13 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <script type="module" crossorigin src="./assets/index-yLxmbdDR.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BlU2nG8F.css">
+  <script type="module" crossorigin src="./assets/index-BF5EqdAl.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-D7H4vCdT.css">
 </head>
 <body>
 <a class="home-link" href="/">Qualiacology</a>
 <canvas id="game" tabindex="-1" aria-label="OLLY OLLY game"></canvas>
-<div id="hud" hidden>
-  <div id="crosshair"></div>
-  <div id="hitmark"></div>
-</div>
+<div id="hud" hidden></div>
 <div id="menu">
   <div id="menu-inner">
     <h1 id="title">OLLY OLLY</h1>
@@ -49,6 +46,7 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
     <h2>Paused</h2>
     <button id="resume" class="primary">Resume</button>
     <nav class="menu-links" aria-label="Pause menu">
+      <button data-panel="supplies-panel">Supplies</button>
       <button data-panel="porches-panel">Porches</button>
       <button data-panel="settings-panel">Settings</button>
       <button data-panel="credits-panel">Credits</button>
@@ -57,6 +55,11 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
     <p class="small-note">Continue returns to your last rest point.</p>
   </div>
 </div>
+<dialog id="supplies-panel" aria-labelledby="supplies-title">
+  <div class="panel-heading"><h2 id="supplies-title">Supplies</h2><button data-close aria-label="Close supplies">Close</button></div>
+  <table class="supplies"><thead><tr><th scope="col">Weapon</th><th scope="col">Loaded</th><th scope="col">Spare</th></tr></thead><tbody id="supplies-weapons"></tbody></table>
+  <p class="supplies-crackers">Firecrackers <span id="supplies-crackers">0</span></p>
+</dialog>
 <dialog id="settings-panel" aria-labelledby="settings-title">
   <div class="panel-heading"><h2 id="settings-title">Settings</h2><button data-close aria-label="Close settings">Close</button></div>
   <label class="setting" for="setting-master"><span>Volume</span><output for="setting-master" id="value-master">100%</output>
@@ -80,6 +83,7 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
 <dialog id="porches-panel" aria-labelledby="porches-title">
   <div class="panel-heading"><h2 id="porches-title">Porches</h2><button data-close aria-label="Close porch records">Close</button></div>
   <p class="porch-note">Ghost: all discoveries. Sweet: the candy. Heart: a clear without a hit. Bat: a clear under the target time.</p>
+  <p class="porch-note">Filled circles are earned. Empty circles are not earned yet.</p>
   <table class="porch-records"><thead><tr><th scope="col">House</th><th scope="col">Ghost</th><th scope="col">Sweet</th><th scope="col">Heart</th><th scope="col">Bat</th></tr></thead><tbody id="porch-records"></tbody></table>
   <p class="porch-note">Continue keeps any hits. Earned decorations stay through new nights.</p>
 </dialog>
