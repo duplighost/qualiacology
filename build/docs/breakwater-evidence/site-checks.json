@@ -1,0 +1,11 @@
+{
+  "command": "node build/scripts/preflight.mjs --art",
+  "status": "passed",
+  "games": 32,
+  "albums": 12,
+  "hubPages": 4,
+  "reachableRoutes": 53,
+  "intentional404s": 73,
+  "catalogArt": "Every tier matches its site-data master",
+  "warning": "Existing Pillow Image.getdata deprecation notice; audit passed."
+}

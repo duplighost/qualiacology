@@ -1,0 +1,13 @@
+{
+  "method": "Native High-quality game-camera captures at the output dimensions, in Foundry sector 12. Only the HTML HUD was hidden. No scene editing, generated imagery, crop or rescaling. PNG was encoded to WebP for the card master.",
+  "files": {
+    "assets/games/breakwater-card-clean.webp": {
+      "sha256": "33ff008fdee96968a9bce25fbc62717d6c4769aae6b098dcdf1662305a766b2e",
+      "bytes": 123720
+    },
+    "assets/og/breakwater-og-v1.jpg": {
+      "sha256": "c0aa9e9eae35f11f64173c7345b7c8039d04742990adc6a44db3a0ad847f6ea2",
+      "bytes": 134691
+    }
+  }
+}

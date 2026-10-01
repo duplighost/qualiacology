@@ -1,0 +1,15 @@
+{
+  "url": "http://127.0.0.1:4173/breakwater/",
+  "method": "Real clicks and keyboard input on the ordinary public route. Performance quality is selected for the cloud software renderer.",
+  "checks": [
+    "Public menu boots without a developer bridge",
+    "New game captures the mouse and leaves the HUD active",
+    "Escape pauses and releases the mouse",
+    "Resume captures the mouse and returns directly to play",
+    "The constellation returns to play through the same public lock path"
+  ],
+  "errors": [],
+  "httpErrors": [],
+  "externalRequests": [],
+  "passed": true
+}

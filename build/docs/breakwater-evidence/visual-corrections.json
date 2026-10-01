@@ -1,0 +1,581 @@
+{
+  "startedAt": "2026-10-01T05:36:01.003Z",
+  "url": "http://127.0.0.1:4173/breakwater/?dev=1",
+  "environment": {
+    "rendererRequested": "Chromium / ANGLE SwiftShader (CPU software renderer)",
+    "viewport": [
+      1440,
+      900
+    ],
+    "functionalQuality": "high",
+    "worldQuality": "high",
+    "actual": {
+      "vendor": "Google Inc. (Google)",
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "webgl": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "devicePixelRatio": 1,
+      "renderPixelRatio": 1,
+      "buffer": [
+        1440,
+        900
+      ],
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36"
+    }
+  },
+  "limitations": [
+    "Software-renderer timing is measured in wall-clock frame intervals; it is not a hardware-GPU performance claim.",
+    "Developer-assisted sector loading validates construction and capture only. It does not prove normal progression, combat balance, or two-hour campaign length.",
+    "Screenshots document real rendered frames, including the gameplay camera; visual quality still requires human review.",
+    "A finite floor at spawn or exit does not by itself establish that every route or secret is reachable."
+  ],
+  "checks": [
+    {
+      "name": "Game booted with real Chromium WebGL",
+      "passed": true,
+      "wallMs": 8987,
+      "environment": {
+        "vendor": "Google Inc. (Google)",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "webgl": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+        "devicePixelRatio": 1,
+        "renderPixelRatio": 1,
+        "buffer": [
+          1440,
+          900
+        ],
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "name": "Rendered district evidence and software timing: sector 4",
+      "passed": true,
+      "wallMs": 64408,
+      "sector": 4,
+      "screenshot": "district-02-sector-04.png",
+      "pixels": {
+        "size": [
+          1440,
+          900
+        ],
+        "centralMeanLuma": 93.33229037499918,
+        "centralLumaStdDev": 40.40194976666113,
+        "centralNearBlackFraction": 0.0011875,
+        "quantizedColors": 577
+      },
+      "softwareTiming": {
+        "sampleFrames": 2,
+        "meanFrameMs": 8983,
+        "medianFrameMs": 8766.400000000001,
+        "p95FrameMs": 8766.400000000001,
+        "approximateWallClockFps": 0.11132138483802738,
+        "framesOver50ms": 2,
+        "framesOver100ms": 2
+      },
+      "enemiesInSimulation": 4,
+      "note": "Not a normal-progression or campaign-duration test."
+    },
+    {
+      "name": "Rendered district evidence and software timing: sector 12",
+      "passed": true,
+      "wallMs": 52385,
+      "sector": 12,
+      "screenshot": "district-04-sector-12.png",
+      "pixels": {
+        "size": [
+          1440,
+          900
+        ],
+        "centralMeanLuma": 38.73010618750055,
+        "centralLumaStdDev": 27.101442167306487,
+        "centralNearBlackFraction": 0.075875,
+        "quantizedColors": 599
+      },
+      "softwareTiming": {
+        "sampleFrames": 2,
+        "meanFrameMs": 4266.450000000004,
+        "medianFrameMs": 4266.400000000009,
+        "p95FrameMs": 4266.400000000009,
+        "approximateWallClockFps": 0.2343869024598903,
+        "framesOver50ms": 2,
+        "framesOver100ms": 2
+      },
+      "enemiesInSimulation": 4,
+      "note": "Not a normal-progression or campaign-duration test."
+    },
+    {
+      "name": "No unresolved page, HTTP, network or console errors",
+      "passed": true,
+      "pageErrors": [],
+      "httpErrors": [],
+      "unresolvedNetworkFailures": [],
+      "validatedStreamAbortNotifications": [
+        {
+          "url": "http://127.0.0.1:4173/breakwater/assets/props/wooden_crate_02/wooden_crate_02.bin",
+          "error": "net::ERR_ABORTED",
+          "time": "2026-10-01T05:36:02.565Z",
+          "action": "boot",
+          "validatedLoaded": true,
+          "bytes": 150064,
+          "sha256": "e68e272641f704e5241e4108894f0b97363d511944db8b991a48787d0160ea5e",
+          "note": "Chromium reported an aborted underlying streamed request, but the exact complete bytes were observed in Response.arrayBuffer(), matched the local source SHA-256, and the asset successfully decoded into the ready world."
+        },
+        {
+          "url": "http://127.0.0.1:4173/breakwater/assets/props/quiver_tree_01/quiver_tree_01.glb",
+          "error": "net::ERR_ABORTED",
+          "time": "2026-10-01T05:36:02.569Z",
+          "action": "boot",
+          "validatedLoaded": true,
+          "bytes": 5268732,
+          "sha256": "21af2c1239782cca566e93287983aab23a1f89af715f8c6093009450dcf166ba",
+          "note": "Chromium reported an aborted underlying streamed request, but the exact complete bytes were observed in Response.arrayBuffer(), matched the local source SHA-256, and the asset successfully decoded into the ready world."
+        }
+      ],
+      "consoleErrors": []
+    }
+  ],
+  "sectors": [],
+  "secrets": [],
+  "captures": [
+    {
+      "name": "district-02-sector-04",
+      "file": "district-02-sector-04.png",
+      "sector": 4,
+      "gameplayCamera": true,
+      "developerPlacement": true,
+      "pose": {
+        "requestedXZ": [
+          -7,
+          -24
+        ],
+        "selected": [
+          -7,
+          0.02,
+          -24
+        ],
+        "yaw": -0.35,
+        "pitch": 0.18
+      },
+      "sampleWindowTimedOut": false,
+      "developerSimulationSeconds": 2,
+      "observations": {
+        "enemies": 4,
+        "mode": "playing",
+        "health": 100,
+        "drawCalls": 504,
+        "triangles": 1242704,
+        "renderedPixelRatio": 1,
+        "position": [
+          -7,
+          0,
+          -24
+        ]
+      },
+      "softwareTiming": {
+        "sampleFrames": 2,
+        "meanFrameMs": 8983,
+        "medianFrameMs": 8766.400000000001,
+        "p95FrameMs": 8766.400000000001,
+        "approximateWallClockFps": 0.11132138483802738,
+        "framesOver50ms": 2,
+        "framesOver100ms": 2
+      },
+      "pixels": {
+        "size": [
+          1440,
+          900
+        ],
+        "centralMeanLuma": 93.33229037499918,
+        "centralLumaStdDev": 40.40194976666113,
+        "centralNearBlackFraction": 0.0011875,
+        "quantizedColors": 577
+      },
+      "gameFramesHeldOnlyForScreenshot": true
+    },
+    {
+      "name": "district-04-sector-12",
+      "file": "district-04-sector-12.png",
+      "sector": 12,
+      "gameplayCamera": true,
+      "developerPlacement": true,
+      "pose": {
+        "requestedXZ": [
+          -3,
+          -22
+        ],
+        "selected": [
+          -3,
+          0.02,
+          -22
+        ],
+        "yaw": -0.3,
+        "pitch": 0.11
+      },
+      "sampleWindowTimedOut": false,
+      "developerSimulationSeconds": 2,
+      "observations": {
+        "enemies": 4,
+        "mode": "playing",
+        "health": 100,
+        "drawCalls": 581,
+        "triangles": 639853,
+        "renderedPixelRatio": 1,
+        "position": [
+          -3,
+          0,
+          -22
+        ]
+      },
+      "softwareTiming": {
+        "sampleFrames": 2,
+        "meanFrameMs": 4266.450000000004,
+        "medianFrameMs": 4266.400000000009,
+        "p95FrameMs": 4266.400000000009,
+        "approximateWallClockFps": 0.2343869024598903,
+        "framesOver50ms": 2,
+        "framesOver100ms": 2
+      },
+      "pixels": {
+        "size": [
+          1440,
+          900
+        ],
+        "centralMeanLuma": 38.73010618750055,
+        "centralLumaStdDev": 27.101442167306487,
+        "centralNearBlackFraction": 0.075875,
+        "quantizedColors": 599
+      },
+      "gameFramesHeldOnlyForScreenshot": true
+    }
+  ],
+  "networkFailures": [
+    {
+      "url": "http://127.0.0.1:4173/breakwater/assets/props/wooden_crate_02/wooden_crate_02.bin",
+      "error": "net::ERR_ABORTED",
+      "time": "2026-10-01T05:36:02.565Z",
+      "action": "boot",
+      "validatedLoaded": true,
+      "bytes": 150064,
+      "sha256": "e68e272641f704e5241e4108894f0b97363d511944db8b991a48787d0160ea5e",
+      "note": "Chromium reported an aborted underlying streamed request, but the exact complete bytes were observed in Response.arrayBuffer(), matched the local source SHA-256, and the asset successfully decoded into the ready world."
+    },
+    {
+      "url": "http://127.0.0.1:4173/breakwater/assets/props/quiver_tree_01/quiver_tree_01.glb",
+      "error": "net::ERR_ABORTED",
+      "time": "2026-10-01T05:36:02.569Z",
+      "action": "boot",
+      "validatedLoaded": true,
+      "bytes": 5268732,
+      "sha256": "21af2c1239782cca566e93287983aab23a1f89af715f8c6093009450dcf166ba",
+      "note": "Chromium reported an aborted underlying streamed request, but the exact complete bytes were observed in Response.arrayBuffer(), matched the local source SHA-256, and the asset successfully decoded into the ready world."
+    }
+  ],
+  "httpErrors": [],
+  "pageErrors": [],
+  "consoleErrors": [],
+  "consoleWarnings": [],
+  "sourceAtStart": {
+    "main": "2c67c38ee31725e984a01077509a52fa114d3e22ab2b8238da12019f0be89a60",
+    "world": "807674bd4c01a6104067f6093a61f6ae49f0662761a29d281a552d6aacb61983",
+    "player": "2029d377f8d9d1a6dda759a7640b4eee614ca1f9c80f9763f91802b52a538c73",
+    "weapon": "aa688f9cf9f2848861086b9c217fc41386102b6cd5b9affc237d84db609336a5",
+    "input": "1e44ba5eae79e73f0832e7bb086f313ea313b2e41232bd8b113b0edddc59358a",
+    "combat": "32a39e923800e05e2a31dbe5175af7c95b31321487d204620fc4b765e3a80015",
+    "combat-visuals": "b598ea53a55cd410a93373ff0b5c3c48e9230855be5b16c2a88576d33aab6ada",
+    "effects": "4370556ecec3660d1a993e89c8ed9e0990dd22aaac5fd3373a36cdf3313bc5a6",
+    "ui": "4a27ddf086973b193d394764ff6c22e4ca94f1318478b93c077d72c7739bd48c",
+    "materials": "3908175de161051efb463f444ddb6a361e8dd5a34d50719a55e2c79757b0f32d",
+    "props": "b57fdfa3bba51c9b1919db76f5ec42698bf499cff7a4c73b2b2fb43728d5bd63",
+    "campaign": "485b42fdf1470f53688cd54c1f580c2dfd902f1be26d1bbfa457c6fbf53362ea",
+    "progression": "5350a278b711ec3e54c3ebb8097235b3b9c192691c4467dd4c72102568c77cf0",
+    "storage": "b8743d7a854a839de763cf64592ca57cbcf8ec545dfd61d75107a7f53dacbdac",
+    "audio": "be7a729b63829e926f13123ee60c14a42d96cb616dc012a10c6bdc00445f1a53",
+    "index.html": "c8e7e8c8568dbfdfe22b2a22bd04b440da56f46340e39985453b9855eee3e18a",
+    "style.css": "3f21a5b5ca9bb030e045f06983f07c8b18cc7e8ddb3f13cc97c691b10688c6b6"
+  },
+  "bootWallMs": 8987,
+  "currentAction": "Rendered district evidence and software timing: sector 12",
+  "finalSnapshot": {
+    "mode": "playing",
+    "sector": 12,
+    "sectorName": "Casting Floor",
+    "position": [
+      -3,
+      0,
+      -22
+    ],
+    "velocity": [
+      0,
+      0,
+      0
+    ],
+    "health": 100,
+    "grounded": true,
+    "swimming": false,
+    "checkpoint": 0,
+    "unlockedSector": 0,
+    "completed": false,
+    "skills": [],
+    "xp": 0,
+    "level": 1,
+    "skillPoints": 1,
+    "lance": "held",
+    "enemyCount": 4,
+    "activeArena": 0,
+    "cleared": [],
+    "drawCalls": 581,
+    "triangles": 639853,
+    "frames": [
+      -478.10000000018636,
+      6549.799999999999,
+      16.600000000000364,
+      33.29999999999927,
+      6699.800000000001,
+      16.69999999999891,
+      3133.2000000000007,
+      3283.2000000000007,
+      7183,
+      16.700000000000728,
+      10516.199999999997,
+      8766.400000000001,
+      9199.599999999999,
+      26032.299999999996,
+      16.60000000000582,
+      16.69999999999709,
+      8233,
+      17249.300000000003,
+      33.39999999999418,
+      4616.5,
+      4266.400000000009,
+      4266.5,
+      13782.800000000003,
+      16.699999999982538,
+      16.60000000000582
+    ],
+    "diagnostics": {
+      "errors": [],
+      "warnings": [],
+      "loads": [
+        {
+          "sector": "wake-dock",
+          "ms": 730.5999999996275,
+          "solids": 715,
+          "arenas": 3
+        },
+        {
+          "sector": "grand-concourse",
+          "ms": 723,
+          "solids": 850,
+          "arenas": 3
+        },
+        {
+          "sector": "casting-floor",
+          "ms": 65.5,
+          "solids": 782,
+          "arenas": 3
+        }
+      ],
+      "assetErrors": []
+    },
+    "events": [
+      {
+        "type": "sector",
+        "t": 0,
+        "sector": 0,
+        "checkpoint": 0
+      },
+      {
+        "type": "mode",
+        "t": 0,
+        "mode": "menu"
+      },
+      {
+        "type": "sector",
+        "t": 0.22,
+        "sector": 4,
+        "checkpoint": 0
+      },
+      {
+        "type": "mode",
+        "t": 0.22,
+        "mode": "playing"
+      },
+      {
+        "type": "arena",
+        "t": 0.22,
+        "sector": 4,
+        "arena": 0
+      },
+      {
+        "type": "sector",
+        "t": 0.57,
+        "sector": 12,
+        "checkpoint": 0
+      },
+      {
+        "type": "mode",
+        "t": 0.57,
+        "mode": "playing"
+      },
+      {
+        "type": "arena",
+        "t": 0.57,
+        "sector": 12,
+        "arena": 0
+      }
+    ]
+  },
+  "decodedPayloads": [
+    {
+      "url": null,
+      "bytes": 2638,
+      "sha256": "80e2faf48b7423bb522b573e459d99c5656a16763285ec8268e957fc7d41f9b8"
+    },
+    {
+      "url": null,
+      "bytes": 2878,
+      "sha256": "f420b66b2e56513542b9598f038eb5f5ce120746735997807e58552049884043"
+    },
+    {
+      "url": null,
+      "bytes": 2733,
+      "sha256": "b62862832ab6bfb3262563749b9196cf6dd2b011ca86a7ccb1b35f007e5685b5"
+    },
+    {
+      "url": null,
+      "bytes": 2794,
+      "sha256": "ebeab82d463c89eb5f894b85807da111280a73b552d694257118f3f2d47bf760"
+    },
+    {
+      "url": null,
+      "bytes": 4150,
+      "sha256": "e90985d317664668988cb95ce707784c94ab0ccc6d13c980ca789fa69a5cf7b6"
+    },
+    {
+      "url": null,
+      "bytes": 5436,
+      "sha256": "97e31aac7c350bc40294e78f39f66d5aa998ac2703be1d09b5dab9ae7027876f"
+    },
+    {
+      "url": null,
+      "bytes": 44872,
+      "sha256": "10f3202e9ac9acf8dd896f1562c64db58311ffef89efb402d8433e03ad486427"
+    },
+    {
+      "url": null,
+      "bytes": 664580,
+      "sha256": "ae46bc3aceda8234515054b3b4595db14e7eb72148100b5c2cafe1de7393410c"
+    },
+    {
+      "url": null,
+      "bytes": 174180,
+      "sha256": "1e139c9a5a04de7b44a665cb504670c2e899d1f8f62ad84a238165874d4eea6c"
+    },
+    {
+      "url": null,
+      "bytes": 702068,
+      "sha256": "cfa3dea8f0f91525b5dfe93d889acacf961d20f7174aae100eae2c6e101edf31"
+    },
+    {
+      "url": null,
+      "bytes": 150064,
+      "sha256": "e68e272641f704e5241e4108894f0b97363d511944db8b991a48787d0160ea5e"
+    },
+    {
+      "url": null,
+      "bytes": 5268732,
+      "sha256": "21af2c1239782cca566e93287983aab23a1f89af715f8c6093009450dcf166ba"
+    },
+    {
+      "url": null,
+      "bytes": 344252,
+      "sha256": "12e8293535e816f1e8bebc94e95da092599909d3c1b9b6cc7384d90307db06ca"
+    },
+    {
+      "url": null,
+      "bytes": 5451493,
+      "sha256": "5244534e9cf5b606f2ff513aa00ddb161b0a4826ffd88a0d3bd03ac29247d198"
+    }
+  ],
+  "loadedAssetState": {
+    "sky": true,
+    "props": {
+      "names": [
+        "barrel",
+        "storageCart",
+        "gasTank",
+        "rock",
+        "crate",
+        "lamp",
+        "tree"
+      ],
+      "errors": [],
+      "stats": {
+        "models": 7,
+        "meshes": 10,
+        "triangles": 95885,
+        "byName": {
+          "storageCart": {
+            "meshes": 1,
+            "triangles": 18902
+          },
+          "barrel": {
+            "meshes": 1,
+            "triangles": 1473
+          },
+          "gasTank": {
+            "meshes": 1,
+            "triangles": 5238
+          },
+          "rock": {
+            "meshes": 1,
+            "triangles": 29566
+          },
+          "crate": {
+            "meshes": 2,
+            "triangles": 5176
+          },
+          "lamp": {
+            "meshes": 2,
+            "triangles": 9530
+          },
+          "tree": {
+            "meshes": 2,
+            "triangles": 26000
+          }
+        }
+      }
+    }
+  },
+  "finishedAt": "2026-10-01T05:38:17.875Z",
+  "sourceAtEnd": {
+    "main": "2c67c38ee31725e984a01077509a52fa114d3e22ab2b8238da12019f0be89a60",
+    "world": "807674bd4c01a6104067f6093a61f6ae49f0662761a29d281a552d6aacb61983",
+    "player": "2029d377f8d9d1a6dda759a7640b4eee614ca1f9c80f9763f91802b52a538c73",
+    "weapon": "aa688f9cf9f2848861086b9c217fc41386102b6cd5b9affc237d84db609336a5",
+    "input": "1e44ba5eae79e73f0832e7bb086f313ea313b2e41232bd8b113b0edddc59358a",
+    "combat": "32a39e923800e05e2a31dbe5175af7c95b31321487d204620fc4b765e3a80015",
+    "combat-visuals": "b598ea53a55cd410a93373ff0b5c3c48e9230855be5b16c2a88576d33aab6ada",
+    "effects": "4370556ecec3660d1a993e89c8ed9e0990dd22aaac5fd3373a36cdf3313bc5a6",
+    "ui": "4a27ddf086973b193d394764ff6c22e4ca94f1318478b93c077d72c7739bd48c",
+    "materials": "3908175de161051efb463f444ddb6a361e8dd5a34d50719a55e2c79757b0f32d",
+    "props": "b57fdfa3bba51c9b1919db76f5ec42698bf499cff7a4c73b2b2fb43728d5bd63",
+    "campaign": "485b42fdf1470f53688cd54c1f580c2dfd902f1be26d1bbfa457c6fbf53362ea",
+    "progression": "5350a278b711ec3e54c3ebb8097235b3b9c192691c4467dd4c72102568c77cf0",
+    "storage": "b8743d7a854a839de763cf64592ca57cbcf8ec545dfd61d75107a7f53dacbdac",
+    "audio": "be7a729b63829e926f13123ee60c14a42d96cb616dc012a10c6bdc00445f1a53",
+    "index.html": "c8e7e8c8568dbfdfe22b2a22bd04b440da56f46340e39985453b9855eee3e18a",
+    "style.css": "3f21a5b5ca9bb030e045f06983f07c8b18cc7e8ddb3f13cc97c691b10688c6b6"
+  },
+  "changedDuringRun": [],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "sectorsInspected": 0,
+    "pageErrors": 0,
+    "httpErrors": 0,
+    "networkFailures": 0,
+    "validatedStreamAbortNotifications": 2,
+    "consoleErrors": 0
+  },
+  "districtContactSheet": "district-contact-sheet.jpg"
+}

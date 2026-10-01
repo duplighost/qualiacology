@@ -1,0 +1,35 @@
+{
+  "events": [
+    {
+      "type": "lock-return",
+      "result": true,
+      "inputLocked": false,
+      "native": true
+    },
+    {
+      "type": "lockchange",
+      "locked": true
+    }
+  ],
+  "nativeLock": true,
+  "debug": false,
+  "panels": [
+    "pause-panel"
+  ],
+  "hud": {
+    "className": "hud hidden",
+    "display": "none",
+    "visibility": "visible",
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    }
+  },
+  "errors": []
+}

@@ -1,0 +1,94 @@
+{
+  "generated": "2026-10-01T05:27:19.507Z",
+  "source": "/workspace/qualiacology/breakwater",
+  "passed": 10,
+  "cases": [
+    {
+      "name": "A jump beneath a ceiling stops upward motion without lateral teleportation",
+      "passed": true,
+      "evidence": {
+        "maxY": 0.28,
+        "final": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "Landing on a solid prop remains on its top rather than sinking and ejecting",
+      "passed": true,
+      "evidence": [
+        0,
+        1.1,
+        0
+      ]
+    },
+    {
+      "name": "A dash into a thin wall stays on the near side",
+      "passed": true,
+      "evidence": {
+        "z": -1.6400000000000001
+      }
+    },
+    {
+      "name": "Respawn clears buffered jump and movement transients",
+      "passed": true,
+      "evidence": {
+        "y": 0,
+        "jumpBuffer": 0
+      }
+    },
+    {
+      "name": "Throw collision includes the segment immediately in front of the eye",
+      "passed": true,
+      "evidence": {
+        "z": -0.4921875,
+        "state": "lodged"
+      }
+    },
+    {
+      "name": "A caught lance clears its timing window while held and charging",
+      "passed": true,
+      "evidence": {
+        "state": "held",
+        "charge": 0.020833333333333332,
+        "perfectWindow": false
+      }
+    },
+    {
+      "name": "Charged behavior agrees with the fully charged cue",
+      "passed": true,
+      "evidence": {
+        "normalSpeed": 54,
+        "chargedSpeed": 68,
+        "readyCues": 1
+      }
+    },
+    {
+      "name": "A parry during return primes the next throw, not the current returning pass",
+      "passed": true,
+      "evidence": {
+        "pulses": 1,
+        "stormReady": false,
+        "stormPass": false
+      }
+    },
+    {
+      "name": "Weapon reset clears primed and active Storm plus catch feedback state",
+      "passed": true,
+      "evidence": {
+        "state": "held"
+      }
+    },
+    {
+      "name": "Perfect catches provide their owned skill effects exactly once",
+      "passed": true,
+      "evidence": {
+        "health": 73,
+        "dashCd": 0,
+        "pulses": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,218 @@
+{
+  "checks": [
+    {
+      "name": "skitter approaches into actual damaging reach",
+      "passed": true,
+      "evidence": {
+        "initialDistance": 6,
+        "firstHitAt": 1.22,
+        "kind": "ram"
+      }
+    },
+    {
+      "name": "hunter approaches into actual damaging reach",
+      "passed": true,
+      "evidence": {
+        "initialDistance": 13,
+        "firstHitAt": 1.78,
+        "kind": "ram"
+      }
+    },
+    {
+      "name": "furnace approaches into actual damaging reach",
+      "passed": true,
+      "evidence": {
+        "initialDistance": 9.3,
+        "firstHitAt": 1.55,
+        "kind": "heat"
+      }
+    },
+    {
+      "name": "tether approaches into actual damaging reach",
+      "passed": true,
+      "evidence": {
+        "initialDistance": 14,
+        "firstHitAt": 3.53,
+        "kind": "cable-sweep"
+      }
+    },
+    {
+      "name": "Glasskeeper fans and sweep cross the stationary player lane",
+      "passed": true,
+      "evidence": {
+        "damageEvents": 4,
+        "healthLost": 58
+      }
+    },
+    {
+      "name": "distant Crucible selects a ranged attack instead of empty heat cone",
+      "passed": true,
+      "evidence": {
+        "attack": "slag-rain"
+      }
+    },
+    {
+      "name": "charged core hit interrupts Crucible heat and exposes vent with baseline kit",
+      "passed": true,
+      "evidence": {
+        "damage": 75,
+        "exposure": 3,
+        "state": "recover"
+      }
+    },
+    {
+      "name": "Counterweight post-slam return rewards the actual return pass",
+      "passed": true,
+      "evidence": {
+        "returnDamage": 217,
+        "returnWindow": 2.65
+      }
+    },
+    {
+      "name": "Switchman dodge opens brakes while a connecting ram does not",
+      "passed": true,
+      "evidence": {
+        "missedRamOpening": 3.1,
+        "connectedRamOpening": 0
+      }
+    },
+    {
+      "name": "glasskeeper actual reflected projectile opens guarded core",
+      "passed": true,
+      "evidence": {
+        "exposure": 3.4,
+        "health": 3631,
+        "messages": [
+          "SHUTTERS OPEN · Strike the amber lens."
+        ]
+      }
+    },
+    {
+      "name": "warden actual reflected projectile opens guarded core",
+      "passed": true,
+      "evidence": {
+        "exposure": 3.7,
+        "health": 3031,
+        "messages": [
+          "FIRE CONTROL DISABLED · Strike the optic."
+        ]
+      }
+    },
+    {
+      "name": "Floodgate ring actually missed by a jump opens turbine",
+      "passed": true,
+      "evidence": {
+        "exposure": 2.15,
+        "damage": 0
+      }
+    },
+    {
+      "name": "Heart adds cable and pressure mechanics across three phases",
+      "passed": true,
+      "evidence": {
+        "1": [
+          "heart-spiral",
+          "heart-anchors",
+          "heart-spiral",
+          "heart-anchors"
+        ],
+        "2": [
+          "heart-cross",
+          "heart-spiral",
+          "heart-anchors",
+          "heart-cross"
+        ],
+        "3": [
+          "heart-cross",
+          "heart-spiral",
+          "heart-surge",
+          "heart-anchors"
+        ]
+      }
+    },
+    {
+      "name": "occluded boss approaches instead of waiting at its preferred range",
+      "passed": true,
+      "evidence": {
+        "distanceMoved": 1.9
+      }
+    },
+    {
+      "name": "reassembly search chooses a clear sightline before another covered point",
+      "passed": true,
+      "evidence": {
+        "position": [
+          7.175227319867257,
+          0,
+          0.2617497053112798
+        ]
+      }
+    },
+    {
+      "name": "phase transition presents new attack instead of a free damage opening",
+      "passed": true,
+      "evidence": {
+        "phase": 2,
+        "attack": "lens-sweep",
+        "exposure": 0
+      }
+    },
+    {
+      "name": "multiple reflected pellets cannot repeatedly cancel a fresh boss tell",
+      "passed": true,
+      "evidence": {
+        "state": "windup",
+        "tellRemaining": 1,
+        "coreOpen": 3.4
+      }
+    },
+    {
+      "name": "slag-rain ground warning includes actual lob flight time",
+      "passed": true,
+      "evidence": {
+        "warningSeconds": 2.06,
+        "windupSeconds": 1.03,
+        "flightWarningSeconds": 1.03
+      }
+    },
+    {
+      "name": "short physics segment entering body still credits aimed core once",
+      "passed": true,
+      "evidence": {
+        "damage": 75,
+        "passHits": 1
+      }
+    },
+    {
+      "name": "off-center body trajectory does not trigger Crucible core counter",
+      "passed": true,
+      "evidence": {
+        "damage": 24,
+        "state": "windup"
+      }
+    },
+    {
+      "name": "Drag return path moves a nearby surviving light machine without extra damage",
+      "passed": true,
+      "evidence": {
+        "sidewaysMovement": 0.634,
+        "health": 54,
+        "initialForce": 5.558,
+        "rangeMetres": 2.5
+      }
+    },
+    {
+      "name": "Drag respects range, heavy armor, cover, outbound passes, and missing skill",
+      "passed": true,
+      "evidence": [
+        "outside range",
+        "heavy",
+        "boss",
+        "cover",
+        "outbound",
+        "unselected"
+      ]
+    }
+  ],
+  "passed": true
+}

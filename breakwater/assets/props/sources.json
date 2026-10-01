@@ -1,0 +1,576 @@
+{
+  "retrieved": "2026-10-01",
+  "publisher": "Poly Haven",
+  "license": "CC0-1.0",
+  "licenseSource": "https://polyhaven.com/license",
+  "verification": "Every original file was downloaded over HTTPS with certificate verification enabled, then checked against the byte count and MD5 in Poly Haven's file API. SHA-256 is also recorded for local integrity.",
+  "assets": {
+    "barrel_03": {
+      "key": "barrel",
+      "name": "Barrel 03",
+      "source": "https://polyhaven.com/a/barrel_03",
+      "metadataSource": "https://api.polyhaven.com/assets?type=models",
+      "filesSource": "https://api.polyhaven.com/files/barrel_03",
+      "authors": {
+        "Serhii Khromov": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license",
+      "publishedDimensionsMillimetres": [
+        633.943498134613,
+        638.5995149612427,
+        930.4736243899824
+      ],
+      "publishedPolycount": 1473,
+      "resolution": "1k",
+      "modifications": "None: original glTF, binary buffers, and JPG images. Runtime only centers the model horizontally and places its base at y=0.",
+      "files": [
+        {
+          "path": "assets/props/barrel_03/barrel_03.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/barrel_03/barrel_03.bin",
+          "bytes": 44872,
+          "md5": "6993587e3ef8e0603334e615ab292288",
+          "sha256": "10f3202e9ac9acf8dd896f1562c64db58311ffef89efb402d8433e03ad486427"
+        },
+        {
+          "path": "assets/props/barrel_03/barrel_03_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/barrel_03/barrel_03_1k.gltf",
+          "bytes": 2638,
+          "md5": "204eec2159a38a1dc4b826ef255f9468",
+          "sha256": "80e2faf48b7423bb522b573e459d99c5656a16763285ec8268e957fc7d41f9b8"
+        },
+        {
+          "path": "assets/props/barrel_03/textures/barrel_03_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/barrel_03/barrel_03_arm_1k.jpg",
+          "bytes": 249922,
+          "md5": "3520338e30b4d257745db34848098688",
+          "sha256": "2cec2338b36d7322bef55e6a1d0884b223c5ed383cf986a58bfa461478c64c7e"
+        },
+        {
+          "path": "assets/props/barrel_03/textures/barrel_03_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/barrel_03/barrel_03_diff_1k.jpg",
+          "bytes": 149997,
+          "md5": "6e77dc1af60c48787fd80dbbcf125040",
+          "sha256": "62feb27dfa9a0daf3f323fdc1ddc2d8e4a5996cf2c72fe50197b55c2b9cba7f3"
+        },
+        {
+          "path": "assets/props/barrel_03/textures/barrel_03_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/barrel_03/barrel_03_nor_gl_1k.jpg",
+          "bytes": 126707,
+          "md5": "fd181365eb7397d55773987d145f0420",
+          "sha256": "ade97c52985047858a4f38226a9b8a888e3a766ba0434700b4618fb25424c4b6"
+        }
+      ],
+      "extensionsUsed": [],
+      "bytes": 574136,
+      "runtimeBoundsMetres": {
+        "width": 0.633943498134613,
+        "height": 0.9304736243899825,
+        "depth": 0.6385995149612427
+      },
+      "runtimeMeshes": 1,
+      "runtimeTriangles": 1473
+    },
+    "industrial_storage_cart": {
+      "key": "storageCart",
+      "name": "Industrial Storage Cart",
+      "source": "https://polyhaven.com/a/industrial_storage_cart",
+      "metadataSource": "https://api.polyhaven.com/assets?type=models",
+      "filesSource": "https://api.polyhaven.com/files/industrial_storage_cart",
+      "authors": {
+        "Jule Bielitz": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license",
+      "publishedDimensionsMillimetres": [
+        1603.3486723899841,
+        1102.7454733848572,
+        1377.3844093084335
+      ],
+      "publishedPolycount": 18902,
+      "resolution": "1k",
+      "modifications": "None: original glTF, binary buffers, and JPG images. Runtime only centers the model horizontally and places its base at y=0.",
+      "files": [
+        {
+          "path": "assets/props/industrial_storage_cart/industrial_storage_cart.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/industrial_storage_cart/industrial_storage_cart.bin",
+          "bytes": 664580,
+          "md5": "22c80526ee820188a193b4ea0b91fc2f",
+          "sha256": "ae46bc3aceda8234515054b3b4595db14e7eb72148100b5c2cafe1de7393410c"
+        },
+        {
+          "path": "assets/props/industrial_storage_cart/industrial_storage_cart_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/industrial_storage_cart/industrial_storage_cart_1k.gltf",
+          "bytes": 2878,
+          "md5": "00a94d9dff97c2c18c7c37764f812d6c",
+          "sha256": "f420b66b2e56513542b9598f038eb5f5ce120746735997807e58552049884043"
+        },
+        {
+          "path": "assets/props/industrial_storage_cart/textures/industrial_storage_cart_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/industrial_storage_cart/industrial_storage_cart_arm_1k.jpg",
+          "bytes": 849352,
+          "md5": "89546cd4242734559608d0ce8584bd46",
+          "sha256": "956ee8d02021aba0b5fdbf393029b0aaabd7d29076caa3a5678e394f79adcca1"
+        },
+        {
+          "path": "assets/props/industrial_storage_cart/textures/industrial_storage_cart_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/industrial_storage_cart/industrial_storage_cart_diff_1k.jpg",
+          "bytes": 553691,
+          "md5": "ed9ac3076458572e50418a76b8742e9f",
+          "sha256": "7e779d7f7385307ebb332aec41bafff10c21972aaf92382f30cacb16957e7d37"
+        },
+        {
+          "path": "assets/props/industrial_storage_cart/textures/industrial_storage_cart_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/industrial_storage_cart/industrial_storage_cart_nor_gl_1k.jpg",
+          "bytes": 567119,
+          "md5": "818d963a7e4ca6a0d7b0309f80ffa745",
+          "sha256": "a4fcd4309516e6005b5f3636399bd801df72fc75986831fad9cc5c31b737070a"
+        }
+      ],
+      "extensionsUsed": [],
+      "bytes": 2637620,
+      "runtimeBoundsMetres": {
+        "width": 1.6033486723899841,
+        "height": 1.3773844093084335,
+        "depth": 1.1027454733848572
+      },
+      "runtimeMeshes": 1,
+      "runtimeTriangles": 18902
+    },
+    "propane_tank": {
+      "key": "gasTank",
+      "name": "Propane Tank",
+      "source": "https://polyhaven.com/a/propane_tank",
+      "metadataSource": "https://api.polyhaven.com/assets?type=models",
+      "filesSource": "https://api.polyhaven.com/files/propane_tank",
+      "authors": {
+        "Slinc": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license",
+      "publishedDimensionsMillimetres": [
+        337.3616933822632,
+        337.3616933822632,
+        553.7950303405523
+      ],
+      "publishedPolycount": 5238,
+      "resolution": "1k",
+      "modifications": "None: original glTF, binary buffers, and JPG images. Runtime only centers the model horizontally and places its base at y=0.",
+      "files": [
+        {
+          "path": "assets/props/propane_tank/propane_tank.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/propane_tank/propane_tank.bin",
+          "bytes": 174180,
+          "md5": "bb8e4a72c3f655bfa3dec7456a343451",
+          "sha256": "1e139c9a5a04de7b44a665cb504670c2e899d1f8f62ad84a238165874d4eea6c"
+        },
+        {
+          "path": "assets/props/propane_tank/propane_tank_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/propane_tank/propane_tank_1k.gltf",
+          "bytes": 2733,
+          "md5": "4579fb704d4d97e1aca048c126f6d921",
+          "sha256": "b62862832ab6bfb3262563749b9196cf6dd2b011ca86a7ccb1b35f007e5685b5"
+        },
+        {
+          "path": "assets/props/propane_tank/textures/propane_tank_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/propane_tank/propane_tank_arm_1k.jpg",
+          "bytes": 675391,
+          "md5": "23773169952447a34c90944eb17563a0",
+          "sha256": "c56b34618f8d3a2681f559e66bbd4616010ba092b8266ee4249940e1dfecf820"
+        },
+        {
+          "path": "assets/props/propane_tank/textures/propane_tank_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/propane_tank/propane_tank_diff_1k.jpg",
+          "bytes": 702492,
+          "md5": "935d42c466adae18710e1f0fc79b306b",
+          "sha256": "09ae9f12f41ed0c8c7fb8e22f16871727b9b6ed7e06cde98ec9b8052395f46a4"
+        },
+        {
+          "path": "assets/props/propane_tank/textures/propane_tank_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/propane_tank/propane_tank_nor_gl_1k.jpg",
+          "bytes": 659305,
+          "md5": "d6f11926f096f3373f091bb35f83ddd3",
+          "sha256": "e17827f800150fb069dbe36ff4464eaf9f8c4d2d4608f1cc87a48dea0fe3d8f0"
+        }
+      ],
+      "extensionsUsed": [],
+      "bytes": 2214101,
+      "runtimeBoundsMetres": {
+        "width": 0.3373616933822632,
+        "height": 0.5537950303405523,
+        "depth": 0.3373616933822632
+      },
+      "runtimeMeshes": 1,
+      "runtimeTriangles": 5238
+    },
+    "rock_face_02": {
+      "key": "rock",
+      "name": "Rock Face 02",
+      "source": "https://polyhaven.com/a/rock_face_02",
+      "metadataSource": "https://api.polyhaven.com/assets?type=models",
+      "filesSource": "https://api.polyhaven.com/files/rock_face_02",
+      "authors": {
+        "Dario Barresi": "All",
+        "Rico Cilliers": "processing"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license",
+      "publishedDimensionsMillimetres": [
+        4870.411515235901,
+        3472.859501838684,
+        4734.235167503357
+      ],
+      "publishedPolycount": 29566,
+      "resolution": "1k",
+      "modifications": "None: original glTF, binary buffers, and JPG images. Runtime only centers the model horizontally and places its base at y=0.",
+      "files": [
+        {
+          "path": "assets/props/rock_face_02/rock_face_02.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/rock_face_02/rock_face_02.bin",
+          "bytes": 702068,
+          "md5": "add01c9b573fdddd688acb6378c78c3b",
+          "sha256": "cfa3dea8f0f91525b5dfe93d889acacf961d20f7174aae100eae2c6e101edf31"
+        },
+        {
+          "path": "assets/props/rock_face_02/rock_face_02_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_face_02/rock_face_02_1k.gltf",
+          "bytes": 2794,
+          "md5": "f4c7eefa474143b14312409cad4fb4b8",
+          "sha256": "ebeab82d463c89eb5f894b85807da111280a73b552d694257118f3f2d47bf760"
+        },
+        {
+          "path": "assets/props/rock_face_02/textures/rock_face_02_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_face_02/rock_face_02_arm_1k.jpg",
+          "bytes": 820389,
+          "md5": "9e59b31d77e404500effa446e790f8fb",
+          "sha256": "0f3f64b9f56e3c5cecbb99e45d8fa0d4cbf025d4455439d1c5f6672a408365ee"
+        },
+        {
+          "path": "assets/props/rock_face_02/textures/rock_face_02_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_face_02/rock_face_02_diff_1k.jpg",
+          "bytes": 920193,
+          "md5": "8f3731e5c8e4e5c7f5de983353cf3ee3",
+          "sha256": "d777f2c9b598773c2143751c34913cf5eef0ae392af31fb73c28b98afab6fb7b"
+        },
+        {
+          "path": "assets/props/rock_face_02/textures/rock_face_02_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_face_02/rock_face_02_nor_gl_1k.jpg",
+          "bytes": 1082942,
+          "md5": "af2e17bb469b499dc14765dc13ad30ae",
+          "sha256": "a9dc200810f5488395fdc928b5a9441c007c33047d0375d946f33dcd2ff1c853"
+        }
+      ],
+      "extensionsUsed": [],
+      "bytes": 3528386,
+      "runtimeBoundsMetres": {
+        "width": 2.711196154356003,
+        "height": 2.471966937184334,
+        "depth": 2.126700222492218
+      },
+      "runtimeMeshes": 1,
+      "runtimeTriangles": 29566
+    },
+    "wooden_crate_02": {
+      "key": "crate",
+      "name": "Wooden Crate 02",
+      "source": "https://polyhaven.com/a/wooden_crate_02",
+      "metadataSource": "https://api.polyhaven.com/assets?type=models",
+      "filesSource": "https://api.polyhaven.com/files/wooden_crate_02",
+      "authors": {
+        "James Ray Cock": "modeling",
+        "Jurita Burger": "graphic design"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license",
+      "publishedDimensionsMillimetres": [
+        1166.325867176056,
+        529.1010439395905,
+        463.95453810691833
+      ],
+      "publishedPolycount": 5176,
+      "resolution": "1k",
+      "modifications": "None: original glTF, binary buffers, and JPG images. Runtime only centers the model horizontally and places its base at y=0.",
+      "files": [
+        {
+          "path": "assets/props/wooden_crate_02/textures/wooden_crate_02_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_crate_02/wooden_crate_02_arm_1k.jpg",
+          "bytes": 819577,
+          "md5": "a7537612dbfb7fd25e756074eec5624e",
+          "sha256": "a76af97005a66fe8c7cdcabf20174f06813e6a6d5cd9502157c93a57f3c89d5a"
+        },
+        {
+          "path": "assets/props/wooden_crate_02/textures/wooden_crate_02_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_crate_02/wooden_crate_02_diff_1k.jpg",
+          "bytes": 716110,
+          "md5": "45bca8f49da9d541e06bc926ab001c81",
+          "sha256": "a6e57123110d2899af9493c22b1918174f1c96c707e7126ac67738d98ee10c07"
+        },
+        {
+          "path": "assets/props/wooden_crate_02/textures/wooden_crate_02_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_crate_02/wooden_crate_02_nor_gl_1k.jpg",
+          "bytes": 546319,
+          "md5": "314226b31765168cd8070898f8a7e18e",
+          "sha256": "59342f730c9f336950f796ef5e4c3b8c794ce5adbd54d98a2ecb679a7e4ae5e8"
+        },
+        {
+          "path": "assets/props/wooden_crate_02/wooden_crate_02.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/wooden_crate_02/wooden_crate_02.bin",
+          "bytes": 150064,
+          "md5": "08d98507231cdeda1070d1a2d0646254",
+          "sha256": "e68e272641f704e5241e4108894f0b97363d511944db8b991a48787d0160ea5e"
+        },
+        {
+          "path": "assets/props/wooden_crate_02/wooden_crate_02_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_crate_02/wooden_crate_02_1k.gltf",
+          "bytes": 4150,
+          "md5": "a69eb62fd20e6badb6bb56f052930e06",
+          "sha256": "e90985d317664668988cb95ce707784c94ab0ccc6d13c980ca789fa69a5cf7b6"
+        }
+      ],
+      "extensionsUsed": [],
+      "bytes": 2236220,
+      "runtimeBoundsMetres": {
+        "width": 0.5291009545326233,
+        "height": 0.46395455300807953,
+        "depth": 1.1663258075714111
+      },
+      "runtimeMeshes": 2,
+      "runtimeTriangles": 5176
+    },
+    "hanging_industrial_lamp": {
+      "key": "lamp",
+      "name": "Hanging Industrial Lamp",
+      "source": "https://polyhaven.com/a/hanging_industrial_lamp",
+      "metadataSource": "https://api.polyhaven.com/assets?type=models",
+      "filesSource": "https://api.polyhaven.com/files/hanging_industrial_lamp",
+      "authors": {
+        "Kuutti Siitonen": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license",
+      "publishedDimensionsMillimetres": [
+        549.6065020561218,
+        549.606442451477,
+        1355.3501134738326
+      ],
+      "publishedPolycount": 9530,
+      "resolution": "1k",
+      "modifications": "None: original glTF, binary buffers, and JPG images. Runtime only centers the model horizontally and places its base at y=0.",
+      "files": [
+        {
+          "path": "assets/props/hanging_industrial_lamp/hanging_industrial_lamp.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/hanging_industrial_lamp/hanging_industrial_lamp.bin",
+          "bytes": 344252,
+          "md5": "7148574f0db05abe68f7e51565abe2ce",
+          "sha256": "12e8293535e816f1e8bebc94e95da092599909d3c1b9b6cc7384d90307db06ca"
+        },
+        {
+          "path": "assets/props/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf",
+          "bytes": 5436,
+          "md5": "59baa7ef17a7696ac26bc5bd70fbb3df",
+          "sha256": "97e31aac7c350bc40294e78f39f66d5aa998ac2703be1d09b5dab9ae7027876f"
+        },
+        {
+          "path": "assets/props/hanging_industrial_lamp/textures/hanging_industrial_lamp_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/hanging_industrial_lamp/hanging_industrial_lamp_arm_1k.jpg",
+          "bytes": 835394,
+          "md5": "077f309d4ed9d38b19be1aa75462771e",
+          "sha256": "888d78437900b43874af5195694c7b867568c9a96ef528846ad7d001f9e096ae"
+        },
+        {
+          "path": "assets/props/hanging_industrial_lamp/textures/hanging_industrial_lamp_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/hanging_industrial_lamp/hanging_industrial_lamp_diff_1k.jpg",
+          "bytes": 708934,
+          "md5": "9931801f2ff2533c891105c7a41af39d",
+          "sha256": "22cafeccd4421495c860f8c522bb9e45eaa19fda6ec3a2365dcb5b1db66aad96"
+        },
+        {
+          "path": "assets/props/hanging_industrial_lamp/textures/hanging_industrial_lamp_emissive_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/hanging_industrial_lamp/hanging_industrial_lamp_emissive_1k.jpg",
+          "bytes": 40173,
+          "md5": "a9e170515931ba022ec6436e188d360b",
+          "sha256": "ebf7fed3b0c1d6104d91b77195c7eb0e3da6927562ec4a612700b8afd7574099"
+        },
+        {
+          "path": "assets/props/hanging_industrial_lamp/textures/hanging_industrial_lamp_glass_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/hanging_industrial_lamp/hanging_industrial_lamp_glass_nor_gl_1k.jpg",
+          "bytes": 555604,
+          "md5": "2e64e3e249137658baaa7cde64ad4def",
+          "sha256": "5393af7d78e85689cba7c7b198fafddcee540d3125ebd133799d56f19945d8bf"
+        },
+        {
+          "path": "assets/props/hanging_industrial_lamp/textures/hanging_industrial_lamp_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/hanging_industrial_lamp/hanging_industrial_lamp_nor_gl_1k.jpg",
+          "bytes": 753861,
+          "md5": "6820f01127e747636024838f0bde0494",
+          "sha256": "ef524876a1a4c5b6d7fb4c652d21e55474ee85b50b8896537fd60e82b288b5f0"
+        }
+      ],
+      "extensionsUsed": [
+        "KHR_materials_transmission",
+        "KHR_materials_emissive_strength"
+      ],
+      "bytes": 3243654,
+      "runtimeBoundsMetres": {
+        "width": 0.5496065020561218,
+        "height": 1.3553501134738326,
+        "depth": 0.549606442451477
+      },
+      "runtimeMeshes": 2,
+      "runtimeTriangles": 9530
+    },
+    "quiver_tree_01": {
+      "key": "tree",
+      "name": "Quiver Tree 01",
+      "source": "https://polyhaven.com/a/quiver_tree_01",
+      "metadataSource": "https://api.polyhaven.com/assets?type=models",
+      "filesSource": "https://api.polyhaven.com/files/quiver_tree_01",
+      "authors": {
+        "James Ray Cock": "Photography",
+        "Dario Barresi": "Photography",
+        "Rico Cilliers": "modeling"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license",
+      "publishedDimensionsMillimetres": [
+        1181.235671043396,
+        968.5054421424866,
+        2715.5103981494904
+      ],
+      "publishedPolycount": 269522,
+      "sourceGltfTriangles": 150124,
+      "resolution": "1k",
+      "modifications": "Blender 4.3.2 imported the original glTF; material-separated collapse simplification reduced trunk to 8,000 triangles and foliage to 18,000 triangles. Exported uncompressed GLB, restored the original leaf JPG rather than a redundant PNG re-encoding, and removed unnecessary alpha blending because the RGB images and material factor are opaque. All six original JPG maps are embedded byte-for-byte unchanged. No external decoder is required. Runtime centers the tree horizontally and places its base at y=0.",
+      "preparation": {
+        "asset": "quiver_tree_01",
+        "blender": "4.3.2",
+        "technique": "Material-separated Blender collapse decimation with triangulation; original texture maps reused by glTF exporter.",
+        "parts": [
+          {
+            "material": "quiver_tree_01_leaf",
+            "beforeTriangles": 113154,
+            "targetTriangles": 18000,
+            "afterTriangles": 18000
+          },
+          {
+            "material": "quiver_tree_01_trunk",
+            "beforeTriangles": 36970,
+            "targetTriangles": 8000,
+            "afterTriangles": 8000
+          }
+        ],
+        "bytes": 6226608,
+        "elapsedSeconds": 2.9591609259996403
+      },
+      "packing": {
+        "beforeBytes": 6226608,
+        "afterBytes": 5268732,
+        "restoredOriginalJPEGMaps": 1,
+        "opaqueFoliage": "Base colour maps contain RGB only and baseColorFactor alpha is 1; removed unnecessary BLEND mode, preserving geometry silhouettes and avoiding transparent sorting.",
+        "sha256": "21af2c1239782cca566e93287983aab23a1f89af715f8c6093009450dcf166ba"
+      },
+      "sourceFiles": [
+        {
+          "path": "textures/quiver_tree_01_trunk_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/quiver_tree_01/quiver_tree_01_trunk_arm_1k.jpg",
+          "bytes": 492139,
+          "md5": "b7b46a8529e62e706b9a0e3417af1309",
+          "sha256": "9271edcab1c7224aa6b9e64f0321ae54ad7c074557290cd366c3392e7c330ab7"
+        },
+        {
+          "path": "textures/quiver_tree_01_leaf_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/quiver_tree_01/quiver_tree_01_leaf_nor_gl_1k.jpg",
+          "bytes": 898833,
+          "md5": "f954c80f430b126b7126fad32f381bb9",
+          "sha256": "4480bafa755e1886073546aca1fbd6da377c463849f18588c773460c61b4ed0a"
+        },
+        {
+          "path": "quiver_tree_01_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/quiver_tree_01/quiver_tree_01_1k.gltf",
+          "bytes": 5080,
+          "md5": "0899227b1eeee2f8cbaf2e4693fc7ded",
+          "sha256": "aa6885a0fe43b274584851b0947e2209dc64afce1d20a75a1567e790a12d0722"
+        },
+        {
+          "path": "textures/quiver_tree_01_leaf_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/quiver_tree_01/quiver_tree_01_leaf_arm_1k.jpg",
+          "bytes": 737159,
+          "md5": "23212753d3e3464d7d74702ed6a1d178",
+          "sha256": "c0be7dd1b7dcc61fcbe252b2ca656b1ecf7633d9a1bb52cf7006bc97bf6c560c"
+        },
+        {
+          "path": "quiver_tree_01.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/quiver_tree_01/quiver_tree_01.bin",
+          "bytes": 4413204,
+          "md5": "4d02b6a0e57a20fbaee31c6b7820b0f2",
+          "sha256": "20efdf4aa14825ffd01abb21535afd485a00022c96ad04c1269bb01c137bbe08"
+        },
+        {
+          "path": "textures/quiver_tree_01_trunk_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/quiver_tree_01/quiver_tree_01_trunk_nor_gl_1k.jpg",
+          "bytes": 940495,
+          "md5": "b592c0f7abdefab0c9e2f354b9274683",
+          "sha256": "430ccf8d2545f7fe1119433ef34a02111a81f907dfb4ee50654ffdad4b655438"
+        },
+        {
+          "path": "textures/quiver_tree_01_leaf_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/quiver_tree_01/quiver_tree_01_leaf_diff_1k.jpg",
+          "bytes": 652456,
+          "md5": "ac7692d306b779c530177c14ddbba622",
+          "sha256": "5622b466a950b74d296c3d066e0d28d85770232fd5624c5ab0f752de825fae18"
+        },
+        {
+          "path": "textures/quiver_tree_01_trunk_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/quiver_tree_01/quiver_tree_01_trunk_diff_1k.jpg",
+          "bytes": 741115,
+          "md5": "d112fb7af9fb2921d7e5ade4e84f5586",
+          "sha256": "47963e7a274bf26da0a49019d01268f5dad9e8a2e6cd17fcd3ba1d2606517f57"
+        }
+      ],
+      "sourceBytes": 8880481,
+      "files": [
+        {
+          "path": "assets/props/quiver_tree_01/quiver_tree_01.glb",
+          "source": "Derived from the documented CC0 originals above.",
+          "bytes": 5268732,
+          "md5": "70cd91e5429b6e8a000a35a0ead57d1b",
+          "sha256": "21af2c1239782cca566e93287983aab23a1f89af715f8c6093009450dcf166ba"
+        }
+      ],
+      "extensionsUsed": [],
+      "bytes": 5268732,
+      "runtimeBoundsMetres": {
+        "width": 1.181588888168335,
+        "height": 2.7158959209918976,
+        "depth": 0.9699603021144867
+      },
+      "runtimeMeshes": 2,
+      "runtimeTriangles": 26000
+    }
+  },
+  "totalBytes": 19702849,
+  "licenseEvidence": {
+    "source": "https://polyhaven.com/license",
+    "retrieved": "2026-10-01",
+    "publisherStatement": "Our assets are all licensed as CC0, which is effectively Public Domain even in jurisdictions that do not support the Public Domain.",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "responseSha256": "6f4f617c936d14d5a80db6a2ebec145c79277a760672501eef51bff7a0d4cbba"
+  },
+  "loaderSoftware": [
+    {
+      "path": "vendor/jsm/loaders/GLTFLoader.js",
+      "source": "https://raw.githubusercontent.com/mrdoob/three.js/r161/examples/jsm/loaders/GLTFLoader.js",
+      "license": "MIT",
+      "licenseNotice": "vendor/THREE-LICENSE.txt",
+      "sha256": "d073b438e6a07e1359741dd5d6c76c953420cc0d4fd84eb1bdde94315540e6a3"
+    },
+    {
+      "path": "vendor/jsm/utils/BufferGeometryUtils.js",
+      "source": "https://raw.githubusercontent.com/mrdoob/three.js/r161/examples/jsm/utils/BufferGeometryUtils.js",
+      "license": "MIT",
+      "licenseNotice": "vendor/THREE-LICENSE.txt",
+      "sha256": "b0c64fe6f3b9907262921b73fafc4ade874c07ba6b4876e164c87a830c2c2113"
+    }
+  ]
+}

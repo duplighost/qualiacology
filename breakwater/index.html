@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0b161d">
+    <meta name="description" content="Throw, reposition, and recall a kinetic lance through six coastal districts in this first-person action game by Alex.">
+    <meta name="color-scheme" content="dark">
+    <title>BREAKWATER | Qualiacology</title>
+    <link rel="canonical" href="https://qualiacology.com/breakwater/">
+    <meta property="og:site_name" content="Qualiacology">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="BREAKWATER | Qualiacology">
+    <meta property="og:description" content="Throw, reposition, and recall a kinetic lance through six coastal districts in this first-person action game by Alex.">
+    <meta property="og:url" content="https://qualiacology.com/breakwater/">
+    <meta property="og:image" content="https://qualiacology.com/assets/og/breakwater-og-v1.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A first-person view of the coastal machinery and kinetic lance in BREAKWATER.">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="BREAKWATER | Qualiacology">
+    <meta name="twitter:description" content="Throw, reposition, and recall a kinetic lance through six coastal districts in this first-person action game by Alex.">
+    <meta name="twitter:image" content="https://qualiacology.com/assets/og/breakwater-og-v1.jpg">
+    <meta name="twitter:image:alt" content="A first-person view of the coastal machinery and kinetic lance in BREAKWATER.">
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="preload" href="assets/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="style.css">
+    <script type="importmap">
+      {"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/jsm/"}}
+    </script>
+  </head>
+  <body>
+    <a id="site-home" class="site-home" href="/" aria-label="Return to Qualiacology" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10H4m5-5-5 5 5 5"/></svg><span>Qualiacology</span></a>
+    <canvas id="game" aria-label="BREAKWATER game view"></canvas>
+    <div id="loading" role="status" aria-live="polite">
+      <div class="loading-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <p class="loading-title">BREAKWATER</p>
+      <p id="load-status">Preparing the coast</p>
+      <div class="loading-track" aria-hidden="true"><i></i></div>
+    </div>
+    <main id="ui" aria-label="Game interface"></main>
+    <noscript><div class="no-script">BREAKWATER needs JavaScript and a browser with WebGL 2 enabled.</div></noscript>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

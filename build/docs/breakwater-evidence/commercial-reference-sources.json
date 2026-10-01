@@ -1,0 +1,36 @@
+[
+  {
+    "game": "Dying Light 2 Stay Human: Reloaded Edition",
+    "developer": [
+      "Techland"
+    ],
+    "publisher": [
+      "Techland"
+    ],
+    "official_store_page": "https://store.steampowered.com/app/534380/",
+    "official_api": "https://store.steampowered.com/api/appdetails?appids=534380&cc=us&l=english",
+    "screenshot_url": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/534380/ss_df6aeb006060f7b26439f4bc7bee8b9e96c80e02.1920x1080.jpg?t=1788258144",
+    "steam_screenshot_id": 0,
+    "local_file": "reference-dying-light-2-street.jpg",
+    "sha256": "3357f7f0de29898cd8e4c30a98d38167bf791ecb778270bbba21042317a42888",
+    "accessed_utc": "2026-10-01T05:30:09.421237+00:00",
+    "usage": "Review reference only; outside repository and not included in game runtime. Copyright retained by original owners. Official store screenshots may be staged or captured on different hardware/settings."
+  },
+  {
+    "game": "Ghostrunner 2",
+    "developer": [
+      "One More Level"
+    ],
+    "publisher": [
+      "505 Games"
+    ],
+    "official_store_page": "https://store.steampowered.com/app/2144740/",
+    "official_api": "https://store.steampowered.com/api/appdetails?appids=2144740&cc=us&l=english",
+    "screenshot_url": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2144740/ss_f76c84f32e92841ddc88b16a8ccf28060db6d1bd.1920x1080.jpg?t=1741369902",
+    "steam_screenshot_id": 3,
+    "local_file": "reference-ghostrunner-2-industrial.jpg",
+    "sha256": "f794ce3d32a34cb311fdc07ce53ac02111327885138864382bc210026aeb7943",
+    "accessed_utc": "2026-10-01T05:30:09.659142+00:00",
+    "usage": "Review reference only; outside repository and not included in game runtime. Copyright retained by original owners. Official store screenshots may be staged or captured on different hardware/settings."
+  }
+]
