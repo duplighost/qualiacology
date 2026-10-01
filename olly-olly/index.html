@@ -18,8 +18,8 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <script type="module" crossorigin src="./assets/index-CKb1BSyD.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-D7H4vCdT.css">
+  <script type="module" crossorigin src="./assets/index-03afuqDJ.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Bb20Xk6n.css">
 </head>
 <body>
 <a class="home-link" href="/">Qualiacology</a>
@@ -46,6 +46,7 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
     <h2>Paused</h2>
     <button id="resume" class="primary">Resume</button>
     <nav class="menu-links" aria-label="Pause menu">
+      <button data-panel="story-panel">Tonight</button>
       <button data-panel="supplies-panel">Supplies</button>
       <button data-panel="porches-panel">Porches</button>
       <button data-panel="settings-panel">Settings</button>
@@ -59,6 +60,11 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
   <div class="panel-heading"><h2 id="supplies-title">Supplies</h2><button data-close aria-label="Close supplies">Close</button></div>
   <table class="supplies"><thead><tr><th scope="col">Weapon</th><th scope="col">Loaded</th><th scope="col">Spare</th></tr></thead><tbody id="supplies-weapons"></tbody></table>
   <p class="supplies-crackers">Firecrackers <span id="supplies-crackers">0</span></p>
+  <p class="supplies-crackers">Candy <span id="supplies-candy">guns hit 0% harder</span></p>
+</dialog>
+<dialog id="story-panel" aria-labelledby="story-title">
+  <div class="panel-heading"><h2 id="story-title">Tonight</h2><button data-close aria-label="Close">Close</button></div>
+  <div id="story-body"></div>
 </dialog>
 <dialog id="settings-panel" aria-labelledby="settings-title">
   <div class="panel-heading"><h2 id="settings-title">Settings</h2><button data-close aria-label="Close settings">Close</button></div>
