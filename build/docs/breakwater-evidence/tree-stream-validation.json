@@ -1,0 +1,27 @@
+{
+  "verifiedAt": "2026-10-01T05:31:50.395455+00:00",
+  "originalReport": "report.json",
+  "cause": "Known-stream-abort classifier accepted .gltf/.bin but omitted the newly added .glb format; no asset download or decode failed. The original in-browser Response.arrayBuffer observation contains the complete GLB bytes with an exact SHA-256 match, and runtime state confirms decoded tree meshes.",
+  "resolved": true,
+  "evidence": [
+    {
+      "url": "http://127.0.0.1:4173/breakwater/assets/props/quiver_tree_01/quiver_tree_01.glb",
+      "error": "net::ERR_ABORTED",
+      "time": "2026-10-01T05:24:54.509Z",
+      "action": "boot",
+      "actualCompleteDecodedBytes": 5268732,
+      "sha256": "21af2c1239782cca566e93287983aab23a1f89af715f8c6093009450dcf166ba",
+      "exactOriginalResponseArrayBufferMatch": {
+        "url": null,
+        "bytes": 5268732,
+        "sha256": "21af2c1239782cca566e93287983aab23a1f89af715f8c6093009450dcf166ba"
+      },
+      "decodedTree": {
+        "meshes": 2,
+        "triangles": 26000
+      },
+      "runtimeAssetErrors": []
+    }
+  ],
+  "rawReportPreserved": true
+}

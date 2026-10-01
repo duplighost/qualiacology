@@ -1,0 +1,87 @@
+{
+  "result": {
+    "stats": {
+      "models": 7,
+      "meshes": 10,
+      "triangles": 95885,
+      "byName": {
+        "barrel": {
+          "meshes": 1,
+          "triangles": 1473
+        },
+        "storageCart": {
+          "meshes": 1,
+          "triangles": 18902
+        },
+        "gasTank": {
+          "meshes": 1,
+          "triangles": 5238
+        },
+        "crate": {
+          "meshes": 2,
+          "triangles": 5176
+        },
+        "rock": {
+          "meshes": 1,
+          "triangles": 29566
+        },
+        "lamp": {
+          "meshes": 2,
+          "triangles": 9530
+        },
+        "tree": {
+          "meshes": 2,
+          "triangles": 26000
+        }
+      }
+    },
+    "names": [
+      "barrel",
+      "storageCart",
+      "gasTank",
+      "rock",
+      "crate",
+      "lamp",
+      "tree"
+    ],
+    "bounds": {
+      "barrel": {
+        "width": 0.633943498134613,
+        "height": 0.9304736243899825,
+        "depth": 0.6385995149612427
+      },
+      "storageCart": {
+        "width": 1.6033486723899841,
+        "height": 1.3773844093084335,
+        "depth": 1.1027454733848572
+      },
+      "gasTank": {
+        "width": 0.3373616933822632,
+        "height": 0.5537950303405523,
+        "depth": 0.3373616933822632
+      },
+      "rock": {
+        "width": 2.711196154356003,
+        "height": 2.471966937184334,
+        "depth": 2.126700222492218
+      },
+      "crate": {
+        "width": 0.5291009545326233,
+        "height": 0.46395455300807953,
+        "depth": 1.1663258075714111
+      },
+      "lamp": {
+        "width": 0.5496065020561218,
+        "height": 1.3553501134738326,
+        "depth": 0.549606442451477
+      },
+      "tree": {
+        "width": 1.181588888168335,
+        "height": 2.7158959209918976,
+        "depth": 0.9699603021144867
+      }
+    },
+    "errors": []
+  },
+  "errors": []
+}

@@ -1,0 +1,37 @@
+{
+  "suite": "all-boss-actual-input-controlled-simulation",
+  "started": "2026-10-01T05:23:09.286Z",
+  "checks": [
+    {
+      "name": "actual charged LMB release interrupts heat windup at core and opens vent",
+      "passed": true,
+      "before": {
+        "health": 2250,
+        "state": "windup",
+        "attack": "furnace-cone",
+        "timer": 1.03,
+        "charge": 1
+      },
+      "after": {
+        "health": 2175,
+        "state": "recover",
+        "exposed": 2.833333333333334,
+        "stun": 0.6833333333333328,
+        "playerHealth": 100
+      },
+      "damage": 75
+    }
+  ],
+  "notes": [
+    "Actual Playwright mouse/keyboard events drive all attacks, catches, parries, movement, and retry buttons.",
+    "Aim can be measured/set through the documented development bridge.",
+    "simulatedSeconds measures the controller interval after1.667 seconds of setup; arenaSeconds includes that real-engine spawn/setup interval. Button event counts can exceed successful catches/parries.",
+    "Prior live-frame real-input validation passed and is preserved in live-input-passed-report.json; this run uses controlled steps immediately after the actual start click because software GPU wall time is highly variable.",
+    "After live-frame input validation, requestAnimationFrame rendering is temporarily held and the real engine fixed step is explicitly advanced. This accelerates software-WebGL testing; it is not a human playtime or frame-rate measurement.",
+    "Every boss setup skips earlier campaign encounters with a development fixture. There is no health, damage, armor, invulnerability, skill, or projectile modification. Telemetry assists aim, telegraph reactions, distance, and catch/parry timing; actual Playwright events drive actions. Results are mechanically assisted completion samples, not human playtime or an optimal-route measurement."
+  ],
+  "errors": [],
+  "captures": [],
+  "passed": true,
+  "finished": "2026-10-01T05:23:19.151Z"
+}

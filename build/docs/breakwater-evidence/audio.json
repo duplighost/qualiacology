@@ -1,0 +1,101 @@
+{
+  "passed": true,
+  "before": {
+    "context": false,
+    "underwater": true
+  },
+  "measurements": {
+    "normal": {
+      "db": -46.0202751159668,
+      "stats": {
+        "unlocked": true,
+        "paused": false,
+        "state": "running",
+        "district": "quay",
+        "pendingDistrict": null,
+        "intensity": 0,
+        "voices": 7,
+        "maxVoices": 56,
+        "loadedSamples": 14,
+        "expectedSamples": 14,
+        "failedSamples": [],
+        "transportStep": 1,
+        "instrumentBuffers": 40,
+        "underwater": false,
+        "gameplayCutoff": 19845,
+        "gameplayGain": 1
+      }
+    },
+    "midpoint": {
+      "unlocked": true,
+      "paused": false,
+      "state": "running",
+      "district": "quay",
+      "pendingDistrict": null,
+      "intensity": 0,
+      "voices": 6,
+      "maxVoices": 56,
+      "loadedSamples": 14,
+      "expectedSamples": 14,
+      "failedSamples": [],
+      "transportStep": 1,
+      "instrumentBuffers": 40,
+      "underwater": true,
+      "gameplayCutoff": 5827.60107421875,
+      "gameplayGain": 0.792279839515686
+    },
+    "submerged": {
+      "db": -73.92658996582031,
+      "stats": {
+        "unlocked": true,
+        "paused": false,
+        "state": "running",
+        "district": "quay",
+        "pendingDistrict": null,
+        "intensity": 0,
+        "voices": 4,
+        "maxVoices": 56,
+        "loadedSamples": 14,
+        "expectedSamples": 14,
+        "failedSamples": [],
+        "transportStep": 1,
+        "instrumentBuffers": 40,
+        "underwater": true,
+        "gameplayCutoff": 953.5555419921875,
+        "gameplayGain": 0.7200568318367004
+      }
+    },
+    "restored": {
+      "db": -46.02092742919922,
+      "stats": {
+        "unlocked": true,
+        "paused": false,
+        "state": "running",
+        "district": "quay",
+        "pendingDistrict": null,
+        "intensity": 0,
+        "voices": 4,
+        "maxVoices": 56,
+        "loadedSamples": 14,
+        "expectedSamples": 14,
+        "failedSamples": [],
+        "transportStep": 1,
+        "instrumentBuffers": 40,
+        "underwater": false,
+        "gameplayCutoff": 19834.705078125,
+        "gameplayGain": 0.9999298453330994
+      }
+    },
+    "lowNormal": -45.840335845947266,
+    "lowSubmerged": -48.43293762207031,
+    "musicNormal": -53.66912078857422,
+    "musicSubmerged": -81.54281616210938,
+    "uiNormal": -46.46540069580078,
+    "uiSubmerged": -46.46540069580078,
+    "uiPausedSubmerged": -46.46540069580078,
+    "endingRms": 0.0331850503532434,
+    "mutedRms": 0.000014014268881570976
+  },
+  "errors": [],
+  "audibleArtifact": "underwater-transition.wav (normal 0–2s, submerged 2–4s, normal 4–6s)"
+}

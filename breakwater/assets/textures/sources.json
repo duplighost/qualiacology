@@ -1,0 +1,868 @@
+{
+  "version": 1,
+  "pipeline": "Local source copies only; optional gzip decoded, DDS DXT decoded, BC5 XY normals decoded with positive Z reconstructed and normalized. Albedo is sRGB; normal/ORM are linear data. Normal resize re-normalizes vectors. No gamma applied to data. ORM channels: R ambient occlusion, G roughness, B metalness. Albedo WebP quality 91; normal/ORM WebP lossless. Only leaf is cropped, with four transparent edge pixels to exclude neighboring atlas fragments.",
+  "materials": {
+    "concrete": {
+      "page": "https://ambientcg.com/a/Concrete035",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Concrete 035",
+      "localMaterial": "concrete035",
+      "tileMetres": [
+        2.0,
+        2.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/concrete035/concrete035.albedo.dds",
+          "sha256": "d3516e96c0d594729325cc2b153362e6138c8e6a0ee4eb09809148575b3aa280"
+        },
+        {
+          "path": "olly-olly/assets/materials/concrete035/concrete035.normal.ktx2",
+          "sha256": "7508c01e5c48e40ed90cd3e88b28d8cca985ef52aded532dd8b696fbf2452930"
+        },
+        {
+          "path": "olly-olly/assets/materials/concrete035/concrete035.orm.dds",
+          "sha256": "52e9fa55ad4656ca8f234715b8ae7d26b8397bf845b899b5631fc75b533efc96"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "concrete.color.webp",
+          "width": 1024,
+          "height": 512,
+          "bytes": 179252,
+          "sha256": "88aaefbf5a213dfa27e46863d4f4156c73620ef16d363168e4e8be9280f3a018"
+        },
+        "normal": {
+          "file": "concrete.normal.webp",
+          "width": 512,
+          "height": 256,
+          "bytes": 110862,
+          "sha256": "d27cb4e83813a1b8896aa6175f47f9fc6c11c0f59a9b12215dffcb4640f4a984"
+        },
+        "orm": {
+          "file": "concrete.orm.webp",
+          "width": 256,
+          "height": 128,
+          "bytes": 18568,
+          "sha256": "17d825e01a7d11ff4057d28c9da542b20343c97b7d4fb1cdd369dc0956b4f125"
+        }
+      }
+    },
+    "concreteClean": {
+      "page": "https://ambientcg.com/a/Concrete047A",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Concrete 047 A",
+      "localMaterial": "concrete047a",
+      "tileMetres": [
+        2.0,
+        2.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/concrete047a/concrete047a.albedo.dds",
+          "sha256": "7732c614dacf16e9aff8bddef7f074c879d949bf163a45c5346afb7ad975cd37"
+        },
+        {
+          "path": "olly-olly/assets/materials/concrete047a/concrete047a.normal.ktx2",
+          "sha256": "c722848c7d585f0ae83b5e0559fc72efa3b020e11452795f207d4e54ab80f2c9"
+        },
+        {
+          "path": "olly-olly/assets/materials/concrete047a/concrete047a.orm.dds",
+          "sha256": "27ea94adff5d5b7c163a7a165112eff6d05ea2cde37050229bf9f084c08596a7"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "concreteClean.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 454728,
+          "sha256": "be3aa76382936661dab97cd8f91882b9afe2513e9e0ce42e5997d9b2e80c9026"
+        },
+        "normal": {
+          "file": "concreteClean.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 313170,
+          "sha256": "6059ef8c1a581ae881d7fc5887cb5ce06ec37f25f5a90c55fb43d2f3c615d933"
+        },
+        "orm": {
+          "file": "concreteClean.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 33984,
+          "sha256": "27369b36c6690514688eda7cce30eb230c88a34014a3599d93bef08a4735ab4d"
+        }
+      }
+    },
+    "steel": {
+      "page": "https://ambientcg.com/a/CorrugatedSteel009",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "donor": "curfew/work/visual-overhaul/material-research/CorrugatedSteel009",
+      "localMaterial": "corrugatedsteel009",
+      "tileMetres": [
+        2.0,
+        1.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/corrugatedsteel009/corrugatedsteel009.albedo.dds",
+          "sha256": "3a86974eab2a9d288d9a1fdcd92dcfb30db81171581ea794d1785e6c64d700b6"
+        },
+        {
+          "path": "olly-olly/assets/materials/corrugatedsteel009/corrugatedsteel009.normal.ktx2",
+          "sha256": "ea5b177c9512f13e03402861b7f3d16ee3eefff8f67587a98afbf581103caaff"
+        },
+        {
+          "path": "olly-olly/assets/materials/corrugatedsteel009/corrugatedsteel009.orm.dds",
+          "sha256": "d062fafb806dd28cc771cc09fd0f9fbcc89d083f85462cfb7f9607846a616bbd"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "steel.color.webp",
+          "width": 1024,
+          "height": 512,
+          "bytes": 82844,
+          "sha256": "c618192213c9232a73c528043d3fb545f0d39d27181bdb28fe3528116dbfe86b"
+        },
+        "normal": {
+          "file": "steel.normal.webp",
+          "width": 512,
+          "height": 256,
+          "bytes": 60674,
+          "sha256": "aa7d12a4a0ac0b0c786bde8d7f05c3359a649dd16fca991acae2d7b4a4b4506f"
+        },
+        "orm": {
+          "file": "steel.orm.webp",
+          "width": 256,
+          "height": 128,
+          "bytes": 23856,
+          "sha256": "3045df87361b27be8aad65b9408ef68227cbcd7f5822d91ad0cbec4b7eff9b11"
+        }
+      }
+    },
+    "rust": {
+      "page": "https://ambientcg.com/a/Rust003",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Rust 003",
+      "localMaterial": "rust003",
+      "tileMetres": [
+        1.0,
+        1.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/rust003/rust003.albedo.dds",
+          "sha256": "98c617f1f95827f40ce5fe6844cd1ba8d5fdb1b6684d49a616c527dd1c534a35"
+        },
+        {
+          "path": "olly-olly/assets/materials/rust003/rust003.normal.ktx2",
+          "sha256": "a49679104054da0a9abe7bd2c292901cac47dbe7603d4690a4b6b16d46405443"
+        },
+        {
+          "path": "olly-olly/assets/materials/rust003/rust003.orm.dds",
+          "sha256": "4d2e35bd07d9f2a2cc7cfdce36ff419d9bcf830e297ca2f9305db1f476db05f9"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "rust.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 168712,
+          "sha256": "6d0c991e1faf4776314be5eacfc5bd917079e3a01f1a6ebf15379b7bd1633b10"
+        },
+        "normal": {
+          "file": "rust.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 345712,
+          "sha256": "8d34be359425006eb5c29003feca05d6bc8ec948757f2a05b9e9d2cd43b0c49a"
+        },
+        "orm": {
+          "file": "rust.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 34162,
+          "sha256": "fe04e86e1d75348612a9a72f865e9a5c4d709ee0881dd081f4d45b86d53f551d"
+        }
+      }
+    },
+    "brick": {
+      "page": "https://ambientcg.com/a/Bricks089",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "donor": "curfew/work/visual-overhaul/masonry-research/Bricks089",
+      "localMaterial": "bricks089",
+      "tileMetres": [
+        2.2,
+        1.1
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/bricks089/bricks089.albedo.dds",
+          "sha256": "11c0c485ca9cfc67f53bcddc3076e4201f328d66c52e6679d0d6db650af60caf"
+        },
+        {
+          "path": "olly-olly/assets/materials/bricks089/bricks089.normal.ktx2",
+          "sha256": "27d3c617787b7d613d92496c5eaec3c7f03b34e754febb5c6dc5507ed03d641e"
+        },
+        {
+          "path": "olly-olly/assets/materials/bricks089/bricks089.orm.dds",
+          "sha256": "f81a7eb17f0fd36a0f3295dac3813b8ff15dded3107469a4fe3b834748696692"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "brick.color.webp",
+          "width": 1024,
+          "height": 512,
+          "bytes": 222916,
+          "sha256": "fa73a185d8f0c7db0bcfc63038057e39a0a15a2587149336e4d1865d6aa64888"
+        },
+        "normal": {
+          "file": "brick.normal.webp",
+          "width": 512,
+          "height": 256,
+          "bytes": 240600,
+          "sha256": "6f3e12b34e520330cf3aa164c300f103c2e7760e00446d5729db8448dab9857c"
+        },
+        "orm": {
+          "file": "brick.orm.webp",
+          "width": 256,
+          "height": 128,
+          "bytes": 40034,
+          "sha256": "aaa6fbd873f73f241fb97124981d3f7ef859db57f2c23b1545b828183ada2318"
+        }
+      }
+    },
+    "stone": {
+      "page": "https://ambientcg.com/a/Rock001",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Rock 001",
+      "localMaterial": "rock001",
+      "tileMetres": [
+        2.0,
+        2.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/rock001/rock001.albedo.dds",
+          "sha256": "548b83ceee6d73cef29f4d18954fc81e1f5dd2f50b3e3db90a3dd7d513bb3647"
+        },
+        {
+          "path": "olly-olly/assets/materials/rock001/rock001.normal.ktx2",
+          "sha256": "2da7cd591ad0ee6e469be20e8724a592ce7f65ff65aa53d20642f0378bd0d5c7"
+        },
+        {
+          "path": "olly-olly/assets/materials/rock001/rock001.orm.dds",
+          "sha256": "56456c6d8374bd23ed6ece8ba814a01c6c4ab1aefb364277d6a39ab1b71c0b17"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "stone.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 439990,
+          "sha256": "70d50364711a8973d8b0e923f23a5f7971e287cf48cde232aa41f17b0bb64fa0"
+        },
+        "normal": {
+          "file": "stone.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 543322,
+          "sha256": "ef539a1bfa21a222a524ca26d9c56065a97d151e8345b2d11f005a209d008286"
+        },
+        "orm": {
+          "file": "stone.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 55838,
+          "sha256": "86303640fb3cba1d806621fcf3b75ae3cb7df785df2906a94abc50932c903be9"
+        }
+      }
+    },
+    "marble": {
+      "page": "https://ambientcg.com/a/Marble012",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Marble 012",
+      "localMaterial": "marble012",
+      "tileMetres": [
+        1.5,
+        1.5
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/marble012/marble012.albedo.dds",
+          "sha256": "4deab0a831a2188144de49d3ec8f7470aff68f8c9dd8415e2e1d42bca664c6c4"
+        },
+        {
+          "path": "olly-olly/assets/materials/marble012/marble012.normal.ktx2",
+          "sha256": "f8b7796b6fb2a055d63fcecccbfd216eaf642b0a3da6d1082155687bc56a5fff"
+        },
+        {
+          "path": "olly-olly/assets/materials/marble012/marble012.orm.dds",
+          "sha256": "2505f0341d1f8f10f8e80a6c9c71c0182658297c45aa38ee49a6cfd0c21de9f4"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "marble.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 379670,
+          "sha256": "126c2f311714a9c7280fd570bc7e0caeace2ef510e1e60992042b0fa48a8f9a8"
+        },
+        "normal": {
+          "file": "marble.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 35432,
+          "sha256": "58ae3071fad0920ed944ce84f88c9aad9911ac8066671d3f81970c9b741f97d8"
+        },
+        "orm": {
+          "file": "marble.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 28248,
+          "sha256": "ab84fca74e0a07fb8ff83d700296d6bd992242c63044cb08908722ed51bc0ac8"
+        }
+      }
+    },
+    "wood": {
+      "page": "https://ambientcg.com/a/Wood049",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "donor": "winterline/public/assets/materials/Wood049",
+      "localMaterial": "wood049",
+      "tileMetres": [
+        1.2,
+        1.2
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/wood049/wood049.albedo.dds",
+          "sha256": "c6a01095869b15f3809a60e62162af575fb149b1c34c24b6734c8be5375a4f40"
+        },
+        {
+          "path": "olly-olly/assets/materials/wood049/wood049.normal.ktx2",
+          "sha256": "ae37bcc2f0d1b6b1bde80ce85df72fc9c163b147d961ea91f494aaa7e8e9fbbd"
+        },
+        {
+          "path": "olly-olly/assets/materials/wood049/wood049.orm.dds",
+          "sha256": "4eda2b32a8d2e4e6004da262f23cc1c3df25ab3c84feeb4ad44562e69d44fdf3"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "wood.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 165022,
+          "sha256": "d63fcda4bb8de14f4107d810828651362eb38665700218fab0e22748bcda6123"
+        },
+        "normal": {
+          "file": "wood.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 267686,
+          "sha256": "9c87114dfc19795909531dc508e014710c1b0b802e1d9341d9b95466f450486d"
+        },
+        "orm": {
+          "file": "wood.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 34378,
+          "sha256": "6322ff6880c4c22c8a5bab9ab753a72922bcb37cc6448004437f951f75f37890"
+        }
+      }
+    },
+    "dark": {
+      "page": "https://ambientcg.com/a/Metal046B",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Metal 046 B",
+      "localMaterial": "metal046b",
+      "tileMetres": [
+        1.0,
+        1.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/metal046b/metal046b.albedo.dds",
+          "sha256": "a83dad6ee82009f30c33222e8af5e1cfb97ea1a750d41fc44bd2dc31cd66fa11"
+        },
+        {
+          "path": "olly-olly/assets/materials/metal046b/metal046b.normal.ktx2",
+          "sha256": "b53b782a8c93eabcbf6cb6731d8a9ce93402791745f0c68b79a2903ca1b2a22f"
+        },
+        {
+          "path": "olly-olly/assets/materials/metal046b/metal046b.orm.dds",
+          "sha256": "6d00eb240aea12e2b70572a6bba6b51426aa66c4a2627b102d73fff04483539e"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "dark.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 227890,
+          "sha256": "d4536ca220899b271743170b2d6829152e5fe7e64abdd2d8a60bfe8a3ba18411"
+        },
+        "normal": {
+          "file": "dark.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 213266,
+          "sha256": "37f12ef5983d5ccc6d958c2e727d66b1f4dfa4559ba9fdc1e10b5ac25b9e4b15"
+        },
+        "orm": {
+          "file": "dark.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 58990,
+          "sha256": "84b3261a45d1765c80d45118b51a94bb722408be247a2951b54a6b4c7fbc74c7"
+        }
+      }
+    },
+    "soil": {
+      "page": "https://polyhaven.com/a/brown_mud_leaves_01",
+      "licence": "CC0 1.0",
+      "author": "Rob Tuytel",
+      "title": "Brown Mud Leaves 01",
+      "localMaterial": "brown_mud_leaves_01",
+      "tileMetres": [
+        2.0,
+        2.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/brown_mud_leaves_01/brown_mud_leaves_01.albedo.dds",
+          "sha256": "9f5fe0d71ae8dadad33c641917486ab0081fd646ad6dfd737369821e33da61da"
+        },
+        {
+          "path": "olly-olly/assets/materials/brown_mud_leaves_01/brown_mud_leaves_01.normal.ktx2",
+          "sha256": "04a23c03bd2eaad40bd90fc21ab1d0400bb27f81659d11dca5579af3d70a5040"
+        },
+        {
+          "path": "olly-olly/assets/materials/brown_mud_leaves_01/brown_mud_leaves_01.orm.dds",
+          "sha256": "0dfc6036b9049f75f1e642d4a9d5c010c45eb80e2d1b56a213ca7d9a03e8fdbb"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "soil.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 508632,
+          "sha256": "1db48f0d681be6a5f5c73c51ea49176e77345afac33bfe804b5214c5b766d46e"
+        },
+        "normal": {
+          "file": "soil.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 601374,
+          "sha256": "27b3ba762fc325debfed8378a939af1acfe8d40d8a6db62efd32b8df4b80d650"
+        },
+        "orm": {
+          "file": "soil.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 51206,
+          "sha256": "2f38a3ffd0fc365339282697cbec4560c62592aee475adee23b480928c914e71"
+        }
+      }
+    },
+    "grass": {
+      "page": "https://polyhaven.com/a/leafy_grass",
+      "licence": "CC0 1.0",
+      "author": "Charlotte Baglioni",
+      "title": "Leafy Grass",
+      "localMaterial": "leafy_grass",
+      "tileMetres": [
+        2.0,
+        2.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/leafy_grass/leafy_grass.albedo.dds",
+          "sha256": "2c11270048c0df6c5ef64c490da3e36a10a93a150dbbf9b3b35b5c51df1fcc11"
+        },
+        {
+          "path": "olly-olly/assets/materials/leafy_grass/leafy_grass.normal.ktx2",
+          "sha256": "3056d6b991744cde96c44d8c559ac496779ba06ed9766932f751e1bca5c6d35e"
+        },
+        {
+          "path": "olly-olly/assets/materials/leafy_grass/leafy_grass.orm.dds",
+          "sha256": "39cc448244dfea5ba7bd5ab82e9bb2987f19388526116677b18f54e3e7eb8ffd"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "grass.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 488556,
+          "sha256": "6cbf4db0d7cdadbb6e82c12b3100a5dfe87d88810f73d9ffaf80ebad84b5c84e"
+        },
+        "normal": {
+          "file": "grass.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 566962,
+          "sha256": "d9673be782b04760e3ded1473ebfb69af143925d06ffa0e9259051c2d2b806e5"
+        },
+        "orm": {
+          "file": "grass.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 44438,
+          "sha256": "0f845c2a6d1cf844cf398f850ed2f3b3bdf0563fbd7f9fb7cd81edaac97c97a5"
+        }
+      }
+    },
+    "moss": {
+      "page": "https://ambientcg.com/a/Moss002",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Moss 002",
+      "localMaterial": "moss002",
+      "tileMetres": [
+        1.0,
+        1.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/moss002/moss002.albedo.dds",
+          "sha256": "507f019ab850bdebbd4000b06cf7c700d83a0f6bc595b020b9ada0f118a09882"
+        },
+        {
+          "path": "olly-olly/assets/materials/moss002/moss002.normal.ktx2",
+          "sha256": "3c750aeea8ab84ec5ca2c9a7b76efa34179708883bca7902ce9ac63e75bd6349"
+        },
+        {
+          "path": "olly-olly/assets/materials/moss002/moss002.orm.dds",
+          "sha256": "055f9c5eb56cd97ee39f9c12ec47ee32c56b2bafa53f206810833a69060f6663"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "moss.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 520740,
+          "sha256": "ad9179d7eb2800098119b54c5cc3f7cc87fa2749039d03a9611561e274f34e2c"
+        },
+        "normal": {
+          "file": "moss.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 594084,
+          "sha256": "a501f600fdd9d0a298ac969b8e19105fa1e5325a1d65d77b9e0cb52ed18bc9f6"
+        },
+        "orm": {
+          "file": "moss.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 51914,
+          "sha256": "47478c5f0070eb5261205cd12522b19cc3c3ab50c5896e4ac9c412f019de0d00"
+        }
+      }
+    },
+    "bark": {
+      "page": "https://polyhaven.com/a/bark_brown_02",
+      "licence": "CC0 1.0",
+      "author": "Rob Tuytel",
+      "title": "Bark Brown 02",
+      "localMaterial": "bark_brown_02",
+      "tileMetres": [
+        1.0,
+        1.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/bark_brown_02/bark_brown_02.albedo.dds",
+          "sha256": "faab559279e5f680a075fe4a195a6552b1f71dd0169f9d49c10329ab56b88614"
+        },
+        {
+          "path": "olly-olly/assets/materials/bark_brown_02/bark_brown_02.normal.ktx2",
+          "sha256": "53a6816c344f0331b582219d00fb177d3240bac0705cfe4750a84b686c03a953"
+        },
+        {
+          "path": "olly-olly/assets/materials/bark_brown_02/bark_brown_02.orm.dds",
+          "sha256": "1666b1f1b365cd5b9575f4f18e191055daa277f576996333a2f8cdaf9f61e13c"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "bark.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 424854,
+          "sha256": "72eb4ab0c3641a62de9ead19b6c8619988e909d46478e3dbdbe01fb773fd2d0e"
+        },
+        "normal": {
+          "file": "bark.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 599542,
+          "sha256": "89158281e468c98d7596e1a6bc2cc5cbb0df8c8a2f2ca98278d9c2b4cd2c98cd"
+        },
+        "orm": {
+          "file": "bark.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 107598,
+          "sha256": "7643bb7a2fddd62e89d2f1433c80d3e876ced0440fb2ec5e40b2695640b7a8a6"
+        }
+      }
+    },
+    "plaster": {
+      "page": "https://ambientcg.com/a/PaintedPlaster017",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Painted Plaster 017",
+      "localMaterial": "paintedplaster017",
+      "tileMetres": [
+        2.0,
+        2.0
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/paintedplaster017/paintedplaster017.albedo.dds",
+          "sha256": "6b512d80e5cd0d9f454e594b8367613d0dad441f09d4e74c0ef92e8d94dbac45"
+        },
+        {
+          "path": "olly-olly/assets/materials/paintedplaster017/paintedplaster017.normal.ktx2",
+          "sha256": "3f907a5da824ae6dc2536715e15818e9d972becb4d27a18be286c3aad320dcb9"
+        },
+        {
+          "path": "olly-olly/assets/materials/paintedplaster017/paintedplaster017.orm.dds",
+          "sha256": "03098064a358d3dfccb66924c6aae44535a38cd06c72eede1f5327daf789a11b"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "plaster.color.webp",
+          "width": 1024,
+          "height": 512,
+          "bytes": 70868,
+          "sha256": "147552d488b406c1513847ecfb64c4872b30a81f08ad717ae24140bd567cf261"
+        },
+        "normal": {
+          "file": "plaster.normal.webp",
+          "width": 512,
+          "height": 256,
+          "bytes": 190586,
+          "sha256": "71ed83b6e56d9f2fc47e3d58e1e3d1af7bd9816fbf58dda42092428334bb72e0"
+        },
+        "orm": {
+          "file": "plaster.orm.webp",
+          "width": 256,
+          "height": 128,
+          "bytes": 10210,
+          "sha256": "0fbef1b5d54cf0d3ed5207412bd598049822708e2217bdc5f829335494e9e46f"
+        }
+      }
+    },
+    "brass": {
+      "derived": "brass",
+      "from": [],
+      "licence": "CC0 1.0",
+      "localMaterial": "brass",
+      "tileMetres": [
+        0.25,
+        0.25
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/materials/brass/brass.albedo.dds",
+          "sha256": "b9b6a1900e42a8e1c3bda90e270b86c39ddb86dffa2c07ea08c4048f0d0627cf"
+        },
+        {
+          "path": "olly-olly/assets/materials/brass/brass.normal.ktx2",
+          "sha256": "405e31b8b3651627aa07516bcbe0c543ecfe8c3075546eedfd19e7d99a8c177c"
+        },
+        {
+          "path": "olly-olly/assets/materials/brass/brass.orm.dds",
+          "sha256": "1b2db8d6adcfbb89b14e1626d754200507c90c1d31327b4adb0c3040981e9b65"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "brass.color.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 16462,
+          "sha256": "138f87a927a2a4da0b64c0895b8c5f18c2c4d0d7a2670fbdca540e3fae554e69"
+        },
+        "normal": {
+          "file": "brass.normal.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 6874,
+          "sha256": "107f1b92d68ebf9122b966451608db57c02e2a4dda0ad0fff31c4049fdb528a4"
+        },
+        "orm": {
+          "file": "brass.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 18230,
+          "sha256": "bce3588245105668962cbe9da8ad997c586626bd2e6ec416828cd9f1577322e9"
+        }
+      }
+    },
+    "snow": {
+      "page": "https://ambientcg.com/a/Snow010A",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Snow 010 A",
+      "tileMetres": [
+        2,
+        2
+      ],
+      "inputs": [
+        {
+          "path": "winterline/assets/materials/Snow010A/Snow010A_1K-JPG_Color.jpg",
+          "sha256": "ce7b984376757d3c0f7e5fdd43fa84241a9f7026c9f530813c2e493061a369b2"
+        },
+        {
+          "path": "winterline/assets/materials/Snow010A/Snow010A_1K-JPG_NormalGL.jpg",
+          "sha256": "64da196ff294dfc7edf0da3608c306ba8e7adab29529aac2759d5f2c7d8d3698"
+        },
+        {
+          "path": "winterline/assets/materials/Snow010A/Snow010A_1K-JPG_Roughness.jpg",
+          "sha256": "058a3aa7c5f5b53eff9391b9b42f2a2377f86c7cda10ce330c042b1f02211081"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "snow.color.webp",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 24604,
+          "sha256": "4bda0a385adf233e0999750ffc4b10a5b04b0aefbbc738cab0ba1b89e931f94d"
+        },
+        "normal": {
+          "file": "snow.normal.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 326982,
+          "sha256": "8beac856b25000bc6e666aa35eb52acec7bbc0e61453e708c901008916c3a36c"
+        },
+        "orm": {
+          "file": "snow.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 34998,
+          "sha256": "5e7e95281bacc1bdf376dc5b3917d4270ab9598300d21876396f38a7fbc09fbf"
+        }
+      }
+    },
+    "leaf": {
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Photographed maple leaf from OLLY OLLY leaf atlas",
+      "originalSources": [
+        {
+          "id": "LeafSet027",
+          "page": "https://ambientcg.com/a/LeafSet027",
+          "licence": "CC0 1.0",
+          "author": "ambientCG (Lennart Demes)",
+          "file": "LeafSet027_2K-JPG.zip"
+        },
+        {
+          "id": "LeafSet028",
+          "page": "https://ambientcg.com/a/LeafSet028",
+          "licence": "CC0 1.0",
+          "author": "ambientCG (Lennart Demes)",
+          "file": "LeafSet028_2K-JPG.zip"
+        },
+        {
+          "id": "LeafSet021",
+          "page": "https://ambientcg.com/a/LeafSet021",
+          "licence": "CC0 1.0",
+          "author": "ambientCG (Lennart Demes)",
+          "file": "LeafSet021_2K-JPG.zip"
+        },
+        {
+          "id": "LeafSet012",
+          "page": "https://ambientcg.com/a/LeafSet012",
+          "licence": "CC0 1.0",
+          "author": "ambientCG (Lennart Demes)",
+          "file": "LeafSet012_2K-JPG.zip"
+        }
+      ],
+      "tileMetres": [
+        0.16,
+        0.16
+      ],
+      "inputs": [
+        {
+          "path": "olly-olly/assets/decor/leaves.albedo.dds",
+          "sha256": "4bef013a411be2e0ea19473ed5a329814a9f28241be0b495702d2a2be96b850a"
+        },
+        {
+          "path": "olly-olly/assets/decor/leaves.normal.ktx2",
+          "sha256": "196fbfabfec2dc3f8c59a17b331a7867a6cf1b79c4f5349ac5f34e54b2a1a000"
+        },
+        {
+          "path": "olly-olly/assets/decor/leaves.orm.dds",
+          "sha256": "12ec528758f730b03f9c47a8fc97dd867d539ed55523de546c52a9f3ff7aa8e4"
+        }
+      ],
+      "maps": {
+        "color": {
+          "file": "leaf.color.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 6702,
+          "sha256": "e73a132571dd4c06ae55970f734db67d2eb46fcbf894d12362dcdf2258617e8a"
+        },
+        "normal": {
+          "file": "leaf.normal.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 34266,
+          "sha256": "d3bbf9583c5320c42e731cab7dc23b9d320cfcd3b7fca7a5beb76075ce3d11b2"
+        },
+        "orm": {
+          "file": "leaf.orm.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 10286,
+          "sha256": "5f955a42df1d9c63bd91a403db94684a9224cf7282aa7372ea113b8ecc6dd759"
+        }
+      },
+      "atlasCrop": [
+        0.5,
+        0.25,
+        0.75,
+        0.5
+      ]
+    },
+    "water": {
+      "title": "BREAKWATER periodic analytic wave normals",
+      "author": "BREAKWATER",
+      "source": "Original mathematical wave derivatives; no third-party images",
+      "maps": {
+        "normal": {
+          "file": "water.normal.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 38864,
+          "sha256": "075680619778d438cebc16e35ad814dada6d78d8c36b36a5e5e205288e9a0218"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,410 @@
+{
+  "createdAt": "2026-10-01T05:41:43.423249+00:00",
+  "description": "Composite evidence assembled from six unaltered gameplay screenshot sources from two recorded runs. Only equal-size downsampling and external captions are applied.",
+  "sources": [
+    {
+      "sector": 0,
+      "district": "Freight Quay",
+      "sourceFile": "/workspace/breakwater-development/qa-output/visual-reviewed/district-01-sector-00.png",
+      "sourceSHA256": "fa3d355f3033f03dcae3902365e3811f5a87da1a8d49f84205a1a511cb4f7fa4",
+      "run": "visual-reviewed",
+      "sourceReport": "/workspace/breakwater-development/qa-output/visual-reviewed/report.json",
+      "runStartedAt": "2026-10-01T05:24:52.827Z",
+      "runFinishedAt": "2026-10-01T05:29:04.987Z",
+      "sourceChangedDuringRun": [
+        "combat"
+      ],
+      "capture": {
+        "name": "district-01-sector-00",
+        "file": "district-01-sector-00.png",
+        "sector": 0,
+        "gameplayCamera": true,
+        "developerPlacement": true,
+        "pose": {
+          "requestedXZ": [
+            -4,
+            -22
+          ],
+          "selected": [
+            -4,
+            0.02,
+            -22
+          ],
+          "yaw": -0.22,
+          "pitch": 0.06
+        },
+        "sampleWindowTimedOut": false,
+        "developerSimulationSeconds": 2,
+        "observations": {
+          "enemies": 3,
+          "mode": "playing",
+          "health": 100,
+          "drawCalls": 401,
+          "triangles": 621214,
+          "renderedPixelRatio": 1,
+          "position": [
+            -4,
+            0,
+            -22
+          ]
+        },
+        "softwareTiming": {
+          "sampleFrames": 2,
+          "meanFrameMs": 3433.1500000000015,
+          "medianFrameMs": 766.5,
+          "p95FrameMs": 766.5,
+          "approximateWallClockFps": 0.2912776895853661,
+          "framesOver50ms": 2,
+          "framesOver100ms": 2
+        },
+        "pixels": {
+          "size": [
+            1440,
+            900
+          ],
+          "centralMeanLuma": 68.5948663125,
+          "centralLumaStdDev": 32.21184995986865,
+          "centralNearBlackFraction": 0.00075,
+          "quantizedColors": 609
+        },
+        "gameFramesHeldOnlyForScreenshot": true
+      }
+    },
+    {
+      "sector": 4,
+      "district": "Flooded Transit",
+      "sourceFile": "/workspace/breakwater-development/qa-output/visual-corrections/district-02-sector-04.png",
+      "sourceSHA256": "0a0f5dd8c5f492daf919fae95494b72aa0379eebb4ce96408f8b0ccd9dfbfffe",
+      "run": "visual-corrections",
+      "sourceReport": "/workspace/breakwater-development/qa-output/visual-corrections/report.json",
+      "runStartedAt": "2026-10-01T05:36:01.003Z",
+      "runFinishedAt": "2026-10-01T05:38:17.875Z",
+      "sourceChangedDuringRun": [],
+      "capture": {
+        "name": "district-02-sector-04",
+        "file": "district-02-sector-04.png",
+        "sector": 4,
+        "gameplayCamera": true,
+        "developerPlacement": true,
+        "pose": {
+          "requestedXZ": [
+            -7,
+            -24
+          ],
+          "selected": [
+            -7,
+            0.02,
+            -24
+          ],
+          "yaw": -0.35,
+          "pitch": 0.18
+        },
+        "sampleWindowTimedOut": false,
+        "developerSimulationSeconds": 2,
+        "observations": {
+          "enemies": 4,
+          "mode": "playing",
+          "health": 100,
+          "drawCalls": 504,
+          "triangles": 1242704,
+          "renderedPixelRatio": 1,
+          "position": [
+            -7,
+            0,
+            -24
+          ]
+        },
+        "softwareTiming": {
+          "sampleFrames": 2,
+          "meanFrameMs": 8983,
+          "medianFrameMs": 8766.400000000001,
+          "p95FrameMs": 8766.400000000001,
+          "approximateWallClockFps": 0.11132138483802738,
+          "framesOver50ms": 2,
+          "framesOver100ms": 2
+        },
+        "pixels": {
+          "size": [
+            1440,
+            900
+          ],
+          "centralMeanLuma": 93.33229037499918,
+          "centralLumaStdDev": 40.40194976666113,
+          "centralNearBlackFraction": 0.0011875,
+          "quantizedColors": 577
+        },
+        "gameFramesHeldOnlyForScreenshot": true
+      }
+    },
+    {
+      "sector": 8,
+      "district": "Glass Conservatory",
+      "sourceFile": "/workspace/breakwater-development/qa-output/visual-reviewed/district-03-sector-08.png",
+      "sourceSHA256": "96173b523da77091126c210430ea9fb14a7c122558131c8a373107c3472eba83",
+      "run": "visual-reviewed",
+      "sourceReport": "/workspace/breakwater-development/qa-output/visual-reviewed/report.json",
+      "runStartedAt": "2026-10-01T05:24:52.827Z",
+      "runFinishedAt": "2026-10-01T05:29:04.987Z",
+      "sourceChangedDuringRun": [
+        "combat"
+      ],
+      "capture": {
+        "name": "district-03-sector-08",
+        "file": "district-03-sector-08.png",
+        "sector": 8,
+        "gameplayCamera": true,
+        "developerPlacement": true,
+        "pose": {
+          "requestedXZ": [
+            6,
+            -23
+          ],
+          "selected": [
+            6,
+            0.02,
+            -23
+          ],
+          "yaw": 0.22,
+          "pitch": 0.06
+        },
+        "sampleWindowTimedOut": false,
+        "developerSimulationSeconds": 2,
+        "observations": {
+          "enemies": 4,
+          "mode": "playing",
+          "health": 100,
+          "drawCalls": 385,
+          "triangles": 1385894,
+          "renderedPixelRatio": 1,
+          "position": [
+            6,
+            0,
+            -23
+          ]
+        },
+        "softwareTiming": {
+          "sampleFrames": 2,
+          "meanFrameMs": 3799.899999999994,
+          "medianFrameMs": 3716.600000000006,
+          "p95FrameMs": 3716.600000000006,
+          "approximateWallClockFps": 0.26316482012684583,
+          "framesOver50ms": 2,
+          "framesOver100ms": 2
+        },
+        "pixels": {
+          "size": [
+            1440,
+            900
+          ],
+          "centralMeanLuma": 124.549644825,
+          "centralLumaStdDev": 36.9009021144059,
+          "centralNearBlackFraction": 0.0015,
+          "quantizedColors": 911
+        },
+        "gameFramesHeldOnlyForScreenshot": true
+      }
+    },
+    {
+      "sector": 12,
+      "district": "Foundry",
+      "sourceFile": "/workspace/breakwater-development/qa-output/visual-corrections/district-04-sector-12.png",
+      "sourceSHA256": "1ec9b7fb28e445dca0ac79041b27c529d357cc3bba0afc439a3441b3b2ac829a",
+      "run": "visual-corrections",
+      "sourceReport": "/workspace/breakwater-development/qa-output/visual-corrections/report.json",
+      "runStartedAt": "2026-10-01T05:36:01.003Z",
+      "runFinishedAt": "2026-10-01T05:38:17.875Z",
+      "sourceChangedDuringRun": [],
+      "capture": {
+        "name": "district-04-sector-12",
+        "file": "district-04-sector-12.png",
+        "sector": 12,
+        "gameplayCamera": true,
+        "developerPlacement": true,
+        "pose": {
+          "requestedXZ": [
+            -3,
+            -22
+          ],
+          "selected": [
+            -3,
+            0.02,
+            -22
+          ],
+          "yaw": -0.3,
+          "pitch": 0.11
+        },
+        "sampleWindowTimedOut": false,
+        "developerSimulationSeconds": 2,
+        "observations": {
+          "enemies": 4,
+          "mode": "playing",
+          "health": 100,
+          "drawCalls": 581,
+          "triangles": 639853,
+          "renderedPixelRatio": 1,
+          "position": [
+            -3,
+            0,
+            -22
+          ]
+        },
+        "softwareTiming": {
+          "sampleFrames": 2,
+          "meanFrameMs": 4266.450000000004,
+          "medianFrameMs": 4266.400000000009,
+          "p95FrameMs": 4266.400000000009,
+          "approximateWallClockFps": 0.2343869024598903,
+          "framesOver50ms": 2,
+          "framesOver100ms": 2
+        },
+        "pixels": {
+          "size": [
+            1440,
+            900
+          ],
+          "centralMeanLuma": 38.73010618750055,
+          "centralLumaStdDev": 27.101442167306487,
+          "centralNearBlackFraction": 0.075875,
+          "quantizedColors": 599
+        },
+        "gameFramesHeldOnlyForScreenshot": true
+      }
+    },
+    {
+      "sector": 16,
+      "district": "White Spillway",
+      "sourceFile": "/workspace/breakwater-development/qa-output/visual-reviewed/district-05-sector-16.png",
+      "sourceSHA256": "17b6ff2fa64b952f7a105ce79b979a40d39236019b199c7498a6b39f8a63fd40",
+      "run": "visual-reviewed",
+      "sourceReport": "/workspace/breakwater-development/qa-output/visual-reviewed/report.json",
+      "runStartedAt": "2026-10-01T05:24:52.827Z",
+      "runFinishedAt": "2026-10-01T05:29:04.987Z",
+      "sourceChangedDuringRun": [
+        "combat"
+      ],
+      "capture": {
+        "name": "district-05-sector-16",
+        "file": "district-05-sector-16.png",
+        "sector": 16,
+        "gameplayCamera": true,
+        "developerPlacement": true,
+        "pose": {
+          "requestedXZ": [
+            4,
+            -22
+          ],
+          "selected": [
+            4,
+            0.02,
+            -22
+          ],
+          "yaw": 0.35,
+          "pitch": 0.1
+        },
+        "sampleWindowTimedOut": false,
+        "developerSimulationSeconds": 2,
+        "observations": {
+          "enemies": 5,
+          "mode": "playing",
+          "health": 100,
+          "drawCalls": 359,
+          "triangles": 413966,
+          "renderedPixelRatio": 1,
+          "position": [
+            4,
+            0,
+            -22
+          ]
+        },
+        "softwareTiming": {
+          "sampleFrames": 2,
+          "meanFrameMs": 2741.550000000003,
+          "medianFrameMs": 2583.2999999999884,
+          "p95FrameMs": 2583.2999999999884,
+          "approximateWallClockFps": 0.3647571629187864,
+          "framesOver50ms": 2,
+          "framesOver100ms": 2
+        },
+        "pixels": {
+          "size": [
+            1440,
+            900
+          ],
+          "centralMeanLuma": 130.8222511125,
+          "centralLumaStdDev": 39.94283975094823,
+          "centralNearBlackFraction": 0.0006875,
+          "quantizedColors": 662
+        },
+        "gameFramesHeldOnlyForScreenshot": true
+      }
+    },
+    {
+      "sector": 20,
+      "district": "Storm Crown",
+      "sourceFile": "/workspace/breakwater-development/qa-output/visual-reviewed/district-06-sector-20.png",
+      "sourceSHA256": "c5fd8ce10a8009f692cec917a4b1fc381dcb7b96836859971fdef9a85b95fdb9",
+      "run": "visual-reviewed",
+      "sourceReport": "/workspace/breakwater-development/qa-output/visual-reviewed/report.json",
+      "runStartedAt": "2026-10-01T05:24:52.827Z",
+      "runFinishedAt": "2026-10-01T05:29:04.987Z",
+      "sourceChangedDuringRun": [
+        "combat"
+      ],
+      "capture": {
+        "name": "district-06-sector-20",
+        "file": "district-06-sector-20.png",
+        "sector": 20,
+        "gameplayCamera": true,
+        "developerPlacement": true,
+        "pose": {
+          "requestedXZ": [
+            -5,
+            -22
+          ],
+          "selected": [
+            -5,
+            0.02,
+            -22
+          ],
+          "yaw": -0.28,
+          "pitch": 0.15
+        },
+        "sampleWindowTimedOut": false,
+        "developerSimulationSeconds": 2,
+        "observations": {
+          "enemies": 4,
+          "mode": "playing",
+          "health": 100,
+          "drawCalls": 332,
+          "triangles": 682200,
+          "renderedPixelRatio": 1,
+          "position": [
+            -5,
+            0,
+            -22
+          ]
+        },
+        "softwareTiming": {
+          "sampleFrames": 2,
+          "meanFrameMs": 2949.9000000000087,
+          "medianFrameMs": 2766.600000000006,
+          "p95FrameMs": 2766.600000000006,
+          "approximateWallClockFps": 0.3389945421878698,
+          "framesOver50ms": 2,
+          "framesOver100ms": 2
+        },
+        "pixels": {
+          "size": [
+            1440,
+            900
+          ],
+          "centralMeanLuma": 67.26957122499999,
+          "centralLumaStdDev": 36.721463669032,
+          "centralNearBlackFraction": 0.0078125,
+          "quantizedColors": 711
+        },
+        "gameFramesHeldOnlyForScreenshot": true
+      }
+    }
+  ]
+}

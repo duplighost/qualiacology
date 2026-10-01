@@ -1,0 +1,22 @@
+{
+  "asset": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+  "authors": {
+    "Greg Zaal": "Original",
+    "Jarod Guest": "Sky edits"
+  },
+  "page": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+  "license": "CC0 1.0",
+  "licenseURL": "https://polyhaven.com/license",
+  "file": "coastal-clouds-2k.hdr",
+  "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr",
+  "bytes": 5451493,
+  "verifiedMD5": "2eba3a4d7eeb23cbfbeca364c97e7980",
+  "sha256": "5244534e9cf5b606f2ff513aa00ddb161b0a4826ffd88a0d3bd03ac29247d198",
+  "adaptation": "None; direct original 2K HDR file",
+  "loader": {
+    "source": "https://raw.githubusercontent.com/mrdoob/three.js/r161/examples/jsm/loaders/RGBELoader.js",
+    "license": "MIT (Three.js Authors)",
+    "sha256": "f0e87d0008d9484d31358b32befd1bf80e4301f77573cc9a7cf7d871cc3f64b4"
+  },
+  "originalFilename": "kloofendal_48d_partly_cloudy_puresky_2k.hdr"
+}

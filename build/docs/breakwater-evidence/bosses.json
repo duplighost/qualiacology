@@ -1,0 +1,1546 @@
+{
+  "suite": "all-boss-actual-input-controlled-simulation",
+  "started": "2026-10-01T05:25:43.298Z",
+  "checks": [],
+  "notes": [
+    "Actual Playwright mouse/keyboard events drive all attacks, catches, parries, movement, and retry buttons.",
+    "Aim can be measured/set through the documented development bridge.",
+    "simulatedSeconds measures the controller interval after1.667 seconds of setup; arenaSeconds includes that real-engine spawn/setup interval. Button event counts can exceed successful catches/parries.",
+    "Prior live-frame real-input validation passed and is preserved in live-input-passed-report.json; this run uses controlled steps immediately after the actual start click because software GPU wall time is highly variable.",
+    "After live-frame input validation, requestAnimationFrame rendering is temporarily held and the real engine fixed step is explicitly advanced. This accelerates software-WebGL testing; it is not a human playtime or frame-rate measurement.",
+    "Every boss setup skips earlier campaign encounters with a development fixture. There is no health, damage, armor, invulnerability, skill, or projectile modification. Telemetry assists aim, telegraph reactions, distance, and catch/parry timing; actual Playwright events drive actions. Results are mechanically assisted completion samples, not human playtime or an optimal-route measurement."
+  ],
+  "errors": [],
+  "captures": [],
+  "bosses": [
+    {
+      "bossType": "counterweight",
+      "sector": 3,
+      "passed": true,
+      "simulatedSeconds": 20.55,
+      "arenaSeconds": 22.22,
+      "thrown": 13,
+      "recalled": 12,
+      "parryInputs": 0,
+      "jumps": 4,
+      "dashes": 3,
+      "catchInputs": 36,
+      "lowestHealth": 100,
+      "damageReceived": 0,
+      "finalHealth": 100,
+      "phases": [
+        1,
+        2,
+        3
+      ],
+      "attacks": [
+        "weight-slam",
+        "weight-rings",
+        "weight-cross"
+      ],
+      "bossEvents": [
+        {
+          "kind": "_executeBoss",
+          "attack": "weight-slam",
+          "phase": 1,
+          "t": 3.533
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "weight-slam",
+          "phase": 1,
+          "t": 3.533,
+          "message": "WINCH RELEASED \u00b7 Recall through the amber coupling."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "weight-rings",
+          "phase": 2,
+          "t": 6.967
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "weight-cross",
+          "phase": 2,
+          "t": 10.683
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "weight-slam",
+          "phase": 2,
+          "t": 14.4
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "weight-slam",
+          "phase": 2,
+          "t": 14.4,
+          "message": "WINCH RELEASED \u00b7 Recall through the amber coupling."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "weight-cross",
+          "phase": 3,
+          "t": 16.067
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "weight-slam",
+          "phase": 3,
+          "t": 19.783
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "weight-slam",
+          "phase": 3,
+          "t": 19.783,
+          "message": "WINCH RELEASED \u00b7 Recall through the amber coupling."
+        }
+      ],
+      "positionSamples": [
+        {
+          "t": 1.67,
+          "player": [
+            0,
+            1.6,
+            -166
+          ],
+          "boss": [
+            0,
+            1.6,
+            -181.56
+          ],
+          "bossState": "spawn",
+          "bossHealth": 1900,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 6.67,
+          "player": [
+            -5.404310449252402,
+            1.6,
+            -166.83366100892232
+          ],
+          "boss": [
+            -0.14046728311660822,
+            1.6,
+            -180.26653948282433
+          ],
+          "bossState": "windup",
+          "bossHealth": 1186,
+          "los": true,
+          "playerVelocity": [
+            -1.876579880632589e-29,
+            0,
+            -5.918748270579933e-30
+          ]
+        },
+        {
+          "t": 11.67,
+          "player": [
+            -14.292760060031958,
+            1.6,
+            -173.13728694208538
+          ],
+          "boss": [
+            -0.45150198144623743,
+            1.6,
+            -179.47280548050702
+          ],
+          "bossState": "recover",
+          "bossHealth": 869,
+          "los": true,
+          "playerVelocity": [
+            -1.1399022469194115e-09,
+            0,
+            -9.441711311276254e-10
+          ]
+        },
+        {
+          "t": 16.67,
+          "player": [
+            -11.359298399118162,
+            3.024999999999999,
+            -189.7096091952338
+          ],
+          "boss": [
+            -1.2266576455183704,
+            1.6,
+            -179.11799574775307
+          ],
+          "bossState": "recover",
+          "bossHealth": 453,
+          "los": true,
+          "playerVelocity": [
+            0.006264957364683357,
+            2.8999999999999964,
+            0.002574630807047894
+          ]
+        }
+      ]
+    },
+    {
+      "bossType": "switchman",
+      "sector": 7,
+      "passed": true,
+      "simulatedSeconds": 22.5,
+      "arenaSeconds": 24.17,
+      "thrown": 15,
+      "recalled": 15,
+      "parryInputs": 6,
+      "jumps": 0,
+      "dashes": 0,
+      "catchInputs": 44,
+      "lowestHealth": 85,
+      "damageReceived": 15,
+      "finalHealth": 85,
+      "phases": [
+        1,
+        2,
+        3
+      ],
+      "attacks": [
+        "rail-charge",
+        "crossing-fire",
+        "signal-mines"
+      ],
+      "bossEvents": [
+        {
+          "kind": "_executeBoss",
+          "attack": "rail-charge",
+          "phase": 1,
+          "t": 3.7
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "rail-charge",
+          "phase": 1,
+          "t": 4.9,
+          "message": "BRAKES OVERHEATED \u00b7 Strike the amber engine."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "crossing-fire",
+          "phase": 1,
+          "t": 9.017
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "crossing-fire",
+          "phase": 2,
+          "t": 10.783
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "signal-mines",
+          "phase": 3,
+          "t": 13.283
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "rail-charge",
+          "phase": 3,
+          "t": 17.167
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "rail-charge",
+          "phase": 3,
+          "t": 18.4,
+          "message": "BRAKES OVERHEATED \u00b7 Strike the amber engine."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "crossing-fire",
+          "phase": 3,
+          "t": 22.517
+        }
+      ],
+      "positionSamples": [
+        {
+          "t": 1.67,
+          "player": [
+            0,
+            -0.8,
+            -166
+          ],
+          "boss": [
+            0,
+            -0.8,
+            -181.56
+          ],
+          "bossState": "spawn",
+          "bossHealth": 2800,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 6.67,
+          "player": [
+            -8.913749613874465,
+            -0.8,
+            -163.49102082818965
+          ],
+          "boss": [
+            0,
+            -0.8,
+            -155.15
+          ],
+          "bossState": "recover",
+          "bossHealth": 2442,
+          "los": true,
+          "playerVelocity": [
+            -2.9563384797878087e-16,
+            0,
+            -9.707117091364436e-17
+          ]
+        },
+        {
+          "t": 11.67,
+          "player": [
+            -8.913749613874465,
+            -0.8,
+            -163.49102082818965
+          ],
+          "boss": [
+            -1.0178868187727712,
+            -0.8,
+            -155.15
+          ],
+          "bossState": "recover",
+          "bossHealth": 1366,
+          "los": true,
+          "playerVelocity": [
+            -1.6322187985654323e-57,
+            0,
+            -5.359379213417428e-58
+          ]
+        },
+        {
+          "t": 16.67,
+          "player": [
+            1.116997596532771,
+            -0.8,
+            -166.40647973716284
+          ],
+          "boss": [
+            -2.4615291733064733,
+            -0.8,
+            -155.15035610434668
+          ],
+          "bossState": "windup",
+          "bossHealth": 693,
+          "los": true,
+          "playerVelocity": [
+            0.01260610656925357,
+            0,
+            0.0027895651921669424
+          ]
+        },
+        {
+          "t": 21.67,
+          "player": [
+            5.413575833737052,
+            -0.8,
+            -171.10294096056015
+          ],
+          "boss": [
+            -2.1951664096970593,
+            -0.8,
+            -182.2823819899298
+          ],
+          "bossState": "windup",
+          "bossHealth": 93,
+          "los": true,
+          "playerVelocity": [
+            -1.3710374936053013e-25,
+            0,
+            -2.175752746103953e-25
+          ]
+        }
+      ]
+    },
+    {
+      "bossType": "glasskeeper",
+      "sector": 11,
+      "passed": true,
+      "simulatedSeconds": 20.75,
+      "arenaSeconds": 22.42,
+      "thrown": 13,
+      "recalled": 13,
+      "parryInputs": 9,
+      "jumps": 0,
+      "dashes": 0,
+      "catchInputs": 36,
+      "lowestHealth": 72,
+      "damageReceived": 34,
+      "finalHealth": 92,
+      "phases": [
+        1,
+        2,
+        3
+      ],
+      "attacks": [
+        "glass-fan",
+        "lens-sweep",
+        "glass-orbit"
+      ],
+      "bossEvents": [
+        {
+          "kind": "_executeBoss",
+          "attack": "glass-fan",
+          "phase": 1,
+          "t": 3.533
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-fan",
+          "phase": 1,
+          "t": 4.667,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-fan",
+          "phase": 1,
+          "t": 4.667,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-fan",
+          "phase": 1,
+          "t": 5.05,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-fan",
+          "phase": 1,
+          "t": 5.05,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-fan",
+          "phase": 1,
+          "t": 5.05,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-fan",
+          "phase": 1,
+          "t": 5.55,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-fan",
+          "phase": 1,
+          "t": 5.55,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "lens-sweep",
+          "phase": 1,
+          "t": 8.167
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "lens-sweep",
+          "phase": 2,
+          "t": 9.25,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "lens-sweep",
+          "phase": 2,
+          "t": 9.883
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "lens-sweep",
+          "phase": 2,
+          "t": 11.5,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "glass-orbit",
+          "phase": 2,
+          "t": 15
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-orbit",
+          "phase": 2,
+          "t": 16.083,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-orbit",
+          "phase": 3,
+          "t": 16.617,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "glass-orbit",
+          "phase": 3,
+          "t": 17.633
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-orbit",
+          "phase": 3,
+          "t": 18.7,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "glass-orbit",
+          "phase": 3,
+          "t": 19.15,
+          "message": "SHUTTERS OPEN \u00b7 Strike the amber lens."
+        }
+      ],
+      "positionSamples": [
+        {
+          "t": 1.67,
+          "player": [
+            0,
+            4.8,
+            -166
+          ],
+          "boss": [
+            0,
+            4.8,
+            -181.56
+          ],
+          "bossState": "spawn",
+          "bossHealth": 3700,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 6.67,
+          "player": [
+            0,
+            4.8,
+            -166
+          ],
+          "boss": [
+            0,
+            4.8,
+            -180.99333333333328
+          ],
+          "bossState": "hunt",
+          "bossHealth": 2827,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 11.67,
+          "player": [
+            0,
+            4.8,
+            -166
+          ],
+          "boss": [
+            0,
+            4.8,
+            -180.99333333333328
+          ],
+          "bossState": "recover",
+          "bossHealth": 1981,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 16.67,
+          "player": [
+            0,
+            4.8,
+            -166
+          ],
+          "boss": [
+            0,
+            4.8,
+            -180.99333333333328
+          ],
+          "bossState": "windup",
+          "bossHealth": 1113,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "bossType": "crucible",
+      "sector": 15,
+      "passed": true,
+      "simulatedSeconds": 24.5,
+      "arenaSeconds": 26.17,
+      "thrown": 17,
+      "recalled": 17,
+      "parryInputs": 1,
+      "jumps": 2,
+      "dashes": 0,
+      "catchInputs": 48,
+      "lowestHealth": 100,
+      "damageReceived": 0,
+      "finalHealth": 100,
+      "phases": [
+        1,
+        2,
+        3
+      ],
+      "attacks": [
+        "furnace-cone",
+        "slag-rain",
+        "hammer"
+      ],
+      "bossEvents": [
+        {
+          "kind": "_counterOpen",
+          "attack": "furnace-cone",
+          "phase": 1,
+          "t": 2.583,
+          "message": "VENT RUPTURED \u00b7 Heat cycle interrupted."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "slag-rain",
+          "phase": 1,
+          "t": 6.633
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "slag-rain",
+          "phase": 2,
+          "t": 9.417
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "hammer",
+          "phase": 2,
+          "t": 13.45
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "furnace-cone",
+          "phase": 2,
+          "t": 16.583,
+          "message": "VENT RUPTURED \u00b7 Heat cycle interrupted."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "hammer",
+          "phase": 3,
+          "t": 19.033
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "furnace-cone",
+          "phase": 3,
+          "t": 22.183,
+          "message": "VENT RUPTURED \u00b7 Heat cycle interrupted."
+        }
+      ],
+      "positionSamples": [
+        {
+          "t": 1.67,
+          "player": [
+            0,
+            0,
+            -166
+          ],
+          "boss": [
+            0,
+            0,
+            -181.56
+          ],
+          "bossState": "spawn",
+          "bossHealth": 2700,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 6.67,
+          "player": [
+            -8.145279351481673,
+            0,
+            -173.16637602784837
+          ],
+          "boss": [
+            -0.0024222429027444654,
+            0,
+            -180.94677690566627
+          ],
+          "bossState": "recover",
+          "bossHealth": 1962,
+          "los": true,
+          "playerVelocity": [
+            -0.06375266016360644,
+            0,
+            -0.05833990690147924
+          ]
+        },
+        {
+          "t": 11.67,
+          "player": [
+            -10.645886195192906,
+            0,
+            -176.88585674697723
+          ],
+          "boss": [
+            -0.0024222429027444654,
+            0,
+            -180.94677690566627
+          ],
+          "bossState": "recover",
+          "bossHealth": 1469,
+          "los": true,
+          "playerVelocity": [
+            -3.4345453264911003e-23,
+            0,
+            -7.061097563790695e-23
+          ]
+        },
+        {
+          "t": 16.67,
+          "player": [
+            -11.546684985796963,
+            0,
+            -181.0896973548208
+          ],
+          "boss": [
+            -0.37614407946034195,
+            0,
+            -180.80418662240675
+          ],
+          "bossState": "recover",
+          "bossHealth": 1057,
+          "los": true,
+          "playerVelocity": [
+            -0.18779574026923568,
+            0,
+            -3.857588760609371
+          ]
+        },
+        {
+          "t": 21.67,
+          "player": [
+            -11.555086465260867,
+            0,
+            -181.2622755650932
+          ],
+          "boss": [
+            -0.5892985251345384,
+            0,
+            -180.81292123175342
+          ],
+          "bossState": "hunt",
+          "bossHealth": 578,
+          "los": true,
+          "playerVelocity": [
+            -2.7504143288430414e-39,
+            0,
+            -5.649738054096838e-38
+          ]
+        }
+      ]
+    },
+    {
+      "bossType": "floodgate",
+      "sector": 19,
+      "passed": true,
+      "simulatedSeconds": 32.3,
+      "arenaSeconds": 33.97,
+      "thrown": 25,
+      "recalled": 25,
+      "parryInputs": 5,
+      "jumps": 12,
+      "dashes": 0,
+      "catchInputs": 43,
+      "lowestHealth": 73,
+      "damageReceived": 36,
+      "finalHealth": 90,
+      "phases": [
+        1,
+        2,
+        3
+      ],
+      "attacks": [
+        "pressure-rings",
+        "water-jet",
+        "sluice-cross"
+      ],
+      "bossEvents": [
+        {
+          "kind": "_executeBoss",
+          "attack": "pressure-rings",
+          "phase": 1,
+          "t": 3.533
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "pressure-rings",
+          "phase": 1,
+          "t": 4.817,
+          "message": "PRESSURE LOST \u00b7 Strike the amber turbine."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "pressure-rings",
+          "phase": 1,
+          "t": 5.7,
+          "message": "PRESSURE LOST \u00b7 Strike the amber turbine."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "water-jet",
+          "phase": 1,
+          "t": 8
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "water-jet",
+          "phase": 2,
+          "t": 9.883
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "sluice-cross",
+          "phase": 2,
+          "t": 13.6
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "sluice-cross",
+          "phase": 3,
+          "t": 17.633
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "pressure-rings",
+          "phase": 3,
+          "t": 28.1
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "pressure-rings",
+          "phase": 3,
+          "t": 28.967,
+          "message": "PRESSURE LOST \u00b7 Strike the amber turbine."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "pressure-rings",
+          "phase": 3,
+          "t": 29.85,
+          "message": "PRESSURE LOST \u00b7 Strike the amber turbine."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "pressure-rings",
+          "phase": 3,
+          "t": 30.767,
+          "message": "PRESSURE LOST \u00b7 Strike the amber turbine."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "water-jet",
+          "phase": 3,
+          "t": 32.567
+        }
+      ],
+      "positionSamples": [
+        {
+          "t": 1.67,
+          "player": [
+            0,
+            6.4,
+            -166
+          ],
+          "boss": [
+            0,
+            6.4,
+            -181.56
+          ],
+          "bossState": "spawn",
+          "bossHealth": 2350,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 6.67,
+          "player": [
+            0,
+            6.4,
+            -166.99999999999994
+          ],
+          "boss": [
+            0,
+            6.4,
+            -181.56
+          ],
+          "bossState": "hunt",
+          "bossHealth": 1913,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            -2.2090184509425437e-33
+          ]
+        },
+        {
+          "t": 11.67,
+          "player": [
+            -6.798990921743162,
+            6.4,
+            -168.37845247483827
+          ],
+          "boss": [
+            0,
+            6.4,
+            -181.56
+          ],
+          "bossState": "recover",
+          "bossHealth": 1114,
+          "los": true,
+          "playerVelocity": [
+            -5.599485373914706e-20,
+            0,
+            -2.3290264233830138e-20
+          ]
+        },
+        {
+          "t": 16.67,
+          "player": [
+            -11.052210458786943,
+            6.4,
+            -171.37052374293705
+          ],
+          "boss": [
+            -0.022957147514831005,
+            6.4,
+            -181.5381883710888
+          ],
+          "bossState": "windup",
+          "bossHealth": 792,
+          "los": true,
+          "playerVelocity": [
+            -4.22405596511846,
+            0,
+            -4.445897933478727
+          ]
+        },
+        {
+          "t": 21.67,
+          "player": [
+            -13.26,
+            6.4,
+            -174.38107005275492
+          ],
+          "boss": [
+            -3.1427896518030867,
+            6.4,
+            -179.8513304666894
+          ],
+          "bossState": "hunt",
+          "bossHealth": 734,
+          "los": false,
+          "playerVelocity": [
+            0,
+            0,
+            -2.7920121817525225e-23
+          ]
+        },
+        {
+          "t": 26.67,
+          "player": [
+            -14.579478032828773,
+            6.4,
+            -173.6676433074739
+          ],
+          "boss": [
+            -4.371046368496833,
+            6.4,
+            -173.58365124810769
+          ],
+          "bossState": "hunt",
+          "bossHealth": 676,
+          "los": true,
+          "playerVelocity": [
+            -2.1409375840673126e-26,
+            0,
+            1.1575805693228753e-26
+          ]
+        },
+        {
+          "t": 31.67,
+          "player": [
+            -14.464279607814486,
+            6.4,
+            -174.27634142401237
+          ],
+          "boss": [
+            -4.530810713117538,
+            6.4,
+            -171.85144684593214
+          ],
+          "bossState": "windup",
+          "bossHealth": 73,
+          "los": true,
+          "playerVelocity": [
+            1.6486744277620051,
+            0,
+            -8.342529338742967
+          ]
+        }
+      ]
+    },
+    {
+      "bossType": "warden",
+      "sector": 23,
+      "passed": true,
+      "simulatedSeconds": 24.5,
+      "arenaSeconds": 26.17,
+      "thrown": 17,
+      "recalled": 17,
+      "parryInputs": 5,
+      "jumps": 0,
+      "dashes": 0,
+      "catchInputs": 48,
+      "lowestHealth": 79,
+      "damageReceived": 21,
+      "finalHealth": 84,
+      "phases": [
+        1,
+        2,
+        3
+      ],
+      "attacks": [
+        "execution-lines",
+        "pursuit",
+        "lockdown"
+      ],
+      "bossEvents": [
+        {
+          "kind": "_executeBoss",
+          "attack": "execution-lines",
+          "phase": 1,
+          "t": 3.533
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "execution-lines",
+          "phase": 1,
+          "t": 4.35,
+          "message": "FIRE CONTROL DISABLED \u00b7 Strike the optic."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "pursuit",
+          "phase": 1,
+          "t": 8.767
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "pursuit",
+          "phase": 2,
+          "t": 11.433
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "lockdown",
+          "phase": 2,
+          "t": 16.783
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "lockdown",
+          "phase": 2,
+          "t": 17.25,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "lockdown",
+          "phase": 2,
+          "t": 17.65,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "lockdown",
+          "phase": 3,
+          "t": 19.617
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "lockdown",
+          "phase": 3,
+          "t": 20.117,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "lockdown",
+          "phase": 3,
+          "t": 20.5,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "execution-lines",
+          "phase": 3,
+          "t": 23.617
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "execution-lines",
+          "phase": 3,
+          "t": 24.017,
+          "message": "FIRE CONTROL DISABLED \u00b7 Strike the optic."
+        }
+      ],
+      "positionSamples": [
+        {
+          "t": 1.67,
+          "player": [
+            0,
+            5.6,
+            -166
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "spawn",
+          "bossHealth": 3100,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 6.67,
+          "player": [
+            0,
+            5.6,
+            -166
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "recover",
+          "bossHealth": 2484,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 11.67,
+          "player": [
+            -8.249983214918112,
+            5.6,
+            -166.8907375252053
+          ],
+          "boss": [
+            -3.914578775094695,
+            5.6,
+            -160.56258706074152
+          ],
+          "bossState": "attack",
+          "bossHealth": 1960,
+          "los": true,
+          "playerVelocity": [
+            -5.605990777903265,
+            0,
+            -7.565033646314132
+          ]
+        },
+        {
+          "t": 16.67,
+          "player": [
+            -8.553620482149944,
+            5.6,
+            -172.81322169584863
+          ],
+          "boss": [
+            -17.7,
+            5.6,
+            -168.35938874963495
+          ],
+          "bossState": "windup",
+          "bossHealth": 1536,
+          "los": true,
+          "playerVelocity": [
+            2.5077519881300697e-36,
+            0,
+            -4.2097104686495797e-36
+          ]
+        },
+        {
+          "t": 21.67,
+          "player": [
+            -8.553620482149944,
+            5.6,
+            -172.81322169584863
+          ],
+          "boss": [
+            -17.7,
+            5.6,
+            -168.35938874963495
+          ],
+          "bossState": "recover",
+          "bossHealth": 472,
+          "los": true,
+          "playerVelocity": [
+            1.3845505056848324e-77,
+            0,
+            -2.324215785988323e-77
+          ]
+        }
+      ]
+    },
+    {
+      "bossType": "heart",
+      "sector": 24,
+      "passed": true,
+      "simulatedSeconds": 32.5,
+      "arenaSeconds": 34.17,
+      "thrown": 21,
+      "recalled": 21,
+      "parryInputs": 9,
+      "jumps": 8,
+      "dashes": 0,
+      "catchInputs": 57,
+      "lowestHealth": 62,
+      "damageReceived": 71,
+      "finalHealth": 67,
+      "phases": [
+        1,
+        2,
+        3
+      ],
+      "attacks": [
+        "heart-spiral",
+        "heart-anchors",
+        "heart-cross",
+        "heart-surge"
+      ],
+      "bossEvents": [
+        {
+          "kind": "_executeBoss",
+          "attack": "heart-spiral",
+          "phase": 1,
+          "t": 3.533
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-spiral",
+          "phase": 1,
+          "t": 4.75,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-spiral",
+          "phase": 1,
+          "t": 5.2,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-spiral",
+          "phase": 1,
+          "t": 5.667,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "heart-anchors",
+          "phase": 1,
+          "t": 8.25
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "heart-spiral",
+          "phase": 1,
+          "t": 11.967
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-cross",
+          "phase": 2,
+          "t": 13.067,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "heart-cross",
+          "phase": 2,
+          "t": 13.167
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "heart-spiral",
+          "phase": 2,
+          "t": 17.633
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-spiral",
+          "phase": 2,
+          "t": 18.667,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-spiral",
+          "phase": 2,
+          "t": 19.2,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-spiral",
+          "phase": 2,
+          "t": 19.6,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "heart-surge",
+          "phase": 3,
+          "t": 22.467
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-surge",
+          "phase": 3,
+          "t": 24.3,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_counterOpen",
+          "attack": "heart-surge",
+          "phase": 3,
+          "t": 24.833,
+          "message": "SYSTEM INTERRUPTED \u00b7 Core exposed."
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "heart-anchors",
+          "phase": 3,
+          "t": 27.8
+        },
+        {
+          "kind": "_executeBoss",
+          "attack": "heart-cross",
+          "phase": 3,
+          "t": 31.517
+        }
+      ],
+      "positionSamples": [
+        {
+          "t": 1.67,
+          "player": [
+            0,
+            5.6,
+            -166
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "spawn",
+          "bossHealth": 4200,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 6.67,
+          "player": [
+            0,
+            5.6,
+            -166
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "recover",
+          "bossHealth": 3535,
+          "los": true,
+          "playerVelocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 11.67,
+          "player": [
+            -7.64015916082354,
+            5.6,
+            -168.84296708207856
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "windup",
+          "bossHealth": 2863,
+          "los": true,
+          "playerVelocity": [
+            4.06583243646263e-29,
+            0,
+            -1.0476341237322213e-28
+          ]
+        },
+        {
+          "t": 16.67,
+          "player": [
+            -7.64015916082354,
+            5.6,
+            -168.84296708207856
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "windup",
+          "bossHealth": 2229,
+          "los": true,
+          "playerVelocity": [
+            1.579610554111217e-63,
+            0,
+            -4.070147859153373e-63
+          ]
+        },
+        {
+          "t": 21.67,
+          "player": [
+            -10.09516264453469,
+            5.6,
+            -170.54302336493794
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "windup",
+          "bossHealth": 1343,
+          "los": true,
+          "playerVelocity": [
+            -0.1754131974500745,
+            0,
+            -0.13744783680643863
+          ]
+        },
+        {
+          "t": 26.67,
+          "player": [
+            -10.103010162129925,
+            5.6,
+            -170.54917241377493
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "hunt",
+          "bossHealth": 591,
+          "los": true,
+          "playerVelocity": [
+            -1.8078024939908676e-32,
+            0,
+            -1.4165327682545122e-32
+          ]
+        },
+        {
+          "t": 31.67,
+          "player": [
+            -14.94723538645866,
+            6.634999999999999,
+            -178.53317687866112
+          ],
+          "boss": [
+            0,
+            5.6,
+            -181.56
+          ],
+          "bossState": "recover",
+          "bossHealth": 67,
+          "los": true,
+          "playerVelocity": [
+            -2.00225713001758e-25,
+            5.299999999999997,
+            -7.505012397659109e-25
+          ]
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "finished": "2026-10-01T05:26:37.968Z"
+}

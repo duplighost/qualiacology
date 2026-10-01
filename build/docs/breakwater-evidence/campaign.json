@@ -1,0 +1,1051 @@
+{
+  "method": "Simulated progression through the actual gameplay engine: debug travel, forced enemy HP=1, engine _damage, real fixed updates and UI clicks. This does not validate two hours of playtime, difficulty, encounter mastery or ordinary navigation.",
+  "generated": "2026-10-01T05:39:27.872Z",
+  "sectors": [
+    {
+      "sector": 0,
+      "name": "Wake Dock",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 45,
+          "defeated": 3,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 0,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 76,
+          "defeated": 6,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 0,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 86,
+          "defeated": 8,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 0,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 1,
+        "mode": "playing",
+        "unlockedSector": 1
+      }
+    },
+    {
+      "sector": 1,
+      "name": "Container Canyon",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 86,
+          "defeated": 8,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 1,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 86,
+          "defeated": 8,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 1,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 1,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 2,
+        "mode": "playing",
+        "unlockedSector": 2
+      }
+    },
+    {
+      "sector": 2,
+      "name": "Drydock Spine",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 2,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 2,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 106,
+          "defeated": 12,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 2,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 3,
+        "mode": "playing",
+        "unlockedSector": 3
+      }
+    },
+    {
+      "sector": 3,
+      "name": "Counterweight",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 3,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 3,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 34,
+          "defeated": 1,
+          "bosses": [
+            "counterweight"
+          ],
+          "checkpoint": 3,
+          "savedSector": 3,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 4,
+        "mode": "playing",
+        "unlockedSector": 4
+      }
+    },
+    {
+      "sector": 4,
+      "name": "Grand Concourse",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 86,
+          "defeated": 8,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 4,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 4,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 4,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 5,
+        "mode": "playing",
+        "unlockedSector": 5
+      }
+    },
+    {
+      "sector": 5,
+      "name": "Last Platform",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 5,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 5,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 106,
+          "defeated": 12,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 5,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 6,
+        "mode": "playing",
+        "unlockedSector": 6
+      }
+    },
+    {
+      "sector": 6,
+      "name": "Signal Descent",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 6,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 6,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 132,
+          "defeated": 14,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 6,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 7,
+        "mode": "playing",
+        "unlockedSector": 7
+      }
+    },
+    {
+      "sector": 7,
+      "name": "The Switchman",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 7,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 7,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 34,
+          "defeated": 1,
+          "bosses": [
+            "switchman"
+          ],
+          "checkpoint": 3,
+          "savedSector": 7,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 8,
+        "mode": "playing",
+        "unlockedSector": 8
+      }
+    },
+    {
+      "sector": 8,
+      "name": "Sun Court",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 81,
+          "defeated": 7,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 8,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 8,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 8,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 9,
+        "mode": "playing",
+        "unlockedSector": 9
+      }
+    },
+    {
+      "sector": 9,
+      "name": "Hanging Orchard",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 9,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 9,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 106,
+          "defeated": 12,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 9,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 10,
+        "mode": "playing",
+        "unlockedSector": 10
+      }
+    },
+    {
+      "sector": 10,
+      "name": "Rain Gallery",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 10,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 10,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 137,
+          "defeated": 15,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 10,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 11,
+        "mode": "playing",
+        "unlockedSector": 11
+      }
+    },
+    {
+      "sector": 11,
+      "name": "The Glasskeeper",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 11,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 11,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 34,
+          "defeated": 1,
+          "bosses": [
+            "glasskeeper"
+          ],
+          "checkpoint": 3,
+          "savedSector": 11,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 12,
+        "mode": "playing",
+        "unlockedSector": 12
+      }
+    },
+    {
+      "sector": 12,
+      "name": "Casting Floor",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 86,
+          "defeated": 8,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 12,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 12,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 12,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 13,
+        "mode": "playing",
+        "unlockedSector": 13
+      }
+    },
+    {
+      "sector": 13,
+      "name": "Furnace Choir",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 13,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 13,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 132,
+          "defeated": 14,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 13,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 14,
+        "mode": "playing",
+        "unlockedSector": 14
+      }
+    },
+    {
+      "sector": 14,
+      "name": "Chainworks",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 14,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 14,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 137,
+          "defeated": 15,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 14,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 15,
+        "mode": "playing",
+        "unlockedSector": 15
+      }
+    },
+    {
+      "sector": 15,
+      "name": "Crucible",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 15,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 15,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 34,
+          "defeated": 1,
+          "bosses": [
+            "crucible"
+          ],
+          "checkpoint": 3,
+          "savedSector": 15,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 16,
+        "mode": "playing",
+        "unlockedSector": 16
+      }
+    },
+    {
+      "sector": 16,
+      "name": "White Cut",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 16,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 16,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 16,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 17,
+        "mode": "playing",
+        "unlockedSector": 17
+      }
+    },
+    {
+      "sector": 17,
+      "name": "Turbine Cathedral",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 17,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 17,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 132,
+          "defeated": 14,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 17,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 18,
+        "mode": "playing",
+        "unlockedSector": 18
+      }
+    },
+    {
+      "sector": 18,
+      "name": "Ice Ladder",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 18,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 18,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 137,
+          "defeated": 15,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 18,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 19,
+        "mode": "playing",
+        "unlockedSector": 19
+      }
+    },
+    {
+      "sector": 19,
+      "name": "Floodgate",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 19,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 19,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 34,
+          "defeated": 1,
+          "bosses": [
+            "floodgate"
+          ],
+          "checkpoint": 3,
+          "savedSector": 19,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 20,
+        "mode": "playing",
+        "unlockedSector": 20
+      }
+    },
+    {
+      "sector": 20,
+      "name": "Copper Horizon",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 91,
+          "defeated": 9,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 20,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 20,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 20,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 21,
+        "mode": "playing",
+        "unlockedSector": 21
+      }
+    },
+    {
+      "sector": 21,
+      "name": "Induction Gardens",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 21,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 21,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 142,
+          "defeated": 16,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 21,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 22,
+        "mode": "playing",
+        "unlockedSector": 22
+      }
+    },
+    {
+      "sector": 22,
+      "name": "Broken Halo",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 106,
+          "defeated": 12,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 22,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 101,
+          "defeated": 11,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 22,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 142,
+          "defeated": 16,
+          "bosses": [],
+          "checkpoint": 3,
+          "savedSector": 22,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 23,
+        "mode": "playing",
+        "unlockedSector": 23
+      }
+    },
+    {
+      "sector": 23,
+      "name": "The Warden",
+      "arenaCount": 3,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 96,
+          "defeated": 10,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 23,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 111,
+          "defeated": 13,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 23,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 34,
+          "defeated": 1,
+          "bosses": [
+            "warden"
+          ],
+          "checkpoint": 3,
+          "savedSector": 23,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 24,
+        "mode": "playing",
+        "unlockedSector": 24
+      }
+    },
+    {
+      "sector": 24,
+      "name": "First Light",
+      "arenaCount": 4,
+      "arenas": [
+        {
+          "index": 0,
+          "steps": 111,
+          "defeated": 13,
+          "bosses": [],
+          "checkpoint": 1,
+          "savedSector": 24,
+          "gateOpen": true
+        },
+        {
+          "index": 1,
+          "steps": 147,
+          "defeated": 17,
+          "bosses": [],
+          "checkpoint": 2,
+          "savedSector": 24,
+          "gateOpen": true
+        },
+        {
+          "index": 2,
+          "steps": 34,
+          "defeated": 1,
+          "bosses": [
+            "heart"
+          ],
+          "checkpoint": 3,
+          "savedSector": 24,
+          "gateOpen": true
+        },
+        {
+          "index": 3,
+          "steps": 14,
+          "defeated": 0,
+          "bosses": [],
+          "checkpoint": 4,
+          "savedSector": 24,
+          "gateOpen": true
+        }
+      ],
+      "after": {
+        "sector": 24,
+        "mode": "ending",
+        "unlockedSector": 24
+      }
+    }
+  ],
+  "errors": [],
+  "checkpoints": 76,
+  "savedReload": {
+    "sector": 7,
+    "checkpoint": 1,
+    "xp": 987,
+    "skills": [
+      "catchdrive"
+    ]
+  },
+  "deathRetry": {
+    "checkpoint": 1,
+    "health": 100,
+    "deaths": 1
+  },
+  "bosses": [
+    "counterweight",
+    "crucible",
+    "floodgate",
+    "glasskeeper",
+    "heart",
+    "switchman",
+    "warden"
+  ],
+  "ending": {
+    "completed": true,
+    "checkpoint": 4,
+    "sector": 24,
+    "kills": 721,
+    "recordedSectors": 25
+  },
+  "replay": {
+    "expectedSector": 12,
+    "actualSector": 12,
+    "expectedCheckpoint": 1,
+    "actualCheckpoint": 1,
+    "arena": {
+      "index": 0,
+      "steps": 86,
+      "defeated": 8,
+      "bosses": [],
+      "checkpoint": 1,
+      "savedSector": 12,
+      "gateOpen": true
+    }
+  },
+  "passed": true
+}

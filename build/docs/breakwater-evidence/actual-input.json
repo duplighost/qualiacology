@@ -1,0 +1,2551 @@
+{
+  "startedAt": "2026-10-01T04:53:30.281Z",
+  "url": "http://127.0.0.1:4173/breakwater/?dev=1",
+  "environment": {
+    "rendererRequested": "Chromium / ANGLE SwiftShader (CPU software renderer)",
+    "viewport": [
+      960,
+      600
+    ],
+    "functionalQuality": "low",
+    "actual": {
+      "vendor": "Google Inc. (Google)",
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "webgl": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "devicePixelRatio": 1,
+      "renderPixelRatio": 1,
+      "buffer": [
+        960,
+        600
+      ],
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36"
+    }
+  },
+  "limitations": [
+    "Software-renderer timing is measured in wall-clock frame intervals; it is not a hardware-GPU performance claim.",
+    "Developer-assisted sector loading validates construction and capture only. It does not prove normal progression, combat balance, or two-hour campaign length.",
+    "Screenshots document real rendered frames, including the gameplay camera; visual quality still requires human review.",
+    "A finite floor at spawn or exit does not by itself establish that every route or secret is reachable."
+  ],
+  "checks": [
+    {
+      "name": "Game booted with real Chromium WebGL",
+      "passed": true,
+      "wallMs": 7949,
+      "environment": {
+        "vendor": "Google Inc. (Google)",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "webgl": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+        "devicePixelRatio": 1,
+        "renderPixelRatio": 1,
+        "buffer": [
+          960,
+          600
+        ],
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "name": "Menu WCAG audit has no serious/critical violations",
+      "passed": true,
+      "violations": []
+    },
+    {
+      "name": "Menu: real rendering, semantic controls and unclipped layout",
+      "passed": true,
+      "wallMs": 12418,
+      "semantic": {
+        "buttons": [
+          {
+            "text": "New game",
+            "disabled": false
+          },
+          {
+            "text": "Chapters",
+            "disabled": false
+          },
+          {
+            "text": "Settings",
+            "disabled": false
+          },
+          {
+            "text": "Controls",
+            "disabled": false
+          }
+        ],
+        "horizontalOverflow": false,
+        "loadingHidden": true,
+        "duplicateIds": []
+      },
+      "screenshot": "01-menu.png",
+      "accessibilityViolationCount": 0
+    },
+    {
+      "name": "Apply explicit software-renderer functional-test quality through real settings UI",
+      "passed": true,
+      "wallMs": 18775,
+      "quality": "low",
+      "renderPixelRatio": 0.7,
+      "note": "Initial menu capture used the default high setting; functional input tests use this declared lower software-renderer profile."
+    },
+    {
+      "name": "Start through an actual UI click and capture the mouse",
+      "passed": true,
+      "wallMs": 8434,
+      "selector": "[data-action=\"new\"]",
+      "snapshot": {
+        "mode": "playing",
+        "sector": 0,
+        "sectorName": "Wake Dock",
+        "position": [
+          0,
+          0,
+          8
+        ],
+        "velocity": [
+          0,
+          0,
+          0
+        ],
+        "health": 100,
+        "grounded": true,
+        "swimming": false,
+        "checkpoint": 0,
+        "unlockedSector": 0,
+        "completed": false,
+        "skills": [],
+        "xp": 0,
+        "level": 1,
+        "skillPoints": 1,
+        "lance": "held",
+        "enemyCount": 0,
+        "activeArena": -1,
+        "cleared": [],
+        "drawCalls": 181,
+        "triangles": 274646,
+        "frames": [
+          -467.4000000000933,
+          5366.5,
+          16.600000000000364,
+          16.699999999999818,
+          4233.200000000001,
+          16.69999999999891,
+          2049.8999999999996,
+          1999.9000000000015,
+          1999.8999999999978,
+          2716.600000000002,
+          3116.5999999999985,
+          2999.7999999999993,
+          3683.2000000000007,
+          2633.2000000000007,
+          2749.9000000000015,
+          5799.699999999997,
+          33.400000000001455,
+          2083.199999999997,
+          1533.300000000003,
+          1833.199999999997,
+          1066.7000000000044,
+          1699.9000000000015,
+          1700,
+          3983.0999999999985
+        ],
+        "diagnostics": {
+          "errors": [],
+          "warnings": [],
+          "loads": [
+            {
+              "sector": "wake-dock",
+              "ms": 803.8999999999069,
+              "solids": 705,
+              "arenas": 3
+            },
+            {
+              "sector": "wake-dock",
+              "ms": 629.2999999998137,
+              "solids": 705,
+              "arenas": 3
+            }
+          ],
+          "assetErrors": []
+        },
+        "events": [
+          {
+            "type": "sector",
+            "t": 0,
+            "sector": 0,
+            "checkpoint": 0
+          },
+          {
+            "type": "mode",
+            "t": 0,
+            "mode": "menu"
+          },
+          {
+            "type": "sector",
+            "t": 0.93,
+            "sector": 0,
+            "checkpoint": 0
+          },
+          {
+            "type": "mode",
+            "t": 0.93,
+            "mode": "playing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Real WASD movement and pointer-lock mouse look",
+      "passed": true,
+      "wallMs": 11098,
+      "start": [
+        0,
+        0,
+        8
+      ],
+      "end": [
+        0,
+        0,
+        6.0014634088039935
+      ],
+      "displacement": 1.9985365911960065,
+      "observedAim": [
+        -0.07,
+        -0.008
+      ]
+    },
+    {
+      "name": "Real jump, dash and slide inputs reach their gameplay states",
+      "passed": true,
+      "wallMs": 18820,
+      "observed": {
+        "jump": true,
+        "dash": true,
+        "slide": true
+      }
+    },
+    {
+      "name": "Real left/right mouse throw and recall complete a lance cycle",
+      "passed": true,
+      "wallMs": 11758,
+      "outward": {
+        "state": "outbound",
+        "distance": 10.800000000000002
+      },
+      "observedStates": [
+        "held",
+        "outbound",
+        "returning"
+      ],
+      "screenshot": "02-first-person-after-input.png",
+      "pixels": {
+        "size": [
+          960,
+          600
+        ],
+        "centralMeanLuma": 80.0012761375,
+        "centralLumaStdDev": 36.59949572435849,
+        "centralNearBlackFraction": 0.001375,
+        "quantizedColors": 579
+      }
+    },
+    {
+      "name": "Constellation WCAG audit has no serious/critical violations",
+      "passed": true,
+      "violations": []
+    },
+    {
+      "name": "Real Tab opens a keyboard-operable constellation; Escape/pause resumes",
+      "passed": true,
+      "wallMs": 14433,
+      "skillControls": [
+        {
+          "name": "Catch Drive, available",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Slipstream, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Towline, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Breaking Wake, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Backbreaker, available",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Undertow, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Hardpoint, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Split Current, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Return Address, available",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Homecoming, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Borrowed Storm, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Second Wind, locked",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "Unlock · 1 point",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        },
+        {
+          "name": "ReturnTab / Esc",
+          "tag": "BUTTON",
+          "tabIndex": 0,
+          "disabled": false
+        }
+      ],
+      "keyboardFocus": {
+        "tag": "BUTTON",
+        "name": "Return Address, available"
+      },
+      "boughtSkill": "catchdrive",
+      "savedSkillPoints": 0,
+      "screenshot": "03-constellation.png",
+      "accessibilityViolationCount": 0,
+      "resumeSelector": "[data-action=\"exit-skills\"]"
+    },
+    {
+      "name": "Real settings controls apply and persist, then restore defaults",
+      "passed": true,
+      "wallMs": 21938,
+      "persistedFovDuringTest": 83,
+      "restored": {
+        "sensitivity": 0.002,
+        "volume": 0.75,
+        "music": 0.5,
+        "fov": 82,
+        "quality": "low",
+        "shake": 0.6,
+        "difficulty": "standard",
+        "subtitles": true,
+        "inverted": false
+      }
+    },
+    {
+      "name": "Saved skill/settings survive a browser reload and real Continue click",
+      "passed": true,
+      "wallMs": 24579,
+      "skills": [
+        "catchdrive"
+      ],
+      "sector": 0,
+      "checkpoint": 0
+    },
+    {
+      "name": "No page, HTTP, network or console errors",
+      "passed": false,
+      "pageErrors": [],
+      "httpErrors": [],
+      "networkFailures": [
+        {
+          "url": "http://127.0.0.1:4173/breakwater/assets/sky/coastal-clouds-2k.hdr",
+          "error": "net::ERR_ABORTED"
+        }
+      ],
+      "consoleErrors": []
+    }
+  ],
+  "sectors": [],
+  "captures": [
+    {
+      "name": "01-menu",
+      "file": "01-menu.png",
+      "pixels": {
+        "size": [
+          960,
+          600
+        ],
+        "centralMeanLuma": 57.948065924999995,
+        "centralLumaStdDev": 41.06237934876417,
+        "centralNearBlackFraction": 0.0004375,
+        "quantizedColors": 438
+      }
+    },
+    {
+      "name": "02-first-person-after-input",
+      "file": "02-first-person-after-input.png",
+      "pixels": {
+        "size": [
+          960,
+          600
+        ],
+        "centralMeanLuma": 80.0012761375,
+        "centralLumaStdDev": 36.59949572435849,
+        "centralNearBlackFraction": 0.001375,
+        "quantizedColors": 579
+      }
+    },
+    {
+      "name": "03-constellation",
+      "file": "03-constellation.png",
+      "pixels": {
+        "size": [
+          960,
+          600
+        ],
+        "centralMeanLuma": 35.6280105875,
+        "centralLumaStdDev": 15.498627191122296,
+        "centralNearBlackFraction": 0,
+        "quantizedColors": 177
+      }
+    },
+    {
+      "name": "04-pause",
+      "file": "04-pause.png",
+      "pixels": {
+        "size": [
+          960,
+          600
+        ],
+        "centralMeanLuma": 73.372061725,
+        "centralLumaStdDev": 31.89633055286846,
+        "centralNearBlackFraction": 0.00125,
+        "quantizedColors": 441
+      }
+    },
+    {
+      "name": "05-settings",
+      "file": "05-settings.png",
+      "pixels": {
+        "size": [
+          960,
+          600
+        ],
+        "centralMeanLuma": 37.01274565,
+        "centralLumaStdDev": 32.70033338458946,
+        "centralNearBlackFraction": 0,
+        "quantizedColors": 222
+      }
+    }
+  ],
+  "networkFailures": [
+    {
+      "url": "http://127.0.0.1:4173/breakwater/assets/sky/coastal-clouds-2k.hdr",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "httpErrors": [],
+  "pageErrors": [],
+  "consoleErrors": [],
+  "consoleWarnings": [],
+  "bootWallMs": 7949,
+  "accessibility": {
+    "menu": [],
+    "skills": []
+  },
+  "currentAction": "lance: waiting for return to hand",
+  "realInputTrace": [
+    {
+      "time": 12219.9,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 14269.8,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 16269.7,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 18269.6,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 20986.2,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 24102.8,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 27102.6,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 30785.8,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 33419,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 36168.9,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 41968.6,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 42002,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 44085.2,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 45618.5,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 47451.7,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 48518.4,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 50218.3,
+      "panel": "menu",
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 51918.3,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 55901.4,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 55918.1,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 57418,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        7.774355674421319
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 59901.3,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        7.380460268737569
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 60218,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        6.9214952681366615
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 61201.2,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        6.4373651858017205
+      ],
+      "yaw": 0,
+      "pitch": 0
+    },
+    {
+      "time": 62067.8,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        6.169147059580326
+      ],
+      "yaw": -0.022,
+      "pitch": -0.002
+    },
+    {
+      "time": 63051.1,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        6.065416106936415
+      ],
+      "yaw": -0.046,
+      "pitch": -0.004
+    },
+    {
+      "time": 64217.8,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        6.025299092146999
+      ],
+      "yaw": -0.07,
+      "pitch": -0.008
+    },
+    {
+      "time": 65184.4,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        6.009784196789401
+      ],
+      "yaw": -0.046000000000000006,
+      "pitch": -0.004
+    },
+    {
+      "time": 66134.3,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        6.003783950280013
+      ],
+      "yaw": -0.022000000000000006,
+      "pitch": -0.002
+    },
+    {
+      "time": 67001,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        6.0014634088039935
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 67817.6,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 7.699999999999999,
+      "position": [
+        0,
+        0.4049999999999999,
+        6.000414342562687
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 68667.6,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 6.499999999999998,
+      "position": [
+        0,
+        0.7499999999999999,
+        5.99971113243152
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 69567.5,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 5.299999999999997,
+      "position": [
+        0,
+        1.035,
+        5.999239756584024
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 70500.9,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 4.099999999999996,
+      "position": [
+        0,
+        1.2599999999999998,
+        5.998923783904231
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 71367.4,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 2.8999999999999964,
+      "position": [
+        0,
+        1.4249999999999996,
+        5.998711981082965
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 72117.4,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 1.6999999999999966,
+      "position": [
+        0,
+        1.5299999999999994,
+        5.998570005406064
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 72900.8,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 0.49999999999999667,
+      "position": [
+        0,
+        1.574999999999999,
+        5.998474836263788
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 73667.4,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -0.7000000000000034,
+      "position": [
+        0,
+        1.559999999999999,
+        5.9984110424799555
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 74417.3,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -1.9000000000000035,
+      "position": [
+        0,
+        1.4849999999999988,
+        5.99836828022784
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 75217.3,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -3.100000000000003,
+      "position": [
+        0,
+        1.3499999999999985,
+        5.998339615833034
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 75917.3,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -4.300000000000003,
+      "position": [
+        0,
+        1.1549999999999985,
+        5.9983204015145875
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 76617.3,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -5.500000000000004,
+      "position": [
+        0,
+        0.8999999999999982,
+        5.998307521771762
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 77367.2,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -6.7000000000000055,
+      "position": [
+        0,
+        0.584999999999998,
+        5.998298888221959
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 79300.5,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -7.900000000000007,
+      "position": [
+        0,
+        0.2099999999999977,
+        5.998293100980457
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 79517.1,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        0,
+        0,
+        5.998289410126399
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 79550.5,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0.14666666666666667,
+      "dashCd": 1.0333333333333334,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 1.083,
+      "position": [
+        5.782411586589357e-18,
+        0.03705,
+        5.164956076793065
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 81800.4,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0.09666666666666668,
+      "dashCd": 0.9833333333333335,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 0.9285371249999997,
+      "position": [
+        1.4456028966473393e-17,
+        0.08596324375,
+        3.914956076793065
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 81817.1,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0.08000000000000002,
+      "dashCd": 0.9666666666666668,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 0.8821102687499998,
+      "position": [
+        1.734723475976807e-17,
+        0.1006650815625,
+        3.4982894101263984
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 81850.4,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": 0.04666666666666669,
+      "dashCd": 0.9333333333333333,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 0.7961045175468747,
+      "position": [
+        2.3129646346357426e-17,
+        0.12790023611015625,
+        2.6649560767930653
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 82617.1,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.8833333333333332,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": 0.6825601107317516,
+      "position": [
+        3.180326372624146e-17,
+        0.1638559649349452,
+        1.4149560767930653
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 84216.9,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.833333333333333,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -0.5174398892682485,
+      "position": [
+        3.928238817004036e-17,
+        0.15798397047153276,
+        0.33710065093225655
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 84267,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.7833333333333329,
+      "sliding": false,
+      "grounded": false,
+      "velocityY": -1.7174398892682485,
+      "position": [
+        4.543960232291577e-17,
+        0.09211197600812034,
+        -0.5502474247327046
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 85033.6,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.7333333333333327,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.0623191751656355e-17,
+        0,
+        -1.2972813901636717
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 85816.9,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 0,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.6833333333333326,
+      "sliding": true,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.543639131650643e-17,
+        0,
+        -1.990936550698669
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 86616.9,
+      "panel": null,
+      "lance": "held",
+      "charge": 0.0625,
+      "distance": 0,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.6333333333333324,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.80872444837021e-17,
+        0,
+        -2.3729647534505514
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 87366.9,
+      "panel": null,
+      "lance": "held",
+      "charge": 0.12499999999999999,
+      "distance": 0,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.5833333333333323,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.911243815061097e-17,
+        0,
+        -2.5207107315712984
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 88116.8,
+      "panel": null,
+      "lance": "held",
+      "charge": 0.1875,
+      "distance": 0,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.5333333333333321,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.950892259859038e-17,
+        0,
+        -2.577850162361002
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 88833.5,
+      "panel": null,
+      "lance": "outbound",
+      "charge": 0,
+      "distance": 2.7,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.48333333333333206,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.966225939978573e-17,
+        0,
+        -2.5999483243042203
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 89600.1,
+      "panel": null,
+      "lance": "outbound",
+      "charge": 0,
+      "distance": 5.4,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.43333333333333207,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.972156103121325e-17,
+        0,
+        -2.608494590070604
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 90416.7,
+      "panel": null,
+      "lance": "outbound",
+      "charge": 0,
+      "distance": 8.100000000000001,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.3833333333333321,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.974449540484405e-17,
+        0,
+        -2.6117997816398093
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 91150,
+      "panel": null,
+      "lance": "outbound",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.3333333333333321,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975336506797432e-17,
+        0,
+        -2.6130780348099973
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 91866.6,
+      "panel": null,
+      "lance": "returning",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.2833333333333321,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.9756795330571e-17,
+        0,
+        -2.61357238774927
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 92633.3,
+      "panel": null,
+      "lance": "returning",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.23333333333333212,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975812195383835e-17,
+        0,
+        -2.613763574310952
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 93466.6,
+      "panel": null,
+      "lance": "returning",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.18333333333333213,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975863501347852e-17,
+        0,
+        -2.6138375139974874
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 94283.2,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.13333333333333214,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975883343468885e-17,
+        0,
+        -2.613866109507532
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 95049.8,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.08333333333333215,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975891017231081e-17,
+        0,
+        -2.613877168564353
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 95766.6,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0.03333333333333216,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975893984989726e-17,
+        0,
+        -2.613881445555307
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 96416.5,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895132743741e-17,
+        0,
+        -2.6138830996431657
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 97099.8,
+      "panel": null,
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 98566.4,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 98583,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 99266.4,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 99949.7,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 101199.6,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 102032.9,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 102799.6,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 102816.3,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 104316.1,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 105199.5,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 106132.7,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 106882.7,
+      "panel": "skills",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 107616,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 109082.6,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 109099.3,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 109782.6,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 110499.2,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 111315.9,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 111999.2,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 112749.2,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 113465.8,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 114799.1,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 114815.7,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 116165.6,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 116182.3,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 117465.7,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 118265.6,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 118282.3,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 119482.2,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 122765.4,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 122782.1,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 124048.8,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 126065.3,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 126082,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 127281.9,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 128681.8,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 130165.2,
+      "panel": "settings",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 131698.4,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    },
+    {
+      "time": 133881.7,
+      "panel": "pause",
+      "lance": "held",
+      "charge": 0,
+      "distance": 10.800000000000002,
+      "dash": -0.0033333333333333097,
+      "dashCd": 0,
+      "sliding": false,
+      "grounded": true,
+      "velocityY": 0,
+      "position": [
+        5.975895576627303e-17,
+        0,
+        -2.613883739346797
+      ],
+      "yaw": -6.938893903907228e-18,
+      "pitch": 0
+    }
+  ],
+  "finishedAt": "2026-10-01T04:56:09.404Z",
+  "summary": {
+    "passed": 12,
+    "failed": 1,
+    "sectorsInspected": 0,
+    "pageErrors": 0,
+    "httpErrors": 0,
+    "networkFailures": 1,
+    "consoleErrors": 0
+  }
+}

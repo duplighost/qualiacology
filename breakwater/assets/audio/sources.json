@@ -1,0 +1,132 @@
+{
+  "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "provenance": "License/source documentation retained in winterline/assets/audio/ASSET-LICENSES.md and olly-olly/assets/audio/guns/ASSET-LICENSES.md, with original acquisition records in olly-olly/assets/SOURCES.md. No commercial game recordings or music are used.",
+  "recordings": [
+    {
+      "file": "step-0.wav",
+      "sourceFile": "winterline/assets/audio/step-0.wav",
+      "author": "Joseph Sardin / BigSoundBank",
+      "source": "https://bigsoundbank.com/footsteps-shoe-on-concrete-s0514.html",
+      "license": "CC0-1.0",
+      "adaptation": "Existing trimmed mono 48 kHz excerpt copied unchanged; runtime pitch and gain variation.",
+      "sha256": "6872bdac406386ece03a6bed03c20a6ce9f0c2cf4253c3aa9e48cdcd42f08729"
+    },
+    {
+      "file": "step-1.wav",
+      "sourceFile": "winterline/assets/audio/step-1.wav",
+      "author": "Joseph Sardin / BigSoundBank",
+      "source": "https://bigsoundbank.com/footsteps-shoe-on-concrete-s0514.html",
+      "license": "CC0-1.0",
+      "adaptation": "Existing trimmed mono 48 kHz excerpt copied unchanged; runtime pitch and gain variation.",
+      "sha256": "249b113a44eef16de835804b55d83ce2c1e2f20357334ac35ed7ada9e769eece"
+    },
+    {
+      "file": "step-2.wav",
+      "sourceFile": "winterline/assets/audio/step-2.wav",
+      "author": "Joseph Sardin / BigSoundBank",
+      "source": "https://bigsoundbank.com/footsteps-shoe-on-concrete-s0514.html",
+      "license": "CC0-1.0",
+      "adaptation": "Existing trimmed mono 48 kHz excerpt copied unchanged; runtime pitch and gain variation.",
+      "sha256": "fd1b7eedb4e3cf8804ad9cebb7603d44b9e5595d15aa4fedb191b14058829364"
+    },
+    {
+      "file": "step-3.wav",
+      "sourceFile": "winterline/assets/audio/step-3.wav",
+      "author": "Joseph Sardin / BigSoundBank",
+      "source": "https://bigsoundbank.com/footsteps-shoe-on-concrete-s0514.html",
+      "license": "CC0-1.0",
+      "adaptation": "Existing trimmed mono 48 kHz excerpt copied unchanged; runtime pitch and gain variation.",
+      "sha256": "00bbba11f5042662d1dad323b519b22402341af7c5be5faeccfaa3aaa648cd11"
+    },
+    {
+      "file": "metal-0.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/impact-metal-0.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; layered with original synthesized effects at runtime.",
+      "sha256": "411a48dc8e0d7bae660805d29e8a71414d3a551707ac75547b2d73e9bfdbc24c"
+    },
+    {
+      "file": "metal-1.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/impact-metal-1.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; layered with original synthesized effects at runtime.",
+      "sha256": "e7fa92903417867712ba405a787442169a801b67e503f15f3eeb4660eb4c97e7"
+    },
+    {
+      "file": "metal-2.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/impact-metal-2.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; layered with original synthesized effects at runtime.",
+      "sha256": "8a3fb103f1267c2bb51a1166f44ff118a97f2ba7fa20cca36b504458a620ff29"
+    },
+    {
+      "file": "punch-0.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/impact-punch-0.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; layered with original synthesized effects at runtime.",
+      "sha256": "f8f506faad21c4b3f99db3efa4db570f541979a81e4e93a461b0fb22a70552e2"
+    },
+    {
+      "file": "punch-1.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/impact-punch-1.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; layered with original synthesized effects at runtime.",
+      "sha256": "220abd8585c8b4e053f92f51d45a5182b2bb35ff4d727079429546f74089c061"
+    },
+    {
+      "file": "punch-2.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/impact-punch-2.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; layered with original synthesized effects at runtime.",
+      "sha256": "eae38d0adfaf914d988e0810cc3261177963ca2c9709cf9c79f4aa331160b3a8"
+    },
+    {
+      "file": "glass-0.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/impact-glass-0.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; layered with original synthesized effects at runtime.",
+      "sha256": "f110c2996ca251e643226dc40df51e5d44a073170d9c3518d497fcc094b6d0b5"
+    },
+    {
+      "file": "glass-1.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/impact-glass-1.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; layered with original synthesized effects at runtime.",
+      "sha256": "3f3cd0532581a89a35292119614a13b309a11baf96c11420550f8123c03c3a8e"
+    },
+    {
+      "file": "cloth-0.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/cloth-0.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/rpg-audio",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; runtime pitch and gain variation.",
+      "sha256": "5da55ca7519a20066340beece50c5cc4ede0b42a6beca5c0ab9ecbe58a63927f"
+    },
+    {
+      "file": "cloth-1.ogg",
+      "sourceFile": "olly-olly/assets/audio/guns/cloth-1.ogg",
+      "author": "Kenney",
+      "source": "https://kenney.nl/assets/rpg-audio",
+      "license": "CC0-1.0",
+      "adaptation": "Existing processed mono 48 kHz Ogg recording copied unchanged; runtime pitch and gain variation.",
+      "sha256": "325e84d9bb083f3803e4224e267cef11af77dc4880da7a9f5de97d78072ac9bc"
+    }
+  ]
+}
