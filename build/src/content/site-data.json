@@ -52,6 +52,19 @@
   },
   "games": [
     {
+      "slug": "olly-olly",
+      "title": "OLLY OLLY",
+      "descriptor": "Halloween first-person horror",
+      "group": "horror",
+      "featured": true,
+      "image": "/assets/games/olly-olly-card-v20261001.jpg",
+      "alt": "Five trick-or-treaters seen from behind on a wet street of lit houses at night, a witch, a small bedsheet ghost and a skeleton among them, and a giant figure in a bedsheet rising over the trees in front of a full moon",
+      "summary": "One Halloween night on Alder Lane. Twelve houses, a churchyard and a forest, scarecrows that get up off the lawns, trick-or-treaters in rubber masks, and something tall in a bedsheet looking for you. Keyboard and mouse.",
+      "metaDescription": "OLLY OLLY is a first-person horror shooter set on one Halloween night on a New England street: twelve houses, a churchyard, a forest, and a tall figure in a bedsheet looking for you.",
+      "controls": "WASD + mouse · Shift sprint · Space jump · C crouch · click fire, right click aim · 1-4 guns · R reload · V kick · Q firecrackers · F flashlight · E use · Tab map",
+      "actionLabel": "Go out"
+    },
+    {
       "slug": "curfew",
       "title": "We Were Promised Morning",
       "descriptor": "open-world night horror",
@@ -69,7 +82,7 @@
       "title": "KICKMOON",
       "descriptor": "First-person moon collectathon",
       "group": "action",
-      "featured": true,
+      "featured": false,
       "image": "/assets/games/kickmoon-card-v20260905.webp",
       "alt": "An astronaut mid-kick between three small worlds, a blue water moon, a red lava moon and a cratered white one, the ball blazing a trail of fire ahead",
       "summary": "A boomerang is fun because it comes back. A ball is more fun. Kick it, catch it, and chase it all the way around a moon that is actually round.",
@@ -102,19 +115,6 @@
       "metaDescription": "WINTERLINE is a first-person parkour shooter set in a Christmas city at night: sprint, slide, climb the buildings, drive the cars, and go down through the manholes. Keyboard and mouse.",
       "controls": "WASD + mouse · Shift sprint · Space jump, hold to climb · C slide or crouch · click fire, right click aim · 1 2 3 guns · R reload · F melee · E doors, manholes and cars",
       "actionLabel": "Enter the city"
-    },
-    {
-      "slug": "olly-olly",
-      "title": "OLLY OLLY",
-      "descriptor": "Halloween first-person horror",
-      "group": "horror",
-      "featured": false,
-      "image": "/assets/games/olly-olly-card-clean.jpg",
-      "alt": "Four figures in rubber Halloween masks, a skull, an old man, a devil and a ghoul, walking down a dark street at night with pillowcases, and a tall figure in a bedsheet standing behind them",
-      "summary": "One Halloween night on Alder Lane. Twelve houses, a churchyard and a forest, scarecrows that get up off the lawns, trick-or-treaters in rubber masks, and something tall in a bedsheet looking for you. Keyboard and mouse.",
-      "metaDescription": "OLLY OLLY is a first-person horror shooter set on one Halloween night on a New England street: twelve houses, a churchyard, a forest, and a tall figure in a bedsheet looking for you.",
-      "controls": "WASD + mouse · Shift sprint · Space jump · C crouch · click fire, right click aim · 1-4 guns · R reload · V kick · Q firecrackers · F flashlight · E use · Tab map",
-      "actionLabel": "Go out"
     },
     {
       "slug": "i-seent-it",
