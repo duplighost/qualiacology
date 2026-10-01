@@ -1,0 +1,84 @@
+{
+  "seconds": 13.083,
+  "fps": 24,
+  "size": [
+    480,
+    360
+  ],
+  "stamp": "PM 6:45  OCT.31 1996",
+  "source": "tools/hale-tape.mjs + tools/blender/hale_tape.py, hale_motion.py (who is where), hale_cloth.py (the sheet)",
+  "meshes": [
+    "src/world/houses/hale.js",
+    "src/world/houses/pruitt.js",
+    "src/world/houses/kit/leaf.js",
+    "tools/blender/dress_lib.py"
+  ],
+  "loop": "the picture comes up out of 0.25 s of snow and ends in 0.5 s of it, so the end leads back into the start",
+  "poster": {
+    "file": "home-1996.jpg",
+    "at": 11.55
+  },
+  "shots": {
+    "costume": [
+      0,
+      2.7
+    ],
+    "sam": [
+      2.7,
+      7.2
+    ],
+    "run": [
+      6.85,
+      8.05
+    ],
+    "out": [
+      8.05,
+      10.4
+    ],
+    "backs": [
+      10.4,
+      12
+    ],
+    "boards": [
+      12,
+      12.58
+    ],
+    "snow": [
+      12.58,
+      13.083
+    ]
+  },
+  "voices": [
+    {
+      "id": "ruth",
+      "at": 2.3,
+      "room": 3.6,
+      "text": "Sam. The whole route. You hold his hand at the crossings."
+    },
+    {
+      "id": "sam",
+      "at": 6,
+      "room": 0.9,
+      "text": "I know, Mom."
+    },
+    {
+      "id": "ollie",
+      "at": 7,
+      "room": 1.25,
+      "text": "He holds the bag!"
+    }
+  ],
+  "audio": {
+    "file": "home-1996.ogg",
+    "original": true,
+    "dialogue": false,
+    "music": false,
+    "bell": false,
+    "knock": false,
+    "screenDoorSlaps": [
+      9.73
+    ],
+    "peak": 0.342,
+    "rms": 0.0206
+  }
+}
