@@ -52,6 +52,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 
 | site folder | source | how the site copy is made |
 |---|---|---|
+| olly-olly | `Projects/olly-olly-wt/integration-20260923` | `node tools/build-site-copy.mjs` there; never hand-edit the site copy |
 | arc, thrown | `Projects\arc`, `Projects\thrown` | `node build-site-copy.mjs` there; never hand-edit the site copy |
 | curfew | `Projects\curfew` | `node build-site-copy.mjs` there; never hand-edit |
 | winterline | `Projects\winterline` | `node tools/build-site-copy.mjs` there; never hand-edit |
