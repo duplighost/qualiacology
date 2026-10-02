@@ -1,1 +1,18 @@
-{ "keys": [] }
+{
+  "keys": [
+    "ollie",
+    "hear",
+    "hundred",
+    "ready",
+    "herei",
+    "found",
+    "oxen",
+    "home",
+    "ruth"
+  ],
+  "home": {
+    "ruth": "home-ruth",
+    "sam": "home-sam",
+    "ollie": "home-ollie"
+  }
+}

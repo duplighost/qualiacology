@@ -1,0 +1,571 @@
+{
+  "generated": "2026-10-02",
+  "sources": {
+    "sam": {
+      "file": "sam.mp3",
+      "sha256": "c338baff5d8149c619c68cb5caa1db820777406caaecd6beecc3933b21f02f35",
+      "provider": "CreativeClaw",
+      "model": "speech/elevenlabs-v4",
+      "voice": "UgBBYS2sOqTuMpoF3BR0",
+      "voiceName": "Mark",
+      "jobId": "04b9ca97-3101-49d1-b7aa-d70afdbecc21",
+      "sourceUrl": "https://cdn.creativeclaw.co/u/d47a3b90/audio/1e18cc5a-c3a5-4470-8410-4a4cf783f649.mp3",
+      "request": {
+        "model": "speech/elevenlabs-v4",
+        "voice_id": "UgBBYS2sOqTuMpoF3BR0",
+        "text": "[quiet, tired, intimate] Ollie? [long pause] I hear you, Ollie. I'm coming down. [long pause] [softly, matter-of-fact] A hundred. [long pause] Ready or not. [long pause] Here I come. [long pause] [gentle, relieved] Found you. [long pause] [calling gently] Olly olly oxen free. [long pause] [quiet, intimate] He's home, Mom.",
+        "extras": {
+          "language_code": "en",
+          "voice_settings": {
+            "stability": 0.55,
+            "similarity_boost": 0.75
+          },
+          "timestamps": true,
+          "output_format": "mp3_44100_192"
+        }
+      },
+      "creditsUsed": 7
+    },
+    "ruth": {
+      "file": "ruth.wav",
+      "sha256": "a480509b6418ccf1340ed160367034cd7f9d126fcec652a8907d7a332325d71b",
+      "provider": "CreativeClaw",
+      "model": "speech/gemini-3.8-flash-tts",
+      "voice": "gacrux",
+      "voiceName": "Gacrux",
+      "jobId": "0ef1a34a-345f-492e-bde8-1cf12391a085",
+      "sourceUrl": "https://cdn.creativeclaw.co/u/d47a3b90/audio/be0df756-db31-4b21-865d-42033abdb134.wav",
+      "request": {
+        "model": "speech/gemini-3.8-flash-tts",
+        "voice_id": "gacrux",
+        "text": "This is Ruth Hale. If you're calling about Oliver, leave a number. Any hour.",
+        "extras": {
+          "style": "An original fictional American mother, around fifty. An ordinary answering-machine greeting recorded alone at home after her son went missing. Natural, restrained, practical, not a narrator, not theatrical. A small breath of resolve on 'Any hour.' Speak the exact words conversationally in about 5.5 seconds, without rushing or extra sounds. Dry solo voice, no music, no beep, no sound effects. Neutral American English."
+        }
+      },
+      "creditsUsed": 1
+    },
+    "home-ruth": {
+      "file": "home-ruth.wav",
+      "sha256": "f8e972a176e32cb38d09c3280c7ae8e5b45636dee69c7b933453621a8cbbddb3",
+      "provider": "CreativeClaw",
+      "model": "speech/gemini-3.8-flash-tts",
+      "voice": "gacrux",
+      "voiceName": "Gacrux",
+      "jobId": "c4f3db6f-967b-4917-a673-cf28f4560941",
+      "sourceUrl": "https://cdn.creativeclaw.co/u/d47a3b90/audio/31805e77-63fa-4a4f-b5ff-a5c116465996.wav",
+      "request": {
+        "model": "speech/gemini-3.8-flash-tts",
+        "voice_id": "gacrux",
+        "text": "Sam. The whole route. You hold his hand at the crossings.",
+        "extras": {
+          "style": "An original fictional American mother around forty, speaking from the doorway to her sixteen-year-old son who is about to take his little brother trick-or-treating. A practical affectionate reminder, firm on 'whole route' and 'hold his hand'. Ordinary domestic speech, no acting flourish, no narration. Say the exact words naturally and briskly within 3.5 seconds, only tiny pauses between sentences. Dry solo voice, no music, no sound effects. Neutral American English."
+        }
+      },
+      "creditsUsed": 1
+    },
+    "home-sam": {
+      "file": "home-sam.wav",
+      "sha256": "49a1fd41e83d9df8f7881dfbe35c5414475562f9f625ca880c8f037cb0353a86",
+      "provider": "CreativeClaw",
+      "model": "speech/gemini-3.8-flash-tts",
+      "voice": "achird",
+      "voiceName": "Achird",
+      "jobId": "54525e82-70ee-4cd3-af2a-6ba4f9bca724",
+      "sourceUrl": "https://cdn.creativeclaw.co/u/d47a3b90/audio/dc228bcc-b87b-435c-9279-4aebefc1fcb5.wav",
+      "request": {
+        "model": "speech/gemini-3.8-flash-tts",
+        "voice_id": "achird",
+        "text": "I know, Mom.",
+        "extras": {
+          "style": "An original fictional sixteen-year-old American boy, casually answering his mother while walking out the door. A quick familiar answer with mild teenage impatience, affectionate underneath, not a performance. Youthful male register, not a deep adult narrator. One compact natural utterance under 0.9 seconds, no pauses or added sounds. Exact words only, dry solo voice, neutral American English, no music."
+        }
+      },
+      "creditsUsed": 1
+    },
+    "home-ollie": {
+      "file": "home-ollie.wav",
+      "sha256": "9b8f5d4c3b59b985bd5001475f50d00250745c6efbd8822d794a4bbbf4d3e9a3",
+      "provider": "CreativeClaw",
+      "model": "speech/gemini-3.8-flash-tts",
+      "voice": "kore",
+      "voiceName": "Kore",
+      "jobId": "5b5a38b8-a4b4-49b7-9c02-14e43bacf5d9",
+      "sourceUrl": "https://cdn.creativeclaw.co/u/d47a3b90/audio/a05a521a-7caf-4225-a25e-98b9397ad140.wav",
+      "request": {
+        "model": "speech/gemini-3.8-flash-tts",
+        "voice_id": "kore",
+        "text": "He holds the bag!",
+        "extras": {
+          "style": "An original fictional seven-year-old American boy in a bedsheet ghost costume, happily correcting his mother: his big brother carries the candy bag. Bright, matter-of-fact little child's voice, androgynous youthful register, not an adult narrator and not a cartoon squeak. One quick natural sentence within 1.2 seconds; emphasize 'bag'. Exact words only, clean dry solo voice with no sound effects or music. Neutral American English."
+        }
+      },
+      "creditsUsed": 1
+    }
+  },
+  "clips": [
+    {
+      "key": "ollie",
+      "text": "Ollie?",
+      "file": "ollie.ogg",
+      "source": "sam",
+      "sourceCutSeconds": [
+        0.1447,
+        0.73
+      ],
+      "sourceDuration": 0.5853,
+      "tempo": 1,
+      "filters": "highpass=f=70,lowpass=f=9500",
+      "activeRmsTargetDb": -23,
+      "gain": 1.614326,
+      "duration": 0.5824,
+      "bytes": 9298,
+      "sha256": "649c3f66e8617b41361f47721532cd7e6be011ab4f5e8f86c697e4c272bced27",
+      "peakDb": -16.95,
+      "rmsDb": -27.81,
+      "clippedSamples": 0
+    },
+    {
+      "key": "hear",
+      "text": "I hear you, Ollie. I'm coming down.",
+      "file": "hear.ogg",
+      "source": "sam",
+      "sourceCutSeconds": [
+        2.14,
+        4.3451
+      ],
+      "sourceDuration": 2.2051,
+      "tempo": 1,
+      "filters": "highpass=f=70,lowpass=f=9500",
+      "activeRmsTargetDb": -23,
+      "gain": 1.470618,
+      "duration": 2.2051,
+      "bytes": 23955,
+      "sha256": "1dc52af2978646478e3726cac986f0b488b1c64edc8393a264ba12106aabb279",
+      "peakDb": -11.36,
+      "rmsDb": -27.64,
+      "clippedSamples": 0
+    },
+    {
+      "key": "hundred",
+      "text": "A hundred.",
+      "file": "hundred.ogg",
+      "source": "sam",
+      "sourceCutSeconds": [
+        5.2699,
+        6.1581
+      ],
+      "sourceDuration": 0.8882,
+      "tempo": 1,
+      "filters": "highpass=f=70,lowpass=f=9500",
+      "activeRmsTargetDb": -23,
+      "gain": 1.850766,
+      "duration": 0.8853,
+      "bytes": 12259,
+      "sha256": "8e57f6d991d69a0b1cf8c6f8fdf83ec6b83800e6babc044a6f39937d65a267f5",
+      "peakDb": -10.86,
+      "rmsDb": -27.67,
+      "clippedSamples": 0
+    },
+    {
+      "key": "ready",
+      "text": "Ready or not.",
+      "file": "ready.ogg",
+      "source": "sam",
+      "sourceCutSeconds": [
+        7.0449,
+        7.93
+      ],
+      "sourceDuration": 0.8851,
+      "tempo": 1,
+      "filters": "highpass=f=70,lowpass=f=9500",
+      "activeRmsTargetDb": -23,
+      "gain": 1.055627,
+      "duration": 0.8822,
+      "bytes": 13668,
+      "sha256": "167a91dc6c013741142e2af14d6240d0d13943f439224f60dac9a29624d8a290",
+      "peakDb": -10.67,
+      "rmsDb": -27.47,
+      "clippedSamples": 0
+    },
+    {
+      "key": "herei",
+      "text": "Here I come.",
+      "file": "herei.ogg",
+      "source": "sam",
+      "sourceCutSeconds": [
+        8.6598,
+        9.4283
+      ],
+      "sourceDuration": 0.7685,
+      "tempo": 1,
+      "filters": "highpass=f=70,lowpass=f=9500",
+      "activeRmsTargetDb": -23,
+      "gain": 0.870157,
+      "duration": 0.7656,
+      "bytes": 10926,
+      "sha256": "ea18eeae315026ed2534d98da86b4407cd1602ddf0b9469e02cfdc8645b466d0",
+      "peakDb": -13.12,
+      "rmsDb": -27.39,
+      "clippedSamples": 0
+    },
+    {
+      "key": "found",
+      "text": "Found you.",
+      "file": "found.ogg",
+      "source": "sam",
+      "sourceCutSeconds": [
+        10.54,
+        11.19
+      ],
+      "sourceDuration": 0.65,
+      "tempo": 1,
+      "filters": "highpass=f=70,lowpass=f=9500",
+      "activeRmsTargetDb": -23,
+      "gain": 4.189617,
+      "duration": 0.6471,
+      "bytes": 9929,
+      "sha256": "768084dc3d8f16d8a736742efba0cfd2b14eb195fc53109c175e075c4dc13761",
+      "peakDb": -12.47,
+      "rmsDb": -26.72,
+      "clippedSamples": 0
+    },
+    {
+      "key": "oxen",
+      "text": "Olly olly oxen free.",
+      "file": "oxen.ogg",
+      "source": "sam",
+      "sourceCutSeconds": [
+        11.98,
+        13.5965
+      ],
+      "sourceDuration": 1.6165,
+      "tempo": 1,
+      "filters": "highpass=f=70,lowpass=f=9500",
+      "activeRmsTargetDb": -23,
+      "gain": 0.963162,
+      "duration": 1.6165,
+      "bytes": 22059,
+      "sha256": "677457d142729a3b0e6f6e7c8cf772ffda88351d77c81479a2411d9e9cd91140",
+      "peakDb": -10.97,
+      "rmsDb": -26.61,
+      "clippedSamples": 0
+    },
+    {
+      "key": "home",
+      "text": "He's home, Mom.",
+      "file": "home.ogg",
+      "source": "sam",
+      "sourceCutSeconds": [
+        14.4198,
+        15.348
+      ],
+      "sourceDuration": 0.9281,
+      "tempo": 1,
+      "filters": "highpass=f=70,lowpass=f=9500",
+      "activeRmsTargetDb": -23,
+      "gain": 1.573579,
+      "duration": 0.9252,
+      "bytes": 12183,
+      "sha256": "960fcaf2aaec0368d5c001ad9acb58c8d1e5301812e920ff4a8619e57a6c6d7f",
+      "peakDb": -9.77,
+      "rmsDb": -26.86,
+      "clippedSamples": 0
+    },
+    {
+      "key": "ruth",
+      "text": "This is Ruth Hale. If you're calling about Oliver, leave a number. Any hour.",
+      "file": "ruth.ogg",
+      "source": "ruth",
+      "sourceCutSeconds": [
+        0.0498,
+        6.2659
+      ],
+      "sourceDuration": 6.2161,
+      "tempo": 1,
+      "filters": "highpass=f=230,lowpass=f=3600",
+      "activeRmsTargetDb": -25,
+      "gain": 0.780728,
+      "duration": 6.2161,
+      "bytes": 54076,
+      "sha256": "74b8cd47081145f8d8e47108782fee433f7c3ab42e3ca62fc400290e197c772d",
+      "peakDb": -11.67,
+      "rmsDb": -30.76,
+      "clippedSamples": 0
+    },
+    {
+      "key": "home-ruth",
+      "text": "Sam. The whole route. You hold his hand at the crossings.",
+      "file": "home-ruth.ogg",
+      "source": "home-ruth",
+      "sourceCutSeconds": [
+        0.0249,
+        3.7067
+      ],
+      "sourceDuration": 3.6819,
+      "tempo": 1.051966,
+      "filters": "highpass=f=140,lowpass=f=5000",
+      "activeRmsTargetDb": -25,
+      "gain": 0.66917,
+      "duration": 3.5152,
+      "bytes": 33594,
+      "sha256": "d0c4a314c03c6d1e5760a178a9fa17092c56ce0dc23cd129cb5a363a15ec4b02",
+      "peakDb": -11.49,
+      "rmsDb": -30.41,
+      "clippedSamples": 0
+    },
+    {
+      "key": "home-sam",
+      "text": "I know, Mom.",
+      "file": "home-sam.ogg",
+      "source": "home-sam",
+      "sourceCutSeconds": [
+        0.2294,
+        1.3671
+      ],
+      "sourceDuration": 1.1377,
+      "tempo": 1.30766,
+      "filters": "highpass=f=140,lowpass=f=4200",
+      "activeRmsTargetDb": -25,
+      "gain": 0.732185,
+      "duration": 0.8735,
+      "bytes": 11055,
+      "sha256": "1da16fd558df03969980a5707cdfffb1a8ba017033b931a38a3cb24bfb40ac8d",
+      "peakDb": -15.12,
+      "rmsDb": -28.54,
+      "clippedSamples": 0
+    },
+    {
+      "key": "home-ollie",
+      "text": "He holds the bag!",
+      "file": "home-ollie.ogg",
+      "source": "home-ollie",
+      "sourceCutSeconds": [
+        0.3042,
+        1.9208
+      ],
+      "sourceDuration": 1.6166,
+      "tempo": 1.347147,
+      "filters": "highpass=f=160,lowpass=f=3100",
+      "activeRmsTargetDb": -25,
+      "gain": 0.39098,
+      "duration": 1.2122,
+      "bytes": 13935,
+      "sha256": "2d8557802a8ddaef95a4d1c952a3042e55bc213bcb9f98158335e8a8c7bf0394",
+      "peakDb": -16.18,
+      "rmsDb": -29.28,
+      "clippedSamples": 0
+    }
+  ],
+  "processing": "tools/audio/voice-clips.py; source alignment for Sam, RMS boundary trim, pitch-preserving atempo only for tape slots, bandwidth filtering, light tape saturation, active RMS matching with -6 dBFS peak ceiling, 12 ms fades, mono 44.1 kHz Vorbis quality 5.",
+  "verification": {
+    "levels": {
+      "found.ogg": {
+        "len": 0.647,
+        "peak_db": -12.47,
+        "rms_db": -26.72,
+        "crest_db": 14.2,
+        "loud10ms_db": -20.05,
+        "clip": 0,
+        "centroid": 352,
+        "hi6k": 0.0004,
+        "harsh2_5k": 0.044,
+        "sub60": 0.003,
+        "tail60": 0.64,
+        "dc": -4e-05,
+        "flags": []
+      },
+      "hear.ogg": {
+        "len": 2.205,
+        "peak_db": -11.37,
+        "rms_db": -27.65,
+        "crest_db": 16.3,
+        "loud10ms_db": -18.41,
+        "clip": 0,
+        "centroid": 277,
+        "hi6k": 0.0007,
+        "harsh2_5k": 0.024,
+        "sub60": 0.0,
+        "tail60": 2.2,
+        "dc": -1e-05,
+        "flags": []
+      },
+      "herei.ogg": {
+        "len": 0.766,
+        "peak_db": -13.13,
+        "rms_db": -27.39,
+        "crest_db": 14.3,
+        "loud10ms_db": -21.14,
+        "clip": 0,
+        "centroid": 708,
+        "hi6k": 0.0003,
+        "harsh2_5k": 0.039,
+        "sub60": 0.0,
+        "tail60": 0.76,
+        "dc": 1e-05,
+        "flags": []
+      },
+      "home-ollie.ogg": {
+        "len": 1.212,
+        "peak_db": -16.17,
+        "rms_db": -29.28,
+        "crest_db": 13.1,
+        "loud10ms_db": -21.74,
+        "clip": 0,
+        "centroid": 738,
+        "hi6k": 0.0003,
+        "harsh2_5k": 0.049,
+        "sub60": 0.0,
+        "tail60": 1.2,
+        "dc": -9e-05,
+        "flags": []
+      },
+      "home-ruth.ogg": {
+        "len": 3.515,
+        "peak_db": -11.49,
+        "rms_db": -30.41,
+        "crest_db": 18.9,
+        "loud10ms_db": -19.02,
+        "clip": 0,
+        "centroid": 516,
+        "hi6k": 0.0096,
+        "harsh2_5k": 0.013,
+        "sub60": 0.0,
+        "tail60": 3.45,
+        "dc": -8e-05,
+        "flags": []
+      },
+      "home-sam.ogg": {
+        "len": 0.873,
+        "peak_db": -15.12,
+        "rms_db": -28.54,
+        "crest_db": 13.4,
+        "loud10ms_db": -21.48,
+        "clip": 0,
+        "centroid": 496,
+        "hi6k": 0.0001,
+        "harsh2_5k": 0.021,
+        "sub60": 0.0,
+        "tail60": 0.87,
+        "dc": -2e-05,
+        "flags": []
+      },
+      "home.ogg": {
+        "len": 0.925,
+        "peak_db": -9.4,
+        "rms_db": -26.86,
+        "crest_db": 17.5,
+        "loud10ms_db": -19.93,
+        "clip": 0,
+        "centroid": 1000,
+        "hi6k": 0.0183,
+        "harsh2_5k": 0.071,
+        "sub60": 0.0,
+        "tail60": 0.92,
+        "dc": 1e-05,
+        "flags": []
+      },
+      "hundred.ogg": {
+        "len": 0.885,
+        "peak_db": -10.86,
+        "rms_db": -27.67,
+        "crest_db": 16.8,
+        "loud10ms_db": -18.76,
+        "clip": 0,
+        "centroid": 284,
+        "hi6k": 0.0004,
+        "harsh2_5k": 0.023,
+        "sub60": 0.001,
+        "tail60": 0.88,
+        "dc": -1e-05,
+        "flags": []
+      },
+      "ollie.ogg": {
+        "len": 0.582,
+        "peak_db": -16.94,
+        "rms_db": -27.81,
+        "crest_db": 10.9,
+        "loud10ms_db": -22.13,
+        "clip": 0,
+        "centroid": 170,
+        "hi6k": 0.0002,
+        "harsh2_5k": 0.007,
+        "sub60": 0.001,
+        "tail60": 0.58,
+        "dc": 0.0,
+        "flags": []
+      },
+      "oxen.ogg": {
+        "len": 1.617,
+        "peak_db": -10.95,
+        "rms_db": -26.61,
+        "crest_db": 15.7,
+        "loud10ms_db": -22.03,
+        "clip": 0,
+        "centroid": 932,
+        "hi6k": 0.0057,
+        "harsh2_5k": 0.119,
+        "sub60": 0.0,
+        "tail60": 1.61,
+        "dc": -2e-05,
+        "flags": []
+      },
+      "ready.ogg": {
+        "len": 0.882,
+        "peak_db": -10.68,
+        "rms_db": -27.47,
+        "crest_db": 16.8,
+        "loud10ms_db": -20.3,
+        "clip": 0,
+        "centroid": 677,
+        "hi6k": 0.0,
+        "harsh2_5k": 0.046,
+        "sub60": 0.0,
+        "tail60": 0.88,
+        "dc": -2e-05,
+        "flags": []
+      },
+      "ruth.ogg": {
+        "len": 6.216,
+        "peak_db": -11.67,
+        "rms_db": -30.76,
+        "crest_db": 19.1,
+        "loud10ms_db": -19.94,
+        "clip": 0,
+        "centroid": 553,
+        "hi6k": 0.0012,
+        "harsh2_5k": 0.011,
+        "sub60": 0.0,
+        "tail60": 6.21,
+        "dc": -4e-05,
+        "flags": [
+          "LONG"
+        ]
+      }
+    },
+    "transcription": {
+      "local": "faster-whisper tiny.en, CPU int8, no transcript prompt, all 12 prepared clips.",
+      "localNote": "Words matched with punctuation/number spelling differences except oxen: tiny.en rendered Olly olly as All the all the.",
+      "samIndependent": {
+        "mediaType": "transcript",
+        "url": "https://cdn.creativeclaw.co/u/d47a3b90/transcripts/4d43f982-8f4a-4105-970b-bcf5cbe88483.json",
+        "transcript_url": "https://cdn.creativeclaw.co/u/d47a3b90/transcripts/4d43f982-8f4a-4105-970b-bcf5cbe88483.json",
+        "diarization_url": "https://cdn.creativeclaw.co/u/d47a3b90/transcripts/2268822e-15fd-4cf6-96f9-2bdb7e95cb6b.json",
+        "audio_url": "https://cdn.creativeclaw.co/u/d47a3b90/audio/1e18cc5a-c3a5-4470-8410-4a4cf783f649.mp3",
+        "text": "Ollie? I hear you, Ollie. I'm coming down. A hundred. Ready or not, here I come. Found you. Ollie, Ollie, oxen free. He's home, Mom",
+        "formatted_text": "Speaker 0 [00:00 \u00e2\u20ac\u201d 00:15]\n[s1] Ollie? [s2] I hear you, Ollie. [s3] I'm coming down. [s4] A hundred. [s5] Ready or not, here I come. [s6] Found you. [s7] Ollie, Ollie, oxen free. [s8] He's home, Mom",
+        "language": "eng",
+        "duration": 15.52,
+        "speakerCount": 1,
+        "wordCount": 25,
+        "model": "elevenlabs-scribe",
+        "cached": false,
+        "jobId": "f5a45550-466d-4114-a31b-ac9de9f9de52",
+        "creditsUsed": 1
+      }
+    },
+    "timing": "All three tape clips fit authored slots (3.6, 0.9, 1.25 seconds).",
+    "runtime": "Pending scoped browser verification.",
+    "listening": "No subjective listening claim; performances need Alexs ear. Teen Sam and Ollie use pitch-preserving time compression (1.308x and 1.347x)."
+  }
+}
