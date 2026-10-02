@@ -565,7 +565,52 @@
       }
     },
     "timing": "All three tape clips fit authored slots (3.6, 0.9, 1.25 seconds).",
-    "runtime": "Pending scoped browser verification.",
-    "listening": "No subjective listening claim; performances need Alexs ear. Teen Sam and Ollie use pitch-preserving time compression (1.308x and 1.347x)."
-  }
+    "runtime": {
+      "testedCode": "c0b59bf",
+      "opening": "Packaged Chrome/D3D11 check: all 12 buffers before Play; all three film cues/captions; no voice overlap; pause/resume; skip stops sound; all adult caption holds; Found you stamp; repeated E on the answering machine; tone 0.3 seconds after actual greeting end.",
+      "openingCheckCorrection": "First check expected a bare prompt ID, but the existing field concatenates ID and label. Corrected to startsWith; timing and both real-key plays passed in that run.",
+      "ending": {
+        "report": "c0b59bf-game-06-10-27",
+        "checks": {
+          "boot": true,
+          "play": true,
+          "homeRung": true,
+          "homeLights": true,
+          "homeWalkBegins": true,
+          "homeInside": true,
+          "homeHung": true,
+          "homeCandle": true,
+          "homeCards": true,
+          "homeCredits": true,
+          "homeComplete": true,
+          "homeNoProblems": true,
+          "endingVoices": true,
+          "endingVoiceCaptions": true,
+          "rendered": true,
+          "runtime": true
+        },
+        "url": "https://deploy-preview-316--classy-strudel-55444b.netlify.app/olly-olly/"
+      },
+      "crypt": {
+        "report": "c0b59bf-game-06-15-58",
+        "checks": {
+          "boot": true,
+          "play": true,
+          "cryptStopsAt99": true,
+          "cryptHundred": true,
+          "cryptBagTaken": true,
+          "cryptVoices": true,
+          "cryptCaptionTiming": true,
+          "rendered": true,
+          "runtime": true
+        }
+      },
+      "limits": "Prepared saves and camera placement with real interaction keys; not an uninterrupted whole-night run. Desktop Chrome with ANGLE D3D11 and adjusted mouse isolation. Subjective performance approval is separate."
+    },
+    "listening": "No subjective listening claim; performances need Alexs ear. Teen Sam and Ollie use pitch-preserving time compression (1.308x and 1.347x).",
+    "previewAssets": "All 12 hosted OGG SHA-256 values matched the prepared source files.",
+    "reviewVideo": "13.083 seconds, H.264/AAC; decoded soundtrack matched the source mix at 0 samples offset at 16 kHz (correlation 0.999829)."
+  },
+  "creditsReported": 12,
+  "creditsNote": "7 credits adult Sam, 1 each for four Google generations, 1 for independent Scribe transcription; completed-job reports, no purchase."
 }
