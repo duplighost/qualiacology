@@ -79,3 +79,21 @@ already supplied ambientCG Asphalt012 derivatives plus generated soil/moss color
 and leaf litter. Canonical JPEGs and the optional authoring script are included.
 It is not a newly acquired ground scan. No Poly Haven image was downloaded into or
 used by this release. No commercial-game image is a playable asset.
+
+
+## 1.2 Black Iron polish changes
+No new third-party assets were acquired for this revision. Everything added is
+authored geometry, authored shaders, or a derivative of material already listed
+above.
+
+The sky, the open sea, the headland terrain, the horizon ridges, the causeway,
+the breaker stone and the strand are all procedural geometry and hand-written
+GLSL in this repository. The strand and headland reuse the supplied ambientCG
+meadow and cast-concrete derivatives already declared above; no new ground scan,
+sky photograph, water capture or terrain height field was downloaded or used.
+
+The climbing gait, the haul pose and the mantle are procedural two-bone solutions
+applied to the same inherited licensed rig described under "Character". They are
+modifications, not a newly acquired mocap library, and the creator does not
+endorse this game. The screenshots used while making this pass are actual game
+renderer output; none is generated concept art.

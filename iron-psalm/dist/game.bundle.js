@@ -39,6 +39,7 @@ class GameApplication {
         app.inputBound = false;
         app.disposed = false;
         app.bootTimer = null;
+        app.endingTimer = null;
         app.frameRequest = null;
         app.sim = undefined;
         app.view = undefined;
@@ -75,7 +76,7 @@ class GameApplication {
         app.zoneCodes = { cells: 'A', laundry: 'B', boiler: 'C', yard: 'D', warden: 'E', exit: 'F' };
         if (app.coarse)
             app.host.document.body.classList.add('touch');
-        for (const name of ["toast", "sector", "hideGesture", "showGesture", "clearInput", "saveSettings", "begin", "panel", "pause", "resume", "showPause", "showSettings", "backSettings", "retry", "updateContinue", "ended", "handleEvents", "readInput", "objective", "paintHud", "frame", "bind", "init", "destroy"])
+        for (const name of ["toast", "sector", "hideGesture", "showGesture", "clearInput", "saveSettings", "begin", "panel", "pause", "resume", "showPause", "showSettings", "backSettings", "retry", "updateContinue", "finish", "ended", "handleEvents", "readInput", "objective", "paintHud", "frame", "bind", "init", "destroy"])
             this[name] = this[name].bind(this);
     }
     destroy() { return lifecycle.destroy(this); }
@@ -123,6 +124,9 @@ class GameApplication {
     }
     updateContinue() {
         return session.updateContinue(this);
+    }
+    finish() {
+        return session.finish(this);
     }
     ended(win) {
         return session.ended(this, win);
@@ -195,8 +199,8 @@ async function init(app) {
         app.view.shaderWarmupComplete = true;
         app.view.render();
         if (app.coarse) {
-            app.$('#deviceNote').innerHTML = 'MANUAL TOUCH · DRAG THE SCENE TO LOOK<br>FULL BROWSER GAME · NO INSTALLATION';
-            app.$('#title .description').innerHTML = 'Left pad moves the prisoner.<br>Circle or swipe on the right pad to swing.<br>Tap WHIP for a single strike. Drag the scene to look.';
+            app.$('#deviceNote').innerHTML = 'TWO-THUMB CONTROLS<br>FULL BROWSER GAME · NO INSTALLATION';
+            app.$('#title .description').innerHTML = 'Left thumb moves. Right thumb drags the iron.<br>Drag anywhere else on the screen to look around.';
         }
         app.bind();
         app.updateContinue();
@@ -276,12 +280,14 @@ module.exports = { usesTouchControls, requestOrientation };
 }, {}],
 "src/app/config.js": [function(require, module, exports) {
 'use strict';
-/** Presentation/build version is independent of the compatible version-4 save format. */
-const VERSION = '0.8.2';
+/** Black Iron has a deliberately new checkpoint namespace: the rebuilt late
+ * campaign and ending cannot safely resume the geometry/progression state from
+ * the older dc04 release. Compatible visual settings remain shared. */
+const VERSION = '1.2.0';
 const STORAGE_KEYS = Object.freeze({
-    checkpoint: 'iron-psalm-dc04-checkpoint',
+    checkpoint: 'iron-psalm-black-iron-05-checkpoint',
     settings: 'iron-psalm-dc04-settings',
-    best: 'iron-psalm-best'
+    best: 'iron-psalm-black-iron-best'
 });
 function normalizeSettings(value, coarse = false) {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -297,7 +303,7 @@ function normalizeSettings(value, coarse = false) {
         clarity: ['preset', '1', '1.5', '2'].includes(source.clarity) ? source.clarity : 'preset',
         touchLookMode: source.touchLookMode === 'push' ? 'push' : 'drag',
         touchLookSensitivity: Number.isFinite(source.touchLookSensitivity) ? Math.max(.4, Math.min(2, source.touchLookSensitivity)) : 1,
-        touchLookVertical: source.touchLookVertical === true,
+        touchLookVertical: source.touchLookVertical !== false,
         sound: source.sound !== false,
         autoQuality: source.autoQuality === true,
         volume: Number.isFinite(source.volume) ? Math.max(0, Math.min(1, source.volume)) : .66
@@ -318,8 +324,11 @@ function handleEvents(app) {
         if(e.type==='circuitOff')app.toast(e.remote?'Courtyard backup circuit disabled.':'Call box destroyed.',2.5);
         if(e.type==='climberDomino'&&e.knockedOff)app.toast('CHAIN REACTION / '+(e.depth+1)+' DOWN',1.5);
         if(e.type==='shortcut')app.toast('The hidden return hatch is open.',2.5);
-        if(e.type==='climbStart'){app.sector(e.name,'CLIMB / KEEP THE IRON MOVING');app.toast(app.coarse?'Left pad climbs and traverses. Circle the right pad to knock pursuers off.':'W/S climb · A/D traverse. Mouse circles swing in the wall plane. Guards are following.',5);}
-        if(e.type==='climbEnd'){app.view.poseBuffer.clear();app.toast('Over the top. Full ground controls restored.',2.5);}
+        if(e.type==='climbStart'){app.sector(e.name,Math.round(e.height||0)+' METRES OF IT');app.toast(app.coarse?'Left thumb climbs. Now swing the iron ABOVE you — the weight hauls you up.':'W/S climbs. Now swing the iron ABOVE you — its weight hauls you up faster than your arms ever will.',6.5);app.haulsSeen=0;}
+        if(e.type==='mantleStart')app.toast('Hands on the coping. Keep W held.',1.4);
+        if(e.type==='climbHaul'){app.haulsSeen=(app.haulsSeen||0)+1;if(app.haulsSeen===1)app.toast('That is the trick. Keep the iron above you and it keeps pulling.',3.4);}
+        if(e.type==='climberFall')app.toast('One off the wall.',1.1);
+        if(e.type==='climbEnd'){app.view.poseBuffer.clear();app.toast((e.hauls>6?'Hauled the whole way. ':'')+'Feet down. Full ground controls restored.',2.5);}
         if(e.type==='climbBreak') app.toast('Grip barrier broken. The way up is open.',2);
         if (e.type === 'sector')
             app.sector(e.name);
@@ -329,16 +338,30 @@ function handleEvents(app) {
         }
         if (e.type === 'reveal')
             app.toast('Not a wall. A way out.', 3);
-        if (e.type === 'locked')
-            app.toast(e.requires ? 'Break the lockdown relay in the records hall.' : 'This gate answers to the officer guarding it.', 2.6);
+        if (e.type === 'locked') {
+            if (e.id === 'coast-chain-gate') app.toast('The chain is still under tension. Destroy the winch first.', 2.8);
+            else app.toast(e.requires ? 'Break the mechanism controlling this gate.' : 'This gate answers to the officer guarding it.', 2.6);
+        }
         if (e.type === 'bossDown') {
             const last = e.key === 'governor';
             app.sector(last ? 'NO FURTHER APPEAL.' : 'YOUR SENTENCE IS NOT OVER.', last ? 'GOVERNOR / DEFEATED' : 'WARDEN / DEFEATED');
-            app.toast(last ? 'Break the sea gate. Then climb the outer defenses.' : 'Break his gate. Take the administration stair to the upper galleries.', 6);
+            app.toast(last ? 'The court is finished. The service breach leads through the outer defenses.' : 'Break his gate. Take the administration stair to the upper galleries.', 6);
         }
         if (e.type === 'relay') {
             app.sector('LOCKDOWN ENDED.', 'RECORDS / SERVICE BRIDGE');
             app.toast('The service bridge is unlocked. Cross to the infirmary.', 5);
+        }
+        if (e.type === 'lastChain') {
+            app.sector('THE LAST CHAIN IS DEAD.', 'COAST / WINCH DESTROYED');
+            app.toast('The sea gate has gone slack. Break it, then follow the lit lane.', 5);
+        }
+        if (e.type === 'finalGate') {
+            app.sector('NO WALL LEFT.', 'COAST / THE TIDE ROAD');
+            app.toast('The tide road runs out to the breaker stone. Take the iron with you.', 5.5);
+        }
+        if (e.type === 'cuffBroken') {
+            app.sector('THE IRON STAYS HERE.', '0317 / SENTENCE SERVED');
+            app.toast('Nothing on your leg. Run.', 4.5);
         }
         if (e.type === 'reel')
             app.toast(e.short ? 'Narrow gallery: chain reeled in. Keep drawing your swing.' : 'Room to swing. Full chain restored.', 3);
@@ -349,8 +372,8 @@ function handleEvents(app) {
             app.saveTime = 2.5;
             app.$('#save').style.opacity = '1';
         }
-        if (e.type === 'dead' || e.type === 'win')
-            app.ended(e.type === 'win');
+        if (e.type === 'dead') app.ended(false);
+        if (e.type === 'win') app.finish();
     }
 }
 module.exports = { handleEvents };
@@ -370,11 +393,12 @@ function frame(app, now) {
     const raw = (now - app.last) / 1000, dt = Math.max(0, Math.min(raw, .085));
     app.last = now;
     app.fpsEMA = app.IP.lerp(app.fpsEMA, 1 / Math.max(raw, .004), .04);
-    if (app.mode === 'play') {
+    if (app.mode === 'play' || app.mode === 'ending') {
+        // The final walk is still played, not watched.
         const input = app.readInput(dt || 1 / 60);
         app.accumulator += dt * (app.sim.impactSlow > 0 ? .70 : 1);
         let steps = 0;
-        while (app.accumulator >= 1 / 120 && steps < 12 && app.mode === 'play') {
+        while (app.accumulator >= 1 / 120 && steps < 12 && (app.mode === 'play' || app.mode === 'ending')) {
             app.view.captureBeforeStep();
             app.sim.step(1 / 120, input);
             app.accumulator -= 1 / 120;
@@ -396,7 +420,8 @@ function frame(app, now) {
             app.lastPadButtons = pad.buttons.map(b => b.pressed);
         }
     }
-    app.view.update(app.mode === 'play' || app.mode === 'title' ? dt : 0, app.mode === 'play' ? app.accumulator * 120 : 1, app.mode === 'title' || app.mode === 'settings' && app.fromPanel === 'title');
+    // The morning keeps coming up behind the results panel.
+    app.view.update(app.mode === 'play' || app.mode === 'title' || app.mode === 'ending' || app.mode === 'won' ? dt : 0, app.mode === 'play' ? app.accumulator * 120 : 1, app.mode === 'title' || app.mode === 'settings' && app.fromPanel === 'title');
     app.view.render();
     app.sound.update(app.sim, app.mode === 'play', app.view.cameraYaw);
     app.paintHud(dt);
@@ -450,13 +475,20 @@ function showGesture(app, layout) {
 function objective(app) {
     const g = id => app.sim.gates.find(q => q.id === id), p = app.sim.player, zone = app.sim.region;
     const toward = (text, x, z) => ({ text, x, z });
-    if(app.sim.climb){const c=app.sim.climb.surface;return toward((app.coarse?'Left pad climbs / traverses · circle the right pad to knock guards off · ':'W/S climb · A/D traverse · circle the mouse to knock guards off · ')+Math.max(0,Math.ceil(c.top-p.y))+' m to the top',p.x,c.z);}
+    if(app.sim.climb){const c=app.sim.climb.surface,left=Math.max(0,Math.ceil(c.top-p.y));
+        const lead=app.sim.climb.hauls>1?'Throw the iron overhead and ride it up · ':(app.coarse?'Swing the iron above you to be hauled up · ':'Swing the iron overhead — its weight carries you · ');
+        return toward(lead+left+' m to the coping',p.x,c.z);}
     if(p.z<-303){
-        if(p.z>-322)return toward(app.coarse?'Climb the marked outer wall. Push the left pad toward the masonry.':'Climb the marked outer wall. Push W against the masonry.',0,-320);
-        if(p.z>-378)return toward('Cross the rampart. Take the east stair into the grass.',8,-373);
-        if(p.z>-418)return toward('Climb the giant chain-link fence. The watch store hides an extra route.',3,-416);
+        if(p.z>-322)return toward(app.coarse?'Climb the marked service breach. Push the left pad toward the masonry.':'Climb the marked service breach. Hold W against the masonry.',0,-320);
+        if(p.z>-378)return toward('Cross the service parapet. Take the east stair into the grass.',8,-373);
+        if(p.z>-418)return toward('Climb the perimeter mesh. The watch store hides an optional cache.',3,-416);
         if(p.z>-456)return toward('Cross the mesh catwalk. Descend at the west end.',-14,-452);
-        return toward('Beyond the prison. Follow the coast.',-6,-470);
+        const winch=app.sim.props.find(q=>q.id==='coast-winch'), gate=g('coast-chain-gate');
+        const anvil=app.sim.props.find(q=>q.id==='breaker-stone');
+        if(winch&&!winch.broken)return toward('Destroy the chain winch. Drag the iron into its drum.',4.65,-461.7);
+        if(gate&&!gate.broken)return toward('Break the slack sea gate.',-6,-467);
+        if(anvil&&!anvil.broken)return toward('Out along the tide road. Swing the iron into the breaker stone.',-6,-530.5);
+        return toward('Walk down the strand. Nothing is counting any more.',-6,-552.5);
     }
     if (zone === 'cells')
         return g('north-gate').broken ? toward('Through the north passage to the wash house.', 0, -24) : toward('Break the north transfer gate.', 0, -18);
@@ -488,7 +520,7 @@ function objective(app) {
         return toward('Follow the drainage channel to the final court.', 0, -261);
     if (!app.sim.finalBossDead)
         return toward((require('../simulation/governor').circuitsOff(app.sim)?'Backup circuit disabled. Break his cover; punish his charge.':'Smash both call boxes to stop backup. Use his charge against the cover.'), 0, -273);
-    return toward('Break the sea gate. The outer defenses are beyond.', 0, -301);
+    return toward('Leave the court. The service breach is beyond the south gate.', 0, -301);
 }
 function paintHud(app, dt) {
     if (app.coarse) {
@@ -515,12 +547,27 @@ function paintHud(app, dt) {
         app.$('#health').innerHTML = Array.from({ length: p.maxHealth }, (_, i) => '<i class="' + (i < p.health ? '' : 'lost') + '"></i>').join('');
         app.$('#health').setAttribute('aria-label', `${p.health} of ${p.maxHealth} health`);
         app.$('#help').innerHTML = app.sim.climb
-            ? 'W/S CLIMB &nbsp; · &nbsp; A/D TRAVERSE &nbsp; · &nbsp; SHIFT + A/D EVADE &nbsp; · &nbsp; HOLD LEFT MOUSE + CIRCLE TO SWING<br>REVERSE THE CIRCLE TO WHIP BACK &nbsp; · &nbsp; SPACE BRAKE &nbsp; · &nbsp; R SHORT CHAIN &nbsp; · &nbsp; S AT BOTTOM TO STEP OFF'
-            : 'WASD MOVE &nbsp; · &nbsp; HOLD LEFT MOUSE + CIRCLE GUIDE SWING &nbsp; · &nbsp; RIGHT DRAG / Q E LOOK<br>HOLD SPACE BRAKE &nbsp; · &nbsp; R REEL IN &nbsp; · &nbsp; SHIFT EVADE &nbsp; · &nbsp; WHEEL / C DISTANCE / CENTRE &nbsp; · &nbsp; ESC PAUSE';
+            ? 'W/S CLIMB &nbsp; · &nbsp; A/D TRAVERSE &nbsp; · &nbsp; <b>SWING THE IRON OVERHEAD TO HAUL</b><br>THE WEIGHT PULLS YOU UP FASTER THAN YOUR ARMS &nbsp; · &nbsp; S AT THE BOTTOM STEPS OFF'
+            : (app.coarse
+                ? 'LEFT THUMB MOVES &nbsp; · &nbsp; RIGHT THUMB SWINGS THE IRON<br>DRAG ANYWHERE ELSE ON THE SCREEN TO LOOK AROUND'
+                : 'WASD MOVE &nbsp; · &nbsp; HOLD LEFT MOUSE + DRAG TO SWING &nbsp; · &nbsp; ESC PAUSE<br>DRAG CLOSE FOR SHORT HITS &nbsp; · &nbsp; FARTHER OUT FOR WIDE ARCS &nbsp; · &nbsp; CROSS OVER YOUR BODY TO REVERSE');
         app.$('#zoneName').textContent = app.sim.climb?.surface.name || app.sim.world.rooms.find(r => r.id === app.sim.region)?.name || app.zoneNames[app.sim.region] || 'THE FORGOTTEN WAY';
         app.$('#zoneCode').textContent = 'BLACKWATER / ACT ' + (p.z > -105 ? 'I' : p.z > -203 ? 'II' : p.z > -304 ? 'III' : 'IV') + ' OF IV';
         app.$('#hudMeta').textContent = app.sim.secretCount + ' / ' + app.sim.world.secrets.length + ' SECRETS' + (app.sim.compact ? ' · SHORT CHAIN' : '');
     }
+    const climbPanel = app.$('#climb');
+    if (app.sim.climb) {
+        const c = app.sim.climb.surface, span = Math.max(.001, c.top - c.bottom);
+        const t = app.IP.clamp((p.y - c.bottom) / span, 0, 1);
+        climbPanel.setAttribute('aria-hidden', 'false');
+        climbPanel.querySelector('.climb-fill').style.transform = 'scaleY(' + t + ')';
+        climbPanel.querySelector('.climb-mark').style.bottom = (t * 100) + '%';
+        climbPanel.querySelector('.climb-metres').textContent = Math.max(0, Math.ceil(c.top - p.y));
+        const haul = app.IP.clamp(app.sim.climb.hoist || 0, 0, 1);
+        climbPanel.querySelector('.haul b').style.transform = 'scaleX(' + haul + ')';
+        climbPanel.classList.toggle('hauling', haul > .3);
+    }
+    else if (climbPanel.getAttribute('aria-hidden') !== 'true') climbPanel.setAttribute('aria-hidden', 'true');
     const ob = app.objective();
     app.$('#objective').textContent = ob.text;
     const boss = app.sim.enemies.filter(e => e.type === 'warden' && !e.dead).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
@@ -567,8 +614,10 @@ function clearInput(app) {
     app.host.document.querySelectorAll('.knob').forEach(e => e.style.transform = '');
     app.lastInput = { spin: false, grip: false, mx: 0, mz: 0 };
     app.hideGesture();
-    if (app.view)
+    if (app.view) {
         app.view.cameraLookHeld = false;
+        app.view.manualSwingHeld = false;
+    }
     app.host.document.body.classList.remove('looking');
 }
 function readInput(app, dt) {
@@ -578,10 +627,12 @@ function readInput(app, dt) {
         mx = app.touches.move.x;
         my = app.touches.move.y;
     }
-    const turn = (app.keys.has('KeyQ') ? 1 : 0) - (app.keys.has('KeyE') ? 1 : 0) + app.touches.look;
-    app.view.cameraYaw += turn * dt * 1.6;
-    const look = app.touchLook.sample(dt, app.settings.touchLookMode);
-    if (look.dx || look.dy) app.view.rotateCamera(look.dx * app.settings.touchLookSensitivity, app.settings.touchLookVertical ? look.dy * app.settings.touchLookSensitivity : 0);
+    // The follow camera removes Q/E and touch-look from the required control path.
+    if (app.mouse.left && app.gesture.down) {
+        const layout = app.view.swingLayout();
+        app.gesture.reframe(layout, app.view.cameraYaw, app.sim.reach);
+        app.showGesture(layout);
+    }
     let hand = app.gesture.sample(dt), brake = app.keys.has('Space') || app.touchBrake;
     const pad = Array.from(app.host.navigator.getGamepads?.() || []).find(p => p?.connected);
     if (pad) {
@@ -609,6 +660,7 @@ function readInput(app, dt) {
             app.pause();
         app.lastPadButtons = pad.buttons.map(b => b.pressed);
     }
+    app.view.manualSwingHeld = !!(app.gesture.down || app.padGesture.down);
     const v = app.view.moveBasis(mx, my);
     if (app.mouse.right)
         hand.grip = false;
@@ -697,6 +749,9 @@ function bind(app) {
     // Touches beginning on the scenery own LOOK until release, even across UI pads.
     // Touches beginning on pads/buttons keep their original role. No finger stealing.
     app.listeners.on(canvas, 'pointerdown', e => {
+        // Dragging anywhere that is not a pad turns the camera. On a phone the
+        // automatic follow alone was the whole camera, and being swung around by
+        // your own thumbstick is what made it sickening.
         if (app.mode !== 'play' || e.pointerType !== 'touch') return;
         if (!app.touchLook.begin(e.pointerId, e.clientX, e.clientY)) return;
         e.preventDefault();
@@ -707,7 +762,9 @@ function bind(app) {
     app.listeners.on(app.host, 'pointermove', e => {
         if (app.mode !== 'play' || e.pointerType !== 'touch' || e.pointerId !== app.touchLook.pointerId) return;
         const delta = app.touchLook.move(e.pointerId, e.clientX, e.clientY, app.settings.touchLookMode);
-        if (delta) app.view.rotateCamera(delta.dx * app.settings.touchLookSensitivity, app.settings.touchLookVertical ? delta.dy * app.settings.touchLookSensitivity : 0);
+        // Vertical is deliberately half-rate: pitch is the axis that makes people
+        // queasy, and it is clamped at both ends anyway.
+        if (delta) app.view.rotateCamera(delta.dx * app.settings.touchLookSensitivity, app.settings.touchLookVertical ? delta.dy * app.settings.touchLookSensitivity * .5 : 0);
         e.preventDefault();
     }, {passive: false});
     const endLook = e => {
@@ -735,6 +792,9 @@ function bind(app) {
             const layout = app.view.swingLayout();
             app.gesture.begin(e.clientX, e.clientY, layout, app.view.cameraYaw, app.sim.reach, e.timeStamp);
             app.showGesture(layout);
+            app.$('#reticle').style.display = 'block';
+            app.$('#reticle').style.left = e.clientX + 'px';
+            app.$('#reticle').style.top = e.clientY + 'px';
         }
         if (e.button === 2) {
             app.mouse.right = true;
@@ -752,6 +812,9 @@ function bind(app) {
             if (app.mouse.right)
                 app.view.rotateCamera(e.clientX - app.mouse.x, e.clientY - app.mouse.y);
             else if (app.mouse.left) {
+                const layout = app.view.swingLayout();
+                app.gesture.reframe(layout, app.view.cameraYaw, app.sim.reach);
+                app.showGesture(layout);
                 for (const point of (e.getCoalescedEvents?.().length ? e.getCoalescedEvents() : [e]))
                     app.gesture.move(point.clientX, point.clientY, point.timeStamp);
                 app.$('#reticle').style.display = 'block';
@@ -922,8 +985,10 @@ function destroy(app) {
         return app.destroyPromise;
     app.disposed = true;
     app.mode = 'disposed';
-    app.host.clearTimeout(app.bootTimer);
-    app.host.cancelAnimationFrame(app.frameRequest);
+    if (app.bootTimer != null) app.host.clearTimeout(app.bootTimer);
+    if (app.endingTimer != null) app.host.clearTimeout(app.endingTimer);
+    if (app.frameRequest != null) app.host.cancelAnimationFrame(app.frameRequest);
+    app.bootTimer = app.endingTimer = app.frameRequest = null;
     app.listeners.dispose();
     app.clearInput();
     for (const node of app.host.document.querySelectorAll('button,select,input')) {
@@ -964,9 +1029,17 @@ module.exports = ListenerScope;
 "src/app/session.js": [function(require, module, exports) {
 'use strict';
 /** Application session. Receives the one GameApplication instance; no hidden module-level game state. */
+function clearEnding(app) {
+    if (app.endingTimer) app.host.clearTimeout(app.endingTimer);
+    app.endingTimer = null;
+    app.host.document.body.classList.remove('ending');
+    const veil = app.$('#endingVeil');
+    if (veil) veil.setAttribute('aria-hidden', 'true');
+}
 function begin(app, continueRun = false) {
     if (app.disposed)
         return;
+    clearEnding(app);
     app.sound.init();
     app.sound.setVolume(app.settings.volume);
     app.clearInput();
@@ -1004,7 +1077,7 @@ function begin(app, continueRun = false) {
     app.$('#title').classList.add('hidden');
     app.$('#panel').style.display = 'none';
     app.host.document.body.classList.add('playing');
-    app.toast(app.coarse ? 'Circle to swing. Slide to WHIP and release for a single strike.' : 'Hold LEFT MOUSE and circle the faint guide. Reverse your circle to whip back. Release to coast.', 6);
+    app.toast(app.coarse ? 'Left thumb moves. Right thumb drags the iron. Drag the screen to look.' : 'WASD moves. Hold LEFT MOUSE and drag the iron.', 5);
     app.$('#game').focus();
 }
 function pause(app) {
@@ -1031,6 +1104,7 @@ function resume(app) {
 function retry(app) {
     if (app.disposed)
         return;
+    clearEnding(app);
     app.clearInput();
     app.sim.retry();
     app.lastHud='';app.hudClock=0;
@@ -1052,9 +1126,26 @@ function retry(app) {
 function updateContinue(app) {
     app.$('#continue').style.display = app.storage.get(app.storageKeys.checkpoint) ? 'inline-block' : 'none';
 }
+
+function finish(app) {
+    if (app.disposed || app.mode === 'ending' || app.mode === 'won') return;
+    clearEnding(app);
+    // Keep the input, keep the simulation, keep the walk. The old ending froze the
+    // player and cross-faded a white card over the top of the game; the sunrise is
+    // in the world now, and it belongs to whoever is still holding the controls.
+    app.mode = 'ending';
+    app.host.document.body.classList.add('ending');
+    const veil = app.$('#endingVeil');
+    if (veil) veil.setAttribute('aria-hidden', 'false');
+    app.endingTimer = app.host.setTimeout(() => {
+        app.endingTimer = null;
+        if (!app.disposed) ended(app, true);
+    }, 9600);
+}
 function ended(app, win) {
     if (app.disposed)
         return;
+    clearEnding(app);
     app.mode = win ? 'won' : 'dead';
     app.clearInput();
     let best = app.storage.get(app.storageKeys.best) || 0;
@@ -1064,7 +1155,7 @@ function ended(app, win) {
     }
     const minutes = Math.floor(app.sim.t / 60), seconds = Math.floor(app.sim.t % 60).toString().padStart(2, '0');
     app.panel(`<div class="kicker">${win ? '0317 / no forwarding address' : '0317 / sentence interrupted'}</div>
-    <h2>${win ? 'Time served.' : 'Not your last word.'}</h2><p>${win ? 'Every swing was yours.' : 'The checkpoint remembers your progress.'}</p>
+    <h2>${win ? 'The first morning.' : 'Not your last word.'}</h2><p>${win ? 'The sentence ended before the chain did. Behind you: every locked room. Ahead: weather, distance, and nobody counting.' : 'The checkpoint remembers your progress.'}</p>
     <div class="stats"><div><strong>${app.sim.score.toLocaleString()}</strong><small>RECKONING</small></div><div><strong>${app.sim.kills}</strong><small>PUT DOWN</small></div><div><strong>${app.sim.secretCount} / ${app.sim.world.secrets.length}</strong><small>SECRETS</small></div></div>
     <p>${minutes}:${seconds} inside · ${app.sim.breaks} things broken · best ${best.toLocaleString()}</p>
     <div class="panel-buttons">${win ? '<button class="primary" id="again">ANOTHER ESCAPE</button>' : '<button class="primary" id="retryDeath">RETRY CHECKPOINT</button><button id="again">START AGAIN</button>'}<button id="backTitle">TITLE</button></div>`);
@@ -1088,14 +1179,14 @@ function ended(app, win) {
         app.updateContinue();
     };
 }
-module.exports = { begin, pause, resume, retry, updateContinue, ended };
+module.exports = { begin, pause, resume, retry, updateContinue, finish, ended, clearEnding };
 
 }, {}],
 "src/app/settings.js": [function(require, module, exports) {
 'use strict';
 /** Application settings. Receives the one GameApplication instance; no hidden module-level game state. */
 function applyVisualSettings(app) {
-    app.host.document.body.classList.toggle('advanced-touch', app.settings.advancedTouch === true);
+    app.host.document.body.classList.remove('advanced-touch');
     app.view.touchPresentation = app.coarse;
     app.view.clarity = app.settings.clarity;
     app.view.adaptiveScale = 1;
@@ -1112,15 +1203,13 @@ function panel(app, html) {
 }
 function showPause(app) {
     app.panel(`<div class="kicker">IRON PSALM / THE LONG SENTENCE ${app.version}</div><h2>Still breathing.</h2>
-    <p>Your hand supplies the swing. The camera stays inside the walls.</p>
+    <p>Your hand supplies the swing. The camera follows without asking for another hand.</p>
     <div class="panel-buttons"><button id="resume" class="primary">RESUME</button><button id="settingsButton">SETTINGS</button><button id="retry">RETRY CHECKPOINT</button><button id="newRun">NEW ESCAPE</button></div>
-    ${app.coarse ? '<p class="controls-note">Left pad moves. Circle the right pad to swing.<br>Tap <b>WHIP</b>, or slide from the swing pad to it and release, for a single strike.<br>Drag the scenery to look. Extra buttons are in Settings.</p>' : `<p class="controls-note"><b>Hold LMB + move the mouse</b> — pull the iron along your arc.<br>
-    Circle around the faint on-screen guide to build an orbit. Sweep back the other way to reverse.<br>
-    Draw smaller circles around that same guide for short swings. Release LMB to let momentum carry it.<br>
-    <b>Hold RMB + drag</b> — look around. <b>Q / E</b> — turn the camera.<br>
-    <b>WASD</b> — move. <b>Shift</b> — evade. <b>Hold Space</b> — brake the ball.<br>
-    <b>Hold R</b> — reel the chain in. Narrow galleries reel automatically.<br><b>Climbing:</b> push W against marked masonry or chain-link. W/S climb; A/D traverse; Shift + A/D evades sideways. Mouse circles swing on the wall face. Smash grates or go around. Descend to the bottom to retreat.<br>
-    <b>Wheel</b> — distance. <b>C</b> — centre behind the prisoner. <b>H</b> — help.</p>`}
+    ${app.coarse ? '<p class="controls-note"><b>Left thumb:</b> move.<br><b>Right thumb:</b> drag the iron. Release to let momentum carry it.<br>The camera follows automatically.</p>' : `<p class="controls-note"><b>WASD</b> — move.<br>
+    <b>Hold left mouse + drag</b> — place and swing the iron.<br>
+    Drag close for short strikes; farther out for wide arcs. Cross back over the prisoner to reverse.<br>
+    Release the mouse to let momentum carry it. The camera follows automatically.<br>
+    <b>On walls:</b> W/S climbs and A/D traverses. <b>Esc</b> pauses.</p>`}
     <div class="resume-hint">${app.coarse ? 'TAP RESUME TO CONTINUE' : 'ESC TO RESUME'}</div>`);
     app.$('#resume').onclick = app.resume;
     app.$('#settingsButton').onclick = () => app.showSettings('pause');
@@ -1135,10 +1224,6 @@ function showSettings(app, origin) {
     ${app.coarse ? `<label class="setting">Screen orientation<select id="orientation"><option value="portrait">Vertical · portrait</option><option value="landscape">Horizontal · landscape</option></select></label>` : ''}
     <label class="setting">Visual quality<select id="quality"><option value="mobile">Mobile Enhanced</option><option value="high">High · reflections</option><option value="balanced">Balanced</option><option value="low">Performance</option></select></label>
     <label class="setting">Image clarity<select id="clarity"><option value="preset">Preset default</option><option value="1">1× · lighter</option><option value="1.5">1.5× · sharp</option><option value="2">2× · very sharp</option></select></label>
-    ${app.coarse ? `<label class="setting">Camera touch<select id="touchLookMode"><option value="drag">Drag to look</option><option value="push">Push &amp; hold to turn</option></select></label>
-    <label class="setting">Camera sensitivity<input id="touchSensitivity" aria-label="Camera sensitivity" type="range" min=".4" max="2" step=".1" value="${app.settings.touchLookSensitivity}"></label>
-    <label class="setting">Allow up/down camera dragging<input id="touchVertical" type="checkbox" ${app.settings.touchLookVertical ? 'checked' : ''}></label>` : ''}
-    ${app.coarse ? `<label class="setting">Show brake &amp; evade<input id="advancedTouch" type="checkbox" ${app.settings.advancedTouch ? 'checked' : ''}></label>` : ''}
     <label class="setting">Adapt resolution, keep visual detail<input id="adaptive" type="checkbox" ${app.settings.autoQuality ? 'checked' : ''}></label>
     <label class="setting">Sound<input id="sound" type="checkbox" ${app.settings.sound ? 'checked' : ''}></label>
     <label class="setting">Master volume <input id="masterVolume" aria-label="Master volume" type="range" min="0" max="1" step=".01" value="${app.settings.volume}"></label>
@@ -1152,23 +1237,12 @@ function showSettings(app, origin) {
             void require('./browser-host').requestOrientation(app, app.settings.orientation);
         };
     }
-    if (app.coarse) app.$('#advancedTouch').onchange = e => {
-        app.clearInput(); app.settings.advancedTouch = e.target.checked;
-        app.host.document.body.classList.toggle('advanced-touch', e.target.checked);
-        app.saveSettings();
-    };
     app.$('#quality').value = app.settings.quality;
     app.$('#clarity').value = app.settings.clarity;
     app.$('#clarity').onchange = e => {
         app.settings.clarity = e.target.value;
         applyVisualSettings(app); app.saveSettings();
     };
-    if (app.coarse) {
-        app.$('#touchLookMode').value = app.settings.touchLookMode;
-        app.$('#touchLookMode').onchange = e => { app.clearInput(); app.settings.touchLookMode = e.target.value; app.saveSettings(); };
-        app.$('#touchSensitivity').oninput = e => { app.settings.touchLookSensitivity = Number(e.target.value); app.saveSettings(); };
-        app.$('#touchVertical').onchange = e => { app.settings.touchLookVertical = e.target.checked; app.saveSettings(); };
-    }
     app.$('#quality').onchange = e => {
         app.settings.quality = e.target.value;
         applyVisualSettings(app);
@@ -1255,10 +1329,18 @@ function event(sound, e, p) {
         case 'climbEvade':sound.noiseHit(.13,1100,.06,pan);break;
         case 'climbStep': sound.noiseHit(.085,e.kind==='fence'?2600:900,.055,pan); if(e.kind==='fence')sound.tone(510,.14,.026,'sine',230,pan);break;
         case 'climbStart': sound.noiseHit(.2,1500,.1,pan); break;
+        // The cuff: one enormous struck note, then the chain going slack.
+        case 'cuffBroken':
+            sound.metal(46,pan);sound.noiseHit(.85,240,.52,pan);
+            sound.tone(58,1.9,.20,'sine',31,pan);sound.tone(174,1.2,.10,'triangle',87,pan);
+            sound.tone(261,2.6,.055,'sine',196,pan);break;
+        // The haul: a chain snatching taut, then the body coming up after it.
+        case 'climbHaul':{const q=Math.min(1,e.power||.5);sound.metal(18+q*16,pan);sound.noiseHit(.16+q*.2,420,.10+q*.08,pan);sound.tone(88+q*54,.34,.055+q*.05,'triangle',44,pan);break;}
         case 'climbBreak':if(e.kind==='stone'){sound.noiseHit(.48,670,.26,pan);sound.tone(60,.30,.12,'sine',30,pan);}else{sound.metal(32,pan);sound.noiseHit(.45,1600,.24,pan);}break;
         case 'climberFall':sound.noiseHit(.5,520,.13,pan);sound.tone(175,.45,.09,'triangle',65,pan);break;
         case 'climbSlip':sound.noiseHit(.18,1300,.11,pan);break;
-        case 'climbEnd':sound.noiseHit(.10,680,.06,pan);break;
+        case 'mantleStart':sound.noiseHit(.12,900,.07,pan);sound.tone(92,.20,.045,'triangle',50,pan);break;
+        case 'climbEnd':sound.noiseHit(.10,680,.06,pan);sound.tone(118,.24,.045,'sine',62,pan);break;
         case 'step': {
             const metal = ['gallery', 'bridge', 'rampart'].includes(sound.surface), tile = ['laundry', 'infirmary', 'archive'].includes(sound.surface), outside = ['yard', 'court', 'dock', 'freedom', 'meadow', 'perimeter', 'coast'].includes(sound.surface);
             sound.noiseHit(metal ? .11 : .075, metal ? 1850 : tile ? 1050 : outside ? 570 : 790, metal ? .062 : .075, pan);
@@ -1321,6 +1403,16 @@ function event(sound, e, p) {
         case 'relay':
             sound.noiseHit(.35, 4100, .20, pan);
             sound.tone(420, .66, .09, 'sawtooth', 55, pan);
+            break;
+        case 'lastChain':
+            sound.noiseHit(.62, 1800, .36, pan);
+            sound.tone(58, 1.15, .22, 'sawtooth', 29, pan);
+            sound.tone(174.61, 1.3, .08, 'triangle', 58, pan);
+            break;
+        case 'finalGate':
+            sound.metal(38, pan);
+            sound.noiseHit(.74, 780, .42, pan);
+            sound.tone(55, 1.25, .25, 'sine', 27, pan);
             break;
         case 'reel':
             sound.noiseHit(.13, 1900, .045, pan);
@@ -1700,7 +1792,7 @@ module.exports = { ...math, ...world, PrisonSim, ENEMY, ManualSwing, segmentBox3
 }, {"./camera/sweep": "src/camera/sweep.js", "./input/manual-swing": "src/input/manual-swing.js", "./presentation/pose-buffer": "src/presentation/pose-buffer.js", "./shared/math": "src/shared/math.js", "./simulation/enemy-types": "src/simulation/enemy-types.js", "./simulation/prison-sim": "src/simulation/prison-sim.js", "./world": "src/world/index.js"}],
 "src/input/manual-swing.js": [function(require, module, exports) {
 'use strict';
-/** Timestamped mouse/controller trajectories. A stationary grip never powers an orbit. */
+/** Direct mouse/controller trajectories. Cursor position is the ball target; cursor motion alone supplies power. */
 const IP = require('../shared/math');
 class ManualSwing {
     constructor() {
@@ -1743,9 +1835,23 @@ class ManualSwing {
         this.lastPhi = p.phi;
         this.lastNX = p.nx;
         this.theta = p.phi - yaw;
-        this.radius = IP.clamp(p.r, .26, 1) * reach * .96;
+        this.radius = IP.clamp(p.r, .18, 1) * reach * .96;
         if (Number.isFinite(timeStamp))
             this.samples.push({ t: timeStamp * .001, a: this.theta });
+    }
+    reframe(layout, yaw, reach) {
+        if (!this.down || !layout || ![layout.x, layout.y, layout.rx, layout.ry, yaw, reach].every(Number.isFinite) || layout.rx <= 0 || layout.ry <= 0 || reach <= 0)
+            return false;
+        this.layout = { ...layout };
+        this.reach = reach;
+        this.yaw = yaw;
+        const p = this.polar(this.lastX, this.lastY);
+        const wrapped = p.phi - yaw;
+        this.theta += IP.angle(wrapped - this.theta);
+        this.radius = IP.clamp(p.r, .18, 1) * reach * .96;
+        this.lastPhi = p.phi;
+        this.lastNX = p.nx;
+        return true;
     }
     move(x, y, timeStamp) {
         if (!this.down || !Number.isFinite(x + y) || Math.hypot(x - this.lastX, y - this.lastY) < .2)
@@ -1753,7 +1859,7 @@ class ManualSwing {
         this.lastX = x;
         this.lastY = y;
         const p = this.polar(x, y);
-        this.radius = IP.clamp(p.r, .26, 1) * this.reach * .96;
+        this.radius = IP.clamp(p.r, .18, 1) * this.reach * .96;
         if (p.r <= .16)
             return;
         let delta = IP.angle(p.phi - this.lastPhi);
@@ -1800,7 +1906,7 @@ class ManualSwing {
         this.omega = IP.damp(this.omega, velocity, 42, dt);
         this.pending = 0;
         return {
-            manual: true, grip: this.down && this.moved, targetAngle: this.theta, targetRadius: this.radius,
+            manual: true, grip: this.down, targetAngle: this.theta, targetRadius: this.radius,
             targetOmega: this.omega, handMoving: this.down && this.moved && this.motionAge < .13, spin: false
         };
     }
@@ -1885,11 +1991,11 @@ function buildAscentArt(v) {
     if(!w.climbs)return;
     v.fenceWireCount=0;v.wireFlex={value:0};v.wireClock={value:0};
     const wireMat=m.lightIron.clone();wireMat.onBeforeCompile=sh=>{sh.uniforms.uWireFlex=v.wireFlex;sh.uniforms.uWireClock=v.wireClock;sh.vertexShader='uniform float uWireFlex;uniform float uWireClock;\n'+sh.vertexShader;sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.z+=sin(position.x*2.9)*sin(position.y*.65)*sin(uWireClock*18.-position.y)*uWireFlex*.035;');};wireMat.customProgramCacheKey=()=> 'reckoning-wire';
-    f.box(8,-.72,-419,150,.5,190,m.yardFloor,0,0,.17);
     const soil=new T.MeshStandardMaterial({color:0xb7b3aa,roughness:1,
         map:v.tex('meadow_color.jpg',true),normalMap:v.tex('meadow_normal.jpg'),roughnessMap:v.tex('meadow_rough.jpg'),
         normalScale:new T.Vector2(.42,.42),envMapIntensity:.40});
-    for(const r of w.floors.filter(r=>r.style==='meadow')) f.box(r.x,-.011,r.z,r.w,.028,r.d,soil,0,0,.50);
+    // Meadow uses the authoritative room floor. Decorative soil is broken into
+    // inset patches below, never stacked as a second coplanar floor.
     // Heavy load-bearing columns under raised landings and stair flights.
     for(const r of w.floors.filter(r=>r.outdoors&&(r.y>0||r.ramp))){
         for(let z=r.z1+2;z<r.z2-1;z+=6){const y=v.sim.groundHeight(r.x,z);if(y<1)continue;
@@ -1900,26 +2006,77 @@ function buildAscentArt(v) {
             b.box(r.x,y-.48,z,r.w,.35,.4,m.ironDark);
         }
     }
+    // ------------------------------------------------------- climbable surfaces
+    // A climb has to be readable from the foot of it: where the holds are, where
+    // you can stand, how far is left. Everything below is real geometry with real
+    // depth, so the raking key light does the explaining rather than a decal.
+    const ledgesOf = id => (w.climbLedges||[]).filter(l=>l.climbId===id);
     for(const c of w.climbs){
+        const span=c.top-c.bottom, mid=(c.x1+c.x2)/2, wide=c.x2-c.x1;
         if(c.kind==='stone'){
-            for(let x=c.x1+.45;x<c.x2;x+=3.6){
-                b.box(x,(c.bottom+c.top)/2,c.z-.43,.33,c.top-c.bottom,.95,m.trim,0,.018);
+            // Recessed courses. Alternating bands sit back from the face, so the
+            // wall has a section instead of being a painted plane.
+            for(let y=c.bottom+.30;y<c.top-.35;y+=.92){
+                b.box(mid,y,c.z-.10,wide+.5,.46,.34,m.stoneDark,0,.02,.45);
             }
-            for(let y=c.bottom+.34;y<c.top-.2;y+=.48){
-                for(let x=c.x1+.38;x<c.x2-.2;x+=.56){
-                    // Mortar scars and protruding chipped bricks are the climbable surface.
-                    const seed=Math.abs(Math.sin(x*127.1+y*311.7)*43758.54)%1;if(seed<.16)continue;const shift=seed*.11;
-                    b.box(x+shift,y,c.z+.028,.15+shift,.048+shift*.25,.055+shift*.18,m.stoneDark,0,.014);
+            // Pilasters every 3.6 m give the face vertical rhythm and shadow.
+            for(let x=c.x1+.45;x<c.x2;x+=3.6){
+                b.box(x,(c.bottom+c.top)/2,c.z-.43,.33,span,.95,m.trim,0,.018);
+                b.box(x,c.top-.12,c.z-.40,.50,.26,1.12,m.stoneDark,0,.03);
+            }
+            // The holds themselves: chunky projecting headers laid in a staggered
+            // ladder, plus a scatter of broken-out bricks between them.
+            let row=0;
+            for(let y=c.bottom+.55;y<c.top-.45;y+=.62,row++){
+                const shift=(row%2)?.36:0;
+                for(let x=c.x1+.55+shift;x<c.x2-.35;x+=.72){
+                    const seed=Math.abs(Math.sin(x*127.1+y*311.7)*43758.54)%1;
+                    if(seed<.19)continue;
+                    const out=.055+seed*.085;
+                    b.box(x,y,c.z+out*.5,.30+seed*.06,.115,out,m.stoneDark,0,.012);
+                    if(seed>.82)b.box(x+.05,y-.13,c.z+.018,.19,.055,.036,m.stone,0,.008);
                 }
             }
+            // String courses you can actually stand on. These are the rests.
+            for(const l of ledgesOf(c.id)){
+                b.box(mid,l.y-.13,c.z+.10,wide+.7,.26,.62,m.trim,0,.03,.4);
+                b.box(mid,l.y+.03,c.z+.38,wide+.7,.07,.10,m.lightIron);
+                for(let x=c.x1+1.1;x<c.x2;x+=2.4)
+                    b.box(x,l.y-.42,c.z+.24,.16,.34,.30,m.stoneDark,0,.02);
+                v.sign(Math.round(l.y-c.bottom)+' M',mid+wide*.34,l.y+.42,c.z+.07,1.15,.30,0,'#d9c48d','#1d2b2b',50);
+            }
+            // A blown-out panel of masonry near the top, with the bar still in it.
+            const bx=mid-wide*.22,by=c.bottom+span*.80;
+            b.box(bx,by,c.z-.30,2.6,1.5,.70,m.black,0,.02);
+            for(let i=0;i<5;i++)b.rod([bx-1.1+i*.55,by-.72,c.z-.05],[bx-1.05+i*.55,by+.72,c.z-.02],.022,m.copper);
+            for(const dx of [-1.32,1.32])b.box(bx+dx,by,c.z-.05,.24,1.6,.46,m.stoneDark,0,.03);
+            b.box(bx,by+.82,c.z-.08,2.9,.22,.52,m.trim,0,.025);
+            // Buttress piers and the coping overhang.
             for(const x of [c.x1-.34,c.x2+.34]){
                 b.box(x,c.top*.5,c.z-.65,.65,c.top+1.4,1.45,m.stoneDark,0,.035);
                 b.box(x,c.top+.7,c.z-.65,1.05,.24,1.8,m.trim,0,.045);
             }
-            // A copper drain spine gives scale without blocking the climb lanes.
-            const x=c.x1+.17;
-            b.cyl(x,c.top/2,c.z+.22,.085,.085,c.top,m.copper);
-            for(let y=1;y<c.top;y+=3)b.torus(x,y,c.z+.22,.096,.020,m.ironDark,Math.PI/2);
+            b.box(mid,c.top+.14,c.z+.08,wide+1.6,.28,.96,m.trim,0,.04,.35);
+            b.box(mid,c.top-.06,c.z+.50,wide+1.6,.14,.20,m.stoneDark,0,.02);
+            // Downpipe with real brackets, and a second one on the far side.
+            for(const x of [c.x1+.17,c.x2-.17]){
+                b.cyl(x,c.top/2,c.z+.22,.085,.085,c.top,m.copper);
+                for(let y=1;y<c.top;y+=1.6){
+                    b.torus(x,y,c.z+.22,.096,.020,m.ironDark,Math.PI/2);
+                    b.rod([x,y,c.z+.20],[x,y,c.z-.02],.026,m.ironDark);
+                }
+                b.cyl(x,.22,c.z+.34,.14,.19,.44,m.ironDark);
+            }
+            // Weeds rooted in the mortar. They only grow where water runs.
+            for(let i=0;i<46;i++){
+                const t=(i*7919%1000)/1000, u=(i*104729%1000)/1000;
+                const x=c.x1+.8+t*(wide-1.6), y=c.bottom+.6+u*(span-1.6);
+                if(((i*13)%7)>3)continue;
+                for(let k=0;k<4;k++){
+                    const ang=(k/4)*Math.PI*2+t*3;
+                    b.rod([x,y,c.z+.06],[x+Math.cos(ang)*.16,y+.14+u*.18,c.z+.20+Math.sin(ang)*.05],.014,m.leaf);
+                }
+            }
         } else {
             // Actual galvanized diamond wire, not a solid wall painted as a fence.
             const left=c.x1-.5,right=c.x2+.5,h=c.top;
@@ -1935,7 +2092,7 @@ function buildAscentArt(v) {
                         const low=left+(panel.y-panel.h*.5-offset)/slope,high=left+(panel.y+panel.h*.5-offset)/slope;
                         const cut1=Math.max(panel.x-panel.w*.5,Math.min(low,high)),cut2=Math.min(panel.x+panel.w*.5,Math.max(low,high));
                         if(cut2<=cut1)continue;
-                        const next=[];for(const [a,b] of spans){if(cut2<=a||cut1>=b)next.push([a,b]);else {if(a<cut1)next.push([a,cut1]);if(b>cut2)next.push([cut2,b]);}}spans=next;
+                        const next=[];for(const [a,bb] of spans){if(cut2<=a||cut1>=bb)next.push([a,bb]);else {if(a<cut1)next.push([a,cut1]);if(bb>cut2)next.push([cut2,bb]);}}spans=next;
                     }
                     for(const [a,z] of spans){if(z-a<.001)continue;v.fenceWireCount++;b.rod([a,slope*(a-left)+offset,c.z+.03],[z,slope*(z-left)+offset,c.z+.03],.010,wireMat);}
                 }
@@ -1943,33 +2100,62 @@ function buildAscentArt(v) {
             for(let x=left;x<right+.2;x+=3.6){
                 b.cyl(x,h/2,c.z-.22,.079,.095,h+.55,m.iron);
                 b.box(x,.12,c.z-.22,.65,.35,.70,m.stoneDark,0,.05);
+                // Tensioners on the line wires. Small, but they say "this is built".
+                for(const y of [h*.42,h*.76])b.cyl(x+.30,y,c.z-.14,.038,.038,.22,m.chrome,0,Math.PI/2,10);
             }
-            for(const y of [.16,5,10,h])b.rod([left,y,c.z-.14],[right,y,c.z-.14],.068,m.iron);
+            for(const y of [.16, h*.42, h*.76, h])b.rod([left,y,c.z-.14],[right,y,c.z-.14],.068,m.iron);
             (v.staticRoot.userData.cameraBoxes??=[]).push(new T.Box3(V(left,0,c.z-.35),V(right,h,c.z+.04)));
             // Supports and mounting hardware, including the overhead catwalk.
             b.box((left+right)/2,h-.22,c.z-.44,right-left,.26,.6,m.ironDark);
+            // Razor coil along the crown. It reads as the reason you smash a panel.
+            for(let x=left;x<right;x+=.40){
+                const a=x*3.4;
+                b.torus(x,h+.30+Math.sin(a)*.05,c.z-.02,.26,.016,m.lightIron,0,Math.PI/2+Math.sin(a)*.2,0);
+            }
+            b.rod([left,h+.30,c.z-.02],[right,h+.30,c.z-.02],.014,m.lightIron);
+            // Standing rails inside the mesh: somewhere to plant on the way up.
+            for(const l of ledgesOf(c.id)){
+                b.rod([left,l.y,c.z+.12],[right,l.y,c.z+.12],.052,m.iron);
+                b.box((left+right)/2,l.y-.10,c.z+.20,right-left,.06,.34,m.ironDark);
+                for(let x=left+1.6;x<right;x+=3.6)b.rod([x,l.y-.06,c.z+.14],[x,l.y-.62,c.z-.16],.028,m.ironDark);
+            }
+            // Patched and dented panels; a fence this long is never uniform.
+            for(let i=0;i<7;i++){
+                const x=left+2+((i*11.7)%(right-left-4)),y=.9+((i*3.1)%(h-2.2));
+                b.box(x,y,c.z+.05,1.5+((i*7)%3)*.35,.95,.05,i%3?m.ironDark:m.wood,0,.01);
+                for(const dx of [-.6,.6])b.rod([x+dx,y-.45,c.z+.06],[x+dx,y+.45,c.z+.06],.017,m.lightIron);
+            }
         }
-        v.sign(c.kind==='fence'?'OUTER MESH / 16 m':'MASONRY ACCESS / '+c.top+' m',(c.x1+c.x2)/2,2.7,c.z+.1,3.15,.40,0,'#c9b477','#273b39',45);
+        v.sign(c.kind==='fence'?'PERIMETER MESH / '+c.top.toFixed(1)+' m':'SERVICE BREACH / '+c.top.toFixed(1)+' m',mid,2.7,c.z+.1,3.15,.40,0,'#c9b477','#273b39',45);
         // Fixed paint indicates grip zones. Nothing flashes or fades with the camera.
         for(let x=c.x1+1.1;x<c.x2;x+=4.8){
             b.box(x,1.50,c.z+.11,.065,.72,.025,m.yellow);
             b.box(x-.16,1.77,c.z+.11,.055,.30,.025,m.yellow,0,0);
             b.box(x+.16,1.77,c.z+.11,.055,.30,.025,m.yellow,0,0);
         }
+        // A worn, scuffed approach at the foot with a stencilled instruction: the
+        // climb teaches itself before the player is ever on it.
+        f.box(mid,.012,c.z+2.30,Math.min(wide,11),.024,3.0,m.stoneDark,0,0,.7);
+        v.sign('SWING THE IRON OVERHEAD',mid,.050,c.z+2.65,4.2,.34,0,'#e8d29a','#1b2a2a',46,{flat:true});
+        for(const side of [-1,1])b.box(mid+side*(Math.min(wide,11)/2-.30),.09,c.z+2.30,.20,.18,2.9,m.yellow,0,.03);
     }
-    // Floodlights physically attached to wall towers, not loose mid-air lights.
-    for(const [x,z,y] of [[-11.4,-323,23],[11.4,-323,23],[-17.1,-419,15],[27.1,-419,15]]){
+    // Floodlights scale with the rebuilt breaches and remain physically attached.
+    const outer=w.climbs.find(c=>c.id==='outer-wall'),mesh=w.climbs.find(c=>c.id==='chain-fence');
+    const fixtures=[];
+    if(outer)for(const x of [outer.x1-.8,outer.x2+.8])fixtures.push([x,outer.z-.8,outer.top-.65]);
+    if(mesh)for(const x of [mesh.x1-.8,mesh.x2+.8])fixtures.push([x,mesh.z-.8,mesh.top-.55]);
+    for(const [x,z,y] of fixtures){
         b.box(x,y,z,.34,.3,.4,m.ironDark);b.rod([x,y,z],[x,y,z+1.05],.05,m.iron);
         b.box(x,y,z+1.10,.90,.45,.28,m.ironDark,0,.05);b.box(x,y-.05,z+1.26,.69,.26,.025,m.cold);
-        v.lampPositions.push({x,y:y-.25,z:z+1.5,color:0xd3e2ce,intensity:20});
+        v.lampPositions.push({x,y:y-.25,z:z+1.5,color:0xc6d9cf,intensity:17});
     }
-    // Supported skyline towers and retaining walls outside the walkable footprints.
+    // Distant perimeter towers frame the yard without dwarfing the playable wall.
     for(const x of [-29,48]){
-        b.box(x,7.2,-403,.65,14.4,66,m.stoneDark,0,0,.25);
+        b.box(x,4.8,-403,.65,9.6,66,m.stoneDark,0,0,.25);
         for(const z of [-376,-411,-438]){
-            b.box(x,8.5,z,4.5,17,4.5,m.stoneDark,0,.045);
-            b.box(x,17.12,z,5.5,.36,5.5,m.trim,0,.025);
-            for(const side of [-1,1])b.box(x+side*1.2,15.3,z+2.27,.78,1.03,.03,m.black);
+            b.box(x,5.5,z,4.2,11,4.2,m.stoneDark,0,.045);
+            b.box(x,11.12,z,5.0,.36,5.0,m.trim,0,.025);
+            for(const side of [-1,1])b.box(x+side*1.1,9.5,z+2.12,.72,.9,.03,m.black);
         }
     }
     // Panel ownership remains per object; breaking one never hides the whole fence.
@@ -1989,18 +2175,42 @@ function buildAscentArt(v) {
     const positions=[],colors=[];let seed=9437;
     const rnd=()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};
     for(const r of w.floors.filter(r=>r.style==='meadow')){
-        const count=Math.floor(r.w*r.d*11.5);
+        const count=Math.floor(r.w*r.d*19);
         for(let i=0;i<count;i++){
             const x=r.x1+rnd()*r.w,z=r.z1+rnd()*r.d;
             // A readable worn route through the grass, but room to explore.
             if((Math.abs(x-3-Math.sin(z*.18)*.65)<1.5+rnd()*.9||Math.abs(z+382)<1.5)&&rnd()<.94)continue;
-            for(let j=0;j<5;j++){
-                const angle=rnd()*Math.PI*2,ww=.009+rnd()*.014,h=.10+rnd()*.28,dx=Math.cos(angle)*ww,dz=Math.sin(angle)*ww;
-                const bx=Math.cos(angle+.5)*h*.31,bz=Math.sin(angle+.5)*h*.31;
+            // Clumps, not an even lawn: patches run to seed, patches are trampled.
+            const vigour=.55+Math.abs(Math.sin(x*.21)*Math.cos(z*.17))*1.35;
+            const dry=rnd();
+            const blades=vigour>1.2?7:vigour>.85?5:3;
+            for(let j=0;j<blades;j++){
+                const angle=rnd()*Math.PI*2,ww=.010+rnd()*.017,h=(.12+rnd()*.40)*vigour,dx=Math.cos(angle)*ww,dz=Math.sin(angle)*ww;
+                const lean=.38+rnd()*.30;
+                const bx=Math.cos(angle+.5)*h*lean,bz=Math.sin(angle+.5)*h*lean;
                 const verts=[[x-dx,.015,z-dz],[x+dx,.015,z+dz],[x+bx*.35+dx*.56,h*.53,z+bz*.35+dz*.56],
                     [x-dx,.015,z-dz],[x+bx*.35+dx*.56,h*.53,z+bz*.35+dz*.56],[x+bx*.35-dx*.56,h*.53,z+bz*.35-dz*.56],
                     [x+bx*.35-dx*.56,h*.53,z+bz*.35-dz*.56],[x+bx*.35+dx*.56,h*.53,z+bz*.35+dz*.56],[x+bx,h,z+bz]];
-                const hue=rnd();for(const vv of verts){positions.push(...vv);const t=vv[1]/h;colors.push(.035+hue*.040+t*.026,.058+hue*.045+t*.045,.019+hue*.025+t*.016);}
+                const hue=rnd();
+                for(const vv of verts){
+                    positions.push(...vv);
+                    const t=Math.min(1,vv[1]/Math.max(h,.001));
+                    // Green in the root, bleached straw at the tip on the dry clumps.
+                    colors.push(
+                        .030+hue*.038+t*(.030+dry*.150),
+                        .052+hue*.044+t*(.048+dry*.120),
+                        .017+hue*.023+t*(.014+dry*.046));
+                }
+            }
+            // The occasional seed head standing clear of everything else.
+            if(rnd()<.045){
+                const h=.52+rnd()*.34, sx=x+(rnd()-.5)*.1, sz=z+(rnd()-.5)*.1, lean=(rnd()-.5)*.28;
+                for(let k=0;k<3;k++){
+                    const a=k*2.1, ww=.008;
+                    const verts=[[sx-ww,.015,sz],[sx+ww,.015,sz],[sx+lean+Math.cos(a)*.03,h,sz+Math.sin(a)*.03],
+                        [sx,.015,sz-ww],[sx,.015,sz+ww],[sx+lean+Math.cos(a)*.03,h,sz+Math.sin(a)*.03]];
+                    for(const vv of verts){positions.push(...vv);const t=Math.min(1,vv[1]/h);colors.push(.075+t*.230,.082+t*.205,.034+t*.088);}
+                }
             }
         }
     }
@@ -2008,6 +2218,78 @@ function buildAscentArt(v) {
     const gm=new T.MeshStandardMaterial({vertexColors:true,roughness:1,side:T.DoubleSide});
     v.grassTime={value:0};gm.onBeforeCompile=s=>{s.uniforms.uGrassTime=v.grassTime;s.vertexShader='uniform float uGrassTime;\n'+s.vertexShader;s.vertexShader=s.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.x += sin(uGrassTime*1.25+position.x*.8+position.z*.3)*position.y*position.y*.11;');};
     const grass=new T.Mesh(gg,gm);grass.receiveShadow=true;grass.name='rooted meadow grass';v.staticRoot.add(grass);v.ascentGrass=grass;
+    // --------------------------------------------------- the parapet you earn
+    // Twenty-eight metres of climbing deserves somewhere worth arriving. Paving,
+    // merlons, a drain channel, a dead searchlight and a cable run along the top.
+    const crown=w.rooms.find(r=>r.id==='wall-crown');
+    if(crown){
+        const cy=crown.y;
+        for(let x=crown.x1+.6;x<crown.x2;x+=1.55){
+            b.box(x,cy+.02,crown.z,1.40,.09,crown.d-.5,m.trim,0,.02,.5);
+        }
+        f.box(crown.x,cy+.03,crown.z+crown.d*.32,crown.w-.6,.05,.42,m.stoneDark,0,0,.7);
+        // Merlons on the seaward side; a low kerb on the side you climbed up.
+        for(let x=crown.x1+.5;x<crown.x2;x+=2.35){
+            b.box(x,cy+.78,crown.z1+.35,1.55,1.56,.62,m.stoneDark,0,.05,.35);
+            b.box(x,cy+1.62,crown.z1+.35,1.78,.18,.80,m.trim,0,.04,.4);
+        }
+        b.box(crown.x,cy+.28,crown.z2-.30,crown.w+1.2,.56,.46,m.trim,0,.05,.45);
+        // Conduit and junction boxes along the walkway.
+        b.rod([crown.x1+.4,cy+1.42,crown.z1+.92],[crown.x2-.4,cy+1.42,crown.z1+.92],.055,m.copper);
+        for(let x=crown.x1+2;x<crown.x2;x+=5.2){
+            b.box(x,cy+1.42,crown.z1+.92,.34,.46,.30,m.ironDark,0,.03);
+            b.rod([x,cy+1.20,crown.z1+.92],[x,cy+.10,crown.z1+.92],.026,m.ironDark);
+        }
+        // A searchlight that stopped working a long time ago.
+        b.cyl(crown.x2-2.2,cy+.55,crown.z+.4,.30,.42,1.10,m.ironDark);
+        b.box(crown.x2-2.2,cy+1.45,crown.z+.4,1.05,.95,1.20,m.ironDark,.5,.06);
+        b.box(crown.x2-2.2+.42,cy+1.45,crown.z+.4+.54,.80,.74,.05,m.cold,.5,.02);
+        b.rod([crown.x2-2.2,cy+1.0,crown.z+.4],[crown.x2-2.2,cy+.15,crown.z+.4],.05,m.iron);
+    }
+    // The parapet stair: treads, landings, a handrail and lamps that reach a rail.
+    const descent=w.rooms.find(r=>r.id==='wall-descent');
+    if(descent){
+        for(let z=descent.z1+1.4;z<descent.z2-1;z+=3.1){
+            const y=v.sim.groundHeight(descent.x,z);
+            for(const x of [descent.x1+.22,descent.x2-.22]){
+                b.cyl(x,y+.52,z,.035,.042,1.04,m.iron);
+                b.rod([x,y+1.00,z-1.6],[x,v.sim.groundHeight(descent.x,z+1.6)+1.00,z+1.6],.036,m.lightIron);
+            }
+            b.box(descent.x,y-.02,z,descent.w-.45,.05,.34,m.trim,0,.02,.6);
+        }
+        // Lamps on the wall side only. A full-width gantry read as a black bar
+        // straight across the view every time you looked down the flight.
+        for(const z of [descent.z1+7,descent.z1+19,descent.z1+31,descent.z2-6]){
+            const y=v.sim.groundHeight(descent.x,z), x=descent.x1+.30;
+            b.cyl(x,y+2.10,z,.05,.06,2.10,m.ironDark);
+            b.box(x+.36,y+3.10,z,.78,.20,.34,m.ironDark,0,.03);
+            b.box(x+.36,y+3.00,z,.58,.08,.24,m.warm);
+            b.rod([x,y+3.10,z],[x+.36,y+3.10,z],.035,m.ironDark);
+            v.lampPositions.push({x:x+.5,y:y+2.88,z,color:0xffc07a,intensity:15});
+        }
+    }
+    // Meadow dressing: a collapsed fence line, a dead tree, and field stones.
+    const meadow=w.rooms.find(r=>r.id==='grass-yard');
+    if(meadow){
+        for(let z=meadow.z1+3;z<meadow.z2-2;z+=3.4){
+            const lean=Math.sin(z*.7)*.30, x=meadow.x1+2.1+Math.sin(z*.13)*.9;
+            b.cyl(x,.62,z,.075,.095,1.34,m.wood,lean,0,8);
+            if(Math.abs(Math.sin(z*1.7))>.35)for(const y of [.52,.95])
+                b.rod([x,y+lean*.3,z],[x+Math.sin(z*.13+.3)*.9-Math.sin(z*.13)*.9,y,z+3.4],.017,m.iron);
+        }
+        const tx=meadow.x2-7.5,tz=meadow.z1+11;
+        b.cyl(tx,2.05,tz,.20,.42,4.10,m.wood,.05,.03,10);
+        for(const [ax,ay,az,len,rr] of [[-1,.55,.2,2.3,.10],[.9,.75,-.4,2.0,.09],[.2,.95,.9,1.6,.07],[-.6,1.0,-.8,1.3,.06]]){
+            b.rod([tx,3.5,tz],[tx+ax*len,3.5+ay*len,tz+az*len],rr,m.wood);
+            b.rod([tx+ax*len,3.5+ay*len,tz+az*len],[tx+ax*len*1.7,3.5+ay*len*1.55,tz+az*len*1.8],rr*.55,m.wood);
+        }
+        for(let i=0;i<70;i++){
+            const x=meadow.x1+1+((i*7919)%1000)/1000*(meadow.w-2), z=meadow.z1+1+((i*104729)%1000)/1000*(meadow.d-2);
+            if(Math.abs(x-3)<2.6)continue;
+            const sz=.24+((i*53)%100)/100*.55;
+            b.box(x,sz*.16,z,sz,sz*.55,sz*.85,m.stoneDark,i*.9,.16,.5);
+        }
+    }
     for(const [text,x,z,y] of [['OUTER DEFENSES',0,-305,3],['MEADOW / OUTER MESH',3,-380,2.6],['THE WATCH STORE',31.5,-380,2.4],['COAST ACCESS',-6,-459,2.6]]){
         // Freestanding route signs have two posts, not floating labels.
         v.sign(text,x,y,z,3,.36,0,'#c2c6ac','#263b38',48);
@@ -2199,9 +2481,14 @@ module.exports = { loadCharacters, cloneSkin, inkTexture };
 }, {"./context": "src/presentation/characters/context.js"}],
 "src/presentation/characters/climbing.js": [function(require, module, exports) {
 'use strict';
-/** Two-bone reach posing on the actual visible skeleton. Each planted hand is
- * locked to a world-space grip between re-grasps, rather than windmilling. */
-const {V,Q}=require('./context');
+/** Climbing as an actual gait: four limbs, one of them moving at a time, each
+ * hand and foot landing on a hold that exists in the masonry rather than sliding
+ * up an invisible rail. Three points stay loaded at all times, the hips swing
+ * under the planted side, and the haul has its own full-body pose so being
+ * dragged up by the iron looks nothing like climbing under your own power.
+ */
+const {V,Q,IP}=require('./context');
+const ease=t=>t*t*(3-2*t);
 function solveLimb(actor,upper,lower,end,target,bend){
     if(!upper||!lower||!end)return;
     const a=upper.getWorldPosition(V()),mid=lower.getWorldPosition(V()),tip=end.getWorldPosition(V());
@@ -2215,41 +2502,140 @@ function solveLimb(actor,upper,lower,end,target,bend){
     actor.aim(upper,lower,elbow.sub(a));
     actor.aim(lower,end,a.addScaledVector(dir,d).sub(lower.getWorldPosition(V())));
 }
+function curlFingers(actor,b,side,amount=-.70){
+    for(const finger of ['index','middle','ring','pinky'])for(const j of ['02','03']){
+        const bone=b[finger+'_'+j+'_'+side];if(bone)actor.rotateWorld(bone,Q().setFromAxisAngle(V(1,0,0),amount));
+    }
+}
+/** Holds are snapped to the same lattice the wall is built from, so a hand never
+ * closes on blank masonry. The fence gets a finer, denser grid. */
+function snapHold(surface,x,y,fence){
+    if(fence)return {x:Math.round(x/.30)*.30,y:Math.round(y/.26)*.26};
+    const row=Math.round((y-.55)/.62), stagger=(row&1)?.36:0;
+    return {x:Math.round((x-.55-stagger)/.72)*.72+.55+stagger, y:row*.62+.55};
+}
+const ORDER=[['hand','r'],['foot','l'],['hand','l'],['foot','r']];
+function limbTarget(e,kind,side,surface,reaching){
+    const sign=side==='l'?-1:1;
+    if(kind==='hand')return {x:e.x+sign*.215,y:e.y+1.60+(reaching?.46:.08)+(side==='l'?.05:0),z:surface.z+.08};
+    return {x:e.x+sign*.165,y:e.y+(reaching?.34:.07),z:surface.z+.16};
+}
 function climbingPose(actor,e,time,dt=1/60){
     const b=actor.scan.bones,v=actor.view,s=v.sim;
     const surface=s.world.climbs.find(c=>c.id===(e.climbId||s.climb?.id));
     if(!surface)return;
-    actor.group.position.set(e.x,e.y||0,e.z-.18);actor.group.rotation.set(0,Math.PI,0);
-    actor.group.updateMatrixWorld(true);
-    // Facing the wall rotates the bind-space left/right axes: left is now -X.
-    // Keep targets on the same side as each shoulder; crossing them lost reach.
-    const moving=Math.hypot(e.vx||0,e.vy||0)>.15;
-    const state=actor.grips||(actor.grips={id:null,lastY:-Infinity,points:{}});
-    if(state.id!==surface.id||Math.abs((state.lastY||0)-e.y)>2){state.points={};state.id=surface.id;}
-    state.lastY=e.y;
-    const fence=surface.kind==='fence',step=fence?.26:.24;
-    for(const [side,sign] of [['l',-1],['r',1]]){
-        const phase=(e.phase||0)+(sign>0?0:Math.PI),plant=Math.sin(phase)>.05;
-        const targetY=e.y+1.80,targetX=e.x+sign*.30;
-        const key='hand_'+side;
-        let grip=state.points[key];
-        if(!grip||!plant||Math.abs(grip.y-targetY)>.38||Math.abs(grip.x-targetX)>.55){
-            const next=V(targetX,Math.floor(targetY/step)*step,surface.z+.09);
-            if(grip&&moving)grip.lerp(next,1-Math.exp(-22*Math.max(0,dt)));else grip=next;
-            state.points[key]=grip;
-        }
-        solveLimb(actor,b['upperarm_'+side],b['lowerarm_'+side],b[key],grip,V(sign*.6,-.1,.8));
-        actor.aim(b[key],b['middle_01_'+side],V(0,.6,-.28));
-        const footY=e.y+.13+(moving?Math.max(0,-Math.sin(phase))*.22:0);
-        const toe=V(e.x+sign*.18,footY,surface.z+.19);
-        solveLimb(actor,b['upperleg_'+side],b['lowerleg_'+side],b['foot_'+side],toe,V(sign*.20,0,-1));
-        for(const finger of ['index','middle','ring','pinky'])for(const j of ['02','03']){
-            const bone=b[finger+'_'+j+'_'+side];if(bone)actor.rotateWorld(bone,Q().setFromAxisAngle(V(1,0,0),-.70));
+    const isPlayer=e===s.player, own=isPlayer&&s.climb?.id===surface.id?s.climb:null;
+    const mantle=own?(own.mantle||0):0;
+    if(mantle){mantlePose(actor,e,surface,mantle);return;}
+    const fence=surface.kind==='fence';
+    const step=dt>0?Math.min(dt,1/20):0;
+    const hoist=IP.clamp(own?(own.hoist||0):0,0,1);
+    const haul=IP.clamp((hoist-.08)/.42,0,1);
+    const speed=Math.hypot(e.vx||0,e.vy||0);
+    // ---- the limb cycle -----------------------------------------------------
+    let st=actor.climbState;
+    if(!st||st.id!==surface.id||Math.abs(st.anchorY-e.y)>3.2){
+        st=actor.climbState={id:surface.id,anchorY:e.y,lead:0,phase:1,from:null,to:null,points:{}};
+        for(const [kind,side] of ORDER){
+            const t=limbTarget(e,kind,side,surface,false);
+            const h=snapHold(surface,t.x,t.y,fence);
+            st.points[kind+side]=V(h.x,h.y,t.z);
         }
     }
+    st.anchorY=e.y;
+    // The gait only advances when the body is actually moving. Hanging still
+    // leaves three points loaded and one hand resetting, which is what a climber does.
+    const drive=IP.clamp(speed/2.2,0,1)+haul*.85;
+    if(st.phase>=1){
+        const [kind,side]=ORDER[st.lead];
+        const key=kind+side, want=limbTarget(e,kind,side,surface,false);
+        const cur=st.points[key];
+        const stale=Math.abs(cur.y-want.y)>.30||Math.abs(cur.x-want.x)>.36;
+        if(stale&&drive>.04){
+            const reach=limbTarget(e,kind,side,surface,true);
+            const h=snapHold(surface,reach.x,IP.lerp(cur.y,reach.y,1),fence);
+            st.from=cur.clone();
+            st.to=V(h.x,Math.max(cur.y+ (kind==='hand'?.22:.18), h.y),want.z);
+            st.phase=0;
+        }
+        else st.lead=(st.lead+1)%ORDER.length;
+    }
+    if(st.phase<1&&st.from&&st.to){
+        st.phase=Math.min(1,st.phase+step*(2.5+drive*4.4));
+        const t=ease(st.phase),[kind,side]=ORDER[st.lead];
+        const p=st.from.clone().lerp(st.to,t);
+        // The moving limb comes off the wall, swings, and is set down again.
+        p.z+=Math.sin(st.phase*Math.PI)*(kind==='hand'?.19:.13);
+        p.y+=Math.sin(st.phase*Math.PI)*(kind==='hand'?.09:.05);
+        st.points[kind+side]=p;
+        if(st.phase>=1){st.points[kind+side]=st.to.clone();st.lead=(st.lead+1)%ORDER.length;}
+    }
+    for(const [kind,side] of ORDER){
+        const key=kind+side,q=st.points[key],ideal=limbTarget(e,kind,side,surface,false);
+        const lo=kind==='hand'?e.y+.92:e.y-.46, hi=kind==='hand'?e.y+2.16:e.y+.92;
+        if(q.y<lo-1.0||q.y>hi+1.0||Math.abs(q.x-ideal.x)>1.25){
+            const h=snapHold(surface,ideal.x,ideal.y,fence);
+            q.set(h.x,IP.clamp(h.y,lo,hi),ideal.z);
+            if(ORDER[st.lead][0]===kind&&ORDER[st.lead][1]===side)st.phase=1;
+        }
+        else q.y=IP.clamp(q.y,lo,hi);
+        q.x=IP.clamp(q.x,e.x-.78,e.x+.78);
+    }
+    // ---- body ---------------------------------------------------------------
+    const loadedSide=ORDER[st.lead][1]==='l'?1:-1;         // weight hangs off the planted side
+    const sway=loadedSide*(1-Math.abs(st.phase*2-1))*.055*(1-haul*.7);
+    const bob=Math.sin(time*1.6)*.012*(1-drive);
+    actor.group.position.set(e.x+sway,(e.y||0)+bob+haul*.05,e.z-.10-haul*.09);
+    actor.group.rotation.set(-.045-haul*.16,Math.PI,-sway*.85+(fence?Math.sin(time*15)*(s.fenceVibration||0)*.02:0));
+    actor.group.updateMatrixWorld(true);
+    // ---- limbs --------------------------------------------------------------
+    for(const [side,sign] of [['l',-1],['r',1]]){
+        const hand=st.points['hand'+side].clone();
+        const foot=st.points['foot'+side].clone();
+        if(haul>0){
+            // Hauled: both arms committed overhead, feet trailing off the wall,
+            // the cuffed right leg hanging furthest behind.
+            const up=V(e.x+sign*.23,e.y+2.06+(side==='r'?.08:0),surface.z+.05);
+            const trail=V(e.x+sign*.155,e.y-.10-(side==='r'?.12:0),surface.z+.30);
+            hand.lerp(up,haul);
+            foot.lerp(trail,haul);
+        }
+        solveLimb(actor,b['upperarm_'+side],b['lowerarm_'+side],b['hand_'+side],hand,V(sign*.52,-.92-haul*.30,.34));
+        actor.aim(b['hand_'+side],b['middle_01_'+side],V(0,.55,-.26));
+        curlFingers(actor,b,side,-.70-haul*.22);
+        solveLimb(actor,b['upperleg_'+side],b['lowerleg_'+side],b['foot_'+side],foot,V(sign*.30,-.18,.62));
+    }
+    // Spine and head: reach lengthens the body, the haul arches it, and the eyes
+    // go where the next hold is rather than straight through the brickwork.
+    const stretch=(1-Math.abs(st.phase*2-1))*.10;
+    if(b.spine_01)actor.rotateWorld(b.spine_01,Q().setFromAxisAngle(V(0,0,1),-sway*1.6));
+    if(b.spine_02)actor.rotateWorld(b.spine_02,Q().setFromAxisAngle(V(1,0,0),-(stretch+haul*.20)));
+    if(b.neck)actor.rotateWorld(b.neck,Q().setFromAxisAngle(V(1,0,0),-(.20+haul*.34)));
     if(e.attack>0){const t=1-e.attack/(e.attackMax||1);actor.aim(b.upperarm_r,b.lowerarm_r,V(-.25,.5-t*.6,.45));actor.aim(b.lowerarm_r,b.hand_r,V(-.2,-.3,1));}
-    // The wire responds locally; the camera and collision surface do not oscillate.
-    if(fence)actor.group.position.z+=Math.sin(time*15)*(s.fenceVibration||0)*.015;
+    actor.group.updateMatrixWorld(true);
+}
+function mantlePose(actor,e,surface,t){
+    const b=actor.scan.bones;
+    // Four beats: hands set on the coping, a hard press, the lead knee comes
+    // through, then the body stands up out of the crouch onto the parapet.
+    const press=ease(IP.clamp(t/.40,0,1)), cross=ease(IP.clamp((t-.20)/.55,0,1)), rise=ease(IP.clamp((t-.66)/.34,0,1));
+    actor.group.position.set(e.x,e.y||0,e.z-.04+rise*.03);
+    actor.group.rotation.set(-.30*(1-cross)+rise*.10,Math.PI,.045*Math.sin(t*Math.PI));
+    actor.group.updateMatrixWorld(true);
+    const spread=.32-.07*cross, ledgeZ=surface.z-.12;
+    for(const [side,sign] of [['l',-1],['r',1]]){
+        const hand=V(e.x+sign*spread,surface.top+.13+press*.06+(side==='r'?-.035:.035),ledgeZ+rise*.22);
+        solveLimb(actor,b['upperarm_'+side],b['lowerarm_'+side],b['hand_'+side],hand,V(sign*.45,.25-press*.5,.9));
+        curlFingers(actor,b,side,-.88);
+    }
+    const lead=t<.72?'r':'l';
+    for(const [side,sign] of [['l',-1],['r',1]]){
+        const through=side===lead?Math.min(1,t/.62):Math.max(0,(t-.30)/.60);
+        const foot=V(e.x+sign*.19,surface.top+.04-.66*(1-through)+rise*.02,surface.z+.12-1.24*through);
+        solveLimb(actor,b['upperleg_'+side],b['lowerleg_'+side],b['foot_'+side],foot,V(sign*.18,.15,-1));
+    }
+    if(b.spine_02)actor.rotateWorld(b.spine_02,Q().setFromAxisAngle(V(1,0,0),.34*cross*(1-rise)));
+    if(b.neck)actor.rotateWorld(b.neck,Q().setFromAxisAngle(V(1,0,0),-.22-rise*.24));
     actor.group.updateMatrixWorld(true);
 }
 module.exports=climbingPose;
@@ -3088,6 +3474,385 @@ function solidMaterial(mat) {
 module.exports = { merge, roundedBox, boxGeo, Batch, canvasTexture, solidMaterial };
 
 }, {"./engine": "src/presentation/engine.js"}],
+"src/presentation/late-game-art.js": [function(require, module, exports) {
+'use strict';
+/**
+ * Authored visual rebuild for the campaign's second half. These pieces are
+ * architectural detail, not invisible gameplay blockers or random scatter.
+ */
+const { T, V, Batch } = require('./context');
+const PI = Math.PI;
+
+function ensureMaterials(v) {
+    const m = v.materials;
+    if (!m.blackIron) {
+        m.blackIron = m.ironDark.clone();
+        m.blackIron.name = 'black-iron';
+        m.blackIron.color.set(0x171f21);
+        m.blackIron.roughness = .57;
+        m.blackIron.metalness = .78;
+        m.oxide = m.copper.clone();
+        m.oxide.name = 'oxidized-copper';
+        m.oxide.color.set(0x5e4936);
+        m.oxide.roughness = .82;
+        m.canvas = m.cloth.clone();
+        m.canvas.name = 'medical-canvas';
+        m.canvas.color.set(0x75827b);
+        m.dawn = new T.MeshBasicMaterial({ color: 0xffc783 });
+        m.shoreRock = new T.MeshStandardMaterial({
+            map: v.tex('cast_color.jpg', true), normalMap: v.tex('cast_normal.jpg'), roughnessMap: v.tex('cast_rough.jpg'),
+            color: 0x6b6a60, roughness: .98, metalness: .02, envMapIntensity: .30
+        });
+        m.shoreRock.name = 'shore-rock';
+        m.shoreRock.normalScale.set(.9, .9);
+        m.wrack = new T.MeshStandardMaterial({ color: 0x2b2f1c, roughness: 1 });
+        m.wrack.name = 'tide-wrack';
+        m.deepWater = new T.MeshStandardMaterial({ color: 0x10292c, roughness: .28, metalness: .18 });
+    }
+}
+
+/** Dressing that is physically carried by a breakable belongs to that breakable.
+ * Anything registered here topples and disappears with its owner instead of
+ * being left hanging in the air once the machine under it is gone. */
+function mounted(v, ownerId) {
+    const group = new T.Group();
+    v.staticRoot.add(group);
+    (v.attached ??= new Map());
+    if (!v.attached.has(ownerId)) v.attached.set(ownerId, []);
+    v.attached.get(ownerId).push(group);
+    return { group, batch: new Batch(group, false) };
+}
+
+function buildLateGameArt(v) {
+    ensureMaterials(v);
+    const m = v.materials, b = new Batch(v.staticRoot), f = new Batch(v.floorRoot);
+    const lamps = [];
+    // `mount` is the height of the structure the fitting actually hangs from.
+    // Passing it is mandatory: a lamp with a 35 cm stub into empty air is the
+    // exact kind of floating object this pass exists to remove.
+    const addLamp = (x, y, z, cool = false, mount = null, batch = b) => {
+        batch.box(x, y, z, 1.05, .22, .42, m.blackIron, 0, .035);
+        batch.box(x, y - .10, z + .225, .78, .12, .025, cool ? m.cold : m.warm);
+        const top = mount === null ? y + .45 : mount;
+        batch.rod([x, y + .1, z], [x, top, z], .045, m.blackIron);
+        if (mount !== null) batch.box(x, top - .04, z, .30, .09, .30, m.blackIron);
+        lamps.push({ x, y: y - .18, z: z + .35, color: cool ? 0xb8d5d0 : 0xffb76b, intensity: cool ? 13 : 18 });
+    };
+    const pipeRun = (x, z1, z2, y, mat = m.oxide) => {
+        b.rod([x, y, z1], [x, y, z2], .085, mat);
+        for (let z = z1 + 1.0; z < z2; z += 3.5) {
+            b.torus(x, y, z, .105, .025, m.blackIron, PI / 2);
+            b.rod([x, y, z], [x + (x < 0 ? -.28 : .28), y, z], .028, m.lightIron);
+        }
+    };
+
+    // RECORDS ENGINE — stacks become an actual archive machine.
+    for (const x of [-11.2, 11.2]) {
+        b.box(x, 7.05, -171.5, .55, 6.6, 30.1, m.blackIron, 0, .025);
+        pipeRun(x + (x < 0 ? .35 : -.35), -185.5, -157.5, 8.2, m.oxide);
+        for (let z = -184; z <= -159; z += 5) {
+            b.box(x + (x < 0 ? .31 : -.31), 5.7, z, .15, 2.1, 3.55, m.iron, 0, .018);
+            b.box(x + (x < 0 ? .43 : -.43), 5.72, z, .03, 1.62, 2.8, m.paper);
+        }
+    }
+    for (let z = -183.5; z <= -159.5; z += 6) {
+        b.rod([-11.1, 8.6, z], [11.1, 8.6, z], .07, m.blackIron);
+        b.box(0, 8.48, z, 3.8, .11, .34, m.lightIron);
+        addLamp(0, 8.25, z + .02, false, 8.56);
+    }
+    // Hanging index cards align with desks instead of drifting across the room.
+    for (const [x, z, label] of [[-3.6, -165.3, 'A–M'], [3.7, -179.8, 'N–Z']]) {
+        b.rod([x, 7.8, z], [x, 5.8, z], .025, m.blackIron);
+        b.box(x, 5.58, z, 1.25, .36, .08, m.ironDark, 0, .02);
+        v.sign(label, x, 5.58, z + .05, 1.05, .25, 0, '#d4c7a2', '#1a2929', 42);
+    }
+
+    // INFIRMARY — fixed bed bays, curtain rails, plumbing and a lit nurse station.
+    for (const x of [40.6, 57.4]) {
+        pipeRun(x, -187.4, -160.6, 7.4, m.iron);
+        for (const [i, z] of [-163.5, -170.5, -177.5, -184.5].entries()) {
+            const side = x < 49 ? 'west' : 'east';
+            // The track is bolted to the ceiling and stays; the curtain, its
+            // droppers and the bay monitor are the bed's and fall with it.
+            b.rod([x, 7.05, z - 1.4], [x, 7.05, z + 1.4], .038, m.chrome);
+            const bay = mounted(v, `infirmary-${side}-bed-${i}`);
+            bay.batch.rod([x, 7.02, z - 1.38], [x, 4.75, z - 1.38], .024, m.chrome);
+            bay.batch.rod([x, 7.02, z + 1.38], [x, 4.75, z + 1.38], .024, m.chrome);
+            bay.batch.box(x, 5.82, z + (x < 49 ? -1.31 : 1.31), .045, 2.28, .62, m.canvas, 0, .018);
+            bay.batch.box(x + (x < 49 ? -.17 : .17), 5.0, z, .16, 1.25, .65, m.green, 0, .025);
+            bay.batch.rod([x + (x < 49 ? -.17 : .17), 5.62, z], [x + (x < 49 ? -.04 : .04), 7.02, z], .022, m.chrome);
+            bay.batch.flush();
+        }
+    }
+    b.box(49, 7.75, -174, 7.2, .20, 3.3, m.blackIron, 0, .03);
+    b.box(49, 7.60, -174, 5.5, .06, 2.2, m.cold);
+    v.lampPositions.push({ x: 49, y: 7.38, z: -174, color: 0xc5ded7, intensity: 23 });
+    for (let z = -185; z <= -163; z += 5.5) addLamp(49, 8.05, z, true, 9.34);
+
+    // RECEIVING DOCK — real loading bays, bumpers and overhead crane rails.
+    for (const x of [38.05, 63.95]) {
+        for (const z of [-208.7, -217.2]) {
+            b.box(x, 2.7, z, .26, 4.65, 6.4, m.blackIron, 0, .03);
+            for (let y = .55; y < 4.8; y += .48)
+                b.box(x + (x < 50 ? .16 : -.16), y, z, .055, .11, 5.75, m.iron);
+            b.box(x + (x < 50 ? .28 : -.28), .42, z, .32, .72, 4.8, m.rubber, 0, .05);
+        }
+    }
+    for (const x of [41, 51, 61]) {
+        b.box(x, 6.95, -213, .34, .34, 19.3, m.blackIron);
+        b.rod([x, 6.55, -221.4], [x, 6.55, -204.6], .035, m.oxide);
+    }
+    b.box(51, 6.55, -214.0, 22.5, .52, .75, m.yellow, 0, .035);
+    b.cyl(51, 5.95, -214.0, .34, .34, .48, m.blackIron, 0, PI / 2, 20);
+    b.rod([51, 5.7, -214], [51, 3.05, -214], .07, m.blackIron);
+    b.torus(51, 2.72, -214, .34, .06, m.blackIron, 0, 0, PI / 2, PI * 1.65);
+    for (const z of [-207, -216, -221]) addLamp(51, 6.1, z, false, 6.82);
+
+    // INCINERATOR — refractory arches, connected flues and service catwalks.
+    for (const [i, x, z] of [[0, -10.4, -211.5], [1, -10.4, -228.2], [2, 8.2, -234.8]]) {
+        // The brick piers are the building. The hood, the stack and the flue
+        // stand on the machine, so they are registered to it and come down with it.
+        for (const side of [-1, 1]) b.box(x + side * 2.35, 2.5, z, .28, 5, 5.2, m.stoneDark, 0, .025);
+        const id = ['incinerator-bank-west-a', 'incinerator-bank-west-b', 'incinerator-bank-east'][i];
+        const stack = mounted(v, id);
+        stack.batch.box(x, 5.55, z, 4.8, .34, 5.0, m.blackIron, 0, .035);
+        stack.batch.cyl(x, 6.7, z, .42, .5, 2.4, m.oxide, 0, 0, 20);
+        stack.batch.rod([x, 7.9, z], [x, 7.9, -206.2], .22, m.oxide);
+        // Hangers tie the flue to the roof so the run never reads as unsupported.
+        for (let fz = z; fz > -206.2; fz -= 4.4) stack.batch.rod([x, 8.02, fz], [x, 9.3, fz], .05, m.blackIron);
+        stack.batch.flush();
+    }
+    b.box(-1.0, 5.3, -222.8, 1.1, .28, 31.0, m.blackIron);
+    for (let z = -237; z <= -208; z += 4.8) {
+        b.rod([-1.55, 5.3, z], [-.45, 5.3, z], .05, m.lightIron);
+        addLamp(0, 5.0, z, false, 5.3);
+    }
+    // Glowing ash trenches are inset, not coplanar full-room tiles.
+    for (const [x, z, len] of [[-4.2, -220, 8], [4.1, -230, 7]]) {
+        f.box(x, .015, z, 1.15, .03, len, m.blackIron, 0, .02, .6);
+        f.box(x, .038, z, .55, .012, len - .35, m.warm, 0, 0, .8);
+    }
+
+    // GOVERNOR'S COURT — a designed arena with a dais, galleries and symmetry.
+    // The judgement dais is two solid wings around a deliberate processional
+    // aisle. The old full-width slab and fake wall looked like geometry you could
+    // walk through; every visible blocker now agrees with the simulation.
+    for (const x of [-5.4, 5.4]) b.box(x, .24, -284.4, 4.2, .48, 4.5, m.stoneDark, 0, .04);
+    for (const x of [-6.6, 6.6]) {
+        b.box(x, 2.75, -284.4, .65, 5.5, 4.2, m.trim, 0, .025);
+        b.box(x, 5.62, -284.4, 1.0, .25, 4.65, m.blackIron, 0, .025);
+    }
+    for (const x of [-4.2, 4.2]) b.box(x, 3.0, -286.2, 3.6, 5.8, .38, m.stoneDark, 0, .035);
+    b.box(0, 5.25, -286.2, 12.0, 1.30, .38, m.stoneDark, 0, .035);
+    b.box(0, 4.92, -285.97, 5.8, .84, .07, m.blackIron, 0, .02);
+    v.sign('NO FURTHER APPEAL', 0, 4.92, -285.90, 5.25, .48, 0, '#e0c58e', '#192526', 38);
+    for (const x of [-1.65, 1.65]) f.box(x, .021, -284.4, .07, .042, 7.2, m.oxide, 0, 0, .8);
+    for (const x of [-15, -5, 5, 15]) {
+        b.rod([x, 6.25, -257], [x, 6.25, -284.8], .055, m.blackIron);
+        addLamp(x, 5.85, -262.2, false, 6.25);
+        addLamp(x, 5.85, -279.5, false, 6.25);
+    }
+    // Floor inlay is raised by centimetres and broken into narrow strips: no
+    // duplicate arena slab, no flashing coplanar tile.
+    for (const x of [-6, 0, 6]) f.box(x, .018, -271, .08, .036, 24.5, m.oxide, 0, 0, .8);
+    for (const z of [-262, -271, -280]) f.box(0, .019, z, 32.0, .038, .08, m.oxide, 0, 0, .8);
+
+    // OUTER BREACH — compact climbs with believable service hardware.
+    const outer = v.world.climbs?.find(c => c.id === 'outer-wall');
+    if (outer) {
+        for (const y of [outer.top * .24, outer.top * .48, outer.top * .72, outer.top * .94]) {
+            b.box(-7.5, y, outer.z + .33, 4.2, .18, .55, m.blackIron, 0, .025);
+            b.box(7.5, y, outer.z + .33, 4.2, .18, .55, m.blackIron, 0, .025);
+            for (const x of [-9.1, -5.9, 5.9, 9.1]) b.rod([x, y - .05, outer.z + .1], [x, y - .8, outer.z - .35], .035, m.blackIron);
+        }
+        for (const x of [-9.4, 9.4]) {
+            b.rod([x, .25, outer.z + .42], [x, outer.top + .4, outer.z + .42], .07, m.oxide);
+            for (let y = .7; y < outer.top; y += .72) b.box(x, y, outer.z + .52, .65, .045, .22, m.lightIron);
+        }
+    }
+    const fence = v.world.climbs?.find(c => c.id === 'chain-fence');
+    if (fence) {
+        b.box((fence.x1 + fence.x2) / 2, fence.top + .25, fence.z - .48, fence.x2 - fence.x1 + 1.5, .28, .9, m.blackIron, 0, .025);
+        for (let x = fence.x1 + 2; x < fence.x2; x += 6)
+            b.box(x, fence.top + 1.0, fence.z - .55, 1.2, 1.6, 1.1, m.blackIron, 0, .04);
+    }
+
+    // ---------------------------------------------------------------- THE COAST
+    // The winch, the sea gate, and then a causeway standing in open water. The
+    // old ending put its scenery on a floor that stopped existing three metres
+    // further on; every piece here carries its own weight down to the seabed.
+    f.box(4.65, .11, -461.7, 3.2, .22, 2.6, m.stoneDark, 0, .035, .4);
+    for (let z = -462.5; z > -467; z -= .44) {
+        b.torus(-6, .37, z, .21, .043, m.blackIron, PI / 2);
+        if ((Math.round((z + 462.5) / .44) & 1) === 0) b.torus(-6, .37, z - .22, .21, .043, m.oxide, 0, PI / 2);
+    }
+    for (const x of [-20.8, 8.8]) {
+        b.box(x, 1.65, -470, .75, 3.3, 7.2, m.stoneDark, 0, .05);
+        b.box(x, 3.42, -470, 1.1, .32, 7.7, m.trim, 0, .035);
+    }
+    for (const x of [-9.2, -2.8]) {
+        b.cyl(x, 1.25, -471.6, .12, .15, 2.5, m.blackIron);
+        b.box(x, 2.5, -471.6, 1.15, .28, .65, m.blackIron, 0, .03);
+        b.box(x, 2.42, -471.25, .82, .12, .025, m.dawn);
+        v.lampPositions.push({ x, y: 2.28, z: -471.0, color: 0xffc98a, intensity: 27 });
+    }
+    v.sign('STOP THE WINCH', 4.65, 3.0, -460.95, 3.0, .40, 0, '#ead29c', '#182526', 44);
+
+    // THE TIDE ROAD — a masonry causeway on arched piers, out into open water.
+    const seaStone = m.seaStone || m.stoneDark;
+    for (let z = -489; z > -524; z -= 4.2) {
+        for (const x of [-9.3, -2.7]) {
+            b.box(x, -3.1, z, 1.5, 6.4, 2.1, seaStone, 0, .09, .22);
+            b.box(x, .12, z, 1.9, .40, 2.5, m.trim, 0, .05, .35);
+        }
+        // Spandrel and soffit between the piers so the road is carried, not floating.
+        b.box(-6, -.55, z - 2.1, 7.8, 1.30, 2.2, seaStone, 0, .05, .3);
+        b.box(-6, -1.62, z - 2.1, 6.0, .95, 1.5, seaStone, 0, .06, .3);
+    }
+    b.box(-6, -.42, -506.5, 8.2, 1.05, 36, seaStone, 0, .04, .25);
+    for (let z = -490; z > -523; z -= 2.6) {
+        for (const x of [-9.72, -2.28]) {
+            // Kerb, mooring ring and the weed line the tide leaves behind.
+            b.box(x, .18, z, .42, .36, 2.62, m.trim, 0, .03, .45);
+            if (Math.round((z + 490) / 2.6) % 2 === 0) {
+                b.torus(x + (x < -6 ? .22 : -.22), .16, z, .17, .034, m.oxide, 0, PI / 2);
+                b.box(x + (x < -6 ? .20 : -.20), .04, z, .16, .10, .46, m.blackIron);
+            }
+            b.box(x + (x < -6 ? .24 : -.24), -.22, z, .09, .30, 2.62, m.leaf, 0, .02);
+        }
+    }
+    for (let z = -492; z > -522; z -= 5.4) f.box(-6, .022, z, 6.6, .044, .10, m.oxide, 0, 0, .8);
+
+    // THE BREAKER STONE — the islet it stands on, and the plinth under it. The
+    // plinth is separate geometry, so smashing the stone leaves a cut base rather
+    // than a hole where a prop used to hover.
+    // The islet is rock. Only the pad the stone sits on is worked masonry.
+    b.box(-6, -2.9, -531, 18, 6.0, 15.0, m.shoreRock, 0, .30, .14);
+    // The rim of the islet, kept clear of the road and of the stone itself so no
+    // decorative boulder ever sits where the player has to walk.
+    for (let i = 0; i < 34; i++) {
+        const a = i / 34 * PI * 2, rr = 10.4 + (i % 4) * 1.5;
+        const x = -6 + Math.cos(a) * rr, z = -531 + Math.sin(a) * (rr * .74);
+        if (Math.abs(x + 6) < 5.2 && z > -527.5) continue;
+        b.box(x, -1.05 + (i % 3) * .26, z, 2.6 + (i % 3) * 1.0, 1.9, 2.8, i % 2 ? m.shoreRock : m.seaStone, a, .34, .22);
+    }
+    f.box(-6, .012, -530.5, 7.4, .024, 6.0, m.stoneDark, 0, 0, .42);
+    for (const [rx, rz, rw, rd] of [[-6, -530.5, 6.2, 4.8]])
+        b.box(rx, .09, rz, rw, .18, rd, m.trim, 0, .04, .4);
+    // Four bollards and a set of cut shackles: this rock has done this before.
+    for (const [bx, bz] of [[-9.1, -528.0], [-2.9, -528.0], [-9.1, -533.2], [-2.9, -533.2]]) {
+        b.cyl(bx, .58, bz, .17, .23, 1.16, m.blackIron);
+        b.torus(bx, 1.10, bz, .17, .038, m.oxide, PI / 2);
+    }
+    for (let i = 0; i < 9; i++) {
+        const a = i * .82, r2 = 2.4 + (i % 3) * .55;
+        b.torus(-6 + Math.cos(a) * r2, .14, -530.5 + Math.sin(a) * r2 * .75, .10, .028, m.oxide, PI / 2, 0, a);
+    }
+    // Painted on the pad rather than hung on posts in front of the one thing the
+    // player is here to look at.
+    v.sign('BREAK THE CUFF', -6, .036, -527.4, 5.0, .78, 0, '#f2d9a4', '#1a2727', 46, { flat: true });
+    for (const sx of [-1, 1]) f.box(-6 + sx * 3.05, .020, -530.5, .14, .04, 5.6, m.yellow, 0, 0, .8);
+
+    // THE STRAND — the causeway gives out and the last of it is wet sand running
+    // down into the water. This is one continuous slope with ripples in it, not
+    // the stack of treads the generic ramp builder makes for a stair.
+    {
+        const X0 = -21, X1 = 9, Z0 = -570, Z1 = -538, STEP = 1.15;
+        const cols = Math.round((X1 - X0) / STEP) + 1, rows = Math.round((Z1 - Z0) / STEP) + 1;
+        const noise = (x, z) => {
+            const n = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+            return n - Math.floor(n);
+        };
+        const height = (x, z) => {
+            const t = Math.min(1.34, Math.max(0, (-z - 538) / 24));
+            // The slope the simulation walks on, plus ripple bars across the tide.
+            const base = -t * 5.9;
+            const ripple = Math.sin(z * 1.15 + Math.sin(x * .22) * 1.6) * .105 * Math.max(0, 1 - t * .55);
+            const drift = (noise(Math.floor(x * .35), Math.floor(z * .35)) - .5) * .26 * Math.max(0, 1 - t * .5);
+            const channel = -Math.exp(-Math.pow((x + 6) / 7.5, 2)) * .30 * Math.min(1, t);
+            return base + ripple + drift + channel - .015;
+        };
+        const pos = [], uv = [], col = [], idx = [];
+        for (let j = 0; j < rows; j++)
+            for (let i = 0; i < cols; i++) {
+                const x = X0 + i * STEP, z = Z0 + j * STEP, y = height(x, z);
+                const t = Math.min(1, Math.max(0, (-z - 538) / 24));
+                pos.push(x, y, z);
+                uv.push(x * .08, z * .08);
+                // Dry pale sand up by the rock, dark saturated sand at the water,
+                // with a bright drying band where the last wave reached.
+                const wet = Math.min(1, t * 1.22), g = noise(Math.floor(x * 1.7), Math.floor(z * 1.7));
+                const tide = Math.exp(-Math.pow((t - .58) * 6.2, 2)) * .17;
+                col.push(
+                    (1.14 - wet * .62) + g * .10 + tide,
+                    (1.00 - wet * .58) + g * .08 + tide,
+                    (.78 - wet * .44) + g * .06 + tide
+                );
+            }
+        for (let j = 0; j < rows - 1; j++)
+            for (let i = 0; i < cols - 1; i++) {
+                const a = j * cols + i, bb = a + 1, c = a + cols, d = c + 1;
+                idx.push(a, c, d, a, d, bb);
+            }
+        const g = new T.BufferGeometry();
+        g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+        g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+        g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+        g.setIndex(idx);
+        g.computeVertexNormals();
+        const sandMat = m.sand.clone();
+        sandMat.name = 'sand';
+        sandMat.vertexColors = true;
+        sandMat.color.set(0xd8c7a6);
+        sandMat.roughness = .86;
+        const strand = new T.Mesh(g, sandMat);
+        strand.name = 'the-strand';
+        strand.receiveShadow = true;
+        v.floorRoot.add(strand);
+        // Rocks are bedded into the sand, not set down on top of it.
+        for (let i = 0; i < 70; i++) {
+            const t = i / 70, z = -538 - t * 23;
+            const spread = 11.5 - t * 4.2;
+            const x = -6 + (((i * 7919) % 200) / 100 - 1) * spread;
+            if (Math.abs(x + 6) < 2.2 || x < X0 + 1 || x > X1 - 1) continue;
+            const size = .34 + ((i * 104729) % 100) / 100 * (1.25 - t * .6);
+            b.box(x, height(x, z) + size * .13, z, size * 1.5, size * .55, size * 1.1, m.shoreRock, i * .8, .26, .28);
+        }
+        // A beached spar and the wrack line, laid flat into the slope.
+        for (const [x, z, a] of [[-13.2, -543.5, .55], [1.8, -548, -.38], [-10.5, -554, .22]]) {
+            b.box(x, height(x, z) + .16, z, 3.4, .30, .46, m.wood, a, .06, .5);
+            b.box(x + Math.cos(a) * 1.35, height(x, z) + .11, z + Math.sin(a) * 1.35, 1.0, .19, .30, m.wood, a + .7, .05, .5);
+        }
+        // Wrack collects in one line where the last high tide gave up, not evenly
+        // scattered across the whole beach like confetti.
+        for (let i = 0; i < 150; i++) {
+            const drift = (noise(i, 3) - .5) * 3.4;
+            const z = -551.5 + drift + (noise(i, 11) - .5) * 1.6;
+            const x = -6 + (((i * 5081) % 200) / 100 - 1) * 12.5;
+            if (x < X0 + .6 || x > X1 - .6) continue;
+            b.box(x, height(x, z) + .022, z, .22 + (i % 4) * .17, .035, .05 + (i % 3) * .03, m.wrack, i * 1.3, 0, .9);
+        }
+    }
+    // Gulls. Three of them, on fixed arcs; the coast should not be dead.
+    v.gulls = [];
+    for (let i = 0; i < 3; i++) {
+        const gull = new T.Group(), gb = new Batch(gull, false);
+        gb.box(0, 0, 0, .12, .09, .42, m.trim, 0, .04);
+        for (const sx of [-1, 1]) gb.box(sx * .30, .04, .02, .58, .035, .17, m.trim, sx * .2, .02);
+        gb.box(0, .02, -.24, .07, .06, .12, m.warm);
+        gb.flush();
+        gull.userData.seed = i;
+        v.staticRoot.add(gull);
+        v.gulls.push(gull);
+    }
+    for (const lamp of lamps) v.lampPositions.push(lamp);
+    b.flush();
+    f.flush(false);
+}
+
+module.exports = { buildLateGameArt };
+
+}, {"./context": "src/presentation/context.js"}],
 "src/presentation/polish-art.js": [function(require, module, exports) {
 'use strict';
 /** polish-art: permanent authored environment and materials. No gameplay-state ownership. */
@@ -3107,30 +3872,39 @@ const polishMaterials = function (view) {
     maps(m.paint, 'plaster');
     maps(m.yardFloor, 'asphalt');
     maps(m.floor, 'cast');
-    m.stone.color.set(0xaaa69a);
-    m.stoneDark.color.set(0x737b76);
-    m.trim.color.set(0xb5bdb6);
-    m.paint.color.set(0x425c58);
-    m.yardFloor.color.set(0xb7babb);
+    m.stone.color.set(0x858176);
+    m.stoneDark.color.set(0x4b5350);
+    m.trim.color.set(0x858e87);
+    m.paint.color.set(0x294743);
+    m.yardFloor.color.set(0x555b56);
     m.paint.roughness = .89;
     m.floor.roughness = .91;
-    m.floor.color.set(0xc4c6bf);
-    m.tileFloor.color.set(0x9caea5);
-    m.officeFloor.color.set(0x8b9187);
-    m.iron.color.set(0x737d7b);
+    m.floor.color.set(0x6f746d);
+    m.tileFloor.color.set(0x66746d);
+    m.officeFloor.color.set(0x5e625a);
+    m.iron.color.set(0x586260);
     m.iron.roughness = .46;
-    m.ironDark.color.set(0x353e40);
-    m.copper.color.set(0x9c896e);
+    m.ironDark.color.set(0x202a2c);
+    m.copper.color.set(0x8f7558);
     m.copper.roughness = .63;
-    m.cold.color.set(0x798b89);
-    m.warm.color.set(0xc6a272);
+    m.cold.color.set(0x6e8581);
+    m.warm.color.set(0xd1a26b);
+    m.sand = new T.MeshStandardMaterial({
+        map: view.tex('cast_color.jpg', true), normalMap: view.tex('cast_normal.jpg'), roughnessMap: view.tex('cast_rough.jpg'),
+        color: 0xc9b696, roughness: .90, metalness: .02, envMapIntensity: .55
+    });
+    m.sand.name = 'wet-strand';
+    m.sand.normalScale.set(.30, .30);
+    m.seaStone = m.stoneDark.clone();
+    m.seaStone.name = 'sea-masonry';
+    m.seaStone.color.set(0x41484a);
     m.roof = new T.MeshStandardMaterial({
-        map: view.tex('plaster_color.jpg', true), normalMap: view.tex('plaster_normal.jpg'), roughnessMap: view.tex('plaster_rough.jpg'), color: 0x68797f, roughness: .95, metalness: .04, side: T.DoubleSide
+        map: view.tex('plaster_color.jpg', true), normalMap: view.tex('plaster_normal.jpg'), roughnessMap: view.tex('plaster_rough.jpg'), color: 0x45585d, roughness: .96, metalness: .04, side: T.DoubleSide
     });
     m.roof.name = 'permanent-roof';
     m.roof.normalScale.set(.12, .12);
     m.glass = new T.MeshStandardMaterial({
-        color: 0x819c99, roughness: .34, metalness: .12, transparent: true, opacity: .27, depthWrite: false, side: T.DoubleSide
+        color: 0x587a78, roughness: .38, metalness: .12, transparent: true, opacity: .27, depthWrite: false, side: T.DoubleSide
     });
     m.glass.name = 'fixed-skylight';
     // Static world-space variation never depends on the camera. It accents seams
@@ -3293,29 +4067,381 @@ const buildPolishArt = function (v, Batch) {
             floorBatch.add(p.geometry, stripe);
         }
     }
-    // Replace only the existing distant sea slab: the traversable exit stays intact.
-    const water = new T.Mesh(new T.PlaneGeometry(190, 55, 1, 1), new T.ShaderMaterial({
-        uniforms: { uTime: { value: 0 }, uEye: { value: new T.Vector3() } }, vertexShader: 'varying vec3 vWorld;void main(){vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}', fragmentShader: `varying vec3 vWorld;uniform vec3 uEye;uniform float uTime;void main(){vec2 p=vWorld.xz;float a=sin(p.x*.65+p.y*.83+uTime*.8),b=sin(p.x*.31-p.y*.52+uTime*.56);vec3 n=normalize(vec3(-.10*a,1.,-.08*b));vec3 eye=normalize(uEye-vWorld);float f=pow(1.-max(0.,dot(n,eye)),4.);vec3 c=mix(vec3(.045,.105,.115),vec3(.27,.36,.37),f);vec3 l=normalize(vec3(-.45,.68,-.3));float glint=pow(max(0.,dot(reflect(-l,n),eye)),150.);c+=vec3(.95,.65,.32)*glint*.42;float foam=smoothstep(.79,.96,sin(p.y*1.3+sin(p.x*.4)+uTime*.55))*(1.-smoothstep(1.,7.,abs(p.y+304.)));c=mix(c,vec3(.36,.40,.35),foam*.25);gl_FragColor=vec4(c,1.);}`
-    }));
-    water.rotation.x = -Math.PI / 2;
-    water.position.set(0, -.55, -330);
-    water.name = 'coastal-water';
-    water.frustumCulled = false;
-    v.staticRoot.add(water);
-    v.water = water;
-    // Fixed sky with a real horizon; it is independent of camera heading/geometry.
-    const skyGeo = new T.SphereGeometry(130, 24, 14), skyMat = new T.ShaderMaterial({
-        side: T.BackSide, depthWrite: false, uniforms: { uTime: { value: 0 } }, vertexShader: 'varying vec3 vDir;void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: `varying vec3 vDir;uniform float uTime;float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+1.),f.x),f.y);}void main(){vec3 d=normalize(vDir);float y=max(d.y,0.);vec3 c=mix(vec3(.53,.57,.55),vec3(.12,.22,.29),pow(y,.42));vec2 p=d.xz/max(.16,y)*1.1+vec2(uTime*.0014,0.);float cloud=.55*n(p)+.28*n(p*2.04)+.17*n(p*4.17);c=mix(c,vec3(.46,.50,.49),smoothstep(.37,.68,cloud)*smoothstep(0.,.1,y)*.75);vec3 sun=normalize(vec3(-28.,51.,-16.));float a=dot(d,sun);c+=vec3(.92,.67,.37)*pow(max(0.,a),128.)*.32;c+=vec3(1.,.76,.47)*smoothstep(.9991,.9998,a)*1.8;gl_FragColor=vec4(c,1.);}`
-    });
-    v.sky = new T.Mesh(skyGeo, skyMat);
-    v.sky.frustumCulled = false;
-    v.sky.renderOrder = -100;
-    v.scene.add(v.sky);
-    v.scene.background = null;
+    buildSkyAndSea(v, Batch);
+    buildLightShafts(v, roofRooms);
     v.roofEnvelopes = roofRooms;
     b.flush();
     floorBatch.flush(false);
 };
+
+/** Sky, sea, headland and the far backdrop. Everything here is world geometry or
+ * a fixed shader: nothing reacts to the camera, and nothing is a 2D overlay.
+ * The backdrop group re-centres on the prisoner each frame, so ridges 130 m out
+ * read as an unreachable horizon instead of props you can walk up to. */
+const buildSkyAndSea = function (v, Batch) {
+    const m = v.materials;
+    // ---------------------------------------------------------------- sky
+    v.skyUniforms = {
+        uTime: { value: 0 }, uDawn: { value: 0 },
+        uSunDir: { value: new T.Vector3(31, 43, 24).normalize() }
+    };
+    const skyMat = new T.ShaderMaterial({
+        side: T.BackSide, depthWrite: false, fog: false, uniforms: v.skyUniforms,
+        vertexShader: 'varying vec3 vDir;void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+        fragmentShader: `varying vec3 vDir;uniform float uTime,uDawn;uniform vec3 uSunDir;
+ float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+1.),f.x),f.y);}
+ float fbm(vec2 p){float a=.52,s=0.;for(int i=0;i<5;i++){s+=a*n(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return s;}
+ void main(){
+   vec3 d=normalize(vDir);
+   float y=d.y, up=clamp(y,0.,1.), band=pow(1.-up,1.55);
+   vec3 zenith=mix(vec3(.118,.186,.216),vec3(.126,.152,.232),uDawn);
+   vec3 haze=mix(vec3(.372,.430,.424),vec3(.690,.452,.320),uDawn);
+   vec3 c=mix(zenith,haze,band);
+   float sd=dot(d,uSunDir);
+   // Forward scatter, then the disc itself. Both follow the same sun vector the
+   // directional light uses, so shadows always point away from the visible sun.
+   c+=mix(vec3(.46,.31,.16),vec3(1.00,.50,.21),uDawn)*pow(max(0.,sd),7.)*(.18+.62*uDawn);
+   c+=mix(vec3(.86,.60,.31),vec3(1.00,.72,.38),uDawn)*pow(max(0.,sd),190.)*(.70+1.90*uDawn);
+   float disc=smoothstep(mix(.99855,.99760,uDawn),mix(.99935,.99880,uDawn),sd);
+   c+=mix(vec3(1.,.88,.66),vec3(1.,.80,.50),uDawn)*disc*(2.4+5.2*uDawn);
+   // Two cloud decks projected onto a dome plane. The lower deck is lit on the
+   // side that faces the sun; the high wisps only ever catch the rim light.
+   float lift=smoothstep(.005,.19,y);
+   vec2 q=d.xz/max(.055,up);
+   vec2 p1=q*.52+vec2(uTime*.0032,uTime*.0011);
+   float deck=fbm(p1),cov=smoothstep(.47,.87,deck);
+   float rim=smoothstep(.40,.80,fbm(p1+uSunDir.xz*.30));
+   vec3 dark=mix(vec3(.134,.170,.186),vec3(.246,.186,.198),uDawn);
+   vec3 lit=mix(vec3(.560,.600,.598),vec3(1.00,.760,.520),uDawn);
+   c=mix(c,mix(dark,lit,clamp(rim*.86+pow(max(0.,sd),3.)*.42,0.,1.)),cov*lift*.90);
+   vec2 p2=q*1.95+vec2(uTime*.0092,-uTime*.0035);
+   c=mix(c,lit*1.06,smoothstep(.60,.94,fbm(p2))*lift*.30);
+   // Below the true horizon the dome fades into the same haze the sea sits in.
+   c=mix(c,haze*.60,smoothstep(.015,-.14,y));
+   gl_FragColor=vec4(c,1.);
+ }`
+    });
+    v.sky = new T.Mesh(new T.SphereGeometry(184, 40, 24), skyMat);
+    v.sky.frustumCulled = false;
+    v.sky.renderOrder = -100;
+    v.scene.add(v.sky);
+    v.scene.background = null;
+
+    // ------------------------------------------------------------- open sea
+    // One plane, well outside the block, at the foot of the headland cliffs.
+    v.seaUniforms = {
+        uTime: { value: 0 }, uEye: { value: new T.Vector3() }, uDawn: { value: 0 },
+        uSunDir: { value: v.skyUniforms.uSunDir.value }
+    };
+    const sea = new T.Mesh(new T.PlaneGeometry(1500, 1100, 1, 1), new T.ShaderMaterial({
+        uniforms: v.seaUniforms, fog: false,
+        vertexShader: 'varying vec3 vWorld;void main(){vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
+        fragmentShader: `varying vec3 vWorld;uniform vec3 uEye,uSunDir;uniform float uTime,uDawn;
+ float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+1.),f.x),f.y);}
+ void main(){
+   vec2 p=vWorld.xz;
+   // Three swell scales; the smallest is the one that survives at distance and
+   // becomes the sun's glitter path rather than a mirror.
+   float a=sin(p.x*.19+p.y*.26+uTime*.62),b=sin(p.x*.41-p.y*.33+uTime*.83);
+   float c2=sin(p.x*1.31+p.y*1.07+uTime*1.9)*.5+n(p*1.6+uTime*.22)-.5;
+   vec3 nor=normalize(vec3(-(.085*a+.052*c2),1.,-(.062*b+.048*c2)));
+   vec3 eye=normalize(uEye-vWorld);
+   float fres=pow(clamp(1.-dot(nor,eye),0.,1.),4.5);
+   vec3 deep=mix(vec3(.026,.072,.084),vec3(.038,.062,.092),uDawn);
+   vec3 sky=mix(vec3(.240,.322,.336),vec3(.560,.420,.360),uDawn);
+   vec3 col=mix(deep,sky,fres);
+   float glint=pow(max(0.,dot(reflect(-uSunDir,nor),eye)),170.);
+   col+=mix(vec3(.95,.66,.33),vec3(1.,.72,.34),uDawn)*glint*(.55+1.5*uDawn);
+   // A broad glitter road toward the sun; it widens and warms as dawn comes up.
+   float road=pow(max(0.,dot(normalize(vec3(uSunDir.x,0.,uSunDir.z)),normalize(vec3(eye.x,0.,eye.z)))),10.);
+   col+=mix(vec3(.50,.34,.18),vec3(1.,.62,.30),uDawn)*road*smoothstep(.45,.95,n(p*2.4+uTime*.3))*(.10+.34*uDawn);
+   // Foam where the water actually meets something: the headland, and the strand
+   // the last walk runs down into. Two bands, both breathing at the same rate.
+   float band=smoothstep(.58,.98,sin(p.y*1.15+sin(p.x*.44)*1.6+uTime*.72));
+   float cliffShore=1.-smoothstep(0.,8.,abs(vWorld.z+492.));
+   float strandShore=(1.-smoothstep(0.,9.,abs(vWorld.z+561.)))*(1.-smoothstep(11.,20.,abs(vWorld.x+6.)));
+   float shore=max(cliffShore,strandShore*1.35);
+   col=mix(col,mix(vec3(.62,.65,.62),vec3(1.,.90,.74),uDawn),clamp(band*shore,0.,1.)*.55);
+   col=mix(col,mix(vec3(.30,.36,.36),vec3(.62,.50,.40),uDawn),clamp(strandShore,0.,1.)*.30);
+   gl_FragColor=vec4(col,1.);
+ }`
+    }));
+    sea.rotation.x = -Math.PI / 2;
+    sea.position.set(10, -5.6, -760);
+    sea.name = 'open-sea';
+    sea.frustumCulled = false;
+    sea.renderOrder = -60;
+    v.staticRoot.add(sea);
+    v.water = sea;
+
+    // ------------------------------------------------------ headland terrain
+    // Everything outside the block stands on one continuous piece of ground that
+    // falls away into the water. Before this the authored rooms were rectangles
+    // floating over open sea, and the gaps between them showed straight through.
+    const R = 0x1d2a2b;
+    const rooms = v.world.floors.filter(r => r.outdoors);
+    const X0 = -56, X1 = 70, Z0 = -496, Z1 = -290, STEP = 2;
+    const cols = Math.round((X1 - X0) / STEP) + 1, rows = Math.round((Z1 - Z0) / STEP) + 1;
+    const hash2 = (x, z) => {
+        const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+        return n - Math.floor(n);
+    };
+    const smoothNoise = (x, z) => {
+        const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi;
+        const u = fx * fx * (3 - 2 * fx), w = fz * fz * (3 - 2 * fz);
+        return IP.lerp(IP.lerp(hash2(xi, zi), hash2(xi + 1, zi), u), IP.lerp(hash2(xi, zi + 1), hash2(xi + 1, zi + 1), u), w);
+    };
+    // Inside this rectangle the ground is walkable-flat; beyond it, it falls to the sea.
+    const IN = { x1: -40, x2: 54, z1: -487, z2: -294 };
+    const terrainHeight = (x, z) => {
+        const out = Math.max(IN.x1 - x, x - IN.x2, IN.z1 - z, z - IN.z2);
+        const roll = (smoothNoise(x * .085, z * .085) - .5) * 1.5 + (smoothNoise(x * .31, z * .31) - .5) * .42;
+        if (out <= 0) {
+            // Near any authored room the ground flattens so no slab ever floats and
+            // no hillock ever pokes through a floor the simulation owns.
+            let near = Infinity;
+            for (const r of rooms) {
+                const d = Math.max(r.x1 - x, x - r.x2, r.z1 - z, z - r.z2);
+                if (d < near) near = d;
+            }
+            const blend = IP.clamp((near - 1.2) / 6, 0, 1);
+            return -.09 + roll * blend * .5 - IP.clamp(-out / 9, 0, 1) * .25;
+        }
+        const t = IP.clamp(out / 8.5, 0, 1);
+        return -.09 - Math.pow(t, 1.45) * 13.5 + roll * (1 - t * .6) - Math.sin(t * 3.1) * 1.1;
+    };
+    const tp = [], tuv = [], tcol = [], tidx = [];
+    for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+            const x = X0 + i * STEP, z = Z0 + j * STEP, y = terrainHeight(x, z);
+            tp.push(x, y, z);
+            tuv.push(x * .05, z * .05);
+            // Grass on the flats, rock on the falls, shingle near the waterline.
+            const rockiness = IP.clamp((-y - .4) / 3.4, 0, 1);
+            const shingle = IP.clamp(1 - Math.abs(z + 489) / 10, 0, 1) * (1 - rockiness);
+            const g = smoothNoise(x * .21, z * .21);
+            const col = [
+                IP.lerp(IP.lerp(.33 + g * .12, .40, rockiness), .62, shingle),
+                IP.lerp(IP.lerp(.37 + g * .14, .43, rockiness), .58, shingle),
+                IP.lerp(IP.lerp(.25 + g * .09, .42, rockiness), .47, shingle)
+            ];
+            tcol.push(col[0], col[1], col[2]);
+        }
+    }
+    for (let j = 0; j < rows - 1; j++)
+        for (let i = 0; i < cols - 1; i++) {
+            const a = j * cols + i, b = a + 1, c = a + cols, d = c + 1;
+            tidx.push(a, c, d, a, d, b);
+        }
+    const tg = new T.BufferGeometry();
+    tg.setAttribute('position', new T.Float32BufferAttribute(tp, 3));
+    tg.setAttribute('uv', new T.Float32BufferAttribute(tuv, 2));
+    tg.setAttribute('color', new T.Float32BufferAttribute(tcol, 3));
+    tg.setIndex(tidx);
+    tg.computeVertexNormals();
+    const terrainMat = new T.MeshStandardMaterial({
+        vertexColors: true, roughness: 1, metalness: 0,
+        map: v.tex('meadow_color.jpg', true), normalMap: v.tex('meadow_normal.jpg'), roughnessMap: v.tex('meadow_rough.jpg'),
+        normalScale: new T.Vector2(.6, .6), envMapIntensity: .35
+    });
+    terrainMat.name = 'headland';
+    const terrain = new T.Mesh(tg, terrainMat);
+    terrain.name = 'headland-terrain';
+    terrain.receiveShadow = true;
+    v.floorRoot.add(terrain);
+    v.headland = terrain;
+    // Boulders along the fall line, planted into the slope rather than dropped on it.
+    const rocks = new Batch(v.staticRoot);
+    for (let i = 0; i < 260; i++) {
+        const a = i / 260 * Math.PI * 2 + hash2(i, 3) * .4;
+        const rad = .5 + hash2(i, 7) * .5;
+        const x = 7 + Math.cos(a) * (48 + rad * 26), z = -390 + Math.sin(a) * (95 + rad * 22);
+        if (x < X0 + 3 || x > X1 - 3 || z < Z0 + 3 || z > Z1 - 3) continue;
+        const y = terrainHeight(x, z), size = .8 + hash2(i, 11) * 2.6;
+        if (y > -.6) continue;
+        rocks.box(x, y + size * .22, z, size, size * .78, size * .9, m.stoneDark, hash2(i, 13) * 3, .18, .4);
+    }
+    rocks.flush();
+    // -------------------------------------------------------- far backdrop
+    // Continuous ridge silhouettes, not scattered blocks. Each band is one closed
+    // strip whose top edge is noise-driven, rooted far below the water so no part
+    // of it can ever be seen to end. The group follows the prisoner, so the range
+    // keeps its distance from the parapet as well as from the grass.
+    v.backdrop = new T.Group();
+    v.backdrop.name = 'horizon-backdrop';
+    v.scene.add(v.backdrop);
+    const hash = i => Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
+    const wave = (a, k, off) => {
+        let sum = 0, amp = 1, freq = k;
+        for (let o = 0; o < 4; o++) {
+            sum += amp * Math.sin(a * freq + off + o * 2.399 + hash(o + off) * 6.28);
+            amp *= .52;
+            freq *= 2.07;
+        }
+        return sum;
+    };
+    function ridgeBand(radius, base, low, high, k, off, segments, near, far) {
+        const position = [], colour = [], index = [];
+        for (let i = 0; i <= segments; i++) {
+            const a = i / segments * Math.PI * 2;
+            const t = Math.pow(IP.clamp((wave(a, k, off) + 1.55) / 3.1, 0, 1), 1.35);
+            const top = low + t * (high - low);
+            const x = Math.sin(a) * radius, z = Math.cos(a) * radius;
+            position.push(x, top, z, x, base, z);
+            // Ridgelines catch the sky; the feet of the range sink into haze.
+            const lit = .55 + .45 * Math.max(0, t);
+            colour.push(near[0] * lit, near[1] * lit, near[2] * lit, far[0], far[1], far[2]);
+        }
+        for (let i = 0; i < segments; i++) {
+            const a = i * 2, b = a + 2;
+            index.push(a, a + 1, b + 1, a, b + 1, b);
+        }
+        const g = new T.BufferGeometry();
+        g.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+        g.setAttribute('color', new T.Float32BufferAttribute(colour, 3));
+        g.setIndex(index);
+        g.computeVertexNormals();
+        return g;
+    }
+    v.ridgeUniforms = { uDawn: { value: 0 } };
+    const ridgeMat = new T.ShaderMaterial({
+        uniforms: v.ridgeUniforms, vertexColors: true, fog: false, side: T.DoubleSide,
+        vertexShader: 'varying vec3 vC;varying float vY;void main(){vC=color;vec4 w=modelMatrix*vec4(position,1.);vY=w.y;gl_Position=projectionMatrix*viewMatrix*w;}',
+        fragmentShader: `varying vec3 vC;varying float vY;uniform float uDawn;
+ void main(){
+   vec3 c=vC*mix(vec3(1.),vec3(1.06,.86,.74),uDawn);
+   // The tops of the range pick up the same warm rim the sky does at dawn.
+   c=mix(c,mix(vec3(.28,.35,.36),vec3(.52,.38,.32),uDawn),clamp(1.-vY/34.,0.,1.)*.58);
+   gl_FragColor=vec4(c,1.);
+ }`
+    });
+    for (const [radius, base, low, high, k, off, seg] of [
+        [176, -52, 2, 62, 5.2, 0, 220],
+        [152, -52, -3, 40, 8.4, 11, 210],
+        [131, -52, -7, 21, 13.1, 27, 196]
+    ]) {
+        const shade = 1 - (176 - radius) / 150;
+        const mesh = new T.Mesh(ridgeBand(radius, base, low, high, k, off, seg,
+            [.208 * shade + .05, .262 * shade + .05, .282 * shade + .05],
+            [.118, .160, .176]), ridgeMat);
+        mesh.frustumCulled = false;
+        mesh.renderOrder = -85;
+        v.backdrop.add(mesh);
+    }
+    // A broken treeline at the foot of the range, shorter and much busier.
+    const trees = new T.Mesh(ridgeBand(120, -52, -9, 2.4, 23, 5, 320,
+        [.112, .150, .134], [.078, .104, .102]), ridgeMat);
+    trees.frustumCulled = false;
+    trees.renderOrder = -84;
+    v.backdrop.add(trees);
+};
+
+/** The dawn drive. `strength` runs 0 (overcast morning) to 1 (the sun clear of
+ * the water). The sky, the sea, the sun light and the haze all read the same
+ * value, so the ending is one lighting state, not four overlays. */
+const setDawn = function (v, strength) {
+    const t = clamp(strength || 0, 0, 1);
+    v.dawn = t;
+    if (v.skyUniforms) v.skyUniforms.uDawn.value = t;
+    if (v.seaUniforms) v.seaUniforms.uDawn.value = t;
+    const dir = v.skyUniforms ? v.skyUniforms.uSunDir.value : null;
+    if (dir) dir.set(IP.lerp(31, 6.5, t), IP.lerp(43, 6.2, t), IP.lerp(24, -47, t)).normalize();
+    if (v.sun) {
+        v.sun.color.setRGB(IP.lerp(1, 1, t), IP.lerp(.847, .706, t), IP.lerp(.659, .412, t));
+        v.sun.intensity = IP.lerp(2.9, 3.35, t);
+    }
+    if (v.ambient) {
+        v.ambient.color.setRGB(IP.lerp(.545, .827, t), IP.lerp(.651, .639, t), IP.lerp(.678, .592, t));
+        v.ambient.intensity = IP.lerp(1.06, 1.14, t);
+    }
+    if (v.fill) v.fill.color.setRGB(IP.lerp(.561, .784, t), IP.lerp(.698, .612, t), IP.lerp(.749, .592, t));
+    if (v.scene.fog) v.scene.fog.color.setRGB(IP.lerp(.200, .470, t), IP.lerp(.267, .330, t), IP.lerp(.259, .262, t));
+};
+
+/** Daylight coming through the ridge glazing, as geometry. Each shaft is a pair
+ * of crossed curtains hung under the skylight slot and raked along the sun, so
+ * there is always one facing the camera and none of it is a screen overlay. */
+const buildLightShafts = function (v, roofRooms) {
+    const dir = v.skyUniforms ? v.skyUniforms.uSunDir.value : new T.Vector3(31, 43, 24).normalize();
+    const lean = new T.Vector2(dir.x, dir.z).normalize().multiplyScalar(-1);
+    v.shaftUniforms = { uTime: { value: 0 }, uStrength: { value: 1 }, uDawn: { value: 0 } };
+    const mat = new T.ShaderMaterial({
+        uniforms: v.shaftUniforms, transparent: true, depthWrite: false, fog: false,
+        blending: T.AdditiveBlending, side: T.DoubleSide,
+        vertexShader: `varying vec3 vW;varying vec3 vN;varying vec2 vUvS;
+ void main(){vUvS=uv;vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vN=normalize(mat3(modelMatrix)*normal);gl_Position=projectionMatrix*viewMatrix*w;}`,
+        fragmentShader: `varying vec3 vW;varying vec3 vN;varying vec2 vUvS;uniform float uTime,uStrength,uDawn;
+ float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+1.),f.x),f.y);}
+ void main(){
+   // Bright at the glazing, gone before it reaches the floor. The uv overshoots 1 at
+   // the bottom edge, and pow() of a negative is NaN on real GPUs: bloom spreads it
+   // into black blocks, and the wet floor reflects them.
+   float fall=pow(max(0.,1.-vUvS.y),1.55)*smoothstep(0.,.06,vUvS.y);
+   // Soft edges across the width, broken up by slow drifting motes of dust.
+   float across=smoothstep(0.,.22,vUvS.x)*smoothstep(1.,.78,vUvS.x);
+   float grain=.72+.42*n(vec2(vW.x*.55+uTime*.05,vW.z*.55));
+   // A flat quad seen edge-on has to disappear, or the shaft becomes a wall.
+   vec3 eye=normalize(cameraPosition-vW);
+   float facing=smoothstep(.04,.34,abs(dot(normalize(vN),eye)));
+   float a=fall*across*grain*facing*uStrength*.74;
+   vec3 c=mix(vec3(1.,.93,.78),vec3(1.,.82,.58),uDawn);
+   gl_FragColor=vec4(c*a,a);
+ }`
+    });
+    mat.name = 'daylight-shaft';
+    const poolMat = new T.ShaderMaterial({
+        uniforms: v.shaftUniforms, transparent: true, depthWrite: false, fog: false,
+        blending: T.AdditiveBlending, side: T.DoubleSide,
+        vertexShader: 'varying vec2 vUvS;void main(){vUvS=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+        fragmentShader: `varying vec2 vUvS;uniform float uStrength,uDawn;
+ void main(){
+   float d=length((vUvS-.5)*vec2(1.,.78))*2.;
+   float a=pow(max(0.,1.-d),2.4)*uStrength*.42;
+   gl_FragColor=vec4(mix(vec3(1.,.94,.80),vec3(1.,.84,.60),uDawn)*a,a);
+ }`
+    });
+    poolMat.name = 'daylight-pool';
+    v.shaftGroup = new T.Group();
+    v.shaftGroup.name = 'daylight-shafts';
+    v.scene.add(v.shaftGroup);
+    for (const r of roofRooms) {
+        const mid = (r.x1 + r.x2) / 2, top = r.eave + r.rise, drop = top - .35;
+        const width = Math.min(3.4, (r.x2 - r.x1) * .22);
+        for (let z = r.z1 + 4.0; z < r.z2 - 2; z += 7.6) {
+            const foot = new T.Vector2(mid, z).add(lean.clone().multiplyScalar(drop * .42));
+            for (const across of [true, false]) {
+                const g = new T.BufferGeometry();
+                const hx = across ? width * .5 : 0, hz = across ? 0 : width * .5;
+                const p = [
+                    mid - hx, top, z - hz, mid + hx, top, z + hz,
+                    foot.x + hx, top - drop, foot.y + hz, foot.x - hx, top - drop, foot.y - hz
+                ];
+                g.setAttribute('position', new T.Float32BufferAttribute(p, 3));
+                g.setAttribute('uv', new T.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+                g.setIndex([0, 1, 2, 0, 2, 3]);
+                g.computeVertexNormals();
+                const mesh = new T.Mesh(g, mat);
+                mesh.renderOrder = 6;
+                mesh.frustumCulled = true;
+                mesh.geometry.computeBoundingSphere();
+                v.shaftGroup.add(mesh);
+            }
+            // The pool where the shaft lands. Without it the light arrives from
+            // the roof and then simply stops in mid-air above the floor.
+            {
+                const pool = new T.Mesh(new T.PlaneGeometry(width * 2.3, width * 3.1), poolMat);
+                pool.rotation.x = -Math.PI / 2;
+                pool.position.set(foot.x, .035, foot.y);
+                pool.renderOrder = 5;
+                v.shaftGroup.add(pool);
+            }
+        }
+    }
+};
+
 const updatePolishedLights = function (v, dt) {
     const s = v.sim, p = s.player;
     let pool = v._lampOwners;
@@ -3368,23 +4494,71 @@ const updatePolishedLights = function (v, dt) {
         }
     }
     // Shadow translation snaps only in the two light-plane axes, not world axes.
-    const dir = new T.Vector3(-28, 51, -16).normalize(), right = new T.Vector3(0, 1, 0).cross(dir).normalize(), up = dir.clone().cross(right).normalize();
+    const sunDir = v.skyUniforms ? v.skyUniforms.uSunDir.value : new T.Vector3(31, 43, 24).normalize();
+    const dir = sunDir.clone(), right = new T.Vector3(0, 1, 0).cross(dir).normalize(), up = dir.clone().cross(right).normalize();
     const pt = new T.Vector3(p.x, s.climb ? p.y : s.groundHeight(p.x, p.z), p.z - 2), sx = 46 / v.sun.shadow.mapSize.x, sy = 54 / v.sun.shadow.mapSize.y;
     pt.addScaledVector(right, Math.round(pt.dot(right) / sx) * sx - pt.dot(right));
     pt.addScaledVector(up, Math.round(pt.dot(up) / sy) * sy - pt.dot(up));
     v.sun.target.position.copy(pt);
-    v.sun.position.copy(pt).add(new T.Vector3(-28, 51, -16));
+    v.sun.position.copy(pt).addScaledVector(sunDir, 62);
     v.sun.target.updateMatrixWorld();
+    // Dawn is driven by the escape itself: it starts when the winch dies, lifts
+    // when the cuff comes off, and finishes as the strand runs into the water.
+    const seq = s.world.finalSequence;
+    if (seq) {
+        const winch = s.props.find(o => o.id === seq.objective);
+        let target = winch && winch.broken ? .22 : 0;
+        if (s.unchained) target = Math.max(target, .60);
+        if (s.unchained) target = Math.max(target, .70);
+        target = Math.max(target, IP.clamp((-p.z - 486) / 56, 0, 1) * (s.unchained ? 1 : .5));
+        if (s.finale) target = 1;
+        setDawn(v, IP.damp(v.dawn || 0, target, s.finale ? 1.1 : .55, dt || 1 / 60));
+    }
     if (v.sky) {
-        v.sky.position.set(p.x, p.y || 0, p.z);
-        v.sky.material.uniforms.uTime.value = v.elapsed;
+        v.sky.position.set(p.x, (s.climb ? p.y : 0), p.z);
+        v.skyUniforms.uTime.value = v.elapsed;
+    }
+    if (v.gulls) for (const gull of v.gulls) {
+        const i = gull.userData.seed, t = v.elapsed * (.24 + i * .045) + i * 2.1;
+        const cx = -6 + i * 4 - 4, cz = -548 - i * 7, r = 17 + i * 6;
+        gull.position.set(cx + Math.cos(t) * r, 7.5 + i * 3.4 + Math.sin(t * 1.7) * 1.4, cz + Math.sin(t) * r * .7);
+        gull.rotation.set(Math.sin(t * 1.7) * .16, -t + Math.PI / 2, Math.cos(t * 2.3) * .30);
+    }
+    if (v.backdrop) {
+        v.backdrop.position.set(p.x, 0, p.z);
+        v.ridgeUniforms.uDawn.value = v.dawn || 0;
     }
     if (v.water) {
-        v.water.material.uniforms.uTime.value = v.elapsed;
-        v.water.material.uniforms.uEye.value.copy(v.camera.position);
+        v.seaUniforms.uTime.value = v.elapsed;
+        v.seaUniforms.uEye.value.copy(v.camera.position);
+    }
+    // Post-pass atmosphere reads the same sun and the same dawn value as the sky.
+    if (v.finalMat) {
+        const u = v.finalMat.uniforms, sun = v.skyUniforms.uSunDir.value;
+        u.uSunDirW.value.copy(sun);
+        u.uCamWorld.value.copy(v.camera.matrixWorld);
+        u.uDawn.value = v.dawn || 0;
+        u.uEnding.value = s.finale ? IP.clamp(v.dawn || 0, 0, 1) : 0;
+        if (v.shaftUniforms) {
+            v.shaftUniforms.uTime.value = v.elapsed;
+            v.shaftUniforms.uDawn.value = v.dawn || 0;
+            // Shafts belong to the roofed half of the game and to profiles that
+            // can afford the overdraw.
+            const inside = 1 - v.outdoorMix;
+            v.shaftUniforms.uStrength.value = (v.quality === 'low' ? 0 : v.quality === 'mobile' ? .60 : 1) * inside;
+            v.shaftGroup.visible = v.quality !== 'low' && inside > .02;
+        }
+        const outdoors = !!v.sim.floorAt(p.x, p.z)?.outdoors || !!s.climb;
+        v.outdoorMix = IP.damp(v.outdoorMix ?? (outdoors ? 1 : 0), outdoors ? 1 : 0, 2.4, dt || 1 / 60);
+        u.uHaze.value = (0.0030 - 0.0007 * (v.dawn || 0)) * v.outdoorMix;
+        const projected = sun.clone().multiplyScalar(900).add(v.camera.position).project(v.camera);
+        const facing = sun.dot(v.camera.getWorldDirection(new T.Vector3()));
+        u.uSunScreen.value.set(projected.x * .5 + .5, projected.y * .5 + .5);
+        u.uShafts.value = v.quality === 'high' || v.quality === 'balanced'
+            ? clamp(facing * 2.1 - .18, 0, 1) * v.outdoorMix * (.34 + .55 * (v.dawn || 0)) : 0;
     }
 };
-module.exports = { polishMaterials, buildPolishArt, updatePolishedLights };
+module.exports = { polishMaterials, buildPolishArt, buildSkyAndSea, buildLightShafts, setDawn, updatePolishedLights };
 
 }, {"../shared/math": "src/shared/math.js", "./engine": "src/presentation/engine.js"}],
 "src/presentation/pose-buffer.js": [function(require, module, exports) {
@@ -3638,7 +4812,10 @@ module.exports = IP;
 'use strict';
 /** View architecture. Uses authoritative state for display, never to decide game progression. */
 const { T, IP, PI, TAU, V, C, rand, mix, Batch, canvasTexture, solidMaterial } = require('../context');
-function sign(view, text, x, y, z, w = 2.6, h = .50, ry = 0, color = '#c5c9b5', bg = '#2f4645', size = 60) {
+/** A sign is a physical object. `opts.flat` lays it on the ground as paint, and
+ * `opts.hang` is the height of the structure it is suspended from — without one,
+ * a wide sign gets no hangers at all rather than two rods into open air. */
+function sign(view, text, x, y, z, w = 2.6, h = .50, ry = 0, color = '#c5c9b5', bg = '#2f4645', size = 60, opts = {}) {
     const t = canvasTexture(768, 128, (c, ww, hh) => {
         c.fillStyle = bg;
         c.fillRect(0, 0, ww, hh);
@@ -3651,8 +4828,17 @@ function sign(view, text, x, y, z, w = 2.6, h = .50, ry = 0, color = '#c5c9b5', 
         c.textBaseline = 'middle';
         c.fillText(text, ww / 2, hh / 2 + 2, ww - 50);
     });
-    let m = new T.Mesh(new T.PlaneGeometry(w, h), solidMaterial(new T.MeshStandardMaterial({ map: t, roughness: .8, side: T.DoubleSide })));
+    let m = new T.Mesh(new T.PlaneGeometry(w, h), solidMaterial(new T.MeshStandardMaterial({
+        map: t, roughness: .95, side: T.DoubleSide, transparent: !!opts.flat, opacity: opts.flat ? .62 : 1, depthWrite: !opts.flat
+    })));
     m.position.set(x, y, z);
+    if (opts.flat) {
+        m.rotation.set(-PI / 2, 0, ry);
+        m.name = 'floor stencil:' + text;
+        view.staticRoot.add(m);
+        view.labels.push(m);
+        return m;
+    }
     m.rotation.y = ry;
     m.name = 'mounted sign:' + text;
     view.staticRoot.add(m);
@@ -3666,9 +4852,9 @@ function sign(view, text, x, y, z, w = 2.6, h = .50, ry = 0, color = '#c5c9b5', 
     for (const xx of [-w * .45, w * .45])
         for (const yy of [-h * .34, h * .34])
             pb.sphere(xx, yy, .008, .015, view.materials.chrome);
-    if (w > 4) {
+    if (Number.isFinite(opts.hang) && opts.hang > y + h * .5) {
         for (const xx of [-w * .46, w * .46])
-            pb.rod([xx, h * .5, -.04], [xx, h * .5 + .75, -.04], .022, view.materials.ironDark);
+            pb.rod([xx, h * .5, -.04], [xx, opts.hang - y, -.04], .022, view.materials.ironDark);
     }
     pb.flush();
     return m;
@@ -3916,8 +5102,8 @@ function buildWorld(view) {
         IP.buildExpansionArt(view, Batch);
     IP.buildPolishArt(view, Batch);
     // Drains, papers and scars keep the floor tactile without creating invisible obstacles.
-    for (const r of view.world.rooms.filter(q => !q.sub)) {
-        for (let i = 0; i < 12; i++) {
+    for (const r of view.world.rooms.filter(q => !q.sub && !q.noLitter)) {
+        for (let i = 0; i < 7; i++) {
             let x = mix(r.x1 + .8, r.x2 - .8, rand()), z = mix(r.z1 + .8, r.z2 - .8, rand());
             if (i % 4 === 0) {
                 f.box(x, (r.y || 0) + .025, z, .38, .025, .50, m.ironDark);
@@ -4064,26 +5250,33 @@ function cameraLimit(view, pivot, end) {
 function rotateCamera(view, dx, dy = 0) {
     view.cameraYaw -= dx * .0042;
     view.cameraPitch = clamp(view.cameraPitch + dy * .0028, .10, .65);
+    // A deliberate look wins for a few seconds. Without this the follow camera
+    // drags the view straight back the instant the player lets go.
+    if (dx || dy) view.lookHold = 2.8;
 }
 function centreCamera(view) {
     view.cameraYaw = (view.sim.player.face || Math.PI) - Math.PI;
 }
 function swingLayout(view) {
-    const p = view.sim.player, point = view.project(p.x, (view.sim.climb ? p.y : view.sim.groundHeight(p.x, p.z)) + .90, p.z);
-    const x = clamp(point.x, innerWidth * .30, innerWidth * .70), y = clamp(point.y, innerHeight * .58, innerHeight * .72);
-    return {
-        x, y, rx: Math.min(170, innerWidth * .20, innerHeight * .23), ry: Math.min(115, innerHeight * .17, innerHeight - y - 35)
-    };
+    const p = view.sim.player, point = view.project(p.x, (view.sim.climb ? p.y : view.sim.groundHeight(p.x, p.z)) + .78, p.z);
+    const x = clamp(point.x, 95, innerWidth - 95), y = clamp(point.y, 90, innerHeight - 90);
+    const rx = Math.min(190, innerWidth * .22, innerHeight * .25);
+    return { x, y, rx, ry: Math.min(rx * .72, innerHeight - y - 30, y - 30) };
 }
 function snapCamera(view) {
     const p = view.sim.player;
     view.cameraPivot.set(p.x, (view.sim.climb ? p.y : view.sim.groundHeight(p.x, p.z)) + 1.28, p.z);
     view.cameraReady = false;
+    // The dome and the horizon ride with the prisoner. Snapping the camera without
+    // snapping them leaves one frame looking at the outside of the sky after a
+    // checkpoint load, a retry or any other jump.
+    if (view.sky) view.sky.position.set(p.x, view.sim.climb ? p.y : 0, p.z);
+    if (view.backdrop) view.backdrop.position.set(p.x, 0, p.z);
     view.updateCamera(1 / 60, false);
 }
 function updateCamera(view, dt, title = false) {
     const p = view.sim.player;
-    // No ball-follow wobble, gait bob, automatic yaw, FOV pulsing or title pan.
+    // Stable follow camera: no ball wobble, gait bob, FOV pulsing or title pan.
     const anchor = V(p.x, (view.sim.climb ? p.y : view.sim.groundHeight(p.x, p.z)) + 1.28, p.z);
     if (!view.cameraReady)
         view.cameraPivot.copy(anchor);
@@ -4093,12 +5286,56 @@ function updateCamera(view, dt, title = false) {
     const pivotLimit = view.cameraLimit(anchor, view.cameraPivot), pivotDist = anchor.distanceTo(view.cameraPivot);
     if (pivotDist > pivotLimit && pivotDist > .001)
         view.cameraPivot.copy(anchor).lerp(view.cameraPivot, Math.max(0, pivotLimit / pivotDist));
-    if (view.sim.climb) {
-        view.cameraYaw=clamp(IP.angle(view.cameraYaw),-.78,.78);
+    // Follow the prisoner's heading only while travelling. Swinging never fights the camera.
+    view.lookHold = Math.max(0, (view.lookHold || 0) - dt);
+    if (!title && !view.cameraLookHeld && !view.manualSwingHeld && !view.sim.climb && view.lookHold <= 0) {
+        const speed = Math.hypot(p.vx || 0, p.vz || 0);
+        if (speed > .18) {
+            const face = Number.isFinite(p.face) ? p.face : Math.PI;
+            const error = IP.angle(face - Math.PI - view.cameraYaw);
+            // A dead band, so ordinary strafing and course corrections do not drag
+            // the horizon around. Only a real change of heading moves the camera,
+            // and on a touch screen it moves slower and later.
+            const band = view.touchPresentation ? .52 : .17;
+            const rate = view.touchPresentation ? 1.9 : 3.8;
+            const over = Math.max(0, Math.abs(error) - band) * Math.sign(error);
+            if (over) view.cameraYaw += over * (1 - Math.exp(-rate * dt));
+        }
     }
-    const yaw = view.cameraYaw, pitch = view.sim.climb ? Math.min(view.cameraPitch,.18) : view.cameraPitch, cp = Math.cos(pitch);
+    let climbPitch = null, climbDistance = null;
+    if (view.sim.climb) {
+        const c = view.sim.climb.surface;
+        const t = clamp((p.y - c.bottom) / Math.max(1, c.top - c.bottom), 0, 1);
+        view.climbHeight = IP.damp(view.climbHeight ?? t, t, 5, dt);
+        const h = view.climbHeight;
+        // Stay near the climber's own level. Looking down on him from above folds
+        // the legs into the torso and the whole pose reads as a shrug; a near-level
+        // three-quarter shot is how a climb has always been photographed.
+        climbPitch = .028 + .085 * h;
+        climbDistance = 7.0 + 3.1 * h;
+        // A standing three-quarter offset plus a lean toward the iron: enough
+        // parallax for the masonry to have a section, never enough to disorient.
+        const side = Math.sign(view.sim.ball.x - p.x) || 1;
+        const want = side * .27 + clamp((view.sim.ball.x - p.x) * .030, -.14, .14);
+        view.cameraYaw = clamp(IP.angle(view.cameraYaw), -.72, .72);
+        if (!view.cameraLookHeld && !view.manualSwingHeld)
+            view.cameraYaw += (want - view.cameraYaw) * (1 - Math.exp(-1.5 * dt));
+        view.climbLook = IP.damp(view.climbLook ?? 0, h, 3, dt);
+        // Settle the player's own pitch down to the climbing value as well, so the
+        // default shot is level with the climber and manual look still works.
+        view.cameraPitch = IP.damp(view.cameraPitch, climbPitch + .05, 2.2, dt);
+    }
+    else { view.climbHeight = null; view.climbLook = null; }
+    view.climbKick = IP.damp(view.climbKick || 0, 0, 6.5, dt);
+    // The last walk widens out on its own. Control is never taken away; the lens
+    // simply steps back and lets the morning into the frame.
+    view.finaleT = view.sim.finale ? Math.min(1, (view.finaleT || 0) + dt / 9) : 0;
+    const yaw = view.cameraYaw;
+    // On the last walk the lens lifts to the horizon; the sunrise is the subject.
+    const basePitch = climbPitch !== null ? clamp(view.cameraPitch, climbPitch - .04, climbPitch + .26) : view.cameraPitch;
+    const pitch = IP.lerp(basePitch, .065, view.finaleT), cp = Math.cos(pitch);
     const direction = V(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp);
-    const nominal = (view.sim.climb ? 9.2 : view.cameraMode ? 8.25 : 7.2) * view.zoom;
+    const nominal = (climbDistance !== null ? climbDistance * (1 - view.climbKick * .06) : view.cameraMode ? 9.15 : 8.1) * view.zoom * (1 + view.finaleT * .62);
     const end = view.cameraPivot.clone().addScaledVector(direction, nominal);
     const safe = view.cameraLimit(view.cameraPivot, end);
     // Retract before collision, ease out afterward. Smoothing never permits a
@@ -4109,7 +5346,20 @@ function updateCamera(view, dt, title = false) {
         view.boomDistance = IP.damp(view.boomDistance, safe, 5.5, dt);
     view.currentOffset.copy(direction).multiplyScalar(view.boomDistance);
     view.camera.position.copy(view.cameraPivot).add(view.currentOffset);
-    view.cameraTarget.copy(view.cameraPivot).add(V(-Math.sin(yaw) * .55, -.20, -Math.cos(yaw) * .55));
+    // Keep the lens above whatever surface it ends up over. On the parapet stair
+    // and the coast stair the boom used to sink into the treads behind the player.
+    const under = view.sim.groundHeight(view.camera.position.x, view.camera.position.z);
+    const floor = under + (view.sim.climb ? .55 : .95);
+    if (Number.isFinite(floor) && view.camera.position.y < floor) {
+        const rise = floor - view.camera.position.y;
+        view.camera.position.y = floor;
+        // Pull in slightly as it lifts, so the framing stays on the prisoner
+        // instead of sliding off over his head.
+        view.camera.position.lerp(view.cameraPivot, clamp(rise * .07, 0, .22));
+    }
+    // Low on the wall the shot leans up the route; high on it, down the drop.
+    const climbGaze = (climbPitch !== null ? IP.lerp(.74, -.22, view.climbLook || 0) : 0) + view.finaleT * 1.05;
+    view.cameraTarget.copy(view.cameraPivot).add(V(-Math.sin(yaw) * .55, -.20 + climbGaze, -Math.cos(yaw) * .55));
     view.camera.lookAt(view.cameraTarget);
     view.camera.updateMatrixWorld();
     view.cameraReady = true;
@@ -4269,6 +5519,24 @@ function handle(view, e) {
         view.emitParticles(e.x, y, e.z, 70, 6.2, 'metal');
         view.puff(e.x, y, e.z, 'stone', 1.2);
     }
+    if (e.type === 'climbHaul') {
+        // Grit off the masonry where the hands re-set, and a short pull of the
+        // boom. The haul has to be felt, not read off a meter.
+        // Grit off the hold, not a smoke grenade: the old puff filled the frame
+        // with white slabs every time the iron came over the top.
+        view.puff(e.x, e.y + .35, e.z, 'stone', .14 + (e.power || 0) * .12);
+        view.emitParticles(e.x, e.y + .2, e.z, 9, 2.1, 'metal');
+        view.climbKick = Math.min(1, (view.climbKick || 0) + .55 + (e.power || 0) * .5);
+        view.shake = Math.max(view.shake, .12 * (e.power || 0));
+    }
+    if (e.type === 'climberFall')
+        view.puff(e.x, e.y + 1, e.z, 'body', 1.1);
+    if (e.type === 'cuffBroken') {
+        view.emitParticles(e.x, e.y, e.z, 90, 8.5, 'metal');
+        view.puff(e.x, e.y - .3, e.z, 'stone', 1.5);
+        view.shake = Math.max(view.shake, .9);
+        view.flash = 0;
+    }
     if (e.type === 'loaded')
         view.clearEffects();
 }
@@ -4363,8 +5631,8 @@ class View {
     resize() {
         return setup.resize(this);
     }
-    sign(text, x, y, z, w, h, ry, color, bg, size) {
-        return architecture.sign(this, text, x, y, z, w, h, ry, color, bg, size);
+    sign(text, x, y, z, w, h, ry, color, bg, size, opts) {
+        return architecture.sign(this, text, x, y, z, w, h, ry, color, bg, size, opts);
     }
     lamp(batch, x, y, z, ry, cool) {
         return architecture.lamp(this, batch, x, y, z, ry, cool);
@@ -4755,13 +6023,70 @@ function makePost(view) {
     });
     view.finalMat = new T.ShaderMaterial({
         depthTest: false, depthWrite: false, uniforms: {
-            tScene: { value: view.target.texture }, tDepth: { value: view.target.depthTexture }, tBloom: { value: view.bloomB.texture }, uResolution: { value: size }, uInvProjection: { value: view.camera.projectionMatrixInverse.clone() }, uNear: { value: .12 }, uFar: { value: 170 }, uTime: { value: 0 }, uExposure: { value: 1.10 }, uDamage: { value: 0 }, uAO: { value: 1 }, uFXAA: { value: 1 }
+            tScene: { value: view.target.texture }, tDepth: { value: view.target.depthTexture }, tBloom: { value: view.bloomB.texture }, uResolution: { value: size }, uInvProjection: { value: view.camera.projectionMatrixInverse.clone() }, uNear: { value: .12 }, uFar: { value: 230 }, uTime: { value: 0 }, uExposure: { value: 1.18 }, uDamage: { value: 0 }, uAO: { value: .85 }, uFXAA: { value: 1 },
+            uCamWorld: { value: new T.Matrix4() }, uSunDirW: { value: new T.Vector3(-.46, .84, -.26) }, uSunScreen: { value: new T.Vector2(.5, .5) },
+            uHaze: { value: 0 }, uShafts: { value: 0 }, uDawn: { value: 0 }, uGrain: { value: .020 }, uEnding: { value: 0 }
         }, vertexShader: vert, fragmentShader: `
- varying vec2 vUv;uniform sampler2D tScene,tDepth,tBloom;uniform vec2 uResolution;uniform mat4 uInvProjection;uniform float uNear,uFar,uTime,uExposure,uDamage,uAO,uFXAA;
+ varying vec2 vUv;uniform sampler2D tScene,tDepth,tBloom;uniform vec2 uResolution,uSunScreen;uniform mat4 uInvProjection,uCamWorld;uniform vec3 uSunDirW;uniform float uNear,uFar,uTime,uExposure,uDamage,uAO,uFXAA,uHaze,uShafts,uDawn,uGrain,uEnding;
  float lin(float z){return (2.*uNear*uFar)/(uFar+uNear-(2.*z-1.)*(uFar-uNear));}
  vec3 fxaa(vec2 uv){vec2 px=1./uResolution;vec3 c=texture2D(tScene,uv).rgb;vec3 nw=texture2D(tScene,uv+vec2(-1.,-1.)*px).rgb,ne=texture2D(tScene,uv+vec2(1.,-1.)*px).rgb,sw=texture2D(tScene,uv+vec2(-1.,1.)*px).rgb,se=texture2D(tScene,uv+vec2(1.,1.)*px).rgb;vec3 l=vec3(.299,.587,.114);float lnw=dot(nw,l),lne=dot(ne,l),lsw=dot(sw,l),lse=dot(se,l),lm=dot(c,l);vec2 dir=vec2(-((lnw+lne)-(lsw+lse)),(lnw+lsw)-(lne+lse));float reduce=max((lnw+lne+lsw+lse)*.03125,.0078125);float rcp=1./(min(abs(dir.x),abs(dir.y))+reduce);dir=clamp(dir*rcp,vec2(-5.),vec2(5.))*px;vec3 a=.5*(texture2D(tScene,uv+dir*(1./3.-.5)).rgb+texture2D(tScene,uv+dir*(2./3.-.5)).rgb);vec3 b=a*.5+.25*(texture2D(tScene,uv+dir*-.5).rgb+texture2D(tScene,uv+dir*.5).rgb);float lb=dot(b,l),lo=min(lm,min(min(lnw,lne),min(lsw,lse))),hi=max(lm,max(max(lnw,lne),max(lsw,lse)));return lb<lo||lb>hi?a:b;}
  vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
- void main(){vec3 color=mix(texture2D(tScene,vUv).rgb,fxaa(vUv),uFXAA);float depth=lin(texture2D(tDepth,vUv).r),ao=0.;float rad=clamp(180./depth,2.,28.);for(int i=0;i<12;i++){float fi=float(i),angle=fi*2.399963;vec2 offset=vec2(cos(angle),sin(angle))*sqrt((fi+.5)/12.)*rad/uResolution;float d=lin(texture2D(tDepth,vUv+offset).r),delta=depth-d;ao+=smoothstep(.025,.14,delta)*(1.-smoothstep(.28,1.1,delta));}color*=1.-ao/12.*.40*uAO;color+=texture2D(tBloom,vUv).rgb*.12;float vignette=smoothstep(.95,.25,length((vUv-.5)*vec2(1.,.88)));color*=mix(.79,1.,vignette);color=aces(color*uExposure);color=pow(color,vec3(1./2.2));float noise=fract(sin(dot(vUv*uResolution+fract(uTime)*19.,vec2(12.9898,78.233)))*43758.5453)-.5;color+=noise*0.;color=mix(color,vec3(.36,.075,.028),uDamage*(1.-vignette)*.46);gl_FragColor=vec4(color,1.);}`
+ vec3 viewRay(vec2 uv){vec4 clip=vec4(uv*2.-1.,1.,1.);vec4 vp=uInvProjection*clip;vp/=vp.w;return normalize((uCamWorld*vec4(vp.xyz,0.)).xyz);}
+ // Analytic aerial perspective. The same gradient and sun the sky dome uses, so
+ // distance blends into the real horizon rather than a flat grey constant.
+ vec3 hazeColour(vec3 dir){
+   float up=clamp(dir.y,0.,1.);
+   vec3 low=mix(vec3(.286,.352,.352),vec3(.640,.452,.352),uDawn);
+   vec3 high=mix(vec3(.128,.186,.204),vec3(.190,.196,.248),uDawn);
+   vec3 c=mix(low,high,pow(up,.70));
+   float sd=max(0.,dot(dir,uSunDirW));
+   c+=mix(vec3(.40,.27,.14),vec3(.92,.48,.22),uDawn)*pow(sd,6.)*(.22+.66*uDawn);
+   return c;
+ }
+ // Screen-space light shafts, masked to sky depth so solid geometry occludes them.
+ vec3 shafts(vec2 uv){
+   vec2 delta=uSunScreen-uv;float len=length(delta);
+   vec3 acc=vec3(0.);
+   for(int i=0;i<14;i++){
+     float t=(float(i)+.5)/14.;
+     vec2 s=uv+delta*t*.86;
+     float sky=smoothstep(150.,205.,lin(texture2D(tDepth,s).r));
+     vec3 c=texture2D(tScene,s).rgb;
+     acc+=c*sky*smoothstep(.42,1.6,max(c.r,max(c.g,c.b)))*(1.-t);
+   }
+   return acc/14.*smoothstep(1.35,.12,len);
+ }
+ void main(){
+   // A whisper of lateral dispersion at the frame edge. Lens, not gimmick.
+   float edge=length((vUv-.5)*vec2(1.,.88));
+   vec2 ca=(vUv-.5)*edge*edge*.0026;
+   vec3 color=mix(texture2D(tScene,vUv).rgb,fxaa(vUv),uFXAA);
+   color.r=mix(color.r,texture2D(tScene,vUv+ca).r,.85);
+   color.b=mix(color.b,texture2D(tScene,vUv-ca).b,.85);
+   float depth=lin(texture2D(tDepth,vUv).r),ao=0.;
+   float rad=clamp(180./depth,2.,28.);
+   for(int i=0;i<12;i++){float fi=float(i),angle=fi*2.399963;vec2 offset=vec2(cos(angle),sin(angle))*sqrt((fi+.5)/12.)*rad/uResolution;float d=lin(texture2D(tDepth,vUv+offset).r),delta=depth-d;ao+=smoothstep(.025,.14,delta)*(1.-smoothstep(.28,1.1,delta));}
+   color*=1.-ao/12.*.26*uAO;
+   if(uHaze>0.){
+     vec3 dir=viewRay(vUv);
+     float d=min(depth,220.);
+     float f=(1.-exp(-d*uHaze))*(1.-smoothstep(150.,190.,depth));
+     color=mix(color,hazeColour(dir),clamp(f,0.,.74));
+   }
+   color+=texture2D(tBloom,vUv).rgb*.20;
+   if(uShafts>0.)color+=shafts(vUv)*uShafts*mix(vec3(1.,.86,.62),vec3(1.,.72,.42),uDawn)*1.55;
+   float luma=dot(color,vec3(.2126,.7152,.0722));
+   color*=mix(vec3(.92,1.01,1.04),vec3(1.075,1.01,.94),smoothstep(.10,1.20,luma));
+   float vignette=smoothstep(.95,.22,edge);
+   color*=mix(mix(.88,.94,uEnding),1.,vignette);
+   color=aces(color*(uExposure+uEnding*.14));
+   color=pow(color,vec3(1./2.2));
+   // Grain sits mostly in the shadows, the way real stock behaves.
+   float noise=fract(sin(dot(vUv*uResolution+fract(uTime)*19.,vec2(12.9898,78.233)))*43758.5453)-.5;
+   color+=noise*uGrain*(1.25-dot(color,vec3(.2126,.7152,.0722))*.85);
+   color=mix(color,vec3(.36,.075,.028),uDamage*(1.-vignette)*.46);
+   gl_FragColor=vec4(color,1.);
+ }`
     });
 }
 function makeWetFloor(view) {
@@ -4772,7 +6097,7 @@ function makeWetFloor(view) {
     view.wetUniforms = {
         uIPReflection: { value: view.reflectionTarget.texture }, uIPReflectMatrix: { value: new T.Matrix4() }, uIPWetMask: { value: view.tex('puddles.jpg') }, uIPWetEnabled: { value: 0 }
     };
-    for (let name of ['floor', 'tileFloor', 'officeFloor']) {
+    for (let name of ['floor', 'tileFloor', 'officeFloor', 'sand']) {
         let mat = view.materials[name];
         mat.onBeforeCompile = sh => {
             Object.assign(sh.uniforms, view.wetUniforms);
@@ -4865,6 +6190,8 @@ function initialize(view, canvas, world, sim) {
     view.zoom = 1;
     view.cameraMode = 0;
     view.sparks = [];
+    view.dawn = 0;
+    view.outdoorMix = 0;
     view.rings = [];
     view.trail = [];
     view.staticRoot = new T.Group();
@@ -4882,9 +6209,10 @@ function initialize(view, canvas, world, sim) {
     view.cameraYaw = 0;
     view.cameraPitch = .32;
     view.cameraPivot = V(0, 1.28, 12);
-    view.boomDistance = 7.2;
+    view.boomDistance = 8.1;
     view.cameraReady = false;
     view.cameraLookHeld = false;
+    view.manualSwingHeld = false;
     view.cameraBoxes = [];
     view.cameraGrid = new Map();
     view.pointerPlane = new T.Plane(V(0, 1, 0), 0);
@@ -4894,13 +6222,13 @@ function initialize(view, canvas, world, sim) {
     view.renderer.toneMapping = T.NoToneMapping;
     view.renderer.shadowMap.enabled = true;
     view.renderer.shadowMap.type = T.PCFSoftShadowMap;
-    view.renderer.setClearColor(0x91a3a6);
+    view.renderer.setClearColor(0x152123);
     view.renderer.info.autoReset = false;
     view.scene = new T.Scene();
-    view.scene.background = C(0x8b9fa6);
-    view.scene.fog = new T.FogExp2(0x667b7e, .0063);
+    view.scene.background = C(0x18282a);
+    view.scene.fog = new T.FogExp2(0x334442, .0030);
     view.scene.add(view.floorRoot, view.staticRoot, view.dynamic, view.actorRoot);
-    view.camera = new T.PerspectiveCamera(61, 1, .12, 170);
+    view.camera = new T.PerspectiveCamera(54, 1, .12, 230);
     view.camera.position.set(5.5, 13.8, 26.8);
     view.camera.lookAt(view.cameraTarget);
     view.camera.updateMatrixWorld();
@@ -4913,6 +6241,7 @@ function initialize(view, canvas, world, sim) {
     view.buildWorld();
     IP.buildAscentArt(view);
     require('../encounter-art').buildEncounterArt(view);
+    require('../late-game-art').buildLateGameArt(view);
     IP.optimizeScene(view);
     view.buildCameraCollision();
     view.makeActors();
@@ -4950,45 +6279,60 @@ function makeMaterials(view) {
         mats[name] = cut ? solidMaterial(m) : m;
         return m;
     };
-    pbr('stone', 'masonry', 0xcac7b8, .96, 0, true);
-    pbr('stoneDark', 'masonry', 0x999b8c, .93, 0, true);
-    pbr('trim', 'plaster', 0xb5b3a0, .85, 0, true);
-    pbr('paint', 'plaster', 0x516864, .95, 0, true);
-    pbr('floor', 'cast', 0xabae9f, .78);
-    pbr('tileFloor', 'tile', 0xbabeb0, .6);
-    pbr('officeFloor', 'tile', 0x939082, .67);
-    pbr('yardFloor', 'asphalt', 0xb7b2a0, .9);
-    pbr('iron', 'steel', 0x586268, .5, .82, true);
-    pbr('ironDark', 'steel', 0x292e2f, .61, .72, true);
-    pbr('lightIron', 'steel', 0xa5aaa3, .39, .88, true);
-    pbr('copper', 'copper', 0xb4a181, .5, .74, true);
-    pbr('wood', 'wood', 0x9e8060, .87, 0, true);
-    pbr('cloth', 'cloth', 0xa39f87, .96, 0, true);
-    pbr('porcelain', 'concrete', 0xd5d7c6, .28, .04);
+    pbr('stone', 'masonry', 0x85867b, .96, 0, true);
+    pbr('stoneDark', 'masonry', 0x535b56, .94, 0, true);
+    pbr('trim', 'plaster', 0x858e84, .88, 0, true);
+    pbr('paint', 'plaster', 0x304b48, .94, 0, true);
+    pbr('floor', 'cast', 0x747970, .86);
+    pbr('tileFloor', 'tile', 0x6f7a73, .68);
+    pbr('officeFloor', 'tile', 0x5f625b, .74);
+    pbr('yardFloor', 'asphalt', 0x5e625a, .94);
+    pbr('iron', 'steel', 0x4c5858, .53, .82, true);
+    pbr('ironDark', 'steel', 0x1d2729, .63, .76, true);
+    pbr('lightIron', 'steel', 0x8f9994, .43, .88, true);
+    pbr('copper', 'copper', 0x8f7557, .57, .74, true);
+    pbr('wood', 'wood', 0x795f45, .90, 0, true);
+    pbr('cloth', 'cloth', 0x777360, .98, 0, true);
+    pbr('porcelain', 'concrete', 0xa6aa9f, .34, .04);
     pbr('red', 'steel', 0x792e1d, .6, .5, true);
     pbr('green', 'steel', 0x687668, .68, .4, true);
     mats.black = new T.MeshStandardMaterial({ color: 0x151b1c, roughness: .91 });
     mats.rubber = new T.MeshStandardMaterial({ color: 0x242826, roughness: .88 });
     mats.chrome = new T.MeshStandardMaterial({ color: 0xafb4ae, metalness: .95, roughness: .23 });
-    mats.paper = new T.MeshStandardMaterial({ color: 0xc4bd9f, roughness: .96, side: T.DoubleSide });
+    mats.paper = new T.MeshStandardMaterial({ color: 0xa99f80, roughness: .97, side: T.DoubleSide });
     mats.leaf = new T.MeshStandardMaterial({ color: 0x3c5335, roughness: 1, side: T.DoubleSide });
     mats.dirt = new T.MeshStandardMaterial({ color: 0x333729, roughness: 1 });
-    mats.warm = new T.MeshBasicMaterial({ color: 0xffd8a0 });
-    mats.cold = new T.MeshBasicMaterial({ color: 0xcde3dc });
+    mats.warm = new T.MeshBasicMaterial({ color: 0xe2ad70 });
+    mats.cold = new T.MeshBasicMaterial({ color: 0x78908c });
     mats.yellow = new T.MeshStandardMaterial({ color: 0xb0a36b, roughness: .85 });
     mats.redLight = new T.MeshBasicMaterial({ color: 0xe85627 });
     let sky = canvasTexture(1024, 512, (c, w, h) => {
         let g = c.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#728eaa');
-        g.addColorStop(.47, '#7d827c');
-        g.addColorStop(.52, '#c0ae89');
-        g.addColorStop(1, '#242e2e');
+        g.addColorStop(0, '#0d222c');
+        g.addColorStop(.34, '#1d3439');
+        g.addColorStop(.47, '#4a5a56');
+        g.addColorStop(.505, '#8d7550');
+        g.addColorStop(.56, '#3a4744');
+        g.addColorStop(1, '#0a1113');
         c.fillStyle = g;
         c.fillRect(0, 0, w, h);
-        for (let i = 0; i < 4; i++) {
-            c.fillStyle = i % 2 ? '#a3b1b0' : '#ece2c4';
-            c.fillRect(150 + i * 230, 155, 18, 120);
+        // A soft sun and a broken cloud deck give metal something to reflect
+        // other than a flat band. This feeds the PMREM probe, not the visible sky.
+        const sun = c.createRadialGradient(276, 214, 4, 276, 214, 120);
+        sun.addColorStop(0, 'rgba(255,238,198,.95)');
+        sun.addColorStop(.25, 'rgba(255,196,124,.42)');
+        sun.addColorStop(1, 'rgba(255,170,90,0)');
+        c.fillStyle = sun;
+        c.fillRect(156, 94, 240, 240);
+        for (let i = 0; i < 26; i++) {
+            const x = (i * 197) % 1024, y = 150 + ((i * 83) % 96), r = 26 + ((i * 53) % 58);
+            c.globalAlpha = .10 + ((i * 29) % 17) / 100;
+            c.fillStyle = i % 3 ? '#63757040' : '#c3a97a40';
+            c.beginPath();
+            c.ellipse(x, y, r, r * .32, 0, 0, Math.PI * 2);
+            c.fill();
         }
+        c.globalAlpha = 1;
     });
     sky.mapping = T.EquirectangularReflectionMapping;
     const pm = new T.PMREMGenerator(view.renderer);
@@ -4998,30 +6342,35 @@ function makeMaterials(view) {
     sky.dispose();
 }
 function makeLight(view) {
-    const ambient = new T.HemisphereLight(0xb9ced5, 0x37362c, .82);
+    const ambient = new T.HemisphereLight(0x8ba6ad, 0x2a2d28, 1.06);
     view.ambient = ambient;
     view.scene.add(ambient);
-    view.sun = new T.DirectionalLight(0xffdfb0, 3.25);
-    view.sun.position.set(-30, 55, -15);
+    view.sun = new T.DirectionalLight(0xffd8a8, 2.9);
+    view.sun.position.set(34, 47, 26);
     view.sun.castShadow = true;
     view.sun.shadow.mapSize.set(2048, 2048);
+    view.sun.shadow.blurSamples = 12;
     const s = view.sun.shadow.camera;
     s.left = -23;
     s.right = 23;
     s.top = 27;
     s.bottom = -27;
     s.near = 1;
-    s.far = 110;
+    s.far = 132;
     view.sun.shadow.bias = -.00022;
     view.sun.shadow.normalBias = .035;
-    view.sun.shadow.radius = 2;
+    view.sun.shadow.radius = 2.4;
     view.scene.add(view.sun, view.sun.target);
-    view.fill = new T.DirectionalLight(0xbcd2df, .48);
-    view.fill.position.set(30, 15, 25);
+    view.fill = new T.DirectionalLight(0x8fb2bf, .62);
+    view.fill.position.set(-28, 17, -22);
     view.scene.add(view.fill);
+    // Ground bounce. Without it every downward-facing surface reads as dead ambient.
+    view.bounce = new T.DirectionalLight(0xb08a5e, .26);
+    view.bounce.position.set(12, -20, -14);
+    view.scene.add(view.bounce);
     view.pointLights = [];
-    for (let i = 0; i < 5; i++) {
-        let l = new T.PointLight(0xffbd77, 0, 13, 2);
+    for (let i = 0; i < 7; i++) {
+        let l = new T.PointLight(0xffc27a, 0, 21, 2);
         view.scene.add(l);
         view.pointLights.push(l);
     }
@@ -5053,7 +6402,14 @@ function resize(view) {
     view.renderProfile = profile;
     view.renderer.setPixelRatio(dpr);
     view.renderer.setSize(w, h, false);
-    view.camera.aspect = w / h;
+    const aspect = w / h;
+    // Preserve real viewport proportions, then constrain perspective distortion.
+    // Normal landscape uses a 54° vertical lens; ultrawide displays are capped at 94° horizontally.
+    const baseVFov = aspect < .8 ? 58 : 54;
+    const maxHFov = 94 * Math.PI / 180;
+    const cappedVFov = 2 * Math.atan(Math.tan(maxHFov * .5) / aspect) * 180 / Math.PI;
+    view.camera.fov = aspect > 1 ? Math.min(baseVFov, cappedVFov) : baseVFov;
+    view.camera.aspect = aspect;
     view.camera.updateProjectionMatrix();
     const size = view.renderer.getDrawingBufferSize(new T.Vector2());
     if (view.target) {
@@ -5072,7 +6428,7 @@ function resize(view) {
 }
 module.exports = { initialize, tex, makeMaterials, makeLight, setQuality, resize };
 
-}, {"../context": "src/presentation/context.js", "../encounter-art": "src/presentation/encounter-art.js", "../render-profile": "src/presentation/render-profile.js"}],
+}, {"../context": "src/presentation/context.js", "../encounter-art": "src/presentation/encounter-art.js", "../late-game-art": "src/presentation/late-game-art.js", "../render-profile": "src/presentation/render-profile.js"}],
 "src/presentation/view/update.js": [function(require, module, exports) {
 'use strict';
 /** View update. Uses authoritative state for display, never to decide game progression. */
@@ -5121,6 +6477,7 @@ function update(view, dt, alpha = 1, title = false) {
             mesh.visible = !prop.broken;
     }
     IP.updatePropInstances(view);
+    updateMountedDressing(view, s, dt);
     for (const sec of view.secretMeshes) {
         sec.g.visible = !s.foundSecrets.has(sec.id);
         sec.g.position.y = sec.y;
@@ -5148,13 +6505,18 @@ function update(view, dt, alpha = 1, title = false) {
         view.cuff.quaternion.setFromAxisAngle(V(0, 1, 0), p.face).multiply(new T.Quaternion().setFromAxisAngle(V(1, 0, 0), fp.a + fp.b));
     }
     view.cuff.position.copy(ankle);
+    // With the cuff struck off there is no tether to draw: the iron lies coiled
+    // on the breaker stone and the leg is bare for the first time in the game.
+    const unchained = !!s.unchained;
+    view.cuff.visible = !unchained;
+    view.ballEye.visible = !unchained;
     for (let i = 0; i < view.slackLoops.length; i++) {
         const ring = view.slackLoops[i];
-        ring.visible = s.reach - s.tetherReach > (i + .2) * .42;
+        ring.visible = !unchained && s.reach - s.tetherReach > (i + .2) * .42;
         ring.position.copy(ankle).add(V(0, i * .055 + .12, 0));
         ring.quaternion.copy(view.cuff.quaternion).multiply(new T.Quaternion().setFromAxisAngle(V(1, 0, 0), PI / 2));
     }
-    const anchorOffset = ankle.clone().sub(V(r.chain[0].x, r.chain[0].y, r.chain[0].z));
+    const anchorOffset = unchained ? V(0, 0, 0) : ankle.clone().sub(V(r.chain[0].x, r.chain[0].y, r.chain[0].z));
     let ch = r.chain.map((v, i) => {
         let w = Math.pow(Math.max(0, 1 - i / 5), 2);
         return { x: v.x + anchorOffset.x * w, y: v.y + anchorOffset.y * w, z: v.z + anchorOffset.z * w };
@@ -5230,12 +6592,47 @@ function update(view, dt, alpha = 1, title = false) {
     view.updateCamera(dt, title);
     view.updateLights(dt);
     view.dustMat.uniforms.uTime.value = view.elapsed;
-    view.dustMat.uniforms.uCenter.value.set(p.x, s.groundHeight(p.x, p.z), p.z);
+    view.dustMat.uniforms.uCenter.value.set(p.x, s.climb ? p.y : s.groundHeight(p.x, p.z), p.z);
+}
+/** Dressing registered to a breakable topples once, then stops being drawn.
+ * Nothing that was standing on a machine is left hanging when the machine goes. */
+function updateMountedDressing(view, s, dt) {
+    if (!view.attached) return;
+    const falling = view._falling ??= [];
+    const gone = view._fallen ??= new Set();
+    for (const prop of s.props) {
+        const groups = view.attached.get(prop.id);
+        if (!groups) continue;
+        if (prop.broken && !gone.has(prop.id)) {
+            gone.add(prop.id);
+            for (const g of groups) falling.push({ g, t: 0, spin: (Math.random() - .5) * 2.2 });
+        }
+        else if (!prop.broken && gone.has(prop.id)) {
+            gone.delete(prop.id);
+            for (const g of groups) {
+                g.visible = true;
+                g.position.set(0, 0, 0);
+                g.rotation.set(0, 0, 0);
+            }
+            for (let i = falling.length - 1; i >= 0; i--)
+                if (groups.includes(falling[i].g)) falling.splice(i, 1);
+        }
+    }
+    for (let i = falling.length - 1; i >= 0; i--) {
+        const item = falling[i];
+        item.t += dt;
+        item.g.position.y = -4.9 * item.t * item.t;
+        item.g.rotation.z = item.spin * item.t * item.t * .9;
+        if (item.t > 1.15) {
+            item.g.visible = false;
+            falling.splice(i, 1);
+        }
+    }
 }
 function updateLights(view, dt = 1 / 60) {
     IP.updatePolishedLights(view, dt);
 }
-module.exports = { captureBeforeStep, update, updateLights };
+module.exports = { captureBeforeStep, update, updateLights, updateMountedDressing };
 
 }, {"../context": "src/presentation/context.js", "../encounter-art": "src/presentation/encounter-art.js"}],
 "src/presentation/world-art.js": [function(require, module, exports) {
@@ -5246,6 +6643,9 @@ const clamp = IP.clamp;
 const extraProp = function (view, b, o) {
     const m = view.materials, w = o.w, d = o.d, h = o.h;
     switch (o.kind) {
+        case 'collision':
+            // Simulation-only blocker; its authored visible shell is rendered by the scene pass.
+            return true;
         case 'bunk':
             for (const y of [.48, 1.61]) {
                 b.box(0, y, 0, w, .10, d, m.ironDark, 0, .02);
@@ -5365,6 +6765,43 @@ const extraProp = function (view, b, o) {
             b.rod([-.27, .16, d * .55], [.27, .60, d * .55], .065, m.chrome);
             b.box(0, .70, d * .57, .40, .08, .08, m.yellow);
             break;
+        case 'winch':
+            // A coherent final mechanism: bolted plinth, drum, hand wheel and
+            // chain guide. Every decorative piece belongs to this breakable.
+            b.box(0, .16, 0, w, .32, d, m.stoneDark, 0, .07);
+            for (const x of [-w * .37, w * .37]) {
+                b.box(x, .82, 0, .18, 1.32, d * .68, m.ironDark, 0, .035);
+                b.box(x, 1.48, 0, .32, .18, d * .84, m.lightIron, 0, .025);
+            }
+            b.cyl(0, 1.05, 0, .54, .54, w * .72, m.ironDark, 0, Math.PI / 2, 24);
+            for (const x of [-w * .28, w * .28])
+                b.torus(x, 1.05, 0, .55, .065, m.copper, 0, Math.PI / 2);
+            b.cyl(0, 1.05, 0, .14, .14, w * .92, m.chrome, 0, Math.PI / 2, 18);
+            b.torus(w * .48, 1.22, 0, .43, .055, m.lightIron, Math.PI / 2);
+            for (let a = 0; a < Math.PI * 2; a += Math.PI / 4)
+                b.rod([w * .48, 1.22, 0], [w * .48 + Math.cos(a) * .42, 1.22 + Math.sin(a) * .42, 0], .026, m.lightIron);
+            b.box(0, 1.88, -d * .28, w * .7, .42, .18, m.green, 0, .035);
+            b.box(0, 1.88, -d * .39, w * .48, .20, .04, m.redLight, 0, .018);
+            break;
+        case 'anvil': {
+            // A breaker stone: a granite bed with an iron face worn into a hollow,
+            // and two centuries of shackles cut off on top of it.
+            b.box(0, .22, 0, w, .44, d, m.stoneDark, 0, .06, .5);
+            b.box(0, .58, 0, w * .86, .30, d * .84, m.stoneDark, 0, .05, .45);
+            b.box(0, .86, 0, w * .70, .28, d * .70, view.materials.blackIron || m.ironDark, 0, .04);
+            b.box(0, 1.02, 0, w * .62, .07, d * .30, m.ironDark, 0, .02);
+            for (const sx of [-1, 1]) {
+                b.box(sx * w * .30, 1.00, 0, .18, .12, d * .56, m.lightIron, 0, .03);
+                b.cyl(sx * w * .40, .70, d * .36, .06, .07, .44, m.iron);
+            }
+            // Cut links left where other men were freed, or were not.
+            for (let i = 0; i < 7; i++) {
+                const a = i * 1.1, r2 = .55 + (i % 3) * .30;
+                b.torus(Math.cos(a) * r2, .30 + (i % 2) * .02, Math.sin(a) * r2 * .7 + d * .18, .085, .026, m.ironDark, PI / 2, 0, a);
+            }
+            b.torus(0, 1.08, -d * .24, .15, .035, m.chrome, PI / 2);
+            break;
+        }
         case 'lamp':
             b.cyl(0, .09, 0, .20, .25, .18, m.ironDark);
             b.cyl(0, h * .46, 0, .045, .06, h * .88, m.iron);
@@ -5380,13 +6817,13 @@ const extraProp = function (view, b, o) {
 const buildExpansionArt = function (v, Batch) {
     const m = v.materials, b = new Batch(v.staticRoot), f = new Batch(v.floorRoot), w = v.world;
     // Geometric stairs follow the same continuous support surface as the simulation.
-    for (const r of w.floors.filter(r => r.expansion)) {
-        const mat = ['infirmary', 'chapel'].includes(r.style) ? m.tileFloor : r.style === 'archive' ? m.officeFloor : ['court', 'dock', 'freedom'].includes(r.style) ? m.yardFloor : r.style === 'furnace' ? m.stoneDark : r.style === 'gallery' || r.style === 'bridge' ? m.iron : m.floor;
+    for (const r of w.floors.filter(r => r.expansion && !r.noAutoFloor)) {
+        const mat = ['infirmary', 'chapel'].includes(r.style) ? m.tileFloor : r.style === 'archive' ? m.officeFloor : ['court', 'dock', 'freedom'].includes(r.style) ? m.yardFloor : r.style === 'furnace' ? m.stoneDark : r.style === 'gallery' || r.style === 'bridge' ? m.iron : r.style === 'strand' ? m.sand : r.style === 'causeway' ? m.seaStone : m.floor;
         if (r.ramp) {
             for (let z = r.z1; z < r.z2; z += .36) {
                 const depth = Math.min(.36, r.z2 - z), y = v.sim.groundHeight(r.x, z + depth / 2);
                 f.box(r.x, y - .12, z + depth / 2, r.w, .24, depth + .006, mat, 0, 0, .33);
-                f.box(r.x, y + .007, z + .025, r.w - .3, .018, .035, m.lightIron);
+                if (Math.round((z - r.z1) / .36) % 2 === 0) f.box(r.x, y + .009, z + .030, r.w - .5, .014, .026, m.trim);
             }
         }
         else {
@@ -5573,7 +7010,7 @@ module.exports = { PI, TAU, clamp, lerp, damp, angle, rng, dist, segCircle, swee
 "src/simulation/checkpoint-schema.js": [function(require, module, exports) {
 'use strict';
 /** Validate the complete save before reset/load mutates authoritative state.
- * Valid v4 snapshots retain their original fields/values. Unknown entity fields
+ * Valid snapshots retain their original fields/values. Unknown entity fields
  * cannot overwrite collider sizes, AI stats, methods, or object prototypes.
  */
 class CheckpointError extends Error {
@@ -5699,7 +7136,11 @@ function load(sim, s) {
                 Object.assign(item, src);
             }
         }
-    sim.placeBall();
+    // Derived, not stored: the cuff is off exactly when the breaker stone is broken,
+    // so an old save can never disagree with the world about it.
+    sim.unchained = sim.props.some(o => o.cuffAnvil && o.broken);
+    if (sim.unchained) require('./weapon').dropIron(sim, sim.props.find(o => o.cuffAnvil));
+    else sim.placeBall();
     sim.navDirty = true;
     sim.checkpoint = JSON.parse(JSON.stringify(s));
     sim.emit('loaded');
@@ -5711,31 +7152,45 @@ function retry(sim) {
 }
 module.exports = { saveCheckpoint, serialize, load, retry };
 
-}, {"./checkpoint-schema": "src/simulation/checkpoint-schema.js"}],
+}, {"./checkpoint-schema": "src/simulation/checkpoint-schema.js", "./weapon": "src/simulation/weapon.js"}],
 "src/simulation/climbing.js": [function(require, module, exports) {
 'use strict';
-/** A local vertical combat plane. Input remains a measured hand trajectory;
- * the optional mobile WHIP composes one bounded stroke before this motor.
- * x/y are physical world axes; z is the front of the authored climb surface.
+/** A local vertical combat plane. x/y are physical world axes; z is the front of
+ * the authored climb surface.
+ *
+ * The iron is the engine of the climb. Free climbing always works and is always
+ * safe, but it is slow. Swinging the ball overhead and catching it on the way up
+ * hauls the prisoner after it: the same measured hand trajectory the whole game
+ * teaches, doing the one thing that only makes sense on a wall. Nothing here can
+ * strand a player — the haul only ever adds height.
  */
 const {clamp,damp,angle,segCircle,sweepBox}=require('../shared/math');
 const {hasReward}=require('./rewards');
+const CLIMB_UP=1.85, CLIMB_DOWN=3.10, CLIMB_SIDE=2.95, CLIMB_DASH=6.4, HOIST=6.4;
 function anchor(sim) { const c=sim.climb.surface,p=sim.player; return {x:p.x+.14,y:p.y+.32,z:c.z+.83}; }
 function available(sim,input) {
     const up = input.climbY ?? -(input.mz||0);
-    if (sim.climb || !Number.isFinite(up) || up < .35 || !(input.mz < -.10)) return null;
+    if (sim.climb || !Number.isFinite(up) || up < .35) return null;
     const p=sim.player;
     return (sim.world.climbs||[]).find(c=>p.x>c.x1+.35&&p.x<c.x2-.35&&p.z>c.z+.12&&p.z<c.z+1.10&&Math.abs((p.y||0)-c.bottom)<.4);
 }
+function ledgeUnder(sim,c,y) {
+    let best=null;
+    for (const l of sim.world.climbLedges||[]) {
+        if (l.climbId!==c.id) continue;
+        if (y>=l.y-.22 && y<=l.y+.30 && (best===null||l.y>best.y)) best=l;
+    }
+    return best;
+}
 function begin(sim,c) {
     const p=sim.player;
-    sim.climb={id:c.id,surface:c,elapsed:0,mantle:0,retreat:false};
+    sim.climb={id:c.id,surface:c,elapsed:0,mantle:0,retreat:false,hoist:0,kickCD:0,hauls:0,peak:0,rest:0};
     p.x=clamp(p.x,c.x1+.45,c.x2-.45); p.z=c.z+.62; p.y=c.bottom; p.vx=p.vy=p.vz=0;
     p.face=Math.PI; p.climbing=true; p.dash=0;
     const a=anchor(sim),b=sim.ball;
     Object.assign(b,{x:a.x+Math.min(2,sim.reach*.8),y:a.y+.45,z:a.z,vx:0,vy:0,vz:0,speed:0});
     b.prevX=b.x;b.prevY=b.y;b.prevZ=b.z; updateChain(sim);
-    sim.emit('climbStart',{id:c.id,name:c.name,kind:c.kind,x:p.x,y:p.y,z:p.z});
+    sim.emit('climbStart',{id:c.id,name:c.name,kind:c.kind,x:p.x,y:p.y,z:p.z,height:c.top-c.bottom});
 }
 function updateChain(sim) {
     const a=anchor(sim),b=sim.ball,n=sim.chain.length-1,d=Math.hypot(b.x-a.x,b.y-a.y);
@@ -5800,11 +7255,33 @@ function weapon(sim,dt,input) {
             e.hitCD=.23;e.flash=.15;
             sim.emit('hit',{id:e.id,x:e.x,y:e.y+1,z:e.z,speed:b.speed,material:'body'});
             // A fast iron hit breaks the grip. Not an invisible timer or automatic cull.
-            if(b.speed>13){e.hp=0;sim.kill(e,clamp(b.vx*.16,-5,5),1.2);sim.emit('climberFall',{id:e.id,x:e.x,y:e.y,z:e.z,height:e.y-c.bottom});}
+            if(b.speed>13)knockOff(sim,e,c,clamp(b.vx*.16,-5,5),0);
             else {e.y=Math.max(c.bottom,e.y-.75);e.stagger=.55;}
         }
     }
     if(![b.x,b.y,b.vx,b.vy].every(Number.isFinite)) {b.x=a.x+1;b.y=a.y+.3;b.vx=b.vy=0;sim.emit('recovery');updateChain(sim);}
+}
+
+/** One guard comes off the wall, and anything he lands on comes off with him.
+ * The cascade is bounded and only ever travels downward, so it can never reach
+ * around a surface or hit somebody the falling body could not physically touch. */
+function knockOff(sim,e,c,vx,depth) {
+    if(e.dead)return;
+    e.hp=0;
+    sim.kill(e,vx,1.2);
+    sim.emit('climberFall',{id:e.id,x:e.x,y:e.y,z:e.z,height:e.y-c.bottom});
+    if(depth>=3)return;
+    let caught=0;
+    for(const other of sim.enemies){
+        if(other===e||other.dead||!other.climbing||other.climbId!==c.id)continue;
+        if(other.y>=e.y-.1||e.y-other.y>4.2||Math.abs(other.x-e.x)>1.95)continue;
+        caught++;
+        sim.score+=180;
+        sim.combo++;sim.comboTime=2.6;
+        sim.emit('climberDomino',{x:other.x,y:other.y+1,z:other.z,depth:depth+1,knockedOff:true});
+        knockOff(sim,other,c,vx*.7,depth+1);
+        if(caught>=2)break;
+    }
 }
 
 /** Nearby guards walk to the real foot of a climb before joining. Far enemies
@@ -5851,12 +7328,15 @@ function updateGuards(sim,dt) {
         const oldX=e.x,oldY=e.y;
         if(!e.attack){
             e.x=clamp(e.x+clamp(targetX-e.x,-1.65*dt,1.65*dt),c.x1+.45,c.x2-.45);
-            e.y+=clamp(targetY-e.y,-1.5*dt,(e.stagger>0?.55:3.30+(e.climbIndex%3)*.12)*dt);
+            e.y+=clamp(targetY-e.y,-1.5*dt,(e.stagger>0?.55:2.35+(e.climbIndex%3)*.12)*dt);
         }
         e.vx=(e.x-oldX)/dt;e.vy=(e.y-oldY)/dt;e.vz=0;e.face=Math.PI;e.phase+=Math.hypot(e.vx,e.vy)*dt*2.2;
         if(pursuing&&Math.hypot(e.x-p.x,e.y-p.y)<1.7&&e.cooldown<=0&&!e.attack){e.attack=.62;e.attackMax=.62;sim.emit('windup',{x:e.x,y:e.y+1,z:e.z});}
         if(e.attack>0){e.attack-=dt;if(e.attack<=0){e.attack=0;e.cooldown=2.0;
-            if(pursuing&&Math.hypot(e.x-p.x,e.y-p.y)<2){const hp=p.health;sim.hurt(1,e);if(p.health<hp){p.y=Math.max(c.bottom,p.y-(hasReward(sim,'grip-wrap')?.32:.6));sim.emit('climbSlip',{x:p.x,y:p.y,z:p.z});}}
+            if(pursuing&&Math.hypot(e.x-p.x,e.y-p.y)<2){const hp=p.health;sim.hurt(1,e);if(p.health<hp){
+            // Standing on a rest course means feet on stone: you get hit, you do not fall.
+            const planted=current&&(current.rest||0)>.5;
+            p.y=Math.max(c.bottom,p.y-(planted?.12:hasReward(sim,'grip-wrap')?.32:.6));sim.emit('climbSlip',{x:p.x,y:p.y,z:p.z,planted});}}
         }}
         if(!pursuing&&e.y>=c.top-.01){e.y=c.top;e.z=c.z-2.25;e.climbing=false;e.climbLanded=true;e.vx=e.vy=e.vz=0;}
     }
@@ -5867,33 +7347,58 @@ function step(sim,dt,input) {
     const prevY=p.y;
     p.dashCD=Math.max(0,(p.dashCD||0)-dt);p.dash=Math.max(0,(p.dash||0)-dt);
     if(state.mantle){
-        state.mantle=Math.min(1,state.mantle+dt/.85);const t=state.mantle,t2=t*t*(3-2*t);
-        p.z=c.z+.62-2.92*t2;p.y=c.top+Math.sin(t*Math.PI)*.22;p.vx=p.vy=p.vz=0;
+        // Three readable phases: pull to the coping, bring the hips over, then
+        // plant both feet. The old code translated straight through the wall.
+        state.mantle=Math.min(1,state.mantle+dt/.64);const t=state.mantle;
+        const smooth=q=>q*q*(3-2*q),pull=smooth(clamp(t/.34,0,1)),cross=smooth(clamp((t-.18)/.62,0,1)),settle=smooth(clamp((t-.72)/.28,0,1));
+        const lip=c.z+.18,landing=c.z-2.30;
+        p.z=(c.z+.62)+(lip-(c.z+.62))*pull+(landing-lip)*cross;
+        const lift=Math.sin(Math.PI*clamp(t/.92,0,1))*.62;
+        p.y=c.top+lift*(1-settle*.35);p.vx=p.vy=p.vz=0;
         weapon(sim,dt,{brake:true});updateGuards(sim,dt);sim.updateRagdolls(dt);sim.updateDebris(dt);
-        if(t>=1){p.y=c.top;p.z=c.z-2.30;p.climbing=false;sim.completedClimbs.add(c.id);sim.climb=null;sim.placeBall();sim.emit('climbEnd',{id:c.id,name:c.name,x:p.x,y:p.y,z:p.z});sim.updateProgress();}
+        if(t>=1){p.y=c.top;p.z=landing;p.climbing=false;sim.completedClimbs.add(c.id);sim.climb=null;sim.placeBall();sim.emit('climbEnd',{id:c.id,name:c.name,x:p.x,y:p.y,z:p.z,hauls:state.hauls});sim.updateProgress();}
         return;
     }
     let mx=Number(input.climbX ?? input.mx)||0,my=Number(input.climbY ?? -(input.mz||0))||0;
     if(!Number.isFinite(mx+my)){mx=0;my=0;}const l=Math.max(1,Math.hypot(mx,my));mx/=l;my/=l;
     if(input.dash!==undefined&&input.dash!==sim.dashId){sim.dashId=input.dash;if(p.dashCD<=0&&Math.abs(mx)>.15){p.dash=.16;p.dashCD=.7;p.inv=Math.max(p.inv,.18);sim.emit('climbEvade',{x:p.x,y:p.y+1,z:p.z});}}
-    const xx=clamp(p.x+mx*(p.dash>0?6:2.6)*dt,c.x1+.4,c.x2-.4),yy=clamp(p.y+my*2.55*dt,c.bottom,c.top);
+    const climbRate=my>0?CLIMB_UP:CLIMB_DOWN;
+    const xx=clamp(p.x+mx*(p.dash>0?CLIMB_DASH:CLIMB_SIDE)*dt,c.x1+.4,c.x2-.4);
+    let yy=clamp(p.y+my*climbRate*dt,c.bottom,c.top);
+    // The haul: an overhead throw that is still climbing drags the body after it.
+    // It cannot subtract height, so a player who never swings simply climbs slowly.
+    const a=anchor(sim),b=sim.ball;
+    const above=clamp((b.y-a.y)/Math.max(.9,sim.tetherReach)+.18,0,1);
+    const rising=clamp((b.vy-1.2)/13,0,1);
+    const carry=clamp((b.speed-5)/12,0,1);
+    const pull=my<-.3?0:above*rising*carry;
+    state.hoist=damp(state.hoist||0,pull,pull>(state.hoist||0)?22:7,dt);
+    state.kickCD=Math.max(0,(state.kickCD||0)-dt);
+    if(state.hoist>.42&&state.kickCD<=0&&yy<c.top-.05){
+        state.kickCD=.42;state.hauls++;sim.score+=15;sim.combo++;sim.comboTime=2.4;
+        sim.emit('climbHaul',{x:p.x,y:p.y+1.5,z:c.z+.3,power:state.hoist,speed:b.speed});
+    }
+    yy=clamp(yy+state.hoist*HOIST*dt,c.bottom,c.top);
+    state.peak=Math.max(state.peak||0,(yy-c.bottom)/Math.max(.001,c.top-c.bottom));
     let newX=xx,newY=yy;
     for(const panel of sim.climbPanels){
         if(panel.climbId!==c.id||panel.broken)continue;
         const h=sweepBox(p.x,p.y+.95,newX,newY+.95,{x:panel.x,z:panel.y,w:panel.w,d:panel.h},.33);
         if(h){newX=p.x+(newX-p.x)*Math.max(0,h.t-.01);newY=p.y+(newY-p.y)*Math.max(0,h.t-.01);}
     }
+    const ledge=ledgeUnder(sim,c,newY);
+    state.rest=ledge?Math.min(1,(state.rest||0)+dt*4):0;
     p.x=newX;p.y=newY;p.vx=(p.x-p.px)/dt;p.vy=(p.y-prevY)/dt;p.vz=0;p.phase+=Math.hypot(p.vx,p.vy)*dt*2.7;
     sim.compact=!!input.compact;sim.tetherReach=damp(sim.tetherReach,sim.compact?1.35:sim.reach,8,dt);
     weapon(sim,dt,input);updateGuards(sim,dt);
     sim.heat=clamp(sim.heat+(clamp((sim.ball.speed-10)/17,0,1)*1.45-.84)*dt,0,1);
     sim.updateRagdolls(dt);sim.updateDebris(dt);
-    if(p.y>=c.top-.01&&my>.3)state.mantle=.0001;
+    if(p.y>=c.top-.01&&(my>.3||state.hoist>.25)){state.mantle=.0001;sim.emit('mantleStart',{id:c.id,x:p.x,y:p.y,z:p.z});}
     if(p.y<=c.bottom+.01&&my<-.3){p.z=c.z+2.45;p.y=c.bottom;p.climbing=false;p.vx=p.vy=p.vz=0;sim.climb=null;sim.placeBall();sim.emit('climbRetreat',{id:c.id});}
     p.stepT-=dt;
     if(Math.hypot(p.vx,p.vy)>.4&&p.stepT<=0){p.stepT=.36;sim.emit('climbStep',{x:p.x,y:p.y+1,z:p.z,kind:c.kind});}
 }
-module.exports={anchor,available,begin,step,updateGuards,updateChain};
+module.exports={anchor,available,begin,step,updateGuards,updateChain,ledgeUnder};
 
 }, {"../shared/math": "src/shared/math.js", "./rewards": "src/simulation/rewards.js"}],
 "src/simulation/combat.js": [function(require, module, exports) {
@@ -5911,7 +7416,7 @@ function hitSolid(sim, s, speed, vx, vz, contact = null) {
         return;
     if (sim.isLocked(s)) {
         s.hitCD = .6;
-        sim.emit('locked', { x: s.x, z: s.z, requires: s.requires, bossKey: s.bossKey || 'warden' });
+        sim.emit('locked', { id: s.id, kind: s.kind, x: s.x, z: s.z, requires: s.requires, bossKey: s.bossKey || 'warden' });
         return;
     }
     if (speed < 8.4)
@@ -5930,16 +7435,28 @@ function hitSolid(sim, s, speed, vx, vz, contact = null) {
         sim.score += s.kind === 'breach' ? 300 : 80;
         sim.emit('break', { id: s.id, x: s.x, y: (s.y || 0) + s.h * .4, z: s.z, kind: s.kind, speed, vx, vz });
         sim.makeDebris(s, vx, vz);
+        if (s.finalGate)
+            sim.emit('finalGate', { id: s.id, x: s.x, y: (s.y || 0) + s.h * .5, z: s.z });
         if (s.secret) {
             sim.openSecrets.add(s.secret);
             sim.emit('reveal', { id: s.secret });
         }
         if (s.circuit) sim.emit('circuitOff',{id:s.id,x:s.x,y:(s.y||0)+1,z:s.z});
+        if (s.cuffAnvil) {
+            // The iron comes off. Everything the player has fought with for four
+            // acts is now lying on the rock behind them.
+            sim.unchained = true;
+            sim.score += 2500;
+            sim.impactSlow = .85;
+            require('./weapon').dropIron(sim, s);
+            sim.emit('cuffBroken', { id: s.id, x: s.x, y: (s.y || 0) + 1, z: s.z });
+            sim.saveCheckpoint(sim.region, { x: sim.player.x, z: sim.player.z });
+        }
         if (s.objective) {
             for (const g of sim.gates)
                 if (g.requires === s.id)
                     g.locked = false;
-            sim.emit('relay', { id: s.id });
+            sim.emit(s.finalObjective ? 'lastChain' : 'relay', { id: s.id });
             sim.saveCheckpoint(sim.region, { x: sim.player.x, z: sim.player.z });
         }
     }
@@ -6179,7 +7696,7 @@ function hurt(sim, amount, source) {
 }
 module.exports = { hitSolid, updateEnemies, hitEnemy, kill, hurt };
 
-}, {"../shared/math": "src/shared/math.js", "./enemy-types": "src/simulation/enemy-types.js", "./governor": "src/simulation/governor.js", "./tactics": "src/simulation/tactics.js"}],
+}, {"../shared/math": "src/shared/math.js", "./enemy-types": "src/simulation/enemy-types.js", "./governor": "src/simulation/governor.js", "./tactics": "src/simulation/tactics.js", "./weapon": "src/simulation/weapon.js"}],
 "src/simulation/debris.js": [function(require, module, exports) {
 'use strict';
 /** debris subsystem. Explicit simulation argument; no global registration or renderer dependency. */
@@ -6423,6 +7940,8 @@ class PrisonSim {
     reset() {
         this.invalidateSpatial();
         this.climb = null;
+        this.unchained = false;
+        this.finale = false;
         this.fenceVibration = 0;
         this.completedClimbs = new Set();
         this.climbPanels = (this.world.climbPanels || []).map(p=>({...p,hitCD:0}));
@@ -6541,12 +8060,13 @@ class PrisonSim {
                 this.emit('dash', { x: p.x, z: p.z });
             }
         }
-        const targetSpeed = 8.2;
+        // Unchained, the body that has been dragging seventy kilos finally moves.
+        const targetSpeed = this.unchained ? 12.6 : 8.2;
         p.vx = damp(p.vx, mx * targetSpeed, ml ? 17 : 23, dt);
         p.vz = damp(p.vz, mz * targetSpeed, ml ? 17 : 23, dt);
         if (p.dash > 0) {
-            p.vx = p.dashX * 16.4;
-            p.vz = p.dashZ * 16.4;
+            p.vx = p.dashX * (this.unchained ? 21 : 16.4);
+            p.vz = p.dashZ * (this.unchained ? 21 : 16.4);
         }
         let ss = this.near(p.x, p.z, 9);
         this.moveBody(p, p.vx * dt, p.vz * dt, .34, ss);
@@ -6720,7 +8240,7 @@ function isLocked(sim, o) {
     return !sim.bossKills.has(o.bossKey || 'warden');
 }
 function updateProgress(sim) {
-    if (sim.climb) return;
+    if (sim.climb || sim.finale) return;
     const p = sim.player;
     let r = sim.world.rooms.find(r => !r.sub && p.x > r.x1 + .4 && p.x < r.x2 - .4 && p.z > r.z1 + .4 && p.z < r.z2 - .4);
     if (r && sim.region !== r.id) {
@@ -6742,9 +8262,16 @@ function updateProgress(sim) {
             sim.saveCheckpoint(sim.region, { x: p.x, z: p.z });
         }
     const exit = sim.world.exitTarget;
-    const won = exit ? dist(p, exit) < exit.r && sim.bossKills.has(exit.bossKey) && (exit.climbsRequired||[]).every(id=>sim.completedClimbs.has(id)) : p.z < -101 && Math.abs(p.x) < 5.5 && sim.bossDead;
+    const objectiveDone = !exit?.requires || !!sim.props.find(q => q.id === exit.requires)?.broken;
+    const gateDone = !exit?.gate || !!sim.gates.find(q => q.id === exit.gate)?.broken;
+    const unchainedDone = !exit?.unchained || !!sim.unchained;
+    const won = exit ? dist(p, exit) < exit.r && sim.bossKills.has(exit.bossKey) &&
+        (exit.climbsRequired || []).every(id => sim.completedClimbs.has(id)) && objectiveDone && gateDone && unchainedDone :
+        p.z < -101 && Math.abs(p.x) < 5.5 && sim.bossDead;
     if (won) {
-        sim.state = 'won';
+        // The simulation keeps running. The last walk is the player's to take,
+        // not a camera move played at them.
+        sim.finale = true;
         sim.emit('win', { score: sim.score, time: sim.t });
     }
 }
@@ -7149,7 +8676,24 @@ function resetChain(sim) {
         };
     });
 }
+/** Park the iron where the cuff was struck off and coil the chain beside it. It
+ * stays in the world as an object the player walks away from; it is not deleted. */
+function dropIron(sim, anvil) {
+    const b = sim.ball;
+    const x = anvil.x - 1.55, z = anvil.z + .85, y = sim.groundHeight(x, z);
+    Object.assign(b, { x, y: y + b.r, z, vx: 0, vy: 0, vz: 0, speed: 0, prevX: x, prevY: y + b.r, prevZ: z });
+    const n = sim.chain.length;
+    for (let i = 0; i < n; i++) {
+        const t = i / (n - 1), turn = t * Math.PI * 3.1, radius = .34 + t * .52;
+        const cx = x + .92 + Math.cos(turn) * radius, cz = z + .30 + Math.sin(turn) * radius * .8;
+        const cy = sim.groundHeight(cx, cz) + .055;
+        Object.assign(sim.chain[i], { x: cx, y: cy, z: cz, ox: cx, oy: cy, oz: cz, rx: cx, ry: cy, rz: cz });
+    }
+}
 function updateBall(sim, dt, input, ss) {
+    // Once the cuff is off there is no weapon simulation left to run; the iron is
+    // scenery, and the prisoner is lighter than he has been all game.
+    if (sim.unchained) return;
     const p = sim.player, b = sim.ball, a = sim.anchor();
     b.prevX = b.x;
     b.prevY = b.y;
@@ -7340,7 +8884,7 @@ function updateBall(sim, dt, input, ss) {
         sim.emit('recovery');
     }
 }
-module.exports = { anchor, placeBall, resetChain, updateBall };
+module.exports = { dropIron, anchor, placeBall, resetChain, updateBall };
 
 }, {"../shared/math": "src/shared/math.js"}],
 "src/simulation/whip.js": [function(require, module, exports) {
@@ -7635,10 +9179,15 @@ function addAscent(w) {
         {id:'chain-fence',name:'THE CHAIN-LINK GAUNTLET',kind:'fence',x1:-16.3,x2:26.3,z:-418,bottom:0,top:16,entry:{x:3,z:-415.9},exit:{x:3,z:-420.3},checkpoint:'grass-yard',required:true,guards:6},
         {id:'watch-wall',name:'THE WATCH STORE',kind:'stone',x1:28.7,x2:37.3,z:-382,bottom:0,top:7,entry:{x:32.5,z:-380},exit:{x:32.5,z:-384.2},checkpoint:'grass-yard',required:false,guards:3}
     ];
+    // Barriers across the face. Each one forces a traverse before it is smashed,
+    // so a tall wall is a route rather than a single held direction.
     w.climbPanels = [
         {id:'wall-grate-low',climbId:'outer-wall',x:-2.0,y:9.2,w:6.2,h:1.05},
+        {id:'wall-grate-mid',climbId:'outer-wall',x:3.2,y:14.6,w:5.6,h:1.05},
         {id:'wall-grate-high',climbId:'outer-wall',x:3.0,y:17.5,w:6.2,h:1.05},
-        {id:'fence-plate',climbId:'chain-fence',x:3,y:8.5,w:7,h:1.1}
+        {id:'wall-maintenance-spar',climbId:'outer-wall',x:-3.4,y:21.8,w:6.4,h:.85},
+        {id:'fence-plate',climbId:'chain-fence',x:3,y:8.5,w:7,h:1.1},
+        {id:'fence-plate-high',climbId:'chain-fence',x:12,y:11.2,w:6.5,h:1.05,kind:'wire'}
     ].map(p=>({...p,hp:2,maxHp:2,broken:false}));
     for (const c of w.climbs) {
         w.walls.push({id:'climb-surface-'+c.id,x:(c.x1+c.x2)/2,z:c.z-.35,w:c.id==='outer-wall'?24.6:c.id==='chain-fence'?46.6:10.6,d:.7,h:c.top-c.bottom,y:c.bottom,style:c.kind==='fence'?'chain-fence':'climb-stone',expansion:true,outer:false,protected:true,climbSurface:true});
@@ -7881,6 +9430,7 @@ const extendWorld = function (w) {
     foe('warden', 0, -273, 'court', { bossKey: 'governor', label: 'GOVERNOR / NO FURTHER APPEAL', hp: 54 });
     addAscent(w);
     require('./encounter-upgrade')(w);
+    require('./late-game-rebuild')(w);
     // Ground heights belong to the simulation. The renderer follows these surfaces.
     for (const r of w.rooms) {
         r.y ??= 0;
@@ -7915,6 +9465,9 @@ const extendWorld = function (w) {
             }
     const lines = new Map();
     function edge(axis, c, t, r) {
+        // A beach has no railings. The simulation still bounds the room; this only
+        // stops a perimeter fence being drawn around open ground.
+        if (r.openEdge) return;
         const x = axis === 'x' ? t + .5 : c, z = axis === 'x' ? c : t + .5;
         const inner = (r.style === 'gallery' && ((axis === 'z' && Math.abs(c) === 8 && z >= -146 && z <= -115) || (axis === 'x' && [-115, -146].includes(c) && x > -8 && x < 8))) || r.style === 'bridge';
         const yy = heightAt(r.x, Math.min(r.z2 - .01, Math.max(r.z1 + .01, z))), y = Math.round(yy * 100) / 100;
@@ -7961,13 +9514,13 @@ const extendWorld = function (w) {
         w.checkpoints[id] = p;
     // Waypoints used by the honest input-driven route regression, not teleport targets.
     w.mainRoute = [[0, 8], [0, -24], [0, -35], [19, -35], [29, -35], [29, -56], [29, -70], [6, -70], ['boss', 'warden'], [0, -78], [0, -89], [0, -108], [-10, -110], [-10, -140], [-10, -150], [0, -151], [0, -162], [1, -173], [-7, -180], ['relay'], [0, -174], [20, -174], [39, -174], [50, -174], [50, -185], [50, -206], [50, -213], [30, -213], [5, -213], [0, -232], [0, -246], [0, -260], ['boss', 'governor'], [0, -281], [0, -294], [0, -301]];
-    w.mainRoute = w.mainRoute.concat([[0,-316],['climb','outer-wall'],[0,-326],[8,-326],[8,-374],[3,-389],[3,-413],['climb','chain-fence'],[3,-422],[-14,-422],[-14,-452],[-6,-461],[-6,-470]]);
+    w.mainRoute = w.mainRoute.concat([[0,-316],['climb','outer-wall'],[0,-326],[8,-326],[8,-374],[3,-389],[3,-413],['climb','chain-fence'],[3,-422],[-14,-422],[-14,-452],[-6,-461],['objective','coast-winch'],[-6,-467],['gate','coast-chain-gate'],[-6,-494],[-6,-520],['objective','breaker-stone'],[-6,-540],[-6,-552]]);
     w.secretsTotal = w.secrets.length;
     return w;
 };
 module.exports = extendWorld;
 
-}, {"../shared/math": "src/shared/math.js", "./ascent": "src/world/ascent.js", "./encounter-upgrade": "src/world/encounter-upgrade.js"}],
+}, {"../shared/math": "src/shared/math.js", "./ascent": "src/world/ascent.js", "./encounter-upgrade": "src/world/encounter-upgrade.js", "./late-game-rebuild": "src/world/late-game-rebuild.js"}],
 "src/world/encounter-upgrade.js": [function(require, module, exports) {
 'use strict';
 /** Authored encounter and reward edits. IDs are stable and all new obstructions
@@ -8012,7 +9565,202 @@ function makeWorld() {
 }
 module.exports = { makeWorld, makeActOneWorld, extendWorld };
 
-}, {"./act-one": "src/world/act-one.js", "./campaign": "src/world/campaign.js"}]
+}, {"./act-one": "src/world/act-one.js", "./campaign": "src/world/campaign.js"}],
+"src/world/late-game-rebuild.js": [function(require, module, exports) {
+'use strict';
+/**
+ * Rebuilds Acts II-IV after the feature branches have been assembled.
+ * The older branches accumulated duplicate floors and free-floating dressing.
+ * This pass keeps the route and combat contract, but replaces late-game clutter
+ * with authored, wall-aligned assemblies and a deliberate final sequence.
+ */
+function rebuildLateGame(w) {
+    const roomBy = id => w.rooms.find(r => r.id === id);
+    const prop = (id, kind, x, z, width, depth, height, hp = 2, y = 0, extra = {}) => {
+        const item = { id, kind, x, z, w: width, d: depth, h: height, hp, maxHp: hp, rot: 0, breakable: true, y, ...extra };
+        w.props.push(item);
+        return item;
+    };
+    const wall = (id, x, z, width, depth, height, y = 0, style = 'perimeter', extra = {}) => {
+        const item = { id, x, z, w: width, d: depth, h: height, y, style, outer: false, expansion: true, protected: true, ...extra };
+        w.walls.push(item);
+        return item;
+    };
+    const room = (id, name, x1, z1, x2, z2, style, y = 0, extra = {}) => {
+        const r = { id, name, x1, z1, x2, z2, x: (x1 + x2) / 2, z: (z1 + z2) / 2, w: x2 - x1, d: z2 - z1, style, y, sub: false, expansion: true, act: 4, outdoors: true, ...extra };
+        w.rooms.push(r);
+        w.floors.push(r);
+        return r;
+    };
+    const gate = (id, x, z, width, extra = {}) => {
+        const item = { id, x, z, w: width, d: .34, h: 3.05, y: 0, axis: 'x', hp: 5, maxHp: 5, kind: 'gate', locked: true, ...extra };
+        w.gates.push(item);
+        return item;
+    };
+
+    // The culvert outlet used to draw a second floor exactly on top of the court.
+    // Keeping it as room metadata preserves the secret while removing the z-fight.
+    w.floors = w.floors.filter(r => r.id !== 's11-exit');
+    // Act I also inherited one overlapping L-shaped secret floor. Replace the
+    // overlapping rectangle with two non-overlapping support pieces while the
+    // room metadata remains intact for sector naming and checkpoint logic.
+    const forgotten = roomBy('s1c');
+    if (forgotten) {
+        w.floors = w.floors.filter(r => r.id !== 's1c');
+        w.floors.push(
+            { ...forgotten, id: 's1c-south-floor', x1: -20, z1: -33, x2: -12, z2: -31, x: -16, z: -32, w: 8, d: 2 },
+            { ...forgotten, id: 's1c-east-floor', x1: -14, z1: -31, x2: -12, z2: -29, x: -13, z: -30, w: 2, d: 2 }
+        );
+    }
+    const lateIds = new Set([
+        'gallery-south', 'gallery-west', 'gallery-east', 'gallery-north', 'records', 'skybridge', 'infirmary',
+        'down-stair', 'dock', 'haul', 'incinerator', 'sluice', 'court', 'freedom', 'wall-foot', 'wall-crown',
+        'wall-descent', 'grass-yard', 'fence-crown', 'fence-descent', 'coast', 'watch-foot', 'watch-cache',
+        'watch-descent', 'watch-return'
+    ]);
+    for (const r of w.rooms) if (lateIds.has(r.id) || (r.act || 0) >= 2) r.noLitter = true;
+
+    // Remove the accreted scatter pass. The replacements below all have a reason
+    // to exist and sit in a wall bay, work lane, medical bay, loading bay, or arena.
+    const junkPrefixes = [
+        'gallery-cart-', 'records-shelf-', 'records-desk-', 'records-chair', 'ward-', 'dock-pallet-',
+        'dock-barrel-', 'furnace-', 'ash-cart-', 'court-planter-', 'court-table', 'court-crate',
+        'secret-dressing-', 'court-cover-', 'court-call-', 'meadow-crate-'
+    ];
+    w.props = w.props.filter(p => {
+        if (junkPrefixes.some(prefix => p.id.startsWith(prefix))) return false;
+        if (p.id.startsWith('breakable-light-')) {
+            const n = Number(p.id.slice('breakable-light-'.length));
+            if (Number.isFinite(n) && n >= 5) return false;
+        }
+        return true;
+    });
+
+    // Upper galleries: maintenance carts are parked in recesses, never in the route.
+    prop('gallery-service-cart-west', 'cart', -10.25, -121.5, 1.25, 1.55, 1.05, 2, 3.5, { rot: Math.PI / 2 });
+    prop('gallery-service-cart-east', 'cart', 10.25, -141.0, 1.25, 1.55, 1.05, 2, 3.5, { rot: Math.PI / 2 });
+
+    // Records: perimeter stacks and two indexing stations create readable lanes.
+    for (const [i, z] of [-161.3, -172.2, -178.4, -184.3].entries())
+        prop('records-wall-stack-west-' + i, 'bookshelf', -10.0, z, 1.25, 3.35, 2.75, 3, 3.5, { rot: Math.PI / 2, authoredBay: true });
+    for (const [i, z] of [-161.6, -167.2, -172.7, -184.0].entries())
+        prop('records-wall-stack-east-' + i, 'bookshelf', 10.0, z, 1.25, 3.35, 2.75, 3, 3.5, { rot: Math.PI / 2, authoredBay: true });
+    prop('records-index-south', 'desk', -3.6, -165.3, 3.1, 1.35, 1.02, 3, 3.5, { rot: 0, authoredBay: true });
+    prop('records-index-north', 'desk', 3.7, -179.8, 3.1, 1.35, 1.02, 3, 3.5, { rot: Math.PI, authoredBay: true });
+
+    // Infirmary: paired bed bays against the walls, with a clear central spine.
+    for (const [side, x] of [['west', 39.25], ['east', 58.75]])
+        for (const [i, z] of [-163.5, -170.5, -177.5, -184.5].entries())
+            prop(`infirmary-${side}-bed-${i}`, 'gurney', x, z, 1.5, 2.55, 1.18, 2, 3.5, { rot: side === 'west' ? Math.PI / 2 : -Math.PI / 2, medicalBay: true });
+    prop('infirmary-nurse-station', 'desk', 49.0, -174.0, 3.2, 1.35, 1.02, 3, 3.5, { rot: Math.PI / 2, medicalBay: true });
+    prop('infirmary-drug-cabinet', 'cabinet', 59.7, -186.1, 1.65, .72, 2.25, 3, 3.5, { rot: Math.PI / 2, medicalBay: true });
+    prop('infirmary-linen-cart', 'cart', 42.0, -186.0, 1.15, 1.35, .95, 2, 3.5, { rot: Math.PI / 2, medicalBay: true });
+
+    // Receiving dock: cargo is staged in marked bays along the walls.
+    for (const [i, x, z, rot] of [
+        [0, 39.2, -207.0, Math.PI / 2], [1, 39.2, -216.7, Math.PI / 2],
+        [2, 62.8, -209.2, -Math.PI / 2], [3, 62.8, -218.0, -Math.PI / 2]
+    ]) prop('dock-bay-load-' + i, 'pallet', x, z, 2.45, 2.25, 1.7, 4, 0, { rot, cargoBay: true });
+    for (const [i, x, z] of [[0, 41.8, -220.1], [1, 61.0, -205.8], [2, 64.0, -205.8]])
+        prop('dock-drum-rack-' + i, 'barrel', x, z, .95, .95, 1.28, 2, 0, { cargoBay: true });
+
+    // Incinerator: machines are bolted to the side walls; the fight lane remains open.
+    prop('incinerator-bank-west-a', 'furnace', -10.4, -211.5, 4.0, 4.1, 4.8, 8, 0, { rot: Math.PI / 2, machineBay: true });
+    prop('incinerator-bank-west-b', 'furnace', -10.4, -228.2, 4.0, 4.1, 4.8, 8, 0, { rot: Math.PI / 2, machineBay: true });
+    prop('incinerator-bank-east', 'furnace', 8.2, -234.8, 4.0, 4.1, 4.8, 8, 0, { rot: -Math.PI / 2, machineBay: true });
+    prop('incinerator-ash-cart-a', 'cart', -6.0, -218.4, 1.45, 1.8, 1.2, 3, 0, { rot: Math.PI / 2, machineBay: true });
+    prop('incinerator-ash-cart-b', 'cart', 5.2, -229.0, 1.45, 1.8, 1.2, 3, 0, { rot: -Math.PI / 2, machineBay: true });
+
+    // Governor's court: mirrored cover and wall-mounted call boxes. Nothing overlaps.
+    prop('court-cover-west', 'desk', -10.0, -268.6, 3.2, 1.35, 1.18, 4, 0, { cover: true, rot: Math.PI / 2, courtFixture: true });
+    prop('court-cover-east', 'desk', 10.0, -278.8, 3.2, 1.35, 1.18, 4, 0, { cover: true, rot: -Math.PI / 2, courtFixture: true });
+    prop('court-call-west', 'relay', -18.1, -265.8, 1.0, .72, 1.8, 3, 0, { circuit: true, rot: Math.PI / 2, courtFixture: true });
+    prop('court-call-east', 'relay', 18.1, -280.2, 1.0, .72, 1.8, 3, 0, { circuit: true, rot: -Math.PI / 2, courtFixture: true });
+    prop('court-dais-solid-west', 'collision', -5.4, -284.4, 4.2, 4.5, .52, 0, 0, { breakable: false, solid: true, courtFixture: true });
+    prop('court-dais-solid-east', 'collision', 5.4, -284.4, 4.2, 4.5, .52, 0, 0, { breakable: false, solid: true, courtFixture: true });
+
+    // The climbs were cut down when they were a held-direction elevator and the
+    // only thing height added was duration. The iron now hauls the prisoner, so
+    // height is the payoff again: these are tall enough to be a view from the top.
+    const tuneClimb = (id, top, guards, name) => {
+        const c = w.climbs.find(q => q.id === id);
+        if (!c) return;
+        c.top = top; c.guards = guards; c.name = name;
+        const surface = w.walls.find(q => q.id === 'climb-surface-' + id);
+        if (surface) { surface.h = top - c.bottom; surface.y = c.bottom; }
+        w.enemies = w.enemies.filter(e => !e.id.startsWith('climber-' + id + '-') || Number(e.id.split('-').pop()) < guards);
+    };
+    tuneClimb('outer-wall', 28.0, 6, 'THE SERVICE BREACH');
+    tuneClimb('chain-fence', 15.0, 4, 'THE PERIMETER MESH');
+    tuneClimb('watch-wall', 8.0, 1, 'THE WATCH STORE');
+    Object.assign(roomBy('wall-crown'), { y: 28, name: 'THE SERVICE PARAPET' });
+    Object.assign(roomBy('wall-descent'), { name: 'THE PARAPET STAIR', ramp: { fromZ: -330, toZ: -378, fromY: 28, toY: 0 } });
+    Object.assign(roomBy('fence-crown'), { y: 15, name: 'THE PERIMETER CATWALK' });
+    Object.assign(roomBy('fence-descent'), { name: 'THE COAST STAIR', ramp: { fromZ: -424, toZ: -456, fromY: 15, toY: 0 } });
+    Object.assign(roomBy('watch-cache'), { y: 8, name: 'THE WATCHMAN\'S PLATFORM' });
+    Object.assign(roomBy('watch-descent'), { ramp: { fromZ: -391, toZ: -405, fromY: 8, toY: 0 } });
+    const watchChest = w.props.find(p => p.id === 'watch-chest');
+    if (watchChest) watchChest.y = 8;
+    for (const panel of w.climbPanels) {
+        // Grates sit between the rest courses, so a barrier never lands on a ledge,
+        // and they alternate sides so the route across the face zig-zags.
+        if (panel.id === 'wall-grate-low') { panel.y = 7.4; panel.x = -2.4; panel.w = 6.0; }
+        if (panel.id === 'wall-grate-mid') { panel.y = 14.6; panel.x = 3.2; panel.w = 5.6; }
+        if (panel.id === 'wall-grate-high') { panel.y = 21.8; panel.x = -3.4; panel.w = 6.4; }
+        if (panel.id === 'wall-maintenance-spar') { panel.y = 25.6; panel.x = 4.2; panel.w = 4.6; panel.h = .80; }
+        if (panel.id === 'fence-plate') { panel.y = 5.6; panel.w = 6.4; }
+        if (panel.id === 'fence-plate-high') { panel.y = 11.2; panel.x = 11.5; panel.w = 6.5; }
+    }
+    // Rest courses: real projecting stonework and real standing rails. They break
+    // the climb into readable stages and give the camera something to sweep past.
+    w.climbLedges = [];
+    for (const [id, heights] of [['outer-wall', [4.6, 10.8, 17.8, 24.4]], ['chain-fence', [3.6, 8.2, 13.2]], ['watch-wall', [4.2]]])
+        for (const y of heights) w.climbLedges.push({ climbId: id, y });
+
+    // ------------------------------------------------------------ THE LAST CHAIN
+    // Stop the winch, break the sea gate, walk the tide road out to the breaker
+    // stone, and take the iron off your own leg. The last thing the game asks for
+    // is the first thing it ever taught, aimed at the thing you have dragged the
+    // whole way. Then you walk down the strand, unweighted, into the sunrise.
+    prop('coast-winch', 'winch', 4.65, -461.7, 2.35, 1.65, 2.15, 7, 0, { objective: true, finalObjective: true, rot: Math.PI / 2, coastFixture: true });
+    wall('coast-lock-wall-west', -16, -467.0, 12, .55, 4.4, 0, 'perimeter');
+    wall('coast-lock-wall-east', 4, -467.0, 12, .55, 4.4, 0, 'perimeter');
+    gate('coast-chain-gate', -6, -467.0, 7.7, { requires: 'coast-winch', finalGate: true, hp: 6, maxHp: 6 });
+    const coast = roomBy('coast');
+    if (coast) {
+        coast.name = 'THE LAST CHAIN';
+        coast.z1 = -488;
+        coast.z = (coast.z1 + coast.z2) / 2;
+        coast.d = coast.z2 - coast.z1;
+    }
+    room('causeway', 'THE TIDE ROAD', -10, -524, -2, -488, 'causeway', 0);
+    room('mooring', 'THE BREAKER STONE', -15, -538, 3, -524, 'causeway', 0, { openEdge: true });
+    room('strand', 'NO FORWARDING ADDRESS', -19, -562, 7, -538, 'strand', 0, {
+        openEdge: true, noAutoFloor: true, ramp: { fromZ: -538, toZ: -562, fromY: 0, toY: -5.9 }
+    });
+    prop('breaker-stone', 'anvil', -6, -531.4, 3.9, 2.9, 2.05, 4, 0, { cuffAnvil: true, coastFixture: true, rot: 0 });
+    w.finalSequence = {
+        objective: 'coast-winch', gate: 'coast-chain-gate', anvil: 'breaker-stone',
+        thresholdZ: -548, name: 'THE FIRST MORNING'
+    };
+    w.exitTarget = {
+        x: -6, z: -552.5, r: 3.2, bossKey: 'governor', climbsRequired: ['outer-wall', 'chain-fence'],
+        requires: 'coast-winch', gate: 'coast-chain-gate', unchained: true
+    };
+
+    // Update checkpoints and route text without changing the proven spatial route.
+    Object.assign(w.checkpoints, {
+        'wall-crown': { x: 0, z: -326 }, 'fence-crown': { x: 3, z: -422 }, 'watch-cache': { x: 32.5, z: -387 },
+        'coast': { x: -6, z: -459 }, 'causeway': { x: -6, z: -494 }, 'mooring': { x: -6, z: -526 }, 'strand': { x: -6, z: -541 }
+    });
+    const act4 = w.acts.find(a => a.id === 4);
+    if (act4) act4.name = 'THE LAST CHAIN';
+    w.campaignVersion = 6;
+    return w;
+}
+module.exports = rebuildLateGame;
+
+}, {}]
 };
 const cache = Object.create(null);
 function load(id) {
