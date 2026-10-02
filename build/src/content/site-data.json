@@ -156,6 +156,18 @@
       "actionLabel": "Play HEARSE"
     },
     {
+      "slug": "skip",
+      "title": "SKIP",
+      "descriptor": "Round-the-world stone skip",
+      "group": "action",
+      "image": "/assets/games/skip-card-v20261002.jpg",
+      "alt": "A stone skimming a bay at dusk past a red-and-white buoy, its ring on the moon’s path across the water, a lighthouse and hills behind",
+      "summary": "Skip a stone off a beach at dusk. Click or tap as it touches the water. If you keep going it travels all the way around the world: the bay, a creek, a town, a church, the ice, the open sea, and back to the beach by morning. Mouse, or one thumb on a phone.",
+      "metaDescription": "SKIP is a stone-skipping browser game: click or tap as the stone touches the water and keep it going all the way around the world, from a bay at dusk back to the beach by morning. Mouse, or one thumb on a phone.",
+      "controls": "click or tap as the stone touches the water · mouse steers · click a stone on the sand or roll the wheel to pick one · phone: tap where you want it",
+      "actionLabel": "Play SKIP"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",
