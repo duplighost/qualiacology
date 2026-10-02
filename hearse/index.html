@@ -1,0 +1,1500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HEARSE | Qualiacology</title>
+<meta name="description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or one thumb on a phone.">
+<meta name="theme-color" content="#000000">
+<link rel="canonical" href="https://qualiacology.com/hearse/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="HEARSE | Qualiacology">
+<meta property="og:description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or one thumb on a phone.">
+<meta property="og:url" content="https://qualiacology.com/hearse/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/hearse-card-v20261002.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="A dark church floor seen from above: seven candles on an iron triangle, a small red figure throwing a spinning light on a chain, stained-glass moths, and a rose window with an eye in the middle of it">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="HEARSE | Qualiacology">
+<meta name="twitter:description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or one thumb on a phone.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/hearse-card-v20261002.jpg">
+<style>
+.home-link{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));z-index:200;color:rgba(233,226,207,.78);text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.55);border:1px solid rgba(241,201,107,.35);cursor:pointer;transition:opacity .4s}
+.home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(241,201,107,.8);outline:0}
+.playing .home-link{opacity:0;pointer-events:none}
+</style>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+body{position:fixed;left:0;top:0;right:0;bottom:0}
+#safe{position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+#stage{position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden;color:#e9e2cf;font-family:"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif}
+#c{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
+#stage div{position:absolute;pointer-events:none;transition:opacity .35s;opacity:0;text-shadow:0 0 .6em rgba(0,0,0,.9)}
+#score{left:50%;top:6.2%;transform:translateX(-50%);font-size:1.25em;letter-spacing:.14em;font-variant-numeric:tabular-nums}
+#mult{left:50%;top:9.6%;transform:translateX(-50%);font-size:.85em;letter-spacing:.1em;color:#f1c96b}
+#mult.pop{animation:pop .35s}
+@keyframes pop{0%{transform:translateX(-50%) scale(1.7)}100%{transform:translateX(-50%) scale(1)}}
+#stage #word{transform:translate(-50%,0);font-size:.95em;font-style:italic;letter-spacing:.06em;color:#f6d27a;white-space:nowrap;transition:none;text-shadow:0 0 .25em #000,0 0 .6em #000,0 0 1em #000}
+#stage #title{left:6.5%;top:81%;font-size:2.3em;letter-spacing:.62em;transition:opacity 1.2s;white-space:nowrap}
+#go{left:7%;top:91.5%;transform:none}
+#stage #card{left:6.5%;top:77%;text-align:left;transition:opacity 1s}
+#card div{position:static;opacity:1}
+#cs{font-size:2.6em;letter-spacing:.12em;font-variant-numeric:tabular-nums}
+#card #cb{font-size:.8em;letter-spacing:.2em;opacity:.7;margin-top:.3em}
+#pause{left:50%;top:45%;transform:translateX(-50%);font-size:1em;letter-spacing:.5em;font-style:italic;text-align:center;line-height:2}
+#pause .k{letter-spacing:0;font-style:normal}
+#stage #err{left:6%;top:40%;right:6%;opacity:1;color:#e9e2cf;font:italic 16px/1.5 Georgia,serif;text-align:center;white-space:pre-wrap}
+.hint{transform:translate(-50%,-100%);text-align:center;line-height:1}
+.hint div,.hint span{position:static!important;opacity:1!important}
+.k{display:inline-block;min-width:1.5em;height:1.5em;line-height:1.5em;margin:.06em;padding:0 .2em;box-sizing:border-box;border:1px solid rgba(233,226,207,.6);border-radius:.28em;font:600 .5em/1.5 system-ui,sans-serif;text-align:center;background:rgba(0,0,0,.35)}
+.mouse,.hint .mouse{display:inline-block;position:relative!important;width:.9em;height:1.4em;border:1.5px solid rgba(233,226,207,.75);border-radius:.45em;background:rgba(0,0,0,.35)}
+.mouse i{position:absolute;left:0;top:0;width:50%;height:42%;border-radius:.4em 0 0 0;background:#e9e2cf;animation:hold 1.3s infinite}
+.mouse.tap i{animation:tap 1.1s infinite}
+@keyframes hold{0%,8%{opacity:.15}16%,74%{opacity:1}86%,100%{opacity:.15}}
+@keyframes tap{0%,50%{opacity:.15}60%,80%{opacity:1}100%{opacity:.15}}
+#hh{transform:translate(-50%,-50%)}
+/* a thumb's glyphs: a ring and a dot. tap; drag; hold, then lift. */
+.tp,.drag,.lift{display:none;position:relative;border:1.5px solid rgba(233,226,207,.6);border-radius:50%;background:rgba(0,0,0,.3);vertical-align:middle;box-sizing:border-box}
+.hint .tp,.hint .drag,.hint .lift{position:relative!important}
+.tp{width:1.5em;height:1.5em}
+.drag,.lift{width:2.8em;height:2.8em}
+.tp i,.drag i,.lift i{position:absolute;left:50%;top:50%;border-radius:50%;background:#e9e2cf}
+.tp i{width:.6em;height:.6em;margin:-.3em 0 0 -.3em;animation:tap 1.1s infinite}
+.drag i,.lift i{width:1em;height:1em;margin:-.5em 0 0 -.5em}
+.drag i{animation:drag 1.6s ease-in-out infinite}
+.lift i{animation:lift 1.6s infinite}
+@keyframes drag{0%,100%{transform:translateX(-.75em)}50%{transform:translateX(.75em)}}
+@keyframes lift{0%,8%{transform:scale(.35);opacity:.25}18%,68%{transform:scale(1);opacity:1}82%,100%{transform:scale(2);opacity:0}}
+.touch #go .mouse,.touch #pause .k{display:none}
+.touch #go .tp,.touch #pause .tp{display:inline-block}
+#ht{left:50%;top:90%;transform:translate(-50%,-50%)}
+#ht.d .drag,#ht.l .lift{display:inline-block}
+#stick,#knob{position:fixed;left:0;top:0;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .15s;z-index:5}
+#stick{width:92px;height:92px;margin:-46px 0 0 -46px;border:1.5px solid rgba(233,226,207,.5);box-sizing:border-box}
+#knob{width:34px;height:34px;margin:-17px 0 0 -17px;background:rgba(233,226,207,.55)}
+/* a phone held upright: the room stands on end at the top of the screen and the words go underneath it, where the thumb is */
+.pt #stage{overflow:visible}
+.pt #score{top:3.6%}
+.pt #mult{top:6.4%}
+body.pt #stage #title{left:50%;top:8.2%;transform:translateX(-50%);padding-left:.62em;font-size:2em}
+body.pt #stage #card{left:50%;top:7.6%;transform:translateX(-50%);text-align:center}
+.pt #go{left:50%;top:93.5%;transform:translate(-50%,-50%)}
+.pt #ht{top:92%}
+body.pt.deck #stage #title{top:calc(100% + var(--deck) * .16)}
+body.pt.deck #stage #card{top:calc(100% + var(--deck) * .08)}
+.pt.deck #go{top:calc(100% + var(--deck) * .68)}
+.pt.deck #ht{top:calc(100% + var(--deck) * .5)}
+</style>
+</head>
+<body>
+<a class="home-link" href="/">Qualiacology</a>
+<div id="safe"></div>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="score">0</div>
+  <div id="mult"></div>
+  <div id="word"></div>
+  <div id="title">HEARSE</div>
+  <div id="go" class="hint"><span class="mouse tap"><i></i></span><span class="tp"><i></i></span></div>
+  <div id="card"><div id="cs"></div><div id="cb"></div></div>
+  <div id="hm" class="hint"><span class="k">W</span><br><span class="k">A</span><span class="k">S</span><span class="k">D</span></div>
+  <div id="hh" class="hint"><span class="mouse"><i></i></span></div>
+  <div id="hd" class="hint"><span class="k">space</span></div>
+  <div id="ht" class="hint"><span class="drag"><i></i></span><span class="lift"><i></i></span></div>
+  <div id="pause">paused<br><span class="k">esc</span><span class="tp"><i></i></span></div>
+  <div id="err"></div>
+</div>
+<div id="stick"></div>
+<div id="knob"></div>
+<script>
+/* HEARSE renderer. WebGL2, no dependencies.
+   One stone floor drawn by a shader, lit sprites on top, two lights that cast shadows
+   (the top and the candles), bloom, and a post pass. World is 1600 x 1000, y down. */
+(function () {
+'use strict';
+const W = 1600, H = 1000, NL = 16, MAXI = 6000, STRIDE = 15;
+const R = window.R = { W, H };
+R.S = { SHADOW: 0, GLOW: 1, RING: 2, STREAK: 3, PILLAR: 4, PLAYER: 5, TOP: 6, MOTH: 7, SPIDER: 8, BELL: 9,
+  CANDLE: 10, HEARSE: 11, SHARD: 12, ROSE: 13, DART: 14, PUFF: 15, RETICLE: 16 };
+
+let gl, cv, safe = null, hdr = true, rw = 2, rh = 2, wasPt = null;
+R.portrait = false; R.scale = 1; R.lost = false;
+let pFloor, pSpr, pShadow, pBlur, pDown, pUp, pPost;
+let fbScene, fbSh, fbShB, bloom = [];
+let vaoSpr, bufSpr, vaoSh, bufSh, vaoTri;
+const inst = new Float32Array(MAXI * STRIDE); let ni = 0;
+const lpos = new Float32Array(NL * 4), lcol = new Float32Array(NL * 3); let nl = 2;
+const occ = []; const shv = new Float32Array(128 * 2 * 12); let sh0 = 0, sh1 = 0;
+const rip = new Float32Array(16); let nr = 0;
+const bell = new Float32Array(16);
+
+const COMMON = `
+precision highp float;
+const float W=1600., H=1000.;
+float ss(float a,float b,float x){ float t=clamp((x-a)/(b-a),0.,1.); return t*t*(3.-2.*t); }
+uniform vec2 uRes; uniform float uTime; uniform float uHue; uniform vec3 uAmb;
+uniform vec4 uLPos[${NL}]; uniform vec3 uLCol[${NL}]; uniform int uLN;
+uniform sampler2D uShadow;
+float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+vec2 hash2(vec2 p){ return vec2(hash(p), hash(p+17.17)); }
+float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x), f.y); }
+float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*noise(p); p=p*2.03+7.1; a*=.5; } return s; }
+vec3 hueRot(vec3 c,float a){ const vec3 k=vec3(0.57735); float ca=cos(a), sa=sin(a); return c*ca+cross(k,c)*sa+k*dot(k,c)*(1.-ca); }
+vec3 glassPal(float h){ h=fract(h);
+  vec3 c = h<.22? vec3(.04,.16,.9) : h<.44? vec3(.85,.04,.07) : h<.62? vec3(1.,.62,.07) : h<.8? vec3(.04,.6,.28) : vec3(.5,.1,.75);
+  return max(hueRot(c,uHue),0.); }
+vec3 voro(vec2 p){ vec2 n=floor(p), f=fract(p); float md=8., md2=8.; vec2 mg=vec2(0.);
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=hash2(n+g); vec2 r=g+o-f; float d=dot(r,r);
+    if(d<md){ md2=md; md=d; mg=g; } else if(d<md2){ md2=d; } }
+  return vec3(hash(n+mg+3.7), sqrt(md2)-sqrt(md), sqrt(md)); }
+float sdSeg(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h); }
+float legD(vec2 p, vec2 a, vec2 b, float r0, float r1){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-mix(r0,r1,h); }
+vec3 lighting(vec2 wp, float wz, vec3 n, vec3 alb, float gloss, float spec){
+  vec2 sh=textureLod(uShadow, gl_FragCoord.xy/uRes, 0.).rg;
+  vec3 acc=vec3(0.);
+  for(int i=0;i<${NL};i++){ if(i>=uLN) break;
+    vec3 L=vec3(uLPos[i].xy-wp, uLPos[i].z-wz); float d=length(L); L/=max(d,1e-3);
+    float Rr=uLPos[i].w; float f=clamp(1.-d/Rr,0.,1.); float att=f*f/(1.+(d*d)/(Rr*Rr*.06));
+    float s = i==0? sh.r : (i==1? sh.g : 1.);
+    float ndl=max(dot(n,L),0.);
+    vec3 hv=normalize(L+vec3(0.,0.,1.));
+    float sp=pow(max(dot(n,hv),0.),gloss)*spec;
+    acc+=uLCol[i]*(att*s)*(alb*ndl+sp);
+  }
+  return acc; }
+// The rose window. p in the unit disc. Returns colour (0 = lead) and alpha (0 = nothing there).
+vec4 rose(vec2 p, float mask){
+  float r=length(p); if(r>1.) return vec4(0.);
+  float sec=atan(p.y,p.x)/6.2831853*12.; float k=mod(floor(sec)+12.,12.); float fa=fract(sec);
+  vec3 col=vec3(0.); float al=1.; float pane=1.;
+  if(r<.24){ col=glassPal(.5)*1.1; pane=ss(.24,.215,r); }
+  else if(r<.5){ float ca=(k+.5)/12.*6.2831853; vec2 cc=vec2(cos(ca),sin(ca))*.37; float d=length(p-cc);
+    pane=ss(.088,.072,d); col=glassPal(k*.618+.1); }
+  else { float alive=mod(floor(mask/exp2(k)),2.);
+    float edgeA=min(fa,1.-fa)*r*.5236; float tipR=.98-.10*pow(abs(fa-.5)*2.,2.);
+    float inP=ss(.012,.03,edgeA)*ss(tipR,tipR-.02,r)*ss(.5,.53,r);
+    vec3 v=voro(vec2(fa*1.6+k*3.1, r*7.)+13.);
+    col=glassPal(k*.381+v.x*.22); pane=inP*ss(.03,.09,v.y);
+    if(alive<.5){ al=(1.-inP)*step(r,.985); pane=0.; }
+    else al=step(r,tipR+.012); }
+  return vec4(col*pane, al); }
+`;
+
+const VS_TRI = `#version 300 es
+void main(){ gl_Position=vec4(vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2))*2.-1., 0., 1.); }`;
+
+const FS_FLOOR = `#version 300 es
+${COMMON}
+uniform float uRose, uPool; uniform vec4 uBell[4];
+out vec4 o;
+const vec2 DM=vec2(.37987,.92504);
+void main(){
+  vec2 wp=vec2(gl_FragCoord.x/uRes.x*W,(1.-gl_FragCoord.y/uRes.y)*H);
+  float dl=50.-wp.x, dr=wp.x-1550., dt=50.-wp.y, db=wp.y-950.;
+  float dOut=max(max(dl,dr),max(dt,db));
+  if(dOut>0.){
+    vec2 dirOut = dOut==dl? vec2(-1.,0.) : dOut==dr? vec2(1.,0.) : dOut==dt? vec2(0.,-1.) : vec2(0.,1.);
+    float st=fbm(wp*.05); float bev=ss(16.,0.,dOut);
+    vec3 alb=vec3(.26,.24,.22)*(.6+.6*st)*mix(.2,1.,bev);
+    vec3 n=normalize(vec3(-dirOut*1.6*bev, .3+.7*(1.-bev)));
+    vec3 col=lighting(wp,14.,n,alb,20.,.06)*bev+uAmb*alb*.5;
+    if(dt>0.){ for(int k=0;k<5;k++){ float dx=(wp.x-230.-float(k)*285.)/26.;
+      col+=glassPal(float(k)*.23+.07)*exp(-dx*dx)*exp(-dt/15.)*uPool*.5; } }
+    o=vec4(col,1.); return;
+  }
+  vec2 c=wp-vec2(800.,500.); float rc=length(c);
+  vec2 q=mat2(.7071,.7071,-.7071,.7071)*wp/92.; vec2 id=floor(q), f=fract(q);
+  float chk=mod(id.x+id.y,2.); float tr=hash(id);
+  float edge=min(min(f.x,1.-f.x),min(f.y,1.-f.y));
+  float grout=ss(0.,.03,edge);
+  float mar=fbm(wp*.018+tr*13.);
+  vec3 alb=mix(vec3(.085,.09,.105), vec3(.33,.31,.28), chk)*(.78+.44*tr);
+  alb*=.8+.4*mar;
+  float vein=ss(.035,0.,abs(fbm(wp*.011+tr*5.+3.)-.5));
+  alb+=vein*mix(.10,.05,chk);
+  alb*=mix(.35,1.,grout);
+  float h=grout*.8+fbm(wp*.22)*.35+(f.x-.5)*(tr-.5)*.6;
+  float wet=ss(.3,.7,fbm(wp*.006+11.));
+  float spec=mix(.05,.2,wet)*grout, gloss=mix(28.,90.,wet);
+  vec3 add=vec3(0.);
+  vec3 brass=vec3(.55,.39,.14);
+  if(rc>88.&&rc<300.){
+    float t=(rc-95.)/17.9; float fr=abs(fract(t)-.5); float ri=floor(t);
+    float line=ss(.40,.46,fr)*step(95.,rc)*step(rc,292.);
+    float ang=atan(c.y,c.x);
+    float a4=fract(ang/6.2831853*4.+mod(ri,2.)*.5); line*=ss(.05,.08,abs(a4-.5));
+    float da=abs(mod(ang+.7854,1.5708)-.7854);
+    float rad=ss(2.8,1.4,da*rc)*step(mod(ri,2.),.5)*step(95.,rc)*step(rc,292.);
+    float lab=max(line,rad);
+    alb=mix(alb,brass,lab); spec=mix(spec,.85,lab); gloss=mix(gloss,60.,lab); h+=lab*.5;
+  }
+  for(int i=0;i<4;i++){ float d=length(wp-uBell[i].xy);
+    float rg=clamp(ss(3.,1.2,abs(d-58.))+ss(2.2,.9,abs(d-47.)),0.,1.);
+    alb=mix(alb,brass,rg); spec=mix(spec,.85,rg); h+=rg*.5;
+    alb*=mix(1.,.62,ss(47.,44.,d));
+    add+=vec3(1.,.68,.3)*(uBell[i].z*.035+uBell[i].w*.6)*ss(76.,10.,d); }
+  vec3 n=normalize(vec3(-dFdx(h)*uRes.x/W, dFdy(h)*uRes.y/H, .45));
+  vec3 pool=vec3(0.); vec2 PM=vec2(-DM.y,DM.x);
+  for(int k=0;k<5;k++){ vec2 d=wp-vec2(230.+float(k)*285.,50.); float al=dot(d,DM), ac=dot(d,PM);
+    float wE = al<300.? 46. : 46.*sqrt(max(0.,1.-pow((al-300.)/70.,2.)));
+    float m=ss(0.,16.,al-22.)*ss(0.,9.,wE-abs(ac))*step(al,370.);
+    if(m>.001){ vec3 v=voro(vec2(al/36.,ac/27.)+float(k)*7.3);
+      float lead=ss(.03,.11,v.y)*ss(1.2,3.6,abs(ac))*ss(.02,.06,abs(fract(al/82.)-.5));
+      pool+=glassPal(v.x*7.13+float(k)*.37)*lead*m; } }
+  vec2 rp=(wp-vec2(1320.,765.))/132.; if(dot(rp,rp)<1.){ pool+=rose(rp,4095.).rgb*uRose*1.25; }
+  pool*=.7+.55*fbm(wp*.012+3.);
+  vec3 col=lighting(wp,0.,n,alb,gloss,spec)+uAmb*alb+pool*(alb*.75+.035)*uPool*.75+add*(alb+.05);
+  o=vec4(col,1.);
+}`;
+
+const VS_SPR = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 aPos; layout(location=1) in vec2 aSize; layout(location=2) in float aRot; layout(location=3) in float aShape;
+layout(location=4) in vec4 aCol; layout(location=5) in vec4 aPar; layout(location=6) in float aZ;
+out vec2 vUV; out vec2 vWP; flat out float vShape; flat out vec4 vCol; flat out vec4 vPar; flat out float vZ; flat out float vRot;
+const vec2 Q[6]=vec2[6](vec2(-1.,-1.),vec2(1.,-1.),vec2(1.,1.),vec2(-1.,-1.),vec2(1.,1.),vec2(-1.,1.));
+void main(){ vec2 c=Q[gl_VertexID]; float cr=cos(aRot), sr=sin(aRot);
+  vec2 wp=aPos+mat2(cr,sr,-sr,cr)*(c*aSize*.5);
+  gl_Position=vec4(wp.x/1600.*2.-1., 1.-wp.y/1000.*2., 0., 1.);
+  vUV=c; vWP=wp; vShape=aShape; vCol=aCol; vPar=aPar; vZ=aZ; vRot=aRot; }`;
+
+const FS_SPR = `#version 300 es
+${COMMON}
+in vec2 vUV; in vec2 vWP; flat in float vShape; flat in vec4 vCol; flat in vec4 vPar; flat in float vZ; flat in float vRot;
+out vec4 o;
+void main(){
+  vec2 p=vUV; float r=length(p); int s=int(vShape+.5);
+  vec3 alb=vec3(0.); float a=0.; vec3 n=vec3(0.,0.,1.); vec3 em=vec3(0.); vec3 ea=vec3(0.); float gloss=20., spec=0., lit=1.;
+  if(s==0){ a=vCol.a*ss(1.,.15,r); o=vec4(0.,0.,0.,a); return; }
+  if(s==1){ float g=max(0.,1.-r); o=vec4(vCol.rgb*(vCol.a*g*g*mix(1.,g,vPar.x)),0.); return; }
+  if(s==2){ float i=ss(vPar.y,0.,abs(r-vPar.x)); i*=i*ss(1.,.96,r); o=vec4(vCol.rgb*(vCol.a*i),0.); return; }
+  if(s==3){ float i=pow(max(0.,1.-abs(p.y)),2.)*ss(1.,.5,abs(p.x)); i*=mix(1.,p.x*.5+.5,vPar.x);
+    if(vPar.y>0.) i*=.4+.6*step(.42,fract((p.x*.5+.5)*vPar.y)); o=vec4(vCol.rgb*(vCol.a*i),0.); return; }
+  if(s==16){ float ring=ss(.1,0.,abs(r-.7)); float fr=(atan(p.x,-p.y)+3.14159)/6.28318; float arc=step(fr,vPar.x);
+    o=vec4(vCol.rgb*vCol.a*(ring*(.3+1.3*arc)+ss(.16,.04,r)),0.); return; }
+  if(s==4){ // pillar, seen from above: a round stone drum on a stepped base
+    a=ss(1.,.97,r); float st=fbm(vWP*.06);
+    alb=vec3(.40,.38,.34)*(.7+.6*st);
+    if(r>.80){ n=vec3(p/r*1.5,.55); alb*=.8; }
+    else if(r>.60){ float t=(r-.60)/.20; n=vec3(p/r*(.25+1.1*t*t),.9); alb*=.9+.1*sin(atan(p.y,p.x)*20.); }
+    else { alb*=.62+.10*sin(r*40.); lit=.8; n=vec3(p*.25,1.); }
+    alb*=1.-.45*ss(.02,0.,abs(r-.80))-.35*ss(.02,0.,abs(r-.60));
+    gloss=24.; spec=.14;
+  } else if(s==5){ // the player from above: red cloak, pale hood, one arm out toward the chain
+    vec2 q=p/vec2(.70,.92); float rq=length(q); float cloak=ss(1.,.9,rq);
+    float arm=ss(.15,.11,sdSeg(p,vec2(.10,.42),vec2(.80,.10)));
+    vec2 hq=(p-vec2(.06,0.))/.40; float rh=length(hq); float hood=ss(1.,.9,rh);
+    a=max(max(cloak,arm),hood)*vCol.a;
+    alb=vec3(.50,.06,.05)*(.8+.4*noise(p*9.));
+    n=vec3(q*.8, sqrt(max(.05,1.-min(rq*rq,.95))));
+    if(arm>cloak) n=vec3(0.,0.,1.);
+    alb=mix(alb,vec3(.8,.62,.5),ss(.13,.09,length(p-vec2(.82,.09))));
+    if(hood>.5){ alb=vec3(.82,.76,.64)*(.9+.2*noise(p*14.)); n=vec3(hq*.9, sqrt(max(.05,1.-rh*rh)));
+      alb=mix(alb,vec3(.015),ss(.34,.14,length((p-vec2(.34,0.))/vec2(.16,.22)))); }
+    em=alb*.16+vCol.rgb*vPar.x; gloss=12.; spec=.08;
+  } else if(s==6){ // the top: steel going to gold at three hooked blades, a glass boss, and tips that smear into arcs of light as it spins
+    float ang=atan(p.y,p.x); float acc=0., tip=0.;
+    for(int i=0;i<9;i++){ float t=float(i)/8.; float aa=ang+vPar.x*t; float w=mix(1.,.10,t);
+      float b=.5+.5*cos(3.*aa-2.2*r); float rad=.40+.56*pow(b,1.7);
+      float inb=ss(rad,rad-.07,r);
+      acc=max(acc,w*inb); tip=max(tip,w*inb*ss(.60,.80,r)); }   // each blade is solid where it is and fades behind itself
+    float hubm=ss(.40,.36,r);
+    a=max(acc,hubm);
+    alb=mix(vec3(.26,.24,.22), vec3(.85,.60,.22), ss(.42,.75,r))*(.5+.5*max(acc,hubm));
+    float jew=ss(.30,.26,r);
+    alb=mix(alb,glassPal(.3+floor((ang+3.1416)/2.0944)*.19)*ss(.02,.05,abs(fract((ang+3.1416)/2.0944)-.5)*r*2.09-.0)*ss(.02,.05,abs(r-.12)),jew);
+    alb*=1.-.6*ss(.03,0.,abs(r-.33));
+    n=vec3(p*.7,1.); gloss=44.; spec=.9; lit=.55;
+    vec3 hc=mix(vec3(1.,.45,.12), vec3(1.,.84,.52), ss(0.,.6,vPar.y));
+    hc=mix(hc, vec3(.78,.9,1.)*1.25, ss(.75,1.,vPar.y));
+    em=hc*(ss(.12,.03,r)*(1.2+1.2*vPar.y)+jew*alb*(.5+1.2*vPar.y)+tip*(.35+2.4*vPar.y))+vec3(1.)*vPar.z;
+  } else if(s==7){ // glass moth, head toward +x: two hues, big panes, an eye on each forewing
+    float flap=.38+.62*abs(cos(vPar.x));
+    vec2 m=vec2(p.x, abs(p.y)/flap);
+    float bw=.085*(1.-.55*ss(-.1,-.42,p.x));
+    float body=max(ss(bw,bw-.03,abs(p.y))*step(-.44,p.x)*step(p.x,.3), ss(.105,.075,length(p-vec2(.28,0.))));
+    float ant=ss(.03,.012,sdSeg(vec2(p.x,abs(p.y)),vec2(.34,.03),vec2(.58,.18)));
+    vec2 f1=mat2(.97,.24,-.24,.97)*(m-vec2(.02,.52)); float w1=length(f1/vec2(.25,.50));
+    vec2 f2=m-vec2(-.30,.30); float w2=length(f2/vec2(.24,.27));
+    float inF=ss(1.,.94,w1), inH=ss(1.,.94,w2)*(1.-inF);
+    float wing=max(inF,inH)*step(.04,m.y);
+    vec3 c0=glassPal(vPar.y*3.7), c1=glassPal(vPar.y*3.7+.21);
+    float lead=1.; vec3 gc=c0;
+    if(inF>.5){ vec2 d=m-vec2(.10,.04); float rr=length(d), th=atan(d.y,d.x);
+      float u=rr/.34, v=(th-.25)/.6;
+      lead=ss(.02,.045,(.5-abs(fract(u)-.5))*.34)*ss(.02,.045,(.5-abs(fract(v)-.5))*.6*rr)*ss(.97,.84,w1);
+      float hs=hash(vec2(floor(u)*3.1+floor(v),floor(vPar.y*97.)));
+      gc=mix(c0,c1,step(.5,hs))*(.7+.6*fract(hs*7.3));
+      float es=length((f1-vec2(0.,.06))/.13);
+      if(es<1.35){ lead=step(es,1.); gc=mix(vec3(.04), vec3(1.,.82,.45)*1.3, ss(.45,.6,es)); }
+    } else { vec2 d=m-vec2(-.22,.06); float u=length(d)/.3;
+      lead=ss(.02,.045,(.5-abs(fract(u)-.5))*.3)*ss(.97,.84,w2);
+      gc=mix(c1,c0,step(1.,u))*.8; }
+    alb=gc*lead; a=max(max(wing,body),ant);
+    float dark=max(body,ant*(1.-wing));
+    alb=mix(alb,vec3(.05,.04,.035)+vec3(.08,.05,.02)*step(.5,fract(p.x*9.)),dark);
+    float eye=ss(.04,.012,length(vec2(p.x-.33,abs(p.y)-.05)));
+    em=alb*(.5*vCol.a)*wing*(1.-dark)+vec3(1.,.6,.25)*eye*1.8+vec3(2.5)*vPar.z;
+    n=vec3(0.,sign(p.y)*.6*(1.-flap),1.); gloss=50.; spec=.6*wing;
+    a*=step(noise(p*5.+vPar.y*31.), vPar.w*1.3-.15);
+  } else if(s==8){ // glass spider, head toward +x
+    float ph=vPar.x; float dleg=10., dj=10.;
+    for(int sd=0;sd<2;sd++){ float sg= sd==0? 1.:-1.;
+      for(int i=0;i<4;i++){ float fi=float(i); float ba=(.45+fi*.66)*sg;
+        vec2 base=vec2(.10,0.)+.09*vec2(cos(ba),sin(ba));
+        float sw=sin(ph+fi*3.14159+(sd==0?0.:3.14159))*.085;
+        vec2 knee=base+.36*vec2(cos(ba-sg*.35),sin(ba-sg*.35));
+        vec2 foot=knee+.50*vec2(cos(ba+sg*.50),sin(ba+sg*.50))+vec2(sw,0.);
+        dleg=min(dleg,min(legD(p,base,knee,.046,.036),legD(p,knee,foot,.036,.010))); dj=min(dj,length(p-knee)); } }
+    float leg=ss(.008,-.008,dleg);
+    float ct=ss(.17,.14,length((p-vec2(.12,0.))/vec2(1.15,1.)));
+    vec2 ab=(p-vec2(-.24,0.))/vec2(.30,.24); float rab=length(ab); float abd=ss(1.,.95,rab);
+    a=max(max(leg,ct),abd);
+    if(abd>.5){ float u=atan(ab.y,ab.x)/1.0472; float e=(.5-abs(fract(u)-.5))*1.0472*rab;
+      float lead=ss(.05,.11,e)*ss(.97,.86,rab)*ss(.04,.09,abs(rab-.42));
+      vec3 gc=glassPal(.33+.08*hash(vec2(floor(u),floor(vPar.y*53.))));
+      if(rab<.42){ gc=vec3(1.,.55,.15); lead=ss(.42,.36,rab); }
+      alb=gc*lead*(.75+.5*hash(vec2(floor(u)+7.,floor(vPar.y*53.)))); em=alb*.75*vCol.a;
+      n=vec3(ab*.9,sqrt(max(.04,1.-rab*rab))); gloss=60.; spec=.9; }
+    else if(ct>.5){ alb=vec3(.035,.03,.03); n=vec3((p-vec2(.12,0.))*3.,1.); gloss=30.; spec=.4;
+      vec2 e=p-vec2(.23,0.);
+      float ey=ss(.032,.012,length(vec2(e.x,abs(e.y)-.036)))+ss(.026,.01,length(vec2(e.x+.035,abs(e.y)-.088)));
+      em+=vec3(1.,.14,.07)*ey*2.6; }
+    else { alb=vec3(.03,.026,.024)+vec3(.25,.2,.15)*ss(.05,.02,dj); gloss=30.; spec=.5; }
+    em+=vec3(2.5)*vPar.z;
+  } else if(s==9){ // bell from above, hung from a wooden headstock
+    float rb=r/.8; a=ss(1.,.97,rb);
+    float slope = rb<.25? .3 : rb<.45? 1.5 : rb<.82? .6 : 1.9;
+    n=vec3(p/max(r,1e-3)*slope,1.);
+    float pat=fbm(vWP*.09+3.);
+    alb=mix(vec3(.46,.29,.10), vec3(.14,.30,.25), ss(.55,.8,pat)*.55)*(.5+.5*ss(.15,.9,rb));
+    alb*=1.-.55*ss(.025,0.,abs(rb-.45))-.55*ss(.025,0.,abs(rb-.82))-.4*ss(.02,0.,abs(rb-.25));
+    gloss=36.; spec=.9;
+    em=vec3(1.,.72,.3)*(vPar.x*2.6*(.35+.65*rb)+vPar.y*.05);
+    float beam=ss(.13,.11,abs(p.y))*ss(1.,.97,abs(p.x));
+    if(beam>.5){ a=max(a,beam); float gr=noise(vec2(p.x*3.,p.y*40.)+vWP*.01);
+      alb=vec3(.16,.10,.06)*(.7+.6*gr); n=vec3(0.,p.y*2.,1.); gloss=14.; spec=.1; em=vec3(0.);
+      alb=mix(alb,vec3(.05),ss(.035,0.,abs(abs(p.x)-.55))); }
+  } else if(s==10){ // candle
+    a=ss(.40,.34,r);
+    alb=mix(vec3(.75,.70,.58), vec3(.9,.8,.5), ss(.25,.08,r)); n=vec3(p*1.2,1.); gloss=10.; spec=.1;
+    vec2 fp=p-vec2(sin(vPar.y)*.05, cos(vPar.y*1.3)*.05);
+    float flame=ss(.2,0.,length(fp)); float halo=pow(max(0.,1.-r),3.);
+    ea=(vec3(1.,.72,.35)*flame*7.+vec3(1.,.5,.15)*halo*.8)*vPar.x;
+  } else if(s==11){ // the hearse: an iron triangle
+    vec2 q=vec2(p.x,-p.y); const float k=1.7320508; float rr=.8;
+    q.x=abs(q.x)-rr; q.y=q.y+rr/k; if(q.x+k*q.y>0.) q=vec2(q.x-k*q.y,-k*q.x-q.y)/2.;
+    q.x-=clamp(q.x,-2.*rr,0.); float sd=-length(q)*sign(q.y);
+    float frame=ss(.07,.045,abs(sd+.03));
+    float post=ss(.17,.14,r);
+    float bars=ss(.03,.018,min(sdSeg(p,vec2(0.),vec2(0.,-.92)),min(sdSeg(p,vec2(0.),vec2(.8,.46)),sdSeg(p,vec2(0.),vec2(-.8,.46)))));
+    a=max(max(frame,post),bars);
+    alb=vec3(.12,.11,.10); n=vec3(p*.2,1.); gloss=40.; spec=.8;
+  } else if(s==12){ // glass shard
+    float sd=max(max(-p.y-.22, dot(p,normalize(vec2(1.6,1.)))-.42), dot(p,normalize(vec2(-1.2+vPar.x,1.)))-.42);
+    a=ss(.05,-.03,sd)*vCol.a;
+    alb=vCol.rgb; n=vec3(cos(vPar.z)*.7,sin(vPar.z)*.7,1.); gloss=70.; spec=1.3;
+    em=vCol.rgb*(.22+vPar.y*2.2);
+  } else if(s==13){ // the rose
+    vec4 rr=rose(p,vPar.x); a=rr.a*vPar.w;
+    alb=rr.rgb; em=rr.rgb*(.55+vPar.y*2.5); gloss=40.; spec=.5; lit=.5;
+    if(r<.2){ vec2 pc=p-.085*vec2(cos(vPar.z),sin(vPar.z)); float pupil=ss(.095,.07,length(pc));
+      alb=mix(vec3(.85,.8,.65),vec3(0.),pupil); em=mix(vec3(1.,.88,.62)*.5,vec3(0.),pupil); lit=.3; }
+  } else if(s==14){ // dart
+    float d=abs(p.x)+abs(p.y/.42); a=ss(1.,.85,d);
+    alb=vCol.rgb; em=vCol.rgb*(2.2+2.5*ss(.6,0.,d));
+  } else if(s==15){ // puff of dust or smoke
+    a=vCol.a*pow(max(0.,1.-r),1.5)*(.55+.45*noise(p*3.+vPar.x)); alb=vCol.rgb;
+  }
+  float cr=cos(vRot), sr=sin(vRot); n=normalize(n); n.xy=mat2(cr,sr,-sr,cr)*n.xy;
+  vec3 col=lighting(vWP,vZ,n,alb,gloss,spec)*lit+uAmb*alb+em;
+  o=vec4(col*a+ea,a);
+}`;
+
+const VS_SH = `#version 300 es
+layout(location=0) in vec2 aP;
+void main(){ gl_Position=vec4(aP.x/1600.*2.-1., 1.-aP.y/1000.*2., 0., 1.); }`;
+const FS_SH = `#version 300 es
+precision highp float; out vec4 o; void main(){ o=vec4(0.); }`;
+
+const FS_BLUR = `#version 300 es
+precision highp float; uniform sampler2D uT; uniform vec2 uDir; uniform vec2 uRes; out vec4 o;
+void main(){ vec2 uv=gl_FragCoord.xy/uRes;
+  vec4 c=texture(uT,uv)*.227;
+  c+=(texture(uT,uv+uDir*1.385)+texture(uT,uv-uDir*1.385))*.316;
+  c+=(texture(uT,uv+uDir*3.231)+texture(uT,uv-uDir*3.231))*.0703;
+  o=c; }`;
+const FS_DOWN = `#version 300 es
+precision highp float; float ss(float a,float b,float x){ float t=clamp((x-a)/(b-a),0.,1.); return t*t*(3.-2.*t); }
+uniform sampler2D uT; uniform vec2 uRes; uniform vec2 uTex; uniform float uThr; out vec4 o;
+void main(){ vec2 uv=gl_FragCoord.xy/uRes;
+  vec3 c=(texture(uT,uv+uTex*vec2(-1.,-1.)).rgb+texture(uT,uv+uTex*vec2(1.,-1.)).rgb+texture(uT,uv+uTex*vec2(-1.,1.)).rgb+texture(uT,uv+uTex*vec2(1.,1.)).rgb)*.25;
+  if(uThr>0.){ float l=max(c.r,max(c.g,c.b)); c*=ss(uThr*.6,uThr*1.6,l); c=min(c,vec3(12.)); }
+  o=vec4(c,1.); }`;
+const FS_UP = `#version 300 es
+precision highp float; uniform sampler2D uT; uniform vec2 uRes; uniform vec2 uTex; uniform float uGain; out vec4 o;
+void main(){ vec2 uv=gl_FragCoord.xy/uRes; vec3 c=texture(uT,uv).rgb*4.;
+  c+=(texture(uT,uv+uTex*vec2(1.,0.)).rgb+texture(uT,uv+uTex*vec2(-1.,0.)).rgb+texture(uT,uv+uTex*vec2(0.,1.)).rgb+texture(uT,uv+uTex*vec2(0.,-1.)).rgb)*2.;
+  c+=texture(uT,uv+uTex).rgb+texture(uT,uv-uTex).rgb+texture(uT,uv+uTex*vec2(1.,-1.)).rgb+texture(uT,uv+uTex*vec2(-1.,1.)).rgb;
+  o=vec4(c/16.*uGain,1.); }`;
+const FS_POST = `#version 300 es
+precision highp float; float ss(float a,float b,float x){ float t=clamp((x-a)/(b-a),0.,1.); return t*t*(3.-2.*t); }
+uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform vec4 uRip[4];
+uniform float uAb, uExp, uDark, uTime, uBloomK, uRot; uniform vec4 uFlash; out vec4 o;
+vec3 aces(vec3 x){ return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.); }
+float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+void main(){ vec2 f=gl_FragCoord.xy/uRes; vec2 uv = uRot>.5? vec2(1.-f.y,f.x) : f; vec2 wp=vec2(uv.x*1600.,(1.-uv.y)*1000.);
+  vec2 off=vec2(0.);
+  for(int i=0;i<4;i++){ vec2 d=wp-uRip[i].xy; float l=length(d); float e=(l-uRip[i].z)/30.; off+=d/max(l,1.)*uRip[i].w*exp(-e*e); }
+  vec2 u2=uv+vec2(off.x/1600.,-off.y/1000.); vec2 cd=u2-.5;
+  vec3 c; c.r=texture(uScene,u2+cd*uAb).r; c.g=texture(uScene,u2).g; c.b=texture(uScene,u2-cd*uAb).b;
+  c+=texture(uBloom,u2).rgb*uBloomK;
+  c=aces(c*uExp); c=pow(c,vec3(1./2.2));
+  float vg=ss(1.15,.25,length(cd*vec2(1.,.92))*1.55); c*=mix(.5,1.,vg);
+  c+=(hash(gl_FragCoord.xy+fract(uTime)*91.7)-.5)*.022;
+  c=mix(c,uFlash.rgb,uFlash.a); c*=1.-uDark;
+  o=vec4(c,1.); }`;
+
+function mkProg(vs, fs) {
+  const p = gl.createProgram();
+  for (const [t, s] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error('shader: ' + gl.getShaderInfoLog(sh));
+    gl.attachShader(p, sh);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); u[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+function mkFbo(w, h, fl) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  if (fl) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  return { f, t, w, h };
+}
+function killFbo(o) { if (o) { gl.deleteFramebuffer(o.f); gl.deleteTexture(o.t); } }
+
+R.init = function (canvas) {
+  if (!cv) {
+    canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); R.lost = true; });
+    canvas.addEventListener('webglcontextrestored', () => { try { R.init(canvas); R.lost = false; } catch (e) { } });
+  }
+  cv = canvas; safe = document.getElementById('safe');
+  gl = cv.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance' });
+  if (!gl) throw new Error('This browser cannot draw it. It needs WebGL 2.');
+  hdr = !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
+  if (hdr) { const t = mkFbo(4, 4, true); if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) hdr = false; killFbo(t); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+  pFloor = mkProg(VS_TRI, FS_FLOOR); pSpr = mkProg(VS_SPR, FS_SPR); pShadow = mkProg(VS_SH, FS_SH);
+  pBlur = mkProg(VS_TRI, FS_BLUR); pDown = mkProg(VS_TRI, FS_DOWN); pUp = mkProg(VS_TRI, FS_UP); pPost = mkProg(VS_TRI, FS_POST);
+  vaoTri = gl.createVertexArray();
+  vaoSpr = gl.createVertexArray(); gl.bindVertexArray(vaoSpr);
+  bufSpr = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bufSpr); gl.bufferData(gl.ARRAY_BUFFER, inst.byteLength, gl.DYNAMIC_DRAW);
+  const lay = [[0, 2, 0], [1, 2, 2], [2, 1, 4], [3, 1, 5], [4, 4, 6], [5, 4, 10], [6, 1, 14]];
+  for (const [loc, size, off] of lay) { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, STRIDE * 4, off * 4); gl.vertexAttribDivisor(loc, 1); }
+  vaoSh = gl.createVertexArray(); gl.bindVertexArray(vaoSh);
+  bufSh = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bufSh); gl.bufferData(gl.ARRAY_BUFFER, shv.byteLength, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
+  gl.bindVertexArray(null);
+  fbScene = fbSh = fbShB = null; bloom = [];
+  R.resize(true);
+};
+
+// Fit the stage in the window and size the buffers to it. Wide window: a 16:10 stage, centred. Tall window (a phone
+// held upright): the same room turned a quarter turn, 10:16, at the top, with whatever is left below it for the thumb.
+// The room is always drawn 1600 wide by 1000 high; only the last pass turns it.
+R.resize = function (force) {
+  const ww = window.innerWidth, wh = window.innerHeight, stage = cv.parentElement;
+  let iT = 0, iR = 0, iB = 0, iL = 0;
+  if (safe) { const q = getComputedStyle(safe); iT = parseFloat(q.paddingTop) || 0; iR = parseFloat(q.paddingRight) || 0; iB = parseFloat(q.paddingBottom) || 0; iL = parseFloat(q.paddingLeft) || 0; }
+  const aw = ww - iL - iR, ah = wh - iT - iB, pt = ah > aw * 1.02;
+  let cw, ch, long, short;
+  if (pt) {
+    cw = Math.floor(Math.min(aw, ah / 1.6)); ch = Math.floor(cw * 1.6);
+    const top = iT + Math.floor(Math.min((ah - ch) * .12, 28)), deck = Math.max(0, wh - iB - top - ch);
+    stage.style.width = cw + 'px'; stage.style.height = ch + 'px';
+    stage.style.left = (iL + Math.floor((aw - cw) / 2)) + 'px'; stage.style.top = top + 'px';
+    stage.style.fontSize = (cw / 30) + 'px'; stage.style.setProperty('--deck', deck + 'px');
+    document.body.classList.toggle('deck', deck >= 96);
+    long = ch; short = cw;
+  } else {
+    cw = Math.floor(Math.min(aw, ah * 1.6)); ch = Math.floor(cw / 1.6);
+    stage.style.width = cw + 'px'; stage.style.height = ch + 'px';
+    stage.style.left = (iL + Math.floor((aw - cw) / 2)) + 'px'; stage.style.top = (iT + Math.floor((ah - ch) / 2)) + 'px';
+    stage.style.fontSize = (cw / 64) + 'px';
+    document.body.classList.remove('deck');
+    long = cw; short = ch;
+  }
+  document.body.classList.toggle('pt', pt);
+  R.portrait = pt;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2) * R.scale;
+  let w = Math.round(long * dpr), h = Math.round(short * dpr);
+  if (w > 2240) { h = Math.round(h * 2240 / w); w = 2240; }
+  w = Math.max(16, w & ~1); h = Math.max(16, h & ~1);
+  if (!force && w === rw && h === rh && pt === wasPt) return;
+  rw = w; rh = h; wasPt = pt; cv.width = pt ? h : w; cv.height = pt ? w : h;
+  killFbo(fbScene); killFbo(fbSh); killFbo(fbShB); bloom.forEach(killFbo); bloom = [];
+  fbScene = mkFbo(w, h, hdr);
+  fbSh = mkFbo(w >> 1, h >> 1, false); fbShB = mkFbo(w >> 1, h >> 1, false);
+  let bw = w >> 1, bh = h >> 1;
+  for (let i = 0; i < 5; i++) { bloom.push(mkFbo(Math.max(2, bw), Math.max(2, bh), hdr)); bw >>= 1; bh >>= 1; }
+};
+R.setScale = function (k) { R.scale = k; R.resize(true); };
+// a point on the screen to a point in the room, a direction on the screen to a direction in the room, and a point in the
+// room to a place on the stage: [left %, top %, % per unit across the screen, % per unit down the screen]
+R.toWorld = function (cx, cy) { const r = cv.getBoundingClientRect(), sx = (cx - r.left) / r.width, sy = (cy - r.top) / r.height; return R.portrait ? [sy * W, (1 - sx) * H] : [sx * W, sy * H]; };
+R.dirToWorld = function (dx, dy) { return R.portrait ? [dy, -dx] : [dx, dy]; };
+R.toStage = function (x, y) { return R.portrait ? [(1 - y / H) * 100, x / W * 100, 100 / H, 100 / W] : [x / W * 100, y / H * 100, 100 / W, 100 / H]; };
+
+R.begin = function () { ni = 0; nl = 2; occ.length = 0; nr = 0; rip.fill(0); lcol.fill(0); };
+R.setLight = function (i, x, y, z, rad, r, g, b) { lpos[i * 4] = x; lpos[i * 4 + 1] = y; lpos[i * 4 + 2] = z; lpos[i * 4 + 3] = rad; lcol[i * 3] = r; lcol[i * 3 + 1] = g; lcol[i * 3 + 2] = b; };
+R.light = function (x, y, z, rad, r, g, b) { if (nl < NL) R.setLight(nl++, x, y, z, rad, r, g, b); };
+R.occ = function (x, y, r, mask) { occ.push(x, y, r, mask); };
+R.ripple = function (x, y, radius, amp) { if (nr < 4) { rip[nr * 4] = x; rip[nr * 4 + 1] = y; rip[nr * 4 + 2] = radius; rip[nr * 4 + 3] = amp; nr++; } };
+R.bell = function (i, x, y, ready, flash) { bell[i * 4] = x; bell[i * 4 + 1] = y; bell[i * 4 + 2] = ready; bell[i * 4 + 3] = flash; };
+R.spr = function (s, x, y, w, h, rot, r, g, b, a, p0, p1, p2, p3, z) {
+  if (ni >= MAXI) return; const o = ni++ * STRIDE;
+  inst[o] = x; inst[o + 1] = y; inst[o + 2] = w; inst[o + 3] = h; inst[o + 4] = rot; inst[o + 5] = s;
+  inst[o + 6] = r; inst[o + 7] = g; inst[o + 8] = b; inst[o + 9] = a;
+  inst[o + 10] = p0 || 0; inst[o + 11] = p1 || 0; inst[o + 12] = p2 || 0; inst[o + 13] = p3 || 0; inst[o + 14] = z || 0;
+};
+R.count = function () { return ni; };
+
+function shadowFor(li, start) {
+  let n = start; const lx = lpos[li * 4], ly = lpos[li * 4 + 1], bit = 1 << li;
+  for (let i = 0; i < occ.length; i += 4) {
+    if (!(occ[i + 3] & bit)) continue;
+    const dx = occ[i] - lx, dy = occ[i + 1] - ly, d = Math.hypot(dx, dy), r = occ[i + 2];
+    if (d <= r + 2 || n + 12 > shv.length) continue;
+    const a = Math.atan2(dy, dx), b = Math.asin(r / d), len = Math.sqrt(d * d - r * r), far = 3200;
+    const c1 = Math.cos(a + b), s1 = Math.sin(a + b), c2 = Math.cos(a - b), s2 = Math.sin(a - b);
+    const t1x = lx + c1 * len, t1y = ly + s1 * len, t2x = lx + c2 * len, t2y = ly + s2 * len;
+    const f1x = lx + c1 * far, f1y = ly + s1 * far, f2x = lx + c2 * far, f2y = ly + s2 * far;
+    shv[n++] = t1x; shv[n++] = t1y; shv[n++] = t2x; shv[n++] = t2y; shv[n++] = f2x; shv[n++] = f2y;
+    shv[n++] = t1x; shv[n++] = t1y; shv[n++] = f2x; shv[n++] = f2y; shv[n++] = f1x; shv[n++] = f1y;
+  }
+  return n;
+}
+function common(P, o) {
+  gl.uniform2f(P.u.uRes, rw, rh); gl.uniform1f(P.u.uTime, o.time); gl.uniform1f(P.u.uHue, o.hue);
+  gl.uniform3f(P.u.uAmb, o.amb[0], o.amb[1], o.amb[2]);
+  gl.uniform4fv(P.u.uLPos, lpos); gl.uniform3fv(P.u.uLCol, lcol); gl.uniform1i(P.u.uLN, nl);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbSh.t); gl.uniform1i(P.u.uShadow, 0);
+}
+function tri() { gl.bindVertexArray(vaoTri); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+R.flush = function (o) {
+  // shadow masks: red for the top, green for the candles
+  sh0 = shadowFor(0, 0); sh1 = shadowFor(1, sh0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbSh.f); gl.viewport(0, 0, fbSh.w, fbSh.h);
+  gl.disable(gl.BLEND); gl.colorMask(true, true, true, true); gl.clearColor(1, 1, 1, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  if (sh1 > 0) {
+    gl.useProgram(pShadow.p); gl.bindVertexArray(vaoSh); gl.bindBuffer(gl.ARRAY_BUFFER, bufSh);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, shv.subarray(0, sh1));
+    gl.colorMask(true, false, false, false); if (sh0 > 0) gl.drawArrays(gl.TRIANGLES, 0, sh0 / 2);
+    gl.colorMask(false, true, false, false); if (sh1 > sh0) gl.drawArrays(gl.TRIANGLES, sh0 / 2, (sh1 - sh0) / 2);
+    gl.colorMask(true, true, true, true);
+  }
+  gl.useProgram(pBlur.p); gl.uniform1i(pBlur.u.uT, 0); gl.uniform2f(pBlur.u.uRes, fbSh.w, fbSh.h); gl.activeTexture(gl.TEXTURE0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbShB.f); gl.bindTexture(gl.TEXTURE_2D, fbSh.t); gl.uniform2f(pBlur.u.uDir, 1.3 / fbSh.w, 0); tri();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbSh.f); gl.bindTexture(gl.TEXTURE_2D, fbShB.t); gl.uniform2f(pBlur.u.uDir, 0, 1.3 / fbSh.h); tri();
+
+  // floor
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbScene.f); gl.viewport(0, 0, rw, rh);
+  gl.useProgram(pFloor.p); common(pFloor, o);
+  gl.uniform1f(pFloor.u.uRose, o.rose); gl.uniform1f(pFloor.u.uPool, o.pool); gl.uniform4fv(pFloor.u.uBell, bell);
+  tri();
+  // sprites, in the order they were added
+  if (ni > 0) {
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(pSpr.p); common(pSpr, o);
+    gl.bindVertexArray(vaoSpr); gl.bindBuffer(gl.ARRAY_BUFFER, bufSpr);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, inst.subarray(0, ni * STRIDE));
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, ni);
+    gl.disable(gl.BLEND);
+  }
+  // bloom
+  gl.useProgram(pDown.p); gl.uniform1i(pDown.u.uT, 0); gl.activeTexture(gl.TEXTURE0);
+  let src = fbScene;
+  for (let i = 0; i < bloom.length; i++) {
+    const d = bloom[i]; gl.bindFramebuffer(gl.FRAMEBUFFER, d.f); gl.viewport(0, 0, d.w, d.h);
+    gl.bindTexture(gl.TEXTURE_2D, src.t); gl.uniform2f(pDown.u.uRes, d.w, d.h); gl.uniform2f(pDown.u.uTex, 1 / src.w, 1 / src.h);
+    gl.uniform1f(pDown.u.uThr, i === 0 ? (hdr ? 1.0 : .8) : 0); tri(); src = d;
+  }
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  gl.useProgram(pUp.p); gl.uniform1i(pUp.u.uT, 0);
+  for (let i = bloom.length - 1; i > 0; i--) {
+    const d = bloom[i - 1], s = bloom[i]; gl.bindFramebuffer(gl.FRAMEBUFFER, d.f); gl.viewport(0, 0, d.w, d.h);
+    gl.bindTexture(gl.TEXTURE_2D, s.t); gl.uniform2f(pUp.u.uRes, d.w, d.h); gl.uniform2f(pUp.u.uTex, 1 / s.w, 1 / s.h);
+    gl.uniform1f(pUp.u.uGain, .9); tri();
+  }
+  gl.disable(gl.BLEND);
+  // to the screen
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height);
+  gl.useProgram(pPost.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbScene.t); gl.uniform1i(pPost.u.uScene, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bloom[0].t); gl.uniform1i(pPost.u.uBloom, 1);
+  gl.uniform2f(pPost.u.uRes, cv.width, cv.height); gl.uniform1f(pPost.u.uRot, R.portrait ? 1 : 0); gl.uniform4fv(pPost.u.uRip, rip);
+  gl.uniform1f(pPost.u.uAb, o.ab); gl.uniform1f(pPost.u.uExp, o.exp); gl.uniform1f(pPost.u.uDark, o.dark);
+  gl.uniform1f(pPost.u.uTime, o.time); gl.uniform1f(pPost.u.uBloomK, o.bloom);
+  gl.uniform4f(pPost.u.uFlash, o.flash[0], o.flash[1], o.flash[2], o.flash[3]);
+  tri();
+  gl.activeTexture(gl.TEXTURE0);
+};
+})();
+
+</script>
+<script>
+/* HEARSE sound. Everything is synthesised; nothing is loaded.
+   Four chords (Dm, Bb, F, C), one per bell. Whatever breaks plays a note of the chord that is sounding. */
+(function () {
+'use strict';
+const A = window.A = { on: false, intensity: 0, chord: 0 };
+const CH = [[50, 53, 57], [46, 50, 53], [53, 57, 60], [48, 52, 55]];
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+let ac, master, dry, wetBus, revIn, noiseBuf, timer = null;
+let padO = [], padF, padG, whN, whF, whG, whO, whOG;
+let step = 0, nextT = 0, hold = 2, lastTick = -1, lastGlass = -1, tickK = 0;
+
+function impulse(sec) {
+  const n = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(2, n, ac.sampleRate), at = Math.floor(ac.sampleRate * .012);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0;
+    for (let i = 0; i < n; i++) { const t = i / n; lp += ((Math.random() * 2 - 1) - lp) * (.55 - .46 * t); d[i] = lp * Math.pow(1 - t, 2.4) * (i < at ? i / at : 1) * 1.6; } }
+  return b;
+}
+A.init = function () {
+  if (ac) { if (ac.state !== 'running') ac.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  ac = new AC();
+  master = ac.createGain(); master.gain.value = .75;
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 18; comp.ratio.value = 5; comp.attack.value = .004; comp.release.value = .22;
+  master.connect(comp); comp.connect(ac.destination);
+  dry = ac.createGain(); dry.connect(master);
+  const conv = ac.createConvolver(); conv.buffer = impulse(3.6);
+  revIn = ac.createGain(); const revOut = ac.createGain(); revOut.gain.value = .5; revIn.connect(conv); conv.connect(revOut); revOut.connect(master);
+  wetBus = ac.createGain(); wetBus.connect(dry); const ws = ac.createGain(); ws.gain.value = .7; wetBus.connect(ws); ws.connect(revIn);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate); const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  // organ pad: always there, very low
+  padF = ac.createBiquadFilter(); padF.type = 'lowpass'; padF.frequency.value = 420; padF.Q.value = .5;
+  padG = ac.createGain(); padG.gain.value = 0; padF.connect(padG); padG.connect(wetBus);
+  for (let i = 0; i < 3; i++) for (const det of [-6, 7]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.detune.value = det; o.frequency.value = mtof(CH[0][i]);
+    const g = ac.createGain(); g.gain.value = .16; o.connect(g); g.connect(padF); o.start(); padO.push({ o, i }); }
+  // the top: air and a note that climbs an octave to the chord's root as it spins up
+  whN = ac.createBufferSource(); whN.buffer = noiseBuf; whN.loop = true; whF = ac.createBiquadFilter(); whF.type = 'bandpass'; whF.Q.value = 1.4; whF.frequency.value = 400;
+  whG = ac.createGain(); whG.gain.value = 0; whN.connect(whF); whF.connect(whG); whG.connect(dry); whN.start();
+  whO = ac.createOscillator(); whO.type = 'triangle'; whO.frequency.value = 147; whOG = ac.createGain(); whOG.gain.value = 0; whO.connect(whOG); whOG.connect(wetBus); whO.start();
+  nextT = ac.currentTime + .1; timer = setInterval(sched, 25);
+  // sounds are made only while the engine is running. a phone will not let it run until a finger has lifted once,
+  // and anything queued before then would all play at the same instant.
+  A.on = ac.state === 'running'; ac.onstatechange = () => { A.on = ac.state === 'running'; if (A.on) nextT = ac.currentTime + .08; };
+};
+A.mute = function () { if (!ac) return; A.muted = !A.muted; master.gain.setTargetAtTime(A.muted ? 0 : .75, ac.currentTime, .03); };
+A.state = function () { return ac ? ac.state : 'none'; };
+A.pause = function (p) { if (!ac) return; if (p) ac.suspend(); else { ac.resume(); nextT = ac.currentTime + .08; } };
+
+function out(x, wet, ttl) {
+  const g = ac.createGain(); let node = g;
+  if (x !== undefined && x !== null && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, (x - 800) / 800 * .7)); g.connect(p); node = p; }
+  node.connect(dry); let w = null; if (wet > 0) { w = ac.createGain(); w.gain.value = wet; node.connect(w); w.connect(revIn); }
+  setTimeout(() => { try { node.disconnect(); if (w) w.disconnect(); } catch (e) { } }, (ttl || 1.5) * 1000 + 300);
+  return g;
+}
+function tone(f, t, dur, vol, type, dst, f1) {
+  const o = ac.createOscillator(); o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g); g.connect(dst); o.start(t); o.stop(t + dur + .03);
+}
+function nz(t, dur, vol, type, f0, f1, q, dst) {
+  const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+  const fl = ac.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(f0, t); if (f1) fl.frequency.exponentialRampToValueAtTime(f1, t + dur); fl.Q.value = q || 1;
+  const g = ac.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .003); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  s.connect(fl); fl.connect(g); g.connect(dst); s.start(t, Math.random() * 1.5); s.stop(t + dur + .03);
+}
+// a run of kills climbs the chord for two octaves and then stays up there; it never gets shrill
+function ladder(k) { const c = CH[A.chord]; if (k > 5) k = 3 + (k % 3); return c[k % 3] + 24 + 12 * Math.floor(k / 3); }
+
+A.setChord = function (i) { A.chord = i; hold = 2; if (!ac) return; const t = ac.currentTime; for (const p of padO) p.o.frequency.setTargetAtTime(mtof(CH[i][p.i]), t, .06); };
+
+// called every frame
+A.frame = function (spin, charging, intensity) {
+  if (!A.on) return; const t = ac.currentTime;
+  A.intensity += (intensity - A.intensity) * .04;
+  padG.gain.setTargetAtTime(.04 + .035 * A.intensity, t, .2); padF.frequency.setTargetAtTime(380 + 1000 * A.intensity, t, .2);
+  whG.gain.setTargetAtTime(charging ? .009 + .022 * spin : .006 * spin, t, .03); whF.frequency.setTargetAtTime(350 + 2300 * spin, t, .03);
+  whO.frequency.setTargetAtTime(mtof(CH[A.chord][0] + 12) * Math.pow(2, spin - 1), t, .02);
+  whOG.gain.setTargetAtTime(charging ? .011 + .015 * spin : 0, t, .04);
+};
+
+// something made of glass broke. k is how far up the run of kills you are.
+A.glass = function (x, k, big) {
+  if (!A.on) return; const t = ac.currentTime; if (t - lastGlass < .028 && !big) return; lastGlass = t;
+  const f = mtof(ladder(k)), d = out(x, .55, 1.4);
+  nz(t, .07, big ? .16 : .1, 'bandpass', 5200 + Math.random() * 2600, 0, 1.2, d);
+  tone(f, t, .5, .13, 'sine', d); tone(f * 2.76, t, .2, .035, 'sine', d); tone(f * 5.4, t, .09, .015, 'sine', d);
+  if (big) tone(f / 2, t, .7, .11, 'triangle', d);
+};
+A.chip = function (x) { if (!A.on) return; const t = ac.currentTime, d = out(x, .2, .6); nz(t, .05, .125, 'bandpass', 2400, 900, 1.5, d); tone(300, t, .07, .14, 'triangle', d, 150); };
+A.bell = function (i, x) {
+  if (!A.on) return; const t = ac.currentTime, root = mtof(CH[i][0] + 12), d = out(x, .9, 6.5);
+  const parts = [[.5, .30, 5.5], [1, .34, 4.2], [i === 0 ? 1.19 : 1.26, .2, 3], [1.5, .14, 2.4], [2, .22, 2], [2.51, .07, 1.4], [3.01, .06, 1.1], [4.1, .04, .8]];
+  for (const [m, v, dur] of parts) tone(root * m, t, dur, v * .29, 'sine', d);
+  nz(t, .05, .1, 'lowpass', 2500, 300, .7, d); tone(root * .5, t, .18, .18, 'sine', d, root * .25);
+  A.setChord(i);
+};
+A.peal = function () { if (!A.on) return; const t = ac.currentTime, d = out(800, .9, 4); for (let i = 0; i < 6; i++) tone(mtof(ladder(i)), t + i * .07, 1.4, .06, 'sine', d); };
+A.throwS = function (p, x) { if (!A.on) return; const t = ac.currentTime, d = out(x, .25, .8); nz(t, .22, .06 + .08 * p, 'bandpass', 2600, 420, .8, d); tone(140, t, .14, .12 + .08 * p, 'sine', d, 50); };
+A.catchS = function (perfect, x) {
+  if (!A.on) return; const t = ac.currentTime, d = out(x, perfect ? .7 : .2, 1.4);
+  tone(1250, t, .05, .08, 'triangle', d); tone(1870, t, .04, .055, 'triangle', d); tone(95, t, .09, .19, 'sine', d, 60);
+  if (perfect) { tone(mtof(CH[A.chord][2] + 36), t, .7, .09, 'sine', d); tone(mtof(CH[A.chord][0] + 36), t + .05, .7, .065, 'sine', d); }
+};
+A.tier = function (n) { if (!A.on) return; const t = ac.currentTime, d = out(null, .6, 1); tone(mtof(CH[A.chord][n === 1 ? 2 : 0] + (n === 1 ? 24 : 36)), t, .3, .066, 'sine', d); };
+A.tick = function (x) {
+  if (!A.on) return; const t = ac.currentTime; if (t - lastTick < .045) return; if (t - lastTick > .5) tickK = 0; lastTick = t;
+  const d = out(x, .3, .5); tone(mtof(ladder(tickK % 6)), t, .06, .055, 'sine', d); tickK++;
+};
+A.tink = function (x) { if (!A.on) return; const t = ac.currentTime, d = out(x, .4, .6); tone(2100 + Math.random() * 700, t, .09, .068, 'triangle', d); nz(t, .03, .062, 'highpass', 5000, 0, 1, d); };
+A.tonk = function (x) { if (!A.on) return; const t = ac.currentTime, d = out(x, .4, .7); tone(430, t, .14, .11, 'triangle', d, 290); nz(t, .04, .075, 'bandpass', 1500, 0, 1.5, d); };
+A.dash = function (x) { if (!A.on) return; const t = ac.currentTime, d = out(x, .15, .5); nz(t, .16, .26, 'bandpass', 800, 2600, .7, d); };
+A.snuff = function (x) {
+  if (!A.on) return; const t = ac.currentTime, d = out(x, .5, 1.6);
+  nz(t, .45, .2, 'lowpass', 900, 120, .5, d); tone(70, t, .4, .32, 'sine', d, 38); tone(mtof(CH[A.chord][0] + 13), t, .9, .045, 'sine', d);
+};
+A.relight = function (k) { if (!A.on) return; const t = ac.currentTime, d = out(800, .8, 1.6); tone(mtof(ladder(k)), t, 1, .1, 'sine', d); tone(mtof(ladder(k)) * 2, t, .5, .035, 'sine', d); };
+A.thud = function (x) { if (!A.on) return; const t = ac.currentTime, d = out(x, .4, 1); tone(90, t, .24, .3, 'sine', d, 36); nz(t, .12, .12, 'lowpass', 500, 100, .6, d); };
+A.skitter = function (x) { if (!A.on) return; const t = ac.currentTime, d = out(x, .2, .5); for (let i = 0; i < 3; i++) nz(t + i * .045, .02, .12, 'bandpass', 3000 + Math.random() * 600, 0, 3, d); };
+A.hiss = function (x) { if (!A.on) return; const t = ac.currentTime, d = out(x, .5, 1.2); nz(t, .7, .1, 'bandpass', 3800, 1400, 2, d); };
+A.levelUp = function () {
+  if (!A.on) return; const t = ac.currentTime, d = out(null, .8, 2.4);
+  for (let i = 0; i < 6; i++) { const f = mtof(ladder(i)); tone(f, t + i * .06, .9, .07, 'sine', d); tone(f * 2, t + i * .06, .3, .02, 'triangle', d); }
+};
+A.roseDown = function () {
+  if (!A.on) return; const t = ac.currentTime, d = out(800, .9, 4);
+  for (let i = 0; i < 26; i++) { const f = mtof(ladder(Math.floor(Math.random() * 6))); const tt = t + i * .045 + Math.random() * .02;
+    nz(tt, .06, .06, 'bandpass', 5000 + Math.random() * 3000, 0, 1.2, d); tone(f, tt, .5, .05, 'sine', d); }
+  tone(60, t, 1.4, .45, 'sine', d, 32);
+};
+// the noise in the dark at the end
+A.strepitus = function () {
+  if (!A.on) return; const t = ac.currentTime, d = out(800, 1, 5);
+  tone(55, t, 2.4, .36, 'sine', d, 30); tone(82, t, 1.4, .21, 'triangle', d, 41); nz(t, .55, .34, 'lowpass', 380, 60, .6, d);
+};
+
+function sched() {
+  if (!ac || ac.state !== 'running') return;
+  if (nextT < ac.currentTime - .2) nextT = ac.currentTime + .05;
+  while (nextT < ac.currentTime + .12) { play(step, nextT); nextT += 60 / 132 / 4; step = (step + 1) % 16; if (step === 0 && --hold <= 0) A.setChord((A.chord + 1) % 4); }
+}
+const PAT = [0, 1, 2, 1, 0, 2, 1, 2, 0, 1, 2, 1, 2, 1, 0, 2];
+function play(s, t) {
+  const I = A.intensity, c = CH[A.chord];
+  if (I > .1 && s % 2 === 0) tone(mtof(c[0] - 12), t, .17, .12 * Math.min(1, I * 3), 'triangle', dry);
+  if (I > .28 && s % 4 === 0) tone(120, t, .16, .2, 'sine', dry, 44);
+  if (I > .42 && s % 4 === 2) nz(t, .035, .03, 'highpass', 7500, 0, 1, dry);
+  if (I > .58 && (s === 4 || s === 12)) nz(t, .11, .06, 'bandpass', 1900, 0, .8, wetBus);
+  if (I > .5) tone(mtof(c[PAT[s]] + 24 + (I > .8 && s % 8 >= 4 ? 12 : 0)), t, .15, .03, 'triangle', wetBus);
+}
+})();
+
+</script>
+<script>
+/* HEARSE. A dark nave, seven candles, and one spinning light on a chain.
+   Hold the left button to spin it up, let go to throw it, it comes back. Candles are your lives.
+   On a phone it is one thumb: touch and drag to walk, the top spins while you touch, lift to throw at the nearest thing. */
+(function () {
+'use strict';
+const S = R.S, TAU = Math.PI * 2;
+const BX0 = 50, BX1 = 1550, BY0 = 50, BY1 = 950;
+const HEARSE = { x: 800, y: 500, r: 72 };
+const PILLARS = [{ x: 530, y: 280, r: 38 }, { x: 1070, y: 280, r: 38 }, { x: 530, y: 720, r: 38 }, { x: 1070, y: 720, r: 38 }];
+const OBST = PILLARS.concat([HEARSE]);
+const BELLS = [{ x: 800, y: 190 }, { x: 1310, y: 500 }, { x: 800, y: 810 }, { x: 290, y: 500 }].map((b, i) => ({ x: b.x, y: b.y, i, cool: 0, flash: 0, swing: 0, rung: -99, ready: 1 }));
+const ROSE = { x: 1320, y: 765 };
+const DM = { x: .37987, y: .92504 };
+// the candles, in the order they go out. the one at the top goes last.
+const CAND_AT = (function () {
+  const s = 92, ap = [0, -.9238 * s], bl = [-.8 * s, .4619 * s], br = [.8 * s, .4619 * s];
+  const L = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  return [L(ap, bl, 1), L(ap, br, 1), L(ap, bl, 2 / 3), L(ap, br, 2 / 3), L(ap, bl, 1 / 3), L(ap, br, 1 / 3), ap];
+})();
+const CAND = CAND_AT.map(p => ({ x: HEARSE.x + p[0], y: HEARSE.y + p[1], lit: 0, v: 0, ph: Math.random() * 6 }));
+// "right on the screen" and "down the screen" as directions in the room. Upright phone: the room is drawn a quarter turn round.
+let OX = 0, OY = 0;
+function off(ox, oy) { if (R.portrait) { OX = oy; OY = -ox; } else { OX = ox; OY = oy; } }
+function layout() {
+  for (let i = 0; i < 7; i++) { off(CAND_AT[i][0], CAND_AT[i][1]); CAND[i].x = HEARSE.x + OX; CAND[i].y = HEARSE.y + OY; }
+  if (G.state !== 'title') return;      // before the first run: stand under the hearse on the screen, top held up the screen
+  off(0, 190); P.x = HEARSE.x + OX; P.y = HEARSE.y + OY; off(0, -1); aim.x = TC.dir.x = OX; aim.y = TC.dir.y = OY;
+  T.x = P.x + OX * 42; T.y = P.y + OY * 42; M.x = P.x + OX * 250; M.y = P.y + OY * 250;
+}
+
+const U0 = { cap: 12, pull: 210, bounce: 1, range: 1, charge: .55, throwMul: 1, move: 400, homing: 0, dashCut: 0, size: 1 };
+const UPS = [
+  ['it carries more.', u => { u.cap = 20; u.pull = 260; }],
+  ['one more bounce.', u => { u.bounce = 2; u.range *= 1.15; }],
+  ['faster.', u => { u.charge = .42; u.throwMul = 1.12; u.move = 430; }],
+  ['it finds them.', u => { u.homing = 1; }],
+  ['the dash cuts.', u => { u.dashCut = 1; }],
+  ['wider.', u => { u.size = 1.35; }],
+  ['it carries more.', u => { u.cap = 32; u.pull = 320; }],
+  ['one more bounce.', u => { u.bounce = 3; u.range *= 1.13; }],
+  ['faster.', u => { u.charge = .32; u.throwMul = 1.25; u.move = 455; }],
+  ['it carries more.', u => { u.cap = 48; u.pull = 380; }]
+];
+let U = Object.assign({}, U0);
+
+const G = { state: 'title', t: 0, run: 0, score: 0, shown: 0, best: 0, level: 1, xp: 0, need: 43, combo: 0, comboT: 0, mult: 1, cycle: 0,
+  hit: 0, slow: 0, lit: .45, litT: .45, ab: 0, flash: 0, hue: 0, hueT: 0, rose: 1, roseT: 1, dieT: 0, canStart: true, paused: false, pealT: -99,
+  moved: 0, dashed: false, threw: false, word: '', wordT: 0, cardOn: false, hurtBy: {} };
+const P = { x: 800, y: 690, vx: 0, vy: 0, ix: 0, iy: 0, face: -Math.PI / 2, dashT: 0, dashCD: 0, dx: 0, dy: -1, inv: 0, r: 15, flash: 0, ghost: [], gT: 0, cut: new Set() };
+const T = { state: 'held', x: 800, y: 648, vx: 0, vy: 0, spin: .12, ang: 0, out: 0, back: 0, maxOut: .3, bounces: 0, dmg: 1, hits: new Set(), melee: new Set(), meleeT: 0,
+  trail: [], orbit: [], charging: false, flash: 0, spk: 0, eta: 9 };
+let moths = [], spiders = [], darts = [], loose = [], shots = [], sparks = [], rings = [], flashes = [], puffs = [], ripples = [], timers = [], B = null;
+const D = { moth: .8, spider: 26, boss: 72 };
+const K = {}, M = { x: 800, y: 400, down: false, pressT: -9, pressState: '' }, aim = { x: 0, y: -1 };
+// one thumb: where it went down (ax, ay), where it is, the walk it asks for in room directions, and what the top is aimed at
+const TC = { on: false, id: null, tap: false, ax: 0, ay: 0, x: 0, y: 0, wx: 0, wy: 0, tgt: null, tx: 0, ty: 0, dir: { x: 0, y: -1 }, lastT: -1e9 };
+const UP_TOUCH = ['farther.', u => { u.range *= 1.2; }];   // a phone has no dash, so it gets this instead of 'the dash cuts.'
+try { G.best = +localStorage.getItem('hearse.best') || 0; } catch (e) { }
+
+const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function hueRGB(h) {
+  h = h - Math.floor(h);
+  const c = h < .22 ? [.04, .16, .9] : h < .44 ? [.85, .04, .07] : h < .62 ? [1, .62, .07] : h < .8 ? [.04, .6, .28] : [.5, .1, .75];
+  const k = .57735, a = G.hue, ca = Math.cos(a), sa = Math.sin(a), d = k * (c[0] + c[1] + c[2]) * k * (1 - ca);
+  return [Math.max(0, c[0] * ca + k * (c[2] - c[1]) * sa + d), Math.max(0, c[1] * ca + k * (c[0] - c[2]) * sa + d), Math.max(0, c[2] * ca + k * (c[1] - c[0]) * sa + d)];
+}
+function heatRGB(h) {
+  const a = clamp(h / .6, 0, 1), b = clamp((h - .75) / .25, 0, 1);
+  const c = [1, .45 + .39 * a, .12 + .4 * a];
+  return [c[0] + (.97 - c[0]) * b, c[1] + (1.1 - c[1]) * b, c[2] + (1.25 - c[2]) * b];
+}
+function pushOut(o, r) {
+  for (const ob of OBST) { const dx = o.x - ob.x, dy = o.y - ob.y, d = Math.hypot(dx, dy), m = ob.r + r;
+    if (d < m) { if (d < .001) o.x = ob.x + m; else { o.x = ob.x + dx / d * m; o.y = ob.y + dy / d * m; } } }
+  o.x = clamp(o.x, BX0 + r, BX1 - r); o.y = clamp(o.y, BY0 + r, BY1 - r);
+}
+function nearObst(x, y, pad) { for (const ob of OBST) if (Math.hypot(x - ob.x, y - ob.y) < ob.r + pad) return true; return false; }
+function later(t, fn) { timers.push({ t, fn }); }
+
+// ---------- effects
+function shardBurst(x, y, n, dx, dy, spd, hue) {
+  const base = Math.atan2(dy, dx);
+  for (let i = 0; i < n; i++) { if (loose.length > 520) loose.shift();
+    const a = base + rnd(-1.3, 1.3), v = spd * rnd(.25, 1), h = hue + rnd(-.08, .08);
+    loose.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, rot: rnd(0, TAU), vr: rnd(-14, 14), hue: h, col: hueRGB(h), age: 0, sz: rnd(15, 23), sk: rnd(0, 1.2) }); }
+}
+function sparkBurst(x, y, n, spd, col, life) {
+  for (let i = 0; i < n; i++) { if (sparks.length > 700) sparks.shift(); const a = rnd(0, TAU), v = spd * rnd(.2, 1);
+    sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: life * rnd(.5, 1), max: life, col }); }
+}
+function flashAt(x, y, rad, col, life) { if (flashes.length > 10) flashes.shift(); flashes.push({ x, y, rad, col, life, max: life }); }
+function ripple(x, y, amp, sp) { if (ripples.length > 3) ripples.shift(); ripples.push({ x, y, r: 0, amp, sp }); }
+function showWord(w) { G.word = w; G.wordT = 2.2; }
+
+// ---------- scoring
+function kill(pts) { G.combo++; G.comboT = 2.4; G.mult = 1 + Math.min(8, Math.floor(G.combo / 6)); G.score += pts * G.mult; }
+function gain(n) { G.xp += n; while (G.xp >= G.need && G.state === 'play') levelUp(); }
+function levelUp() {
+  G.xp -= G.need; G.level++; G.need = Math.round(20 + 16 * G.level + 7 * G.level * G.level);
+  const up = TC.on && G.level === 6 ? UP_TOUCH : UPS[G.level - 2]; let w = 'it carries more.';
+  if (up) { up[1](U); w = up[0]; } else U.cap += 8;
+  showWord(w); relightOne(); A.levelUp(); G.slow = .3;
+  rings.push({ x: P.x, y: P.y, r: 20, maxR: 520, sp: 1500, col: [1, .8, .35], kind: 'fx' });
+  flashAt(P.x, P.y, 600, [1, .8, .4], .6);
+}
+function relightOne() { for (let i = 6; i >= 0; i--) if (!CAND[i].lit) { CAND[i].lit = 1; A.relight(i); sparkBurst(CAND[i].x, CAND[i].y, 8, 160, [1, .7, .3], .5); return true; } return false; }
+
+// ---------- player
+function hurt(by) {
+  if (P.inv > 0 || G.state !== 'play' || G.god) return false;
+  G.hurtBy[by || 'other'] = (G.hurtBy[by || 'other'] || 0) + 1;
+  P.inv = 1.3; P.flash = 1; G.combo = 0; G.mult = 1; G.hit = Math.max(G.hit, .16); G.ab = 1;
+  const c = CAND.find(q => q.lit);
+  if (c) { c.lit = 0; for (let i = 0; i < 5; i++) { off(rnd(-14, 14), rnd(-40, -16)); puffs.push({ x: c.x, y: c.y, vx: OX, vy: OY, life: 1.4, max: 1.4, sz: rnd(22, 40), col: [.5, .5, .55], a: .5 }); } }
+  A.snuff(P.x); ripple(P.x, P.y, 14, 900);
+  rings.push({ x: P.x, y: P.y, r: 20, maxR: 280, sp: 1100, col: [.45, .55, 1], kind: 'fx' });
+  for (const m of moths) { const dx = m.x - P.x, dy = m.y - P.y, d = Math.hypot(dx, dy) || 1; if (d < 280) { m.vx = dx / d * 720; m.vy = dy / d * 720; m.lunge = .3; m.wind = 0; m.lcd = 1.4; } }
+  for (const s of spiders) { const dx = s.x - P.x, dy = s.y - P.y, d = Math.hypot(dx, dy) || 1; if (d < 280) { s.vx = dx / d * 520; s.vy = dy / d * 520; s.pause = .9; s.burst = 0; } }
+  for (const d of darts) if (Math.hypot(d.x - P.x, d.y - P.y) < 230) d.dead = true;
+  if (!CAND.some(q => q.lit)) die();
+  return true;
+}
+function die() { G.state = 'dying'; G.dieT = 0; G.litT = 0; T.charging = false; }
+function dead() {
+  G.state = 'dead'; G.canStart = false; A.strepitus(); recall();
+  moths = []; spiders = []; darts = []; shots = []; rings = []; B = null; G.roseT = 1;
+  if (G.score > G.best) { G.best = G.score; try { localStorage.setItem('hearse.best', String(G.best)); } catch (e) { } }
+  later(1.0, () => { G.cardOn = true; });
+  later(2.3, () => { CAND[6].lit = 1; A.relight(0); G.litT = .45; G.canStart = true; });
+}
+function start() {
+  A.init();
+  U = Object.assign({}, U0);
+  Object.assign(G, { state: 'play', run: 0, score: 0, shown: 0, level: 1, xp: 0, need: 43, combo: 0, comboT: 0, mult: 1, cycle: 0, hit: 0, slow: 0, litT: 1, hueT: 0, roseT: 1,
+    pealT: -99, word: '', wordT: 0, cardOn: false, hurtBy: {} });
+  moths = []; spiders = []; darts = []; shots = []; loose = []; rings = []; B = null; timers = [];
+  D.moth = .8; D.spider = 26; D.boss = 72;
+  T.state = 'held'; T.orbit.length = 0; T.trail.length = 0; T.spin = .12; T.charging = false; P.inv = 0; P.dashT = 0;
+  for (const b of BELLS) { b.cool = 0; b.rung = -99; b.flash = 0; }
+  CAND[6].lit = 1;
+  for (let i = 5; i >= 0; i--) later((6 - i) * .09, () => { CAND[i].lit = 1; A.relight(6 - i); sparkBurst(CAND[i].x, CAND[i].y, 5, 120, [1, .7, .3], .4); });
+}
+function dash() {
+  if (G.state !== 'play' || P.dashCD > 0 || G.paused) return;
+  let dx = P.ix, dy = P.iy; if (!dx && !dy) { dx = aim.x; dy = aim.y; }
+  P.dx = dx; P.dy = dy; P.dashT = .13; P.dashCD = .42; P.inv = Math.max(P.inv, .22); P.cut.clear(); A.dash(P.x); G.dashed = true;
+}
+function player(dt) {
+  let ix = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0), iy = (K.KeyS || K.ArrowDown ? 1 : 0) - (K.KeyW || K.ArrowUp ? 1 : 0);
+  if (R.portrait) { const w = R.dirToWorld(ix, iy); ix = w[0]; iy = w[1]; }   // W is always up the screen
+  if (TC.on) {
+    if (TC.id !== null) { ix = TC.wx; iy = TC.wy; }
+    const tg = G.state === 'play' ? pickTarget() : (TC.tgt = null);
+    if (tg) { const t = Math.min(.3, Math.hypot(TC.tx - P.x, TC.ty - P.y) / 2200); M.x = TC.tx + (tg.vx || 0) * t; M.y = TC.ty + (tg.vy || 0) * t; }
+    else { M.x = P.x + TC.dir.x * 220; M.y = P.y + TC.dir.y * 220; }
+  }
+  const il = Math.hypot(ix, iy); if (il > 1) { ix /= il; iy /= il; }
+  if (G.state === 'dying') { ix = 0; iy = 0; }
+  P.ix = ix; P.iy = iy;
+  if (P.dashT > 0) {
+    P.dashT -= dt; P.vx = P.dx * 1500; P.vy = P.dy * 1500;
+    P.gT -= dt; if (P.gT <= 0) { P.gT = .022; P.ghost.push({ x: P.x, y: P.y, f: P.face, a: .5 }); }
+    if (U.dashCut) {
+      for (const m of moths) if (!m.dead && m.spawn >= .5 && !P.cut.has(m) && Math.hypot(m.x - P.x, m.y - P.y) < 40) { P.cut.add(m); killMoth(m, P.dx, P.dy); }
+      for (const s of spiders) if (!s.dead && s.state === 'crawl' && !P.cut.has(s) && Math.hypot(s.x - P.x, s.y - P.y) < 50) { P.cut.add(s); hitSpider(s, 1, P.dx, P.dy); }
+    }
+  } else { const k = 1 - Math.exp(-dt * (il > 0 ? 22 : 30)); P.vx += (ix * U.move - P.vx) * k; P.vy += (iy * U.move - P.vy) * k; }
+  P.x += P.vx * dt; P.y += P.vy * dt; pushOut(P, P.r);
+  P.dashCD -= dt; P.inv -= dt; P.flash = Math.max(0, P.flash - dt * 3);
+  const ax = M.x - P.x, ay = M.y - P.y, al = Math.hypot(ax, ay); if (al > 4) { aim.x = ax / al; aim.y = ay / al; }
+  P.face = Math.atan2(aim.y, aim.x);
+  for (const g of P.ghost) g.a -= dt * 3.2; if (P.ghost.length) P.ghost = P.ghost.filter(g => g.a > 0);
+  G.moved += Math.hypot(P.vx, P.vy) * dt;
+}
+
+// what a thumb's throw goes for: the nearest thing, holding on to the one it already has unless another is clearly nearer
+function pickTarget() {
+  let best = null, bd = 1e12;
+  const see = (o, x, y) => { const d = ((x - P.x) * (x - P.x) + (y - P.y) * (y - P.y)) * (o === TC.tgt ? .7 : 1); if (d < bd) { bd = d; best = o; TC.tx = x; TC.ty = y; } };
+  for (const m of moths) if (!m.dead && m.spawn >= .5) see(m, m.x, m.y);
+  for (const q of spiders) if (!q.dead && q.state === 'crawl') see(q, q.x, q.y);
+  if (B && B.sc >= 1 && !B.dying) for (let k = 0; k < 12; k++) if (B.mask & (1 << k)) { const a = B.rot + (k + .5) / 12 * TAU; see(B, B.x + Math.cos(a) * B.RB * .75, B.y + Math.sin(a) * B.RB * .75); }
+  return TC.tgt = best;
+}
+
+// ---------- the top
+function throwTop() {
+  const p = Math.max(.18, T.spin), sp = (1450 + 1250 * p) * U.throwMul;
+  T.state = 'out'; T.dmg = 1 + Math.floor(p * 2.001); T.vx = aim.x * sp; T.vy = aim.y * sp; T.out = 0; T.maxOut = (.26 + .16 * p) * U.range; T.bounces = 0; T.hits.clear();
+  const base = Math.atan2(aim.y, aim.x);
+  for (const s of T.orbit) { const a = base + rnd(-.3, .3), v = sp * rnd(.8, 1.25);
+    shots.push({ x: s.x, y: s.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .5, hue: s.hue, col: s.col, rot: rnd(0, TAU) }); }
+  T.orbit.length = 0; A.throwS(p, T.x); if (p > .45) G.threw = true;
+  ripple(T.x, T.y, 3 + 5 * p, 1000);
+}
+function recall() { if (T.state !== 'out') return; T.state = 'back'; T.back = 0; T.hits.clear(); }
+function bounce(iron) {
+  T.bounces++; T.hits.clear(); if (iron) A.tonk(T.x); else A.tink(T.x);
+  sparkBurst(T.x, T.y, 8, 380, [1, .8, .45], .25); flashAt(T.x, T.y, 170, [1, .75, .4], .12);
+  if (T.bounces > U.bounce) recall();
+}
+function catchTop() {
+  const perfect = M.down && M.pressState === 'back' && (G.t - M.pressT) < .17 && G.state === 'play';
+  T.state = 'held'; T.trail.length = 0; T.hits.clear(); T.charging = M.down && G.state === 'play';
+  if (perfect) { T.spin = 1; T.flash = 1; G.hit = Math.max(G.hit, .045); sparkBurst(T.x, T.y, 14, 420, [1, .92, .6], .3);
+    rings.push({ x: T.x, y: T.y, r: 10, maxR: 130, sp: 800, col: [1, .9, .6], kind: 'fx' }); }
+  else T.spin = T.charging ? .34 : .14;
+  A.catchS(perfect, T.x);
+}
+function topHits(x, y, rad, dmg, dx, dy, set, melee) {
+  for (const m of moths) { if (m.dead || m.spawn < .5 || set.has(m)) continue; const ex = m.x - x, ey = m.y - y, q = rad + m.r; if (ex * ex + ey * ey < q * q) { set.add(m); killMoth(m, dx, dy); } }
+  for (const s of spiders) { if (s.dead || s.state !== 'crawl' || set.has(s)) continue; const ex = s.x - x, ey = s.y - y, q = rad + s.r; if (ex * ex + ey * ey < q * q) { set.add(s); hitSpider(s, dmg, dx, dy); } }
+  for (const d of darts) { if (d.dead) continue; const ex = d.x - x, ey = d.y - y, q = rad + 12; if (ex * ex + ey * ey < q * q) { d.dead = true;
+    if (melee) { G.score += 2 * G.mult; A.tick(d.x); T.flash = .4; if (T.orbit.length < U.cap) T.orbit.push({ a: rnd(0, TAU), hue: d.hue, col: d.col, x: d.x, y: d.y }); gain(1); }
+    else { shardBurst(d.x, d.y, 1, dx, dy, 200, d.hue); sparkBurst(d.x, d.y, 4, 250, d.col, .2); } } }
+  roseHit(x, y, rad, dmg, dx, dy, set);
+  for (const b of BELLS) { if (b.cool > 0) continue; const ex = b.x - x, ey = b.y - y, q = rad + 38; if (ex * ex + ey * ey < q * q) ringBell(b); }
+}
+function topUpdate(dt) {
+  const rad = 20 * U.size, w = 7 + 41 * T.spin;   // 48 rad/s at most: at 60 Hz a three-bladed thing still reads as turning the right way
+  T.ang += w * dt; T.flash = Math.max(0, T.flash - dt * 4); T.eta = 9;
+  if (T.state === 'held') {
+    const hx = P.x + aim.x * 42, hy = P.y + aim.y * 42, k = 1 - Math.exp(-dt * 32); T.x += (hx - T.x) * k; T.y += (hy - T.y) * k;
+    if (T.charging) {
+      const s0 = T.spin; T.spin = Math.min(1, T.spin + dt / U.charge);
+      if (s0 < .5 && T.spin >= .5) { A.tier(1); T.flash = .5; }
+      if (s0 < 1 && T.spin >= 1) { A.tier(2); T.flash = 1; rings.push({ x: T.x, y: T.y, r: 8, maxR: 90, sp: 600, col: [.8, .9, 1], kind: 'fx' }); }
+      T.meleeT -= dt; if (T.meleeT <= 0) { T.meleeT = .13; T.melee.clear(); }
+      topHits(T.x, T.y, rad + 6 + Math.min(16, T.orbit.length * .6), 1, aim.x, aim.y, T.melee, true);
+      T.spk += dt * (10 + 34 * T.spin);
+      while (T.spk > 1) { T.spk -= 1; const a = T.ang + Math.floor(rnd(0, 3)) * TAU / 3, rr = rad * 1.05, v = w * rr * .55 + 60;
+        if (sparks.length < 700) sparks.push({ x: T.x + Math.cos(a) * rr, y: T.y + Math.sin(a) * rr, vx: -Math.sin(a) * v + P.vx * .5, vy: Math.cos(a) * v + P.vy * .5, life: .17, max: .17, col: heatRGB(T.spin) }); }
+    } else T.spin = Math.max(.12, T.spin - dt / .5);
+  } else if (T.state === 'out') {
+    T.out += dt; const sp = Math.hypot(T.vx, T.vy), n = Math.max(1, Math.ceil(sp * dt / 14)), sd = dt / n;
+    for (let i = 0; i < n && T.state === 'out'; i++) {
+      T.x += T.vx * sd; T.y += T.vy * sd; let b = false;
+      if (T.x < BX0 + rad) { T.x = BX0 + rad; T.vx = Math.abs(T.vx); b = true; } else if (T.x > BX1 - rad) { T.x = BX1 - rad; T.vx = -Math.abs(T.vx); b = true; }
+      if (T.y < BY0 + rad) { T.y = BY0 + rad; T.vy = Math.abs(T.vy); b = true; } else if (T.y > BY1 - rad) { T.y = BY1 - rad; T.vy = -Math.abs(T.vy); b = true; }
+      if (b) bounce(false);
+      for (const ob of OBST) { const dx = T.x - ob.x, dy = T.y - ob.y, d = Math.hypot(dx, dy), m = ob.r + rad;
+        if (d < m && d > .001) { const nx = dx / d, ny = dy / d, vn = T.vx * nx + T.vy * ny; if (vn < 0) { T.vx -= 2 * vn * nx; T.vy -= 2 * vn * ny; } T.x = ob.x + nx * m; T.y = ob.y + ny * m; if (T.state === 'out') bounce(true); } }
+      topHits(T.x, T.y, rad, T.dmg, T.vx, T.vy, T.hits, false);
+    }
+    if (T.state === 'out' && T.out > T.maxOut) recall();
+  } else {
+    T.back += dt; const sp = Math.min(3800, 1500 + 7000 * T.back); let rem = sp * dt;
+    while (rem > 0 && T.state === 'back') {
+      const dx = P.x - T.x, dy = P.y - T.y, d = Math.hypot(dx, dy) || 1;
+      if (d < 36) { catchTop(); break; }
+      const st = Math.min(rem, 14, d); T.x += dx / d * st; T.y += dy / d * st; T.vx = dx / d * sp; T.vy = dy / d * sp; rem -= st;
+      topHits(T.x, T.y, rad, T.dmg, dx, dy, T.hits, false);
+    }
+    if (T.state === 'back') T.eta = Math.hypot(P.x - T.x, P.y - T.y) / sp;
+  }
+  if (T.state !== 'held' || T.charging) { T.trail.push(T.x, T.y); if (T.trail.length > 28) T.trail.splice(0, 2); }
+  else if (T.trail.length) T.trail.splice(0, 2);
+  // glass it is carrying
+  for (let i = 0; i < T.orbit.length; i++) { const s = T.orbit[i]; s.a += dt * (w * .42 + 2);
+    const rr = (27 + (i % 3) * 8 + Math.floor(i / 12) * 5) * U.size, tx = T.x + Math.cos(s.a) * rr, ty = T.y + Math.sin(s.a) * rr, k = 1 - Math.exp(-dt * 26);
+    s.x += (tx - s.x) * k; s.y += (ty - s.y) * k; }
+  // glass on the floor
+  const pull = T.state === 'held' ? (T.charging ? U.pull : 0) : 110, grab = 30 * U.size + 4;
+  for (const s of loose) {
+    s.age += dt;
+    if (s.age > .22 && G.state === 'play') {
+      const dx = T.x - s.x, dy = T.y - s.y, d = Math.hypot(dx, dy) || 1;
+      // glass that has been thrown once is ammunition only: picking it up again scores nothing
+      if (d < grab) { s.dead = true; A.tick(s.x); if (T.orbit.length < U.cap) T.orbit.push({ a: Math.atan2(-dy, -dx), hue: s.hue, col: s.col, x: s.x, y: s.y }); if (!s.spent) { G.score += G.mult; gain(1); } continue; }
+      if (d < pull) { const f = 3400 * (1 - d / pull) + 900; s.vx += dx / d * f * dt; s.vy += dy / d * f * dt; }
+      else if (Math.hypot(P.x - s.x, P.y - s.y) < 90) { s.vx += dx / d * 2400 * dt; s.vy += dy / d * 2400 * dt; }
+      else if (s.age > 4) { s.vx += dx / d * 300 * dt; s.vy += dy / d * 300 * dt; }
+    }
+    const fr = Math.exp(-dt * 3.2); s.vx *= fr; s.vy *= fr; s.x += s.vx * dt; s.y += s.vy * dt; s.rot += s.vr * dt; s.vr *= Math.exp(-dt * 2);
+    if (s.x < BX0 + 8 || s.x > BX1 - 8) { s.vx *= -.5; s.x = clamp(s.x, BX0 + 8, BX1 - 8); } if (s.y < BY0 + 8 || s.y > BY1 - 8) { s.vy *= -.5; s.y = clamp(s.y, BY0 + 8, BY1 - 8); }
+    if (s.age > 28) s.dead = true;
+  }
+}
+
+// ---------- things that come out of the dark
+function spawnMoth(x, y) { const seed = Math.random(); moths.push({ x, y, vx: 0, vy: 0, seed, ph: rnd(0, 6), spawn: 0, lunge: 0, wind: 0, lcd: rnd(.4, 1.2), flash: 0, face: Math.atan2(P.y - y, P.x - x), r: 20, sp: (185 + rnd(0, 75)) * (1 + .08 * G.cycle) * (1 + Math.min(.3, G.run / 400)) }); }
+function spawnMothGroup(n) {
+  let x, y;
+  // from the window light at first; more and more from the dark along the walls as the run goes on
+  if (Math.random() < clamp((G.run - 25) / 120, 0, .5)) { let t = 0;
+    do { const e = Math.floor(rnd(0, 4)); x = e === 0 ? BX0 + 36 : e === 1 ? BX1 - 36 : rnd(BX0 + 60, BX1 - 60); y = e === 2 ? BY0 + 36 : e === 3 ? BY1 - 36 : rnd(BY0 + 60, BY1 - 60); } while (Math.hypot(x - P.x, y - P.y) < 300 && ++t < 12); }
+  else { let t = 0; do { const k = Math.floor(rnd(0, 5)), al = rnd(70, 330), ac = rnd(-30, 30); x = 230 + k * 285 + DM.x * al - DM.y * ac; y = 50 + DM.y * al + DM.x * ac; } while ((nearObst(x, y, 24) || Math.hypot(x - P.x, y - P.y) < 150) && ++t < 12); }
+  for (let i = 0; i < n; i++) spawnMoth(clamp(x + rnd(-36, 36) * (i > 0), BX0 + 20, BX1 - 20), clamp(y + rnd(-36, 36) * (i > 0), BY0 + 20, BY1 - 20));
+}
+function killMoth(m, dx, dy, burn, soft) {
+  m.dead = true;
+  if (burn) { sparkBurst(m.x, m.y, 8, 160, [1, .5, .15], .4); return; }
+  const k = G.combo, col = hueRGB(m.seed * 3.7); kill(10); A.glass(m.x, k, false);
+  shardBurst(m.x, m.y, 3, dx, dy, 420, m.seed * 3.7); sparkBurst(m.x, m.y, 7, 380, col, .3); flashAt(m.x, m.y, 150, col, .14); if (!soft) G.hit = Math.max(G.hit, .02);
+}
+function spawnSpider() {
+  let x, y, t = 0;
+  do { const a = rnd(0, TAU), d = rnd(130, 260); x = P.x + Math.cos(a) * d; y = P.y + Math.sin(a) * d; } while ((x < BX0 + 70 || x > BX1 - 70 || y < BY0 + 70 || y > BY1 - 70 || nearObst(x, y, 60)) && ++t < 24);
+  if (t >= 24) { x = clamp(P.x + 200, BX0 + 80, BX1 - 80); y = clamp(P.y, BY0 + 80, BY1 - 80); }
+  spiders.push({ x, y, state: 'drop', t: 0, hp: 3 + G.cycle, face: rnd(0, TAU), vx: 0, vy: 0, burst: 0, pause: .45, phase: 0, flash: 0, r: 32, seed: Math.random() });
+  A.hiss(x);
+}
+function hitSpider(s, dmg, dx, dy) {
+  const l = Math.hypot(dx, dy) || 1, col = hueRGB(s.seed * 5.3);
+  s.hp -= dmg; s.flash = 1; s.vx += dx / l * 380; s.vy += dy / l * 380; s.pause = Math.max(s.pause, .22); s.burst = 0;
+  if (s.hp <= 0) { s.dead = true; const k = G.combo; kill(50); A.glass(s.x, k, true); shardBurst(s.x, s.y, 10, dx, dy, 520, s.seed * 5.3); sparkBurst(s.x, s.y, 18, 480, col, .45);
+    flashAt(s.x, s.y, 280, col, .22); G.hit = Math.max(G.hit, .07); ripple(s.x, s.y, 7, 900); }
+  else { A.chip(s.x); shardBurst(s.x, s.y, 2, dx, dy, 300, s.seed * 5.3); sparkBurst(s.x, s.y, 6, 300, col, .3); G.hit = Math.max(G.hit, .03); }
+}
+function ringBell(b) {
+  if (G.state !== 'play' && G.state !== 'dying') return;
+  b.cool = 5; b.flash = 1; b.swing = 1; b.rung = G.t; A.bell(b.i, b.x);
+  rings.push({ x: b.x, y: b.y, r: 30, maxR: 470, sp: 1250, col: [1, .72, .3], kind: 'bell', hit: new Set() });
+  ripple(b.x, b.y, 10, 1250); flashAt(b.x, b.y, 560, [1, .7, .3], .5); G.hit = Math.max(G.hit, .06);
+  if (G.state === 'play' && G.t - G.pealT > 14 && BELLS.every(q => G.t - q.rung < 5)) {
+    G.pealT = G.t; A.peal(); if (relightOne()) showWord('a candle comes back.');
+    rings.push({ x: HEARSE.x, y: HEARSE.y, r: 30, maxR: 900, sp: 1500, col: [1, .85, .5], kind: 'fx' }); flashAt(HEARSE.x, HEARSE.y, 900, [1, .8, .45], .8); G.score += 250 * G.mult;
+  }
+}
+function spawnRose() {
+  B = { x: ROSE.x, y: ROSE.y, rot: 0, mask: 4095, hp: new Array(12).fill(3 + G.cycle), pf: new Float32Array(12), sc: 0, th: Math.atan2((ROSE.y - 500) / 290, (ROSE.x - 800) / 430),
+    dir: Math.random() < .5 ? 1 : -1, fire: 2.4, pat: 0, flash: 0, dying: 0, RB: 128 };
+  G.roseT = 0; A.hiss(B.x); ripple(B.x, B.y, 8, 500);
+}
+function roseHit(x, y, rad, dmg, dx, dy, set) {
+  if (!B || B.sc < 1 || B.dying) return false;
+  const ex = x - B.x, ey = y - B.y, d = Math.hypot(ex, ey); if (d > B.RB + rad || d < B.RB * .46 - rad) return false;
+  let a = Math.atan2(ey, ex) - B.rot; a = ((a % TAU) + TAU) % TAU; const k = Math.floor(a / TAU * 12) % 12;
+  if (!(B.mask & (1 << k))) return false; const key = 'p' + k; if (set) { if (set.has(key)) return false; set.add(key); }
+  petal(k, dmg); return true;
+}
+function petal(k, dmg) {
+  const a = B.rot + (k + .5) / 12 * TAU, px = B.x + Math.cos(a) * B.RB * .75, py = B.y + Math.sin(a) * B.RB * .75, hue = k * .381, col = hueRGB(hue);
+  B.hp[k] -= dmg; B.pf[k] = 1; B.flash = .6;
+  if (B.hp[k] <= 0) { B.mask &= ~(1 << k); const kk = G.combo; kill(30); A.glass(px, kk, true); shardBurst(px, py, 6, Math.cos(a), Math.sin(a), 480, hue); sparkBurst(px, py, 14, 460, col, .4);
+    flashAt(px, py, 240, col, .2); G.hit = Math.max(G.hit, .06); ripple(px, py, 6, 900); if (B.mask === 0) { B.dying = .001; A.roseDown(); } }
+  else { A.chip(px); shardBurst(px, py, 1, Math.cos(a), Math.sin(a), 300, hue); sparkBurst(px, py, 5, 300, col, .3); G.hit = Math.max(G.hit, .025); }
+}
+function roseDown() {
+  for (let k = 0; k < 12; k++) shardBurst(B.x, B.y, 5, Math.cos(k * .52), Math.sin(k * .52), 700, k * .381);
+  sparkBurst(B.x, B.y, 60, 700, [1, .9, .7], .7); flashAt(B.x, B.y, 900, [1, .9, .75], .9); ripple(B.x, B.y, 18, 1100); G.hit = Math.max(G.hit, .14);
+  for (const d of darts) { d.dead = true; shardBurst(d.x, d.y, 1, d.vx, d.vy, 120, d.hue); }
+  G.score += 1000 * (G.cycle + 1); G.cycle++; G.hueT += 1.25; D.boss = 85; relightOne(); G.flash = .5; B = null;
+  later(3, () => { G.roseT = 1; });
+}
+function director(dt) {
+  const th = G.run, cap = 34 + G.level * 2;
+  D.moth -= dt;
+  if (D.moth <= 0 && moths.length < cap) {
+    const n = 1 + (Math.random() < Math.min(.7, th / 80) ? 1 + Math.floor(rnd(0, Math.min(5, 1 + th / 38))) : 0);
+    spawnMothGroup(th < 2 ? 2 : n);
+    D.moth = Math.max(.34, 1.7 - th / 70 - G.level * .03) * (B ? 2.2 : 1) * rnd(.75, 1.25);
+  }
+  D.spider -= dt;
+  if (D.spider <= 0) { if (spiders.length < 2 + G.cycle + Math.floor(th / 90)) spawnSpider(); D.spider = Math.max(3.5, 11 - th / 30) * (B ? 1.6 : 1); }
+  if (!B) { D.boss -= dt; if (D.boss <= 0) spawnRose(); }
+}
+function enemies(dt) {
+  for (const m of moths) {
+    if (m.dead) continue;
+    m.flash = Math.max(0, m.flash - dt * 5);
+    if (m.spawn < 1) { m.spawn += dt / .55; m.ph += dt * 9; if (m.spawn < 1) continue; }
+    const dx = P.x - m.x, dy = P.y - m.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
+    m.lcd -= dt;
+    if (m.wind > 0) { m.wind -= dt; const fr = Math.exp(-dt * 9); m.vx *= fr; m.vy *= fr; m.flash = .45; m.ph += dt * 26;
+      if (m.wind <= 0) { m.lunge = .26; m.vx = nx * 560; m.vy = ny * 560; } }
+    else if (m.lunge > 0) m.lunge -= dt;
+    else { const wv = Math.sin(G.run * 5 + m.seed * 40) * .75; let tx = nx - ny * wv, ty = ny + nx * wv; const tl = Math.hypot(tx, ty); tx /= tl; ty /= tl;
+      const k = 1 - Math.exp(-dt * 3.5); m.vx += (tx * m.sp - m.vx) * k; m.vy += (ty * m.sp - m.vy) * k;
+      if (d < 135 && m.lcd <= 0) { m.wind = .26; m.lcd = 1.6; } }
+    m.x += m.vx * dt; m.y += m.vy * dt; pushOut(m, m.r);
+    const sp = Math.hypot(m.vx, m.vy); m.ph += dt * (15 + sp * .05);
+    if (sp > 20) { let da = Math.atan2(m.vy, m.vx) - m.face; da = Math.atan2(Math.sin(da), Math.cos(da)); m.face += da * (1 - Math.exp(-dt * 12)); }
+    if (d < P.r + 14 && G.state === 'play' && P.dashT <= 0 && P.inv <= 0) { hurt('moth'); killMoth(m, 0, 0, true); }
+  }
+  for (let i = 0; i < moths.length; i++) for (let j = i + 1; j < moths.length; j++) { const a = moths[i], b = moths[j], dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+    if (d2 < 1156 && d2 > .01) { const d = Math.sqrt(d2), p = (34 - d) * .5 / d; a.x -= dx * p; a.y -= dy * p; b.x += dx * p; b.y += dy * p; } }
+  for (const s of spiders) {
+    if (s.dead) continue;
+    s.flash = Math.max(0, s.flash - dt * 5);
+    if (s.state === 'drop') { s.t += dt;
+      if (s.t >= 1.15) { s.state = 'crawl'; s.face = Math.atan2(P.y - s.y, P.x - s.x); A.thud(s.x); ripple(s.x, s.y, 6, 700);
+        for (let i = 0; i < 7; i++) puffs.push({ x: s.x + rnd(-20, 20), y: s.y + rnd(-20, 20), vx: rnd(-90, 90), vy: rnd(-90, 90), life: .7, max: .7, sz: rnd(40, 80), col: [.4, .38, .36], a: .35 });
+        if (Math.hypot(P.x - s.x, P.y - s.y) < 54 && P.dashT <= 0) hurt('drop'); }
+      continue; }
+    const dx = P.x - s.x, dy = P.y - s.y, d = Math.hypot(dx, dy) || 1;
+    if (s.pause > 0) { s.pause -= dt; let da = Math.atan2(dy, dx) - s.face; da = Math.atan2(Math.sin(da), Math.cos(da)); s.face += clamp(da, -7 * dt, 7 * dt);
+      const fr = Math.exp(-dt * 9); s.vx *= fr; s.vy *= fr; s.phase += dt * 6;
+      if (s.pause <= 0) { s.burst = .34; s.face += rnd(-.4, .4); A.skitter(s.x); } }
+    else { const sp = 440 * (1 + .1 * G.cycle); s.vx = Math.cos(s.face) * sp; s.vy = Math.sin(s.face) * sp; s.phase += dt * 40; s.burst -= dt; if (s.burst <= 0) s.pause = rnd(.22, .42); }
+    s.x += s.vx * dt; s.y += s.vy * dt; pushOut(s, s.r);
+    if (d < P.r + 30 && G.state === 'play' && P.dashT <= 0 && P.inv <= 0) hurt('spider');
+  }
+  for (const d of darts) { if (d.dead) continue; d.x += d.vx * dt; d.y += d.vy * dt; d.life -= dt;
+    if (d.x < BX0 || d.x > BX1 || d.y < BY0 || d.y > BY1 || d.life <= 0) { d.dead = true; sparkBurst(d.x, d.y, 3, 160, d.col, .2); continue; }
+    if (Math.hypot(d.x - P.x, d.y - P.y) < P.r + 9 && P.dashT <= 0 && P.inv <= 0 && G.state === 'play') { d.dead = true; hurt('dart'); } }
+  for (const s of shots) {
+    s.life -= dt; s.rot += dt * 22;
+    if (U.homing) { let best = null, bd = 300 * 300; for (const m of moths) { if (m.dead || m.spawn < .5) continue; const q = (m.x - s.x) * (m.x - s.x) + (m.y - s.y) * (m.y - s.y); if (q < bd) { bd = q; best = m; } }
+      for (const m of spiders) { if (m.dead || m.state !== 'crawl') continue; const q = (m.x - s.x) * (m.x - s.x) + (m.y - s.y) * (m.y - s.y); if (q < bd) { bd = q; best = m; } }
+      if (best) { const sp = Math.hypot(s.vx, s.vy), want = Math.atan2(best.y - s.y, best.x - s.x), cur = Math.atan2(s.vy, s.vx); let da = Math.atan2(Math.sin(want - cur), Math.cos(want - cur)); da = clamp(da, -10 * dt, 10 * dt); s.vx = Math.cos(cur + da) * sp; s.vy = Math.sin(cur + da) * sp; } }
+    s.x += s.vx * dt; s.y += s.vy * dt; let hit = false;
+    for (const m of moths) { if (m.dead || m.spawn < .5) continue; if (Math.hypot(m.x - s.x, m.y - s.y) < m.r + 9) { killMoth(m, s.vx, s.vy, false, true); hit = true; break; } }
+    if (!hit) for (const m of spiders) { if (m.dead || m.state !== 'crawl') continue; if (Math.hypot(m.x - s.x, m.y - s.y) < m.r + 6) { hitSpider(m, 1, s.vx, s.vy); hit = true; break; } }
+    if (!hit && roseHit(s.x, s.y, 8, 1, s.vx, s.vy, null)) hit = true;
+    if (!hit) for (const d of darts) { if (!d.dead && Math.hypot(d.x - s.x, d.y - s.y) < 18) { d.dead = true; hit = true; sparkBurst(d.x, d.y, 5, 260, d.col, .25); break; } }
+    if (hit) { s.dead = true; sparkBurst(s.x, s.y, 3, 200, s.col, .2); continue; }
+    const wall = s.x < BX0 + 8 || s.x > BX1 - 8 || s.y < BY0 + 8 || s.y > BY1 - 8 || nearObst(s.x, s.y, 4);
+    if (wall || s.life <= 0) { s.dead = true; if (loose.length < 520) loose.push({ x: clamp(s.x, BX0 + 10, BX1 - 10), y: clamp(s.y, BY0 + 10, BY1 - 10), vx: s.vx * (wall ? -.12 : .2), vy: s.vy * (wall ? -.12 : .2), rot: s.rot, vr: rnd(-10, 10), hue: s.hue, col: s.col, age: 0, sz: rnd(12, 18), sk: rnd(0, 1.2), spent: true }); }
+  }
+  if (B) {
+    for (let k = 0; k < 12; k++) B.pf[k] = Math.max(0, B.pf[k] - dt * 5);
+    B.flash = Math.max(0, B.flash - dt * 3);
+    if (B.dying) { B.dying += dt; B.rot += dt * 6; if (Math.random() < dt * 30) sparkBurst(B.x + rnd(-80, 80), B.y + rnd(-80, 80), 3, 300, [1, .9, .7], .3); if (B.dying > .9) roseDown(); }
+    else if (B.sc < 1) { B.sc = Math.min(1, B.sc + dt / 1.4); }
+    else {
+      B.th += dt * .2 * B.dir; B.rot += dt * .35 * B.dir;
+      const tx = 800 + Math.cos(B.th) * 430, ty = 500 + Math.sin(B.th) * 290, k = 1 - Math.exp(-dt * 1.2); B.x += (tx - B.x) * k; B.y += (ty - B.y) * k;
+      let alive = 0; for (let q = 0; q < 12; q++) if (B.mask & (1 << q)) alive++;
+      B.fire -= dt;
+      if (B.fire <= 0 && darts.length < 90) { B.fire = 1.5 + 1.4 * alive / 12; B.pat ^= 1; B.flash = .3;
+        if (B.pat) { for (let q = 0; q < 12; q++) if (B.mask & (1 << q)) { const a = B.rot + (q + .5) / 12 * TAU, sp = 250 + 20 * G.cycle, hue = q * .381;
+            darts.push({ x: B.x + Math.cos(a) * B.RB, y: B.y + Math.sin(a) * B.RB, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, hue, col: hueRGB(hue), life: 8 }); } }
+        else { const base = Math.atan2(P.y - B.y, P.x - B.x); for (let q = -2; q <= 2; q++) { const a = base + q * .17, sp = 340 + 20 * G.cycle, hue = .5 + q * .1;
+            darts.push({ x: B.x + Math.cos(a) * B.RB * .9, y: B.y + Math.sin(a) * B.RB * .9, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, hue, col: hueRGB(hue), life: 8 }); } }
+        A.skitter(B.x); }
+      const ex = P.x - B.x, ey = P.y - B.y, d = Math.hypot(ex, ey) || 1;
+      if (d < B.RB * .97 + P.r && G.state === 'play') { let a = Math.atan2(ey, ex) - B.rot; a = ((a % TAU) + TAU) % TAU; const q = Math.floor(a / TAU * 12) % 12;
+        if ((B.mask & (1 << q)) || d < B.RB * .5) { if (P.dashT <= 0 && P.inv <= 0) hurt('rose'); P.x = B.x + ex / d * (B.RB + P.r + 2); P.y = B.y + ey / d * (B.RB + P.r + 2); pushOut(P, P.r); } }
+    }
+  }
+  for (const r of rings) { r.r += r.sp * dt; if (r.r > r.maxR) { r.dead = true; continue; }
+    if (r.kind !== 'bell') continue;
+    for (const m of moths) if (!m.dead && m.spawn >= .5 && Math.hypot(m.x - r.x, m.y - r.y) < r.r) killMoth(m, m.x - r.x, m.y - r.y, false, true);
+    for (const s of spiders) if (!s.dead && s.state === 'crawl' && !r.hit.has(s) && Math.hypot(s.x - r.x, s.y - r.y) < r.r) { r.hit.add(s); hitSpider(s, 2, s.x - r.x, s.y - r.y); }
+    for (const d of darts) if (!d.dead && Math.hypot(d.x - r.x, d.y - r.y) < r.r) { d.dead = true; shardBurst(d.x, d.y, 1, d.x - r.x, d.y - r.y, 160, d.hue); }
+    if (B && B.sc >= 1 && !B.dying && !r.hit.has(B) && Math.hypot(B.x - r.x, B.y - r.y) < r.r + B.RB * .6) { r.hit.add(B); for (let k = 0; k < 12 && B && !B.dying; k++) if (B.mask & (1 << k)) petal(k, 1); }
+  }
+}
+function fx(dt, rdt) {
+  for (const s of sparks) { s.x += s.vx * dt; s.y += s.vy * dt; const fr = Math.exp(-dt * 4); s.vx *= fr; s.vy *= fr; s.life -= dt; }
+  for (const f of flashes) f.life -= dt;
+  for (const p of puffs) { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; p.sz += dt * 30; }
+  for (const r of ripples) { r.r += r.sp * dt; r.amp *= Math.exp(-dt * 5); }
+  for (const b of BELLS) { b.cool -= dt; b.flash = Math.max(0, b.flash - dt * 1.6); b.swing = Math.max(0, b.swing - dt * .5); b.ready += ((b.cool <= 0 ? 1 : 0) - b.ready) * (1 - Math.exp(-rdt * 6)); }
+  for (const c of CAND) c.v += (c.lit - c.v) * (1 - Math.exp(-rdt * (c.lit ? 6 : 12)));
+  moths = moths.filter(o => !o.dead); spiders = spiders.filter(o => !o.dead); darts = darts.filter(o => !o.dead); shots = shots.filter(o => !o.dead);
+  loose = loose.filter(o => !o.dead); sparks = sparks.filter(o => o.life > 0); flashes = flashes.filter(o => o.life > 0); puffs = puffs.filter(o => o.life > 0);
+  rings = rings.filter(o => !o.dead); ripples = ripples.filter(o => o.amp > .25);
+}
+function update(rdt) {
+  G.t += rdt;
+  for (const q of timers) q.t -= rdt;
+  if (timers.length) { const due = timers.filter(q => q.t <= 0); timers = timers.filter(q => q.t > 0); for (const q of due) q.fn(); }
+  let ts = 1; if (G.hit > 0) { G.hit -= rdt; ts = .04; } else if (G.slow > 0) { G.slow -= rdt; ts = .3; }
+  if (G.state === 'dying') { ts = .3; G.dieT += rdt; if (G.dieT > .95) dead(); }
+  const dt = rdt * ts;
+  player(dt); topUpdate(dt);
+  if (G.state === 'play' || G.state === 'dying') { G.run += dt; enemies(dt); if (G.state === 'play') director(dt); }
+  fx(dt, rdt);
+  G.comboT -= dt; if (G.comboT <= 0 && G.combo) { G.combo = 0; G.mult = 1; }
+  G.lit += (G.litT - G.lit) * (1 - Math.exp(-rdt * (G.state === 'dying' ? 4.5 : 2.5)));
+  G.hue += (G.hueT - G.hue) * (1 - Math.exp(-rdt * 1.2)); G.rose += (G.roseT - G.rose) * (1 - Math.exp(-rdt * 2));
+  G.ab = Math.max(0, G.ab - rdt * 3.5); G.flash = Math.max(0, G.flash - rdt * 2); G.wordT -= rdt;
+  const I = G.state === 'play' ? clamp(.14 + moths.length / 22 + spiders.length * .12 + (B ? .45 : 0) + G.combo / 40, 0, 1) : 0;
+  A.frame(T.spin, T.charging && T.state === 'held', I);
+}
+
+// ---------- drawing
+function draw() {
+  R.begin();
+  const lit = G.lit, heat = T.spin, hc = heatRGB(heat), ti = (.9 + 1.2 * heat + .6 * T.flash) * (.25 + .75 * lit);
+  R.setLight(0, T.x, T.y, 62, (640 + 420 * heat) * (.8 + .2 * U.size), hc[0] * ti, hc[1] * ti, hc[2] * ti);
+  let nc = 0; for (const c of CAND) nc += c.v;
+  const fl = .93 + .05 * Math.sin(G.t * 11.3) + .035 * Math.sin(G.t * 23.7), hi = .62 * nc * fl;
+  off(0, -22); R.setLight(1, 800 + OX, 500 + OY, 120, 1150, 1.0 * hi, .6 * hi, .28 * hi);
+  R.light(P.x, P.y, 40, 210, .09 * lit + .03, .09 * lit + .03, .12 * lit + .04);
+  if (B) { const e = B.sc * (B.dying ? 2.5 : 1) * (.55 + B.flash); R.light(B.x, B.y, 110, 520, 1.0 * e, .85 * e, .7 * e); }
+  for (const b of BELLS) { if (b.flash > .02) R.light(b.x, b.y, 90, 620, 2.6 * b.flash, 1.8 * b.flash, .8 * b.flash); R.bell(b.i, b.x, b.y, b.ready * (.25 + .75 * lit), b.flash); }
+  for (let i = flashes.length - 1; i >= 0; i--) { const f = flashes[i], k = f.life / f.max * 1.6; R.light(f.x, f.y, 60, f.rad, f.col[0] * k, f.col[1] * k, f.col[2] * k); }
+  for (const p of PILLARS) R.occ(p.x, p.y, p.r - 2, 3);
+  R.occ(P.x, P.y, P.r - 2, 3); R.occ(HEARSE.x, HEARSE.y, 15, 1);
+  for (const s of spiders) if (s.state === 'crawl') R.occ(s.x, s.y, 22, 3);
+  for (const r of ripples) R.ripple(r.x, r.y, r.r, r.amp);
+
+  // floor level
+  for (const p of PILLARS) R.spr(S.SHADOW, p.x, p.y, p.r * 3.5, p.r * 3.5, 0, 0, 0, 0, .62);
+  R.spr(S.SHADOW, HEARSE.x, HEARSE.y, 250, 250, 0, 0, 0, 0, .45);
+  off(18, 26); for (const b of BELLS) R.spr(S.SHADOW, b.x + OX, b.y + OY, 136, 136, 0, 0, 0, 0, .4);
+  for (const s of loose) { const fade = s.age > 26 ? (28 - s.age) / 2 : 1, tw = .12 + .5 * Math.max(0, Math.sin(G.t * 3 + s.rot * 3)) ** 8;
+    R.spr(S.GLOW, s.x, s.y, 38, 38, 0, s.col[0], s.col[1], s.col[2], (.10 + .5 * tw) * fade, 0);
+    R.spr(S.SHARD, s.x, s.y, s.sz, s.sz, s.rot, s.col[0], s.col[1], s.col[2], fade, s.sk, .1 + tw, s.rot * 2, 0, 2); }
+  for (const s of spiders) if (s.state === 'drop') { const t = s.t / 1.15; R.spr(S.SHADOW, s.x, s.y, 40 + 110 * t, 40 + 110 * t, 0, 0, 0, 0, .25 + .6 * t); }
+  R.spr(S.HEARSE, HEARSE.x, HEARSE.y, 184, 184, R.portrait ? -Math.PI / 2 : 0, 1, 1, 1, 1, 0, 0, 0, 0, 30);
+  for (const c of CAND) R.spr(S.CANDLE, c.x, c.y, 48, 48, 0, 1, 1, 1, 1, c.v * (.9 + .1 * Math.sin(G.t * 13 + c.ph * 3)), G.t * 9 + c.ph, 0, 0, 34);
+  off(6, 9); for (const s of spiders) if (s.state === 'crawl') { R.spr(S.SHADOW, s.x + OX, s.y + OY, 130, 130, 0, 0, 0, 0, .45);
+    R.spr(S.SPIDER, s.x, s.y, 150, 150, s.face, 1, 1, 1, 1, s.phase, s.seed, s.flash, 0, 16); }
+  off(4, 6); R.spr(S.SHADOW, P.x + OX, P.y + OY, 56, 56, 0, 0, 0, 0, .5);
+  for (const g of P.ghost) R.spr(S.PLAYER, g.x, g.y, 46, 46, g.f, .3, .4, .9, g.a, .5, 0, 0, 0, 20);
+  const blink = P.inv > 0 && P.dashT <= 0 && G.state === 'play' ? (.45 + .55 * (Math.sin(G.t * 40) > 0)) : 1, dsh = P.dashT > 0 ? 1.5 : 1;
+  R.spr(S.PLAYER, P.x, P.y, 46 * dsh, 46 / Math.sqrt(dsh), P.dashT > 0 ? Math.atan2(P.dy, P.dx) : P.face, 1, .35, .25, blink, P.flash, 0, 0, 0, 20);
+  for (const p of PILLARS) R.spr(S.PILLAR, p.x, p.y, p.r * 2, p.r * 2, 0, 1, 1, 1, 1, 0, 0, 0, 0, 22);
+  // in the air
+  off(10, 15); for (const m of moths) { const c = hueRGB(m.seed * 3.7);
+    if (m.spawn < 1) R.spr(S.GLOW, m.x, m.y, 150, 150, 0, c[0], c[1], c[2], .9 * (1 - m.spawn) + .15, 0);
+    R.spr(S.SHADOW, m.x + OX, m.y + OY, 60, 60, 0, 0, 0, 0, .26 * Math.min(1, m.spawn));
+    R.spr(S.MOTH, m.x, m.y, 86, 86, m.face, 1, 1, 1, 1, m.ph, m.seed, m.flash, Math.min(1, m.spawn), 40); }
+  for (const d of darts) { R.spr(S.GLOW, d.x, d.y, 70, 70, 0, d.col[0], d.col[1], d.col[2], .5, 0);
+    R.spr(S.DART, d.x, d.y, 36, 36, Math.atan2(d.vy, d.vx), d.col[0], d.col[1], d.col[2], 1, 0, 0, 0, 0, 40); }
+  if (B) { const e = B.dying ? 1 + B.dying * .25 : .35 + .65 * B.sc, sz = B.RB * 2 * e;
+    off(26 * B.sc, 34 * B.sc); R.spr(S.SHADOW, B.x + OX, B.y + OY, sz * 1.15, sz * 1.15, 0, 0, 0, 0, .5 * B.sc);
+    R.spr(S.ROSE, B.x, B.y, sz, sz, B.rot, 1, 1, 1, 1, B.mask, B.flash + (B.dying ? 2 : 0), Math.atan2(P.y - B.y, P.x - B.x) - B.rot, Math.min(1, B.sc * 1.5), 60); }
+  for (const b of BELLS) { const sw = Math.sin(G.t * 9) * 7 * b.swing; R.spr(S.BELL, b.x + sw, b.y, 118, 118, (b.i % 2) * 1.5708, 1, 1, 1, 1, b.flash, b.ready * (.25 + .75 * lit), 0, 0, 22); }
+  // the chain and the top
+  if (T.state !== 'held') { const dx = T.x - P.x, dy = T.y - P.y, d = Math.hypot(dx, dy);
+    R.spr(S.STREAK, (T.x + P.x) / 2, (T.y + P.y) / 2, d, 7, Math.atan2(dy, dx), .8, .6, .28, .5, 0, d / 11); }
+  const tr = T.trail, tn = tr.length / 2;
+  for (let i = 1; i < tn; i++) { const x0 = tr[i * 2 - 2], y0 = tr[i * 2 - 1], x1 = tr[i * 2], y1 = tr[i * 2 + 1], d = Math.hypot(x1 - x0, y1 - y0); if (d < .5) continue;
+    const k = i / tn, an = Math.atan2(y1 - y0, x1 - x0);
+    R.spr(S.STREAK, (x0 + x1) / 2, (y0 + y1) / 2, d * 1.7 + 8, (14 + 34 * k) * U.size, an, hc[0], hc[1], hc[2], k * k * (.22 + .6 * heat), 0, 0);
+    if (T.state !== 'held') R.spr(S.STREAK, (x0 + x1) / 2, (y0 + y1) / 2, d * 1.7 + 8, (5 + 9 * k) * U.size, an, 1, .95, .85, k * k * .5, 0, 0); }
+  for (const s of shots) { const a = Math.atan2(s.vy, s.vx); R.spr(S.STREAK, s.x - Math.cos(a) * 26, s.y - Math.sin(a) * 26, 70, 9, a, s.col[0], s.col[1], s.col[2], .9, 1, 0);
+    R.spr(S.SHARD, s.x, s.y, 17, 17, s.rot, s.col[0], s.col[1], s.col[2], 1, .5, 1, s.rot, 0, 40); }
+  R.spr(S.GLOW, T.x, T.y, (96 + 40 * heat) * U.size, (96 + 40 * heat) * U.size, 0, hc[0], hc[1], hc[2], (.07 + .07 * heat + .22 * T.flash) * (.3 + .7 * lit), 0);
+  for (const s of T.orbit) R.spr(S.SHARD, s.x, s.y, 15, 15, s.a * 2, s.col[0], s.col[1], s.col[2], 1, .5, .5 + .5 * heat, s.a, 0, 40);
+  const tsz = (T.state === 'held' ? 66 : 76) * U.size;
+  if (T.state === 'held') R.spr(S.STREAK, (T.x + P.x + aim.x * 19) / 2, (T.y + P.y + aim.y * 19) / 2, 26, 6, P.face, .8, .6, .28, .5, 0, 3);
+  off(4, 7); R.spr(S.SHADOW, T.x + OX, T.y + OY, tsz * 1.25, tsz * 1.25, 0, 0, 0, 0, .5);
+  R.spr(S.TOP, T.x, T.y, tsz, tsz, T.ang, 1, 1, 1, 1, clamp((7 + 41 * T.spin) * .024, 0, 1.9), heat * (.3 + .7 * lit), T.flash, 0, 30);
+  // light and sparks on top of everything
+  for (const s of sparks) { const k = s.life / s.max, sp = Math.hypot(s.vx, s.vy); R.spr(S.STREAK, s.x, s.y, sp * .035 + 8, 5, Math.atan2(s.vy, s.vx), s.col[0], s.col[1], s.col[2], k * .8, 1, 0); }
+  for (const r of rings) { const hs = r.r + 40, k = 1 - r.r / r.maxR; R.spr(S.RING, r.x, r.y, hs * 2, hs * 2, 0, r.col[0], r.col[1], r.col[2], k * (r.kind === 'bell' ? 1.6 : .9), r.r / hs, (r.kind === 'bell' ? 22 : 12) / hs); }
+  for (const p of puffs) R.spr(S.PUFF, p.x, p.y, p.sz, p.sz, 0, p.col[0], p.col[1], p.col[2], p.a * p.life / p.max, p.max, 0, 0, 0, 50);
+  if (T.state === 'back' && T.eta < .5) { const rr = 26 + T.eta * 300, hs = rr + 20, ok = T.eta < .17; R.spr(S.RING, P.x + aim.x * 42, P.y + aim.y * 42, hs * 2, hs * 2, 0, ok ? 1 : .7, ok ? 1 : .6, ok ? 1 : .4, ok ? .8 : .2, rr / hs, 5 / hs); }
+  if (!G.paused && (!TC.on || TC.tgt)) R.spr(S.RETICLE, TC.on ? TC.tx : M.x, TC.on ? TC.ty : M.y, 38, 38, 0, .95, .9, .78, G.state === 'play' ? (TC.on ? .5 : .8) : .45, T.state === 'held' && T.charging ? T.spin : 0);
+
+  const amb = .55 + .45 * lit;
+  R.flush({ time: G.t, hue: G.hue, amb: [.016 * amb, .02 * amb, .034 * amb], rose: G.rose * (B ? 0 : 1), pool: .2 + .8 * lit, exp: 1.15, bloom: .7,
+    ab: .0015 + .012 * G.ab, dark: G.paused ? .5 : 0, flash: [1, .95, .85, G.flash * .5] });
+}
+
+// ---------- words and glyphs
+const $ = id => document.getElementById(id);
+let el = null, shownScore = -1, shownMult = 0, wasPlaying = null;
+function place(e, x, y, ox, oy) { const q = R.toStage(x, y); e.style.left = (q[0] + (ox || 0) * q[2]) + '%'; e.style.top = (q[1] + (oy || 0) * q[3]) + '%'; }
+function hud() {
+  if (!el) el = { score: $('score'), mult: $('mult'), word: $('word'), title: $('title'), card: $('card'), cs: $('cs'), cb: $('cb'), go: $('go'), hm: $('hm'), hh: $('hh'), hd: $('hd'), ht: $('ht'), pause: $('pause'), stick: $('stick'), knob: $('knob') };
+  const play = G.state === 'play' || G.state === 'dying';
+  // the page can hide its own furniture (the site's home link) while a run is on
+  if ((play && !G.paused) !== wasPlaying) { wasPlaying = play && !G.paused; document.body.classList.toggle('playing', wasPlaying); }
+  G.shown += (G.score - G.shown) * .2; const sc = Math.round(G.shown);
+  if (sc !== shownScore) { shownScore = sc; el.score.textContent = sc.toLocaleString('en-US'); }
+  el.score.style.opacity = play ? .85 : 0;
+  if (G.mult !== shownMult) { shownMult = G.mult; el.mult.textContent = G.mult > 1 ? '\u00d7' + G.mult : ''; el.mult.classList.remove('pop'); void el.mult.offsetWidth; el.mult.classList.add('pop'); }
+  el.mult.style.opacity = play && G.mult > 1 ? .9 : 0;
+  el.word.textContent = G.word; el.word.style.opacity = clamp(G.wordT, 0, 1); place(el.word, P.x, P.y, 0, 46);
+  { const m = R.portrait ? 24 : 11; el.word.style.left = clamp(parseFloat(el.word.style.left), m, 100 - m) + '%'; }
+  el.title.style.opacity = G.state === 'title' ? .9 : 0;
+  el.go.style.opacity = (G.state === 'title' || (G.state === 'dead' && G.canStart)) ? .8 : 0;
+  el.card.style.opacity = G.state === 'dead' && G.cardOn ? 1 : 0;
+  if (G.state === 'dead') { el.cs.textContent = G.score.toLocaleString('en-US'); el.cb.textContent = 'best ' + G.best.toLocaleString('en-US'); }
+  const hm = G.state === 'play' && G.moved < 260, hh = G.state === 'play' && !G.threw && G.run > .6, hd = G.state === 'play' && !G.dashed && G.run > 14 && !hm && !hh;
+  if (TC.on) {     // a thumb is told with two moving dots where it rests: drag, then hold and lift
+    el.hm.style.opacity = el.hh.style.opacity = el.hd.style.opacity = 0;
+    el.ht.style.opacity = hm || hh ? .8 : 0; el.ht.className = 'hint ' + (hm ? 'd' : 'l');
+  } else {
+    el.ht.style.opacity = 0;
+    el.hm.style.opacity = hm ? .75 : 0; el.hh.style.opacity = hh && !hm ? .8 : 0; el.hd.style.opacity = hd ? .75 : 0;
+    place(el.hm, P.x, P.y, 0, -62); place(el.hd, P.x, P.y, 0, -62); place(el.hh, T.x + aim.x * 52, T.y + aim.y * 52);
+  }
+  const st = TC.id !== null && !TC.tap && !G.paused;
+  el.stick.style.opacity = st ? .45 : 0; el.knob.style.opacity = st ? .7 : 0;
+  if (st) { el.stick.style.transform = 'translate(' + TC.ax + 'px,' + TC.ay + 'px)'; el.knob.style.transform = 'translate(' + TC.x + 'px,' + TC.y + 'px)'; }
+  el.pause.style.opacity = G.paused ? .9 : 0;
+  document.body.style.cursor = G.paused ? 'default' : 'none';
+}
+
+// ---------- input
+function setPause(p) {
+  if (G.state !== 'play' && p) return;
+  G.paused = p; A.pause(p);
+  if (p) { M.down = false; T.charging = false; TC.id = null; TC.tap = false; TC.wx = TC.wy = 0; for (const k in K) K[k] = false; }
+}
+function pressStart() { if (G.state === 'title' || (G.state === 'dead' && G.canStart)) { start(); return true; } return false; }
+function setTouch(on) { if (TC.on === on) return; TC.on = on; TC.tgt = null; document.body.classList.toggle('touch', on); }
+// the thumb is a stick that starts wherever it lands and is dragged along if it goes past its edge
+function stick() {
+  const RM = 46; let dx = TC.x - TC.ax, dy = TC.y - TC.ay, len = Math.hypot(dx, dy);
+  if (len > RM) { TC.ax += dx * (1 - RM / len); TC.ay += dy * (1 - RM / len); dx = TC.x - TC.ax; dy = TC.y - TC.ay; len = RM; }
+  if (len < .001) { TC.wx = TC.wy = 0; return; }
+  const m = clamp((len - 7) / (RM - 7), 0, 1), w = R.dirToWorld(dx / len, dy / len);
+  TC.wx = w[0] * m; TC.wy = w[1] * m;
+  if (m > .25) { TC.dir.x = w[0]; TC.dir.y = w[1]; }
+}
+function boot() {
+  const cv = $('c');
+  try { R.init(cv); } catch (e) { $('err').textContent = String(e.message || e); throw e; }
+  layout();
+  const fit = () => { const was = R.portrait; R.resize(); if (R.portrait !== was) layout(); };
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', () => setTimeout(fit, 60));
+  window.addEventListener('mousemove', e => {
+    if (TC.on) { if (TC.id !== null || performance.now() - TC.lastT < 800) return; setTouch(false); }   // a real mouse takes over from a thumb
+    const w = R.toWorld(e.clientX, e.clientY); M.x = w[0]; M.y = w[1];
+  });
+  const link = e => e.target && e.target.closest && e.target.closest('a');     // a link on the page (the site's home link) is not the game
+  window.addEventListener('mousedown', e => {
+    if (G.paused || TC.on || link(e)) return;
+    if (e.button === 0) { M.down = true; M.pressT = G.t; pressStart();
+      if (G.state === 'play') { if (T.state === 'held') { T.charging = true; M.pressState = 'held'; } else if (T.state === 'out') { M.pressState = 'recall'; if (T.out > .1) recall(); } else M.pressState = 'back'; } }   // a press right after a throw is not a recall
+    else if (e.button === 2) dash();
+    e.preventDefault();
+  });
+  window.addEventListener('mouseup', e => { if (e.button !== 0 || TC.on) return; M.down = false; if (G.state === 'play' && T.state === 'held' && T.charging && !G.paused) throwTop(); T.charging = false; });
+  window.addEventListener('contextmenu', e => e.preventDefault());
+  // one thumb. down: walk and spin. up: throw. a touch never calls the top back early, because a thumb has to come down to walk.
+  document.addEventListener('touchstart', e => {
+    if (link(e)) return;
+    if (e.cancelable) e.preventDefault(); setTouch(true); TC.lastT = performance.now();
+    if (TC.id !== null) {      // the thumb we were following is gone without a word from the browser: let go of it
+      let here = false; for (const t of e.touches) if (t.identifier === TC.id) here = true;
+      if (here) return; TC.id = null; TC.tap = false; TC.wx = TC.wy = 0; M.down = false; T.charging = false;
+    }
+    const t = e.changedTouches[0]; TC.id = t.identifier; TC.ax = TC.x = t.clientX; TC.ay = TC.y = t.clientY; TC.wx = TC.wy = 0;
+    TC.tap = G.paused || G.state !== 'play';      // this touch is a tap: it wakes a paused game, or starts a run when it lifts
+    if (G.paused) { setPause(false); TC.id = t.identifier; return; }
+    if (TC.tap) return;
+    M.down = true; M.pressT = G.t;
+    if (T.state === 'held') { T.charging = true; M.pressState = 'held'; } else M.pressState = T.state === 'back' ? 'back' : 'recall';
+  }, { passive: false });
+  document.addEventListener('touchmove', e => {
+    if (link(e)) return; if (e.cancelable) e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === TC.id && !TC.tap) { TC.x = t.clientX; TC.y = t.clientY; stick(); }
+  }, { passive: false });
+  const lift = cancel => e => {
+    TC.lastT = performance.now();
+    for (const t of e.changedTouches) if (t.identifier === TC.id) {
+      if (!link(e) && e.cancelable) e.preventDefault();
+      const tap = TC.tap; TC.id = null; TC.tap = false; TC.wx = TC.wy = 0; M.down = false;
+      if (!cancel) A.init();                    // a lifted finger is what a phone accepts as leave to make sound
+      if (tap) { if (!cancel && !G.paused && Math.hypot(t.clientX - TC.ax, t.clientY - TC.ay) < 14) pressStart(); }
+      else if (!cancel && G.state === 'play' && T.state === 'held' && T.charging && !G.paused) throwTop();
+      T.charging = false;
+    }
+  };
+  document.addEventListener('touchend', lift(false), { passive: false });
+  document.addEventListener('touchcancel', lift(true), { passive: false });
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Escape') { if (!e.repeat) setPause(!G.paused); return; }
+    if (G.paused) return;
+    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+    K[e.code] = true;
+    if (e.repeat) return;
+    if ((e.code === 'Space' || e.code === 'Enter') && pressStart()) return;
+    if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') dash();
+    if (e.code === 'KeyM') A.mute();
+  });
+  window.addEventListener('keyup', e => { K[e.code] = false; });
+  const away = () => { for (const k in K) K[k] = false; if (M.down) { M.down = false; T.charging = false; } if (G.state === 'play') setPause(true); else A.pause(true); };
+  const here = () => { if (!G.paused && !document.hidden) A.pause(false); };
+  window.addEventListener('blur', away); window.addEventListener('focus', here);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) away(); else here(); });
+  if (window.matchMedia && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) setTouch(true);
+  CAND[6].lit = 1; CAND[6].v = 1;
+  let last = performance.now(), ft = 16, slowN = 0, fc = 0, gov = true, ftWas = 0, scWas = 1;
+  function frame(now) {
+    requestAnimationFrame(frame); const raw = now - last, dt = clamp(raw / 1000, .001, .034); last = now;
+    if (R.lost) return;
+    if (!G.paused) update(dt); draw(); hud();
+    // a phone that cannot keep up gets a smaller picture, never a slower game. only ever steps down, and only on a thumb.
+    if (gov && TC.on && raw < 250) { ft += (raw - ft) * .05;
+      if (++fc % 90 === 0 && fc > 150) {
+        if (ftWas) { if (ft > ftWas * .88) { R.setScale(scWas); gov = false; } ftWas = 0; }
+        else if (ft > 21.5 && R.scale > .5) { if (++slowN >= 2) { slowN = 0; ftWas = ft; scWas = R.scale; R.setScale(Math.max(.5, R.scale * .8)); } } else slowN = 0;
+      } }
+  }
+  requestAnimationFrame(frame);
+}
+window.__hearse = { G, P, T, M, K, TC, CAND, BELLS, U: () => U, start, hurt, dash, spawnSpider, spawnRose, spawnMothGroup, levelUp, ringBell, throwTop,
+  get B() { return B; }, audio: () => A.state(),
+  spiderPos() { const q = spiders.find(o => o.state === 'crawl'); return q ? { x: q.x, y: q.y } : null; },
+  aimAt() { let best = null, bd = 1e9; const see = o => { const d = Math.hypot(o.x - P.x, o.y - P.y); if (d < bd) { bd = d; best = o; } };
+    for (const m of moths) if (m.spawn >= .5) see(m); for (const s of spiders) if (s.state === 'crawl') see(s); if (B && B.sc >= 1) see(B);
+    return best ? { x: best.x, y: best.y, d: bd } : null; },
+  counts: () => ({ moths: moths.length, spiders: spiders.length, darts: darts.length, loose: loose.length, shots: shots.length, sparks: sparks.length, spr: R.count() }) };
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+
+</script>
+</body>
+</html>
