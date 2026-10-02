@@ -150,9 +150,9 @@
       "featured": true,
       "image": "/assets/games/hearse-card-v20261002.jpg",
       "alt": "A dark church floor seen from above: seven candles on an iron triangle, a small red figure throwing a spinning light on a chain, stained-glass moths, and a rose window with an eye in the middle of it",
-      "summary": "One dark church, seven candles, and a spinning light on a chain. Hold to spin it, let go to throw it, and it comes back. Every hit puts a candle out. A hearse was a candle stand before it was a car. Keyboard and mouse, or one thumb on a phone.",
-      "metaDescription": "HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or one thumb on a phone.",
-      "controls": "WASD + mouse · hold left to spin, let go to throw · click to call it back · Space dash · Esc pause · M mute · phone: one thumb",
+      "summary": "One dark church, seven candles, and a spinning light on a chain. Hold to spin it, let go to throw it, and it comes back. Every hit puts a candle out. A hearse was a candle stand before it was a car. Keyboard and mouse, or two thumbs on a phone held sideways.",
+      "metaDescription": "HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or two thumbs on a phone held sideways.",
+      "controls": "WASD + mouse · hold left to spin, let go to throw · click to call it back · Space dash · Esc pause · M mute · phone: sideways, left thumb walks, right thumb aims and throws",
       "actionLabel": "Play HEARSE"
     },
     {
