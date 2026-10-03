@@ -316,3 +316,10 @@
 
 /skip/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+# --- FREE PLAY ---
+/free-play/
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/free-play/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0

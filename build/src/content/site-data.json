@@ -168,6 +168,18 @@
       "actionLabel": "Play SKIP"
     },
     {
+      "slug": "free-play",
+      "title": "FREE PLAY",
+      "descriptor": "Halloween pinball",
+      "group": "action",
+      "image": "/assets/games/free-play-card-v20261002.jpg",
+      "alt": "A pinball playfield at night, up close: a glowing jack-o’-lantern in front of three brass bells on a painted moon, a red-and-white lighthouse, a ghost train with a white face, and a row of tin ducks on a striped awning",
+      "summary": "A pinball machine in a boardwalk arcade that closed for the season. It’s Halloween, and somebody left it on free play. Three bells, five tin ducks, a jack-o’-lantern that eats the ball, a ghost train and a lighthouse. Every high score on it is BOO’s. Keyboard and mouse.",
+      "metaDescription": "FREE PLAY is a Halloween pinball game in a boardwalk arcade closed for the season: bells for bumpers, tin ducks, a jack-o’-lantern that eats the ball, a ghost train and a lighthouse. Keyboard and mouse.",
+      "controls": "Shift or the mouse buttons for the flippers · hold Space to plunge · X nudges · Esc pause · M mute",
+      "actionLabel": "Play FREE PLAY"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",
