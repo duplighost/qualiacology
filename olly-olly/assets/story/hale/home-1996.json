@@ -12,7 +12,7 @@
     "src/world/houses/pruitt.js",
     "src/world/houses/kit/leaf.js",
     "tools/blender/dress_lib.py",
-    "tools/blender/hale_sam.py"
+    "tools/blender/hale_body.py (Sam: Renderpeople Eric, Winterline copy)"
   ],
   "loop": "the picture comes up out of 0.25 s of snow and ends in 0.5 s of it, so the end leads back into the start",
   "poster": {
