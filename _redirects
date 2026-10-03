@@ -171,3 +171,8 @@
 
 # --- SKIP ---
 /skip.html  /skip/  301!
+
+# --- FREE PLAY ---
+/free-play.html  /free-play/  301!
+/freeplay  /free-play/  302
+/pinball  /free-play/  302
