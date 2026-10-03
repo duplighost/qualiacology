@@ -171,3 +171,6 @@
 
 # --- TETHER ---
 /tether.html  /tether/  301!
+
+# --- SKIP ---
+/skip.html  /skip/  301!

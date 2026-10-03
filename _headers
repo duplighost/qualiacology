@@ -309,3 +309,10 @@
 
 /fetch/ending/media/*
   Cache-Control: public, max-age=86400
+
+# --- SKIP ---
+/skip/
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/skip/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
