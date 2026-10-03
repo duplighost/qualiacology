@@ -168,3 +168,6 @@
 
 # --- HEARSE ---
 /hearse.html  /hearse/  301!
+
+# --- TETHER ---
+/tether.html  /tether/  301!

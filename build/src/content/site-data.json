@@ -156,6 +156,19 @@
       "actionLabel": "Play HEARSE"
     },
     {
+      "slug": "tether",
+      "title": "TETHER",
+      "descriptor": "First-person arcade",
+      "group": "horror",
+      "featured": false,
+      "image": "/assets/games/tether-card-v20261002.jpg",
+      "alt": "A schoolyard tetherball court at night under one sodium lamp: a yellow ball swinging on its rope past a dark glove, and the long shadow of someone standing on the far side of the pole",
+      "summary": "A tetherball on a schoolyard pole at night. Your hand is the mouse. Hit the ball your way and it goes round to the far side, where something hits it back. The rope wraps whichever way is winning. The ball comes back every time, until it doesn’t. Mouse only.",
+      "metaDescription": "TETHER is a one-pole browser game: tetherball in a schoolyard at night against something you only ever see as a hand and a shadow. Desktop, mouse only.",
+      "controls": "Mouse — the hand follows it, swing to hit — Esc pause — M mute — F full screen",
+      "actionLabel": "Play TETHER"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",
