@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <title>HEARSE | Qualiacology</title>
-<meta name="description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or one thumb on a phone.">
+<meta name="description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or two thumbs on a phone held sideways.">
 <meta name="theme-color" content="#000000">
 <link rel="canonical" href="https://qualiacology.com/hearse/">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <meta property="og:site_name" content="Qualiacology">
 <meta property="og:type" content="website">
 <meta property="og:title" content="HEARSE | Qualiacology">
-<meta property="og:description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or one thumb on a phone.">
+<meta property="og:description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or two thumbs on a phone held sideways.">
 <meta property="og:url" content="https://qualiacology.com/hearse/">
 <meta property="og:image" content="https://qualiacology.com/assets/games/hearse-card-v20261002.jpg">
 <meta property="og:image:width" content="1280">
@@ -18,29 +18,33 @@
 <meta property="og:image:alt" content="A dark church floor seen from above: seven candles on an iron triangle, a small red figure throwing a spinning light on a chain, stained-glass moths, and a rose window with an eye in the middle of it">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="HEARSE | Qualiacology">
-<meta name="twitter:description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or one thumb on a phone.">
+<meta name="twitter:description" content="HEARSE is a one-room browser game in a dark church: spin a light on a chain, throw it, and keep seven candles lit. Keyboard and mouse, or two thumbs on a phone held sideways.">
 <meta name="twitter:image" content="https://qualiacology.com/assets/games/hearse-card-v20261002.jpg">
 <style>
-.home-link{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));z-index:200;color:rgba(233,226,207,.78);text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.55);border:1px solid rgba(241,201,107,.35);cursor:pointer;transition:opacity .4s}
+.home-link{position:absolute;left:max(12px,env(safe-area-inset-left));top:12px;z-index:200;color:rgba(233,226,207,.78);text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.55);border:1px solid rgba(241,201,107,.35);cursor:pointer;transition:opacity .4s}
 .home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(241,201,107,.8);outline:0}
 .playing .home-link{opacity:0;pointer-events:none}
 </style>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 body{position:fixed;left:0;top:0;right:0;bottom:0}
 #safe{position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+/* the stage is the picture. the room sits on it at --rx,--ry and is --rw by --rh; with a mouse the room is the whole stage. */
 #stage{position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden;color:#e9e2cf;font-family:"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif}
 #c{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
 #stage div{position:absolute;pointer-events:none;transition:opacity .35s;opacity:0;text-shadow:0 0 .6em rgba(0,0,0,.9)}
-#score{left:50%;top:6.2%;transform:translateX(-50%);font-size:1.25em;letter-spacing:.14em;font-variant-numeric:tabular-nums}
-#mult{left:50%;top:9.6%;transform:translateX(-50%);font-size:.85em;letter-spacing:.1em;color:#f1c96b}
+#score{left:50%;top:calc(var(--ry,0px) + var(--rh,100%)*.062);transform:translateX(-50%);font-size:1.25em;letter-spacing:.14em;font-variant-numeric:tabular-nums}
+#mult{left:50%;top:calc(var(--ry,0px) + var(--rh,100%)*.096);transform:translateX(-50%);font-size:.85em;letter-spacing:.1em;color:#f1c96b}
 #mult.pop{animation:pop .35s}
 @keyframes pop{0%{transform:translateX(-50%) scale(1.7)}100%{transform:translateX(-50%) scale(1)}}
 #stage #word{transform:translate(-50%,0);font-size:.95em;font-style:italic;letter-spacing:.06em;color:#f6d27a;white-space:nowrap;transition:none;text-shadow:0 0 .25em #000,0 0 .6em #000,0 0 1em #000}
-#stage #title{left:6.5%;top:81%;font-size:2.3em;letter-spacing:.62em;transition:opacity 1.2s;white-space:nowrap}
-#go{left:7%;top:91.5%;transform:none}
-#stage #card{left:6.5%;top:77%;text-align:left;transition:opacity 1s}
+#stage #title{left:calc(var(--rx,0px) + var(--rw,100%)*.065);top:calc(var(--ry,0px) + var(--rh,100%)*.81);font-size:2.3em;letter-spacing:.62em;transition:opacity 1.2s;white-space:nowrap}
+#go{left:calc(var(--rx,0px) + var(--rw,100%)*.07);top:calc(var(--ry,0px) + var(--rh,100%)*.915);transform:none}
+#stage #card{left:calc(var(--rx,0px) + var(--rw,100%)*.065);top:calc(var(--ry,0px) + var(--rh,100%)*.77);text-align:left;transition:opacity 1s}
 #card div{position:static;opacity:1}
 #cs{font-size:2.6em;letter-spacing:.12em;font-variant-numeric:tabular-nums}
 #card #cb{font-size:.8em;letter-spacing:.2em;opacity:.7;margin-top:.3em}
@@ -56,63 +60,65 @@ body{position:fixed;left:0;top:0;right:0;bottom:0}
 @keyframes hold{0%,8%{opacity:.15}16%,74%{opacity:1}86%,100%{opacity:.15}}
 @keyframes tap{0%,50%{opacity:.15}60%,80%{opacity:1}100%{opacity:.15}}
 #hh{transform:translate(-50%,-50%)}
-/* a thumb's glyphs: a ring and a dot. tap; drag; hold, then lift. */
-.tp,.drag,.lift{display:none;position:relative;border:1.5px solid rgba(233,226,207,.6);border-radius:50%;background:rgba(0,0,0,.3);vertical-align:middle;box-sizing:border-box}
-.hint .tp,.hint .drag,.hint .lift{position:relative!important}
+/* thumbs' glyphs: a ring and a dot. tap; drag; and press, slide, let go. */
+.tp,.drag,.aim{display:none;position:relative;border:1.5px solid rgba(233,226,207,.6);border-radius:50%;background:rgba(0,0,0,.3);vertical-align:middle;box-sizing:border-box}
+.hint .tp,.hint .drag,.hint .aim{position:relative!important}
 .tp{width:1.5em;height:1.5em}
-.drag,.lift{width:2.8em;height:2.8em}
-.tp i,.drag i,.lift i{position:absolute;left:50%;top:50%;border-radius:50%;background:#e9e2cf}
+.drag,.aim,#hl .tp{width:2.8em;height:2.8em}
+.tp i,.drag i,.aim i{position:absolute;left:50%;top:50%;border-radius:50%;background:#e9e2cf}
 .tp i{width:.6em;height:.6em;margin:-.3em 0 0 -.3em;animation:tap 1.1s infinite}
-.drag i,.lift i{width:1em;height:1em;margin:-.5em 0 0 -.5em}
+.drag i,.aim i,#hl .tp i{width:1em;height:1em;margin:-.5em 0 0 -.5em}
 .drag i{animation:drag 1.6s ease-in-out infinite}
-.lift i{animation:lift 1.6s infinite}
+.aim i{animation:aim 1.9s infinite}
 @keyframes drag{0%,100%{transform:translateX(-.75em)}50%{transform:translateX(.75em)}}
-@keyframes lift{0%,8%{transform:scale(.35);opacity:.25}18%,68%{transform:scale(1);opacity:1}82%,100%{transform:scale(2);opacity:0}}
+@keyframes aim{0%,6%{transform:translate(0,0) scale(.35);opacity:.25}16%{transform:translate(0,0) scale(1);opacity:1}55%,68%{transform:translate(.7em,-.5em) scale(1);opacity:1}84%,100%{transform:translate(.7em,-.5em) scale(2);opacity:0}}
 .touch #go .mouse,.touch #pause .k{display:none}
 .touch #go .tp,.touch #pause .tp{display:inline-block}
-#ht{left:50%;top:90%;transform:translate(-50%,-50%)}
-#ht.d .drag,#ht.l .lift{display:inline-block}
-#stick,#knob{position:fixed;left:0;top:0;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .15s;z-index:5}
-#stick{width:92px;height:92px;margin:-46px 0 0 -46px;border:1.5px solid rgba(233,226,207,.5);box-sizing:border-box}
-#knob{width:34px;height:34px;margin:-17px 0 0 -17px;background:rgba(233,226,207,.55)}
-/* a phone held upright: the room stands on end at the top of the screen and the words go underneath it, where the thumb is */
-.pt #stage{overflow:visible}
-.pt #score{top:3.6%}
-.pt #mult{top:6.4%}
-body.pt #stage #title{left:50%;top:8.2%;transform:translateX(-50%);padding-left:.62em;font-size:2em}
-body.pt #stage #card{left:50%;top:7.6%;transform:translateX(-50%);text-align:center}
-.pt #go{left:50%;top:93.5%;transform:translate(-50%,-50%)}
-.pt #ht{top:92%}
-body.pt.deck #stage #title{top:calc(100% + var(--deck) * .16)}
-body.pt.deck #stage #card{top:calc(100% + var(--deck) * .08)}
-.pt.deck #go{top:calc(100% + var(--deck) * .68)}
-.pt.deck #ht{top:calc(100% + var(--deck) * .5)}
+/* where each thumb rests: in the wall either side of the room */
+#hl,#hr{top:74%;transform:translate(-50%,-50%)}
+#hl{left:max(7%,calc(var(--rx,0px)*.5))}
+#hr{left:min(93%,calc(100% - var(--rx,0px)*.5))}
+#hl.d .drag,#hl.t .tp,#hr .aim{display:inline-block}
+#hl.t{top:40%}
+/* thumbs get larger letters, so the count at the end sits a little higher to clear the tap under it */
+.touch #stage #card{top:calc(var(--ry,0px) + var(--rh,100%)*.7)}
+.stick,.knob{position:fixed;left:0;top:0;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .15s;z-index:5}
+.stick{width:92px;height:92px;margin:-46px 0 0 -46px;border:1.5px solid rgba(233,226,207,.5);box-sizing:border-box}
+.knob{width:34px;height:34px;margin:-17px 0 0 -17px;background:rgba(233,226,207,.55)}
+/* an upright phone gets the game lying on its side, and a small picture of a phone being turned */
+#turn{left:calc(var(--rx,0px) + var(--rw,100%)*.13);top:calc(var(--ry,0px) + var(--rh,100%)*.9);width:1em;height:1.7em;border:1.5px solid rgba(233,226,207,.75);border-radius:.25em;box-sizing:border-box;animation:turn 2.2s ease-in-out infinite;display:none}
+.turned #turn{display:block}
+body.turned:not(.playing) #stage #turn{opacity:.8}
+@keyframes turn{0%,25%{transform:rotate(-90deg)}65%,100%{transform:rotate(-180deg)}}
 </style>
 </head>
 <body>
-<a class="home-link" href="/">Qualiacology</a>
 <div id="safe"></div>
 <div id="stage">
+  <a class="home-link" href="/">Qualiacology</a>
   <canvas id="c"></canvas>
   <div id="score">0</div>
   <div id="mult"></div>
   <div id="word"></div>
   <div id="title">HEARSE</div>
   <div id="go" class="hint"><span class="mouse tap"><i></i></span><span class="tp"><i></i></span></div>
+  <div id="turn"></div>
   <div id="card"><div id="cs"></div><div id="cb"></div></div>
   <div id="hm" class="hint"><span class="k">W</span><br><span class="k">A</span><span class="k">S</span><span class="k">D</span></div>
   <div id="hh" class="hint"><span class="mouse"><i></i></span></div>
   <div id="hd" class="hint"><span class="k">space</span></div>
-  <div id="ht" class="hint"><span class="drag"><i></i></span><span class="lift"><i></i></span></div>
+  <div id="hl" class="hint"><span class="drag"><i></i></span><span class="tp"><i></i></span></div>
+  <div id="hr" class="hint"><span class="aim"><i></i></span></div>
   <div id="pause">paused<br><span class="k">esc</span><span class="tp"><i></i></span></div>
   <div id="err"></div>
 </div>
-<div id="stick"></div>
-<div id="knob"></div>
+<div id="stickL" class="stick"></div><div id="knobL" class="knob"></div>
+<div id="stickR" class="stick"></div><div id="knobR" class="knob"></div>
 <script>
 /* HEARSE renderer. WebGL2, no dependencies.
-   One stone floor drawn by a shader, lit sprites on top, two lights that cast shadows
-   (the top and the candles), bloom, and a post pass. World is 1600 x 1000, y down. */
+   One stone floor, lit sprites on top, two lights that cast shadows (the top and the candles), bloom, and a post pass.
+   The room is 1600 x 1000, y down. A desk sees exactly the room. A phone sees the room with more wall either side,
+   so the picture fills its wider screen; `view` is the piece of the world on screen. */
 (function () {
 'use strict';
 const W = 1600, H = 1000, NL = 16, MAXI = 6000, STRIDE = 15;
@@ -120,10 +126,11 @@ const R = window.R = { W, H };
 R.S = { SHADOW: 0, GLOW: 1, RING: 2, STREAK: 3, PILLAR: 4, PLAYER: 5, TOP: 6, MOTH: 7, SPIDER: 8, BELL: 9,
   CANDLE: 10, HEARSE: 11, SHARD: 12, ROSE: 13, DART: 14, PUFF: 15, RETICLE: 16 };
 
-let gl, cv, safe = null, hdr = true, rw = 2, rh = 2, wasPt = null;
-R.portrait = false; R.scale = 1; R.lost = false;
-let pFloor, pSpr, pShadow, pBlur, pDown, pUp, pPost;
-let fbScene, fbSh, fbShB, bloom = [];
+let gl, cv, safe = null, hdr = true, rw = 2, rh = 2;
+let view = [0, 0, W, H], viewKey = '', stW = 1, stH = 1, stL = 0, stT = 0, winW = 1, matDirty = true;
+R.wide = false; R.turned = false; R.scale = 1; R.lost = false;
+let pBake, pFloor, pSpr, pShadow, pBlur, pDown, pUp, pPost;
+let fbMat, fbScene, fbSh, fbShB, bloom = [];
 let vaoSpr, bufSpr, vaoSh, bufSh, vaoTri;
 const inst = new Float32Array(MAXI * STRIDE); let ni = 0;
 const lpos = new Float32Array(NL * 4), lcol = new Float32Array(NL * 3); let nl = 2;
@@ -135,7 +142,7 @@ const COMMON = `
 precision highp float;
 const float W=1600., H=1000.;
 float ss(float a,float b,float x){ float t=clamp((x-a)/(b-a),0.,1.); return t*t*(3.-2.*t); }
-uniform vec2 uRes; uniform float uTime; uniform float uHue; uniform vec3 uAmb;
+uniform vec2 uRes; uniform vec4 uView; uniform float uTime; uniform float uHue; uniform vec3 uAmb;
 uniform vec4 uLPos[${NL}]; uniform vec3 uLCol[${NL}]; uniform int uLN;
 uniform sampler2D uShadow;
 float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
@@ -187,25 +194,18 @@ vec4 rose(vec2 p, float mask){
 const VS_TRI = `#version 300 es
 void main(){ gl_Position=vec4(vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2))*2.-1., 0., 1.); }`;
 
-const FS_FLOOR = `#version 300 es
+// The stone of the floor and the walls never changes, so it is worked out once for each picture size and kept in three
+// small pictures: A = colour (square-rooted, to keep the darks) and shine; B = which way the surface leans, how tight the
+// shine is, and how much a wall's inner edge catches the light; C = the window light lying on it (before the hue of the
+// glass is turned) and what it is: 0 floor, .5 wall, up to 1 the wall beyond what a desk can see.
+const FS_BAKE = `#version 300 es
 ${COMMON}
-uniform float uRose, uPool; uniform vec4 uBell[4];
-out vec4 o;
+uniform vec4 uBell[4];
+layout(location=0) out vec4 oA; layout(location=1) out vec4 oB; layout(location=2) out vec4 oC;
 const vec2 DM=vec2(.37987,.92504);
 void main(){
-  vec2 wp=vec2(gl_FragCoord.x/uRes.x*W,(1.-gl_FragCoord.y/uRes.y)*H);
-  float dl=50.-wp.x, dr=wp.x-1550., dt=50.-wp.y, db=wp.y-950.;
-  float dOut=max(max(dl,dr),max(dt,db));
-  if(dOut>0.){
-    vec2 dirOut = dOut==dl? vec2(-1.,0.) : dOut==dr? vec2(1.,0.) : dOut==dt? vec2(0.,-1.) : vec2(0.,1.);
-    float st=fbm(wp*.05); float bev=ss(16.,0.,dOut);
-    vec3 alb=vec3(.26,.24,.22)*(.6+.6*st)*mix(.2,1.,bev);
-    vec3 n=normalize(vec3(-dirOut*1.6*bev, .3+.7*(1.-bev)));
-    vec3 col=lighting(wp,14.,n,alb,20.,.06)*bev+uAmb*alb*.5;
-    if(dt>0.){ for(int k=0;k<5;k++){ float dx=(wp.x-230.-float(k)*285.)/26.;
-      col+=glassPal(float(k)*.23+.07)*exp(-dx*dx)*exp(-dt/15.)*uPool*.5; } }
-    o=vec4(col,1.); return;
-  }
+  vec2 wp=uView.xy+vec2(gl_FragCoord.x/uRes.x,1.-gl_FragCoord.y/uRes.y)*uView.zw;
+  // the floor, everywhere (so its slope is defined right up to the walls)
   vec2 c=wp-vec2(800.,500.); float rc=length(c);
   vec2 q=mat2(.7071,.7071,-.7071,.7071)*wp/92.; vec2 id=floor(q), f=fract(q);
   float chk=mod(id.x+id.y,2.); float tr=hash(id);
@@ -220,7 +220,6 @@ void main(){
   float h=grout*.8+fbm(wp*.22)*.35+(f.x-.5)*(tr-.5)*.6;
   float wet=ss(.3,.7,fbm(wp*.006+11.));
   float spec=mix(.05,.2,wet)*grout, gloss=mix(28.,90.,wet);
-  vec3 add=vec3(0.);
   vec3 brass=vec3(.55,.39,.14);
   if(rc>88.&&rc<300.){
     float t=(rc-95.)/17.9; float fr=abs(fract(t)-.5); float ri=floor(t);
@@ -235,9 +234,8 @@ void main(){
   for(int i=0;i<4;i++){ float d=length(wp-uBell[i].xy);
     float rg=clamp(ss(3.,1.2,abs(d-58.))+ss(2.2,.9,abs(d-47.)),0.,1.);
     alb=mix(alb,brass,rg); spec=mix(spec,.85,rg); h+=rg*.5;
-    alb*=mix(1.,.62,ss(47.,44.,d));
-    add+=vec3(1.,.68,.3)*(uBell[i].z*.035+uBell[i].w*.6)*ss(76.,10.,d); }
-  vec3 n=normalize(vec3(-dFdx(h)*uRes.x/W, dFdy(h)*uRes.y/H, .45));
+    alb*=mix(1.,.62,ss(47.,44.,d)); }
+  vec3 n=normalize(vec3(-dFdx(h)*uRes.x/uView.z, dFdy(h)*uRes.y/uView.w, .45));
   vec3 pool=vec3(0.); vec2 PM=vec2(-DM.y,DM.x);
   for(int k=0;k<5;k++){ vec2 d=wp-vec2(230.+float(k)*285.,50.); float al=dot(d,DM), ac=dot(d,PM);
     float wE = al<300.? 46. : 46.*sqrt(max(0.,1.-pow((al-300.)/70.,2.)));
@@ -245,21 +243,65 @@ void main(){
     if(m>.001){ vec3 v=voro(vec2(al/36.,ac/27.)+float(k)*7.3);
       float lead=ss(.03,.11,v.y)*ss(1.2,3.6,abs(ac))*ss(.02,.06,abs(fract(al/82.)-.5));
       pool+=glassPal(v.x*7.13+float(k)*.37)*lead*m; } }
-  vec2 rp=(wp-vec2(1320.,765.))/132.; if(dot(rp,rp)<1.){ pool+=rose(rp,4095.).rgb*uRose*1.25; }
+  vec2 rp=(wp-vec2(1320.,765.))/132.; if(dot(rp,rp)<1.){ pool+=rose(rp,4095.).rgb*1.25; }
   pool*=.7+.55*fbm(wp*.012+3.);
-  vec3 col=lighting(wp,0.,n,alb,gloss,spec)+uAmb*alb+pool*(alb*.75+.035)*uPool*.75+add*(alb+.05);
+  float flag=0., bev=1.;
+  // the walls
+  float dl=50.-wp.x, dr=wp.x-1550., dt=50.-wp.y, db=wp.y-950.;
+  float dOut=max(max(dl,dr),max(dt,db));
+  if(dOut>0.){
+    vec2 dirOut = dOut==dl? vec2(-1.,0.) : dOut==dr? vec2(1.,0.) : dOut==dt? vec2(0.,-1.) : vec2(0.,1.);
+    float st=fbm(wp*.05); bev=ss(16.,0.,dOut);
+    alb=vec3(.26,.24,.22)*(.6+.6*st)*mix(.2,1.,bev);
+    n=normalize(vec3(-dirOut*1.6*bev, .3+.7*(1.-bev)));
+    spec=.06; gloss=20.; pool=vec3(0.);
+    if(dt>0.){ for(int k=0;k<5;k++){ float dx=(wp.x-230.-float(k)*285.)/26.;
+      pool+=glassPal(float(k)*.23+.07)*exp(-dx*dx)*exp(-dt/15.); } }
+    // past the edge of what a desk sees: the wall carries on as coursed stone under a little moonlight
+    float far=max(max(-wp.x,wp.x-1600.),max(-wp.y,wp.y-1000.)); float k=ss(0.,70.,far);
+    if(k>0.){ vec2 bq=vec2(wp.x/72.,wp.y/42.); bq.x+=mod(floor(bq.y),2.)*.5; vec2 bf=fract(bq);
+      float be=min(min(bf.x,1.-bf.x)*72.,min(bf.y,1.-bf.y)*42.); float bt=hash(floor(bq)+3.1);
+      alb=mix(alb, vec3(.30,.29,.28)*(.5+.6*bt)*(.6+.5*st)*mix(.35,1.,ss(0.,2.4,be)), k); }
+    flag=.5+.5*k;
+  }
+  oA=vec4(sqrt(clamp(alb,0.,1.)), spec);
+  oB=vec4(n.xy*.5+.5, gloss/128., bev);
+  oC=vec4(pool*.5, flag);
+}`;
+
+const FS_FLOOR = `#version 300 es
+${COMMON}
+uniform sampler2D uMatA, uMatB, uMatC;
+uniform float uRose, uPool; uniform vec4 uBell[4];
+out vec4 o;
+void main(){
+  ivec2 px=ivec2(gl_FragCoord.xy);
+  vec4 A=texelFetch(uMatA,px,0), Bm=texelFetch(uMatB,px,0), C=texelFetch(uMatC,px,0);
+  vec2 wp=uView.xy+vec2(gl_FragCoord.x/uRes.x,1.-gl_FragCoord.y/uRes.y)*uView.zw;
+  vec3 alb=A.rgb*A.rgb; vec3 n=vec3(Bm.rg*2.-1.,0.); n.z=sqrt(max(1.-dot(n.xy,n.xy),.0004));
+  vec3 pool=max(hueRot(C.rgb*2.,uHue),0.);
+  vec3 col;
+  if(C.a>.25){
+    col=lighting(wp,14.,n,alb,Bm.b*128.,A.a)*Bm.a+uAmb*alb*mix(.5,4.,clamp((C.a*255.-128.)/127.,0.,1.))+pool*uPool*.5;
+  } else {
+    vec2 rp=(wp-vec2(1320.,765.))/132.; pool*=mix(1.,uRose,step(dot(rp,rp),1.));
+    vec3 add=vec3(0.);
+    for(int i=0;i<4;i++){ float d=length(wp-uBell[i].xy); add+=vec3(1.,.68,.3)*(uBell[i].z*.035+uBell[i].w*.6)*ss(76.,10.,d); }
+    col=lighting(wp,0.,n,alb,Bm.b*128.,A.a)+uAmb*alb+pool*(alb*.75+.035)*uPool*.75+add*(alb+.05);
+  }
   o=vec4(col,1.);
 }`;
 
 const VS_SPR = `#version 300 es
 precision highp float;
+uniform vec4 uView;
 layout(location=0) in vec2 aPos; layout(location=1) in vec2 aSize; layout(location=2) in float aRot; layout(location=3) in float aShape;
 layout(location=4) in vec4 aCol; layout(location=5) in vec4 aPar; layout(location=6) in float aZ;
 out vec2 vUV; out vec2 vWP; flat out float vShape; flat out vec4 vCol; flat out vec4 vPar; flat out float vZ; flat out float vRot;
 const vec2 Q[6]=vec2[6](vec2(-1.,-1.),vec2(1.,-1.),vec2(1.,1.),vec2(-1.,-1.),vec2(1.,1.),vec2(-1.,1.));
 void main(){ vec2 c=Q[gl_VertexID]; float cr=cos(aRot), sr=sin(aRot);
   vec2 wp=aPos+mat2(cr,sr,-sr,cr)*(c*aSize*.5);
-  gl_Position=vec4(wp.x/1600.*2.-1., 1.-wp.y/1000.*2., 0., 1.);
+  gl_Position=vec4((wp.x-uView.x)/uView.z*2.-1., 1.-(wp.y-uView.y)/uView.w*2., 0., 1.);
   vUV=c; vWP=wp; vShape=aShape; vCol=aCol; vPar=aPar; vZ=aZ; vRot=aRot; }`;
 
 const FS_SPR = `#version 300 es
@@ -416,8 +458,10 @@ void main(){
 }`;
 
 const VS_SH = `#version 300 es
+precision highp float;
+uniform vec4 uView;
 layout(location=0) in vec2 aP;
-void main(){ gl_Position=vec4(aP.x/1600.*2.-1., 1.-aP.y/1000.*2., 0., 1.); }`;
+void main(){ gl_Position=vec4((aP.x-uView.x)/uView.z*2.-1., 1.-(aP.y-uView.y)/uView.w*2., 0., 1.); }`;
 const FS_SH = `#version 300 es
 precision highp float; out vec4 o; void main(){ o=vec4(0.); }`;
 
@@ -443,14 +487,14 @@ void main(){ vec2 uv=gl_FragCoord.xy/uRes; vec3 c=texture(uT,uv).rgb*4.;
   o=vec4(c/16.*uGain,1.); }`;
 const FS_POST = `#version 300 es
 precision highp float; float ss(float a,float b,float x){ float t=clamp((x-a)/(b-a),0.,1.); return t*t*(3.-2.*t); }
-uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform vec4 uRip[4];
-uniform float uAb, uExp, uDark, uTime, uBloomK, uRot; uniform vec4 uFlash; out vec4 o;
+uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform vec4 uView; uniform vec4 uRip[4];
+uniform float uAb, uExp, uDark, uTime, uBloomK; uniform vec4 uFlash; out vec4 o;
 vec3 aces(vec3 x){ return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.); }
 float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
-void main(){ vec2 f=gl_FragCoord.xy/uRes; vec2 uv = uRot>.5? vec2(1.-f.y,f.x) : f; vec2 wp=vec2(uv.x*1600.,(1.-uv.y)*1000.);
+void main(){ vec2 uv=gl_FragCoord.xy/uRes; vec2 wp=uView.xy+vec2(uv.x,1.-uv.y)*uView.zw;
   vec2 off=vec2(0.);
   for(int i=0;i<4;i++){ vec2 d=wp-uRip[i].xy; float l=length(d); float e=(l-uRip[i].z)/30.; off+=d/max(l,1.)*uRip[i].w*exp(-e*e); }
-  vec2 u2=uv+vec2(off.x/1600.,-off.y/1000.); vec2 cd=u2-.5;
+  vec2 u2=uv+vec2(off.x/uView.z,-off.y/uView.w); vec2 cd=u2-.5;
   vec3 c; c.r=texture(uScene,u2+cd*uAb).r; c.g=texture(uScene,u2).g; c.b=texture(uScene,u2-cd*uAb).b;
   c+=texture(uBloom,u2).rgb*uBloomK;
   c=aces(c*uExp); c=pow(c,vec3(1./2.2));
@@ -484,6 +528,24 @@ function mkFbo(w, h, fl) {
 }
 function killFbo(o) { if (o) { gl.deleteFramebuffer(o.f); gl.deleteTexture(o.t); } }
 
+// the lean of the surface (B) and the window light (C) are kept in half floats where the browser can draw into them: in 8 bits
+// the tight shine on brass and wet stone, and the faint glow on the wall under each window, come out a little different
+// from working them out every frame. a browser that cannot gets 8 bits throughout.
+function mkMat(w, h, fine = hdr) {
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); const t = [];
+  for (let i = 0; i < 3; i++) { const x = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, x);
+    if (fine && i > 0) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, x, 0); t.push(x); }
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+  const o = { f, t, w, h };
+  if (fine && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { killMat(o); return mkMat(w, h, false); }
+  return o;
+}
+function killMat(o) { if (o) { gl.deleteFramebuffer(o.f); o.t.forEach(x => gl.deleteTexture(x)); } }
+
 R.init = function (canvas) {
   if (!cv) {
     canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); R.lost = true; });
@@ -494,7 +556,7 @@ R.init = function (canvas) {
   if (!gl) throw new Error('This browser cannot draw it. It needs WebGL 2.');
   hdr = !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
   if (hdr) { const t = mkFbo(4, 4, true); if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) hdr = false; killFbo(t); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
-  pFloor = mkProg(VS_TRI, FS_FLOOR); pSpr = mkProg(VS_SPR, FS_SPR); pShadow = mkProg(VS_SH, FS_SH);
+  pBake = mkProg(VS_TRI, FS_BAKE); pFloor = mkProg(VS_TRI, FS_FLOOR); pSpr = mkProg(VS_SPR, FS_SPR); pShadow = mkProg(VS_SH, FS_SH);
   pBlur = mkProg(VS_TRI, FS_BLUR); pDown = mkProg(VS_TRI, FS_DOWN); pUp = mkProg(VS_TRI, FS_UP); pPost = mkProg(VS_TRI, FS_POST);
   vaoTri = gl.createVertexArray();
   vaoSpr = gl.createVertexArray(); gl.bindVertexArray(vaoSpr);
@@ -505,55 +567,60 @@ R.init = function (canvas) {
   bufSh = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bufSh); gl.bufferData(gl.ARRAY_BUFFER, shv.byteLength, gl.DYNAMIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
   gl.bindVertexArray(null);
-  fbScene = fbSh = fbShB = null; bloom = [];
+  fbMat = fbScene = fbSh = fbShB = null; bloom = [];
   R.resize(true);
 };
 
-// Fit the stage in the window and size the buffers to it. Wide window: a 16:10 stage, centred. Tall window (a phone
-// held upright): the same room turned a quarter turn, 10:16, at the top, with whatever is left below it for the thumb.
-// The room is always drawn 1600 wide by 1000 high; only the last pass turns it.
+// Fit the stage in the window and size the buffers to it.
+// A mouse: a 16:10 stage, centred, showing exactly the room.
+// A thumb (R.wide): the stage is the whole screen and the view takes in more wall to fill it. If the screen is upright,
+// the stage is laid on its side (R.turned), so the phone is simply held sideways whether or not it will turn by itself.
 R.resize = function (force) {
   const ww = window.innerWidth, wh = window.innerHeight, stage = cv.parentElement;
-  let iT = 0, iR = 0, iB = 0, iL = 0;
+  let iT = 0, iR = 0, iB = 0, iL = 0, sw, sh, turned = false;
   if (safe) { const q = getComputedStyle(safe); iT = parseFloat(q.paddingTop) || 0; iR = parseFloat(q.paddingRight) || 0; iB = parseFloat(q.paddingBottom) || 0; iL = parseFloat(q.paddingLeft) || 0; }
-  const aw = ww - iL - iR, ah = wh - iT - iB, pt = ah > aw * 1.02;
-  let cw, ch, long, short;
-  if (pt) {
-    cw = Math.floor(Math.min(aw, ah / 1.6)); ch = Math.floor(cw * 1.6);
-    const top = iT + Math.floor(Math.min((ah - ch) * .12, 28)), deck = Math.max(0, wh - iB - top - ch);
-    stage.style.width = cw + 'px'; stage.style.height = ch + 'px';
-    stage.style.left = (iL + Math.floor((aw - cw) / 2)) + 'px'; stage.style.top = top + 'px';
-    stage.style.fontSize = (cw / 30) + 'px'; stage.style.setProperty('--deck', deck + 'px');
-    document.body.classList.toggle('deck', deck >= 96);
-    long = ch; short = cw;
+  if (R.wide) {
+    turned = wh > ww; sw = turned ? wh : ww; sh = turned ? ww : wh; stL = 0; stT = 0;
+    stage.style.transformOrigin = '0 0'; stage.style.transform = turned ? 'translate(' + ww + 'px,0) rotate(90deg)' : 'none';
+    const a = sw / sh;
+    if (a >= 1.6) { const w = H * a; view = [(W - w) / 2, 0, w, H]; } else { const h = W / a; view = [0, (H - h) / 2, W, h]; }
   } else {
-    cw = Math.floor(Math.min(aw, ah * 1.6)); ch = Math.floor(cw / 1.6);
-    stage.style.width = cw + 'px'; stage.style.height = ch + 'px';
-    stage.style.left = (iL + Math.floor((aw - cw) / 2)) + 'px'; stage.style.top = (iT + Math.floor((ah - ch) / 2)) + 'px';
-    stage.style.fontSize = (cw / 64) + 'px';
-    document.body.classList.remove('deck');
-    long = cw; short = ch;
+    const aw = ww - iL - iR, ah = wh - iT - iB;
+    sw = Math.floor(Math.min(aw, ah * 1.6)); sh = Math.floor(sw / 1.6);
+    stL = iL + Math.floor((aw - sw) / 2); stT = iT + Math.floor((ah - sh) / 2);
+    stage.style.transform = 'none'; view = [0, 0, W, H];
   }
-  document.body.classList.toggle('pt', pt);
-  R.portrait = pt;
+  stage.style.width = sw + 'px'; stage.style.height = sh + 'px'; stage.style.left = stL + 'px'; stage.style.top = stT + 'px';
+  R.turned = turned; stW = sw; stH = sh; winW = ww;
+  document.body.classList.toggle('turned', turned);
+  // where the room itself sits on the stage, for the words that are placed against it
+  const kx = sw / view[2], ky = sh / view[3];
+  stage.style.setProperty('--rx', (-view[0] * kx) + 'px'); stage.style.setProperty('--ry', (-view[1] * ky) + 'px');
+  stage.style.setProperty('--rw', (W * kx) + 'px'); stage.style.setProperty('--rh', (H * ky) + 'px');
+  stage.style.fontSize = (W * kx / (R.wide ? 44 : 64)) + 'px';
   const dpr = Math.min(window.devicePixelRatio || 1, 2) * R.scale;
-  let w = Math.round(long * dpr), h = Math.round(short * dpr);
+  let w = Math.round(sw * dpr), h = Math.round(sh * dpr);
   if (w > 2240) { h = Math.round(h * 2240 / w); w = 2240; }
   w = Math.max(16, w & ~1); h = Math.max(16, h & ~1);
-  if (!force && w === rw && h === rh && pt === wasPt) return;
-  rw = w; rh = h; wasPt = pt; cv.width = pt ? h : w; cv.height = pt ? w : h;
-  killFbo(fbScene); killFbo(fbSh); killFbo(fbShB); bloom.forEach(killFbo); bloom = [];
+  const vk = view.join(',');
+  if (!force && w === rw && h === rh && vk === viewKey) return;
+  rw = w; rh = h; viewKey = vk; cv.width = w; cv.height = h;
+  killMat(fbMat); killFbo(fbScene); killFbo(fbSh); killFbo(fbShB); bloom.forEach(killFbo); bloom = [];
+  fbMat = mkMat(w, h); matDirty = true;
   fbScene = mkFbo(w, h, hdr);
   fbSh = mkFbo(w >> 1, h >> 1, false); fbShB = mkFbo(w >> 1, h >> 1, false);
   let bw = w >> 1, bh = h >> 1;
   for (let i = 0; i < 5; i++) { bloom.push(mkFbo(Math.max(2, bw), Math.max(2, bh), hdr)); bw >>= 1; bh >>= 1; }
 };
 R.setScale = function (k) { R.scale = k; R.resize(true); };
-// a point on the screen to a point in the room, a direction on the screen to a direction in the room, and a point in the
-// room to a place on the stage: [left %, top %, % per unit across the screen, % per unit down the screen]
-R.toWorld = function (cx, cy) { const r = cv.getBoundingClientRect(), sx = (cx - r.left) / r.width, sy = (cy - r.top) / r.height; return R.portrait ? [sy * W, (1 - sx) * H] : [sx * W, sy * H]; };
-R.dirToWorld = function (dx, dy) { return R.portrait ? [dy, -dx] : [dx, dy]; };
-R.toStage = function (x, y) { return R.portrait ? [(1 - y / H) * 100, x / W * 100, 100 / H, 100 / W] : [x / W * 100, y / H * 100, 100 / W, 100 / H]; };
+// a point on the screen to a point on the stage (in its own frame, whichever way it lies), to a point in the room;
+// a direction on the screen to a direction in the room; how far across the stage a touch is (0 left, 1 right);
+// and a point in the room to a place on the stage: [left %, top %, % per unit across, % per unit down]
+R.toLocal = function (cx, cy) { return R.turned ? [cy, winW - cx] : [cx - stL, cy - stT]; };
+R.toWorld = function (cx, cy) { const l = R.toLocal(cx, cy); return [view[0] + l[0] / stW * view[2], view[1] + l[1] / stH * view[3]]; };
+R.dirToWorld = function (dx, dy) { return R.turned ? [dy, -dx] : [dx, dy]; };
+R.side = function (cx, cy) { return R.toLocal(cx, cy)[0] / stW; };
+R.toStage = function (x, y) { return [(x - view[0]) / view[2] * 100, (y - view[1]) / view[3] * 100, 100 / view[2], 100 / view[3]]; };
 
 R.begin = function () { ni = 0; nl = 2; occ.length = 0; nr = 0; rip.fill(0); lcol.fill(0); };
 R.setLight = function (i, x, y, z, rad, r, g, b) { lpos[i * 4] = x; lpos[i * 4 + 1] = y; lpos[i * 4 + 2] = z; lpos[i * 4 + 3] = rad; lcol[i * 3] = r; lcol[i * 3 + 1] = g; lcol[i * 3 + 2] = b; };
@@ -585,20 +652,30 @@ function shadowFor(li, start) {
   return n;
 }
 function common(P, o) {
-  gl.uniform2f(P.u.uRes, rw, rh); gl.uniform1f(P.u.uTime, o.time); gl.uniform1f(P.u.uHue, o.hue);
+  gl.uniform2f(P.u.uRes, rw, rh); gl.uniform4f(P.u.uView, view[0], view[1], view[2], view[3]);
+  gl.uniform1f(P.u.uTime, o.time); gl.uniform1f(P.u.uHue, o.hue);
   gl.uniform3f(P.u.uAmb, o.amb[0], o.amb[1], o.amb[2]);
   gl.uniform4fv(P.u.uLPos, lpos); gl.uniform3fv(P.u.uLCol, lcol); gl.uniform1i(P.u.uLN, nl);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbSh.t); gl.uniform1i(P.u.uShadow, 0);
 }
 function tri() { gl.bindVertexArray(vaoTri); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+function bake() {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbMat.f); gl.viewport(0, 0, rw, rh); gl.disable(gl.BLEND); gl.colorMask(true, true, true, true);
+  gl.useProgram(pBake.p);
+  gl.uniform2f(pBake.u.uRes, rw, rh); gl.uniform4f(pBake.u.uView, view[0], view[1], view[2], view[3]);
+  gl.uniform1f(pBake.u.uHue, 0); gl.uniform4fv(pBake.u.uBell, bell);
+  tri();
+}
 
 R.flush = function (o) {
+  if (matDirty) { bake(); matDirty = false; }
   // shadow masks: red for the top, green for the candles
   sh0 = shadowFor(0, 0); sh1 = shadowFor(1, sh0);
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbSh.f); gl.viewport(0, 0, fbSh.w, fbSh.h);
   gl.disable(gl.BLEND); gl.colorMask(true, true, true, true); gl.clearColor(1, 1, 1, 1); gl.clear(gl.COLOR_BUFFER_BIT);
   if (sh1 > 0) {
-    gl.useProgram(pShadow.p); gl.bindVertexArray(vaoSh); gl.bindBuffer(gl.ARRAY_BUFFER, bufSh);
+    gl.useProgram(pShadow.p); gl.uniform4f(pShadow.u.uView, view[0], view[1], view[2], view[3]);
+    gl.bindVertexArray(vaoSh); gl.bindBuffer(gl.ARRAY_BUFFER, bufSh);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, shv.subarray(0, sh1));
     gl.colorMask(true, false, false, false); if (sh0 > 0) gl.drawArrays(gl.TRIANGLES, 0, sh0 / 2);
     gl.colorMask(false, true, false, false); if (sh1 > sh0) gl.drawArrays(gl.TRIANGLES, sh0 / 2, (sh1 - sh0) / 2);
@@ -608,9 +685,12 @@ R.flush = function (o) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbShB.f); gl.bindTexture(gl.TEXTURE_2D, fbSh.t); gl.uniform2f(pBlur.u.uDir, 1.3 / fbSh.w, 0); tri();
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbSh.f); gl.bindTexture(gl.TEXTURE_2D, fbShB.t); gl.uniform2f(pBlur.u.uDir, 0, 1.3 / fbSh.h); tri();
 
-  // floor
+  // floor: the kept stone, lit
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbScene.f); gl.viewport(0, 0, rw, rh);
   gl.useProgram(pFloor.p); common(pFloor, o);
+  for (let i = 0; i < 3; i++) { gl.activeTexture(gl.TEXTURE1 + i); gl.bindTexture(gl.TEXTURE_2D, fbMat.t[i]); }
+  gl.uniform1i(pFloor.u.uMatA, 1); gl.uniform1i(pFloor.u.uMatB, 2); gl.uniform1i(pFloor.u.uMatC, 3);
+  gl.activeTexture(gl.TEXTURE0);
   gl.uniform1f(pFloor.u.uRose, o.rose); gl.uniform1f(pFloor.u.uPool, o.pool); gl.uniform4fv(pFloor.u.uBell, bell);
   tri();
   // sprites, in the order they were added
@@ -639,11 +719,11 @@ R.flush = function (o) {
   }
   gl.disable(gl.BLEND);
   // to the screen
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, rw, rh);
   gl.useProgram(pPost.p);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbScene.t); gl.uniform1i(pPost.u.uScene, 0);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bloom[0].t); gl.uniform1i(pPost.u.uBloom, 1);
-  gl.uniform2f(pPost.u.uRes, cv.width, cv.height); gl.uniform1f(pPost.u.uRot, R.portrait ? 1 : 0); gl.uniform4fv(pPost.u.uRip, rip);
+  gl.uniform2f(pPost.u.uRes, rw, rh); gl.uniform4f(pPost.u.uView, view[0], view[1], view[2], view[3]); gl.uniform4fv(pPost.u.uRip, rip);
   gl.uniform1f(pPost.u.uAb, o.ab); gl.uniform1f(pPost.u.uExp, o.exp); gl.uniform1f(pPost.u.uDark, o.dark);
   gl.uniform1f(pPost.u.uTime, o.time); gl.uniform1f(pPost.u.uBloomK, o.bloom);
   gl.uniform4f(pPost.u.uFlash, o.flash[0], o.flash[1], o.flash[2], o.flash[3]);
@@ -809,7 +889,8 @@ function play(s, t) {
 <script>
 /* HEARSE. A dark nave, seven candles, and one spinning light on a chain.
    Hold the left button to spin it up, let go to throw it, it comes back. Candles are your lives.
-   On a phone it is one thumb: touch and drag to walk, the top spins while you touch, lift to throw at the nearest thing. */
+   On a phone, held sideways, it is two thumbs: the left one walks, the right one aims, spins the top while it is down,
+   and throws when it lifts. */
 (function () {
 'use strict';
 const S = R.S, TAU = Math.PI * 2;
@@ -821,21 +902,12 @@ const BELLS = [{ x: 800, y: 190 }, { x: 1310, y: 500 }, { x: 800, y: 810 }, { x:
 const ROSE = { x: 1320, y: 765 };
 const DM = { x: .37987, y: .92504 };
 // the candles, in the order they go out. the one at the top goes last.
-const CAND_AT = (function () {
+const CAND = (function () {
   const s = 92, ap = [0, -.9238 * s], bl = [-.8 * s, .4619 * s], br = [.8 * s, .4619 * s];
   const L = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-  return [L(ap, bl, 1), L(ap, br, 1), L(ap, bl, 2 / 3), L(ap, br, 2 / 3), L(ap, bl, 1 / 3), L(ap, br, 1 / 3), ap];
+  return [L(ap, bl, 1), L(ap, br, 1), L(ap, bl, 2 / 3), L(ap, br, 2 / 3), L(ap, bl, 1 / 3), L(ap, br, 1 / 3), ap]
+    .map(p => ({ x: HEARSE.x + p[0], y: HEARSE.y + p[1], lit: 0, v: 0, ph: Math.random() * 6 }));
 })();
-const CAND = CAND_AT.map(p => ({ x: HEARSE.x + p[0], y: HEARSE.y + p[1], lit: 0, v: 0, ph: Math.random() * 6 }));
-// "right on the screen" and "down the screen" as directions in the room. Upright phone: the room is drawn a quarter turn round.
-let OX = 0, OY = 0;
-function off(ox, oy) { if (R.portrait) { OX = oy; OY = -ox; } else { OX = ox; OY = oy; } }
-function layout() {
-  for (let i = 0; i < 7; i++) { off(CAND_AT[i][0], CAND_AT[i][1]); CAND[i].x = HEARSE.x + OX; CAND[i].y = HEARSE.y + OY; }
-  if (G.state !== 'title') return;      // before the first run: stand under the hearse on the screen, top held up the screen
-  off(0, 190); P.x = HEARSE.x + OX; P.y = HEARSE.y + OY; off(0, -1); aim.x = TC.dir.x = OX; aim.y = TC.dir.y = OY;
-  T.x = P.x + OX * 42; T.y = P.y + OY * 42; M.x = P.x + OX * 250; M.y = P.y + OY * 250;
-}
 
 const U0 = { cap: 12, pull: 210, bounce: 1, range: 1, charge: .55, throwMul: 1, move: 400, homing: 0, dashCut: 0, size: 1 };
 const UPS = [
@@ -861,9 +933,13 @@ const T = { state: 'held', x: 800, y: 648, vx: 0, vy: 0, spin: .12, ang: 0, out:
 let moths = [], spiders = [], darts = [], loose = [], shots = [], sparks = [], rings = [], flashes = [], puffs = [], ripples = [], timers = [], B = null;
 const D = { moth: .8, spider: 26, boss: 72 };
 const K = {}, M = { x: 800, y: 400, down: false, pressT: -9, pressState: '' }, aim = { x: 0, y: -1 };
-// one thumb: where it went down (ax, ay), where it is, the walk it asks for in room directions, and what the top is aimed at
-const TC = { on: false, id: null, tap: false, ax: 0, ay: 0, x: 0, y: 0, wx: 0, wy: 0, tgt: null, tx: 0, ty: 0, dir: { x: 0, y: -1 }, lastT: -1e9 };
-const UP_TOUCH = ['farther.', u => { u.range *= 1.2; }];   // a phone has no dash, so it gets this instead of 'the dash cuts.'
+// a phone, held sideways: two thumbs. TL is the left one (walk; a quick tap dashes), TR the right one (aim; down spins, up
+// throws; down again while the top is out calls it back). each is a stick that starts wherever the thumb lands.
+// TC: whether a thumb is playing at all, the fingers down outside a run (any one of them lifting cleanly starts it), the last
+// way walked, and the way aimed.
+const TC = { on: false, phone: false, taps: new Map(), lastT: -1e9, dir: { x: 0, y: -1 }, av: { x: 0, y: -1 } };
+const TL = { id: null, ax: 0, ay: 0, x: 0, y: 0, sx: 0, sy: 0, wx: 0, wy: 0, t0: 0, far: 0 };
+const TR = { id: null, ax: 0, ay: 0, x: 0, y: 0, aimed: false };
 try { G.best = +localStorage.getItem('hearse.best') || 0; } catch (e) { }
 
 const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -906,7 +982,7 @@ function kill(pts) { G.combo++; G.comboT = 2.4; G.mult = 1 + Math.min(8, Math.fl
 function gain(n) { G.xp += n; while (G.xp >= G.need && G.state === 'play') levelUp(); }
 function levelUp() {
   G.xp -= G.need; G.level++; G.need = Math.round(20 + 16 * G.level + 7 * G.level * G.level);
-  const up = TC.on && G.level === 6 ? UP_TOUCH : UPS[G.level - 2]; let w = 'it carries more.';
+  const up = UPS[G.level - 2]; let w = 'it carries more.';
   if (up) { up[1](U); w = up[0]; } else U.cap += 8;
   showWord(w); relightOne(); A.levelUp(); G.slow = .3;
   rings.push({ x: P.x, y: P.y, r: 20, maxR: 520, sp: 1500, col: [1, .8, .35], kind: 'fx' });
@@ -920,7 +996,7 @@ function hurt(by) {
   G.hurtBy[by || 'other'] = (G.hurtBy[by || 'other'] || 0) + 1;
   P.inv = 1.3; P.flash = 1; G.combo = 0; G.mult = 1; G.hit = Math.max(G.hit, .16); G.ab = 1;
   const c = CAND.find(q => q.lit);
-  if (c) { c.lit = 0; for (let i = 0; i < 5; i++) { off(rnd(-14, 14), rnd(-40, -16)); puffs.push({ x: c.x, y: c.y, vx: OX, vy: OY, life: 1.4, max: 1.4, sz: rnd(22, 40), col: [.5, .5, .55], a: .5 }); } }
+  if (c) { c.lit = 0; for (let i = 0; i < 5; i++) puffs.push({ x: c.x, y: c.y, vx: rnd(-14, 14), vy: rnd(-40, -16), life: 1.4, max: 1.4, sz: rnd(22, 40), col: [.5, .5, .55], a: .5 }); }
   A.snuff(P.x); ripple(P.x, P.y, 14, 900);
   rings.push({ x: P.x, y: P.y, r: 20, maxR: 280, sp: 1100, col: [.45, .55, 1], kind: 'fx' });
   for (const m of moths) { const dx = m.x - P.x, dy = m.y - P.y, d = Math.hypot(dx, dy) || 1; if (d < 280) { m.vx = dx / d * 720; m.vy = dy / d * 720; m.lunge = .3; m.wind = 0; m.lcd = 1.4; } }
@@ -951,17 +1027,19 @@ function start() {
 }
 function dash() {
   if (G.state !== 'play' || P.dashCD > 0 || G.paused) return;
-  let dx = P.ix, dy = P.iy; if (!dx && !dy) { dx = aim.x; dy = aim.y; }
-  P.dx = dx; P.dy = dy; P.dashT = .13; P.dashCD = .42; P.inv = Math.max(P.inv, .22); P.cut.clear(); A.dash(P.x); G.dashed = true;
+  let dx = P.ix, dy = P.iy; if (!dx && !dy) { const q = TC.on ? TC.dir : aim; dx = q.x; dy = q.y; }
+  const dl = Math.hypot(dx, dy) || 1; P.dx = dx / dl; P.dy = dy / dl; P.dashT = .13; P.dashCD = .42; P.inv = Math.max(P.inv, .22); P.cut.clear(); A.dash(P.x); G.dashed = true;
 }
 function player(dt) {
   let ix = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0), iy = (K.KeyS || K.ArrowDown ? 1 : 0) - (K.KeyW || K.ArrowUp ? 1 : 0);
-  if (R.portrait) { const w = R.dirToWorld(ix, iy); ix = w[0]; iy = w[1]; }   // W is always up the screen
   if (TC.on) {
-    if (TC.id !== null) { ix = TC.wx; iy = TC.wy; }
-    const tg = G.state === 'play' ? pickTarget() : (TC.tgt = null);
-    if (tg) { const t = Math.min(.3, Math.hypot(TC.tx - P.x, TC.ty - P.y) / 2200); M.x = TC.tx + (tg.vx || 0) * t; M.y = TC.ty + (tg.vy || 0) * t; }
-    else { M.x = P.x + TC.dir.x * 220; M.y = P.y + TC.dir.y * 220; }
+    if (TL.id !== null) { ix = TL.wx; iy = TL.wy; }
+    // the top is carried the way you walk, until the right thumb slides: then it points where that thumb says, until it lifts
+    const wl = Math.hypot(TL.wx, TL.wy);
+    // it swings round to the new way (turning the angle, so walking straight back still brings it round)
+    if ((TR.id === null || !TR.aimed) && wl > .3) { const a0 = Math.atan2(TC.av.y, TC.av.x); let da = Math.atan2(TL.wy, TL.wx) - a0; da -= Math.round(da / TAU) * TAU;
+      const a = a0 + da * (1 - Math.exp(-dt * 14)); TC.av.x = Math.cos(a); TC.av.y = Math.sin(a); }
+    M.x = P.x + TC.av.x * 260; M.y = P.y + TC.av.y * 260;
   }
   const il = Math.hypot(ix, iy); if (il > 1) { ix /= il; iy /= il; }
   if (G.state === 'dying') { ix = 0; iy = 0; }
@@ -980,16 +1058,6 @@ function player(dt) {
   P.face = Math.atan2(aim.y, aim.x);
   for (const g of P.ghost) g.a -= dt * 3.2; if (P.ghost.length) P.ghost = P.ghost.filter(g => g.a > 0);
   G.moved += Math.hypot(P.vx, P.vy) * dt;
-}
-
-// what a thumb's throw goes for: the nearest thing, holding on to the one it already has unless another is clearly nearer
-function pickTarget() {
-  let best = null, bd = 1e12;
-  const see = (o, x, y) => { const d = ((x - P.x) * (x - P.x) + (y - P.y) * (y - P.y)) * (o === TC.tgt ? .7 : 1); if (d < bd) { bd = d; best = o; TC.tx = x; TC.ty = y; } };
-  for (const m of moths) if (!m.dead && m.spawn >= .5) see(m, m.x, m.y);
-  for (const q of spiders) if (!q.dead && q.state === 'crawl') see(q, q.x, q.y);
-  if (B && B.sc >= 1 && !B.dying) for (let k = 0; k < 12; k++) if (B.mask & (1 << k)) { const a = B.rot + (k + .5) / 12 * TAU; see(B, B.x + Math.cos(a) * B.RB * .75, B.y + Math.sin(a) * B.RB * .75); }
-  return TC.tgt = best;
 }
 
 // ---------- the top
@@ -1279,10 +1347,11 @@ function update(rdt) {
 function draw() {
   R.begin();
   const lit = G.lit, heat = T.spin, hc = heatRGB(heat), ti = (.9 + 1.2 * heat + .6 * T.flash) * (.25 + .75 * lit);
+  const vs = TC.on ? 1.22 : 1;      // on a phone the room is small in the hand: draw the living things a little larger (they hit the same)
   R.setLight(0, T.x, T.y, 62, (640 + 420 * heat) * (.8 + .2 * U.size), hc[0] * ti, hc[1] * ti, hc[2] * ti);
   let nc = 0; for (const c of CAND) nc += c.v;
   const fl = .93 + .05 * Math.sin(G.t * 11.3) + .035 * Math.sin(G.t * 23.7), hi = .62 * nc * fl;
-  off(0, -22); R.setLight(1, 800 + OX, 500 + OY, 120, 1150, 1.0 * hi, .6 * hi, .28 * hi);
+  R.setLight(1, 800, 478, 120, 1150, 1.0 * hi, .6 * hi, .28 * hi);
   R.light(P.x, P.y, 40, 210, .09 * lit + .03, .09 * lit + .03, .12 * lit + .04);
   if (B) { const e = B.sc * (B.dying ? 2.5 : 1) * (.55 + B.flash); R.light(B.x, B.y, 110, 520, 1.0 * e, .85 * e, .7 * e); }
   for (const b of BELLS) { if (b.flash > .02) R.light(b.x, b.y, 90, 620, 2.6 * b.flash, 1.8 * b.flash, .8 * b.flash); R.bell(b.i, b.x, b.y, b.ready * (.25 + .75 * lit), b.flash); }
@@ -1295,29 +1364,29 @@ function draw() {
   // floor level
   for (const p of PILLARS) R.spr(S.SHADOW, p.x, p.y, p.r * 3.5, p.r * 3.5, 0, 0, 0, 0, .62);
   R.spr(S.SHADOW, HEARSE.x, HEARSE.y, 250, 250, 0, 0, 0, 0, .45);
-  off(18, 26); for (const b of BELLS) R.spr(S.SHADOW, b.x + OX, b.y + OY, 136, 136, 0, 0, 0, 0, .4);
+  for (const b of BELLS) R.spr(S.SHADOW, b.x + 18, b.y + 26, 136, 136, 0, 0, 0, 0, .4);
   for (const s of loose) { const fade = s.age > 26 ? (28 - s.age) / 2 : 1, tw = .12 + .5 * Math.max(0, Math.sin(G.t * 3 + s.rot * 3)) ** 8;
-    R.spr(S.GLOW, s.x, s.y, 38, 38, 0, s.col[0], s.col[1], s.col[2], (.10 + .5 * tw) * fade, 0);
-    R.spr(S.SHARD, s.x, s.y, s.sz, s.sz, s.rot, s.col[0], s.col[1], s.col[2], fade, s.sk, .1 + tw, s.rot * 2, 0, 2); }
+    R.spr(S.GLOW, s.x, s.y, 38 * vs, 38 * vs, 0, s.col[0], s.col[1], s.col[2], (.10 + .5 * tw) * fade, 0);
+    R.spr(S.SHARD, s.x, s.y, s.sz * vs, s.sz * vs, s.rot, s.col[0], s.col[1], s.col[2], fade, s.sk, .1 + tw, s.rot * 2, 0, 2); }
   for (const s of spiders) if (s.state === 'drop') { const t = s.t / 1.15; R.spr(S.SHADOW, s.x, s.y, 40 + 110 * t, 40 + 110 * t, 0, 0, 0, 0, .25 + .6 * t); }
-  R.spr(S.HEARSE, HEARSE.x, HEARSE.y, 184, 184, R.portrait ? -Math.PI / 2 : 0, 1, 1, 1, 1, 0, 0, 0, 0, 30);
+  R.spr(S.HEARSE, HEARSE.x, HEARSE.y, 184, 184, 0, 1, 1, 1, 1, 0, 0, 0, 0, 30);
   for (const c of CAND) R.spr(S.CANDLE, c.x, c.y, 48, 48, 0, 1, 1, 1, 1, c.v * (.9 + .1 * Math.sin(G.t * 13 + c.ph * 3)), G.t * 9 + c.ph, 0, 0, 34);
-  off(6, 9); for (const s of spiders) if (s.state === 'crawl') { R.spr(S.SHADOW, s.x + OX, s.y + OY, 130, 130, 0, 0, 0, 0, .45);
-    R.spr(S.SPIDER, s.x, s.y, 150, 150, s.face, 1, 1, 1, 1, s.phase, s.seed, s.flash, 0, 16); }
-  off(4, 6); R.spr(S.SHADOW, P.x + OX, P.y + OY, 56, 56, 0, 0, 0, 0, .5);
-  for (const g of P.ghost) R.spr(S.PLAYER, g.x, g.y, 46, 46, g.f, .3, .4, .9, g.a, .5, 0, 0, 0, 20);
+  for (const s of spiders) if (s.state === 'crawl') { R.spr(S.SHADOW, s.x + 6, s.y + 9, 130 * vs, 130 * vs, 0, 0, 0, 0, .45);
+    R.spr(S.SPIDER, s.x, s.y, 150 * vs, 150 * vs, s.face, 1, 1, 1, 1, s.phase, s.seed, s.flash, 0, 16); }
+  R.spr(S.SHADOW, P.x + 4, P.y + 6, 56 * vs, 56 * vs, 0, 0, 0, 0, .5);
+  for (const g of P.ghost) R.spr(S.PLAYER, g.x, g.y, 46 * vs, 46 * vs, g.f, .3, .4, .9, g.a, .5, 0, 0, 0, 20);
   const blink = P.inv > 0 && P.dashT <= 0 && G.state === 'play' ? (.45 + .55 * (Math.sin(G.t * 40) > 0)) : 1, dsh = P.dashT > 0 ? 1.5 : 1;
-  R.spr(S.PLAYER, P.x, P.y, 46 * dsh, 46 / Math.sqrt(dsh), P.dashT > 0 ? Math.atan2(P.dy, P.dx) : P.face, 1, .35, .25, blink, P.flash, 0, 0, 0, 20);
+  R.spr(S.PLAYER, P.x, P.y, 46 * dsh * vs, 46 / Math.sqrt(dsh) * vs, P.dashT > 0 ? Math.atan2(P.dy, P.dx) : P.face, 1, .35, .25, blink, P.flash, 0, 0, 0, 20);
   for (const p of PILLARS) R.spr(S.PILLAR, p.x, p.y, p.r * 2, p.r * 2, 0, 1, 1, 1, 1, 0, 0, 0, 0, 22);
   // in the air
-  off(10, 15); for (const m of moths) { const c = hueRGB(m.seed * 3.7);
+  for (const m of moths) { const c = hueRGB(m.seed * 3.7);
     if (m.spawn < 1) R.spr(S.GLOW, m.x, m.y, 150, 150, 0, c[0], c[1], c[2], .9 * (1 - m.spawn) + .15, 0);
-    R.spr(S.SHADOW, m.x + OX, m.y + OY, 60, 60, 0, 0, 0, 0, .26 * Math.min(1, m.spawn));
-    R.spr(S.MOTH, m.x, m.y, 86, 86, m.face, 1, 1, 1, 1, m.ph, m.seed, m.flash, Math.min(1, m.spawn), 40); }
-  for (const d of darts) { R.spr(S.GLOW, d.x, d.y, 70, 70, 0, d.col[0], d.col[1], d.col[2], .5, 0);
-    R.spr(S.DART, d.x, d.y, 36, 36, Math.atan2(d.vy, d.vx), d.col[0], d.col[1], d.col[2], 1, 0, 0, 0, 0, 40); }
+    R.spr(S.SHADOW, m.x + 10, m.y + 15, 60 * vs, 60 * vs, 0, 0, 0, 0, .26 * Math.min(1, m.spawn));
+    R.spr(S.MOTH, m.x, m.y, 86 * vs, 86 * vs, m.face, 1, 1, 1, 1, m.ph, m.seed, m.flash, Math.min(1, m.spawn), 40); }
+  for (const d of darts) { R.spr(S.GLOW, d.x, d.y, 70 * vs, 70 * vs, 0, d.col[0], d.col[1], d.col[2], .5, 0);
+    R.spr(S.DART, d.x, d.y, 36 * vs, 36 * vs, Math.atan2(d.vy, d.vx), d.col[0], d.col[1], d.col[2], 1, 0, 0, 0, 0, 40); }
   if (B) { const e = B.dying ? 1 + B.dying * .25 : .35 + .65 * B.sc, sz = B.RB * 2 * e;
-    off(26 * B.sc, 34 * B.sc); R.spr(S.SHADOW, B.x + OX, B.y + OY, sz * 1.15, sz * 1.15, 0, 0, 0, 0, .5 * B.sc);
+    R.spr(S.SHADOW, B.x + 26 * B.sc, B.y + 34 * B.sc, sz * 1.15, sz * 1.15, 0, 0, 0, 0, .5 * B.sc);
     R.spr(S.ROSE, B.x, B.y, sz, sz, B.rot, 1, 1, 1, 1, B.mask, B.flash + (B.dying ? 2 : 0), Math.atan2(P.y - B.y, P.x - B.x) - B.rot, Math.min(1, B.sc * 1.5), 60); }
   for (const b of BELLS) { const sw = Math.sin(G.t * 9) * 7 * b.swing; R.spr(S.BELL, b.x + sw, b.y, 118, 118, (b.i % 2) * 1.5708, 1, 1, 1, 1, b.flash, b.ready * (.25 + .75 * lit), 0, 0, 22); }
   // the chain and the top
@@ -1329,19 +1398,22 @@ function draw() {
     R.spr(S.STREAK, (x0 + x1) / 2, (y0 + y1) / 2, d * 1.7 + 8, (14 + 34 * k) * U.size, an, hc[0], hc[1], hc[2], k * k * (.22 + .6 * heat), 0, 0);
     if (T.state !== 'held') R.spr(S.STREAK, (x0 + x1) / 2, (y0 + y1) / 2, d * 1.7 + 8, (5 + 9 * k) * U.size, an, 1, .95, .85, k * k * .5, 0, 0); }
   for (const s of shots) { const a = Math.atan2(s.vy, s.vx); R.spr(S.STREAK, s.x - Math.cos(a) * 26, s.y - Math.sin(a) * 26, 70, 9, a, s.col[0], s.col[1], s.col[2], .9, 1, 0);
-    R.spr(S.SHARD, s.x, s.y, 17, 17, s.rot, s.col[0], s.col[1], s.col[2], 1, .5, 1, s.rot, 0, 40); }
+    R.spr(S.SHARD, s.x, s.y, 17 * vs, 17 * vs, s.rot, s.col[0], s.col[1], s.col[2], 1, .5, 1, s.rot, 0, 40); }
   R.spr(S.GLOW, T.x, T.y, (96 + 40 * heat) * U.size, (96 + 40 * heat) * U.size, 0, hc[0], hc[1], hc[2], (.07 + .07 * heat + .22 * T.flash) * (.3 + .7 * lit), 0);
-  for (const s of T.orbit) R.spr(S.SHARD, s.x, s.y, 15, 15, s.a * 2, s.col[0], s.col[1], s.col[2], 1, .5, .5 + .5 * heat, s.a, 0, 40);
-  const tsz = (T.state === 'held' ? 66 : 76) * U.size;
+  for (const s of T.orbit) R.spr(S.SHARD, s.x, s.y, 15 * vs, 15 * vs, s.a * 2, s.col[0], s.col[1], s.col[2], 1, .5, .5 + .5 * heat, s.a, 0, 40);
+  // a thumb cannot point at the glass the way a mouse can, so it is shown how far and which way the throw will go
+  if (TC.on && T.state === 'held' && T.charging && G.state === 'play') { const pw = Math.max(.18, T.spin), len = (1450 + 1250 * pw) * U.throwMul * (.26 + .16 * pw) * U.range;
+    R.spr(S.STREAK, T.x + aim.x * len / 2, T.y + aim.y * len / 2, len, 7, P.face, 1, .88, .62, .12 + .2 * T.spin, 0, len / 30); }
+  const tsz = (T.state === 'held' ? 66 : 76) * U.size * vs;
   if (T.state === 'held') R.spr(S.STREAK, (T.x + P.x + aim.x * 19) / 2, (T.y + P.y + aim.y * 19) / 2, 26, 6, P.face, .8, .6, .28, .5, 0, 3);
-  off(4, 7); R.spr(S.SHADOW, T.x + OX, T.y + OY, tsz * 1.25, tsz * 1.25, 0, 0, 0, 0, .5);
+  R.spr(S.SHADOW, T.x + 4, T.y + 7, tsz * 1.25, tsz * 1.25, 0, 0, 0, 0, .5);
   R.spr(S.TOP, T.x, T.y, tsz, tsz, T.ang, 1, 1, 1, 1, clamp((7 + 41 * T.spin) * .024, 0, 1.9), heat * (.3 + .7 * lit), T.flash, 0, 30);
   // light and sparks on top of everything
   for (const s of sparks) { const k = s.life / s.max, sp = Math.hypot(s.vx, s.vy); R.spr(S.STREAK, s.x, s.y, sp * .035 + 8, 5, Math.atan2(s.vy, s.vx), s.col[0], s.col[1], s.col[2], k * .8, 1, 0); }
   for (const r of rings) { const hs = r.r + 40, k = 1 - r.r / r.maxR; R.spr(S.RING, r.x, r.y, hs * 2, hs * 2, 0, r.col[0], r.col[1], r.col[2], k * (r.kind === 'bell' ? 1.6 : .9), r.r / hs, (r.kind === 'bell' ? 22 : 12) / hs); }
   for (const p of puffs) R.spr(S.PUFF, p.x, p.y, p.sz, p.sz, 0, p.col[0], p.col[1], p.col[2], p.a * p.life / p.max, p.max, 0, 0, 0, 50);
   if (T.state === 'back' && T.eta < .5) { const rr = 26 + T.eta * 300, hs = rr + 20, ok = T.eta < .17; R.spr(S.RING, P.x + aim.x * 42, P.y + aim.y * 42, hs * 2, hs * 2, 0, ok ? 1 : .7, ok ? 1 : .6, ok ? 1 : .4, ok ? .8 : .2, rr / hs, 5 / hs); }
-  if (!G.paused && (!TC.on || TC.tgt)) R.spr(S.RETICLE, TC.on ? TC.tx : M.x, TC.on ? TC.ty : M.y, 38, 38, 0, .95, .9, .78, G.state === 'play' ? (TC.on ? .5 : .8) : .45, T.state === 'held' && T.charging ? T.spin : 0);
+  if (!G.paused && !TC.on) R.spr(S.RETICLE, M.x, M.y, 38, 38, 0, .95, .9, .78, G.state === 'play' ? .8 : .45, T.state === 'held' && T.charging ? T.spin : 0);
 
   const amb = .55 + .45 * lit;
   R.flush({ time: G.t, hue: G.hue, amb: [.016 * amb, .02 * amb, .034 * amb], rose: G.rose * (B ? 0 : 1), pool: .2 + .8 * lit, exp: 1.15, bloom: .7,
@@ -1352,8 +1424,13 @@ function draw() {
 const $ = id => document.getElementById(id);
 let el = null, shownScore = -1, shownMult = 0, wasPlaying = null;
 function place(e, x, y, ox, oy) { const q = R.toStage(x, y); e.style.left = (q[0] + (ox || 0) * q[2]) + '%'; e.style.top = (q[1] + (oy || 0) * q[3]) + '%'; }
+function showStick(ring, knob, t) {
+  const on = t.id !== null && !G.paused; ring.style.opacity = on ? .4 : 0; knob.style.opacity = on ? .65 : 0;
+  if (on) { ring.style.transform = 'translate(' + t.ax + 'px,' + t.ay + 'px)'; knob.style.transform = 'translate(' + t.x + 'px,' + t.y + 'px)'; }
+}
 function hud() {
-  if (!el) el = { score: $('score'), mult: $('mult'), word: $('word'), title: $('title'), card: $('card'), cs: $('cs'), cb: $('cb'), go: $('go'), hm: $('hm'), hh: $('hh'), hd: $('hd'), ht: $('ht'), pause: $('pause'), stick: $('stick'), knob: $('knob') };
+  if (!el) el = { score: $('score'), mult: $('mult'), word: $('word'), title: $('title'), card: $('card'), cs: $('cs'), cb: $('cb'), go: $('go'), hm: $('hm'), hh: $('hh'), hd: $('hd'),
+    hl: $('hl'), hr: $('hr'), pause: $('pause'), sl: $('stickL'), kl: $('knobL'), sr: $('stickR'), kr: $('knobR') };
   const play = G.state === 'play' || G.state === 'dying';
   // the page can hide its own furniture (the site's home link) while a run is on
   if ((play && !G.paused) !== wasPlaying) { wasPlaying = play && !G.paused; document.body.classList.toggle('playing', wasPlaying); }
@@ -1363,23 +1440,23 @@ function hud() {
   if (G.mult !== shownMult) { shownMult = G.mult; el.mult.textContent = G.mult > 1 ? '\u00d7' + G.mult : ''; el.mult.classList.remove('pop'); void el.mult.offsetWidth; el.mult.classList.add('pop'); }
   el.mult.style.opacity = play && G.mult > 1 ? .9 : 0;
   el.word.textContent = G.word; el.word.style.opacity = clamp(G.wordT, 0, 1); place(el.word, P.x, P.y, 0, 46);
-  { const m = R.portrait ? 24 : 11; el.word.style.left = clamp(parseFloat(el.word.style.left), m, 100 - m) + '%'; }
+  { const q = R.toStage(176, 0)[0], r = R.toStage(1424, 0)[0]; el.word.style.left = clamp(parseFloat(el.word.style.left), q, r) + '%'; }   // kept on the floor by a wall
   el.title.style.opacity = G.state === 'title' ? .9 : 0;
   el.go.style.opacity = (G.state === 'title' || (G.state === 'dead' && G.canStart)) ? .8 : 0;
   el.card.style.opacity = G.state === 'dead' && G.cardOn ? 1 : 0;
   if (G.state === 'dead') { el.cs.textContent = G.score.toLocaleString('en-US'); el.cb.textContent = 'best ' + G.best.toLocaleString('en-US'); }
   const hm = G.state === 'play' && G.moved < 260, hh = G.state === 'play' && !G.threw && G.run > .6, hd = G.state === 'play' && !G.dashed && G.run > 14 && !hm && !hh;
-  if (TC.on) {     // a thumb is told with two moving dots where it rests: drag, then hold and lift
+  if (TC.on) {     // thumbs are shown, where each one rests, what it does: left drags (and later taps to dash), right holds, aims and lifts
     el.hm.style.opacity = el.hh.style.opacity = el.hd.style.opacity = 0;
-    el.ht.style.opacity = hm || hh ? .8 : 0; el.ht.className = 'hint ' + (hm ? 'd' : 'l');
+    // a glyph is for a thumb that is not down yet: once it lands, its own ring and the dotted line take over. the dash's tap sits above the walking thumb.
+    el.hl.style.opacity = (hm && TL.id === null) || hd ? .8 : 0; el.hl.className = 'hint ' + (hm ? 'd' : 't');
+    el.hr.style.opacity = hh && TR.id === null ? .8 : 0;
   } else {
-    el.ht.style.opacity = 0;
+    el.hl.style.opacity = el.hr.style.opacity = 0;
     el.hm.style.opacity = hm ? .75 : 0; el.hh.style.opacity = hh && !hm ? .8 : 0; el.hd.style.opacity = hd ? .75 : 0;
     place(el.hm, P.x, P.y, 0, -62); place(el.hd, P.x, P.y, 0, -62); place(el.hh, T.x + aim.x * 52, T.y + aim.y * 52);
   }
-  const st = TC.id !== null && !TC.tap && !G.paused;
-  el.stick.style.opacity = st ? .45 : 0; el.knob.style.opacity = st ? .7 : 0;
-  if (st) { el.stick.style.transform = 'translate(' + TC.ax + 'px,' + TC.ay + 'px)'; el.knob.style.transform = 'translate(' + TC.x + 'px,' + TC.y + 'px)'; }
+  showStick(el.sl, el.kl, TL); showStick(el.sr, el.kr, TR);
   el.pause.style.opacity = G.paused ? .9 : 0;
   document.body.style.cursor = G.paused ? 'default' : 'none';
 }
@@ -1388,68 +1465,107 @@ function hud() {
 function setPause(p) {
   if (G.state !== 'play' && p) return;
   G.paused = p; A.pause(p);
-  if (p) { M.down = false; T.charging = false; TC.id = null; TC.tap = false; TC.wx = TC.wy = 0; for (const k in K) K[k] = false; }
+  if (p) { M.down = false; T.charging = false; TL.id = TR.id = null; TC.taps.clear(); TL.wx = TL.wy = 0; for (const k in K) K[k] = false; }
 }
 function pressStart() { if (G.state === 'title' || (G.state === 'dead' && G.canStart)) { start(); return true; } return false; }
-function setTouch(on) { if (TC.on === on) return; TC.on = on; TC.tgt = null; document.body.classList.toggle('touch', on); }
-// the thumb is a stick that starts wherever it lands and is dragged along if it goes past its edge
-function stick() {
-  const RM = 46; let dx = TC.x - TC.ax, dy = TC.y - TC.ay, len = Math.hypot(dx, dy);
-  if (len > RM) { TC.ax += dx * (1 - RM / len); TC.ay += dy * (1 - RM / len); dx = TC.x - TC.ax; dy = TC.y - TC.ay; len = RM; }
-  if (len < .001) { TC.wx = TC.wy = 0; return; }
-  const m = clamp((len - 7) / (RM - 7), 0, 1), w = R.dirToWorld(dx / len, dy / len);
-  TC.wx = w[0] * m; TC.wy = w[1] * m;
+// a thumb playing gets the whole screen and the wider view; a mouse gets the framed room
+function setTouch(on) { if (TC.on === on) return; TC.on = on; document.body.classList.toggle('touch', on); R.wide = on; R.resize(true); }
+// the left button, or the right thumb, goes down / comes up
+function press() {
+  M.down = true; M.pressT = G.t;
+  if (T.state === 'held') { T.charging = true; M.pressState = 'held'; }
+  else if (T.state === 'out') { M.pressState = 'recall'; if (T.out > .1) recall(); }   // a press right after a throw is not a recall
+  else M.pressState = 'back';
+}
+function release() { M.down = false; if (G.state === 'play' && T.state === 'held' && T.charging && !G.paused) throwTop(); T.charging = false; }
+// a stick starts wherever its thumb lands and is dragged along if the thumb goes past its edge
+function pull(t) {
+  const RM = 46; let dx = t.x - t.ax, dy = t.y - t.ay, len = Math.hypot(dx, dy);
+  if (len > RM) { t.ax += dx * (1 - RM / len); t.ay += dy * (1 - RM / len); dx = t.x - t.ax; dy = t.y - t.ay; len = RM; }
+  return [dx, dy, len];
+}
+function walkStick() {
+  const q = pull(TL), len = q[2]; TL.far = Math.max(TL.far, Math.hypot(TL.x - TL.sx, TL.y - TL.sy));
+  if (len < .001) { TL.wx = TL.wy = 0; return; }
+  const m = clamp((len - 7) / 39, 0, 1), w = R.dirToWorld(q[0] / len, q[1] / len);
+  TL.wx = w[0] * m; TL.wy = w[1] * m;
   if (m > .25) { TC.dir.x = w[0]; TC.dir.y = w[1]; }
+}
+function aimStick() { const q = pull(TR); if (q[2] > 9) { const w = R.dirToWorld(q[0] / q[2], q[1] / q[2]); TC.av.x = w[0]; TC.av.y = w[1]; TR.aimed = true; } }
+// a phone that can give the game its whole screen, lying on its side, is asked to when a run starts. one that cannot is left alone.
+function goFull() {
+  if (!TC.phone) return;
+  try { const de = document.documentElement;
+    if (de.requestFullscreen && !document.fullscreenElement) { const q = de.requestFullscreen({ navigationUI: 'hide' });
+      if (q && q.then) q.then(() => { try { const o = screen.orientation; if (o && o.lock) { const r = o.lock('landscape'); if (r && r.catch) r.catch(() => { }); } } catch (e) { } }).catch(() => { }); }
+  } catch (e) { }
 }
 function boot() {
   const cv = $('c');
   try { R.init(cv); } catch (e) { $('err').textContent = String(e.message || e); throw e; }
-  layout();
-  const fit = () => { const was = R.portrait; R.resize(); if (R.portrait !== was) layout(); };
+  const fit = () => R.resize();
   window.addEventListener('resize', fit);
   window.addEventListener('orientationchange', () => setTimeout(fit, 60));
   window.addEventListener('mousemove', e => {
-    if (TC.on) { if (TC.id !== null || performance.now() - TC.lastT < 800) return; setTouch(false); }   // a real mouse takes over from a thumb
+    if (TC.on) { if (TL.id !== null || TR.id !== null || TC.taps.size || performance.now() - TC.lastT < 800) return; setTouch(false); }   // a real mouse takes over from a thumb
     const w = R.toWorld(e.clientX, e.clientY); M.x = w[0]; M.y = w[1];
   });
   const link = e => e.target && e.target.closest && e.target.closest('a');     // a link on the page (the site's home link) is not the game
   window.addEventListener('mousedown', e => {
     if (G.paused || TC.on || link(e)) return;
-    if (e.button === 0) { M.down = true; M.pressT = G.t; pressStart();
-      if (G.state === 'play') { if (T.state === 'held') { T.charging = true; M.pressState = 'held'; } else if (T.state === 'out') { M.pressState = 'recall'; if (T.out > .1) recall(); } else M.pressState = 'back'; } }   // a press right after a throw is not a recall
+    if (e.button === 0) { M.down = true; M.pressT = G.t; pressStart(); if (G.state === 'play') press(); }
     else if (e.button === 2) dash();
     e.preventDefault();
   });
-  window.addEventListener('mouseup', e => { if (e.button !== 0 || TC.on) return; M.down = false; if (G.state === 'play' && T.state === 'held' && T.charging && !G.paused) throwTop(); T.charging = false; });
+  window.addEventListener('mouseup', e => { if (e.button !== 0 || TC.on) return; release(); });
   window.addEventListener('contextmenu', e => e.preventDefault());
-  // one thumb. down: walk and spin. up: throw. a touch never calls the top back early, because a thumb has to come down to walk.
+  // thumbs. a touch that lands on the left half of the game walks; one on the right half aims and throws.
+  // a finger already on the glass when a run starts or wakes: on the left it walks from where it is (and its lift is not a
+  // dash); on the right it is left alone until it lifts, because spinning the top is a fresh press.
+  const adopt = list => {
+    for (const t of list) {
+      if (TL.id !== null) return;
+      if (t.identifier === TR.id || R.side(t.clientX, t.clientY) >= .5) continue;
+      TC.taps.delete(t.identifier);
+      TL.id = t.identifier; TL.ax = TL.x = TL.sx = t.clientX; TL.ay = TL.y = TL.sy = t.clientY; TL.wx = TL.wy = 0; TL.t0 = -1e9; TL.far = 99;
+    }
+  };
   document.addEventListener('touchstart', e => {
     if (link(e)) return;
     if (e.cancelable) e.preventDefault(); setTouch(true); TC.lastT = performance.now();
-    if (TC.id !== null) {      // the thumb we were following is gone without a word from the browser: let go of it
-      let here = false; for (const t of e.touches) if (t.identifier === TC.id) here = true;
-      if (here) return; TC.id = null; TC.tap = false; TC.wx = TC.wy = 0; M.down = false; T.charging = false;
+    // a thumb we were following that the browser no longer lists is gone: let go of it
+    const live = id => { for (const t of e.touches) if (t.identifier === id) return true; return false; };
+    if (TL.id !== null && !live(TL.id)) { TL.id = null; TL.wx = TL.wy = 0; }
+    if (TR.id !== null && !live(TR.id)) { TR.id = null; M.down = false; T.charging = false; }
+    for (const id of [...TC.taps.keys()]) if (!live(id)) TC.taps.delete(id);
+    for (const t of e.changedTouches) {
+      if (G.paused) { setPause(false); TC.taps.set(t.identifier, { x: t.clientX, y: t.clientY }); adopt(e.touches); continue; }   // a touch wakes a paused run at once
+      if (G.state !== 'play') { TC.taps.set(t.identifier, { x: t.clientX, y: t.clientY }); continue; }    // not in a run: any finger that lifts cleanly starts one
+      if (R.side(t.clientX, t.clientY) < .5) {
+        if (TL.id === null) { TL.id = t.identifier; TL.ax = TL.x = TL.sx = t.clientX; TL.ay = TL.y = TL.sy = t.clientY; TL.wx = TL.wy = 0; TL.t0 = performance.now(); TL.far = 0; }
+      } else if (TR.id === null) { TR.id = t.identifier; TR.ax = TR.x = t.clientX; TR.ay = TR.y = t.clientY; TR.aimed = false; press(); }
     }
-    const t = e.changedTouches[0]; TC.id = t.identifier; TC.ax = TC.x = t.clientX; TC.ay = TC.y = t.clientY; TC.wx = TC.wy = 0;
-    TC.tap = G.paused || G.state !== 'play';      // this touch is a tap: it wakes a paused game, or starts a run when it lifts
-    if (G.paused) { setPause(false); TC.id = t.identifier; return; }
-    if (TC.tap) return;
-    M.down = true; M.pressT = G.t;
-    if (T.state === 'held') { T.charging = true; M.pressState = 'held'; } else M.pressState = T.state === 'back' ? 'back' : 'recall';
   }, { passive: false });
   document.addEventListener('touchmove', e => {
     if (link(e)) return; if (e.cancelable) e.preventDefault();
-    for (const t of e.changedTouches) if (t.identifier === TC.id && !TC.tap) { TC.x = t.clientX; TC.y = t.clientY; stick(); }
+    for (const t of e.changedTouches) {
+      if (t.identifier === TL.id) { TL.x = t.clientX; TL.y = t.clientY; walkStick(); }
+      else if (t.identifier === TR.id) { TR.x = t.clientX; TR.y = t.clientY; aimStick(); }
+    }
   }, { passive: false });
   const lift = cancel => e => {
     TC.lastT = performance.now();
-    for (const t of e.changedTouches) if (t.identifier === TC.id) {
-      if (!link(e) && e.cancelable) e.preventDefault();
-      const tap = TC.tap; TC.id = null; TC.tap = false; TC.wx = TC.wy = 0; M.down = false;
-      if (!cancel) A.init();                    // a lifted finger is what a phone accepts as leave to make sound
-      if (tap) { if (!cancel && !G.paused && Math.hypot(t.clientX - TC.ax, t.clientY - TC.ay) < 14) pressStart(); }
-      else if (!cancel && G.state === 'play' && T.state === 'held' && T.charging && !G.paused) throwTop();
-      T.charging = false;
+    if (!link(e) && e.cancelable) e.preventDefault();
+    if (!cancel && !G.paused) A.init();          // a lifted finger is what a phone accepts as leave to make sound
+    for (const t of e.changedTouches) {
+      if (TC.taps.has(t.identifier)) { const q = TC.taps.get(t.identifier); TC.taps.delete(t.identifier);
+        if (!cancel && !G.paused && Math.hypot(t.clientX - q.x, t.clientY - q.y) < 14 && pressStart()) { goFull(); adopt(e.touches); } }
+      else if (t.identifier === TL.id) { TL.id = null; TL.wx = TL.wy = 0;
+        if (!cancel && performance.now() - TL.t0 < 220 && TL.far < 12) dash(); }      // a quick tap of the walking thumb is the dash
+      else if (t.identifier === TR.id) { TR.id = null;
+        if (cancel) { M.down = false; T.charging = false; }
+        else {     // the throw goes where the thumb is as it leaves the glass, even if it flicked in the same moment
+          TR.x = t.clientX; TR.y = t.clientY; aimStick(); aim.x = TC.av.x; aim.y = TC.av.y; M.x = P.x + aim.x * 260; M.y = P.y + aim.y * 260; release(); } }
     }
   };
   document.addEventListener('touchend', lift(false), { passive: false });
@@ -1469,14 +1585,15 @@ function boot() {
   const here = () => { if (!G.paused && !document.hidden) A.pause(false); };
   window.addEventListener('blur', away); window.addEventListener('focus', here);
   document.addEventListener('visibilitychange', () => { if (document.hidden) away(); else here(); });
-  if (window.matchMedia && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) setTouch(true);
+  TC.phone = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
+  if (TC.phone) setTouch(true);
   CAND[6].lit = 1; CAND[6].v = 1;
   let last = performance.now(), ft = 16, slowN = 0, fc = 0, gov = true, ftWas = 0, scWas = 1;
   function frame(now) {
     requestAnimationFrame(frame); const raw = now - last, dt = clamp(raw / 1000, .001, .034); last = now;
     if (R.lost) return;
     if (!G.paused) update(dt); draw(); hud();
-    // a phone that cannot keep up gets a smaller picture, never a slower game. only ever steps down, and only on a thumb.
+    // a phone that cannot keep up gets a smaller picture, never a slower game. only on a thumb; undone if it did not help.
     if (gov && TC.on && raw < 250) { ft += (raw - ft) * .05;
       if (++fc % 90 === 0 && fc > 150) {
         if (ftWas) { if (ft > ftWas * .88) { R.setScale(scWas); gov = false; } ftWas = 0; }
@@ -1485,7 +1602,7 @@ function boot() {
   }
   requestAnimationFrame(frame);
 }
-window.__hearse = { G, P, T, M, K, TC, CAND, BELLS, U: () => U, start, hurt, dash, spawnSpider, spawnRose, spawnMothGroup, levelUp, ringBell, throwTop,
+window.__hearse = { G, P, T, M, K, TC, TL, TR, CAND, BELLS, U: () => U, start, hurt, dash, spawnSpider, spawnRose, spawnMothGroup, levelUp, ringBell, throwTop,
   get B() { return B; }, audio: () => A.state(),
   spiderPos() { const q = spiders.find(o => o.state === 'crawl'); return q ? { x: q.x, y: q.y } : null; },
   aimAt() { let best = null, bd = 1e9; const see = o => { const d = Math.hypot(o.x - P.x, o.y - P.y); if (d < bd) { bd = d; best = o; } };
