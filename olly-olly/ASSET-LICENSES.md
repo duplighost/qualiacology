@@ -14,6 +14,7 @@ A game by Alex / Qualiacology. Generated from the retained source records by `to
 [Eric Rigged 001](https://sketchfab.com/3d-models/eric-rigged-001-rigged-3d-business-man-a46bc9f67aaa415bb4f3241eef900e7f) by Renderpeople, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 Adapted through Winterline for the hands and the Jack and Mask character pipelines. The Jack pipeline resamples the skeleton and locomotion, transfers skin weights and builds its straw, clothing and pumpkin geometry. The Mask removes the human face and neck, darkens and simplifies the cloth, merges joints, sculpts four rubber masks (skull, old man, devil, ghoul) from the scan's own head, and adds an authored hood, collar, cape and pillowcase.
 Locomotion was retained from the Winterline Mixamo / Three.js Soldier conversion, then hunched and resampled. Additional creature actions and the Mask geometry were authored for OLLY OLLY.
+On the 1996 home video (`assets/story/hale/home-1996.webm`), Sam at sixteen is the same scan rendered into the picture: the waistcoat and shirt replaced by a letterman jacket built from the scan's own surface, the trousers and shoes recoloured, posed with the retained Mixamo Idle and Walk and authored reaches (`tools/blender/hale_body.py`). His face is never shown.
 [Retained Mask source record](assets/characters/mask/mask.source.json). [Full Renderpeople acquisition and hand adaptation record](assets/weapons/ASSET-LICENSES.md).
 
 ## Materials, recordings, paintings and wallpaper

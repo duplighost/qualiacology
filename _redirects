@@ -169,5 +169,8 @@
 # --- HEARSE ---
 /hearse.html  /hearse/  301!
 
+# --- TETHER ---
+/tether.html  /tether/  301!
+
 # --- SKIP ---
 /skip.html  /skip/  301!
