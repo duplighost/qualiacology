@@ -61,6 +61,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | pocket-sun | `Projects\pocket-sun` | `npm run build:site` then `npm run copy:site` there |
 | hearse | `Projects\hearse` | `node tools/build-site-copy.mjs` there; never hand-edit the site copy |
 | skip | `Projects\skip` | `node build-site-copy.mjs --site=<this repo>` there; never hand-edit the site copy |
+| free-play | `Projectsree-play` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | tideglass | `Projects	ideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
 | spaceboarding | `Projects\spaceboarding` | copy `assets src styles.css vendor`; keep the site's index.html shell |
 | fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
