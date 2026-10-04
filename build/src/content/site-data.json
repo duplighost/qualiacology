@@ -498,6 +498,21 @@
   ],
   "albums": [
     {
+      "slug": "whoever-you-are",
+      "title": "Whoever You Are",
+      "featured": true,
+      "image": "/assets/albums/whoever-you-are.jpg",
+      "alt": "Whoever You Are album cover",
+      "summary": "Seven tracks. A claw machine of rubber ducks, the quietest mall in the world, an empty lifeguard chair in September, and Maho Bay, for whoever you are.",
+      "tags": [
+        "pop-punk",
+        "emo"
+      ],
+      "tracks": 7,
+      "listen": "https://suno.com/playlist/cc914409-2ba1-4e09-9b46-b8ffce9a4138",
+      "youtube": "https://www.youtube.com/watch?v=VQluq6hd2aQ"
+    },
+    {
       "slug": "i-miss-the-summer-people",
       "title": "I Miss The Summer People",
       "featured": true,
@@ -530,7 +545,7 @@
     {
       "slug": "ask-anyone",
       "title": "Ask Anyone",
-      "featured": true,
+      "featured": false,
       "image": "/assets/albums/ask-anyone.jpg",
       "alt": "Ask Anyone album cover",
       "summary": "Pop, pop-punk, and emo — some lyrical dissonance and some truth. The one where the hooks aren’t covering for anybody.",
