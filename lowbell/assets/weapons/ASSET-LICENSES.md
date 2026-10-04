@@ -68,9 +68,9 @@ Copied from WINTERLINE with their credits above; every image was re-encoded at 1
 
 `rifle.glb` is **Bolt Action Rifle 7.62** from Poly Haven (https://polyhaven.com/a/bolt_action_rifle_7_62), released under **CC0 1.0** (https://creativecommons.org/publicdomain/zero/1.0/). Made into a viewmodel part by `tools/blender/gun_rifle.py`: the scope removed, turned to point -Z, the origin moved onto the bore over the magazine, the bolt handle and bolt joined into one part with its own axis, the loose round and the trigger kept as parts, textures re-encoded at 1K. Credit is not required; it is given anyway.
 
-## The kick's boot and trouser leg - made here
+## The kick's boot and trouser leg
 
-`boot.glb` is modelled by `tools/blender/gun_boot.py` for this game. Its textures are **Leather014** and **Fabric001** by ambientCG (https://ambientcg.com), **CC0 1.0**, re-encoded at 512 px.
+`boot.glb` is copied unchanged from OLLY OLLY, where it was modelled by its `tools/blender/gun_boot.py`. Its textures are **Leather014** and **Fabric001** by ambientCG (https://ambientcg.com), **CC0 1.0**, re-encoded at 512 px.
 
 ## The range
 
