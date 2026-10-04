@@ -612,5 +612,1702 @@
     "reviewVideo": "13.083 seconds, H.264/AAC; decoded soundtrack matched the source mix at 0 samples offset at 16 kHz (correlation 0.999829)."
   },
   "creditsReported": 12,
-  "creditsNote": "7 credits adult Sam, 1 each for four Google generations, 1 for independent Scribe transcription; completed-job reports, no purchase."
+  "creditsNote": "7 credits adult Sam, 1 each for four Google generations, 1 for independent Scribe transcription; completed-job reports, no purchase.",
+  "batches": [
+    {
+      "generated": "2026-10-04",
+      "spec": "voice-more-20261004.json",
+      "sources": {
+        "crypt-here": {
+          "file": "raw/crypt-here.mp3",
+          "sha256": "559780f54e1e74a10c8390e981624f6661a751e39b2e5b7d5d23f3fa5f87b934",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, stunned] Ollie. [long pause] [quiet, breaking] You've been here the whole time. Under the chapel. [long pause] [quiet, guilty] The one place you promised you never would. I said best spot ever.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "3b3ca653-ce9d-4231-ae58-df11a3fcae8f",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/50ad45ef-f761-4d1f-a4a8-67c67a932abf.mp3",
+          "pauses": [
+            1.49,
+            1.07
+          ],
+          "longestPauseInsideALine": 0.85
+        },
+        "crypt-things": {
+          "file": "raw/crypt-things.mp3",
+          "sha256": "862bdc27811dd4680414ab7cd1f0326b297c033a78e5a079c4e28bd0273f71aa",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, tender] Your sneakers, side by side. Your flashlight. A comic. [long pause] [quiet, heartbroken] You made it nice in here. You thought I was coming.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "b555436a-dc5c-4b80-9c60-840ef1a30a69",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/26eace10-83b2-4fc1-ae0e-1e49f3584d0b.mp3",
+          "pauses": [
+            1.12
+          ],
+          "longestPauseInsideALine": 0.8
+        },
+        "things-2-retake": {
+          "file": "raw/things-2-retake.mp3",
+          "sha256": "7090a6ed8869215a1710726b79824e6a8d25d128fc2ac66b22f0141453b5636f",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, heartbroken] You made it nice in here. You thought I was coming.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "648fc508-f5ed-46ec-8193-07e0912ebb6e",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/ce213276-0202-4731-b373-29733fc2d734.mp3"
+        },
+        "crypt-wall": {
+          "file": "raw/crypt-wall.mp3",
+          "sha256": "dc58cf9df2e896e636ec0750a09e0bf0bb1843add8ed63de40e2c845eefefc64",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, matter-of-fact] A scratch in the stone for every count. A hundred to a block. [long pause] [quiet] When I didn't come, you gave me another hundred. And another. Six hundred and fifty-seven. [long pause] [quiet, slow] Then the counting stops. Ten to ten. That's when the knocking starts. [long pause] [quiet, breaking] That's the minute you gave up on me.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "712c4e77-48ba-4aef-a04f-eea0082927e6",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/865137cc-dacc-4912-8c57-f219d14f698d.mp3",
+          "pauses": [
+            1.6,
+            1.42,
+            1.39
+          ],
+          "longestPauseInsideALine": 0.91
+        },
+        "crypt-him": {
+          "file": "raw/crypt-him.mp3",
+          "sha256": "547da31726fa6f12ca21e57d7949ddf562e4888ed61e0d607e7c8dff73f47f8f",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, tired, intimate] You hid where I told you. The stone shut behind you. Nobody came. [long pause] [quiet, tender] So you took your shoes off. Folded your sheet for a pillow, and pulled the rest of it over you. [long pause] [quiet, breaking] You went to sleep waiting, and you never woke up. You were seven.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "6f7b74fd-8828-48f8-9f9c-b9dd143646fc",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/775b53fe-d30a-4648-ab59-9ff7819e61ae.mp3",
+          "pauses": [
+            1.38,
+            1.28
+          ],
+          "longestPauseInsideALine": 0.77
+        },
+        "crypt-corner": {
+          "file": "raw/crypt-corner.mp3",
+          "sha256": "4a48613439cfd4ad3b688b3dedb175f6682722b28713a162c25ae55193b495e2",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, rueful] It was your whole plan for the night. Hide and seek with me. [long pause] [quiet, ashamed] I gave it to you to get rid of you.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "32a810d0-fdee-46f5-a0db-dbd3da4c825f",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/67b79bee-d19c-4c47-803b-30548113af05.mp3",
+          "pauses": [
+            1.64
+          ],
+          "longestPauseInsideALine": 0.57
+        },
+        "crypt-count": {
+          "file": "raw/crypt-count.mp3",
+          "sha256": "e17fb4b2ce5bc8e612a3d5c101c35a0bcc022c8fe449fc2950d8015f213db7cf",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[softly, matter-of-fact] Fifty-seven. You left me forty-three.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "50211c87-efc4-4657-9dc9-9b34e4a0c05c",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/66d144c3-74a4-44ed-930c-ae3b9a7758ef.mp3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "crypt-candy": {
+          "file": "raw/crypt-candy.mp3",
+          "sha256": "0faed70768c7d69762376eb5441f817a5da1eda1f8d32c8974e11f1af642ee39",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, gentle] I brought your candy. From all the houses. [long pause] [quiet, gentle] June's candy apple. You never ate yours. You just carried it. [long pause] [quiet, gentle] Mrs. K's full-size bar. Stop two, every year. [long pause] [quiet, gentle] Frank's peanuts. Save half for Bo. [long pause] [quiet, gentle] The twins' popcorn ball. For whoever hid the longest. That's you. [long pause] [quiet, gentle] A sheriff's star, for your coat. [long pause] [quiet, gentle] A peppermint. You practised. [long pause] [quiet, gentle] Nonna's cannoli. She made you a plate every year. [long pause] [quiet, gentle] A pouch, from a kid who never met you. [long pause] [quiet, proud] Your dare candy. You did it. Everybody's going to know. [long pause] [quiet, ashamed] Nothing from the Deckers'. That one's on me.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "776b149a-a636-456a-935d-dd2db372eac8",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/f71f18ad-13cb-4b3f-a37b-c80aa3dd5547.mp3",
+          "pauses": [
+            1.3,
+            1.25,
+            1.2,
+            1.19,
+            1.17,
+            1.15,
+            1.12,
+            1.1,
+            1.08,
+            1.07
+          ],
+          "longestPauseInsideALine": 0.65
+        },
+        "crypt-map": {
+          "file": "raw/crypt-map.mp3",
+          "sha256": "a341d43b844da8a3060868bfc7ef5ff9e112269b384b74c3bd4827fd88ce2182",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, gentle] And your map. I walked all of it.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "42c75291-7fda-4a79-9beb-7b2385a0352c",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/8d274841-5ba2-46e3-9cbc-525c7634747b.mp3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "crypt-found": {
+          "file": "raw/crypt-found.mp3",
+          "sha256": "fbe000a700e8e52fffe2588c6330553d5630fba9b051673663c14bc5401dbff0",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, steady] I'm not moving you. You stay here tonight, under your sheet. [long pause] [quiet, resolved] In the morning I tell them where you are. Tonight I carry your bag.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "58c0b285-049a-47b2-959f-a36ebf40dccb",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/7c110c6d-7d77-421e-866e-5f00d685a95b.mp3",
+          "pauses": [
+            1.46
+          ],
+          "longestPauseInsideALine": 0.72
+        },
+        "crypt-behind": {
+          "file": "raw/crypt-behind.mp3",
+          "sha256": "874c07ec51d9bbf625f5e1b02f4d4b1d74e1695cc6c76108fa86616a9ff320c4",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, warm] You're behind me. Three steps back, same as always. [long pause] [quiet, rueful] I used to walk faster so you'd have to run. [long pause] [softly] Not tonight.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "49c71323-70df-499b-b990-60088ca37295",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/f68c33ad-608b-4a76-9b99-5f9db26f4cdb.mp3",
+          "pauses": [
+            1.45,
+            1.13
+          ],
+          "longestPauseInsideALine": 0.61
+        },
+        "crypt-stone": {
+          "file": "raw/crypt-stone.mp3",
+          "sha256": "8ca8cfb52153ab94c7b2636f4c76378655ce3c6957e4e8d1101b6530198eed57",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[straining, quiet] It takes everything I have to shift this stone. You were seven.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "0e938c3a-6046-4185-a12f-dcd7591537e9",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/31fef4a2-9713-4eb8-b060-813be162b9c8.mp3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "stone-retake": {
+          "file": "raw/stone-retake.mp3",
+          "sha256": "cf37710b7f00db791940e4236c44c3b05a308603dbbeb8d5b5a22abd85073251",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, tired] It takes everything I have to shift this stone. You were seven.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "ce50612b-a5d2-4a84-830e-03b4fe1d0fa1",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/678798ce-2256-4bb2-a253-6b1fc825eeb4.mp3"
+        },
+        "chapel-votives": {
+          "file": "raw/chapel-votives.mp3",
+          "sha256": "f0c5b1c93c7e8e11b21071e06906f5d48ebad63c1cf833c25d73248f57d2884b",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet] Twenty-nine red glasses, burnt down. One place left. [long pause] [quiet, tender] Mom lit one here every Halloween. To the saint of lost things. [long pause] [quiet, breaking] She was standing right on top of you.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "d9ce41a3-a923-4e3d-8316-ad9b12c2da22",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/4d9f9731-25c7-4b12-a610-16182b49dad9.mp3",
+          "pauses": [
+            0.97,
+            0.86
+          ],
+          "longestPauseInsideALine": 0.74
+        },
+        "chapel-candle": {
+          "file": "raw/chapel-candle.mp3",
+          "sha256": "d1414f2c0835350a0670bee607a61c2ee387a4ed4d84e32f621d4f70febc28b0",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, intimate] Here's this year's, Mom. I found him.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "652ff232-2f60-4c10-b71f-e63b25ad0ab8",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/558cbc18-c7b3-4cf5-92f8-d065085ae7b4.mp3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "tower-sorry": {
+          "file": "raw/tower-sorry.mp3",
+          "sha256": "a0377c2805218f5b4e3a0268a6f7834438746103330d82cad4aade970245eaae",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, tired, honest] I was sixteen. I wanted one night without you. [long pause] [quiet, honest] That's all it was. There isn't a bigger reason. [long pause] [quiet] You did everything I ever told you to. [long pause] [quiet, bitter] \"Next week,\" she wrote. \"Next year,\" he wrote. Everybody was going to get to you later. [long pause] [quiet, breaking] I'm sorry, Ollie.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "941f1eaa-b73d-4357-915b-fb2c905d32b5",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/2c2c5070-ec19-4fee-9dde-2d48afb4c068.mp3",
+          "pauses": [
+            1.45,
+            1.33,
+            1.28,
+            1.13
+          ],
+          "longestPauseInsideALine": 0.69
+        },
+        "bell-giveup": {
+          "file": "raw/bell-giveup.mp3",
+          "sha256": "28fdc8f774897036f7fcb312df79d007bfeeb11775c1d10f14523ec791b6aa73",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, surrendering] I give up, Ollie. You win.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "eb152850-c856-4c93-9e85-ea078154d6f3",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/8e079544-f115-441e-a140-a49f48825250.mp3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "bell-after": {
+          "file": "raw/bell-after.mp3",
+          "sha256": "c6769de6be9d1a617eda8f615b77ca43eefac38a9b518a49aeb657b85cce11b0",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[softly, calling] Game's over. You can come out now. [long pause] [quiet, gentle] Go on home. I'm right behind you. [long pause] [quiet] They're going out behind you. You don't need them now.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "f4561f02-e4aa-4ec8-ba51-b431cfd8d5c1",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/bebee70c-fad2-47e1-a2b8-76688c93d799.mp3",
+          "pauses": [
+            1.33,
+            1.32
+          ],
+          "longestPauseInsideALine": 0.56
+        },
+        "home-lamp": {
+          "file": "raw/home-lamp.mp3",
+          "sha256": "3c9d686151b5d378a3bcc2026b488a044e26190c587860b49ec9bc725678752f",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, remembering] One year I waited at a gate. [long pause] [quiet, tender] This year you waited.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "c5bdb2a7-b61b-4bfa-8281-caa7f82bc41b",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/5719489e-5c39-4f65-ae45-5145d0713684.mp3",
+          "pauses": [
+            1.15
+          ],
+          "longestPauseInsideALine": 0.27
+        },
+        "home-last": {
+          "file": "raw/home-last.mp3",
+          "sha256": "547e84acc3408d3ff46266ccac53f794e4c7a8a4a25be8a8b1cca22663a01748",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, wondering] A tall one and a small one. You drew this. [long pause] [quiet, gentle] That's our porch. Go on in. [long pause] [quiet, tired, intimate] Twenty-nine of them, Mom. That makes thirty.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "828a0fb9-64c1-44b5-93bb-9784d7fa12df",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/1cd84adf-64f4-4510-aea9-10a2c1ca01e2.mp3",
+          "pauses": [
+            1.22,
+            1.21
+          ],
+          "longestPauseInsideALine": 0.78
+        }
+      },
+      "clips": [
+        {
+          "key": "crypt-ollie",
+          "text": "Ollie.",
+          "tag": "quiet, stunned",
+          "file": "crypt-ollie.ogg",
+          "source": "crypt-here",
+          "sourceCutSeconds": [
+            0.1446,
+            1.0977
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.45465,
+          "duration": 0.9502,
+          "bytes": 11985,
+          "sha256": "ea96dc92b353067cb9f75633b36102a04e6153055d7ed7a30811ebe78dac708e",
+          "peakDb": -15.25,
+          "rmsDb": -28.5,
+          "clippedSamples": 0,
+          "heard": "Ollie.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "crypt-here",
+          "text": "You've been here the whole time. Under the chapel.",
+          "tag": "quiet, breaking",
+          "file": "crypt-here.ogg",
+          "source": "crypt-here",
+          "sourceCutSeconds": [
+            2.1834,
+            5.5659
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.691315,
+          "duration": 3.3826,
+          "bytes": 34106,
+          "sha256": "110d120ec8daba6ab512e09f021493a782fdd58af0be1544fa35afc0da915247",
+          "peakDb": -11.73,
+          "rmsDb": -28.1,
+          "clippedSamples": 0,
+          "heard": "You've been here the whole time, under the chapel.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "crypt-promise",
+          "text": "The one place you promised you never would. I said best spot ever.",
+          "tag": "quiet, guilty",
+          "file": "crypt-promise.ogg",
+          "source": "crypt-here",
+          "sourceCutSeconds": [
+            6.4788,
+            11.2033
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.743181,
+          "duration": 4.7245,
+          "bytes": 46483,
+          "sha256": "2d51dea2b6c8c03c1c52cd4f69e89c2f3eb103298474b6ff8464d3a29caf339d",
+          "peakDb": -8.81,
+          "rmsDb": -29.75,
+          "clippedSamples": 0,
+          "heard": "The one place you promised you never would. I said best spot ever.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "things-1",
+          "text": "Your sneakers, side by side. Your flashlight. A comic.",
+          "tag": "quiet, tender",
+          "file": "things-1.ogg",
+          "source": "crypt-things",
+          "sourceCutSeconds": [
+            0.0797,
+            4.9739
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.474795,
+          "duration": 4.8941,
+          "bytes": 47887,
+          "sha256": "ec2922d3742043a1ece25e899f4ac9e93f4c3b5371cb959cd34f85fe4d580b28",
+          "peakDb": -8.96,
+          "rmsDb": -30.38,
+          "clippedSamples": 0,
+          "heard": "your sneakers side by side, your flashlight, a comic.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "things-2",
+          "text": "You made it nice in here. You thought I was coming.",
+          "tag": "quiet, heartbroken",
+          "file": "things-2.ogg",
+          "source": "things-2-retake",
+          "sourceCutSeconds": [
+            0.1396,
+            3.4074
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.276349,
+          "duration": 3.2678,
+          "bytes": 34106,
+          "sha256": "26a356a93c3a717c31970e6a881d4b5581bbced8bef86bc9d5c4c03ab17d6b6f",
+          "peakDb": -9.8,
+          "rmsDb": -28.2,
+          "clippedSamples": 0,
+          "heard": "You made it nice in here. You thought I was coming.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "wall-1",
+          "text": "A scratch in the stone for every count. A hundred to a block.",
+          "tag": "quiet, matter-of-fact",
+          "file": "wall-1.ogg",
+          "source": "crypt-wall",
+          "sourceCutSeconds": [
+            0.0199,
+            3.7915
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.354603,
+          "duration": 3.7717,
+          "bytes": 39688,
+          "sha256": "7dfe6d81b6a428c2cdb3ca9e5e605e823789242733bb2ce41dcd48ae73052cc5",
+          "peakDb": -9.55,
+          "rmsDb": -27.89,
+          "clippedSamples": 0,
+          "heard": "A scratch in the stone for every count, a hundred to a block.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "wall-2",
+          "text": "When I didn't come, you gave me another hundred. And another. Six hundred and fifty-seven.",
+          "tag": "quiet",
+          "file": "wall-2.ogg",
+          "source": "crypt-wall",
+          "sourceCutSeconds": [
+            5.0135,
+            11.1448
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.273655,
+          "duration": 6.1313,
+          "bytes": 63011,
+          "sha256": "aefc44ed3a20ba2cfd898bec43a2a71f16f95f46c405e4b4fb0736fa41b9e52e",
+          "peakDb": -9.78,
+          "rmsDb": -28.15,
+          "clippedSamples": 0,
+          "heard": "When I didn't come, you gave me another hundred, and another six hundred and fifty-seven.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "wall-3",
+          "text": "Then the counting stops. Ten to ten. That's when the knocking starts.",
+          "tag": "quiet, slow",
+          "file": "wall-3.ogg",
+          "source": "crypt-wall",
+          "sourceCutSeconds": [
+            12.5433,
+            18.066
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.638922,
+          "duration": 5.5227,
+          "bytes": 57052,
+          "sha256": "40252fd5b408abf4bc987fd51aa20758041d471bce7c8ac576911bb904f43bf8",
+          "peakDb": -10.2,
+          "rmsDb": -28.44,
+          "clippedSamples": 0,
+          "heard": "Then the counting stops. Ten to ten. That's when the knocking starts.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "wall-4",
+          "text": "That's the minute you gave up on me.",
+          "tag": "quiet, breaking",
+          "file": "wall-4.ogg",
+          "source": "crypt-wall",
+          "sourceCutSeconds": [
+            19.3334,
+            21.0298
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.049943,
+          "duration": 1.6964,
+          "bytes": 20413,
+          "sha256": "403b7423bda92f4da604c5bad5cf4b95a9aad378a34bff8602f4378ce5ca2ae1",
+          "peakDb": -10.86,
+          "rmsDb": -27.41,
+          "clippedSamples": 0,
+          "heard": "That's the minute you gave up on me.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "him-1",
+          "text": "You hid where I told you. The stone shut behind you. Nobody came.",
+          "tag": "quiet, tired, intimate",
+          "file": "him-1.ogg",
+          "source": "crypt-him",
+          "sourceCutSeconds": [
+            0.0897,
+            5.1135
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.038887,
+          "duration": 5.0238,
+          "bytes": 48785,
+          "sha256": "61fa5208c6e8c2984d8814e1b237541cf6fb90e936a391afac8d9b9ac4e0bb03",
+          "peakDb": -11.21,
+          "rmsDb": -28.08,
+          "clippedSamples": 0,
+          "heard": "You hid where I told you. The stone shut behind you. Nobody came.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "him-2",
+          "text": "So you took your shoes off. Folded your sheet for a pillow, and pulled the rest of it over you.",
+          "tag": "quiet, tender",
+          "file": "him-2.ogg",
+          "source": "crypt-him",
+          "sourceCutSeconds": [
+            6.2385,
+            11.3622
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.310465,
+          "duration": 5.1236,
+          "bytes": 51655,
+          "sha256": "3fe8d67abb38a8ea5dfabcb2ae0053aca00689db875c1a0d4f16c713fc9b550d",
+          "peakDb": -9.42,
+          "rmsDb": -28.34,
+          "clippedSamples": 0,
+          "heard": "So you took your shoes off, folded your sheet for a pillow, and pulled the rest of it over you.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "him-3",
+          "text": "You went to sleep waiting, and you never woke up. You were seven.",
+          "tag": "quiet, breaking",
+          "file": "him-3.ogg",
+          "source": "crypt-him",
+          "sourceCutSeconds": [
+            12.6184,
+            16.894
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.092453,
+          "duration": 4.2755,
+          "bytes": 41699,
+          "sha256": "faab5c22bf62c3dd527b61e7f40977b40cf0a448d5a8094df978bca1dbdad86a",
+          "peakDb": -10.38,
+          "rmsDb": -29.57,
+          "clippedSamples": 0,
+          "heard": "You went to sleep waiting and you never woke up. You were seven.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "corner-1",
+          "text": "It was your whole plan for the night. Hide and seek with me.",
+          "tag": "quiet, rueful",
+          "file": "corner-1.ogg",
+          "source": "crypt-corner",
+          "sourceCutSeconds": [
+            0.0797,
+            3.7017
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.595363,
+          "duration": 3.622,
+          "bytes": 37067,
+          "sha256": "e6369eb4c01a426002e09f666d8505459c54427c7236b31dd99179d580b13d16",
+          "peakDb": -9.92,
+          "rmsDb": -29.32,
+          "clippedSamples": 0,
+          "heard": "It was your whole plan for the night. Hide and seek with me.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "corner-2",
+          "text": "I gave it to you to get rid of you.",
+          "tag": "quiet, ashamed",
+          "file": "corner-2.ogg",
+          "source": "crypt-corner",
+          "sourceCutSeconds": [
+            5.1732,
+            7.094
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.934328,
+          "duration": 1.9209,
+          "bytes": 22241,
+          "sha256": "02f62fe119a19970d0e6c9c8a0c454e648a3b8c6d8d4e8e7c02f2cd194d31723",
+          "peakDb": -9.25,
+          "rmsDb": -27.07,
+          "clippedSamples": 0,
+          "heard": "I gave it to you to get rid of you.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "count-ask",
+          "text": "Fifty-seven. You left me forty-three.",
+          "tag": "softly, matter-of-fact",
+          "file": "count-ask.ogg",
+          "source": "crypt-count",
+          "sourceCutSeconds": [
+            0.0,
+            3.1231
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.876294,
+          "duration": 3.1231,
+          "bytes": 32618,
+          "sha256": "a3c20e36bb5a747693c9c6caf26bc85b4f1a322e0026a549e888e00ae4c6c08c",
+          "peakDb": -11.34,
+          "rmsDb": -27.85,
+          "clippedSamples": 0,
+          "heard": "57. You left me 43.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "candy",
+          "text": "I brought your candy. From all the houses.",
+          "tag": "quiet, gentle",
+          "file": "candy.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            0.0398,
+            2.8088
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.59937,
+          "duration": 2.769,
+          "bytes": 28910,
+          "sha256": "c7dff6fe61f06b73be66c250f57707cf9122e1e1212d760643384f08f914da8f",
+          "peakDb": -12.6,
+          "rmsDb": -27.72,
+          "clippedSamples": 0,
+          "heard": "I brought your candy from all the houses.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-pruitt",
+          "text": "June's candy apple. You never ate yours. You just carried it.",
+          "tag": "quiet, gentle",
+          "file": "give-pruitt.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            3.9685,
+            7.9198
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.592902,
+          "duration": 3.9513,
+          "bytes": 41682,
+          "sha256": "aa2aad8b6cbc543924eedfd0366a73109d757fd56f4a472e316791a6eb60c111",
+          "peakDb": -11.09,
+          "rmsDb": -27.98,
+          "clippedSamples": 0,
+          "heard": "June's Candy Apple. You never ate yours. You just carried it.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-kowalski",
+          "text": "Mrs. K's full-size bar. Stop two, every year.",
+          "tag": "quiet, gentle",
+          "file": "give-kowalski.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            8.9886,
+            12.5957
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.977314,
+          "duration": 3.6071,
+          "bytes": 38907,
+          "sha256": "fea4646696099e7e1ec1e03086b47f582319e7460922c3416469b78e3b33972e",
+          "peakDb": -10.49,
+          "rmsDb": -27.85,
+          "clippedSamples": 0,
+          "heard": "Mrs. K's full-size bar. Stop two, every year.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-adler",
+          "text": "Frank's peanuts. Save half for Bo.",
+          "tag": "quiet, gentle",
+          "file": "give-adler.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            13.6736,
+            15.9637
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.013594,
+          "duration": 2.29,
+          "bytes": 25985,
+          "sha256": "069b85f0a88bc2dab46d0133d7b212bcd47459dcf4649e5cc89d6d301037edb8",
+          "peakDb": -9.17,
+          "rmsDb": -27.92,
+          "clippedSamples": 0,
+          "heard": "Frank's Peanuts. Save half for Bow.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-lindqvist",
+          "text": "The twins' popcorn ball. For whoever hid the longest. That's you.",
+          "tag": "quiet, gentle",
+          "file": "give-lindqvist.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            16.9088,
+            20.8451
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.380692,
+          "duration": 3.9363,
+          "bytes": 41015,
+          "sha256": "933a5d1c73abf9cb2a64a1c50c986f6a4a841c06a0a15d8d119b89c7d1704370",
+          "peakDb": -9.36,
+          "rmsDb": -29.58,
+          "clippedSamples": 0,
+          "heard": "The twins popcorn ball, for whoever hid the longest. That's you.",
+          "wordsBack": 0.909
+        },
+        {
+          "key": "give-grady",
+          "text": "A sheriff's star, for your coat.",
+          "tag": "quiet, gentle",
+          "file": "give-grady.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            21.8887,
+            23.7597
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.028551,
+          "duration": 1.871,
+          "bytes": 22501,
+          "sha256": "16f1bffa06c6352de135b8a4582320b1364077613947971fbb2b5025c14629c9",
+          "peakDb": -9.16,
+          "rmsDb": -27.74,
+          "clippedSamples": 0,
+          "heard": "A sheriff's star for your coat.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-abernathy",
+          "text": "A peppermint. You practised.",
+          "tag": "quiet, gentle",
+          "file": "give-abernathy.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            24.7387,
+            26.6496
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.111603,
+          "duration": 1.9109,
+          "bytes": 23425,
+          "sha256": "379d1e842ff1bf59a89b649c16519310e44d0eabb173c8f883be8faa9fe24ef8",
+          "peakDb": -9.19,
+          "rmsDb": -29.8,
+          "clippedSamples": 0,
+          "heard": "A peppermint you practiced.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-russo",
+          "text": "Nonna's cannoli. She made you a plate every year.",
+          "tag": "quiet, gentle",
+          "file": "give-russo.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            27.6787,
+            30.8118
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.707115,
+          "duration": 3.1331,
+          "bytes": 36249,
+          "sha256": "0d7900f6f1e940cc43833e309e33c00852ee29438e1d075f6cf803c54564e651",
+          "peakDb": -9.45,
+          "rmsDb": -27.48,
+          "clippedSamples": 0,
+          "heard": "Nonna's cannoli. She made you a plate every year.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-brennan",
+          "text": "A pouch, from a kid who never met you.",
+          "tag": "quiet, gentle",
+          "file": "give-brennan.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            31.7637,
+            34.1037
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.093274,
+          "duration": 2.3399,
+          "bytes": 26884,
+          "sha256": "f1b943994b62da7bd876ab0802154f308da131b714c360c45141ade56f59de54",
+          "peakDb": -9.1,
+          "rmsDb": -28.42,
+          "clippedSamples": 0,
+          "heard": "A pouch from a kid who never met you.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-hollis",
+          "text": "Your dare candy. You did it. Everybody's going to know.",
+          "tag": "quiet, proud",
+          "file": "give-hollis.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            35.1836,
+            38.9304
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 0.959352,
+          "duration": 3.7467,
+          "bytes": 41724,
+          "sha256": "50abf49920173c69d94c2536b4f6fdf28467a92899f36a519199304b2f592ae8",
+          "peakDb": -9.28,
+          "rmsDb": -30.69,
+          "clippedSamples": 0,
+          "heard": "Your dare candy. You did it. Everybody's going to know.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-decker",
+          "text": "Nothing from the Deckers'. That one's on me.",
+          "tag": "quiet, ashamed",
+          "file": "give-decker.ogg",
+          "source": "crypt-candy",
+          "sourceCutSeconds": [
+            39.8688,
+            42.6128
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.385154,
+          "duration": 2.744,
+          "bytes": 29864,
+          "sha256": "db89ef958028055d1c4be6f1b05c13a3409e25c825fb4cafe4d11ce4aab37edd",
+          "peakDb": -9.79,
+          "rmsDb": -27.58,
+          "clippedSamples": 0,
+          "heard": "Nothing from the Deckers. That one's on me.",
+          "wordsBack": 0.875
+        },
+        {
+          "key": "give-map",
+          "text": "And your map. I walked all of it.",
+          "tag": "quiet, gentle",
+          "file": "give-map.ogg",
+          "source": "crypt-map",
+          "sourceCutSeconds": [
+            0.0648,
+            2.5045
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.243365,
+          "duration": 2.4397,
+          "bytes": 26054,
+          "sha256": "2282efb9202e9d70dc89282fd4e38b2e22b61cba54dc951d7cec02e7c9603366",
+          "peakDb": -11.26,
+          "rmsDb": -28.13,
+          "clippedSamples": 0,
+          "heard": "And your map. I walked all of it.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "found-stay",
+          "text": "I'm not moving you. You stay here tonight, under your sheet.",
+          "tag": "quiet, steady",
+          "file": "found-stay.ogg",
+          "source": "crypt-found",
+          "sourceCutSeconds": [
+            0.1446,
+            4.021
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.128,
+          "duration": 3.8764,
+          "bytes": 39152,
+          "sha256": "822a73a65e19ea538ade644c7ea75cee503807ed994134af3c11c3dfcdf19f3a",
+          "peakDb": -9.69,
+          "rmsDb": -28.36,
+          "clippedSamples": 0,
+          "heard": "I'm not moving you. You stay here tonight, under your sheet.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "found-morning",
+          "text": "In the morning I tell them where you are. Tonight I carry your bag.",
+          "tag": "quiet, resolved",
+          "file": "found-morning.ogg",
+          "source": "crypt-found",
+          "sourceCutSeconds": [
+            5.3134,
+            9.5441
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.531129,
+          "duration": 4.2306,
+          "bytes": 44031,
+          "sha256": "184f6386662055b5af8263d50b9aa21650586b835afe526e56cb1ae11a90754e",
+          "peakDb": -9.6,
+          "rmsDb": -31.68,
+          "clippedSamples": 0,
+          "heard": "In the morning I tell them where you are. Tonight I carry your bag.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "behind-1",
+          "text": "You're behind me. Three steps back, same as always.",
+          "tag": "quiet, warm",
+          "file": "behind-1.ogg",
+          "source": "crypt-behind",
+          "sourceCutSeconds": [
+            0.0,
+            3.6968
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.190406,
+          "duration": 3.6968,
+          "bytes": 36690,
+          "sha256": "d2e02502164866d91fe723868a1047223052f864d4a342c9c312ebcbc1174982",
+          "peakDb": -9.94,
+          "rmsDb": -29.23,
+          "clippedSamples": 0,
+          "heard": "You're behind me. Three steps back. Same as always.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "behind-2",
+          "text": "I used to walk faster so you'd have to run.",
+          "tag": "quiet, rueful",
+          "file": "behind-2.ogg",
+          "source": "crypt-behind",
+          "sourceCutSeconds": [
+            5.0034,
+            7.8272
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.11447,
+          "duration": 2.8238,
+          "bytes": 29893,
+          "sha256": "8565802effda74b8cc27f5ceb1ed49c9656d0e2372c03157c535ecb8e6ca3f7b",
+          "peakDb": -9.36,
+          "rmsDb": -30.0,
+          "clippedSamples": 0,
+          "heard": "I used to walk faster so you'd have to run.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "behind-3",
+          "text": "Not tonight.",
+          "tag": "softly",
+          "file": "behind-3.ogg",
+          "source": "crypt-behind",
+          "sourceCutSeconds": [
+            8.6087,
+            9.4571
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.722431,
+          "duration": 0.8693,
+          "bytes": 11864,
+          "sha256": "d12da1888a2c5f3915ad6231939a351adc876eaafd794cc41fba1da84a20e87b",
+          "peakDb": -9.25,
+          "rmsDb": -31.27,
+          "clippedSamples": 0,
+          "heard": "Not tonight.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "stone",
+          "text": "It takes everything I have to shift this stone. You were seven.",
+          "tag": "straining, quiet",
+          "file": "stone.ogg",
+          "source": "stone-retake",
+          "sourceCutSeconds": [
+            0.0598,
+            4.5149
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.412128,
+          "duration": 4.4551,
+          "bytes": 43520,
+          "sha256": "e72806230d17a487f74eb764480bb5a6b951096649b16620fa80a476121c2df5",
+          "peakDb": -9.57,
+          "rmsDb": -28.05,
+          "clippedSamples": 0,
+          "heard": "It takes everything I have to shift this stone. You were seven.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "votives-1",
+          "text": "Twenty-nine red glasses, burnt down. One place left.",
+          "tag": "quiet",
+          "file": "votives-1.ogg",
+          "source": "chapel-votives",
+          "sourceCutSeconds": [
+            0.0,
+            4.2505
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.957184,
+          "duration": 4.2505,
+          "bytes": 42115,
+          "sha256": "bb7f08650c895c29c2551d33c42a6a7af5fad11d610d633cac93e67c96dabdf8",
+          "peakDb": -12.28,
+          "rmsDb": -28.22,
+          "clippedSamples": 0,
+          "heard": "Twenty-nine red glasses burnt down. One place left.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "votives-2",
+          "text": "Mom lit one here every Halloween. To the saint of lost things.",
+          "tag": "quiet, tender",
+          "file": "votives-2.ogg",
+          "source": "chapel-votives",
+          "sourceCutSeconds": [
+            5.0739,
+            9.4592
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.171523,
+          "duration": 4.3853,
+          "bytes": 43911,
+          "sha256": "62c748201701b6e675b3bc45d16d6f9a95d8cd551d4ce9133a3c36e2919314b1",
+          "peakDb": -9.37,
+          "rmsDb": -27.44,
+          "clippedSamples": 0,
+          "heard": "Mom lit one here every Halloween to the saint of lost things.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "votives-3",
+          "text": "She was standing right on top of you.",
+          "tag": "quiet, breaking",
+          "file": "votives-3.ogg",
+          "source": "chapel-votives",
+          "sourceCutSeconds": [
+            10.1541,
+            12.2346
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.439641,
+          "duration": 2.0805,
+          "bytes": 23824,
+          "sha256": "645b7f4877b9b2a8fc71fb7aa15875022e9318a68ebaa73a2722c9c670726cca",
+          "peakDb": -9.41,
+          "rmsDb": -28.21,
+          "clippedSamples": 0,
+          "heard": "She was standing right on top of you.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "candle-mom",
+          "text": "Here's this year's, Mom. I found him.",
+          "tag": "quiet, intimate",
+          "file": "candle-mom.ogg",
+          "source": "chapel-candle",
+          "sourceCutSeconds": [
+            0.0,
+            2.5095
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.164109,
+          "duration": 2.5095,
+          "bytes": 25690,
+          "sha256": "594f4fab7fe3c8bd21a4bdd17a56ba7525b202106cc4dd28d9b458e5960d637d",
+          "peakDb": -8.54,
+          "rmsDb": -29.12,
+          "clippedSamples": 0,
+          "heard": "Here's this year's mom. I found him.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "sorry-1",
+          "text": "I was sixteen. I wanted one night without you.",
+          "tag": "quiet, tired, honest",
+          "file": "sorry-1.ogg",
+          "source": "tower-sorry",
+          "sourceCutSeconds": [
+            0.0498,
+            3.6568
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.782189,
+          "duration": 3.6071,
+          "bytes": 36838,
+          "sha256": "2e13bed7c87b0beec94119297a2e753be8141050bbe65acf62db723fd98d567c",
+          "peakDb": -9.82,
+          "rmsDb": -27.66,
+          "clippedSamples": 0,
+          "heard": "I was 16. I wanted one night without you.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "sorry-2",
+          "text": "That's all it was. There isn't a bigger reason.",
+          "tag": "quiet, honest",
+          "file": "sorry-2.ogg",
+          "source": "tower-sorry",
+          "sourceCutSeconds": [
+            4.8035,
+            7.6971
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.983866,
+          "duration": 2.8937,
+          "bytes": 31324,
+          "sha256": "8b003524d783f38aa104bdca92fd2cd0e8d7c684510aabf960f75a991ef79d84",
+          "peakDb": -10.36,
+          "rmsDb": -27.56,
+          "clippedSamples": 0,
+          "heard": "That's all it was. There isn't a bigger reason.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "sorry-3",
+          "text": "You did everything I ever told you to.",
+          "tag": "quiet",
+          "file": "sorry-3.ogg",
+          "source": "tower-sorry",
+          "sourceCutSeconds": [
+            8.7087,
+            10.9638
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.05466,
+          "duration": 2.2551,
+          "bytes": 26058,
+          "sha256": "13ff1458c750bc6c636088da663727db1c5be17ef3044cbef85257b4c921799e",
+          "peakDb": -12.16,
+          "rmsDb": -27.12,
+          "clippedSamples": 0,
+          "heard": "You did everything I ever told you to.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "sorry-4",
+          "text": "\"Next week,\" she wrote. \"Next year,\" he wrote. Everybody was going to get to you later.",
+          "tag": "quiet, bitter",
+          "file": "sorry-4.ogg",
+          "source": "tower-sorry",
+          "sourceCutSeconds": [
+            12.0735,
+            18.4992
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.529833,
+          "duration": 6.4256,
+          "bytes": 62938,
+          "sha256": "5becab859c4d3bbc9b0dd9250edb7a99740f401c50a52074c398529d50907ac5",
+          "peakDb": -9.2,
+          "rmsDb": -31.14,
+          "clippedSamples": 0,
+          "heard": "Next week, she wrote. Next year, he wrote. Everybody was going to get to you later.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "sorry-5",
+          "text": "I'm sorry, Ollie.",
+          "tag": "quiet, breaking",
+          "file": "sorry-5.ogg",
+          "source": "tower-sorry",
+          "sourceCutSeconds": [
+            19.8133,
+            21.1505
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.933605,
+          "duration": 1.3372,
+          "bytes": 16314,
+          "sha256": "165592ef14c2be3f6bc9df455960a28cff14f21f75206635517d30915eda3b1a",
+          "peakDb": -10.14,
+          "rmsDb": -29.2,
+          "clippedSamples": 0,
+          "heard": "I'm sorry, Ollie.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "giveup",
+          "text": "I give up, Ollie. You win.",
+          "tag": "quiet, surrendering",
+          "file": "giveup.ogg",
+          "source": "bell-giveup",
+          "sourceCutSeconds": [
+            0.0648,
+            2.5494
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.760943,
+          "duration": 2.4846,
+          "bytes": 25442,
+          "sha256": "72f89413ca43ee05ab356fc3385928973e6e6f9c574f5da79620ef7ea4441d8d",
+          "peakDb": -9.56,
+          "rmsDb": -32.36,
+          "clippedSamples": 0,
+          "heard": "I give up, Ollie. You win.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "game-over",
+          "text": "Game's over. You can come out now.",
+          "tag": "softly, calling",
+          "file": "game-over.ogg",
+          "source": "bell-after",
+          "sourceCutSeconds": [
+            0.0997,
+            2.3947
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.755893,
+          "duration": 2.295,
+          "bytes": 24761,
+          "sha256": "0a2420982ec5519600955d7f92326b95d6f08bc1e36048178506599b1dcaf9cd",
+          "peakDb": -10.48,
+          "rmsDb": -28.27,
+          "clippedSamples": 0,
+          "heard": "Game's over. You can come out now.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "go-home",
+          "text": "Go on home. I'm right behind you.",
+          "tag": "quiet, gentle",
+          "file": "go-home.ogg",
+          "source": "bell-after",
+          "sourceCutSeconds": [
+            3.4735,
+            5.6239
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.063872,
+          "duration": 2.1504,
+          "bytes": 23282,
+          "sha256": "9df447c107daef2442b6059b97ff8e9c5e57fcf0004ee3a7298864ca1888d783",
+          "peakDb": -11.86,
+          "rmsDb": -28.05,
+          "clippedSamples": 0,
+          "heard": "Go on home. I'm right behind you.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "lights-out",
+          "text": "They're going out behind you. You don't need them now.",
+          "tag": "quiet",
+          "file": "lights-out.ogg",
+          "source": "bell-after",
+          "sourceCutSeconds": [
+            6.7735,
+            9.4277
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.52592,
+          "duration": 2.6542,
+          "bytes": 28134,
+          "sha256": "3a1c569e9421cc30899e13be95845e6a0fd1e1fc2e800ea73e6e0d19bad5162d",
+          "peakDb": -11.87,
+          "rmsDb": -27.75,
+          "clippedSamples": 0,
+          "heard": "They're going out behind you. You don't need them now.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "lamp-1",
+          "text": "One year I waited at a gate.",
+          "tag": "quiet, remembering",
+          "file": "lamp-1.ogg",
+          "source": "home-lamp",
+          "sourceCutSeconds": [
+            0.1296,
+            2.29
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.025559,
+          "duration": 2.1603,
+          "bytes": 23194,
+          "sha256": "af2202f06f81bf6eee3733addcb7c5e07b1c9f04a55f6b6f797cd444e37115e1",
+          "peakDb": -11.85,
+          "rmsDb": -26.96,
+          "clippedSamples": 0,
+          "heard": "One year, I waited at a gate.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "lamp-2",
+          "text": "This year you waited.",
+          "tag": "quiet, tender",
+          "file": "lamp-2.ogg",
+          "source": "home-lamp",
+          "sourceCutSeconds": [
+            3.2287,
+            4.7754
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.029189,
+          "duration": 1.5467,
+          "bytes": 17277,
+          "sha256": "33cb4eb2b05cd2e528509fe9d3c2fb316ebba31b4f54da4ed4a08faae3eb85ff",
+          "peakDb": -9.8,
+          "rmsDb": -27.55,
+          "clippedSamples": 0,
+          "heard": "This year, you waited.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "joined",
+          "text": "A tall one and a small one. You drew this.",
+          "tag": "quiet, wondering",
+          "file": "joined.ogg",
+          "source": "home-last",
+          "sourceCutSeconds": [
+            0.0398,
+            3.9262
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.890409,
+          "duration": 3.8864,
+          "bytes": 38075,
+          "sha256": "1425878e98922fb6dfa480b23afdb99cdd1f311d253dace58e5824945badf2d0",
+          "peakDb": -8.93,
+          "rmsDb": -27.82,
+          "clippedSamples": 0,
+          "heard": "A tall one and a small one. You drew this.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "porch",
+          "text": "That's our porch. Go on in.",
+          "tag": "quiet, gentle",
+          "file": "porch.ogg",
+          "source": "home-last",
+          "sourceCutSeconds": [
+            5.0136,
+            6.9445
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.32412,
+          "duration": 1.9309,
+          "bytes": 21933,
+          "sha256": "96882a19a7918fbe5e1462d8642da8188d95e74c210b555258982aa252780771",
+          "peakDb": -9.5,
+          "rmsDb": -28.13,
+          "clippedSamples": 0,
+          "heard": "That's our porch. Go on in.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "thirty",
+          "text": "Twenty-nine of them, Mom. That makes thirty.",
+          "tag": "quiet, tired, intimate",
+          "file": "thirty.ogg",
+          "source": "home-last",
+          "sourceCutSeconds": [
+            8.0336,
+            10.9622
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.131424,
+          "duration": 2.9286,
+          "bytes": 31914,
+          "sha256": "ea9608f3cf6d0ad7533d0dc96d57d9c7fd4378215f59c503b9e1e44773a9b433",
+          "peakDb": -10.81,
+          "rmsDb": -27.64,
+          "clippedSamples": 0,
+          "heard": "29 of them, Mom. That makes 30.",
+          "wordsBack": 1.0
+        }
+      ],
+      "credits": {
+        "before": {
+          "balance": 312,
+          "total": 312,
+          "resettable": 312,
+          "accumulative": 0,
+          "overdraftUsage": 0,
+          "nextResetDate": "2026-10-21T01:00:24.431Z"
+        },
+        "after": {
+          "balance": 294,
+          "total": 294,
+          "resettable": 294,
+          "accumulative": 0,
+          "overdraftUsage": 0,
+          "nextResetDate": "2026-10-21T01:00:24.431Z"
+        }
+      },
+      "processing": "tools/audio/voice-more.py: each take cut at the middles of its longest pauses, then the 2 Oct Sam chain (voice-clips.py): RMS boundary trim, 70 Hz-9.5 kHz, active RMS -23 dBFS with -6 dBFS peak ceiling, 12 ms fades, mono 44.1 kHz Vorbis q5; read back by faster-whisper small.en.",
+      "verification": {
+        "asr": "every clip kept came back with at least 80% of its words, in order",
+        "listening": "No subjective listening claim; performances require Alexs ear."
+      }
+    }
+  ]
 }
