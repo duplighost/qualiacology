@@ -1,0 +1,6 @@
+Seeker geometry, drape, skull, cord, long-arm rig, stains and animation code: original Alex / OLLY OLLY project assets, reused with the user's authorization.
+Cotton surface photographs: Fabric 001 by Lennart Demes, ambientCG. CC0 1.0.
+https://ambientcg.com/a/Fabric001
+https://creativecommons.org/publicdomain/zero/1.0/
+Original provenance: C:/Users/Alex/Projects/olly-olly-wt/integration-20260923/public/assets/SOURCES.md and characters/seeker/materials.json.
+No attribution requirements from unrelated donor characters apply to this independently authored Seeker rig.

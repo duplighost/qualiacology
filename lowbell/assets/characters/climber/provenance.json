@@ -1,0 +1,54 @@
+{
+  "asset": "LOWBELL climber",
+  "origin": "Alex / Qualiacology original OLLY OLLY creature geometry, authored shaders and procedural sound",
+  "donor": "C:/Users/Alex/Projects/olly-olly-wt/integration-20260923",
+  "sourceFiles": [
+    {
+      "path": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\src\\actors\\enemies\\spider-rig.js",
+      "bytes": 21557,
+      "sha256": "028c973b234593c302269bb4ff993dc471f7852da7ae5cfd510d06663cba1503"
+    },
+    {
+      "path": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\src\\core\\rng.js",
+      "bytes": 1241,
+      "sha256": "228312999a51297dc960845ec3a8c1e7a50f20fa920de11b9c76b4ee5a3cab3c"
+    },
+    {
+      "path": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\src\\audio\\dsp.js",
+      "bytes": 10890,
+      "sha256": "10f99ab0193e25e874c044b372c3d194a1b47293085a587e570d6c0b3d59ee4f"
+    },
+    {
+      "path": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\src\\audio\\foley.js",
+      "bytes": 36074,
+      "sha256": "05ef44b3f824a6b010a496965440267dd05324ac17068643c9208387793f6397"
+    }
+  ],
+  "sourceRights": "Existing user-owned game source reused at the explicit request of Alex. These files are authored procedural creature/audio sources; no third-party creature scan or animation clip is claimed.",
+  "adaptation": [
+    "Preserved the detailed eight-legged procedural SpiderRig geometry, generated albedo maps, shell fur, guard hairs, eyes, fangs and palps.",
+    "Removed the donor lamp-pool material hook; LOWBELL scene lights shade the retained materials.",
+    "New LOWBELL fixed-length leg/contact adapter, authored library support route, physical motor, shootable retained death body, bounded pooling and LOD.",
+    "Did not import donor enemy AI, Recast navigation, wall interpolation or ceiling landing snap.",
+    "Foley feet and tell synthesis retained from source lines 25-37. Death is an additional lower contact-scatter variation using the same original synthesis functions.",
+    "Corrected the retained fur shader cache key to include embedded coat constants, preventing abdomen and thorax coats from sharing an incompatible shader."
+  ],
+  "modelFormat": "Procedural Three.js geometry; no GLB, bones or clip files",
+  "sourceTextures": {
+    "abdomen": [
+      256,
+      256
+    ],
+    "carapace": [
+      128,
+      128
+    ]
+  },
+  "sourceGeometry": {
+    "colorDraws": 12,
+    "colorTriangles": 23128,
+    "shadowDraws": 9,
+    "shadowTriangles": 13088
+  },
+  "verification": "CPU geometry/motor/support tests only. Visual, audio and real-GPU acceptance remain with the parent agent."
+}

@@ -1,0 +1,70 @@
+{
+ "id": "wine_bottles_01",
+ "title": "Wine Bottles 01",
+ "url": "https://polyhaven.com/a/wine_bottles_01",
+ "licence": "CC0 1.0",
+ "author": "Rico Cilliers, Jurita Burger",
+ "bytes": 3909317,
+ "triangles": {
+  "source": 28848,
+  "lod0": 3996,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 4000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.6764,
+  0.332,
+  0.0804
+ ],
+ "shippedBytes": 1583591,
+ "parts": [
+  {
+   "name": "wine_bottles_01_bordeaux",
+   "movable": false,
+   "tris": 904,
+   "pivot": [
+    -0.0921,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "wine_bottles_01_alsace",
+   "movable": false,
+   "tris": 1069,
+   "pivot": [
+    -0.3021,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "wine_bottles_01_burgundy",
+   "movable": false,
+   "tris": 887,
+   "pivot": [
+    0.1079,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "wine_bottles_01_champagne",
+   "movable": false,
+   "tris": 1136,
+   "pivot": [
+    0.2979,
+    0,
+    0
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

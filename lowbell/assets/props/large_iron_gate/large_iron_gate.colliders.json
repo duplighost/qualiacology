@@ -1,0 +1,135 @@
+{
+ "id": "large_iron_gate",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "large_iron_gate.large_iron_gate.0",
+   "part": "large_iron_gate",
+   "kind": "obb",
+   "c": {
+    "x": -1.4224,
+    "y": 2.2031,
+    "z": -0.0128
+   },
+   "h": {
+    "x": 0.0527,
+    "y": 0.0153,
+    "z": 0.0358
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "large_iron_gate.large_iron_gate.1",
+   "part": "large_iron_gate",
+   "kind": "obb",
+   "c": {
+    "x": 1.4224,
+    "y": 2.2031,
+    "z": -0.0128
+   },
+   "h": {
+    "x": 0.0527,
+    "y": 0.0153,
+    "z": 0.0358
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "large_iron_gate.large_iron_gate_right_door.0",
+   "part": "large_iron_gate_right_door",
+   "kind": "obb",
+   "c": {
+    "x": 0.6987,
+    "y": 1.4643,
+    "z": 0.006
+   },
+   "h": {
+    "x": 0.735,
+    "y": 1.4643,
+    "z": 0.0427
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "large_iron_gate.large_iron_gate_bolt.0",
+   "part": "large_iron_gate_bolt",
+   "kind": "obb",
+   "c": {
+    "x": 0.0548,
+    "y": 0.9855,
+    "z": 0.0169
+   },
+   "h": {
+    "x": 0.1199,
+    "y": 0.0557,
+    "z": 0.0064
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "large_iron_gate.large_iron_gate_left_door.0",
+   "part": "large_iron_gate_left_door",
+   "kind": "obb",
+   "c": {
+    "x": -0.4107,
+    "y": 1.4844,
+    "z": -0.0063
+   },
+   "h": {
+    "x": 0.4092,
+    "y": 1.4423,
+    "z": 0.0304
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "large_iron_gate.large_iron_gate_left_door.1",
+   "part": "large_iron_gate_left_door",
+   "kind": "obb",
+   "c": {
+    "x": -1.1267,
+    "y": 1.3582,
+    "z": -0.0063
+   },
+   "h": {
+    "x": 0.3069,
+    "y": 1.3202,
+    "z": 0.0304
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "RAYPASS"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

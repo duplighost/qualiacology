@@ -1,0 +1,18 @@
+{
+  "title": "Spiderthing take 3",
+  "creator": "Rasmus (@Rasmus82)",
+  "creatorUrl": "https://sketchfab.com/Rasmus82",
+  "source": "https://sketchfab.com/3d-models/spiderthing-take-3-10bb4cf49d304d64afd2b829666f6caf",
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "Spiderthing take 3 by Rasmus (https://sketchfab.com/Rasmus82), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Source: https://sketchfab.com/3d-models/spiderthing-take-3-10bb4cf49d304d64afd2b829666f6caf",
+  "files": [
+    {
+      "path": "spiderthing-1k.glb",
+      "bytes": 10660104,
+      "sha256": "e979349200a93515210aef9e771da8cb1b7f46ec75ecd2a4075a24822c0e7199",
+      "source": "D:\\Codex-Asset-Cache\\fps-research-20261002\\creature-candidates\\spiderthing-take3\\spiderthing_take_3.glb"
+    }
+  ],
+  "modifications": "No GLB changes. Gameplay loads the 1K GLB, preserving original geometry, UVs, weights and PBR maps. Runtime scales and articulates the six original weighted walking chains and four smaller front appendages for physical floor, wall and ceiling movement, hit reactions and corpses. The source has separate weighted toe-control joints; runtime makes those controls follow their original posed legs. Source armature-wide rotation is excluded from local animation. The identical 4K source remains in the D: asset cache and is not shipped."
+}

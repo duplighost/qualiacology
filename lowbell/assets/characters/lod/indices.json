@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "tool": "meshoptimizer 1.1.1",
+  "indexOnly": true,
+  "nearDistance": 14,
+  "farDistance": 28,
+  "meshes": {
+    "shambler:rp_eric_rigged_001_geo:11433:61617": {
+      "originalTriangles": 20539,
+      "vertices": 11433,
+      "referencedVertices": 11433,
+      "lockedVertices": 4210,
+      "levels": [
+        {
+          "offset": 0,
+          "count": 30807,
+          "error": 0.0039036301895976067
+        },
+        {
+          "offset": 123228,
+          "count": 24171,
+          "error": 0.015771523118019104
+        }
+      ]
+    },
+    "caller:Mesh_0:4718:24792": {
+      "originalTriangles": 8264,
+      "vertices": 4718,
+      "referencedVertices": 4718,
+      "lockedVertices": 1974,
+      "levels": [
+        {
+          "offset": 219912,
+          "count": 15120,
+          "error": 0.0059966533444821835
+        },
+        {
+          "offset": 280392,
+          "count": 11814,
+          "error": 0.01579599268734455
+        }
+      ]
+    },
+    "caller:Mesh_0_1:969:4683": {
+      "originalTriangles": 1561,
+      "vertices": 969,
+      "referencedVertices": 969,
+      "lockedVertices": 62,
+      "levels": [
+        {
+          "offset": 327648,
+          "count": 2337,
+          "error": 0.002683997619897127
+        },
+        {
+          "offset": 336996,
+          "count": 1119,
+          "error": 0.008052687160670757
+        }
+      ]
+    },
+    "caller:MaskCape:837:4680": {
+      "originalTriangles": 1560,
+      "vertices": 837,
+      "referencedVertices": 837,
+      "lockedVertices": 313,
+      "levels": [
+        {
+          "offset": 341472,
+          "count": 4302,
+          "error": 0.005996243096888065
+        },
+        {
+          "offset": 358680,
+          "count": 2508,
+          "error": 0.015848463401198387
+        }
+      ]
+    },
+    "caller:MaskFaceghoul:5593:20997": {
+      "originalTriangles": 6999,
+      "vertices": 5593,
+      "referencedVertices": 5593,
+      "lockedVertices": 0,
+      "levels": [
+        {
+          "offset": 368712,
+          "count": 15153,
+          "error": 0.005991641897708178
+        },
+        {
+          "offset": 429324,
+          "count": 6777,
+          "error": 0.015966244041919708
+        }
+      ]
+    },
+    "caller:MaskHood:1816:10416": {
+      "originalTriangles": 3472,
+      "vertices": 1816,
+      "referencedVertices": 1816,
+      "lockedVertices": 426,
+      "levels": [
+        {
+          "offset": 456432,
+          "count": 8568,
+          "error": 0.005979296285659075
+        },
+        {
+          "offset": 490704,
+          "count": 3924,
+          "error": 0.015963563695549965
+        }
+      ]
+    },
+    "crawler:husk.flesh:79962:79962": {
+      "originalTriangles": 26654,
+      "vertices": 79962,
+      "referencedVertices": 13493,
+      "lockedVertices": 0,
+      "levels": [
+        {
+          "offset": 506400,
+          "count": 39978,
+          "error": 0.00172616564668715
+        },
+        {
+          "offset": 666312,
+          "count": 19188,
+          "error": 0.0030076780822128057
+        }
+      ]
+    },
+    "crawler:husk.bone:4584:4584": {
+      "originalTriangles": 1528,
+      "vertices": 4584,
+      "referencedVertices": 860,
+      "lockedVertices": 0,
+      "levels": [
+        {
+          "offset": 743064,
+          "count": 2292,
+          "error": 0.004474116489291191
+        },
+        {
+          "offset": 752232,
+          "count": 1062,
+          "error": 0.009352682158350945
+        }
+      ]
+    },
+    "crawler:husk.vein:4410:4410": {
+      "originalTriangles": 1470,
+      "vertices": 4410,
+      "referencedVertices": 749,
+      "lockedVertices": 0,
+      "levels": [
+        {
+          "offset": 756480,
+          "count": 4200,
+          "error": 0.0059826793149113655
+        },
+        {
+          "offset": 773280,
+          "count": 1614,
+          "error": 0.01541757583618164
+        }
+      ]
+    },
+    "crawler:husk.eye:720:720": {
+      "originalTriangles": 240,
+      "vertices": 720,
+      "referencedVertices": 126,
+      "lockedVertices": 0,
+      "levels": [
+        {
+          "offset": 779736,
+          "count": 720,
+          "error": 0
+        },
+        {
+          "offset": 782616,
+          "count": 720,
+          "error": 0
+        }
+      ]
+    },
+    "crawler:husk.cavity:1260:1260": {
+      "originalTriangles": 420,
+      "vertices": 1260,
+      "referencedVertices": 216,
+      "lockedVertices": 0,
+      "levels": [
+        {
+          "offset": 785496,
+          "count": 1260,
+          "error": 0
+        },
+        {
+          "offset": 790536,
+          "count": 1260,
+          "error": 0
+        }
+      ]
+    },
+    "crawler:husk.maw:648:648": {
+      "originalTriangles": 216,
+      "vertices": 648,
+      "referencedVertices": 110,
+      "lockedVertices": 0,
+      "levels": [
+        {
+          "offset": 795576,
+          "count": 648,
+          "error": 0
+        },
+        {
+          "offset": 798168,
+          "count": 648,
+          "error": 0
+        }
+      ]
+    },
+    "crawler:husk.hair:6144:6144": {
+      "originalTriangles": 2048,
+      "vertices": 6144,
+      "referencedVertices": 1088,
+      "lockedVertices": 0,
+      "levels": [
+        {
+          "offset": 800760,
+          "count": 6144,
+          "error": 0
+        },
+        {
+          "offset": 825336,
+          "count": 3084,
+          "error": 0.015599677339196205
+        }
+      ]
+    }
+  }
+}

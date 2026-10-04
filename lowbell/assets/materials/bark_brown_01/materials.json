@@ -1,0 +1,47 @@
+{
+ "bark_brown_01": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "bark_brown_01.albedo.dds",
+   "normal": "bark_brown_01.normal.ktx2",
+   "orm": "bark_brown_01.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 34.93,
+   "normalXY": 37.73,
+   "orm": {
+    "ao": 31.78,
+    "rough": 37.13,
+    "metal": 38.94
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "metal": "metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.959,
+   "p99": 6.171
+  },
+  "specAA": true,
+  "seconds": 4.7
+ }
+}

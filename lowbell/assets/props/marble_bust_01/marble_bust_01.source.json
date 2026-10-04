@@ -1,0 +1,40 @@
+{
+ "id": "marble_bust_01",
+ "title": "Marble Bust 01",
+ "url": "https://polyhaven.com/a/marble_bust_01",
+ "licence": "CC0 1.0",
+ "author": "Rico Cilliers",
+ "bytes": 898283,
+ "triangles": {
+  "source": 17456,
+  "lod0": 5000,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 5000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.2716,
+  0.5153,
+  0.2998
+ ],
+ "shippedBytes": 594778,
+ "parts": [
+  {
+   "name": "marble_bust_01",
+   "movable": false,
+   "tris": 5000,
+   "pivot": [
+    -0.013,
+    0.0283,
+    -0.0053
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

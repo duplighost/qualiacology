@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "project": "LOWBELL",
+  "authority": "Material recipes in src/world/chapel-plan.js",
+  "operation": "Runtime material response and physical UV scale only; no texture pixels edited and no source assets replaced.",
+  "variants": [
+    {
+      "material": "chapelCutStone",
+      "source_set": "rock002",
+      "source_url": "https://ambientcg.com/a/Rock002",
+      "license": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "recipe": {
+        "color": "#eee4d2",
+        "scale": 1.1,
+        "roughness": 1,
+        "roughnessRange": [
+          0.72,
+          0.9
+        ],
+        "normalScale": 0.18,
+        "albedoGain": 4,
+        "albedoCeiling": 0.65
+      },
+      "derivation": "A pale dressing-stone material derived from the existing charcoal rock source. Linear sampled albedo is multiplied and clamped before the warm material tint. This is an authored material variant, not a newly photographed limestone scan.",
+      "source_files_unchanged": true,
+      "new_texture_files": false,
+      "source_files": [
+        {
+          "path": "rock002/materials.json",
+          "sha256": "2d372026290cc9b0abfb578f9c287ddebec0cbe987b4c61b1d23d09875f5e374",
+          "bytes": 711
+        },
+        {
+          "path": "rock002/rock002.albedo.dds",
+          "sha256": "66437e276784968da4e3f9874eb542bf0e976d725255c670802dcec01c7b9329",
+          "bytes": 699192
+        },
+        {
+          "path": "rock002/rock002.normal.ktx2",
+          "sha256": "7018c02d137033808b34065358a4ac53a65259ad69b5cef717adaae116970427",
+          "bytes": 350016
+        },
+        {
+          "path": "rock002/rock002.orm.dds",
+          "sha256": "b0f56e5207f5947108fac3d10585e8b6073a7de846880ad5be51ad0ade7e4374",
+          "bytes": 174904
+        }
+      ]
+    },
+    {
+      "material": "chapelJoinery",
+      "source_set": "wood049",
+      "source_url": "https://ambientcg.com/a/Wood049",
+      "license": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "recipe": {
+        "color": "#b49a78",
+        "scale": 0.8,
+        "roughness": 1,
+        "roughnessRange": [
+          0.42,
+          0.68
+        ],
+        "normalScale": 0.2,
+        "surface": "oak"
+      },
+      "derivation": "Finished oak joinery with the original wood map at its approximately 0.8m physical tile size. Component-axis grain mapping follows the cut members.",
+      "source_files_unchanged": true,
+      "new_texture_files": false,
+      "source_files": [
+        {
+          "path": "wood049/materials.json",
+          "sha256": "3e7dd6db8d4c38ca6ecec16f26009c1308b329e647f0a7a9dd9695d5f84c7556",
+          "bytes": 691
+        },
+        {
+          "path": "wood049/wood049.albedo.dds",
+          "sha256": "247785044d29bd3e92f1d5d951dae1c6677044617d97e6257ebc9297373a3cd7",
+          "bytes": 699192
+        },
+        {
+          "path": "wood049/wood049.normal.ktx2",
+          "sha256": "5460b8e7ed2945a4fbcc69cff537855ec2b24e1e09436a44a8f9f0149b1cbde9",
+          "bytes": 350016
+        },
+        {
+          "path": "wood049/wood049.orm.dds",
+          "sha256": "8ac9ff2469a350c590de3eb666c84f384fe6d53910afd6003e354fd6b3373e05",
+          "bytes": 174904
+        }
+      ]
+    },
+    {
+      "material": "chapelMemorialMarble",
+      "source_set": "marble012",
+      "source_url": "https://ambientcg.com/a/Marble012",
+      "license": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "recipe": {
+        "color": "#625a51",
+        "scale": 1.2,
+        "roughness": 1,
+        "roughnessRange": [
+          0.56,
+          0.78
+        ],
+        "normalScale": 0.16
+      },
+      "derivation": "Restrained dark marble confined to the five sanctuary memorial ledger panels.",
+      "source_files_unchanged": true,
+      "new_texture_files": false,
+      "source_files": [
+        {
+          "path": "marble012/marble012.albedo.dds",
+          "sha256": "ff4dba839803fa2eb89e78163571f5312c3a4429ceb65722c4055c999fd17d3c",
+          "bytes": 699192
+        },
+        {
+          "path": "marble012/marble012.normal.ktx2",
+          "sha256": "fe6fd9f0730ab25b285f800cfa206c0acc6073bb6740106dcc4ca3f76dfc6a23",
+          "bytes": 350016
+        },
+        {
+          "path": "marble012/marble012.orm.dds",
+          "sha256": "dff1ab95f64273b2103581195ca79bbd690bca22b0bddcf9f08b5acd9bcf4fa7",
+          "bytes": 43832
+        },
+        {
+          "path": "marble012/materials.json",
+          "sha256": "e8014bb27c24d7f19c14f69502e5aad4052ec6f601ff4b2149c24f0f6e15addc",
+          "bytes": 697
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+ "id": "dining_table",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "dining_table.dining_table.0",
+   "part": "dining_table",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.4385,
+    "z": 0
+   },
+   "h": {
+    "x": 1.1279,
+    "y": 0.4385,
+    "z": 0.6951
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

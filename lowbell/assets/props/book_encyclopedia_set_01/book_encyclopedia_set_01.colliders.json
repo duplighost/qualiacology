@@ -1,0 +1,429 @@
+{
+ "id": "book_encyclopedia_set_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book01.0",
+   "part": "book_encyclopedia_set_01_book01",
+   "kind": "obb",
+   "c": {
+    "x": -0.2562,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0195,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book02.0",
+   "part": "book_encyclopedia_set_01_book02",
+   "kind": "obb",
+   "c": {
+    "x": -0.2216,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0144,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book03.0",
+   "part": "book_encyclopedia_set_01_book03",
+   "kind": "obb",
+   "c": {
+    "x": -0.1946,
+    "y": 0.1187,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0115,
+    "y": 0.1187,
+    "z": 0.0817
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book04.0",
+   "part": "book_encyclopedia_set_01_book04",
+   "kind": "obb",
+   "c": {
+    "x": -0.1686,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0123,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book05.0",
+   "part": "book_encyclopedia_set_01_book05",
+   "kind": "obb",
+   "c": {
+    "x": -0.1461,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0096,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book06.0",
+   "part": "book_encyclopedia_set_01_book06",
+   "kind": "obb",
+   "c": {
+    "x": -0.1252,
+    "y": 0.1187,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0092,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book07.0",
+   "part": "book_encyclopedia_set_01_book07",
+   "kind": "obb",
+   "c": {
+    "x": -0.102,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0122,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book08.0",
+   "part": "book_encyclopedia_set_01_book08",
+   "kind": "obb",
+   "c": {
+    "x": -0.0782,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.011,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book09.0",
+   "part": "book_encyclopedia_set_01_book09",
+   "kind": "obb",
+   "c": {
+    "x": -0.0555,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.011,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book10.0",
+   "part": "book_encyclopedia_set_01_book10",
+   "kind": "obb",
+   "c": {
+    "x": -0.0327,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.011,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book11.0",
+   "part": "book_encyclopedia_set_01_book11",
+   "kind": "obb",
+   "c": {
+    "x": -0.0109,
+    "y": 0.1187,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0096,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book12.0",
+   "part": "book_encyclopedia_set_01_book12",
+   "kind": "obb",
+   "c": {
+    "x": 0.0114,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0114,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book13.0",
+   "part": "book_encyclopedia_set_01_book13",
+   "kind": "obb",
+   "c": {
+    "x": 0.044,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0184,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book14.0",
+   "part": "book_encyclopedia_set_01_book14",
+   "kind": "obb",
+   "c": {
+    "x": 0.0826,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0165,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book15.0",
+   "part": "book_encyclopedia_set_01_book15",
+   "kind": "obb",
+   "c": {
+    "x": 0.1198,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0178,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book16.0",
+   "part": "book_encyclopedia_set_01_book16",
+   "kind": "obb",
+   "c": {
+    "x": 0.152,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0125,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book17.0",
+   "part": "book_encyclopedia_set_01_book17",
+   "kind": "obb",
+   "c": {
+    "x": 0.185,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.018,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book18.0",
+   "part": "book_encyclopedia_set_01_book18",
+   "kind": "obb",
+   "c": {
+    "x": 0.218,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0111,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book19.0",
+   "part": "book_encyclopedia_set_01_book19",
+   "kind": "obb",
+   "c": {
+    "x": 0.2401,
+    "y": 0.1187,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0098,
+    "y": 0.1187,
+    "z": 0.0817
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "book_encyclopedia_set_01.book_encyclopedia_set_01_book20.0",
+   "part": "book_encyclopedia_set_01_book20",
+   "kind": "obb",
+   "c": {
+    "x": 0.2639,
+    "y": 0.1187,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.012,
+    "y": 0.1187,
+    "z": 0.0818
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}
