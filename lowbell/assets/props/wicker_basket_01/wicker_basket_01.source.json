@@ -1,0 +1,40 @@
+{
+ "id": "wicker_basket_01",
+ "title": "Wicker Basket 01",
+ "url": "https://polyhaven.com/a/wicker_basket_01",
+ "licence": "CC0 1.0",
+ "author": "Kuutti Siitonen",
+ "bytes": 2730151,
+ "triangles": {
+  "source": 22276,
+  "lod0": 3999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 4000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  0.3837,
+  0.1186,
+  0.2934
+ ],
+ "shippedBytes": 624434,
+ "parts": [
+  {
+   "name": "wicker_basket_01",
+   "movable": false,
+   "tris": 3999,
+   "pivot": [
+    0.0003,
+    0.0009,
+    0.0004
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

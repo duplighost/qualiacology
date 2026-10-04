@@ -1,0 +1,177 @@
+{
+ "id": "dead_tree_trunk",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "dead_tree_trunk.dead_tree_trunk.0",
+   "part": "dead_tree_trunk",
+   "kind": "obb",
+   "c": {
+    "x": -0.8718,
+    "y": 0.1405,
+    "z": -0.0001
+   },
+   "h": {
+    "x": 0.6538,
+    "y": 0.1326,
+    "z": 0.0462
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "dead_tree_trunk.dead_tree_trunk.1",
+   "part": "dead_tree_trunk",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.1064,
+    "z": -0.0001
+   },
+   "h": {
+    "x": 0.2179,
+    "y": 0.1049,
+    "z": 0.1386
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "dead_tree_trunk.dead_tree_trunk.2",
+   "part": "dead_tree_trunk",
+   "kind": "obb",
+   "c": {
+    "x": 0.8717,
+    "y": 0.1314,
+    "z": 0.0461
+   },
+   "h": {
+    "x": 0.6538,
+    "y": 0.1188,
+    "z": 0.0924
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "dead_tree_trunk.dead_tree_trunk.3",
+   "part": "dead_tree_trunk",
+   "kind": "obb",
+   "c": {
+    "x": -0.7628,
+    "y": 0.1135,
+    "z": 0.0923
+   },
+   "h": {
+    "x": 0.5448,
+    "y": 0.0957,
+    "z": 0.0462
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "dead_tree_trunk.dead_tree_trunk.4",
+   "part": "dead_tree_trunk",
+   "kind": "obb",
+   "c": {
+    "x": -0.7083,
+    "y": 0.1186,
+    "z": -0.0925
+   },
+   "h": {
+    "x": 0.4904,
+    "y": 0.1054,
+    "z": 0.0462
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "dead_tree_trunk.dead_tree_trunk.5",
+   "part": "dead_tree_trunk",
+   "kind": "obb",
+   "c": {
+    "x": 0.8172,
+    "y": 0.1272,
+    "z": -0.0925
+   },
+   "h": {
+    "x": 0.1635,
+    "y": 0.0834,
+    "z": 0.0462
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "dead_tree_trunk.dead_tree_trunk.6",
+   "part": "dead_tree_trunk",
+   "kind": "obb",
+   "c": {
+    "x": 0.4358,
+    "y": 0.0975,
+    "z": -0.0925
+   },
+   "h": {
+    "x": 0.2179,
+    "y": 0.0522,
+    "z": 0.0462
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "dead_tree_trunk.dead_tree_trunk.7",
+   "part": "dead_tree_trunk",
+   "kind": "obb",
+   "c": {
+    "x": 1.0896,
+    "y": 0.1055,
+    "z": -0.0925
+   },
+   "h": {
+    "x": 0.109,
+    "y": 0.0427,
+    "z": 0.0462
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  }
+ ]
+}
