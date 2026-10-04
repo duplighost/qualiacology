@@ -1,0 +1,63 @@
+{
+ "tree_stump_02": {
+  "files": {
+   "albedo": "tree_stump_02.albedo.dds",
+   "normal": "tree_stump_02.normal.ktx2",
+   "orm": "tree_stump_02.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 37.81,
+   "normalXY": 38.09,
+   "orm": {
+    "ao": 99,
+    "rough": 47.5,
+    "metal": 44.72
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.811,
+   "p99": 4.904
+  },
+  "specAA": false,
+  "seconds": 2.2,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}
