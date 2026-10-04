@@ -1,0 +1,56 @@
+{
+ "jack": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "jack.albedo.dds",
+   "normal": "jack.normal.ktx2",
+   "orm": "jack.orm.dds"
+  },
+  "bytes": {
+   "albedo": 1398256,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 40.52,
+   "alpha": 55.89,
+   "normalXY": 45.65,
+   "orm": {
+    "ao": 43.3,
+    "rough": 45.17,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "jack_color.png",
+   "normal": "jack_normal.png",
+   "rough": "jack_rough.png",
+   "ao": "jack_ao.png",
+   "metal": "jack_mask.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.951,
+   0.951,
+   0.951,
+   0.951,
+   0.9512,
+   0.9512
+  ],
+  "normalErrorDeg": {
+   "mean": 0.5,
+   "p99": 3.778
+  },
+  "specAA": true,
+  "seconds": 13.8
+ }
+}

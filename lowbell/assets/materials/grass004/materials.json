@@ -1,0 +1,46 @@
+{
+ "grass004": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "grass004.albedo.dds",
+   "normal": "grass004.normal.ktx2",
+   "orm": "grass004.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 31.65,
+   "normalXY": 38.07,
+   "orm": {
+    "ao": 31.9,
+    "rough": 32.05,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.875,
+   "p99": 4.109
+  },
+  "specAA": false,
+  "seconds": 4.1
+ }
+}

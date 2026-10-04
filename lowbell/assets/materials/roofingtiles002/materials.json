@@ -1,0 +1,45 @@
+{
+ "roofingtiles002": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "roofingtiles002.albedo.dds",
+   "normal": "roofingtiles002.normal.ktx2",
+   "orm": "roofingtiles002.orm.dds"
+  },
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 1398608,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 41.33,
+   "normalXY": 42.61,
+   "orm": {
+    "ao": 99.0,
+    "rough": 34.36,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.082,
+   "p99": 5.489
+  },
+  "specAA": false,
+  "seconds": 17.2
+ }
+}

@@ -1,0 +1,665 @@
+{
+  "version": 1,
+  "sounds": {
+    "bell.chapel": {
+      "files": [
+        "bell.chapel.0.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        8.0
+      ],
+      "note": "BigSoundBank #0830, rung at dawn, used once"
+    },
+    "body.hit": {
+      "files": [
+        "body.hit.0.ogg",
+        "body.hit.1.ogg",
+        "body.hit.2.ogg",
+        "body.hit.3.ogg"
+      ],
+      "gain": 0.6,
+      "len": [
+        0.45,
+        0.45,
+        0.45,
+        0.45
+      ],
+      "note": "Kenney impactPunch heavy"
+    },
+    "body.thud": {
+      "files": [
+        "body.thud.0.ogg",
+        "body.thud.1.ogg",
+        "body.thud.2.ogg",
+        "body.thud.3.ogg"
+      ],
+      "gain": 0.7,
+      "len": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "note": "Kenney impactSoft heavy: a body on the ground"
+    },
+    "cloth": {
+      "files": [
+        "cloth.0.ogg",
+        "cloth.1.ogg",
+        "cloth.2.ogg"
+      ],
+      "gain": 0.35,
+      "len": [
+        0.51,
+        0.306,
+        0.432
+      ],
+      "note": "Kenney RPG cloth"
+    },
+    "crows": {
+      "files": [
+        "crows.0.ogg",
+        "crows.1.ogg",
+        "crows.2.ogg"
+      ],
+      "gain": 0.35,
+      "len": [
+        3.2,
+        3.2,
+        2.2
+      ],
+      "note": "BigSoundBank #0754 crows, #3461 carrion crow"
+    },
+    "door.close": {
+      "files": [
+        "door.close.0.ogg",
+        "door.close.1.ogg",
+        "door.close.2.ogg",
+        "door.close.3.ogg"
+      ],
+      "gain": 0.65,
+      "len": [
+        0.632,
+        0.5,
+        0.668,
+        0.536
+      ],
+      "note": "Kenney door closes, BigSoundBank #0377 and #1704 (the latch)"
+    },
+    "door.creak": {
+      "files": [
+        "door.creak.0.ogg",
+        "door.creak.1.ogg",
+        "door.creak.2.ogg",
+        "door.creak.3.ogg"
+      ],
+      "gain": 0.45,
+      "len": [
+        1.598,
+        1.45,
+        1.4,
+        1.1
+      ],
+      "note": "hinges: BigSoundBank #3205, #1702, #1704, #0306; Kenney creaks"
+    },
+    "door.open": {
+      "files": [
+        "door.open.0.ogg",
+        "door.open.1.ogg",
+        "door.open.2.ogg",
+        "door.open.3.ogg"
+      ],
+      "gain": 0.6,
+      "len": [
+        0.874,
+        1.1,
+        0.9,
+        0.794
+      ],
+      "note": "Kenney door opens, BigSoundBank #0377 and the #1702 handle"
+    },
+    "door.slam": {
+      "files": [
+        "door.slam.0.ogg"
+      ],
+      "gain": 0.8,
+      "len": [
+        1.5
+      ],
+      "note": "BigSoundBank #0103"
+    },
+    "floor.creak": {
+      "files": [
+        "floor.creak.0.ogg",
+        "floor.creak.1.ogg",
+        "floor.creak.2.ogg"
+      ],
+      "gain": 0.35,
+      "len": [
+        0.734,
+        0.236,
+        0.27
+      ],
+      "note": "BigSoundBank #3051 #3055 parquet squeaks, Kenney creak3"
+    },
+    "glass.heavy": {
+      "files": [
+        "glass.heavy.0.ogg",
+        "glass.heavy.1.ogg",
+        "glass.heavy.2.ogg",
+        "glass.heavy.3.ogg"
+      ],
+      "gain": 0.7,
+      "len": [
+        0.238,
+        0.428,
+        0.244,
+        0.168
+      ],
+      "note": "Kenney glass heavy"
+    },
+    "glass.light": {
+      "files": [
+        "glass.light.0.ogg",
+        "glass.light.1.ogg",
+        "glass.light.2.ogg",
+        "glass.light.3.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        0.23,
+        0.206,
+        0.206,
+        0.206
+      ],
+      "note": "Kenney glass light/medium: shards landing"
+    },
+    "latch": {
+      "files": [
+        "latch.0.ogg",
+        "latch.1.ogg"
+      ],
+      "gain": 0.45,
+      "len": [
+        0.154,
+        0.35
+      ],
+      "note": "Kenney RPG latch and click"
+    },
+    "metal.hit": {
+      "files": [
+        "metal.hit.0.ogg",
+        "metal.hit.1.ogg",
+        "metal.hit.2.ogg"
+      ],
+      "gain": 0.55,
+      "len": [
+        0.268,
+        0.14,
+        0.116
+      ],
+      "note": "Kenney metal medium/heavy"
+    },
+    "metal.light": {
+      "files": [
+        "metal.light.0.ogg",
+        "metal.light.1.ogg",
+        "metal.light.2.ogg"
+      ],
+      "gain": 0.45,
+      "len": [
+        0.372,
+        0.248,
+        0.232
+      ],
+      "note": "Kenney metal light and tin"
+    },
+    "owl": {
+      "files": [
+        "owl.0.ogg",
+        "owl.1.ogg"
+      ],
+      "gain": 0.4,
+      "len": [
+        0.988,
+        1.462
+      ],
+      "note": "BigSoundBank #1763 tawny owl"
+    },
+    "pickup": {
+      "files": [
+        "pickup.0.ogg",
+        "pickup.1.ogg",
+        "pickup.2.ogg"
+      ],
+      "gain": 0.4,
+      "len": [
+        0.18,
+        0.19,
+        0.268
+      ],
+      "note": "Kenney RPG leather and belt"
+    },
+    "soft.hit": {
+      "files": [
+        "soft.hit.0.ogg",
+        "soft.hit.1.ogg",
+        "soft.hit.2.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        0.114,
+        0.18,
+        0.132
+      ],
+      "note": "Kenney impactSoft medium"
+    },
+    "step.asphalt": {
+      "files": [
+        "step.asphalt.0.ogg",
+        "step.asphalt.1.ogg",
+        "step.asphalt.2.ogg",
+        "step.asphalt.3.ogg",
+        "step.asphalt.4.ogg"
+      ],
+      "gain": 0.55,
+      "len": [
+        0.288,
+        0.34,
+        0.324,
+        0.32,
+        0.324
+      ],
+      "note": "concrete steps, darker, with gravel grit under them"
+    },
+    "step.carpet": {
+      "files": [
+        "step.carpet.0.ogg",
+        "step.carpet.1.ogg",
+        "step.carpet.2.ogg",
+        "step.carpet.3.ogg"
+      ],
+      "gain": 0.45,
+      "len": [
+        0.166,
+        0.14,
+        0.14,
+        0.14
+      ],
+      "note": "Kenney carpet + RPG boards under a heavy lowpass"
+    },
+    "step.concrete": {
+      "files": [
+        "step.concrete.0.ogg",
+        "step.concrete.1.ogg",
+        "step.concrete.2.ogg",
+        "step.concrete.3.ogg",
+        "step.concrete.4.ogg"
+      ],
+      "gain": 0.55,
+      "len": [
+        0.288,
+        0.308,
+        0.324,
+        0.32,
+        0.324
+      ],
+      "note": "BigSoundBank #0514 shoe on concrete (via WINTERLINE)"
+    },
+    "step.creaky": {
+      "files": [
+        "step.creaky.0.ogg",
+        "step.creaky.1.ogg",
+        "step.creaky.2.ogg",
+        "step.creaky.3.ogg"
+      ],
+      "gain": 0.55,
+      "len": [
+        0.318,
+        0.296,
+        0.308,
+        0.34
+      ],
+      "note": "BigSoundBank #3212 old wooden stair steps"
+    },
+    "step.dirt": {
+      "files": [
+        "step.dirt.0.ogg",
+        "step.dirt.1.ogg",
+        "step.dirt.2.ogg",
+        "step.dirt.3.ogg",
+        "step.dirt.4.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.322
+      ],
+      "note": "grass steps without the blades, a boot thud under"
+    },
+    "step.grass": {
+      "files": [
+        "step.grass.0.ogg",
+        "step.grass.1.ogg",
+        "step.grass.2.ogg",
+        "step.grass.3.ogg",
+        "step.grass.4.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.322
+      ],
+      "note": "BigSoundBank #0854"
+    },
+    "step.gravel": {
+      "files": [
+        "step.gravel.0.ogg",
+        "step.gravel.1.ogg",
+        "step.gravel.2.ogg",
+        "step.gravel.3.ogg",
+        "step.gravel.4.ogg"
+      ],
+      "gain": 0.55,
+      "len": [
+        0.256,
+        0.34,
+        0.24,
+        0.254,
+        0.236
+      ],
+      "note": "BigSoundBank #0510"
+    },
+    "step.leaves": {
+      "files": [
+        "step.leaves.0.ogg",
+        "step.leaves.1.ogg",
+        "step.leaves.2.ogg",
+        "step.leaves.3.ogg",
+        "step.leaves.4.ogg"
+      ],
+      "gain": 0.55,
+      "len": [
+        0.42,
+        0.42,
+        0.42,
+        0.42,
+        0.42
+      ],
+      "note": "BigSoundBank #0137 dry leaves"
+    },
+    "step.metal": {
+      "files": [
+        "step.metal.0.ogg",
+        "step.metal.1.ogg",
+        "step.metal.2.ogg",
+        "step.metal.3.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        0.304,
+        0.308,
+        0.324,
+        0.324
+      ],
+      "note": "concrete step + Kenney plate hit (a grate or a lid)"
+    },
+    "step.mud": {
+      "files": [
+        "step.mud.0.ogg",
+        "step.mud.1.ogg",
+        "step.mud.2.ogg",
+        "step.mud.3.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        0.4,
+        0.4,
+        0.4,
+        0.4
+      ],
+      "note": "dirt step, darker (the wet suction is synthesized on top)"
+    },
+    "step.stone": {
+      "files": [
+        "step.stone.0.ogg",
+        "step.stone.1.ogg",
+        "step.stone.2.ogg",
+        "step.stone.3.ogg",
+        "step.stone.4.ogg"
+      ],
+      "gain": 0.55,
+      "len": [
+        0.288,
+        0.34,
+        0.324,
+        0.32,
+        0.324
+      ],
+      "note": "concrete steps with grit, a little darker"
+    },
+    "step.tile": {
+      "files": [
+        "step.tile.0.ogg",
+        "step.tile.1.ogg",
+        "step.tile.2.ogg",
+        "step.tile.3.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        0.288,
+        0.308,
+        0.324,
+        0.32
+      ],
+      "note": "concrete steps, brighter heel, short tail"
+    },
+    "step.wood": {
+      "files": [
+        "step.wood.0.ogg",
+        "step.wood.1.ogg",
+        "step.wood.2.ogg",
+        "step.wood.3.ogg",
+        "step.wood.4.ogg"
+      ],
+      "gain": 0.55,
+      "len": [
+        0.232,
+        0.258,
+        0.23,
+        0.25,
+        0.244
+      ],
+      "note": "Kenney RPG footsteps on boards"
+    },
+    "stone.hit": {
+      "files": [
+        "stone.hit.0.ogg",
+        "stone.hit.1.ogg",
+        "stone.hit.2.ogg"
+      ],
+      "gain": 0.6,
+      "len": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "note": "Kenney mining: pick on rock (grave slabs, crypt stone)"
+    },
+    "thunder": {
+      "files": [
+        "thunder.0.ogg"
+      ],
+      "gain": 0.6,
+      "len": [
+        4.028
+      ],
+      "note": "BigSoundBank #3113"
+    },
+    "twig": {
+      "files": [
+        "twig.0.ogg",
+        "twig.1.ogg",
+        "twig.2.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        0.052,
+        0.17,
+        0.166
+      ],
+      "note": "BigSoundBank #1301: a twig breaking underfoot"
+    },
+    "wind.a": {
+      "files": [
+        "wind.a.0.ogg"
+      ],
+      "gain": 1.0,
+      "len": [
+        42.0
+      ],
+      "loop": true,
+      "note": "BigSoundBank #0904 wind in dry leaves, 92-134 s"
+    },
+    "wind.b": {
+      "files": [
+        "wind.b.0.ogg"
+      ],
+      "gain": 1.0,
+      "len": [
+        23.0
+      ],
+      "loop": true,
+      "note": "BigSoundBank #0904, 38-61 s"
+    },
+    "wind.gust": {
+      "files": [
+        "wind.gust.0.ogg",
+        "wind.gust.1.ogg"
+      ],
+      "gain": 0.6,
+      "len": [
+        5.5,
+        6.0
+      ],
+      "note": "BigSoundBank #0904: gusts through dry leaves (a swell on the calm stretches, no birds, no knocks)"
+    },
+    "wood.hit": {
+      "files": [
+        "wood.hit.0.ogg",
+        "wood.hit.1.ogg",
+        "wood.hit.2.ogg"
+      ],
+      "gain": 0.7,
+      "len": [
+        0.31,
+        0.31,
+        0.31
+      ],
+      "note": "Kenney wood heavy"
+    },
+    "wood.plank": {
+      "files": [
+        "wood.plank.0.ogg",
+        "wood.plank.1.ogg",
+        "wood.plank.2.ogg"
+      ],
+      "gain": 0.7,
+      "len": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "note": "Kenney plank: boards giving"
+    },
+    "rain.concrete": {
+      "files": [
+        "rain.concrete.0.ogg"
+      ],
+      "gain": 1.0,
+      "len": [
+        36
+      ],
+      "note": "Joseph Sardin / BigSoundBank; CC0-1.0; https://bigsoundbank.com/rain-on-concrete-s1289.html"
+    },
+    "rain.puddle": {
+      "files": [
+        "rain.puddle.0.ogg"
+      ],
+      "gain": 1.0,
+      "len": [
+        32
+      ],
+      "note": "Joseph Sardin / BigSoundBank; CC0-1.0; https://bigsoundbank.com/rain-on-puddle-s1290.html"
+    },
+    "creature.breath": {
+      "files": [
+        "creature.breath.0.ogg",
+        "creature.breath.1.ogg",
+        "creature.breath.2.ogg",
+        "creature.breath.3.ogg"
+      ],
+      "gain": 0.58,
+      "len": [
+        2.6,
+        2.3,
+        2.7,
+        2.4
+      ],
+      "note": "nornalbion; CC-BY-4.0; https://freesound.org/people/nornalbion/sounds/195733/"
+    },
+    "creature.growl": {
+      "files": [
+        "creature.growl.0.ogg",
+        "creature.growl.1.ogg",
+        "creature.growl.2.ogg",
+        "creature.growl.3.ogg"
+      ],
+      "gain": 0.62,
+      "len": [
+        2.7,
+        2.6,
+        2.8,
+        2.4
+      ],
+      "note": "nornalbion; CC-BY-4.0; https://freesound.org/people/nornalbion/sounds/195733/"
+    },
+    "creature.snarl": {
+      "files": [
+        "creature.snarl.0.ogg",
+        "creature.snarl.1.ogg",
+        "creature.snarl.2.ogg",
+        "creature.snarl.3.ogg"
+      ],
+      "gain": 0.65,
+      "len": [
+        1.1,
+        1.2,
+        1.1,
+        1.3
+      ],
+      "note": "nornalbion; CC-BY-4.0; https://freesound.org/people/nornalbion/sounds/195733/"
+    },
+    "creature.screech": {
+      "files": [
+        "creature.screech.0.ogg",
+        "creature.screech.1.ogg",
+        "creature.screech.2.ogg"
+      ],
+      "gain": 0.5,
+      "len": [
+        2.1,
+        2.1,
+        2.3
+      ],
+      "note": "nornalbion; CC-BY-4.0; https://freesound.org/people/nornalbion/sounds/195733/"
+    }
+  }
+}

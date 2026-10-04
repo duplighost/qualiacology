@@ -1,0 +1,11 @@
+{
+  "title": "Eric Rigged 001 hands and forearms (WINTERLINE extraction)",
+  "author": "Renderpeople",
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "source": "https://sketchfab.com/3d-models/eric-rigged-001-rigged-3d-business-man-a46bc9f67aaa415bb4f3241eef900e7f",
+  "copiedFrom": "C:/Users/Alex/Projects/winterline/public/assets/weapons/hands.glb",
+  "sha256": "efd90a7f0cc137455016b2ac135de78484732dca375ca909acdc8d9d0fccdbe1",
+  "bytes": 4548444,
+  "changes": "None in LOWBELL. Forearm/hand extraction, sleeve adjustment and glove smoothing are WINTERLINE's; see ASSET-LICENSES.md."
+}

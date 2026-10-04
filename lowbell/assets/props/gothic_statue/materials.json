@@ -1,0 +1,67 @@
+{
+  "gothic_statue": {
+    "files": {
+      "albedo": "gothic_statue.albedo.dds",
+      "normal": "gothic_statue.normal.ktx2",
+      "orm": "gothic_statue.orm.dds"
+    },
+    "size": [
+      4096,
+      4096
+    ],
+    "alpha": false,
+    "wrap": true,
+    "bytes": {
+      "albedo": 11184952,
+      "normal": 5592944,
+      "orm": 2796344
+    },
+    "psnr": {
+      "albedo": 37.311
+    },
+    "format": {
+      "albedo": "DXT1",
+      "normal": "BC5_UNORM",
+      "orm": "DXT1"
+    },
+    "specAA": false,
+    "seconds": 110.3,
+    "factors": {},
+    "gltf": {
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "metallic": 0,
+      "alphaMode": "OPAQUE",
+      "alphaCutoff": 0.5,
+      "doubleSided": true,
+      "emissive": [
+        0,
+        0,
+        0
+      ],
+      "emissiveStrength": 1,
+      "transmission": 0,
+      "ior": 1.5,
+      "clearcoat": 0
+    },
+    "sizes": {
+      "albedo": [
+        4096,
+        4096
+      ],
+      "normal": [
+        2048,
+        2048
+      ],
+      "orm": [
+        2048,
+        2048
+      ]
+    }
+  }
+}

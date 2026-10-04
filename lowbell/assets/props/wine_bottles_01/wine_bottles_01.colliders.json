@@ -1,0 +1,93 @@
+{
+ "id": "wine_bottles_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "wine_bottles_01.wine_bottles_01_bordeaux.0",
+   "part": "wine_bottles_01_bordeaux",
+   "kind": "obb",
+   "c": {
+    "x": -0.0919,
+    "y": 0.149,
+    "z": 0
+   },
+   "h": {
+    "x": 0.0374,
+    "y": 0.1494,
+    "z": 0.0372
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "wine_bottles_01.wine_bottles_01_alsace.0",
+   "part": "wine_bottles_01_alsace",
+   "kind": "obb",
+   "c": {
+    "x": -0.302,
+    "y": 0.1656,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0362,
+    "y": 0.166,
+    "z": 0.0359
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "wine_bottles_01.wine_bottles_01_burgundy.0",
+   "part": "wine_bottles_01_burgundy",
+   "kind": "obb",
+   "c": {
+    "x": 0.108,
+    "y": 0.1529,
+    "z": 0
+   },
+   "h": {
+    "x": 0.04,
+    "y": 0.1531,
+    "z": 0.0399
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  },
+  {
+   "id": "wine_bottles_01.wine_bottles_01_champagne.0",
+   "part": "wine_bottles_01_champagne",
+   "kind": "obb",
+   "c": {
+    "x": 0.2978,
+    "y": 0.1577,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0403,
+    "y": 0.1579,
+    "z": 0.0402
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "tile"
+  }
+ ]
+}

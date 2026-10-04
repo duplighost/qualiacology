@@ -1,0 +1,40 @@
+{
+ "id": "dining_table",
+ "title": "Dining Table",
+ "url": "https://polyhaven.com/a/dining_table",
+ "licence": "CC0 1.0",
+ "author": "Aron Łyczek",
+ "bytes": 2283933,
+ "triangles": {
+  "source": 1048,
+  "lod0": 1048,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  2.2559,
+  0.877,
+  1.3902
+ ],
+ "shippedBytes": 1234074,
+ "parts": [
+  {
+   "name": "dining_table",
+   "movable": false,
+   "tris": 1048,
+   "pivot": [
+    0.0049,
+    0.0043,
+    -0.0169
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

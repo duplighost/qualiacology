@@ -1,0 +1,90 @@
+{
+ "id": "rock_moss_set_01",
+ "title": "Rock Moss Set 01",
+ "url": "https://polyhaven.com/a/rock_moss_set_01",
+ "licence": "CC0 1.0",
+ "author": "Kless Gyzen",
+ "bytes": 1937065,
+ "triangles": {
+  "source": 63127,
+  "lod0": 8995,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 9000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  7.9939,
+  1.7746,
+  6.9582
+ ],
+ "shippedBytes": 635170,
+ "parts": [
+  {
+   "name": "rock_moss_set_01_rock01",
+   "movable": false,
+   "tris": 1568,
+   "pivot": [
+    -2.8883,
+    0.661,
+    -1.7733
+   ]
+  },
+  {
+   "name": "rock_moss_set_01_rock02",
+   "movable": false,
+   "tris": 1567,
+   "pivot": [
+    -0.0883,
+    0.661,
+    -1.7733
+   ]
+  },
+  {
+   "name": "rock_moss_set_01_rock03",
+   "movable": false,
+   "tris": 711,
+   "pivot": [
+    2.9117,
+    0.661,
+    -1.7733
+   ]
+  },
+  {
+   "name": "rock_moss_set_01_rock04",
+   "movable": false,
+   "tris": 1508,
+   "pivot": [
+    -2.7883,
+    0.661,
+    1.9267
+   ]
+  },
+  {
+   "name": "rock_moss_set_01_rock05",
+   "movable": false,
+   "tris": 2359,
+   "pivot": [
+    0.0617,
+    0.661,
+    1.8267
+   ]
+  },
+  {
+   "name": "rock_moss_set_01_rock06",
+   "movable": false,
+   "tris": 1282,
+   "pivot": [
+    2.7117,
+    0.661,
+    1.9267
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}
