@@ -52,6 +52,19 @@
   },
   "games": [
     {
+      "slug": "aftercurrent",
+      "title": "AFTERCURRENT",
+      "descriptor": "First-person action in a dam at night",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/aftercurrent-card-clean.jpg",
+      "alt": "A turbine hall in daylight from the gallery windows: a man stands in a barred goods lift, and a hanging machine with one orange eye watches from the left",
+      "summary": "Your brother is trapped in the lower lift. One night in the dam with your family’s name on it: the turbine halls, the forest along the shore, the caves under the lake. Keyboard and mouse.",
+      "metaDescription": "AFTERCURRENT is a first-person action game set in a hydro dam at night. Your brother is trapped in the lower lift.",
+      "controls": "WASD + mouse · click fire · right click cable: hold to pull, catch and throw back · Space jump · Shift dash · Ctrl slide · E use · Tab circuit",
+      "actionLabel": "Go in"
+    },
+    {
       "slug": "lowbell",
       "title": "LOWBELL",
       "descriptor": "Haunted-house survival horror",
