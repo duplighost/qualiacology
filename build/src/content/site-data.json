@@ -52,6 +52,19 @@
   },
   "games": [
     {
+      "slug": "lowbell",
+      "title": "LOWBELL",
+      "descriptor": "Haunted-house survival horror",
+      "group": "horror",
+      "featured": false,
+      "image": "/assets/games/lowbell-card-v20261004.jpg",
+      "alt": "A dark ballroom under one lit chandelier, and a crowd of drowned men in waistcoats shuffling across the floorboards toward you, the nearest with his head lolled to one side and his mouth hanging open",
+      "summary": "Lowbell is yours, and so is everything in it. A big house on a rainy night: a ballroom, a library, a cellar, a chapel and its graves. The drowned come up the drive, something under a sheet comes down from upstairs, and the statue in the chapel gets up at six. The night doesn’t end. Keyboard and mouse.",
+      "metaDescription": "LOWBELL is a first-person survival horror shooter set in a big haunted house on a rainy night that doesn’t end: a ballroom, a library, a chapel and its graves, the drowned, and bosses that wake as the night goes on. Keyboard and mouse.",
+      "controls": "WASD + mouse · Shift dash · Space jump, again in the air · click fire, right click aim · 1 2 3 guns or the wheel · R reload · F torch · E use · T skills · M map · Esc pause",
+      "actionLabel": "Enter the night"
+    },
+    {
       "slug": "olly-olly",
       "title": "OLLY OLLY",
       "descriptor": "Halloween first-person horror",
