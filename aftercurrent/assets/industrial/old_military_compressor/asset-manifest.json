@@ -1,0 +1,110 @@
+{
+  "asset": "old_military_compressor",
+  "name": "Old Military Compressor",
+  "source": "https://polyhaven.com/a/old_military_compressor",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "license_statement": "https://polyhaven.com/license",
+  "authors": {
+    "Brian Speight": "All"
+  },
+  "source_polycount": 79042,
+  "source_dimensions_mm": [
+    598.2826352119446,
+    1675.544261932373,
+    1179.0863703936338
+  ],
+  "downloaded_utc": "2026-10-01T05:01:28.052586+00:00",
+  "resolution": "2k",
+  "metadata": {
+    "type": 2,
+    "name": "Old Military Compressor",
+    "categories": [
+      "collection: project_lighthouse",
+      "industrial",
+      "tools"
+    ],
+    "category": "Tools & Equipment/Workshop Equipment/Pumps",
+    "tags": [
+      "cart",
+      "tank",
+      "garage",
+      "workshop",
+      "construction",
+      "automotive",
+      "maintenance"
+    ],
+    "description": "Free 8K model of an old military compressor with dented, scratched tank, stenciled markings, chipped green paint, rusty steel, belt drive, and worn wheels.",
+    "authors": {
+      "Brian Speight": "All"
+    },
+    "donated": true,
+    "category_id": "f70d08a1-456d-56c0-8b66-78c0998fec35",
+    "max_resolution": [
+      8192,
+      8192
+    ],
+    "polycount": 79042,
+    "files_hash": "68ce27286d358c0109bfefb8198d3be96cdf18b7",
+    "texel_density": 2704.6969588750435,
+    "dimensions": [
+      598.2826352119446,
+      1675.544261932373,
+      1179.0863703936338
+    ],
+    "date_published": 1783036800,
+    "staging": null,
+    "collections": [
+      "project_lighthouse"
+    ],
+    "attributes": {
+      "material": [
+        "steel",
+        "rubber"
+      ],
+      "condition": [
+        "rusted"
+      ]
+    },
+    "img_version": "3e9d721d",
+    "download_count": 725,
+    "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/old_military_compressor.png?width=256&height=256&v=3e9d721d"
+  },
+  "files": [
+    {
+      "path": "old_military_compressor_2k.gltf",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/old_military_compressor/old_military_compressor_2k.gltf",
+      "bytes": 4806,
+      "md5": "a68a33f3d5c76484b9ba4835d5b5e416",
+      "sha256": "d1dcc8781b8d99b60e0081fad4eb5b0745f3d106efc32b0cdd78197c01a66ce6"
+    },
+    {
+      "path": "textures/old_military_compressor_nor_gl_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/old_military_compressor/old_military_compressor_nor_gl_2k.jpg",
+      "bytes": 1736585,
+      "md5": "6b84cbf0233ed33a12c95b81bc21c0be",
+      "sha256": "98eca39e654335ee611e6b297aa406b237bb73add4f94b90cd9df92365528fc7"
+    },
+    {
+      "path": "textures/old_military_compressor_diff_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/old_military_compressor/old_military_compressor_diff_2k.jpg",
+      "bytes": 2738043,
+      "md5": "aede2b889437f45fea594045ff653a8d",
+      "sha256": "4fd9f1fa31da35a9d48b8a9e97a73d07ec21f9a92278a42cf394f294b070e537"
+    },
+    {
+      "path": "textures/old_military_compressor_arm_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/old_military_compressor/old_military_compressor_arm_2k.jpg",
+      "bytes": 2851889,
+      "md5": "52229c88aba61dade2d9bf79be1977b5",
+      "sha256": "b7ca154f05e75ba5a37f38acdf0f92f2a28de029bf99f7104945892a38c1ffb3"
+    },
+    {
+      "path": "old_military_compressor.bin",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/old_military_compressor/old_military_compressor.bin",
+      "bytes": 2341548,
+      "md5": "e342302f88b6714ccaf6934df6c80a4e",
+      "sha256": "cb4f99372897713112e468283fa399a4122adf145b8059c8d57b057def4408a3"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+ "file": "surge.glb",
+ "triangles": {
+  "body": 57684,
+  "ram_s1": 1384,
+  "ram_s2": 1384,
+  "ram_s3": 1384,
+  "ram_s4": 1384,
+  "ram_head": 2960,
+  "collar": 1356,
+  "plug": 1572,
+  "needle": 72
+ },
+ "lanes": [
+  -7.0,
+  0.0,
+  7.0
+ ],
+ "ramY": 1.5
+}

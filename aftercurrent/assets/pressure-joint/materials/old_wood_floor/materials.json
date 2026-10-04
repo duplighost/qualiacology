@@ -1,0 +1,57 @@
+{
+  "old_wood_floor": {
+    "size": [
+      1024,
+      1024
+    ],
+    "alpha": false,
+    "wrap": true,
+    "files": {
+      "albedo": "old_wood_floor.albedo.dds",
+      "normal": "old_wood_floor.normal.ktx2",
+      "orm": "old_wood_floor.orm.dds"
+    },
+    "bytes": {
+      "albedo": 699192,
+      "normal": 1398608,
+      "orm": 699192
+    },
+    "psnr": {
+      "albedo": 39.98,
+      "normalXY": 46.46,
+      "orm": {
+        "ao": 39.87,
+        "rough": 41.1,
+        "metal": 43.3
+      }
+    },
+    "sources": {
+      "albedo": "old_wood_floor_diff_1k.jpg",
+      "normal": "old_wood_floor_nor_gl_1k.jpg",
+      "rough": "old_wood_floor_rough.png",
+      "ao": "old_wood_floor_ao.png",
+      "metal": "old_wood_floor_metal.png"
+    },
+    "format": {
+      "albedo": "DXT1",
+      "normal": "BC5_UNORM",
+      "orm": "DXT1"
+    },
+    "normalErrorDeg": {
+      "mean": 0.458,
+      "p99": 3.073
+    },
+    "specAA": true,
+    "seconds": 9.9,
+    "metresPerTile": [
+      3,
+      3
+    ],
+    "source": {
+      "page": "https://polyhaven.com/a/old_wood_floor",
+      "author": "Guillaume Monsergent",
+      "licence": "CC0 1.0",
+      "licenceURL": "https://polyhaven.com/license"
+    }
+  }
+}

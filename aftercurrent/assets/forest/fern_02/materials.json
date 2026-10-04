@@ -1,0 +1,56 @@
+{
+ "fern_02": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "fern_02.albedo.dds",
+   "normal": "fern_02.normal.ktx2",
+   "orm": "fern_02.orm.dds"
+  },
+  "bytes": {
+   "albedo": 5592560,
+   "normal": 1398608,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 41.85,
+   "alpha": 86.88,
+   "normalXY": 49.59,
+   "orm": {
+    "ao": 41.83,
+    "rough": 40.11,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "alpha": "alpha.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.168,
+   0.168,
+   0.168,
+   0.168,
+   0.168,
+   0.1682
+  ],
+  "normalErrorDeg": {
+   "mean": 0.237,
+   "p99": 2.454
+  },
+  "specAA": false,
+  "seconds": 39.8
+ }
+}

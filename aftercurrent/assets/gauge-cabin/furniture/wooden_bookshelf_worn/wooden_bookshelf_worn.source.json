@@ -1,0 +1,40 @@
+{
+ "id": "wooden_bookshelf_worn",
+ "title": "Wooden Bookshelf Worn",
+ "url": "https://polyhaven.com/a/wooden_bookshelf_worn",
+ "licence": "CC0 1.0",
+ "author": "Ulan Cabanilla",
+ "bytes": 2777194,
+ "triangles": {
+  "source": 10106,
+  "lod0": 8000,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.374,
+  2.0634,
+  0.5813
+ ],
+ "shippedBytes": 1256662,
+ "parts": [
+  {
+   "name": "wooden_bookshelf_worn",
+   "movable": false,
+   "tris": 8000,
+   "pivot": [
+    0,
+    0,
+    0
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

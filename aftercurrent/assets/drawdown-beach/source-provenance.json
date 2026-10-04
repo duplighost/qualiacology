@@ -1,0 +1,287 @@
+{
+  "createdAt": "2026-10-02T11:25:58.719Z",
+  "scope": "Exact local CC0 donor copies. Donor game logic, layout and colliders are not imported. No donor writes.",
+  "models": [
+    {
+      "id": "dead_tree_trunk",
+      "title": "Dead Tree Trunk",
+      "url": "https://polyhaven.com/a/dead_tree_trunk",
+      "licence": "CC0 1.0",
+      "author": "Rob Tuytel",
+      "bytes": 4787539,
+      "triangles": {
+        "source": 101802,
+        "lod0": 19999,
+        "lod1": 4998
+      },
+      "budget": {
+        "lod0": 20000,
+        "lod1": 5000
+      },
+      "class": "hero",
+      "dims": [
+        3.0511,
+        0.2898,
+        0.2772
+      ],
+      "shippedBytes": 1362180,
+      "parts": [
+        {
+          "name": "dead_tree_trunk",
+          "movable": false,
+          "tris": 19999,
+          "pivot": [
+            0.0136,
+            0.0277,
+            0.032
+          ]
+        }
+      ],
+      "rigged": false,
+      "animated": [],
+      "processed": "2026-09-22",
+      "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+    },
+    {
+      "id": "rock_moss_set_02",
+      "title": "Rock Moss Set 02",
+      "url": "https://polyhaven.com/a/rock_moss_set_02",
+      "licence": "CC0 1.0",
+      "author": "Kless Gyzen",
+      "bytes": 1942240,
+      "triangles": {
+        "source": 57647,
+        "lod0": 8992,
+        "lod1": null
+      },
+      "budget": {
+        "lod0": 9000,
+        "lod1": null
+      },
+      "class": "large",
+      "dims": [
+        8.2775,
+        1.3602,
+        3.411
+      ],
+      "shippedBytes": 634906,
+      "parts": [
+        {
+          "name": "rock_moss_set_02_rock08",
+          "movable": false,
+          "tris": 1248,
+          "pivot": [
+            -1.2977,
+            0.3152,
+            0.9381
+          ]
+        },
+        {
+          "name": "rock_moss_set_02_rock09",
+          "movable": false,
+          "tris": 1231,
+          "pivot": [
+            0.5237,
+            0.3152,
+            0.9381
+          ]
+        },
+        {
+          "name": "rock_moss_set_02_rock12",
+          "movable": false,
+          "tris": 1248,
+          "pivot": [
+            -0.1704,
+            0.3152,
+            -0.7515
+          ]
+        },
+        {
+          "name": "rock_moss_set_02_rock13",
+          "movable": false,
+          "tris": 1237,
+          "pivot": [
+            2.3348,
+            0.659,
+            -0.3489
+          ]
+        },
+        {
+          "name": "rock_moss_set_02_rock10",
+          "movable": false,
+          "tris": 1248,
+          "pivot": [
+            3.0001,
+            0.3152,
+            0.9381
+          ]
+        },
+        {
+          "name": "rock_moss_set_02_rock11",
+          "movable": false,
+          "tris": 1247,
+          "pivot": [
+            -2.4551,
+            0.3152,
+            -0.7515
+          ]
+        },
+        {
+          "name": "rock_moss_set_02_rock07",
+          "movable": false,
+          "tris": 1533,
+          "pivot": [
+            -3.2469,
+            0.5415,
+            0.9381
+          ]
+        }
+      ],
+      "rigged": false,
+      "animated": [],
+      "processed": "2026-09-22",
+      "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+    }
+  ],
+  "materials": {
+    "pavingstones138": {
+      "files": {
+        "albedo": "pavingstones138.albedo.dds",
+        "normal": "pavingstones138.normal.ktx2",
+        "orm": "pavingstones138.orm.dds"
+      },
+      "metresPerTile": [
+        1,
+        2
+      ],
+      "source": {
+        "page": "https://ambientcg.com/a/PavingStones138",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "donor": "winterline/public/assets/materials/PavingStones138"
+      }
+    }
+  },
+  "files": [
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.albedo.dds",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.albedo.dds",
+      "relative": "props/dead_tree_trunk/dead_tree_trunk.albedo.dds",
+      "bytes": 699192,
+      "sha256": "3721408327bcc2dbda9360d7e99dd9175972f6d8edaa3da50702663048c344eb"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.colliders.json",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.colliders.json",
+      "relative": "props/dead_tree_trunk/dead_tree_trunk.colliders.json",
+      "bytes": 2713,
+      "sha256": "ebbfdcc3ed8cd1785e580b9d81e2e101fe4e3f58e01f84afce12b5f06029c398"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.glb",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.glb",
+      "relative": "props/dead_tree_trunk/dead_tree_trunk.glb",
+      "bytes": 134412,
+      "sha256": "8c3d3434989feda8fed301177c83a546f5ace1ec95134ce80a1ff06502efb3e5"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.normal.ktx2",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.normal.ktx2",
+      "relative": "props/dead_tree_trunk/dead_tree_trunk.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "fe7a1ac08ef9f45eb2402ad4dfd4792fe87fa3d245b9a9f0250a41fff789c810"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.orm.dds",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.orm.dds",
+      "relative": "props/dead_tree_trunk/dead_tree_trunk.orm.dds",
+      "bytes": 174904,
+      "sha256": "fbf0744f863c5edc79ebc4f0caebb6c01b069cb45447b2d865b9ffc6bf5620e8"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.source.json",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\dead_tree_trunk\\dead_tree_trunk.source.json",
+      "relative": "props/dead_tree_trunk/dead_tree_trunk.source.json",
+      "bytes": 696,
+      "sha256": "3803fb056dfd88b3cf3ec06ae2e46274e7aaf76676c8a3473eb9f873acf66e00"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk\\materials.json",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\dead_tree_trunk\\materials.json",
+      "relative": "props/dead_tree_trunk/materials.json",
+      "bytes": 941,
+      "sha256": "3610ddea9e4f662b53afe2e04ee013efd9c1251d1ce65046a963618859f8cfcc"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rock_moss_set_02\\materials.json",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\rock_moss_set_02\\materials.json",
+      "relative": "props/rock_moss_set_02/materials.json",
+      "bytes": 941,
+      "sha256": "b4d0aab8edebb260113a96b13eb6f69858265805f360de387e5761b288b4f792"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.albedo.dds",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.albedo.dds",
+      "relative": "props/rock_moss_set_02/rock_moss_set_02.albedo.dds",
+      "bytes": 174904,
+      "sha256": "af6ab6dc1c332db202da8f39ad5f18365c7a8a4c1e9d661dfd48b3f079677b38"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.colliders.json",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.colliders.json",
+      "relative": "props/rock_moss_set_02/rock_moss_set_02.colliders.json",
+      "bytes": 2527,
+      "sha256": "752ea885a4780a3aa3357221b5ef804d029d1bf84f10a47f278ddb9bc716e279"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.glb",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.glb",
+      "relative": "props/rock_moss_set_02/rock_moss_set_02.glb",
+      "bytes": 62684,
+      "sha256": "98da78ad088545c0720edda4066b94f479e1c31023adb7fd74af8dfe226e7211"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.normal.ktx2",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.normal.ktx2",
+      "relative": "props/rock_moss_set_02/rock_moss_set_02.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "599f2b73df1e68207d6bc72c61bd0c22109c9265e23cf827828f7ac20e141429"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.orm.dds",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.orm.dds",
+      "relative": "props/rock_moss_set_02/rock_moss_set_02.orm.dds",
+      "bytes": 43832,
+      "sha256": "90375423c079897ee93348102c3d70aed05d7bcfce8f62c66b401206d668ba11"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.source.json",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\props\\rock_moss_set_02\\rock_moss_set_02.source.json",
+      "relative": "props/rock_moss_set_02/rock_moss_set_02.source.json",
+      "bytes": 1544,
+      "sha256": "848436a5ed670e3a1facd172665f3ffa0dd501796f90832d65ef99a1b5a7c349"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\pavingstones138\\pavingstones138.albedo.dds",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\materials\\pavingstones138\\pavingstones138.albedo.dds",
+      "relative": "materials/pavingstones138/pavingstones138.albedo.dds",
+      "bytes": 349672,
+      "sha256": "7995073dd14d4b48af7efa284efb3c3019dd3a9560cef9b6224cee0dc3439c0b"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\pavingstones138\\pavingstones138.normal.ktx2",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\materials\\pavingstones138\\pavingstones138.normal.ktx2",
+      "relative": "materials/pavingstones138/pavingstones138.normal.ktx2",
+      "bytes": 175264,
+      "sha256": "a751334053fcabd16519be5f32c4e54983d3f6624d564b96b9c0b30b8c192633"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\pavingstones138\\pavingstones138.orm.dds",
+      "target": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\beach-work\\assets\\materials\\pavingstones138\\pavingstones138.orm.dds",
+      "relative": "materials/pavingstones138/pavingstones138.orm.dds",
+      "bytes": 87528,
+      "sha256": "16c8f69f976b363991f9b0df45d004d21de5f023417cc49d5f46c34e54fccfa4"
+    }
+  ],
+  "totalBytes": 2611786
+}

@@ -1,0 +1,46 @@
+{
+ "rocky_trail": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "rocky_trail.albedo.dds",
+   "normal": "rocky_trail.normal.ktx2",
+   "orm": "rocky_trail.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 35.04,
+   "normalXY": 36.78,
+   "orm": {
+    "ao": 30.61,
+    "rough": 30.25,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "rocky_trail_diff.png",
+   "normal": "rocky_trail_nor_gl.png",
+   "rough": "rocky_trail_rough.png",
+   "ao": "rocky_trail_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 2.231,
+   "p99": 7.139
+  },
+  "specAA": true,
+  "seconds": 13.1
+ }
+}

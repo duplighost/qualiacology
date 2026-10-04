@@ -1,0 +1,50 @@
+{
+ "concrete_layers_02": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "concrete_layers_02.albedo.dds",
+   "normal": "concrete_layers_02.normal.ktx2",
+   "orm": "concrete_layers_02.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 43.0,
+   "normalXY": 48.79,
+   "orm": {
+    "ao": 41.0,
+    "rough": 43.93,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "concrete_layers_02_diff.png",
+   "normal": "concrete_layers_02_nor_gl.png",
+   "rough": "concrete_layers_02_rough.png",
+   "ao": "concrete_layers_02_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.401,
+   "p99": 2.364
+  },
+  "specAA": true,
+  "seconds": 9.4,
+  "metresPerTile": [
+   2.0,
+   2.0
+  ]
+ }
+}

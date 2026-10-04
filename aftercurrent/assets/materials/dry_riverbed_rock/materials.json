@@ -1,0 +1,55 @@
+{
+ "dry_riverbed_rock": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "dry_riverbed_rock.albedo.dds",
+   "normal": "dry_riverbed_rock.normal.ktx2",
+   "orm": "dry_riverbed_rock.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 34.84,
+   "normalXY": 43.9,
+   "orm": {
+    "ao": 35.12,
+    "rough": 34.97,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "dry_riverbed_rock_diff.png",
+   "normal": "dry_riverbed_rock_nor_gl.png",
+   "rough": "dry_riverbed_rock_rough.png",
+   "ao": "dry_riverbed_rock_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.879,
+   "p99": 3.335
+  },
+  "specAA": true,
+  "seconds": 16.7,
+  "metresPerTile": [
+   2.0,
+   2.0
+  ],
+  "source": {
+   "page": "https://polyhaven.com/a/dry_riverbed_rock",
+   "licence": "CC0 1.0",
+   "author": "Poly Haven"
+  }
+ }
+}

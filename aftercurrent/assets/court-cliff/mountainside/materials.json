@@ -1,0 +1,69 @@
+{
+  "mountainside": {
+    "size": [
+      4096,
+      4096
+    ],
+    "alpha": false,
+    "wrap": false,
+    "files": {
+      "albedo": "mountainside.albedo.dds",
+      "normal": "mountainside.normal.ktx2",
+      "orm": "mountainside.orm.dds"
+    },
+    "bytes": {
+      "albedo": 11184952,
+      "normal": 5592944,
+      "orm": 2796344
+    },
+    "psnr": {
+      "albedo": 37.48,
+      "normalXY": 40.73,
+      "orm": {
+        "ao": 38.21,
+        "rough": 39.38,
+        "metal": 43.15
+      }
+    },
+    "sources": {
+      "albedo": "mountainside_diff_4k.jpg",
+      "normal": "mountainside_nor_gl_2k.jpg",
+      "rough": "rough.png",
+      "ao": "ao.png",
+      "metal": "metal.png"
+    },
+    "format": {
+      "albedo": "DXT1",
+      "normal": "BC5_UNORM",
+      "orm": "DXT1"
+    },
+    "normalErrorDeg": {
+      "mean": 1.255,
+      "p99": 4.96
+    },
+    "specAA": true,
+    "seconds": 101.2,
+    "gltf": {
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "metallic": 0,
+      "doubleSided": true,
+      "alphaMode": "OPAQUE"
+    },
+    "source": {
+      "id": "mountainside",
+      "title": "Mountainside",
+      "url": "https://polyhaven.com/a/mountainside",
+      "licence": "CC0 1.0",
+      "authors": {
+        "Dario Barresi": "Photography",
+        "Rico Cilliers": "Processing"
+      }
+    }
+  }
+}

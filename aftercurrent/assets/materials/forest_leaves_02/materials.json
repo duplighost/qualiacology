@@ -1,0 +1,46 @@
+{
+ "forest_leaves_02": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "forest_leaves_02.albedo.dds",
+   "normal": "forest_leaves_02.normal.ktx2",
+   "orm": "forest_leaves_02.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 31.44,
+   "normalXY": 35.37,
+   "orm": {
+    "ao": 30.17,
+    "rough": 33.17,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "forest_leaves_02_diff.png",
+   "normal": "forest_leaves_02_nor_gl.png",
+   "rough": "forest_leaves_02_rough.png",
+   "ao": "forest_leaves_02_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 2.726,
+   "p99": 7.285
+  },
+  "specAA": true,
+  "seconds": 14.7
+ }
+}

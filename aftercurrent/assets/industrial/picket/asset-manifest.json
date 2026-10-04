@@ -1,0 +1,228 @@
+{
+  "asset": "PICKET tripod optical survey head",
+  "revision": 3,
+  "status": "staged, pending independent visual and game-motion review",
+  "runtime": [
+    {
+      "triangles": 33820,
+      "materials": [
+        "PICKET / photographed PBR atlas"
+      ],
+      "min": [
+        -0.8370816111564636,
+        0.00299990177154541,
+        -0.903999924659729
+      ],
+      "max": [
+        0.8370816111564636,
+        1.3929998874664307,
+        0.9099999666213989
+      ],
+      "file": "picket.glb",
+      "bytes": 547852,
+      "sha256": "2e71bfdf0bf04e65e255752a5e3909f61bb39447bb91aef5f19ac1348c54210e"
+    },
+    {
+      "triangles": 16228,
+      "materials": [
+        "PICKET / photographed PBR atlas"
+      ],
+      "min": [
+        -0.8370816111564636,
+        0.00299990177154541,
+        -0.903999924659729
+      ],
+      "max": [
+        0.8370816111564636,
+        1.3927819728851318,
+        0.9099999666213989
+      ],
+      "file": "picket-lod.glb",
+      "bytes": 371612,
+      "sha256": "a6bab10ccac520b3a81a70f1aa43cac753f16c621ecf17143cbd8ab26d8dd7d0"
+    }
+  ],
+  "spec": {
+    "title": "PICKET tripod optical survey head",
+    "prefix": "PICKET",
+    "aimHeight": 0.94,
+    "pivots": {
+      "Base": [
+        0,
+        0,
+        0
+      ],
+      "Head": [
+        0,
+        0.72,
+        0
+      ],
+      "Handle": [
+        0,
+        1.145,
+        -0.28
+      ],
+      "Shutter_L": [
+        -0.123,
+        0.6,
+        0.441
+      ],
+      "Shutter_R": [
+        0.123,
+        0.6,
+        0.441
+      ]
+    },
+    "parents": {
+      "Head": "Base",
+      "Handle": "Head",
+      "Shutter_L": "Head",
+      "Shutter_R": "Head"
+    },
+    "attachments": {
+      "CableHandle": {
+        "parent": "Handle",
+        "position": [
+          0,
+          1.055,
+          -0.842
+        ]
+      },
+      "BeamOrigin": {
+        "parent": "Head",
+        "position": [
+          0,
+          0.6,
+          0.55
+        ]
+      },
+      "RearTarget": {
+        "parent": "Head",
+        "position": [
+          0,
+          0.98,
+          -0.335
+        ]
+      }
+    },
+    "bounds": [
+      [
+        0,
+        1.035,
+        0.055,
+        0.34,
+        0.34,
+        0.32
+      ],
+      [
+        0,
+        0.6,
+        0.39,
+        0.2,
+        0.17,
+        0.18
+      ],
+      [
+        0,
+        0.716,
+        0,
+        0.28,
+        0.075,
+        0.28
+      ],
+      [
+        0,
+        0.38,
+        0.52,
+        0.115,
+        0.37,
+        0.36
+      ],
+      [
+        0.45,
+        0.38,
+        -0.26,
+        0.34,
+        0.37,
+        0.22
+      ],
+      [
+        -0.45,
+        0.38,
+        -0.26,
+        0.34,
+        0.37,
+        0.22
+      ],
+      [
+        0,
+        1.085,
+        -0.615,
+        0.085,
+        0.135,
+        0.305
+      ]
+    ],
+    "counter": "Jump the low sweep or flank its narrow shield. Rear pan handle turns the head and beam."
+  },
+  "materials": {
+    "atlas_size": 2048,
+    "atlases_per_actor": 1,
+    "runtime_materials": 1,
+    "ao_distance_m": 0.055,
+    "ao_range": [
+      0.32,
+      1
+    ],
+    "color": "sRGB photographic RGB, tinted in linear space; photographed coating at 1.85 repeats/metre; waterline stain only on SKIMMER hulls",
+    "roughness": "Photograph variation preserved; paint dielectric, exposed alloy metal, rubber and ceramic dielectric",
+    "normalCreases": "Manufactured edges above 55 degrees split before weighted normals and tangent bake; no texture-pixel patch"
+  },
+  "sources": [
+    {
+      "name": "Green Metal Rust",
+      "author": "Rob Tuytel / Poly Haven",
+      "license": "CC0-1.0",
+      "url": "https://polyhaven.com/a/green_metal_rust"
+    },
+    {
+      "name": "Metal046B",
+      "author": "Lennart Demes / ambientCG",
+      "license": "CC0-1.0",
+      "url": "https://ambientcg.com/view?id=Metal046B"
+    }
+  ],
+  "construction_references": [
+    "https://www.hamiltonjet.com/assets/main/Photos/hj-designers-manual-eng-2013.pdf",
+    "https://leica-geosystems.com/en-us/products/levels/accessories/tripods"
+  ],
+  "ownership": "Original geometry, mechanism design and assembly authored for Alex / Qualiacology. No manufacturer models or images included.",
+  "images": [
+    {
+      "file": "picket_basecolor.png",
+      "bytes": 5195262,
+      "sha256": "d19f92e357a9681627d5defe9ab4a14a748117c7552f81821024f88f8ec7dfa4"
+    },
+    {
+      "file": "picket_normal.png",
+      "bytes": 948895,
+      "sha256": "a3f537fcfe315eee69a56098339c77e25af722c1d60b6bc053e1932038c54689"
+    },
+    {
+      "file": "picket_orm.png",
+      "bytes": 4337447,
+      "sha256": "f26d5a3eeeea664cb07cb4dfd0fcd162672778584019b610efe3bd460cfbbd9e"
+    }
+  ],
+  "verification": {
+    "sourceNormals": "normal-source-audit-v3.json",
+    "deliveredNormals": "normal-delivery-audit-v3.json",
+    "factoryAudit": "../runtime-audit.json",
+    "gameRenderReview": false,
+    "independentCriticReview": false
+  },
+  "outstanding": [
+    "Independent visual critique in the actual environment.",
+    "Unpaused game motion, targeting/collision and worst-view performance review before public promotion."
+  ]
+}

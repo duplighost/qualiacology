@@ -1,0 +1,46 @@
+{
+ "lichen_rock": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "lichen_rock.albedo.dds",
+   "normal": "lichen_rock.normal.ktx2",
+   "orm": "lichen_rock.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 33.91,
+   "normalXY": 38.98,
+   "orm": {
+    "ao": 36.0,
+    "rough": 36.73,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "lichen_rock_diff.png",
+   "normal": "lichen_rock_nor_gl.png",
+   "rough": "lichen_rock_rough.png",
+   "ao": "lichen_rock_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.614,
+   "p99": 5.34
+  },
+  "specAA": true,
+  "seconds": 11.9
+ }
+}

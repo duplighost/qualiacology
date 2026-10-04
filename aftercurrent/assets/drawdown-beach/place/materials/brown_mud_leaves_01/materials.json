@@ -1,0 +1,19 @@
+{
+  "brown_mud_leaves_01": {
+    "source": {
+      "page": "https://polyhaven.com/a/brown_mud_leaves_01",
+      "licence": "CC0 1.0",
+      "author": "Rob Tuytel",
+      "title": "Brown Mud Leaves 01"
+    },
+    "metresPerTile": [
+      2,
+      2
+    ],
+    "files": {
+      "albedo": "brown_mud_leaves_01.albedo.dds",
+      "normal": "brown_mud_leaves_01.normal.ktx2",
+      "orm": "brown_mud_leaves_01.orm.dds"
+    }
+  }
+}

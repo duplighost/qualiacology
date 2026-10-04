@@ -1,0 +1,56 @@
+{
+  "asset": "marble_cliff_05",
+  "title": "Marble Cliff 05",
+  "author": {
+    "Amal Kumar": "All"
+  },
+  "source": "https://polyhaven.com/a/marble_cliff_05",
+  "license": "CC0-1.0",
+  "licenseSource": "https://polyhaven.com/license",
+  "metresPerTile": [
+    20.0020694732666,
+    20.001800537109375
+  ],
+  "technique": "Primary provider permits photo-based photogrammetry/photometric textures; asset described as natural aerial marble cliff, not a verified limestone sample.",
+  "providerStandards": "https://docs.polyhaven.com/en/technical-standards/textures",
+  "files": [
+    {
+      "kind": "Diffuse",
+      "path": "textures/marble_cliff_05_diff_4k.jpg",
+      "bytes": 11379735,
+      "sha256": "ba6b56261e0288f12cb4ca6070acb340b617dab8ffe36dd0a7f129c22683a2c9",
+      "providerMd5": "1179955cd22bbab03830d3bbfc1576cb",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/marble_cliff_05/marble_cliff_05_diff_4k.jpg"
+    },
+    {
+      "kind": "nor_gl",
+      "path": "textures/marble_cliff_05_nor_gl_4k.jpg",
+      "bytes": 10976432,
+      "sha256": "61bb7e65ae3c96564e0ec8fd0cbb15199fb7b4e3e3bb92265c1c2fbabcd92567",
+      "providerMd5": "47789a0689acc36190b6ad9a3fdf77ad",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/marble_cliff_05/marble_cliff_05_nor_gl_4k.jpg"
+    },
+    {
+      "kind": "Rough",
+      "path": "textures/marble_cliff_05_rough_4k.jpg",
+      "bytes": 6104929,
+      "sha256": "123620cdf96acfe788ef3a609d36bf4594eb5eb8e01fcbfed940976c526b29ff",
+      "providerMd5": "c015f99d805eea61a73ec40c9331d15a",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/marble_cliff_05/marble_cliff_05_rough_4k.jpg"
+    },
+    {
+      "kind": "AO",
+      "path": "textures/marble_cliff_05_ao_4k.jpg",
+      "bytes": 5953464,
+      "sha256": "72daf3f81e50fef2643ae733c078dd68a42a5ef1018d6ddb3948989e85b3de82",
+      "providerMd5": "398c207baeaa0c3cdeda61ef2fbd06ab",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/marble_cliff_05/marble_cliff_05_ao_4k.jpg"
+    }
+  ],
+  "bytes": 34414560,
+  "inspectedRejectedAlbedos": [
+    "quarry_wall_02_diff_2k.jpg",
+    "marble_cliff_02_diff_2k.jpg"
+  ],
+  "edits": "None to source maps; runtime BC1/BC5 conversion with mipmaps only."
+}

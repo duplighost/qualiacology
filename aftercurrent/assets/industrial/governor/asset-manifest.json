@@ -1,0 +1,277 @@
+{
+  "asset": "GOVERNOR regulating engine and travelling hoist",
+  "revision": 5,
+  "status": "Staged guard contact correction; six exact decoded geometry/controller CPU cases passed. Integrated GPU motion pending.",
+  "runtime": {
+    "triangles": 95144,
+    "materials": [
+      "GOVERNOR mechanism / photographed PBR atlas",
+      "GOVERNOR structure / photographed PBR atlas"
+    ],
+    "min": [
+      -17.59000015258789,
+      0,
+      -17.149999618530273
+    ],
+    "max": [
+      17.59000015258789,
+      13.640000343322754,
+      17.149999618530273
+    ],
+    "file": "governor.glb",
+    "bytes": 1431176,
+    "sha256": "722de4e1238a1f05920347a174d553a2bf3014b7a53916f9bee4da45c14ad7c0"
+  },
+  "contract": {
+    "coordinates": "ph11-local Y-up metres, identity root, +Z at zero angle",
+    "pivots": {
+      "Foundation": [
+        0,
+        0,
+        0
+      ],
+      "PivotRotor": [
+        0,
+        4,
+        0
+      ],
+      "PivotSweep": [
+        0,
+        0.78,
+        0
+      ],
+      "PivotEmitter": [
+        0,
+        4.8,
+        0
+      ],
+      "EmitterJawL": [
+        -0.52,
+        4.8,
+        2.5
+      ],
+      "EmitterJawR": [
+        0.52,
+        4.8,
+        2.5
+      ],
+      "Gantry": [
+        0,
+        0,
+        0
+      ],
+      "Bridge": [
+        0,
+        11.6,
+        0
+      ],
+      "Trolley": [
+        0,
+        11.6,
+        0
+      ],
+      "HoistDrum": [
+        0,
+        13.3,
+        0
+      ],
+      "Weight": [
+        0,
+        10.2,
+        0
+      ],
+      "HoistCableL": [
+        -0.32,
+        11.7,
+        0
+      ],
+      "HoistCableR": [
+        0.32,
+        11.7,
+        0
+      ],
+      "ControlMounts": [
+        0,
+        0,
+        0
+      ],
+      "GuardLeft": [
+        -14,
+        3.2,
+        -6.52
+      ],
+      "GuardHinge": [
+        -15.1,
+        3.2,
+        -6.52
+      ],
+      "DetentRight": [
+        13.48,
+        3.45,
+        7
+      ],
+      "DetentLever": [
+        13.46,
+        3.45,
+        6.58
+      ]
+    },
+    "parents": {
+      "EmitterJawL": "PivotEmitter",
+      "EmitterJawR": "PivotEmitter",
+      "Trolley": "Bridge",
+      "HoistDrum": "Trolley",
+      "HoistCableL": "Trolley",
+      "HoistCableR": "Trolley",
+      "GuardHinge": "GuardLeft",
+      "DetentLever": "DetentRight"
+    },
+    "attachments": {
+      "Muzzle": {
+        "parent": "PivotEmitter",
+        "position": [
+          0,
+          4.8,
+          2.7
+        ]
+      },
+      "WeightHook": {
+        "parent": "Weight",
+        "position": [
+          0,
+          10.82,
+          0
+        ]
+      },
+      "GuardTarget": {
+        "parent": "GuardLeft",
+        "position": [
+          -14,
+          3.2,
+          -6.425
+        ]
+      },
+      "DetentTarget": {
+        "parent": "DetentRight",
+        "position": [
+          13.39,
+          3.45,
+          7
+        ]
+      },
+      "DropLamp": {
+        "parent": "Trolley",
+        "position": [
+          0,
+          11.22,
+          0.92
+        ]
+      }
+    },
+    "sweep": {
+      "radialM": [
+        2.5,
+        10
+      ],
+      "centerY": 0.78,
+      "parkLiftM": 1.25,
+      "arms": 1
+    },
+    "emitter": {
+      "centerY": 4.8,
+      "muzzleRadiusM": 2.7
+    },
+    "weight": {
+      "sizeM": [
+        1.5,
+        1.5,
+        1.5
+      ],
+      "centerYRange": [
+        0.75,
+        10.2
+      ],
+      "travelXZ": [
+        -15,
+        15
+      ],
+      "cableTopY": 11.7
+    },
+    "guard": {
+      "center": [
+        -14,
+        3.2,
+        -6.55
+      ],
+      "size": [
+        1.82,
+        1.51,
+        0.34
+      ],
+      "hinge": [
+        -15.1,
+        3.2,
+        -6.52
+      ],
+      "openYaw": -1.78,
+      "policy": "Whole sacrificial cassette opens outward on its existing outboard hinge. One continuous physical envelope follows the same 0.77 s impact, swing and settle trajectory as the visible frame. A player body can hold the swing. The falling weight stays supported until actual clearance; the normal brake approach stays unavailable until the same moving cover clears its cable ray.",
+      "motion": {
+        "firstStopSeconds": 0.43,
+        "settledSeconds": 0.77,
+        "playerObstructionPauses": true,
+        "modelBytesUnchanged": true
+      }
+    },
+    "detent": {
+      "center": [
+        13.48,
+        3.45,
+        7
+      ],
+      "size": [
+        0.16,
+        0.9,
+        1
+      ],
+      "activeFace": "-X"
+    },
+    "collision": "Visual factory owns no collision or timing; controller supplies pose."
+  },
+  "builderSHA256": "e2462c95787f1f81e6a2c8bf96aecdcbdc87a22da3775631625afd3d6926aa5a",
+  "material": {
+    "atlasCount": 2,
+    "atlasSize": 2048,
+    "mapsPerAtlas": 3,
+    "gpuRGBA8WithMipsBytes": 134217728,
+    "method": "Original alloy and ceramic hierarchy with CC0 photographic metal/coating PBR, baked tangent maps, manufactured crease normals."
+  },
+  "sources": [
+    {
+      "name": "Green Metal Rust",
+      "author": "Rob Tuytel / Poly Haven",
+      "license": "CC0-1.0",
+      "url": "https://polyhaven.com/a/green_metal_rust"
+    },
+    {
+      "name": "Metal046B",
+      "author": "Lennart Demes / ambientCG",
+      "license": "CC0-1.0",
+      "url": "https://ambientcg.com/view?id=Metal046B"
+    }
+  ],
+  "ownership": "Original Governor geometry, assembly, UVs, authored rig and material composition made for AFTERCURRENT. Referenced surface photographs are CC0.",
+  "verification": "This is staged production art. No public copy, gameplay duration, AAA parity, actual lighting or motion approval is implied.",
+  "repair": {
+    "fromRevision": 4,
+    "mapPolicy": "All six atlas files byte-identical; UV layout retained; no rebake.",
+    "source": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\asset-source\\governor\\governor-baked.blend",
+    "patch": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\governor-room-work\\repair-governor-guard.py",
+    "frameComponentsMoved": 12,
+    "fixedMastComponents": 6,
+    "guardHinge": [
+      -15.1,
+      3.2,
+      -6.52
+    ]
+  }
+}

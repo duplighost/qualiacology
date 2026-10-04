@@ -1,0 +1,5 @@
+Original Governor geometry, assembly, UVs, authored rig and material composition made for AFTERCURRENT. Referenced surface photographs are CC0.
+
+Green Metal Rust by Rob Tuytel / Poly Haven https://polyhaven.com/a/green_metal_rust
+Metal046B by Lennart Demes / ambientCG https://ambientcg.com/view?id=Metal046B
+CC0 1.0 https://creativecommons.org/publicdomain/zero/1.0/

@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "method": "First diffuse surface bounce from the authored directional sun and occluded hemisphere light, using measured mean linear albedo of existing textures. Irradiance encoded as first-order RGB spherical harmonics. Direct light remains renderer-owned.",
+  "min": [
+    -11.7,
+    0.55,
+    -14.7
+  ],
+  "max": [
+    -3,
+    6.55,
+    16.05
+  ],
+  "size": [
+    18,
+    12,
+    62
+  ],
+  "range": 0.04296875,
+  "files": [
+    {
+      "data": "west-house-bounce-0.bin",
+      "bytes": 53568,
+      "sha256": "ea87e2c986cd4fc4e9389325f483d6c9ceed34f3e069b9765d23abeb74a72b65"
+    },
+    {
+      "data": "west-house-bounce-1.bin",
+      "bytes": 53568,
+      "sha256": "186e9ac6489d739973ede7822569d8244c40d4095b89f7934b7cf2ad67106d94"
+    },
+    {
+      "data": "west-house-bounce-2.bin",
+      "bytes": 53568,
+      "sha256": "6ba4c61e3dd5766c8583a3f0dddb83f310e14b3a074f31e9bae7c62065b37660"
+    },
+    {
+      "data": "west-house-bounce-3.bin",
+      "bytes": 53568,
+      "sha256": "71962599b20c6536a02676acc3085db7bbfd0e147c3bf8ae6590b5dcaf9fd201"
+    }
+  ],
+  "samples": 64,
+  "skySamples": 48,
+  "rays": 1910697,
+  "hits": 758236,
+  "sunlit": 120601,
+  "meshes": 61,
+  "triangles": 74327,
+  "geometrySHA256": "9f2140f1e3f960b2cda4b6cec2ad58b88ff998f42435aaf01d81c60d7772937e",
+  "maxCoefficient": 0.04268430545926094,
+  "seconds": 60.9001653,
+  "sourceLighting": {
+    "environment": "outdoor-hdr",
+    "fogColor": 6517099,
+    "fogNear": 36,
+    "fogFar": 138,
+    "sunDirection": [
+      -0.3,
+      0.91,
+      0.16
+    ],
+    "sunColor": 13096139,
+    "sunIntensity": 0.49,
+    "hemisphereSky": 10793901,
+    "hemisphereGround": 3423538,
+    "hemisphereIntensity": 0.34
+  },
+  "limits": [
+    "Static low-frequency diffuse approximation, one bounce only.",
+    "No specular transport, lamp bounce, HDR environment radiance or runtime shadow changes.",
+    "Half-metre grid and 64 rays can blur local contact; the renderer keeps its surface shadows and ambient occlusion.",
+    "No GPU shader compile or native-pixel evidence from this CPU bake."
+  ]
+}

@@ -1,0 +1,40 @@
+{
+ "id": "tree_stump_02",
+ "title": "Tree Stump 02",
+ "url": "https://polyhaven.com/a/tree_stump_02",
+ "licence": "CC0 1.0",
+ "author": "Rob Tuytel",
+ "bytes": 4469340,
+ "triangles": {
+  "source": 62345,
+  "lod0": 7999,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  1.522,
+  0.5216,
+  1.3921
+ ],
+ "shippedBytes": 621626,
+ "parts": [
+  {
+   "name": "tree_stump_02",
+   "movable": false,
+   "tris": 7999,
+   "pivot": [
+    -0.043,
+    0.2335,
+    -0.022
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

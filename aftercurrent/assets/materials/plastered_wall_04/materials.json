@@ -1,0 +1,46 @@
+{
+ "plastered_wall_04": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "plastered_wall_04.albedo.dds",
+   "normal": "plastered_wall_04.normal.ktx2",
+   "orm": "plastered_wall_04.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 45.22,
+   "normalXY": 60.7,
+   "orm": {
+    "ao": 99.0,
+    "rough": 50.25,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "plastered_wall_04_diff.png",
+   "normal": "plastered_wall_04_nor_gl.png",
+   "rough": "plastered_wall_04_rough.png",
+   "ao": "plastered_wall_04_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.106,
+   "p99": 0.421
+  },
+  "specAA": true,
+  "seconds": 11.9
+ }
+}

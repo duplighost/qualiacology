@@ -1,0 +1,19 @@
+{
+  "woodfloor051": {
+    "files": {
+      "albedo": "woodfloor051.albedo.dds",
+      "normal": "woodfloor051.normal.ktx2",
+      "orm": "woodfloor051.orm.dds"
+    },
+    "metresPerTile": [
+      1.6,
+      1.6
+    ],
+    "source": {
+      "page": "https://ambientcg.com/a/WoodFloor051",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "donor": "winterline/public/assets/materials/WoodFloor051"
+    }
+  }
+}

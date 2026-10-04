@@ -1,0 +1,363 @@
+{
+  "asset": "Vale Hydro Alternator",
+  "project": "AFTERCURRENT",
+  "source_script": "tools/build-turbine.py",
+  "original_model": "Authored for Alex; no third-party model geometry",
+  "texture_source": {
+    "url": "https://polyhaven.com/a/green_metal_rust",
+    "author": "Rob Tuytel",
+    "license": "CC0-1.0"
+  },
+  "reference": "https://www.usbr.gov/lc/hooverdam/gallery/pwrplant.html",
+  "runtime": {
+    "file": "vale-turbine.glb",
+    "bytes": 13565516,
+    "sha256": "2dcdd4db53103d7a889f454a457ed02301862ea41da7ae1c4c99c759c4fb2357",
+    "materials": 9,
+    "triangles": 152724,
+    "unique_textures": 3,
+    "front_direction": [
+      0,
+      0,
+      1
+    ],
+    "native_height_m": 3.57,
+    "native_radius_m": 3.27603,
+    "coordinate_system": "Y-up, metres; floor at Y=0; front service hatch faces +Z after Blender export"
+  },
+  "bakes": {
+    "method": "Cycles CPU: object-space photographic paint, geometry pointiness wear, cavity grime, AO, roughness, metallic and tangent normal atlas",
+    "resolution": 2048,
+    "runtime_textures": [
+      "vale_basecolor.png",
+      "vale_normal.png",
+      "vale_orm.png"
+    ],
+    "diagnostic_textures": [
+      "vale_ao.png",
+      "vale_cavity.png",
+      "vale_curvature.png",
+      "vale_roughness.png",
+      "vale_metallic.png"
+    ],
+    "exposed_edge_threshold": 0.57,
+    "color_encoding": "sRGB base colour; linear tangent normal and packed AO/roughness/metallic",
+    "variant_sharing": "All three exports share identical atlas images and material names; closed cover transforms preserve UVs, distant reduction interpolates the same UV atlas."
+  },
+  "revision": 3,
+  "collision_surface_native_y_up": {
+    "instruction": "Add placement Y (0.38 for the current concrete plinth). Evaluate overlapping surfaces by maximum height; ignore micro bolts/eyes.",
+    "roof": {
+      "outer_slope_radius_height": [
+        [
+          1.36,
+          2.66
+        ],
+        [
+          2.4,
+          2.3
+        ],
+        [
+          2.43,
+          2.225
+        ]
+      ],
+      "inner_annulus": [
+        0.91,
+        1.36,
+        2.66
+      ]
+    },
+    "outer_flange": {
+      "radial_range": [
+        2.275,
+        2.575
+      ],
+      "top": 2.2275
+    },
+    "bearing_flange": {
+      "radial_range": [
+        0.65,
+        0.91
+      ],
+      "top": 2.76
+    },
+    "bearing_body_radius_height": [
+      [
+        0.54,
+        3.19
+      ],
+      [
+        0.61,
+        3.1
+      ],
+      [
+        0.62,
+        2.89
+      ],
+      [
+        0.68,
+        2.79
+      ]
+    ],
+    "bearing_seal": {
+      "radial_range": [
+        0.4625,
+        0.5675
+      ],
+      "top": 3.225
+    },
+    "exciter_cap_radius_height": [
+      [
+        0,
+        3.57
+      ],
+      [
+        0.32,
+        3.54
+      ],
+      [
+        0.48,
+        3.46
+      ],
+      [
+        0.525,
+        3.33
+      ]
+    ],
+    "stator_side": {
+      "radius": 2.46,
+      "bottom": 0.24,
+      "top": 2.05
+    },
+    "mounting_sole": {
+      "radius": 2.69,
+      "top": 0.24
+    },
+    "cooler_body_aabb": {
+      "min": [
+        2.295,
+        0.105,
+        -1.195
+      ],
+      "max": [
+        3.075,
+        1.91,
+        -0.085
+      ]
+    },
+    "service_steps": [
+      {
+        "center": [
+          2.1,
+          0.0955,
+          1.43
+        ],
+        "size": [
+          0.65,
+          0.191,
+          0.34
+        ]
+      },
+      {
+        "center": [
+          2.1,
+          0.1855,
+          1.05
+        ],
+        "size": [
+          0.65,
+          0.371,
+          0.34
+        ]
+      }
+    ],
+    "hero_open_door_aabb": {
+      "min": [
+        -0.49,
+        0.83,
+        2.43
+      ],
+      "max": [
+        0.3,
+        1.71,
+        2.901
+      ],
+      "applies_to": "vale-turbine.glb only"
+    }
+  },
+  "closed": {
+    "file": "vale-turbine-closed.glb",
+    "bytes": 13581356,
+    "triangles": 152724,
+    "materials": 9,
+    "unique_textures": 3,
+    "sha256": "73b4b47c65284be47739454f2ec53fa1b4d0e5aeeaeaf17976e105c19b40f178",
+    "purpose": "Full detail secondary unit with closed inspection cover"
+  },
+  "lod": {
+    "file": "vale-turbine-lod.glb",
+    "bytes": 10041204,
+    "triangles": 65064,
+    "sha256": "bba3b9ad2a9e8f86d1186767d577e12356a11eecfcadd09d356395a096210f4d",
+    "purpose": "Distant repeated units with closed inspection cover; preserve full mesh for close inspection"
+  },
+  "attachment_anchors_gltf": [
+    {
+      "id": "lifting_eye_0",
+      "position": [
+        1.11723,
+        2.84,
+        1.11723
+      ]
+    },
+    {
+      "id": "lifting_eye_1",
+      "position": [
+        -1.11723,
+        2.84,
+        1.11723
+      ]
+    },
+    {
+      "id": "lifting_eye_2",
+      "position": [
+        1.11723,
+        2.84,
+        -1.11723
+      ]
+    },
+    {
+      "id": "lifting_eye_3",
+      "position": [
+        -1.11723,
+        2.84,
+        -1.11723
+      ]
+    }
+  ],
+  "optimized_delivery": {
+    "geometry": [
+      {
+        "file": "vale-turbine-runtime.glb",
+        "bytes": 2364960,
+        "sha256": "59cdaa6902af2d6aa03955b10f6b677a2cf9cea8038e175bb3999d4bbc7558d3",
+        "triangles": 152724,
+        "materials": 9,
+        "decoded_bounds": {
+          "min": [
+            -2.7899999618530273,
+            0.0,
+            -2.7899999618530273
+          ],
+          "max": [
+            3.075000286102295,
+            3.5700111389160156,
+            2.9007656574249268
+          ]
+        },
+        "maximum_bounds_error_m": 1.1205673217773438e-05
+      },
+      {
+        "file": "vale-turbine-closed-runtime.glb",
+        "bytes": 2373348,
+        "sha256": "4e8b6ba5591178835660ee54695b1e001fd60183aaf0b3773b361f53c8d66d5b",
+        "triangles": 152724,
+        "materials": 9,
+        "decoded_bounds": {
+          "min": [
+            -2.7899999618530273,
+            0.0,
+            -2.7899999618530273
+          ],
+          "max": [
+            3.075000286102295,
+            3.5700111389160156,
+            2.7900357246398926
+          ]
+        },
+        "maximum_bounds_error_m": 3.5762786865234375e-05
+      },
+      {
+        "file": "vale-turbine-lod-runtime.glb",
+        "bytes": 1384080,
+        "sha256": "1386b702a69759013f1145fb044168f05c07276431b51acbfe4bbcbb978fbd8f",
+        "triangles": 65064,
+        "materials": 9,
+        "decoded_bounds": {
+          "min": [
+            -2.7899999618530273,
+            0.0,
+            -2.7899999618530273
+          ],
+          "max": [
+            3.075000286102295,
+            3.5700111389160156,
+            2.7900357246398926
+          ]
+        },
+        "maximum_bounds_error_m": 3.5762786865234375e-05
+      }
+    ],
+    "shared_textures": [
+      {
+        "file": "vale_normal.png",
+        "bytes": 1358674,
+        "sha256": "98c43a54edf62c970971eaa11f12d17654a62c3494975681b49353cbcf94b34a"
+      },
+      {
+        "file": "vale_orm.png",
+        "bytes": 2826690,
+        "sha256": "083b920b67f7a25e05ac1841b061da004436ae4f54e0e7921b89eeececd2b702"
+      },
+      {
+        "file": "vale_basecolor.png",
+        "bytes": 2083090,
+        "sha256": "a1b9fb6189d7ca99023fabfc32df0ec67c65a3b9855fa505a7b1c790f2fe9274"
+      }
+    ],
+    "compression": "KHR_draco_mesh_compression; position 16 bits, normal 12 bits, UV unquantized",
+    "original_embedded_total_bytes": 37188076,
+    "delivery_total_bytes": 12390842,
+    "bytes_saved": 24797234,
+    "percent_saved": 66.68,
+    "verification": "CPU import/decode of each compressed model: triangle count and material names unchanged; bounds drift below 0.5 mm; original shared image bytes and material definitions retained."
+  },
+  "currentRuntime": {
+    "geometryFiles": [
+      {
+        "file": "vale-turbine-closed-runtime.glb",
+        "bytes": 2373348,
+        "sha256": "4e8b6ba5591178835660ee54695b1e001fd60183aaf0b3773b361f53c8d66d5b"
+      },
+      {
+        "file": "vale-turbine-lod-runtime.glb",
+        "bytes": 1384080,
+        "sha256": "1386b702a69759013f1145fb044168f05c07276431b51acbfe4bbcbb978fbd8f"
+      },
+      {
+        "file": "vale-turbine-runtime.glb",
+        "bytes": 2364960,
+        "sha256": "59cdaa6902af2d6aa03955b10f6b677a2cf9cea8038e175bb3999d4bbc7558d3"
+      }
+    ],
+    "textures": [
+      {
+        "file": "vale_basecolor.png",
+        "bytes": 3010171,
+        "sha256": "80d7d0db3e346e6476139e80a39123d3c0dca2659cbcaf7e62f60433cb532589"
+      },
+      {
+        "file": "vale_normal.png",
+        "bytes": 1358674,
+        "sha256": "98c43a54edf62c970971eaa11f12d17654a62c3494975681b49353cbcf94b34a"
+      },
+      {
+        "file": "vale_orm.png",
+        "bytes": 3365392,
+        "sha256": "2ed2f016842308390a463dff27315058012daf577876ed354a454bbaa3187f6a"
+      }
+    ],
+    "revision": "2026-10-01 photographic RGB/roughness revision and 75mm cavity AO. Geometry and tangent normal map unchanged. Historical embedded-GLB records retained below."
+  }
+}

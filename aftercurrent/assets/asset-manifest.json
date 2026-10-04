@@ -1,0 +1,3090 @@
+{
+  "created": "2026-10-01T00:34:19.605202-04:00",
+  "scope": "Bounded asset subset adapted for AFTERCURRENT. Original copies and source records are preserved in the editable project.",
+  "files": [
+    {
+      "path": "public/assets/materials/concrete035/concrete035.albedo.dds",
+      "bytes": 349672,
+      "sha256": "339d5ac4bc77c5448b3e93cb8a856c45d73a22aafb2fdf319e24c70d72a27e59",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/concrete035/concrete035.normal.ktx2",
+      "bytes": 175264,
+      "sha256": "33055f4f7cb58e1f4600728f5397daa7c610f87e39b2e51137bcc221a0033dcb",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/concrete035/concrete035.orm.dds",
+      "bytes": 21992,
+      "sha256": "7fc4f1a0df74c04f3d83aeeacf0f4c73bb1355cc5723c890028a8b9370a1ae6f",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/concrete035/materials.json",
+      "bytes": 707,
+      "sha256": "78db9949d55b4d70a59d5bbeb684ccc34908328711f4e11adb303af4a16004e7",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/concrete047a/concrete047a.albedo.dds",
+      "bytes": 699192,
+      "sha256": "a10f6ec8cab04dfec6eb5cd8cbbb99a68aa4999f04db28ea1c4785644eefbb87",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/concrete047a/concrete047a.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "406ff1811749835a550a576c3a57c9e287982fdfebe235a25819a7280b881e51",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/concrete047a/concrete047a.orm.dds",
+      "bytes": 43832,
+      "sha256": "a4cda9ad8fd830948023332d6cad09ec4e90eb226c04a690471e4f6f2d75f362",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/concrete047a/materials.json",
+      "bytes": 731,
+      "sha256": "e9a270cbecdc2ee5b3834233ccb4c91696d01f4892ec38dad234aa45e1ca43f8",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/metal046b/materials.json",
+      "bytes": 725,
+      "sha256": "9da1e9278dffb6f31ac55ecc8c6985cdee0b0ed2bc5ab2a768f875ef1529f9a2",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/metal046b/metal046b.albedo.dds",
+      "bytes": 699192,
+      "sha256": "863b1ded746471da0a6f083070f64cc7876c3e189f2d7483d5c6a1e235d37de0",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/metal046b/metal046b.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "c11103049257532c26583070b214b2f6d8ceda0474cc0996e4ca0b04e0a09f0f",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/metal046b/metal046b.orm.dds",
+      "bytes": 43832,
+      "sha256": "507cfce4aab2543521f10ffa858c2d07d1b52e5b77b6eaa2a587bbbeb644fbd0",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/rust003/materials.json",
+      "bytes": 718,
+      "sha256": "b75d63453ff403263da18735d6fade590d1250f74627e1c37c696fa0330afac0",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/rust003/rust003.albedo.dds",
+      "bytes": 699192,
+      "sha256": "1fefadf987f3481572abdd9d9f331d850b00dbf92b10dc4ea6c4680f2c2d936a",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/rust003/rust003.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "a49679104054da0a9abe7bd2c292901cac47dbe7603d4690a4b6b16d46405443",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/rust003/rust003.orm.dds",
+      "bytes": 43832,
+      "sha256": "d8e5b1c45e1e62e7f911bd67ef4f3c3ceff6fcff5f74744f08003f881b8eea57",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/rock001/materials.json",
+      "bytes": 691,
+      "sha256": "b47fa8551085d3709f34ab64cb36f6222bab6972e269d02c8e1e2d98f954e9d2",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/rock001/rock001.albedo.dds",
+      "bytes": 699192,
+      "sha256": "f08ddda98b2ab2d132e3cc5538af7c9b012e70ff1ff3a251c41071cc43a2274d",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/rock001/rock001.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "2da7cd591ad0ee6e469be20e8724a592ce7f65ff65aa53d20642f0378bd0d5c7",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/rock001/rock001.orm.dds",
+      "bytes": 174904,
+      "sha256": "4f345360051163dd093690daa6cc08f26b08849323d77a658e1d37ecba8822df",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/moss002/materials.json",
+      "bytes": 711,
+      "sha256": "73846ed46caebe47a5e5e495f030be9885099116a163a9f33715c5ca84479a30",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/moss002/moss002.albedo.dds",
+      "bytes": 699192,
+      "sha256": "1f592b06e20d8a6180b51c11acd6b10db5a5b29a9e353c9a3248852362df9906",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/moss002/moss002.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "3c750aeea8ab84ec5ca2c9a7b76efa34179708883bca7902ce9ac63e75bd6349",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/moss002/moss002.orm.dds",
+      "bytes": 43832,
+      "sha256": "ed9f80e1835f5b083ed2ecdbfc8f7d740111857fb7ae1b48014b63d1ee5e4216",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/pine_bark/materials.json",
+      "bytes": 746,
+      "sha256": "66ffcde50dda9767b26288a80350f502b9a62462af234bf11df7ff57955550b4",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/pine_bark/pine_bark.albedo.dds",
+      "bytes": 699192,
+      "sha256": "ab5caacc074209416ba434456ce1461ceb99ddc5e19dbaac6f7a098201500db8",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/pine_bark/pine_bark.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "5e5d4373f263b604d672920149331fa47a623f9a3301ba56b6fab9cdd42efd5a",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/pine_bark/pine_bark.orm.dds",
+      "bytes": 174904,
+      "sha256": "8a6447aaccd2ab0473543c02ca1b029c6c1aebc5e0ca39b9122dba5a691bfe41",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/pine_twig/materials.json",
+      "bytes": 876,
+      "sha256": "cc84eb69c5ac14327e4416dca4b5afa96fe1cf1b44efda28a132b0e1a40dd15d",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/pine_twig/pine_twig.albedo.dds",
+      "bytes": 1398256,
+      "sha256": "0ac1ca930f5065e0978ae31f67c9ff31b551fb90c4f94e32a38f82b5f199b838",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/pine_twig/pine_twig.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "9a5d42b097d4577f6d1dcbd6430055e11fba25d119305d6fdf8d582ad91ed32f",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/pine_twig/pine_twig.orm.dds",
+      "bytes": 43832,
+      "sha256": "4bf699229010a1c5a01ba04a57369726ea92435c5b1a12bbad9cc4b4f6eff1ad",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/forest/rock_face_01/materials.json",
+      "bytes": 932,
+      "sha256": "8560ddc878dd4196e0b19bab6bacbc56443f5f30dabc2cfb8080a6d87438114f",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_01/rock_face_01.albedo.dds",
+      "bytes": 2796344,
+      "sha256": "2d20d123eca3a1382b000c5d5851bdc866fcd6b3ff9504e0802651a538628bed",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_01/rock_face_01.colliders.json",
+      "bytes": 193,
+      "sha256": "c0d76634349c27e435034f82a5c7d8e7036a67795897691e36d0b580659e6dd7",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_01/rock_face_01.glb",
+      "bytes": 79812,
+      "sha256": "401c6afae13890691dd976f0e0f1e76c843da8f9c723f245c963e6e19911ed19",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_01/rock_face_01.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "3c15674eb5f66351c25cb18633c48cc684b4b0c0b25720abe65aca82fb1b7725",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_01/rock_face_01.orm.dds",
+      "bytes": 699192,
+      "sha256": "8b64a4fc2338bb6fe6f5eb7537e4223cd9560f2956c55aad6cd91a4be6b72e3d",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_01/rock_face_01.source.json",
+      "bytes": 929,
+      "sha256": "16c68b54951c6488b6f988cb24e2d453e33b80f863f508ddfb429d11c511238b",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_02/materials.json",
+      "bytes": 933,
+      "sha256": "145f726e61e1b7b1cdf92fd16fe320cd52bb510078caec7a2edf1f38baad6fa0",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_02/rock_face_02.albedo.dds",
+      "bytes": 2796344,
+      "sha256": "8fd6ae3f6ee34b3c3a6b9b45b44aad06f14985fbd3fe335253d127c379c2e739",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_02/rock_face_02.colliders.json",
+      "bytes": 193,
+      "sha256": "d2435dab909c180811359c43a09e57eea6daf39eb178b899b52e7235a30b3c3f",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_02/rock_face_02.glb",
+      "bytes": 92528,
+      "sha256": "73c2f10f8bee3d236dea14a9c0d0b23f75b3099e8ae546ab1f013223bb9fa6b1",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_02/rock_face_02.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "00808de82bce4d7090a50af183f625ced75cb0a88c14bb870c07d4ef0a49d593",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_02/rock_face_02.orm.dds",
+      "bytes": 699192,
+      "sha256": "eec5d67b463d983ba754eea4390874d22449871cbb7e215c4c631e3021caf3a5",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/forest/rock_face_02/rock_face_02.source.json",
+      "bytes": 944,
+      "sha256": "2ea8b08b640240115ee437197ede15b39f721dd23cae18fd1493b3e64088053d",
+      "group": "forest"
+    },
+    {
+      "path": "public/assets/props/Barrel_01/Barrel_01.albedo.dds",
+      "bytes": 174904,
+      "sha256": "370978d760ef08846f6526fbaf85850788876f200ea4994782537e6615ba52c2",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/Barrel_01/Barrel_01.colliders.json",
+      "bytes": 481,
+      "sha256": "f67cd6bb20863e2924ce3c27e2a3b8dc7db337451e77d85953a724c36d22816f",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/Barrel_01/Barrel_01.glb",
+      "bytes": 14228,
+      "sha256": "d71ac384abc19ea12735339bd3de7301c91fe2ee3995efc51a2aa6c46f98d86e",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/Barrel_01/Barrel_01.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "f0078d013f18ec6f84a1148165ef2730c39be793939fee1580d367eed1e7c163",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/Barrel_01/Barrel_01.orm.dds",
+      "bytes": 43832,
+      "sha256": "139b85af0a8e0fec8b4159a77d6d525aeb5099c1491cb4f74615278832026545",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/Barrel_01/Barrel_01.source.json",
+      "bytes": 656,
+      "sha256": "4123cdc76232f0335fcebe4ddde3eb5675d6c2a35aae75b25b6ff2dfa4d0b0a4",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/Barrel_01/materials.json",
+      "bytes": 915,
+      "sha256": "65c8530811354dd05c2954d191e0b2062d46ed8f699ae228409efb26677df8b4",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/wooden_crate_02/materials.json",
+      "bytes": 938,
+      "sha256": "710f441ac53271c90696da4e512f1051503a4d464985483d006f7bf84174044f",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/wooden_crate_02/wooden_crate_02.albedo.dds",
+      "bytes": 174904,
+      "sha256": "9a48298810485832a59c67adaa3180661c5e496087d076882efc8235a6bf79dc",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/wooden_crate_02/wooden_crate_02.colliders.json",
+      "bytes": 1440,
+      "sha256": "7c956f3b7881f0eca0cc10ed5bedbef410a37c0fc951ffead74528ac3c1676de",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/wooden_crate_02/wooden_crate_02.glb",
+      "bytes": 27256,
+      "sha256": "8353f216d650f1b649cce75cd0217d2a76102a806cec5562bf22e8b05cf721f2",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/wooden_crate_02/wooden_crate_02.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "da713ec64ea44e0fcc8135566db98508302e0b51486040da5ae3d075f0ef5c44",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/wooden_crate_02/wooden_crate_02.orm.dds",
+      "bytes": 43832,
+      "sha256": "86adb1a65ac172341e212086034e196aae308f42fc2b5339c0dca2d8f7bbbe62",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/wooden_crate_02/wooden_crate_02.source.json",
+      "bytes": 859,
+      "sha256": "79ed69c3db9e41d317a488ac4ba8e9ba6cc855e6ea7a144de616da592a88a504",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/water_manhole_cover/materials.json",
+      "bytes": 953,
+      "sha256": "11a331b13f7251b27699bf8ea55c252c7d90f80a6028b435f8e67281f3d97a2e",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/water_manhole_cover/water_manhole_cover.albedo.dds",
+      "bytes": 174904,
+      "sha256": "43535312e5264edc43405bae14334531bb28a6615e25332ced274bd9ba263dec",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/water_manhole_cover/water_manhole_cover.colliders.json",
+      "bytes": 511,
+      "sha256": "d612377d5b5f609a39809cfc134de64827f37f8afb91db3c837475bf677e4846",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/water_manhole_cover/water_manhole_cover.glb",
+      "bytes": 20256,
+      "sha256": "652beccbe386b05954ed1d5564179d1ed1d864e616b97f2e3a0b9ddb058a0030",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/water_manhole_cover/water_manhole_cover.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "a5ea3caf3e2d05dcab0cdcdf1a103d816480aa826d3bee235e2cd406fa6e6eaa",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/water_manhole_cover/water_manhole_cover.orm.dds",
+      "bytes": 43832,
+      "sha256": "d4fe0a23755373d0a634f95d5095343be2c081bcbc699f50ac59de0082f0ea5f",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/water_manhole_cover/water_manhole_cover.source.json",
+      "bytes": 693,
+      "sha256": "46cb20d1016f899885a5e0b0f4c0523debb9542d3449d6e64e35931ec3b7d978",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/ladder_sectioned_01/ladder_sectioned_01.albedo.dds",
+      "bytes": 174904,
+      "sha256": "5a475c0d9413aaa0efe9837c50de2a837febfe8a871e6fb3f363f0bf48411a1b",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/ladder_sectioned_01/ladder_sectioned_01.colliders.json",
+      "bytes": 530,
+      "sha256": "4cc11ed62bb2e1371f9dbd5425d32d7979f465e87c74f35154c401a428544e0a",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/ladder_sectioned_01/ladder_sectioned_01.glb",
+      "bytes": 67628,
+      "sha256": "c7dcf3738da25ebc195cd2fac1277cedd38d8bb87c9ca3d6ab0ed85ce99e5667",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/ladder_sectioned_01/ladder_sectioned_01.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "0047d7dee4b9b6536beaaafd69f166729b1459030741a9f855d15a7bd1070002",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/ladder_sectioned_01/ladder_sectioned_01.orm.dds",
+      "bytes": 43832,
+      "sha256": "628f99c5831f79f986a56efd3cf6afce07d055cc923c9879beb6cff2a5e9735b",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/ladder_sectioned_01/ladder_sectioned_01.source.json",
+      "bytes": 692,
+      "sha256": "d4436b6ca5236091ef10d772996e399464a5bda279235db4529baf61a1e19a07",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/ladder_sectioned_01/materials.json",
+      "bytes": 954,
+      "sha256": "d78f30112a6745b319b6222db61fb192d589e2d3eca603f731703076ba9f8e87",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/_draco/draco_decoder.wasm",
+      "bytes": 192420,
+      "sha256": "a680d927bed9cb864ddbd63521868891af2bfbe755092761b4837487618df8ac",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/props/_draco/draco_wasm_wrapper.js",
+      "bytes": 58456,
+      "sha256": "8bb2952d2ba7d67e1414f8df819410cb0434a666be53f671fff75f68843d76f6",
+      "group": "props"
+    },
+    {
+      "path": "public/assets/audio/camp/ballgame.ogg",
+      "bytes": 215905,
+      "sha256": "bc193ab7c2cc8ac8fe956bbe26d836ed59b6cad68892079e7f6de7e0637600d0",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/camp/provenance.json",
+      "bytes": 855,
+      "sha256": "60befa6b33777d7d6f6fc79e6c687286ee7000dd599f630f0e60200d3bafc6dd",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/active-hit.ogg",
+      "bytes": 5086,
+      "sha256": "f1c3250ecfa01261f83ffc63b4c6dcec9d9ec43447adcc8e22303829e0543244",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/ASSET-LICENSES.md",
+      "bytes": 2005,
+      "sha256": "e488786b47e6af861b0947b7cabdd39ff1829d5c593c56b8c792dc86599b0564",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/bolt-back.ogg",
+      "bytes": 5985,
+      "sha256": "cf53e6786f380667588c5d10f9de03d7266265ef6264928e639f3a73629a0074",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/bolt-down.ogg",
+      "bytes": 5053,
+      "sha256": "7fbe670e1e3322a70b5c77587959f8840b6603206548906016dec7d67762907e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/bolt-fwd.ogg",
+      "bytes": 5928,
+      "sha256": "fe7c1d79e3c1d9abc2efcdfe45b806a752958a3cae590964d6d3606b694b2dca",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/bolt-up.ogg",
+      "bytes": 4939,
+      "sha256": "88cc36972d25e4b6acb189776d5680a3631f15d20065a2817fae9cb68e9daa80",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/brass-0.ogg",
+      "bytes": 6484,
+      "sha256": "36633b162c319eab41e7079cede2caca4c93cf3bbc44a2c0951a3be29300f065",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/brass-1.ogg",
+      "bytes": 6243,
+      "sha256": "f442affd37c4b6d6391466b44ee21c795c2830d0e75b2c2c2a7db030c7644429",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/brass-2.ogg",
+      "bytes": 6436,
+      "sha256": "b32be1bed5d3c5636263becb517f836072ec3b7ac0bf97a3af8ed3633f62b5f7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/brass-3.ogg",
+      "bytes": 6232,
+      "sha256": "dca816837ca809c6cab0dd2fdacff085d5ddebf9a37410ef7afb9a1d091f329b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/break-wood-0.ogg",
+      "bytes": 5550,
+      "sha256": "5e54bf82d958f7e2677742471533e73bec041b5fe4a2487928a43c7da53c0b2d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/break-wood-1.ogg",
+      "bytes": 5529,
+      "sha256": "9c11b02f5dd19b3db696f6c3b5d304e928b208bae94a7eabbbda61af43c6f77b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/break-wood-2.ogg",
+      "bytes": 5437,
+      "sha256": "90422bf3d4a5eb94c69da0dd743ad92004a8ceffe583ed5229c9115e25ec7b3b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/carbine-report-0.ogg",
+      "bytes": 6249,
+      "sha256": "50ebe3d6a66256848cf2c3094faa68f2d083c18e9398d5e2553b291d9678b34e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/carbine-report-1.ogg",
+      "bytes": 6212,
+      "sha256": "edc32e5dc2c0404c4afc11209f9b6feb1c48bc744973ed42d60a3c9c11e89082",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/carbine-report-2.ogg",
+      "bytes": 6052,
+      "sha256": "0e4f79a1507f699a4ed6717b54aa53032b5b638beca7905b1b55361d208c951f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/carbine-tail-in-0.ogg",
+      "bytes": 8989,
+      "sha256": "b747185ee00ba4bbe853633e6dab91f991eed2641eab6bca8187ff6f6fd4d1fb",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/carbine-tail-in-1.ogg",
+      "bytes": 9451,
+      "sha256": "59675f330ff2110a5c50664a4cd7abce4878d5c8768633e8748c5ff96a38ca3a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/carbine-tail-out-0.ogg",
+      "bytes": 18944,
+      "sha256": "f8cd64582a25860987b69476fcc5bbe3332fb12ac032e465e3f9911d89854980",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/carbine-tail-out-1.ogg",
+      "bytes": 18114,
+      "sha256": "018edac61f81d48a64818ba67f07785328723f53e667d7216f1065bcd4ad0235",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/cloth-0.ogg",
+      "bytes": 11287,
+      "sha256": "5da55ca7519a20066340beece50c5cc4ede0b42a6beca5c0ab9ecbe58a63927f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/cloth-1.ogg",
+      "bytes": 8480,
+      "sha256": "325e84d9bb083f3803e4224e267cef11af77dc4880da7a9f5de97d78072ac9bc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/cracker-pop-0.ogg",
+      "bytes": 5834,
+      "sha256": "1d51e782b4c860d93033256f65e58d81a9990267f1a5a607be15ca2a9e3a240b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/cracker-pop-1.ogg",
+      "bytes": 5765,
+      "sha256": "2601c85fabd768f0a296165c41e36726d161ba0ddf343d2984b5c3365a2f1138",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/cracker-pop-2.ogg",
+      "bytes": 5669,
+      "sha256": "3df5ad286922ed01784a3762f305d17d073677d7f6c36d8e7b113747dccb4458",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/cracker-pop-3.ogg",
+      "bytes": 5914,
+      "sha256": "ca8f24aa91f41f3e3e93b31faa6299552c6e01c90a2f6266b1624c5e47421e61",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/cracker-pop-4.ogg",
+      "bytes": 6011,
+      "sha256": "ee3ce30f5c453148554476eab33ad6ff61143475a0f8f518a90185fe7fe82854",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/cracker-pop-5.ogg",
+      "bytes": 6084,
+      "sha256": "b0cb850435ff2782087e1d1b42bcd16c9db0bbf11f5e435ea5d9b3cde12bd083",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/dry-click.ogg",
+      "bytes": 4724,
+      "sha256": "39c4601d73a63284f86613671dcb536ca06c00712e979722730ceeddc4219a4b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/fuse.ogg",
+      "bytes": 17747,
+      "sha256": "dd6eda6e6d5819dadb79ddd98d2ce03829dd89f6afb2e9d9b3a57e078cde7b5a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/guns.json",
+      "bytes": 3113,
+      "sha256": "aace7982f2075c5e8237169e1de763a4e7a34ff89401eacb223e2780d417738f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/head-tick.ogg",
+      "bytes": 4502,
+      "sha256": "48f0d18dce6e653ee7047195ef2323f885d2c91c6ca58f6bfe0820a8a0248efa",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/hit-tick-0.ogg",
+      "bytes": 4448,
+      "sha256": "b0cffca0ace0c6642fd838da3f2b49b1ce655811c082e2ab86ecda7c8d9b2899",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/hit-tick-1.ogg",
+      "bytes": 4481,
+      "sha256": "b89fdc4e451dc22efc2708307e8e20d35d9495ca49f803fa8fa935484edd377d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/hit-tick-2.ogg",
+      "bytes": 4465,
+      "sha256": "cc4865de434e1d1ca640ecbece196344ac460c2382676119cd611a81a4a1e315",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/hull-0.ogg",
+      "bytes": 4874,
+      "sha256": "6f0f5d788c1bf4e5335e056fcfaa7798fb3e42a08276e7ce8ba72d9860961063",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/hull-1.ogg",
+      "bytes": 4933,
+      "sha256": "6f6a9304276f4c3e87643911874a63b20acea9c68274806df4162e7b6567f3fc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/hull-2.ogg",
+      "bytes": 4941,
+      "sha256": "8bf2c91efb59b197b59c07ecf0fd14f8b77a845e591df13ee56f0c4f865de714",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-dirt-0.ogg",
+      "bytes": 5284,
+      "sha256": "8b75082a1367f7bfd0f2e2ef5d910010f08a6572c8b960d58480bef316511f58",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-dirt-1.ogg",
+      "bytes": 5028,
+      "sha256": "aa01856393e06d69a35321e80b46399142881f642e5dadd7bd79fdeb8292aa93",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-dirt-2.ogg",
+      "bytes": 5242,
+      "sha256": "58a8c011d3272181e3a745207bdcdf9b1f26f148e59289e7065a5273ad3b16e0",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-glass-0.ogg",
+      "bytes": 7435,
+      "sha256": "f110c2996ca251e643226dc40df51e5d44a073170d9c3518d497fcc094b6d0b5",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-glass-1.ogg",
+      "bytes": 7633,
+      "sha256": "3f3cd0532581a89a35292119614a13b309a11baf96c11420550f8123c03c3a8e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-glass-2.ogg",
+      "bytes": 7398,
+      "sha256": "b5022131310c619c3d0e48f2e1c8d3bbee9e42a32b46b008ff65758bb6659917",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-metal-0.ogg",
+      "bytes": 6835,
+      "sha256": "411a48dc8e0d7bae660805d29e8a71414d3a551707ac75547b2d73e9bfdbc24c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-metal-1.ogg",
+      "bytes": 6200,
+      "sha256": "e7fa92903417867712ba405a787442169a801b67e503f15f3eeb4660eb4c97e7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-metal-2.ogg",
+      "bytes": 6109,
+      "sha256": "8a3fb103f1267c2bb51a1166f44ff118a97f2ba7fa20cca36b504458a620ff29",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-plank-0.ogg",
+      "bytes": 10811,
+      "sha256": "1ab2f4a171644bd3f61e69ce934f9fe75fa155088d1c34c5faeb11fba3f0b85e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-plank-1.ogg",
+      "bytes": 10762,
+      "sha256": "e416063a9cee43fbf32bc1b5be319f99a228f067ae673c966e354430c735d01f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-plank-2.ogg",
+      "bytes": 10929,
+      "sha256": "ec26209d4791d344c9a3c8363da0eb7160b1d62ca5d59b2b6a145e4c4988ce9f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-punch-0.ogg",
+      "bytes": 10331,
+      "sha256": "f8f506faad21c4b3f99db3efa4db570f541979a81e4e93a461b0fb22a70552e2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-punch-1.ogg",
+      "bytes": 9309,
+      "sha256": "220abd8585c8b4e053f92f51d45a5182b2bb35ff4d727079429546f74089c061",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-punch-2.ogg",
+      "bytes": 7973,
+      "sha256": "eae38d0adfaf914d988e0810cc3261177963ca2c9709cf9c79f4aa331160b3a8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-soft-0.ogg",
+      "bytes": 5866,
+      "sha256": "5b8016b176a89b760eaf597a07479b780b5d270f76eef70535c962788e6f7cf6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-soft-1.ogg",
+      "bytes": 5953,
+      "sha256": "4533b87b617155acf50046513a65b1f00149085099be0b171c62a3ea7bb6f9df",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-soft-2.ogg",
+      "bytes": 6002,
+      "sha256": "dd07a0cf40e626be25f1dcd86edd4d4de1c34775bfa198bcf095577ed2a33acb",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-wood-0.ogg",
+      "bytes": 5883,
+      "sha256": "afd45930f394f06c038ed50da2676f3c05ed99328aa4b6c0a8a3a61630a39d3f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-wood-1.ogg",
+      "bytes": 5862,
+      "sha256": "19edbcb242d867c354104df40fb0535345092b7995fb13c1e4a90da1039f0efe",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/impact-wood-2.ogg",
+      "bytes": 5849,
+      "sha256": "8ead48ca9782ad6e4b0abc71eda2eebad591c469a5e43f6792c0ed6b128eea25",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/kill-thunk.ogg",
+      "bytes": 4774,
+      "sha256": "680212fc857abf85dd6fb50c9b3ee102c5350b955972118ab69494a1186f8d34",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/kill-tone.ogg",
+      "bytes": 4897,
+      "sha256": "679a5f417e6d69c9aef6d22e1481c91d41cee2a126ea0b7b4bc25c4e97a35b7f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/latch-0.ogg",
+      "bytes": 9740,
+      "sha256": "c55c4ee07082e6526a47556017274db9d4119ae1edec7dbd7fc26858cfeec4bc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/latch-1.ogg",
+      "bytes": 7359,
+      "sha256": "165e2c62fe1f59193556e03b89166f2bae64e331938c104d5f924c2a8d9f30d3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/mag-in.ogg",
+      "bytes": 4947,
+      "sha256": "9c7b8e9092a45652cfe1441560cb9af6f28370bf8ab43f24c568629e56f7774d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/mag-out.ogg",
+      "bytes": 4950,
+      "sha256": "707f40a7501cd40a27e28c76740f6957594ba8d48b47f2e2f699d8ce90f14b80",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pistol-report-0.ogg",
+      "bytes": 7334,
+      "sha256": "44d5b893d19bf6a654b9d88b963a5cc424a4a942d6f839fee40caa102fa060ce",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pistol-report-1.ogg",
+      "bytes": 6987,
+      "sha256": "3acd2363bf5fa2e0aa73b57a797f6d50fa5c56a8440e2d5d225be2e928cb4ebe",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pistol-report-2.ogg",
+      "bytes": 6911,
+      "sha256": "c2b88eff5dfcac8c24cf1d0515013ace23c0b4a1b83a324cbc1ea3cc6311a728",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pistol-tail-in-0.ogg",
+      "bytes": 9047,
+      "sha256": "3e7f80f5def915924683dfd2f838629752c60e9dea43265cae9777433b6b9232",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pistol-tail-in-1.ogg",
+      "bytes": 9422,
+      "sha256": "14959d32591a8f7fb03d5729e6ee9ce16fa5071fde1ce36628bff047bb563bab",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pistol-tail-out-0.ogg",
+      "bytes": 20991,
+      "sha256": "4b75cb88f1fdd1e955f07f57d23255c188d8b346fb23759891702417d983f913",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pistol-tail-out-1.ogg",
+      "bytes": 20877,
+      "sha256": "160642c84167e05632b8f1cbd27361c6fea38ed795858f355bae3723673daf67",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pump-back.ogg",
+      "bytes": 6024,
+      "sha256": "7af239b041d364a55f93aecdfd95fe829e553a1ad0c7a5ff2e1ded32fa2ff5de",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pump-home.ogg",
+      "bytes": 5380,
+      "sha256": "84d9d23964d151a5bd4ba316588524afa4b8ed2c598bd21aa35cc1c2ab900531",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pumpkin-0.ogg",
+      "bytes": 10051,
+      "sha256": "fb30f7841eeea86b84271779544deb3bdeb1555b2259b77c67b22711df74ee9e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/pumpkin-1.ogg",
+      "bytes": 10348,
+      "sha256": "96363d0635748f405d1570acacb0ace56993a91dce8643ae305189806a0b569f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-report-0.ogg",
+      "bytes": 8720,
+      "sha256": "fb2d37f45505ae64b39981a3a6487b822162152e599d7b94ae89bdd7916ada8a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-report-1.ogg",
+      "bytes": 8664,
+      "sha256": "91907fd4bf019c48be74eb718510877b969a2f7f3b293909f272d8714a1d9892",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-report-2.ogg",
+      "bytes": 8780,
+      "sha256": "fb283aa5c66eac7fe8ad4c646d181f2b68e84de1b621d7dec3c02269d2bba7ea",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-report-3.ogg",
+      "bytes": 8827,
+      "sha256": "8a6eb35d91cd32d11cef58baaaf567a5e08c0a0a821fbe273f6b2d2d641aa231",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-tail-in-0.ogg",
+      "bytes": 8892,
+      "sha256": "47415a87114e16e9921abba764fcf3926cbf3187da355a0e79f9cbc3c6ae5317",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-tail-in-1.ogg",
+      "bytes": 9565,
+      "sha256": "daaef27d0706e34912d046a1f68c1c7883bd67a34d032e0d0ed27ba19c4d03bb",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-tail-out-0.ogg",
+      "bytes": 22902,
+      "sha256": "bc6fd859ed40c4a873f3086129e3afb02cc931f13fc6a265f93abac396fe2936",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-tail-out-1.ogg",
+      "bytes": 23189,
+      "sha256": "52ba5c96047b3c6faa233b14bce42fe3cdda18f7f9df26111f54c6c407a07fd2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/rifle-tail-out-2.ogg",
+      "bytes": 22744,
+      "sha256": "d8396387f934dbedd3d205bbcfc9398d5eb7911728e74003a744645a9209ee35",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shell-in-0.ogg",
+      "bytes": 4739,
+      "sha256": "4bc52f21ed805b8df7fa0154ac0acb3ccae5448974007a4f39c86b386a5e9325",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shell-in-1.ogg",
+      "bytes": 4776,
+      "sha256": "944ab4328de06795014ef949075d5f65ced193fb2bb3d2d95aca68893d1d6f78",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shell-in-2.ogg",
+      "bytes": 4794,
+      "sha256": "024d2d87d02638e163a83bff94ad776d6bb56007cb460995f455bd153d650ba9",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-report-0.ogg",
+      "bytes": 9017,
+      "sha256": "00f8e3e019e23377ce8fd69a90b2125b37e87fbcf538aac244025159a9588f00",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-report-1.ogg",
+      "bytes": 8965,
+      "sha256": "7deb6460b4a397878b9638bcde79a2191022097d530265e034af8fd57483c50a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-report-2.ogg",
+      "bytes": 9185,
+      "sha256": "19a77fa7bdf88714c50885e0290ed121e984959f62cd1cff8856d2166d6ebed7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-report-3.ogg",
+      "bytes": 8992,
+      "sha256": "bd51b0f1d9fe579c1fcece498870e8e12fd8c1f34781861dae2b458254513191",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-tail-in-0.ogg",
+      "bytes": 8973,
+      "sha256": "765ab321788c67b9f240881cdfb103e94e67dd26573fc7193f96826612f0dce7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-tail-in-1.ogg",
+      "bytes": 9284,
+      "sha256": "9b0892f9c2cc4aa082f800ef164d3912dd3a01a340b680d6449379919a52db35",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-tail-out-0.ogg",
+      "bytes": 22391,
+      "sha256": "95bb4ebb8198cceb40d84f19199e8a6262350719bcbbeeb6d7ae6ea3c2543666",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-tail-out-1.ogg",
+      "bytes": 22342,
+      "sha256": "7107d91bdafbf759a2300760ba157c96874213d65be8db8430e8b57496ed4b01",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/shotgun-tail-out-2.ogg",
+      "bytes": 21862,
+      "sha256": "860d1fbb6478afca06a7ac49342bbd4d6bf28cc9f135c8d1acc87ab6c99e0663",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/slide-fwd.ogg",
+      "bytes": 5446,
+      "sha256": "a2c7fc2cd1a121b4fbfebf0492cbfe90b6267383611e4b1295adf5caec388214",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/swing.ogg",
+      "bytes": 7328,
+      "sha256": "be5a237599c1d6434fc24f82b73205482cf5e4fb8807ec62be1328018af68fc7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/switch.ogg",
+      "bytes": 7313,
+      "sha256": "7bfcce5af55173899680d9798a324d89ba47a1159d38b8427eaa160f066c4119",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/guns/throw.ogg",
+      "bytes": 7070,
+      "sha256": "3629d24ec86b2d6b5226854ed07837ef565837a4945d4d4a1774ea98607ec765",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/bell.chapel.0.ogg",
+      "bytes": 46224,
+      "sha256": "1e7ad0dec407c0f982dd8b9106c3189dab183acb370d729e09ed7af2cd007ae9",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.hit.0.ogg",
+      "bytes": 7211,
+      "sha256": "b1d3fc34b665f26a05445fe2962521dee1018675237b7cc5458885113e18154e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.hit.1.ogg",
+      "bytes": 7235,
+      "sha256": "100cbd904b06e5d7de0d8cfc2e96ff5b08fdec5e3a42314bd03fc581b15a01a0",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.hit.2.ogg",
+      "bytes": 6298,
+      "sha256": "fcdbdb2f7f542dbadb6557e12b17cf8ea52e7c62bab7a4300e190853d6407a38",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.hit.3.ogg",
+      "bytes": 7288,
+      "sha256": "02f2c9e9a004156298cbc40ce069b6f05b16827a8dabe83650c12ee535f7638c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.hit.4.ogg",
+      "bytes": 7183,
+      "sha256": "877885642fe65011c5dbc7cb55e246abebc85cdeaee86f3d38c075cbbc322515",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.thud.0.ogg",
+      "bytes": 4777,
+      "sha256": "f6f1921b82e565320fa2f55bee2083cfdec6728aa2c07b2af1372c62cdec26ef",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.thud.1.ogg",
+      "bytes": 4736,
+      "sha256": "cd90b3ecda8d07b710cea0c6e9de0a745c306fa5f1a0e6d36fefb36583e740dd",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.thud.2.ogg",
+      "bytes": 4737,
+      "sha256": "92346c51df932aa43226fdaf1d628c1cf7d36e38928a0ffab909223f80e2eb6d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.thud.3.ogg",
+      "bytes": 4710,
+      "sha256": "ae4d9c0552cbdc56c9772e47a4163cbc36ccd81730c868289b2654bb99f69b62",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/body.thud.4.ogg",
+      "bytes": 4765,
+      "sha256": "94910730885aa263ea137da79846b34a89ad7a261c7a0617535df2808904a80c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/book.0.ogg",
+      "bytes": 5548,
+      "sha256": "46dbfb56b264cb8b8dd635b625c2b3bfe4599db67c9c90ed53b855e86e0930e7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/book.1.ogg",
+      "bytes": 5339,
+      "sha256": "cfca1d4448de661907678f7c986a8c5e3872734af27ac744ab2a45b8a10b8102",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/book.2.ogg",
+      "bytes": 5563,
+      "sha256": "b049cde30b869043e12f6a5c0419c050345c671e50de8d4a48d08a83cd10ec17",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/book.3.ogg",
+      "bytes": 5628,
+      "sha256": "2a7460f6f29d1f4a7ceaa7ca710224eb028a65b79d50bb02f72ab866cbb42b72",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/clock.tick.0.ogg",
+      "bytes": 26980,
+      "sha256": "b0e1254db0375ab7dfa8f0a68bf777c36053208b53840dc000759c770b1ffdca",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/cloth.0.ogg",
+      "bytes": 8501,
+      "sha256": "9fed94637a46e0dc3dae8197f1a3181978fc9ae8c34690cf09bc61fd612e66b7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/cloth.1.ogg",
+      "bytes": 6668,
+      "sha256": "3cc7786edd9a32cbbbc061afb9bc10f1619a28216318a29b3f235bd067861c8f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/cloth.2.ogg",
+      "bytes": 7453,
+      "sha256": "738082c5dcee4f26ca1a5e72b0b4cd4ade820dc35b19c6d8b352e23941188dcf",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/cloth.3.ogg",
+      "bytes": 7281,
+      "sha256": "6418d49ca9965609fd147d309fe8b3add96d04a6c69c9ea5289f588b32fa4b46",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/crows.0.ogg",
+      "bytes": 31936,
+      "sha256": "dadf1a21f80ced7108f1920ed68679b5f9e9136edcf6f20b7d2c8f2335b36caf",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/crows.1.ogg",
+      "bytes": 31624,
+      "sha256": "f36e6e3ff95e6e18d6e5230fc299c49e7d8eb4edf7c80fef232c3f5d4ebb6788",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/crows.2.ogg",
+      "bytes": 22939,
+      "sha256": "d6faa5de9ec99fcfef1d4b07e0af10dcdab528ef83eeb3b9abe81b091dcf3b21",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/crows.3.ogg",
+      "bytes": 25622,
+      "sha256": "299cc676edd67c7c88405f0c6f2396891452bfdb1be1058fc43dc0b496d4f286",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/crows.4.ogg",
+      "bytes": 6644,
+      "sha256": "67cf89c9ef85f61848637370f2e2037af18df4f8c6f2097dc12b5608dbd8dfa9",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/dog.0.ogg",
+      "bytes": 7420,
+      "sha256": "9680952957bf513396e9703159cfaee8b40b256acc12fb1684aa24ec0e097730",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/dog.1.ogg",
+      "bytes": 12013,
+      "sha256": "dba0b35dd4b6e16870f6a89cb37f8fc2e8f868c4ba40ac6ec544ba571f0bb1e3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/dog.2.ogg",
+      "bytes": 5880,
+      "sha256": "bac46307df487c8f082f5af335a433068bafc1276aa7417721ce47c7e3a36527",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/dog.3.ogg",
+      "bytes": 9458,
+      "sha256": "14fa63c2ddf1d4f888ff348cc884c137cef404032c548f54a1443ab791725c33",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/dog.4.ogg",
+      "bytes": 5607,
+      "sha256": "e6e679afee7bd5dd9e0f1dee5b3f631ad2370cff19b905978bca6863ddf9e1bd",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.close.0.ogg",
+      "bytes": 9243,
+      "sha256": "2c23aa7fa5a4f5564f54b7b0c09f8b903ee3408b8d62a23e9466ec01172b2ebe",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.close.1.ogg",
+      "bytes": 9007,
+      "sha256": "0b6ba20e6a2b35e3eeec7ab70d3c9197fd7790c8c8f546cd6202cd704436ebf7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.close.2.ogg",
+      "bytes": 10694,
+      "sha256": "399b2b9112a237ca4a7adb6b4b35751b5150bb2802b5b09f48b96c4e4af0dffc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.close.3.ogg",
+      "bytes": 8881,
+      "sha256": "32b0d3aed782ed48100e278ed085ad50e17680bd3693052007457bf1c3f06c54",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.close.4.ogg",
+      "bytes": 9339,
+      "sha256": "ae13b1552401ac7caa0c8c5d2b01348ef0f8848fe188c2579f1a7498c07e3e8d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.close.5.ogg",
+      "bytes": 14515,
+      "sha256": "2d1b497a8cf3fd4ed2d5ebb8884ff14fea0905bc3bf81d39248d574b49594788",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.0.ogg",
+      "bytes": 17623,
+      "sha256": "584e08fe4067115b51773222c7048efe41764e2e323ea19313ae909d27f64184",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.1.ogg",
+      "bytes": 16911,
+      "sha256": "514ef796a79ec7c9f0695967cca78cf6519a2e228561486cba9f737dbd343ee3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.2.ogg",
+      "bytes": 15986,
+      "sha256": "40ed626857b8bac90e50939fd85aaba7b4fd293c8f48af2f4c2cbe8cdb147135",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.3.ogg",
+      "bytes": 13087,
+      "sha256": "180ca2a6cb5ee774c74cff8e1b65e9dd6b01c54a36f059061bd5768aec4f0798",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.4.ogg",
+      "bytes": 9551,
+      "sha256": "2f46f909af72f9cafdf58a6c3fc23b79e9353c2def79d6237c59ff4dd52bb6fc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.5.ogg",
+      "bytes": 12967,
+      "sha256": "95de523f4e29267bc1e5b69cac8aba2b08b67e0f8079724715f64aa93f7f067e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.6.ogg",
+      "bytes": 8661,
+      "sha256": "c3edbad4b320691060c6a1557dc278372e2c245f762a989d330df2c0f8c27c04",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.7.ogg",
+      "bytes": 9808,
+      "sha256": "53ff49ee8942e05d9b3616ca0420a159af55a88324e3aedc3060e9846af1195c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.creak.8.ogg",
+      "bytes": 5856,
+      "sha256": "f5261096994f44a4afbebea71381d2e271895d435a93e6e287b014ff27cd2272",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.open.0.ogg",
+      "bytes": 11814,
+      "sha256": "a7fae94dfc4b6e5169df17d59df003bd89675ddd6f91dbcf58a4b8a4231e1c07",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.open.1.ogg",
+      "bytes": 13465,
+      "sha256": "f917d74e29fa81a7106589511eb01c86ebb41e714155d47c0e5048078a5dc4a7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.open.2.ogg",
+      "bytes": 12097,
+      "sha256": "6b8d16d9117009c2ef097cdb533c89531d73e7dab7056c5e7e8f5ed726d9bb3d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.open.3.ogg",
+      "bytes": 10672,
+      "sha256": "bbdb97b6b5b2b1213e83b530055bcdf2d4cd4162e18216204a65ffd8eef696ba",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.open.4.ogg",
+      "bytes": 11836,
+      "sha256": "0712d81926b0fc8fc099682fff6491b4c436082afbee3f1b5cd8c214c6c62ef6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/door.slam.0.ogg",
+      "bytes": 17703,
+      "sha256": "78f52c75e8548d8fcb7da7f2057c3cff5f40876e38c016ffc27e5f3b9625fdd3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/floor.creak.0.ogg",
+      "bytes": 10581,
+      "sha256": "bf3413295eb4404c6e2da9649bc1badf7fddb4b1a95e1366d587b8aec1e1bc25",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/floor.creak.1.ogg",
+      "bytes": 6895,
+      "sha256": "cf971829c541c3e61ff72565c70d9708aeb60de75534e3efa639bc335348c96b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/floor.creak.2.ogg",
+      "bytes": 7693,
+      "sha256": "0b1e532743fba7d1d21a2c49f561dcc2d94161cb03289cc5ff1ae25f8d1e0543",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/floor.creak.3.ogg",
+      "bytes": 6899,
+      "sha256": "a188bdf6be4cbc422664a9b0c0a1f558921512f1342f18bbf00ea1412a76547a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.heavy.0.ogg",
+      "bytes": 5679,
+      "sha256": "43011654b7c5e4e3425282a252995068a1a2c133b52083bebbf120c84abef226",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.heavy.1.ogg",
+      "bytes": 6881,
+      "sha256": "0525b701a910e62c3f4df74edaa0900cc4e2e9007bab2a27d39ad5f8bed75df6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.heavy.2.ogg",
+      "bytes": 5755,
+      "sha256": "a99d4efcd1cf5169b81c83a7dd4704d81821615958aa12711e7f1eb5075eb09d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.heavy.3.ogg",
+      "bytes": 5315,
+      "sha256": "3bd12a01f8d23c73e502d23317661b990e3fc8c95e70c68307c2c562ca189f26",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.heavy.4.ogg",
+      "bytes": 6420,
+      "sha256": "b4d6fe385eb869655e043be9e4d62f429cc2742441e72dbe97ea237fa06fc18f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.0.ogg",
+      "bytes": 5018,
+      "sha256": "bee48f34c0493d1d83f5f8a5c6f1b0346b5c2e2d059dce47151782e79e7ed69c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.1.ogg",
+      "bytes": 4917,
+      "sha256": "e4bf6b7b23d4b10327a6d2772f6a5c54b84f2ecdf982aa402f93fc34f5e1bc94",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.2.ogg",
+      "bytes": 4932,
+      "sha256": "796939e820f62fb63fb9290c010d054e9ebcb8b6be33ff3ebe7b005f2a1d835f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.3.ogg",
+      "bytes": 4950,
+      "sha256": "fad68a76068ef3707b623d2ad6a292a0e5f2f4ce6f91109b5e67c01baf3b9605",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.4.ogg",
+      "bytes": 5030,
+      "sha256": "92b4ea8d31563fdfdf261b366c9e0695a8d95ad1f05453d585258735fbff09fa",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.5.ogg",
+      "bytes": 5969,
+      "sha256": "7912b7cd55a51d58f3b2d3d9df0bc929ba6da5438d5ce634dbfe209a6ccb9862",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.6.ogg",
+      "bytes": 6047,
+      "sha256": "7b9a312d2f4ec69b9518c5adedc6cea7ab165e12ff78f767b16955c3290126ae",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.7.ogg",
+      "bytes": 5968,
+      "sha256": "2cc90e3ac4931302cffec395b6c2e0c278c1ffbd52f806104afca8d36f307fff",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.8.ogg",
+      "bytes": 6140,
+      "sha256": "b9c7a39265e3b04777b1ec00575d66b89acd8ffd6fa8603f94d599d71c4d3096",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/glass.light.9.ogg",
+      "bytes": 5691,
+      "sha256": "ced8751e27e764a9a5c89e77bce5c73a666f2c93d76eb005b95feaf4b0f584d3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/latch.0.ogg",
+      "bytes": 5224,
+      "sha256": "b0b18b6de7dd58855c9114ce79800e819ef746c9dc2ea198de7d52cd0ce7644f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/latch.1.ogg",
+      "bytes": 7107,
+      "sha256": "70f4625bd1a3769a995503873c9b4cdb11b5bc03eff92d2de39b2ba07193901c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.0.ogg",
+      "bytes": 5511,
+      "sha256": "3bf9c1510236ee4f4e8632acf6a00eef478c73c866034fac11a972bdc00f876b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.1.ogg",
+      "bytes": 4670,
+      "sha256": "b8fd21e345b9bffbc143d3dc8386c886d0072e0cba8fcfd4fe206ef535626cd3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.2.ogg",
+      "bytes": 4593,
+      "sha256": "1cc34b471fcb570121ed3c32bffad320464ada2bae56d8c86ca3fb8a5dc7a1bc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.3.ogg",
+      "bytes": 5237,
+      "sha256": "6a2c7b461e639701f632563fd430d39035801dad7443c140b778fbaa50b10790",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.4.ogg",
+      "bytes": 4380,
+      "sha256": "2e329a0e5c7ac49a7c94cce5830f683ef519b763b7c5f05176a521ba8a48df5c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.5.ogg",
+      "bytes": 4697,
+      "sha256": "5e194dcb7aa439d167a89da19fcaf14e998dc3c03acedd0337dab167f2ff07fd",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.6.ogg",
+      "bytes": 5571,
+      "sha256": "916cba6e990497fec70b99522231e570eccb8dc2df5963936b97b3cd0f0f2e9f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.7.ogg",
+      "bytes": 4403,
+      "sha256": "896bff0e861af3e174f9a2e637aad95ccf2423896bda413db8707a0a8286d9bb",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.8.ogg",
+      "bytes": 4756,
+      "sha256": "a634501204de57e27fbdbc1e5b0f0ed4f81ff5ba03851ceb836be0093641860c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.hit.9.ogg",
+      "bytes": 4442,
+      "sha256": "cc43a5f904bdd07cb78e1d29a461fc4086550dbb68567c55205f4c43b9f7e28e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.0.ogg",
+      "bytes": 5704,
+      "sha256": "61b0004cd4c484321b95dcec382ab245ce9d1c96ce3994e688639007991c43cc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.1.ogg",
+      "bytes": 5202,
+      "sha256": "3db4a3382ad1882b5b7a7a52cfd81a1055581e8c855803518d4354d689e64f37",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.2.ogg",
+      "bytes": 5154,
+      "sha256": "bd6b4078b6b5fc2b53021ceab655569d4d6f539930745aba0a12034616a9f1ee",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.3.ogg",
+      "bytes": 6415,
+      "sha256": "80a7a343458f580b241ba03f54b2a795cbb5c72cd4740458660ae38ae38aeadd",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.4.ogg",
+      "bytes": 5097,
+      "sha256": "bbff134875131b7c8c745c7f316ea362f1a75c8dc25cb87a2bc6c1cb25c57807",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.5.ogg",
+      "bytes": 4909,
+      "sha256": "bb20657e1e055f6fdf5e2463e10173a4d9b8aba4a4f5248fb76b4ec5ca5a262e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.6.ogg",
+      "bytes": 4923,
+      "sha256": "83d59c80d27f64c968681c33e711607f8a1a97a27fbf242c9daa71a3ba909a4a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.7.ogg",
+      "bytes": 4739,
+      "sha256": "67b00b4789d4a9fe585f77734fe89aa3560879c363481eb4f98783606914a2bd",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.8.ogg",
+      "bytes": 4960,
+      "sha256": "5b7c76688c59475fc80ed208638696e07a8a8a2a41c0ed674eec732925225927",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/metal.light.9.ogg",
+      "bytes": 5055,
+      "sha256": "c433cd835dd3a330247daf8d2d4fe375362ce269e57a0680ee677a5e3a337548",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/musicbox.wind.0.ogg",
+      "bytes": 29508,
+      "sha256": "35d34955b61bfb3b97f86180013a75f9fec828acf09f287f48c83c6b21b72a7e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/musicbox.wind.1.ogg",
+      "bytes": 28096,
+      "sha256": "18405fba3de50a94077ab39d42d08d0738fb5a5a9227372169fa26696b39d445",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/ollie.knock.door.0.ogg",
+      "bytes": 9057,
+      "sha256": "bccdf44a985163e14e96d269f9e88c9bcf622e6b447edbd0fa7798050f59a0ee",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/ollie.knock.floor.0.ogg",
+      "bytes": 7274,
+      "sha256": "9309d0129bcb694d6bff2e5f7aaa10a1ca971f2d22c12322eb7b043c1d91cad3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/owl.0.ogg",
+      "bytes": 7566,
+      "sha256": "20b3620f91627383227912818f0580ab132b7b96455ec5d2b8d3752cf473178c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/owl.1.ogg",
+      "bytes": 9320,
+      "sha256": "50a0df2702075a73f6fe713704a77d209b5f7ef8225bec2e043f372fe97d2f47",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/owl.2.ogg",
+      "bytes": 26751,
+      "sha256": "cf5b5150ad1046a06daa245132eb76d9c14517a265ff78a3a21cfb725fd4f894",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/page.0.ogg",
+      "bytes": 7719,
+      "sha256": "860f184530f343ea03b801ed5af4e2aea9c77825d9648b222e7cf28b053b35e0",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/page.1.ogg",
+      "bytes": 7811,
+      "sha256": "04e03430819a1706d0a20250bf0463db0ad4444a39fd57d7afcc2128e04b1fb4",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/page.2.ogg",
+      "bytes": 5845,
+      "sha256": "59f3ac5dc89b2525e620b9c3625177b221f29e6feaa5a8fb2238b86ef50cb534",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/pickup.0.ogg",
+      "bytes": 5571,
+      "sha256": "40fd6d3376ceac55eafc3941265bd6eb713dc9c0266285ea6b70aa3febb30eea",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/pickup.1.ogg",
+      "bytes": 5571,
+      "sha256": "5bf288cee7e12767f748de82877b80a8b11159ee6e0c492ca81331a2de061e4b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/pickup.2.ogg",
+      "bytes": 6140,
+      "sha256": "f4327f2ba6176249a62304682099d411a290abae9ec540bc94108393dd7f360e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/pickup.3.ogg",
+      "bytes": 6333,
+      "sha256": "78cb32c320139af054d77a263b397077e5661d88855ef4620c0faf98c29d26f6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/pot.0.ogg",
+      "bytes": 12540,
+      "sha256": "686a4323e5b506f9a3b6060710687773274b586a536fe19d1eb59f5463aa8f2f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/pot.1.ogg",
+      "bytes": 9952,
+      "sha256": "75730716f9b006ab0bce64291d6c4e4692e90275a158a3ee60a7391527d22108",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/pot.2.ogg",
+      "bytes": 10315,
+      "sha256": "b795183abfba742378de0a80dcbb90ba19c8cb6c53f119f1f74d9a593e3832d6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/soft.hit.0.ogg",
+      "bytes": 4154,
+      "sha256": "92d17d79ded51bc9a6f2b76473ce804881aea780529686e3fa8b2b6164496e15",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/soft.hit.1.ogg",
+      "bytes": 4204,
+      "sha256": "5992574a6ea3e4ea7e8c63d66127dd4e6c5626d416dbd6817f888def6e43fb0c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/soft.hit.2.ogg",
+      "bytes": 4141,
+      "sha256": "a517788a8c9492dc446ee6f1eb11502e11519d95b38a9f807f9ca82c80f7c2c2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/soft.hit.3.ogg",
+      "bytes": 4170,
+      "sha256": "11170c56334891a5698e4b12333747affdf3c7efed262da31fb1582e462e975a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/soft.hit.4.ogg",
+      "bytes": 4179,
+      "sha256": "db6993801c4fcc95540e44d1091ee3981ec46f86cde6d885227a1d33865d4fed",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.0.ogg",
+      "bytes": 6515,
+      "sha256": "346d37496d112fd62ef470f314408b1fa231af4b1ee8203369df73041ab74704",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.1.ogg",
+      "bytes": 7099,
+      "sha256": "4b8262e633540c694cd72ce9fd5fb9a67759aef7be54bc86834da3c986e1664d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.2.ogg",
+      "bytes": 6587,
+      "sha256": "12d56b81b530d0aa82338400cd040972082728e13a19eaf4bcade7ec89f18728",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.3.ogg",
+      "bytes": 7401,
+      "sha256": "218843d5c3cccb5dbe87297bd27549a944504b093f62a2fc2743d9661bfb0487",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.4.ogg",
+      "bytes": 6903,
+      "sha256": "36eb6a2d7e834802d8af5940c7e34a73604375ea0eb72d9efa552fea9eed9ea8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.5.ogg",
+      "bytes": 6202,
+      "sha256": "166b6736263eb9e0f8e9ff2e3686e56299e0ff16dfe68ae52971300045839e61",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.6.ogg",
+      "bytes": 7343,
+      "sha256": "676f77140bffa0269c52cff7d15f1213f4eb84f1d68dcf4d4c22c19e59357cbb",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.7.ogg",
+      "bytes": 7003,
+      "sha256": "fc9561622ebc5a1a1d647421395410b9dd70a77381680f43e18526d28f53bd4d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.8.ogg",
+      "bytes": 6878,
+      "sha256": "abce26a3f2ffa19568669a0aa404884b2ab0253a4072f9b61ee5a934966043f8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.asphalt.9.ogg",
+      "bytes": 6620,
+      "sha256": "c88ffc6296e31b28ae0b9c25a126afc46b38e37c05f06b5a894ce90344406021",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.0.ogg",
+      "bytes": 5076,
+      "sha256": "a6aa661f403a03808e69731968bd083eb9cd1c4ac5b1ffcd18223a9484c5db01",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.1.ogg",
+      "bytes": 4980,
+      "sha256": "b81417a77c38b73f4cceba5f89035474e058c7c0a28d3288b669dbff4f85d2e6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.2.ogg",
+      "bytes": 4980,
+      "sha256": "b92c5efdbfe8c5f65af267e6af8fd30055710e40e1c87d6aeca996a12863770f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.3.ogg",
+      "bytes": 4709,
+      "sha256": "886f4e5423a2c90b57a853edae8da65d1eebb7b6e09a2ebcda8f5469f606841b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.4.ogg",
+      "bytes": 4709,
+      "sha256": "13fb4b22fb3d22c3987b2fc8251dd706dce20ff35ddc469cfa8a67b0212dab5f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.5.ogg",
+      "bytes": 4403,
+      "sha256": "c8976b0387c5f7074a563f85352039dc892bb9c3999fbbe486cdd9c79ded1fc8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.6.ogg",
+      "bytes": 4297,
+      "sha256": "b27dbd553a15e75d77650b644e023d7ebb4b4747deff86384feb75d57507c0b1",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.7.ogg",
+      "bytes": 4523,
+      "sha256": "136b66320e7c8b8383484d8276994cf5502d66f3d9c0d0b062e641b027add057",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.8.ogg",
+      "bytes": 4314,
+      "sha256": "736cc4aaa2fff8a08860872621f90d72dd63d87699f2e85d55355a3192cefecd",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.carpet.9.ogg",
+      "bytes": 4504,
+      "sha256": "e466e88f1335133ca08402f05a4e64c69802902395a3395aeb424bb028ff68d8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.0.ogg",
+      "bytes": 6424,
+      "sha256": "44ce850ed1fb85153d87c978dc44b6946cc4a9844ca23c45d0dd8decfeed3862",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.1.ogg",
+      "bytes": 6901,
+      "sha256": "e70131ce010c8b62d95aa64f4af1d42140f6ef819b5f39b5cdd0be44fa68c5c8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.2.ogg",
+      "bytes": 6976,
+      "sha256": "673e4aeb66c50740515dbf4488608046fec09218c37e4eb39f198eff246594e2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.3.ogg",
+      "bytes": 7031,
+      "sha256": "5a97b57f456355f851ee9fdb9b818e2a67cc62c815f222dba8680a3b1b726d6e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.4.ogg",
+      "bytes": 7174,
+      "sha256": "3d08ac74f50e0bf39321c26bf16931dbb640ce4b5fce70844d1ffaacff2768e4",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.5.ogg",
+      "bytes": 6111,
+      "sha256": "ac0f5a9d6ffea26c8e792a6ba1b3533ab7fcdf235433957988542ed90cd7c085",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.6.ogg",
+      "bytes": 7032,
+      "sha256": "c3f3bc60a7aae3671d9cdea790bd6afb8abd9f08ad6e59f1608245b7a88a8e33",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.7.ogg",
+      "bytes": 6899,
+      "sha256": "9524961e119fd2bd95dc3bbaa7fa9b4be290b90379a50d57664769993377f574",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.8.ogg",
+      "bytes": 6863,
+      "sha256": "235458bb97d81a8d1fd2643d34d5c36c790b47c915fecfe26681d2cb91197b87",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.concrete.9.ogg",
+      "bytes": 5577,
+      "sha256": "19a4beaec5ea8ed7198898f50298f52367636642041f12efb30ac342ff070342",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.0.ogg",
+      "bytes": 8261,
+      "sha256": "e98b310dcd8ba7dc95e6ab0f20878e10db1f6402a37220ff201b673bae0d1d77",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.1.ogg",
+      "bytes": 7829,
+      "sha256": "8ad32bfe4f6ec190cc6c4c6f91870c3e82d0071abb243ba750ecbe0ea1e10f97",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.2.ogg",
+      "bytes": 7889,
+      "sha256": "639d1fd560d0a07bb5fb86690480215586069ca48a334037e21ad9f340f89a81",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.3.ogg",
+      "bytes": 8112,
+      "sha256": "d30db70ee1ee8359e18351bed37fbbc9cbdc8108cc70ab9ef280c5da7c1b2d1b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.4.ogg",
+      "bytes": 8115,
+      "sha256": "8149492e0782726f7791d363fa13345b5d1c8e10555e577bd80637191eeb0084",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.5.ogg",
+      "bytes": 7663,
+      "sha256": "415270708a2b0cfdfc402cfa18f61b97b9d1fe657ae584140812650083002703",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.6.ogg",
+      "bytes": 8078,
+      "sha256": "cc2fc20b3db601ef5b8dcfebc8b12eef43517f7f4c3ee875733fb0c36b96146b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.7.ogg",
+      "bytes": 7530,
+      "sha256": "92eb57b901cbd6ec0274231df8d2a4b4662a6cfa9f0d55a9a112224e9ac77f7a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.8.ogg",
+      "bytes": 8316,
+      "sha256": "d119fefcd024339b982f73a299f08b8e5c76e734e35f52d18f96189c6cfebf9a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.corn.9.ogg",
+      "bytes": 9093,
+      "sha256": "80bd48b75b7a989294885330583906e66c45884147a40fa9808e5d8041a398b5",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.creaky.0.ogg",
+      "bytes": 6764,
+      "sha256": "f5c09938af0cba5b5fba86d274962ff39c6508f41cbf8f85c2fde1ccb4054228",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.creaky.1.ogg",
+      "bytes": 6568,
+      "sha256": "cd5fe6a6bb578b6b2a5d326b6718439d63b3f6244f528ab53972cf84e83b5ab1",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.creaky.2.ogg",
+      "bytes": 6523,
+      "sha256": "63383c39a27cfc4360833dcb183850bf967ef6d6d227126c4e23955cff1117b9",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.creaky.3.ogg",
+      "bytes": 6891,
+      "sha256": "e2c12883622dd74e588a9afd06e5e492030b3c15fd4f6aef63cf7c1698cf9d25",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.creaky.4.ogg",
+      "bytes": 6245,
+      "sha256": "1184f050bb278e716657f745fcc12813a69dec601b6fe039790e26c629c234e9",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.creaky.5.ogg",
+      "bytes": 6624,
+      "sha256": "e1d8f1692038ac6b62a11f58d8df469768d3c7bdfe1e0291753c8e2f3c023230",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.creaky.6.ogg",
+      "bytes": 6988,
+      "sha256": "43cde284ea5638c858ccf59900d725cdb27bbd683635118cd6da905e35e38cbc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.creaky.7.ogg",
+      "bytes": 6895,
+      "sha256": "c2388275d8a3063971fd6d9f99c21002b5a15fabc23825fc3ff77ca86255f584",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.0.ogg",
+      "bytes": 5370,
+      "sha256": "585663cf9bef3638d00df92041bef6c23866813951e62843997ab372a131ca42",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.1.ogg",
+      "bytes": 5188,
+      "sha256": "a5270357f7fc6f45399b6cf00bdf58aa1fa9a7a554e57ea8e9489383a09c324d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.2.ogg",
+      "bytes": 5354,
+      "sha256": "4750c2bf8e344d880d6b1eb5aff9dda493b20e4d55abf787e75428aa40127ab3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.3.ogg",
+      "bytes": 5297,
+      "sha256": "b3c24eee9b9d6e3766504f5e07c3014c50479628a4bb644b0d221d23bbdeeb9c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.4.ogg",
+      "bytes": 5247,
+      "sha256": "4df23d7ce4225d3a678bfce3c7440aacb9b3fcbcb275f1592446af35608782e1",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.5.ogg",
+      "bytes": 5151,
+      "sha256": "c3a8fed367fee7103dcd1282c839b1ae79712da5b42563a05005927266895d06",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.6.ogg",
+      "bytes": 5220,
+      "sha256": "c4638ba037acc09a3f1c2ef5fc440942cb66c2b36ef5ed1989ca95824afd427f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.7.ogg",
+      "bytes": 5446,
+      "sha256": "561f279faba3a2a10658eadda888d1bccaa8d9dfae56426777bb875e8f3a98ae",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.8.ogg",
+      "bytes": 5213,
+      "sha256": "af78737ec8161e0b33ecbb9b92ce280cff6c258ed9487028e9bafc35eee8ee8b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.dirt.9.ogg",
+      "bytes": 4771,
+      "sha256": "74d3f61f56a4d3e4cc696435fa594accca5cd494ae994c9fbf668fc9e4d615d4",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.0.ogg",
+      "bytes": 7899,
+      "sha256": "74f7388fa306ec4e1f8b190a78eb9ab83ea95f154dfd7c7f65356a642bccfc25",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.1.ogg",
+      "bytes": 7494,
+      "sha256": "7d0c7a1f1074c8568ff51f5c035b6035387456cfdc79a9c7e7c95290c9b33fc6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.2.ogg",
+      "bytes": 7534,
+      "sha256": "82544de896139e9e4773abe49f9b9f018ea3dd7b7c4229153f7d7e5a3a54cd15",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.3.ogg",
+      "bytes": 7765,
+      "sha256": "bd10e6a115bb625486680e37d14de089fb4c4f41019affa6310cd9c97cf41309",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.4.ogg",
+      "bytes": 6762,
+      "sha256": "5683377a6e888d91ed75f283bf3acceca4db54eeb4f176814f1c55b25d1b57cb",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.5.ogg",
+      "bytes": 7367,
+      "sha256": "481819d149eee49e810c00de7f4519aeba6fc0f284e9a64d070bf27527cada51",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.6.ogg",
+      "bytes": 7411,
+      "sha256": "0bcd4b69a6af7bf0c45e53afa8b4f1b7c4a0ac7b39e46852df01c12d1cfe2237",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.7.ogg",
+      "bytes": 7544,
+      "sha256": "3df39617e5f56a2187e35d67f59e231d3b009aac5a55f8674e04e2f80977cce5",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.8.ogg",
+      "bytes": 7181,
+      "sha256": "3cfae04411c2d9bebd9e959aa9b903e7a65bbfbb7084e3e42bee5febdfd33a07",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.grass.9.ogg",
+      "bytes": 6374,
+      "sha256": "61e34686c362b54ca4ac0324c3bc2bd16946d054475f01562c28a6db91c20639",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.0.ogg",
+      "bytes": 6449,
+      "sha256": "2850967c789fc1473730f9203dfc15a5d25dc2c0831d2a30eaa3bb67750632b3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.1.ogg",
+      "bytes": 7651,
+      "sha256": "9a4ac8441478d91be2e196e956403761ac8d4c1f0771631766e5d99b4048801e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.2.ogg",
+      "bytes": 6352,
+      "sha256": "c6a3161430366d465d8f98d0d613568fd307b4ec4ae10046234ecf8a6cebf892",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.3.ogg",
+      "bytes": 6962,
+      "sha256": "97d9e89d705b21228466202d817d11c38379ad40e09b7b43158da5adcf097793",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.4.ogg",
+      "bytes": 6434,
+      "sha256": "da35795cbecc196bb8a989ad0ada2117b5a60a9e61ea6ae6c2e3811703b9c74a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.5.ogg",
+      "bytes": 6406,
+      "sha256": "7da7b6b955d1963804a36209327a1cbda65c8a531b9b15b57b07a8b6490c83c5",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.6.ogg",
+      "bytes": 7922,
+      "sha256": "8af34e683aab49f5e557bf8e4c7935fff6a579cb85bf8ff5691b4f91ed44dfa8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.7.ogg",
+      "bytes": 6508,
+      "sha256": "d99d2a4655187252546ca158fec95cf0d182355068e0c02a47828d24c283de97",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.8.ogg",
+      "bytes": 6451,
+      "sha256": "5f355c51143b42e0c8bff241bd5c459e35b7f21c8ed93d16c02f648141f69545",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.gravel.9.ogg",
+      "bytes": 6659,
+      "sha256": "43948205488ee14a8eda638ea766f4eee8e43e33edd4c5a2ca604fe6ffe53e55",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.0.ogg",
+      "bytes": 8080,
+      "sha256": "4c4b659e95759430417ed91e18044975614752d3db2926d604d2d4ff472c6109",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.1.ogg",
+      "bytes": 7740,
+      "sha256": "f32d262b187a7f770fe18751fa4d9f62fc87697eb0ba0e781d3f3960fcd3cf7b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.10.ogg",
+      "bytes": 8534,
+      "sha256": "6c9530ec837be59d25fba9071bbf4e2075064f2d732048dad8382093a1bbe76b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.11.ogg",
+      "bytes": 9116,
+      "sha256": "9cf44f86b7542e18cf480fbb62e927ce7bfd886dd27a017f5e14d34fab015b5b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.2.ogg",
+      "bytes": 8152,
+      "sha256": "984f9ebcfb0007aa4c4788648e800461403c4c327765b1847dd118700a5a0243",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.3.ogg",
+      "bytes": 8004,
+      "sha256": "7a92d33e95163045a31e0b47e7383aacb51244184581e4edda4ad1d081da76b7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.4.ogg",
+      "bytes": 8328,
+      "sha256": "74c01825ea1488abe004a72eeda105813ee77bbd1642c1561cba6b9d164e99b3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.5.ogg",
+      "bytes": 8077,
+      "sha256": "5ee92b6552f031ffa6960df99f76bf3a53b7563f69363b2a37c5a6877085b254",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.6.ogg",
+      "bytes": 8827,
+      "sha256": "77596978a82b87d95108a64ff35d34896648031ff3b15beb3829a857251938f4",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.7.ogg",
+      "bytes": 7493,
+      "sha256": "9328c0c2afc060c6f282f62aceebb27b9e8ef8a8e3ddf96666d43ac5981cc64e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.8.ogg",
+      "bytes": 8273,
+      "sha256": "046b0153720a1d5ed0161c091a7e361aa13696ebfc06071479cf4f9bcc9192db",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.leaves.9.ogg",
+      "bytes": 7265,
+      "sha256": "749ce8f3eb964876efcb3d2a390ebea653a393e502767ad90ae600fcda7e266c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.metal.0.ogg",
+      "bytes": 6571,
+      "sha256": "9b982e183a34521fbcb514d837359b70932fc4748f7b12fe6c672e51b9f7b0c6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.metal.1.ogg",
+      "bytes": 6804,
+      "sha256": "27ace1310d7089e72a9611f918ae815acee22fd1ce51b9289c30b74752933f43",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.metal.2.ogg",
+      "bytes": 6801,
+      "sha256": "011bd704a5e535c125d90f8ddcc105890a1236843477431f163d3b5a317a46c7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.metal.3.ogg",
+      "bytes": 6986,
+      "sha256": "cc1ffce5b25bd24e8d6cbfcd8de9ed27d0da9163c93e81aae2c43feafb922cb8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.metal.4.ogg",
+      "bytes": 6479,
+      "sha256": "6d595f1e38f20c14d148a09c3110d9387ee1c78aedcc919a2f74f288729c01d5",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.metal.5.ogg",
+      "bytes": 7081,
+      "sha256": "32f42ae0a0324be1d239be8f3511388536b7346d81f285ef4102b05aae6f8dbb",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.metal.6.ogg",
+      "bytes": 6741,
+      "sha256": "9d64542a2162de5d9e2d2137c8904bf1939e381ae7b6948e931df00ff9c30005",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.metal.7.ogg",
+      "bytes": 6205,
+      "sha256": "f86480b9bb2683913b74569b363b54298c1edad49c0041bb18a7558309756ec5",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.0.ogg",
+      "bytes": 5165,
+      "sha256": "e0fd91597898142c8629f5ca795de8b60fcdabfc801602a6abe1464a8c1184a0",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.1.ogg",
+      "bytes": 5053,
+      "sha256": "b9189de8bb920642960e62d79ace0910d4b9005074f49e3a1b1b7a2d5acc7a46",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.2.ogg",
+      "bytes": 5360,
+      "sha256": "a87ea6941ead67dab99bbb38876d5ec29c553398c4a4df845a4d1f39f37ea5e2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.3.ogg",
+      "bytes": 4945,
+      "sha256": "8745c1dcb506484c47352966799a5684d3cb5a58e2dd600839d26c02f5587b99",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.4.ogg",
+      "bytes": 5016,
+      "sha256": "7126f77e5afa68e6e44a5d6bd1b48de0fb6c725dc4cbb8e0ad7cb63335581dc9",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.5.ogg",
+      "bytes": 5214,
+      "sha256": "c93ac44ba2c54bba02b3b247f52bd4355fdbdf8f2dd4d65027b242b98ec75967",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.6.ogg",
+      "bytes": 5260,
+      "sha256": "c8e909a2fa62d0e1a397a0b47f1dfe6dd73a283e0f8df19369a5d037097e7732",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.7.ogg",
+      "bytes": 5228,
+      "sha256": "5f40beee2bf5b27975b5b8950ea8e8846122c9249f1c86d624fe33d26133d0d7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.8.ogg",
+      "bytes": 5251,
+      "sha256": "06a495504822de4440c16715a7904724a506b310be961e97f199416d58d7a910",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.mud.9.ogg",
+      "bytes": 4701,
+      "sha256": "2792c733f2ec1d76f4ce5e2770581ab722367d7d382feab757ee32997418b6d2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.0.ogg",
+      "bytes": 5588,
+      "sha256": "490abb799637d7ce4e3d00e06e58ff500074221c575cb07be2dc5692e54a83b2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.1.ogg",
+      "bytes": 5999,
+      "sha256": "4ebb4470cd012129d9943891b98497d1c88a49e5ed6f177853ab46b741fb4d6f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.2.ogg",
+      "bytes": 5935,
+      "sha256": "f9bc2b89569d89f1aa7f316327246926f3ab5db47ed59122cea2dee89a7ba4d6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.3.ogg",
+      "bytes": 6243,
+      "sha256": "4e6198dc7e2a36faf7f62c8fc9e35239fad7efc8ad465248d871966e5403f851",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.4.ogg",
+      "bytes": 6058,
+      "sha256": "20dab2f71c55bf93bbe8fcb711e3223b88ae524a7ac96e8bc379b0044bbddecf",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.5.ogg",
+      "bytes": 5360,
+      "sha256": "3ebec696b2c18336ede5601f9dc55ffae30348cf2c6c6260953f6341fcfeaed2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.6.ogg",
+      "bytes": 5899,
+      "sha256": "f7a6df0f51f60aee2923761ce5147da08b223f257b70dd55da84b1c1d95aa108",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.7.ogg",
+      "bytes": 5861,
+      "sha256": "79755676851c758a17f9342c809b58a3477f9d9411246dcb25cf9823ec931cab",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.8.ogg",
+      "bytes": 5938,
+      "sha256": "b3f4d1192c4c3e537559b6f2cf0c82a8b75ef96e1839f1b4f1e5405982828da9",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.stone.9.ogg",
+      "bytes": 5493,
+      "sha256": "07fe17c7d2444f56f8b569d009445a9c3775488b8e3537deba92dc7611de5722",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.0.ogg",
+      "bytes": 6705,
+      "sha256": "e66ddd4a7446afbc5124ad8494b71ef97511dcdd66c41cfc8d3d23a8753bed27",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.1.ogg",
+      "bytes": 6385,
+      "sha256": "d7b1dfe042529452ea78ed0634faebc240001b76b5b02ce0ba19f52e3fe3f556",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.2.ogg",
+      "bytes": 6306,
+      "sha256": "c117b1efbc825f2a540937c50f92599a00380ac9bcaa1edfc98816951026db1e",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.3.ogg",
+      "bytes": 6429,
+      "sha256": "2386afc34fa51163d2739da44d147093aed9360fff2bde89bd300465981fc528",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.4.ogg",
+      "bytes": 7123,
+      "sha256": "10ae95ee5421cd88df4bf58249b3f6711594808382374354a5ced2643ca4a978",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.5.ogg",
+      "bytes": 6023,
+      "sha256": "10652bd9f0c429a0f07f3573a03043f6a9786856dfdd044c8616d928232d9abb",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.6.ogg",
+      "bytes": 6882,
+      "sha256": "82e410ed2232cc19512e1a6c0c8756a88667ffb0b4424b8765c9c6bc3ccac999",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.7.ogg",
+      "bytes": 6340,
+      "sha256": "04cfe8c3dbbcaed9cacaf5c3af533371f9c52fcfd3bc343bab25781e1b0da786",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.8.ogg",
+      "bytes": 6907,
+      "sha256": "4300af4f79beb8f3b3e5d97b261b19393c1ffedb5329adeff13e9554467e3091",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.straw.9.ogg",
+      "bytes": 6746,
+      "sha256": "265a8e489d105392ab3a76c88d4f4680bb4c153379e9ed2364b0a3814312781c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.0.ogg",
+      "bytes": 6000,
+      "sha256": "d1fd596b55cbf3c431043ae3dcba9b82fc45c0dc5878ae4e14b477760d556870",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.1.ogg",
+      "bytes": 6025,
+      "sha256": "b3fc1e31c018a1f4afa68f028a12c23c98df4c7ab52a65e8e8332c0b6f5c7426",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.2.ogg",
+      "bytes": 6316,
+      "sha256": "5b97eabcef3bec53eb219b6edeace250ace0ade1c18fefdb0da948fd1d219c94",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.3.ogg",
+      "bytes": 6363,
+      "sha256": "482c08cf39a163127e977bbffb73d81dff89726a197c1da5c7318e229b834b32",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.4.ogg",
+      "bytes": 6439,
+      "sha256": "f090b21dce522a69544fa678b50e3b27802f8c1a5c4d9bfc7dabb1f0f7a06b7b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.5.ogg",
+      "bytes": 5933,
+      "sha256": "8448324db04157999ce7605becca2b8706a572ec92bc7b32f42aeb98c9a2d7f7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.6.ogg",
+      "bytes": 6426,
+      "sha256": "5f3c2eeefac0483393f92ab33d80cf25bffe88ac10107b929ce17654f5315cee",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.7.ogg",
+      "bytes": 6097,
+      "sha256": "d43b5658a06befcd56f8192abb1e52d7324724a291d14d8cce17566122dc8a88",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.8.ogg",
+      "bytes": 6208,
+      "sha256": "999b2b8b6a756ef391281e4fafafe68cd89cadfed55169c685d364fae32bba3c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.tile.9.ogg",
+      "bytes": 5549,
+      "sha256": "6cf0b63a5d675bc506b995a4328ca4f6db5494fc2340a882b039ad045134261f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.0.ogg",
+      "bytes": 5778,
+      "sha256": "209b5be899b9d6c203795535b4859aa348e20ae56ca80b287fd571df375de9c8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.1.ogg",
+      "bytes": 5834,
+      "sha256": "3ea2719a48a651ff3f67e72406d0915ee3cf4dd55c54f65653915aedb73362b1",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.2.ogg",
+      "bytes": 5886,
+      "sha256": "d228c26b5d3138eefe9a6b89e5ce8b7bb6ad71e037f36e57ca927fcae250ddb0",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.3.ogg",
+      "bytes": 6333,
+      "sha256": "d1372142523d9b587c483ecb562a90cf5dad6588472c42738724804bf57e9c1b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.4.ogg",
+      "bytes": 6213,
+      "sha256": "ce783b36e96ccd9d2c03e9e8fcb48c3b5214d9b08e80980f88d46aa2af3d390a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.5.ogg",
+      "bytes": 6237,
+      "sha256": "7302808c8215bfa77eb8fd6093642c7afe193016de03b9dc9d5c5952d5718583",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.6.ogg",
+      "bytes": 6071,
+      "sha256": "b09b779c4189ff91f6c08a1c0ff19b3a2851fb0e55af0e47eb196a21da9d923d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.7.ogg",
+      "bytes": 5516,
+      "sha256": "a9403e72910f8fe36d87c2d656871f20fb2ee22ad07cdcd3a3a4ab566ab57579",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.8.ogg",
+      "bytes": 5405,
+      "sha256": "ff9ddff9c91040b8125a9fe69ae2eba41b58094dd4024d619436407321783af2",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/step.wood.9.ogg",
+      "bytes": 5735,
+      "sha256": "d3c975b33617be956c812f749c986e2c0a6768187dbbffcd2bb9146ca642654b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/stone.hit.0.ogg",
+      "bytes": 6582,
+      "sha256": "8e366765390acc760ced32e0d0f27c74aab67bd9a09a847a7b9e222d50fbe8be",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/stone.hit.1.ogg",
+      "bytes": 6816,
+      "sha256": "cd3b27983dba1387953185e73f97f11955f0bbd048e7798d1352519d152c5173",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/stone.hit.2.ogg",
+      "bytes": 7007,
+      "sha256": "6320a3b8f56cce035172332ea18f99a7109378a53b95977cdf590b470a542b76",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/stone.hit.3.ogg",
+      "bytes": 6625,
+      "sha256": "d5e08668dd57608c801ca95f0115946ce0b2953f9ce439a7c174ef3c77e1debf",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/stone.hit.4.ogg",
+      "bytes": 7040,
+      "sha256": "ff98d11264148f06acc52318d01920432aa33cc990fda923e0c18ebb540f6e85",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/thunder.0.ogg",
+      "bytes": 30158,
+      "sha256": "12d0710ea36bdca4a47b3f582dfe508581e41383f7b29ea8d8f6ea41f850657f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/twig.0.ogg",
+      "bytes": 4406,
+      "sha256": "55d7b1ce5d2d99ca6bbb0aad0906eb86a00bcb3691d0851d6e816754c9519487",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/twig.1.ogg",
+      "bytes": 5949,
+      "sha256": "26f57abb25caf36e7aa78f31c2f2f7e180504aacdc3d1810dbde1ce613992df3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/twig.2.ogg",
+      "bytes": 5839,
+      "sha256": "2b2a08409430ad455a0b8fa08da27856d4c133e206be600f8b5b2e9ac716cd2b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/twig.3.ogg",
+      "bytes": 7327,
+      "sha256": "a8f411c4512a43db8b6615f8acc3475a060dbdb0ebfdccf7ec01a32ee3d34aa3",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/twig.4.ogg",
+      "bytes": 6418,
+      "sha256": "79ad67bfc322314863badf3246d2e1a71abe23eabd4069868798c053ff9543bc",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/twig.5.ogg",
+      "bytes": 6767,
+      "sha256": "0ee0570b0b49bb6c6053d5f415160df9a54ef8c0a0210568f46658b0cfce008b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wind.a.0.ogg",
+      "bytes": 421546,
+      "sha256": "5053c01c19556370307dc2db37d5e7fe5709f7b2f70c72e3e9bd1cf0f0d78388",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wind.b.0.ogg",
+      "bytes": 233160,
+      "sha256": "77a9a73213983b4cf7bbfebc7cd4827db6b172c4449bcc286e40837877f20d37",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wind.gust.0.ogg",
+      "bytes": 60940,
+      "sha256": "aae48863f29e5a9470309c7ebfcc8eaf12ead8a84f2d1d1dda199a063f659c34",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wind.gust.1.ogg",
+      "bytes": 64882,
+      "sha256": "f78565e522254db4290112ea95a8cd11b6ec59a4092b037a4c48fcd9d2cee701",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wind.gust.2.ogg",
+      "bytes": 54985,
+      "sha256": "7262d8b01fde25378786f1b414b0c0c180bfbf7718fb47b2e476876f85ddb5e0",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wind.gust.3.ogg",
+      "bytes": 71579,
+      "sha256": "6953c46eea6a78e400251eaae5e66a6e61544b8ef11a8238602f1f4bd74fa15b",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.hit.0.ogg",
+      "bytes": 4705,
+      "sha256": "fcbf98a2080e085682a05757218993c696f422a3ed4d32c5e8af18efb0762556",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.hit.1.ogg",
+      "bytes": 4680,
+      "sha256": "c4d9c2d91a32d314124659c6264f92c248ddfb65a468a88d31f2f3eab743a47a",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.hit.2.ogg",
+      "bytes": 4685,
+      "sha256": "215220d871d4f2ec9dfcfd9c9c46351a03fe1d007aaf0c48dc1275221e5c0cf6",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.hit.3.ogg",
+      "bytes": 4722,
+      "sha256": "74eccc52416aa89f0e9c3663433203b0d20fce0208772357eb26366200b25b92",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.hit.4.ogg",
+      "bytes": 4703,
+      "sha256": "ae9666f215402e5a51b30484ffafd870229e31c8095d439f1752f05012e53798",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.plank.0.ogg",
+      "bytes": 8068,
+      "sha256": "0c37aad6312458702613a952f6a5975d5f8bcfc41dd18ee878516104d3867b33",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.plank.1.ogg",
+      "bytes": 7899,
+      "sha256": "1dfff2b472b43694f6f7e3e59fd109e471a0b66c86d4420189cac7cedfc3e4f8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.plank.2.ogg",
+      "bytes": 7946,
+      "sha256": "3ef5d477b37510f0504f20adfe715ad81b8b7a0dace339b62ffb957341d41cb4",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.plank.3.ogg",
+      "bytes": 7848,
+      "sha256": "2ae0b275540a9b133c0589dea13f38166707d15c9d5006927d2a017a2d262858",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lib/wood.plank.4.ogg",
+      "bytes": 8061,
+      "sha256": "e8de00b3812bd22570430afea64c116615f077134c08d498ea89fb328f619b90",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/90.ogg",
+      "bytes": 8274,
+      "sha256": "caa65f12503193b23478089f84a247bdede278d7b611c50351f1f835633df00d",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/91.ogg",
+      "bytes": 9959,
+      "sha256": "b1bfd5b41fb7ddfda33b804f067ed481c8b49ea2c027a4d014a8d837397c35ff",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/92.ogg",
+      "bytes": 10219,
+      "sha256": "10a73744cdd867b94965867176481dec667d42e56679c2d958c839aaa3cbf3e8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/93.ogg",
+      "bytes": 10324,
+      "sha256": "8958a72ed74f214ab5415a396ed65c0d723a6b427748a0fd8f3bcfc7075e5c7f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/94.ogg",
+      "bytes": 10372,
+      "sha256": "69c8eb53046abd38e2461b519ec12617feff2c6d331e63f909c519e9b0768c2f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/95.ogg",
+      "bytes": 11220,
+      "sha256": "3ce445cc3a1dcd010f92715ad3a65ed58438b01a0967c65d43329cc15d247cd7",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/96.ogg",
+      "bytes": 11229,
+      "sha256": "19ef41450138ad923eb608513773e5f9035bb735b4c96a522d4fc67c6a1a5d31",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/97.ogg",
+      "bytes": 10558,
+      "sha256": "b57da7690ec02a0456149c8d9e0763aab52e854aede2c98015943c306c8517cd",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/98.ogg",
+      "bytes": 10547,
+      "sha256": "e3db9abf0fc1cb8b4e051542ab942ca76047511c83fcbb303adfdd42bdc38ac8",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/99.ogg",
+      "bytes": 10634,
+      "sha256": "0e02ac3f480b486d0b2cdb0d6751505be936ce4f36f120e314a5ff73ddbd171c",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/lindqvist/provenance.json",
+      "bytes": 3021,
+      "sha256": "2e091621b65fc19e411da5f1904d85ef478082f500596084734bded94b01461f",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/audio/manifest.json",
+      "bytes": 18207,
+      "sha256": "c75bcafff978ca7cab457cae468efb73b40f00e18fb6e56193d1269103cb8b48",
+      "group": "audio"
+    },
+    {
+      "path": "public/assets/weapons/shotgun.glb",
+      "bytes": 2018140,
+      "sha256": "fc5ff038426530143a66938b048fdb9b247bc07312b38be676f6068d61bc0c3b",
+      "group": "weapon"
+    },
+    {
+      "path": "public/assets/weapons/hands.glb",
+      "bytes": 1545044,
+      "sha256": "1825770d3d6fce36b4a14dc536f65e11c41cbed209b973c3912ff0cea50430cd",
+      "group": "weapon"
+    },
+    {
+      "path": "public/assets/weapons/ASSET-LICENSES.md",
+      "bytes": 10063,
+      "sha256": "219c2b0a8e45936a9d31b9ca9b547944b29e97910a00047975413ad1d8227489",
+      "group": "weapon"
+    },
+    {
+      "path": "public/assets/weapons/SHOTGUN-LICENSE.md",
+      "bytes": 2161,
+      "sha256": "8b9d814c67793317888f7d9aec03c9bfdb526c2c23a3355abc5b6a7a705be63f",
+      "group": "weapon"
+    },
+    {
+      "path": "public/assets/weapons/CC-BY-4.0.txt",
+      "bytes": 18657,
+      "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411",
+      "group": "weapon"
+    },
+    {
+      "path": "public/assets/weapons/KHRONOS-CONVERSION-LICENSE.txt",
+      "bytes": 1291,
+      "sha256": "f632d48313205eb11f8c7052cd04bbd3f64a79bef0f1811f14ae3c5c93a27704",
+      "group": "weapon"
+    },
+    {
+      "path": "public/assets/licenses/ASSET-LICENSES.md",
+      "bytes": 17934,
+      "sha256": "e2185046da24eeb866ed0b27f7c69e88fa09fbe069891f591ded233d4c9e89c2",
+      "group": "license"
+    },
+    {
+      "path": "public/assets/licenses/THIRD-PARTY-NOTICES.txt",
+      "bytes": 6706,
+      "sha256": "5babd6da0edd6182412a63df30662ab11e4abcd94f1bb25d6b5ae69b3fcd758e",
+      "group": "license"
+    },
+    {
+      "path": "public/assets/licenses/SOURCES.md",
+      "bytes": 209014,
+      "sha256": "2695562f18a1069013a98e5a4998d87d157f895020ef6b5466bde6e66c2f24f5",
+      "group": "license"
+    },
+    {
+      "path": "src/textures.js",
+      "bytes": 13387,
+      "sha256": "15f50b9fe061e220ddb08923bb68c7713d1e5c71d4544091c4bf8e6c4411920b",
+      "group": "loader"
+    },
+    {
+      "path": "public/assets/materials/fabric001/fabric001.albedo.dds",
+      "bytes": 87528,
+      "sha256": "72afce43895efbea6794ac1dd6d7d2db7fbbf0884be862b3d1e1bc636af08c06",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/fabric001/fabric001.normal.ktx2",
+      "bytes": 44160,
+      "sha256": "30586faeac5b4cb85b783569578e459ef00e7a3ff00c54eb9aa8b4ed4a9058ca",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/fabric001/fabric001.orm.dds",
+      "bytes": 21992,
+      "sha256": "0fe60ac9832daaf6d7917f94763bbbbba45d1998e5f9850b56c9823b3134342d",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/fabric001/materials.json",
+      "bytes": 695,
+      "sha256": "8f476cdf4db740b11474d1cff41497fcd21ad7b6e27ea8ed5044973e2b389c17",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/leather014/leather014.albedo.dds",
+      "bytes": 174904,
+      "sha256": "f8d19fd37a382bf11eeddd463608b64bfc666323e90ef0d4fe69a9f145f69ac8",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/leather014/leather014.normal.ktx2",
+      "bytes": 87840,
+      "sha256": "b9e71b741629a90fe19848462f1311f95c3c646731ede2957a1f9266a8a8ce58",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/leather014/leather014.orm.dds",
+      "bytes": 43832,
+      "sha256": "7eaa6fc02b257841699dab527cbe9d4314503e4630d1b06236c3a7a37b8b18e3",
+      "group": "material"
+    },
+    {
+      "path": "public/assets/materials/leather014/materials.json",
+      "bytes": 699,
+      "sha256": "14aaa633d27f12e3fa1bc229e4f7c5bda816052e4de8d6e8a8b182220420c7f5",
+      "group": "material"
+    }
+  ],
+  "copiedBytes": 30353208,
+  "materialSets": [
+    "concrete035",
+    "concrete047a",
+    "metal046b",
+    "rust003",
+    "rock001",
+    "moss002",
+    "pine_bark",
+    "pine_twig",
+    "fabric001",
+    "leather014"
+  ],
+  "licenseRecords": [
+    "assets/licenses/ASSET-LICENSES.md",
+    "assets/licenses/SOURCES.md",
+    "assets/weapons/ASSET-LICENSES.md",
+    "assets/weapons/SHOTGUN-LICENSE.md",
+    "assets/audio/guns/ASSET-LICENSES.md",
+    "assets/industrial/clamp/LICENSE.txt"
+  ],
+  "authored": [
+    {
+      "path": "public/assets/weapons/cable-cuff.glb",
+      "bytes": 832508,
+      "sha256": "e808258efcd5de32bb3e10b256dab006172748495bee47760bea35617ea7071a",
+      "creator": "Alex / Qualiacology with Codex",
+      "source": "tools/build-cable-cuff.py"
+    },
+    {
+      "path": "public/assets/weapons/cable-cuff.source.json",
+      "bytes": 552,
+      "sha256": "6cc2d54ee48c716dfeac4caac493a64fa2a178b0bb09543c216b9ffd64f3539c",
+      "creator": "Alex / Qualiacology with Codex",
+      "source": "tools/build-cable-cuff.py"
+    },
+    {
+      "path": "public/assets/ASSET-CREDITS.md",
+      "bytes": 3985,
+      "sha256": "9615a9b7f3ccac6bfe3355a089c21b760ec9b857a3e70f4ba833632c2458d52f",
+      "creator": "Alex / Qualiacology with Codex",
+      "source": "Original consolidated attribution record"
+    },
+    {
+      "path": "public/assets/industrial/clamp/clamp.glb",
+      "bytes": 9804840,
+      "sha256": "5c1ebc83837536080d8c3d954e74076745969d7ccea1a0a2da4dc8f01368eedc",
+      "creator": "Alex / Qualiacology with Codex",
+      "source": "tools/build-clamp.py",
+      "delivery": "tools/package-clamp.py"
+    },
+    {
+      "path": "public/assets/industrial/clamp/asset-manifest.json",
+      "bytes": 5602,
+      "sha256": "709f97ea7e4b965c4401dd913f70f9d44a8e29da445f504dc6b196c3f7d922cc",
+      "creator": "Alex / Qualiacology with Codex",
+      "source": "tools/build-clamp.py"
+    },
+    {
+      "path": "public/assets/industrial/clamp/LICENSE.txt",
+      "bytes": 611,
+      "sha256": "fe8e0754537d2b3e450efb3b267ec2c2187e45b2539e7050b335df9e303eda82",
+      "creator": "Alex / Qualiacology with Codex",
+      "source": "tools/build-clamp.py"
+    },
+    {
+      "path": "public/assets/industrial/clamp/clamp-legs.glb",
+      "creator": "Alex / Qualiacology with Codex",
+      "source": "tools/build-clamp-legs.py",
+      "bytes": 7004204,
+      "sha256": "58fde997441d1dac153e84aaf534b93a2e8a0055b8495651462225dea9f90d00"
+    },
+    {
+      "path": "public/assets/industrial/clamp/legs-manifest.json",
+      "creator": "Alex / Qualiacology with Codex",
+      "source": "tools/build-clamp-legs.py",
+      "bytes": 8267,
+      "sha256": "b8dbaddc81e598a92cc5f37ce2c7f8ca47c8175d1a08192f973d6111544a2dc4"
+    }
+  ],
+  "sourceAdaptations": [
+    {
+      "output": "src/viewmodel.js",
+      "sources": [
+        "C:/Users/Alex/Projects/olly-olly-wt/integration-20260923/src/actors/weapons/hands.js",
+        "C:/Users/Alex/Projects/olly-olly-wt/integration-20260923/src/actors/weapons/models.js"
+      ],
+      "changes": "Isolated forearm/hand IK and glove shader; removed donor injury shader. New cue/state system, cable-cuff positioning, firearm cycle and disposal."
+    }
+  ]
+}

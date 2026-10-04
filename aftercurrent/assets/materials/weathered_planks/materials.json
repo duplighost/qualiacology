@@ -1,0 +1,52 @@
+{
+ "weathered_planks": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "weathered_planks.albedo.dds",
+   "normal": "weathered_planks.normal.ktx2",
+   "orm": "weathered_planks.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 42.17,
+   "normalXY": 46.43,
+   "orm": {
+    "ao": 39.55,
+    "rough": 45.18,
+    "metal": 99
+   }
+  },
+  "sources": {
+   "albedo": "weathered_planks_diff_1k.png",
+   "normal": "weathered_planks_nor_gl_1k.png",
+   "rough": "weathered_planks_rough_1k.png",
+   "ao": "weathered_planks_ao_1k.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.499,
+   "p99": 4.787
+  },
+  "specAA": true,
+  "seconds": 7.5,
+  "metresPerTile": [
+   2,
+   2
+  ],
+  "source": "https://polyhaven.com/a/weathered_planks",
+  "license": "CC0-1.0"
+ }
+}

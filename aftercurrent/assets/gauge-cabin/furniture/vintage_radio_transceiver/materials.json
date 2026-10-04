@@ -1,0 +1,124 @@
+{
+ "vintage_radio_transceiver": {
+  "files": {
+   "albedo": "vintage_radio_transceiver.albedo.dds",
+   "normal": "vintage_radio_transceiver.normal.ktx2",
+   "orm": "vintage_radio_transceiver.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 39.03,
+   "normalXY": 43.29,
+   "orm": {
+    "ao": 99,
+    "rough": 28.91,
+    "metal": 33.31
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.717,
+   "p99": 4.478
+  },
+  "specAA": false,
+  "seconds": 4.2,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "vintage_radio_transceiver_accessories": {
+  "files": {
+   "albedo": "vintage_radio_transceiver_accessories.albedo.dds",
+   "normal": "vintage_radio_transceiver_accessories.normal.ktx2",
+   "orm": "vintage_radio_transceiver_accessories.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 38.4,
+   "normalXY": 43.56,
+   "orm": {
+    "ao": 99,
+    "rough": 26.45,
+    "metal": 29.43
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.677,
+   "p99": 4.364
+  },
+  "specAA": false,
+  "seconds": 4.5,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

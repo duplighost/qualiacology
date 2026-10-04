@@ -1,0 +1,17 @@
+{
+  "asset": "overcast_soil_puresky",
+  "title": "Overcast Soil (Pure Sky)",
+  "author": [
+    "Sergej Majboroda (original)",
+    "Jarod Guest (sky edit)"
+  ],
+  "source": "https://polyhaven.com/a/overcast_soil_puresky",
+  "license": "CC0-1.0",
+  "licenseURL": "https://polyhaven.com/license",
+  "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/overcast_soil_puresky_2k.hdr",
+  "fetchedAt": "2026-10-02T11:58:25.125Z",
+  "bytes": 4568000,
+  "sha256": "5414e1ac0c35e451d28595b2a2cba05e2ca301fdeb755b0a469408443093dafc",
+  "sourceMD5": "877caf0680d7269037995f6567a67103",
+  "changes": "Original 2K Radiance HDR bytes, no image edits. Authored lighting intensity is independent of the source pixels."
+}

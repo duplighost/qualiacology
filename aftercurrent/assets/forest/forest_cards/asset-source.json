@@ -1,0 +1,33 @@
+{
+  "description": "Original twig and bracken geometry rendered for Alex / Qualiacology in OLLY OLLY; leaf cell derives from ambientCG ScatteredLeaves007, CC0 1.0. Copied byte for byte. No donor changes.",
+  "sources": [
+    {
+      "file": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\tools\\blender\\tree_cards.py",
+      "role": "Original twig and bracken geometry and atlas rendering"
+    },
+    {
+      "file": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\tools\\forest\\atlas.py",
+      "role": "Atlas assembly and photographed leaf acquisition record"
+    }
+  ],
+  "leafAttribution": {
+    "title": "ScatteredLeaves007",
+    "creator": "Lennart Demes / ambientCG",
+    "license": "CC0 1.0",
+    "url": "https://ambientcg.com/a/ScatteredLeaves007"
+  },
+  "copied": [
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\public\\assets\\forest\\forest_cards.albedo.dds",
+      "file": "forest_cards.albedo.dds",
+      "bytes": 2796368,
+      "sha256": "e30621651f49e2b81a4651c87a5a40657bf21f04129668ed8d07c45ce8b76305"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\public\\assets\\forest\\forest_cards.normal.ktx2",
+      "file": "forest_cards.normal.ktx2",
+      "bytes": 2796752,
+      "sha256": "c1d3c2e521ad97a86673e982d94d1d9879fc3180924ec90f91cfa643f31397df"
+    }
+  ]
+}

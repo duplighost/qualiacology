@@ -1,0 +1,19 @@
+{
+  "pavingstones138": {
+    "files": {
+      "albedo": "pavingstones138.albedo.dds",
+      "normal": "pavingstones138.normal.ktx2",
+      "orm": "pavingstones138.orm.dds"
+    },
+    "metresPerTile": [
+      1,
+      2
+    ],
+    "source": {
+      "page": "https://ambientcg.com/a/PavingStones138",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "donor": "winterline/public/assets/materials/PavingStones138"
+    }
+  }
+}

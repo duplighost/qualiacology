@@ -1,0 +1,31 @@
+{
+  "name": "structural_paint",
+  "license": "CC0-1.0",
+  "source": "https://polyhaven.com/a/green_metal_rust",
+  "authors": [
+    "Rob Tuytel"
+  ],
+  "processing": "Full linear-light mip chain, BC1 albedo/ORM and BC5 normal. Structural enamel retinted preserving photographed RGB variation.",
+  "outputs": [
+    {
+      "file": "materials.json",
+      "bytes": 819,
+      "sha256": "fce047f3ab01aa323b0783e1b13fbfc9d5567a4ab9b59c07fc5aaccda5480745"
+    },
+    {
+      "file": "structural_paint.albedo.dds",
+      "bytes": 699192,
+      "sha256": "958aa90514df0f2646f5b953456f04de7c72bee34d9ee20960557ffcb29f0f01"
+    },
+    {
+      "file": "structural_paint.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "16266fdca0eb5863621c16c8572a170e6a71cce2c66bf26493085f8722af2130"
+    },
+    {
+      "file": "structural_paint.orm.dds",
+      "bytes": 699192,
+      "sha256": "f5582ffcfed936da415b0550f52c4395ebc9a06347b06c2bc1d0b903564ebd2d"
+    }
+  ]
+}

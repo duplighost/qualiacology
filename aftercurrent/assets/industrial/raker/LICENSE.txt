@@ -1,0 +1,4 @@
+Original AFTERCURRENT RAKER geometry, UVs, rig and assembly.
+CC0 surface photos: Green Metal Rust by Rob Tuytel / Poly Haven https://polyhaven.com/a/green_metal_rust; Metal046B by Lennart Demes / ambientCG https://ambientcg.com/view?id=Metal046B.
+Timber bark texture: Pine Tree 01, Rob Tuytel (photography), Rico Cilliers (modeling), Poly Haven https://polyhaven.com/a/pine_tree_01; CC0. Only the existing local texture was reused, not tree geometry. Original cylindrical reprojection, stripped-fibre blend and end grain.
+https://creativecommons.org/publicdomain/zero/1.0/

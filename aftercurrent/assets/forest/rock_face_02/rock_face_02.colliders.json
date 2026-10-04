@@ -1,0 +1,8 @@
+{
+ "id": "rock_face_02",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "The crag places these along the west bank; its colliders come from scanprofiles.js.",
+ "colliders": []
+}

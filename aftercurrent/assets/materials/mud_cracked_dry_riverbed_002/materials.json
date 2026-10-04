@@ -1,0 +1,52 @@
+{
+ "mud_cracked_dry_riverbed_002": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "mud_cracked_dry_riverbed_002.albedo.dds",
+   "normal": "mud_cracked_dry_riverbed_002.normal.ktx2",
+   "orm": "mud_cracked_dry_riverbed_002.orm.dds"
+  },
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 5592944,
+   "orm": 2796344
+  },
+  "psnr": {
+   "albedo": 39.41,
+   "normalXY": 36.71,
+   "orm": {
+    "ao": 33.88,
+    "rough": 42.18,
+    "metal": 99
+   }
+  },
+  "sources": {
+   "albedo": "mud_cracked_dry_riverbed_002_diff_2k.png",
+   "normal": "mud_cracked_dry_riverbed_002_nor_gl_2k.png",
+   "rough": "mud_cracked_dry_riverbed_002_rough_2k.png",
+   "ao": "mud_cracked_dry_riverbed_002_ao_2k.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 2.368,
+   "p99": 7.693
+  },
+  "specAA": true,
+  "seconds": 30,
+  "metresPerTile": [
+   2,
+   2
+  ],
+  "source": "https://polyhaven.com/a/mud_cracked_dry_riverbed_002",
+  "license": "CC0-1.0"
+ }
+}

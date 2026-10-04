@@ -1,0 +1,46 @@
+{
+ "concrete047a": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "concrete047a.albedo.dds",
+   "normal": "concrete047a.normal.ktx2",
+   "orm": "concrete047a.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 35.6,
+   "normalXY": 50.17,
+   "orm": {
+    "ao": 42.99,
+    "rough": 42.46,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.418,
+   "p99": 1.355
+  },
+  "specAA": false,
+  "seconds": 4.1
+ }
+}

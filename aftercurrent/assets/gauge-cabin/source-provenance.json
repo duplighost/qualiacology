@@ -1,0 +1,746 @@
+{
+  "createdAt": "2026-10-02T10:33:34.304Z",
+  "scope": "Exact local donor copies only; no donor source logic or layout copied. No donor changes.",
+  "models": [
+    {
+      "id": "painted_wooden_cabinet",
+      "sourceURL": "https://polyhaven.com/a/painted_wooden_cabinet",
+      "author": "Kirill Sannikov",
+      "license": "CC0 1.0",
+      "dims": [
+        1.1947,
+        1.1819,
+        0.6166
+      ],
+      "visualAcceptance": "Package/decoded geometry is inspected by the staging CPU tool; runtime appearance remains unreviewed."
+    },
+    {
+      "id": "painted_wooden_chair_01",
+      "sourceURL": "https://polyhaven.com/a/painted_wooden_chair_01",
+      "author": "Kuutti Siitonen",
+      "license": "CC0 1.0",
+      "dims": [
+        0.4318,
+        0.9565,
+        0.5398
+      ],
+      "visualAcceptance": "Package/decoded geometry is inspected by the staging CPU tool; runtime appearance remains unreviewed."
+    },
+    {
+      "id": "wooden_bookshelf_worn",
+      "sourceURL": "https://polyhaven.com/a/wooden_bookshelf_worn",
+      "author": "Ulan Cabanilla",
+      "license": "CC0 1.0",
+      "dims": [
+        1.374,
+        2.0634,
+        0.5813
+      ],
+      "visualAcceptance": "Package/decoded geometry is inspected by the staging CPU tool; runtime appearance remains unreviewed."
+    },
+    {
+      "id": "vintage_radio_transceiver",
+      "sourceURL": "https://polyhaven.com/a/vintage_radio_transceiver",
+      "author": "Mateusz Sadek",
+      "license": "CC0 1.0",
+      "dims": [
+        0.5738,
+        0.434,
+        0.4138
+      ],
+      "visualAcceptance": "Package/decoded geometry is inspected by the staging CPU tool; runtime appearance remains unreviewed."
+    },
+    {
+      "id": "sofa_03",
+      "sourceURL": "https://polyhaven.com/a/sofa_03",
+      "author": "Fran Calvente",
+      "license": "CC0 1.0",
+      "dims": [
+        2.7312,
+        1.1183,
+        0.9251
+      ],
+      "visualAcceptance": "Package/decoded geometry is inspected by the staging CPU tool; runtime appearance remains unreviewed."
+    },
+    {
+      "id": "vintage_grandfather_clock_01",
+      "sourceURL": "https://polyhaven.com/a/vintage_grandfather_clock_01",
+      "author": "Yann Kervran, James Ray Cock",
+      "license": "CC0 1.0",
+      "dims": [
+        0.6256,
+        2.1906,
+        0.4266
+      ],
+      "visualAcceptance": "Package/decoded geometry is inspected by the staging CPU tool; runtime appearance remains unreviewed."
+    },
+    {
+      "id": "wooden_crate_01",
+      "sourceURL": "https://polyhaven.com/a/wooden_crate_01",
+      "author": "James Ray Cock",
+      "license": "CC0 1.0",
+      "dims": [
+        0.8253,
+        0.3496,
+        0.409
+      ],
+      "visualAcceptance": "Package/decoded geometry is inspected by the staging CPU tool; runtime appearance remains unreviewed."
+    }
+  ],
+  "materials": {
+    "wp-willow-stained": {
+      "files": {
+        "albedo": "wp-willow-stained.albedo.dds",
+        "normal": "wp-willow-stained.normal.ktx2",
+        "orm": "wp-willow-stained.orm.dds"
+      },
+      "metresPerTile": [
+        1.06,
+        0.9006
+      ],
+      "source": {
+        "title": "Willow Bough, 1887 (William Morris)",
+        "page": "https://www.metmuseum.org/art/collection/search/384022",
+        "licence": "Public domain (The Met Open Access, CC0 1.0)",
+        "author": "William Morris (British, Walthamstow, London 1834–1896 Hammersmith, London)",
+        "credit": "Purchase, Edward C. Moore Jr. Gift, 1923; accession 23.163.4k",
+        "scan": "met-384022-willow-bough.jpg",
+        "process": {
+          "lattice": [
+            [
+              1133.57,
+              1.18
+            ],
+            [
+              5.77,
+              1926.74
+            ]
+          ],
+          "score": [
+            0.875,
+            0.885
+          ],
+          "instances": 1,
+          "repaired": 0,
+          "cell_px": [
+            1134,
+            1927
+          ],
+          "scale": 0.7840342124019958,
+          "blend": [
+            0.08,
+            0.08
+          ]
+        }
+      }
+    },
+    "woodsiding011": {
+      "files": {
+        "albedo": "woodsiding011.albedo.dds",
+        "normal": "woodsiding011.normal.ktx2"
+      },
+      "metresPerTile": [
+        2,
+        2
+      ],
+      "source": {
+        "page": "https://ambientcg.com/a/WoodSiding011",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Wood Siding 011"
+      }
+    },
+    "roofingtiles002": {
+      "files": {
+        "albedo": "roofingtiles002.albedo.dds",
+        "normal": "roofingtiles002.normal.ktx2",
+        "orm": "roofingtiles002.orm.dds"
+      },
+      "metresPerTile": [
+        2,
+        2
+      ],
+      "source": {
+        "page": "https://ambientcg.com/a/RoofingTiles002",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Roofing Tiles 002"
+      }
+    },
+    "bricks089": {
+      "files": {
+        "albedo": "bricks089.albedo.dds",
+        "normal": "bricks089.normal.ktx2",
+        "orm": "bricks089.orm.dds"
+      },
+      "metresPerTile": [
+        2.2,
+        1.1
+      ],
+      "source": {
+        "page": "https://ambientcg.com/a/Bricks089",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "donor": "curfew/work/visual-overhaul/masonry-research/Bricks089"
+      }
+    },
+    "woodfloor051": {
+      "files": {
+        "albedo": "woodfloor051.albedo.dds",
+        "normal": "woodfloor051.normal.ktx2",
+        "orm": "woodfloor051.orm.dds"
+      },
+      "metresPerTile": [
+        1.6,
+        1.6
+      ],
+      "source": {
+        "page": "https://ambientcg.com/a/WoodFloor051",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "donor": "winterline/public/assets/materials/WoodFloor051"
+      }
+    },
+    "plaster001": {
+      "files": {
+        "albedo": "plaster001.albedo.dds",
+        "normal": "plaster001.normal.ktx2",
+        "orm": "plaster001.orm.dds"
+      },
+      "metresPerTile": [
+        2,
+        2
+      ],
+      "source": {
+        "page": "https://ambientcg.com/a/Plaster001",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "donor": "winterline/public/assets/materials/Plaster001"
+      }
+    },
+    "fabric001": {
+      "files": {
+        "albedo": "fabric001.albedo.dds",
+        "normal": "fabric001.normal.ktx2",
+        "orm": "fabric001.orm.dds"
+      },
+      "metresPerTile": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "page": "https://ambientcg.com/a/Fabric001",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Fabric 001"
+      }
+    }
+  },
+  "files": [
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_cabinet\\materials.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_cabinet\\materials.json",
+      "relative": "furniture/painted_wooden_cabinet/materials.json",
+      "bytes": 967,
+      "sha256": "b6bdf0b9a66316ae549dc500703e73a8cd9ce9817d3aef299211f052e7034aa7"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.albedo.dds",
+      "relative": "furniture/painted_wooden_cabinet/painted_wooden_cabinet.albedo.dds",
+      "bytes": 699192,
+      "sha256": "c41205f3f0d56e293ab51388020d2f2a9eb5d3e9c0357a4af51e8325a4c2a7f7"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.colliders.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.colliders.json",
+      "relative": "furniture/painted_wooden_cabinet/painted_wooden_cabinet.colliders.json",
+      "bytes": 3029,
+      "sha256": "a47d5a1e4dba1a42072c8c6cd0f621be8122e81113b019186aca6e74a5928a5f"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.glb",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.glb",
+      "relative": "furniture/painted_wooden_cabinet/painted_wooden_cabinet.glb",
+      "bytes": 19056,
+      "sha256": "2f92582005a8b4a9a5f0c103ebc47c8ee6039896b095933b90ce65d611692e20"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.normal.ktx2",
+      "relative": "furniture/painted_wooden_cabinet/painted_wooden_cabinet.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "68d4c3f3a73cf593d3aa48fb6e8ea346dcdfec1235f816e03dbb8c25671fc37e"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.orm.dds",
+      "relative": "furniture/painted_wooden_cabinet/painted_wooden_cabinet.orm.dds",
+      "bytes": 174904,
+      "sha256": "ac90f651d735945f2bc1eed5ecca8d06b002ccac562bc64b096ed31e80d90335"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.source.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_cabinet\\painted_wooden_cabinet.source.json",
+      "relative": "furniture/painted_wooden_cabinet/painted_wooden_cabinet.source.json",
+      "bytes": 1461,
+      "sha256": "5ab172c5be71675c813ae4699b76ec67e0266e33cfb90cfc7c957fc3303c98c7"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_chair_01\\materials.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_chair_01\\materials.json",
+      "relative": "furniture/painted_wooden_chair_01/materials.json",
+      "bytes": 968,
+      "sha256": "b4b88ddd1f899829d0b89effb0c5711b786d6053a8567244bb55d5c47d7aa1d9"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.albedo.dds",
+      "relative": "furniture/painted_wooden_chair_01/painted_wooden_chair_01.albedo.dds",
+      "bytes": 699192,
+      "sha256": "a7e645b1a857593699836d5b146b2b941f78fa4f41f98fb869220c7d2875dd76"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.colliders.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.colliders.json",
+      "relative": "furniture/painted_wooden_chair_01/painted_wooden_chair_01.colliders.json",
+      "bytes": 544,
+      "sha256": "f427f06e12f2a5c941f4e48ce0f2d070e14b634ff1ac183d88bddc5992cdaebf"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.glb",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.glb",
+      "relative": "furniture/painted_wooden_chair_01/painted_wooden_chair_01.glb",
+      "bytes": 8836,
+      "sha256": "19cc97b26c17d14d9b5c40e084ab8cca4a5ad19b2d4625a493d6a7425b9404ac"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.normal.ktx2",
+      "relative": "furniture/painted_wooden_chair_01/painted_wooden_chair_01.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "f26c4ba4f60c95085660921fa6bb3d0506174738ac03d1422f62f828d5b8964e"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.orm.dds",
+      "relative": "furniture/painted_wooden_chair_01/painted_wooden_chair_01.orm.dds",
+      "bytes": 174904,
+      "sha256": "544fe0036898721413787d82549bb168e32f3a18933549e8a9b81751c1b631c5"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.source.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\painted_wooden_chair_01\\painted_wooden_chair_01.source.json",
+      "relative": "furniture/painted_wooden_chair_01/painted_wooden_chair_01.source.json",
+      "bytes": 730,
+      "sha256": "cbb76c496b0d53afe9ab863c21b2ac593f5086bb2a09b67a600eb9c5038f2ee1"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\wooden_bookshelf_worn\\materials.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_bookshelf_worn\\materials.json",
+      "relative": "furniture/wooden_bookshelf_worn/materials.json",
+      "bytes": 965,
+      "sha256": "4bcbf472585fa2c2a696d0b9d337a337e03e1061b509feb0d96bb90ae94e0cf9"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.albedo.dds",
+      "relative": "furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.albedo.dds",
+      "bytes": 699192,
+      "sha256": "1f5261550a0ce11a4bf948952c01b72419c5bf3e154cfc2b22c3a7d4644c8631"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.colliders.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.colliders.json",
+      "relative": "furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.colliders.json",
+      "bytes": 535,
+      "sha256": "4cc583274e43f461d0dab26f28f7a4635bd5961a5753c3ddf2469a795a34399a"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.glb",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.glb",
+      "relative": "furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.glb",
+      "bytes": 31048,
+      "sha256": "a314066ea9c90b15cfb4c668921d9add70b4cf685d62374744eea36b1a06ef05"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.normal.ktx2",
+      "relative": "furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "ae6451f96dce674bcfe4c3dda596e69e2f3418498ecf0c6933ed5bc0f230d44b"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.orm.dds",
+      "relative": "furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.orm.dds",
+      "bytes": 174904,
+      "sha256": "b3da0f5019e37b4729ae78125d6b5d861a0f7c174973104c29acb65a1d58ca6f"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.source.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_bookshelf_worn\\wooden_bookshelf_worn.source.json",
+      "relative": "furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.source.json",
+      "bytes": 710,
+      "sha256": "5bf1c1776076cc7eee5486a8960e8bfa4356b71e38cccecf4711829783c0d99f"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\materials.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\materials.json",
+      "relative": "furniture/vintage_radio_transceiver/materials.json",
+      "bytes": 2007,
+      "sha256": "4ef0c3d25b8d43f5ecdb40d0dc235f61282f7e80ee57cccff1b395fe8dc58f66"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver.albedo.dds",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver.albedo.dds",
+      "bytes": 699192,
+      "sha256": "3556daba6ce0d0d64cc0d0269e89b28bb9a025029b803ffe34769a15701ad6f4"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver.colliders.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver.colliders.json",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver.colliders.json",
+      "bytes": 564,
+      "sha256": "39a39cf4da2c51d511c674e01cc923e93c660961dc4a1e8a10d84f6a5f813fab"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver.glb",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver.glb",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver.glb",
+      "bytes": 61392,
+      "sha256": "13af557faef699d60f560efc8a8f772a437ea593533fc05e7b134d6b1087133e"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver.normal.ktx2",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "39f87b8ba02e8d932ed9b39668f4aa6abdc67169f2f5d3dc605ff65e9b035615"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver.orm.dds",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver.orm.dds",
+      "bytes": 43832,
+      "sha256": "daa9cb97762c5b9b2fe8dfdee7d1f8d554d5d041164c89dcba35ac5e2fae504b"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver.source.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver.source.json",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver.source.json",
+      "bytes": 736,
+      "sha256": "ac3502d11787326b5315c397aa9cba626f82bcb0d1e060f45fe67fb94e0bf3d6"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver_accessories.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver_accessories.albedo.dds",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver_accessories.albedo.dds",
+      "bytes": 699192,
+      "sha256": "6ec2c521115ed0c9730914f72b6ec1bab90663e504c6417a538d5746e124d30d"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver_accessories.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver_accessories.normal.ktx2",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver_accessories.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "97d8e8a3c13e5ee07151855ba7987c405f3d17ba11e5d196342e03381c911c67"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\vintage_radio_transceiver\\vintage_radio_transceiver_accessories.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_radio_transceiver\\vintage_radio_transceiver_accessories.orm.dds",
+      "relative": "furniture/vintage_radio_transceiver/vintage_radio_transceiver_accessories.orm.dds",
+      "bytes": 43832,
+      "sha256": "7d092048041b1759f8f7fb586f59d5b7064ef40486dfaa74fbea982a47ec1ebc"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\sofa_03\\materials.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\sofa_03\\materials.json",
+      "relative": "furniture/sofa_03/materials.json",
+      "bytes": 1847,
+      "sha256": "37d1719f221d09ea3f496ca812cf9319056352fd1a5976c8fec96bebbdc2dcd6"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\sofa_03\\sofa_03.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\sofa_03\\sofa_03.albedo.dds",
+      "relative": "furniture/sofa_03/sofa_03.albedo.dds",
+      "bytes": 699192,
+      "sha256": "135a617a12e21d46784e8cab807087ff7c20d00a5098616b95f16693b4c847b6"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\sofa_03\\sofa_03.colliders.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\sofa_03\\sofa_03.colliders.json",
+      "relative": "furniture/sofa_03/sofa_03.colliders.json",
+      "bytes": 1658,
+      "sha256": "2d315cd0e9c31a6fe58a93431958e4689e6031bf90a28c46ade40abe6f353da7"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\sofa_03\\sofa_03.glb",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\sofa_03\\sofa_03.glb",
+      "relative": "furniture/sofa_03/sofa_03.glb",
+      "bytes": 41464,
+      "sha256": "a587301574f5102c6dd2f2ecc27da7bb8418ac254107a48e2e69e4dfd991ed40"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\sofa_03\\sofa_03.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\sofa_03\\sofa_03.normal.ktx2",
+      "relative": "furniture/sofa_03/sofa_03.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "348aef35b3cc7af49612798b46c2ba412943a4f0d32815ed02977472edb0afbe"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\sofa_03\\sofa_03.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\sofa_03\\sofa_03.orm.dds",
+      "relative": "furniture/sofa_03/sofa_03.orm.dds",
+      "bytes": 174904,
+      "sha256": "9260b0a58fa9e855aef73025cda598adaedb7729e862787a4a0590879b97cbe0"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\sofa_03\\sofa_03.source.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\sofa_03\\sofa_03.source.json",
+      "relative": "furniture/sofa_03/sofa_03.source.json",
+      "bytes": 663,
+      "sha256": "88a7385bc4b3f07c8b404ea228c513bbd033fcc2c4849ffdec38a3ab4bac6235"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\vintage_grandfather_clock_01\\materials.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_grandfather_clock_01\\materials.json",
+      "relative": "furniture/vintage_grandfather_clock_01/materials.json",
+      "bytes": 1384,
+      "sha256": "12da0428684f5ca8d333378062a25ccc0822442d4f5917abe8dddc38f045cb9f"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.albedo.dds",
+      "relative": "furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.albedo.dds",
+      "bytes": 699192,
+      "sha256": "5bb97989f39e7411f5ea9973503a0a6706994ac1c3089de043b91378c5243cd4"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.colliders.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.colliders.json",
+      "relative": "furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.colliders.json",
+      "bytes": 2036,
+      "sha256": "21b94347c15f548fa4f1e5f37aae353974e9fc62c4c7cab9f04020add743237d"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.glb",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.glb",
+      "relative": "furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.glb",
+      "bytes": 101432,
+      "sha256": "0e882190f34f24f70afab3860c1bdb8834ae8e489ec98252471b281d2d3ec5c6"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.normal.ktx2",
+      "relative": "furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "95c20f42e0b53582d8dec1f97306d111746fb5fa4485381ecca0dfc06308e4a1"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.orm.dds",
+      "relative": "furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.orm.dds",
+      "bytes": 174904,
+      "sha256": "a9c011b739fc166676d0a02e09dab86636c4ec201c52edeb2edec72dab3dabda"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.source.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\vintage_grandfather_clock_01\\vintage_grandfather_clock_01.source.json",
+      "relative": "furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.source.json",
+      "bytes": 1143,
+      "sha256": "fcd6fb48e52c055dde785f26454326f974c707b97834b3750cd6ea52d5c32f5a"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\wooden_crate_01\\materials.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_crate_01\\materials.json",
+      "relative": "furniture/wooden_crate_01/materials.json",
+      "bytes": 939,
+      "sha256": "bdaa6739aaa83cf1d1e7ab6f593d49b1d816b2e360a5d3cf44f8002e9786c1be"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\wooden_crate_01\\wooden_crate_01.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_crate_01\\wooden_crate_01.albedo.dds",
+      "relative": "furniture/wooden_crate_01/wooden_crate_01.albedo.dds",
+      "bytes": 174904,
+      "sha256": "e985cb2846b119bac42b8a24f50f6e955016525a23c0247c60b5ae94d24f163e"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\wooden_crate_01\\wooden_crate_01.colliders.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_crate_01\\wooden_crate_01.colliders.json",
+      "relative": "furniture/wooden_crate_01/wooden_crate_01.colliders.json",
+      "bytes": 1155,
+      "sha256": "86743543af61eaba1df35eb73c0afc8f0807e479b0af455e7b32488e4a1de5bb"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\wooden_crate_01\\wooden_crate_01.glb",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_crate_01\\wooden_crate_01.glb",
+      "relative": "furniture/wooden_crate_01/wooden_crate_01.glb",
+      "bytes": 35492,
+      "sha256": "ab0a3bc60209a422e0111a625594ff8f90c6ac23b7c8cc3298dfdc5147b25927"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\wooden_crate_01\\wooden_crate_01.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_crate_01\\wooden_crate_01.normal.ktx2",
+      "relative": "furniture/wooden_crate_01/wooden_crate_01.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "a1374a493032a943ef4038bc18b5420f506de2c6f595239e97cd9a110352e6cb"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\wooden_crate_01\\wooden_crate_01.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_crate_01\\wooden_crate_01.orm.dds",
+      "relative": "furniture/wooden_crate_01/wooden_crate_01.orm.dds",
+      "bytes": 43832,
+      "sha256": "5c090a12957b315c5905967e65747f957bc510939ef613655a8ab0ea1f52c50d"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\wooden_crate_01\\wooden_crate_01.source.json",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\furniture\\wooden_crate_01\\wooden_crate_01.source.json",
+      "relative": "furniture/wooden_crate_01/wooden_crate_01.source.json",
+      "bytes": 1004,
+      "sha256": "cbab34b322cd180a365d8608186f77c93ac63d81805a662bea56e8c3a6903f9a"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\wp-willow-stained\\wp-willow-stained.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\wp-willow-stained\\wp-willow-stained.albedo.dds",
+      "relative": "materials/wp-willow-stained/wp-willow-stained.albedo.dds",
+      "bytes": 699192,
+      "sha256": "165648d799a0a948a5ebc48807959b05789a0bc1ef091a538f1c4bdce57d3620"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\wp-willow-stained\\wp-willow-stained.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\wp-willow-stained\\wp-willow-stained.normal.ktx2",
+      "relative": "materials/wp-willow-stained/wp-willow-stained.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "fb371ccdd86684550088600d7eb18c485fb914d2294a04e90b533fc758c667f4"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\wp-willow-stained\\wp-willow-stained.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\wp-willow-stained\\wp-willow-stained.orm.dds",
+      "relative": "materials/wp-willow-stained/wp-willow-stained.orm.dds",
+      "bytes": 174904,
+      "sha256": "51dd488e186b8c0059d879818f2601ebe544b003791dbefc746e9dd660f99164"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\woodsiding011\\woodsiding011.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\woodsiding011\\woodsiding011.albedo.dds",
+      "relative": "materials/woodsiding011/woodsiding011.albedo.dds",
+      "bytes": 2796344,
+      "sha256": "5f1aa85383834ac1909307dc08854bdecc49efe3314713b1a457c04a47fada09"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\woodsiding011\\woodsiding011.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\woodsiding011\\woodsiding011.normal.ktx2",
+      "relative": "materials/woodsiding011/woodsiding011.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "4647fb99990cce94fc07b21caaa4402c1fdc5f03a95e14ea25a419e287ee6094"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\roofingtiles002\\roofingtiles002.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\roofingtiles002\\roofingtiles002.albedo.dds",
+      "relative": "materials/roofingtiles002/roofingtiles002.albedo.dds",
+      "bytes": 2796344,
+      "sha256": "dc91bf694802efbfb49e4e9a8b08e10ec52c9f4cece2d7e6fe5289e08eaef44b"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\roofingtiles002\\roofingtiles002.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\roofingtiles002\\roofingtiles002.normal.ktx2",
+      "relative": "materials/roofingtiles002/roofingtiles002.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "4e161d35af5f061f432a74b2777975b0263102eb58d577325be741fa31c02665"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\roofingtiles002\\roofingtiles002.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\roofingtiles002\\roofingtiles002.orm.dds",
+      "relative": "materials/roofingtiles002/roofingtiles002.orm.dds",
+      "bytes": 174904,
+      "sha256": "6a6686c7af80912a90f1d2f495afa66354a3b225faaa2d989741857760f437c8"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\bricks089\\bricks089.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\bricks089\\bricks089.albedo.dds",
+      "relative": "materials/bricks089/bricks089.albedo.dds",
+      "bytes": 349672,
+      "sha256": "2359efb95116b36f929e9299c50d286706099797d7066657f302768fd5c257b8"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\bricks089\\bricks089.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\bricks089\\bricks089.normal.ktx2",
+      "relative": "materials/bricks089/bricks089.normal.ktx2",
+      "bytes": 175264,
+      "sha256": "27d3c617787b7d613d92496c5eaec3c7f03b34e754febb5c6dc5507ed03d641e"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\bricks089\\bricks089.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\bricks089\\bricks089.orm.dds",
+      "relative": "materials/bricks089/bricks089.orm.dds",
+      "bytes": 87528,
+      "sha256": "44b58663d408312c6aa9ff5b86990ac16c62377f911a4604f7feb34113d3ba65"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\woodfloor051\\woodfloor051.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\woodfloor051\\woodfloor051.albedo.dds",
+      "relative": "materials/woodfloor051/woodfloor051.albedo.dds",
+      "bytes": 699192,
+      "sha256": "bfb8c0ba25ab064ec1571d03d693e47652ed7115bfff681ff00eef80b44dbceb"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\woodfloor051\\woodfloor051.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\woodfloor051\\woodfloor051.normal.ktx2",
+      "relative": "materials/woodfloor051/woodfloor051.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "ac37414543bd6d5aebdf65284bf8f01151b7862a76440979e8a132269547e140"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\woodfloor051\\woodfloor051.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\woodfloor051\\woodfloor051.orm.dds",
+      "relative": "materials/woodfloor051/woodfloor051.orm.dds",
+      "bytes": 174904,
+      "sha256": "17e729e64af3b9e10cf3c6c480bb31706f6d762750a4affeadf40dccda06ecb8"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\plaster001\\plaster001.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\plaster001\\plaster001.albedo.dds",
+      "relative": "materials/plaster001/plaster001.albedo.dds",
+      "bytes": 699192,
+      "sha256": "3623123483daf84c6605f19661779544dc507c37df0bb5b91da4c53de64b7d97"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\plaster001\\plaster001.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\plaster001\\plaster001.normal.ktx2",
+      "relative": "materials/plaster001/plaster001.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "6580b8c0f833eb305410b27a9c98c66e057ae23d570477fbf5e464744dde45e8"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\plaster001\\plaster001.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\plaster001\\plaster001.orm.dds",
+      "relative": "materials/plaster001/plaster001.orm.dds",
+      "bytes": 43832,
+      "sha256": "39dec8d17c7415ae9b74c03e58ef28d41a4f5bd3a876b8d21e4d75d7a4d95ac3"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\fabric001\\fabric001.albedo.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\fabric001\\fabric001.albedo.dds",
+      "relative": "materials/fabric001/fabric001.albedo.dds",
+      "bytes": 87528,
+      "sha256": "72afce43895efbea6794ac1dd6d7d2db7fbbf0884be862b3d1e1bc636af08c06"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\fabric001\\fabric001.normal.ktx2",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\fabric001\\fabric001.normal.ktx2",
+      "relative": "materials/fabric001/fabric001.normal.ktx2",
+      "bytes": 44160,
+      "sha256": "30586faeac5b4cb85b783569578e459ef00e7a3ff00c54eb9aa8b4ed4a9058ca"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\fabric001\\fabric001.orm.dds",
+      "destination": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\gauge-cabin-work\\assets\\materials\\fabric001\\fabric001.orm.dds",
+      "relative": "materials/fabric001/fabric001.orm.dds",
+      "bytes": 21992,
+      "sha256": "0fe60ac9832daaf6d7917f94763bbbbba45d1998e5f9850b56c9823b3134342d"
+    }
+  ],
+  "totalCopiedBytes": 23119965
+}

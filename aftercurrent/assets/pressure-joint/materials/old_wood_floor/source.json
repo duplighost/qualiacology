@@ -1,0 +1,32 @@
+{
+  "id": "old_wood_floor",
+  "page": "https://polyhaven.com/a/old_wood_floor",
+  "author": "Guillaume Monsergent",
+  "licence": "CC0 1.0",
+  "licenceURL": "https://polyhaven.com/license",
+  "metresPerTile": [
+    3,
+    3
+  ],
+  "sourceReview": "Official asset and licence pages inspected before this download. One 1K set selected to replace parquet-like broad floor and trim; no other downloads.",
+  "maps": [
+    {
+      "file": "old_wood_floor_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/old_wood_floor/old_wood_floor_diff_1k.jpg",
+      "bytes": 755937,
+      "sha256": "e6952149cd1bb02e485a183f526e9dbe8d90d2a22bfac564cc3874cfb8eddd03"
+    },
+    {
+      "file": "old_wood_floor_nor_gl_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/old_wood_floor/old_wood_floor_nor_gl_1k.jpg",
+      "bytes": 714487,
+      "sha256": "617f2b20da0af0304ccf55194beb31a9f30ff1acf793a41a61a43d9d0f3bf886"
+    },
+    {
+      "file": "old_wood_floor_arm_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/old_wood_floor/old_wood_floor_arm_1k.jpg",
+      "bytes": 646103,
+      "sha256": "b13bd2127d6b53957b9a1cb30ecf32b514ccfc04e662e1084e51bf56e1ce3a04"
+    }
+  ]
+}

@@ -1,0 +1,212 @@
+{
+  "asset": "SKIMMER water-jet inspection sled",
+  "revision": 3,
+  "status": "staged, pending independent visual and game-motion review",
+  "runtime": [
+    {
+      "triangles": 27344,
+      "materials": [
+        "SKIMMER / photographed PBR atlas"
+      ],
+      "min": [
+        -0.7666459679603577,
+        -0.023950155824422836,
+        -1.159999966621399
+      ],
+      "max": [
+        0.7666459679603577,
+        0.8009999990463257,
+        1.0700000524520874
+      ],
+      "file": "skimmer.glb",
+      "bytes": 422040,
+      "sha256": "76262d29e52f4db3b7f7dd6f29a5de6dc387a6b8fa7052578d5854375b77be28"
+    },
+    {
+      "triangles": 13120,
+      "materials": [
+        "SKIMMER / photographed PBR atlas"
+      ],
+      "min": [
+        -0.7661194205284119,
+        -0.0234773401170969,
+        -1.159999966621399
+      ],
+      "max": [
+        0.7661194205284119,
+        0.8008819222450256,
+        1.0700000524520874
+      ],
+      "file": "skimmer-lod.glb",
+      "bytes": 268976,
+      "sha256": "1b03cced518cf0616b8520b46844a9aa066e31563a8e1072fb715bf62b41307d"
+    }
+  ],
+  "spec": {
+    "title": "SKIMMER water-jet inspection sled",
+    "prefix": "SKIMMER",
+    "aimHeight": 0.46,
+    "pivots": {
+      "Body": [
+        0,
+        0,
+        0
+      ],
+      "Rotor": [
+        0,
+        0.34,
+        0.58
+      ],
+      "FilterGate": [
+        0,
+        0.57,
+        0.77
+      ],
+      "Nozzle": [
+        0,
+        0.29,
+        -0.82
+      ],
+      "Deflector": [
+        0,
+        0.45,
+        -0.99
+      ]
+    },
+    "parents": {
+      "Rotor": "Body",
+      "FilterGate": "Body",
+      "Nozzle": "Body",
+      "Deflector": "Nozzle"
+    },
+    "attachments": {
+      "CableHandle": {
+        "parent": "Body",
+        "position": [
+          0,
+          0.718,
+          0.452
+        ]
+      },
+      "FilterTarget": {
+        "parent": "Body",
+        "position": [
+          0,
+          0.34,
+          0.735
+        ]
+      },
+      "WakeOrigin": {
+        "parent": "Nozzle",
+        "position": [
+          0,
+          0.29,
+          -1.16
+        ]
+      }
+    },
+    "bounds": [
+      [
+        -0.5,
+        0.25,
+        0,
+        0.24,
+        0.25,
+        1.08
+      ],
+      [
+        0.5,
+        0.25,
+        0,
+        0.24,
+        0.25,
+        1.08
+      ],
+      [
+        0,
+        0.4,
+        -0.03,
+        0.31,
+        0.3,
+        0.95
+      ],
+      [
+        0,
+        0.29,
+        -1.02,
+        0.24,
+        0.2,
+        0.18
+      ],
+      [
+        0,
+        0.718,
+        0.452,
+        0.083,
+        0.083,
+        0.034
+      ]
+    ],
+    "counter": "Dry-bank pull stalls the jet. Hinged intake screen opens and exposes the filter/impeller."
+  },
+  "materials": {
+    "atlas_size": 2048,
+    "atlases_per_actor": 1,
+    "runtime_materials": 1,
+    "ao_distance_m": 0.055,
+    "ao_range": [
+      0.32,
+      1
+    ],
+    "color": "sRGB photographic RGB, tinted in linear space; photographed coating at 1.85 repeats/metre; waterline stain only on SKIMMER hulls",
+    "roughness": "Photograph variation preserved; paint dielectric, exposed alloy metal, rubber and ceramic dielectric",
+    "normalCreases": "Manufactured edges above 55 degrees split before weighted normals and tangent bake; no texture-pixel patch"
+  },
+  "sources": [
+    {
+      "name": "Green Metal Rust",
+      "author": "Rob Tuytel / Poly Haven",
+      "license": "CC0-1.0",
+      "url": "https://polyhaven.com/a/green_metal_rust"
+    },
+    {
+      "name": "Metal046B",
+      "author": "Lennart Demes / ambientCG",
+      "license": "CC0-1.0",
+      "url": "https://ambientcg.com/view?id=Metal046B"
+    }
+  ],
+  "construction_references": [
+    "https://www.hamiltonjet.com/assets/main/Photos/hj-designers-manual-eng-2013.pdf",
+    "https://leica-geosystems.com/en-us/products/levels/accessories/tripods"
+  ],
+  "ownership": "Original geometry, mechanism design and assembly authored for Alex / Qualiacology. No manufacturer models or images included.",
+  "images": [
+    {
+      "file": "skimmer_basecolor.png",
+      "bytes": 4846896,
+      "sha256": "86251f566a26ff5228d84ebe93d54c38c9b5128029350f05f89ce2146c2c77a9"
+    },
+    {
+      "file": "skimmer_normal.png",
+      "bytes": 857433,
+      "sha256": "d6dfbf1a096a17724853a193b244ad8b39871dae16bc321636dffe3d58df5f17"
+    },
+    {
+      "file": "skimmer_orm.png",
+      "bytes": 4488111,
+      "sha256": "a116118239ba7da91f715848f5320bec690efcb2945cddbe6e740a032d73f8fc"
+    }
+  ],
+  "verification": {
+    "sourceNormals": "normal-source-audit-v3.json",
+    "deliveredNormals": "normal-delivery-audit-v3.json",
+    "factoryAudit": "../runtime-audit.json",
+    "gameRenderReview": false,
+    "independentCriticReview": false
+  },
+  "outstanding": [
+    "Independent visual critique in the actual environment.",
+    "Unpaused game motion, targeting/collision and worst-view performance review before public promotion."
+  ]
+}

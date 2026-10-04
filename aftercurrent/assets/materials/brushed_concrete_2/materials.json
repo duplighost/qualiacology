@@ -1,0 +1,47 @@
+{
+ "brushed_concrete_2": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "brushed_concrete_2.albedo.dds",
+   "normal": "brushed_concrete_2.normal.ktx2",
+   "orm": "brushed_concrete_2.orm.dds"
+  },
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 5592944,
+   "orm": 2796344
+  },
+  "psnr": {
+   "albedo": 40.85,
+   "normalXY": 47.9,
+   "orm": {
+    "ao": 38.82,
+    "rough": 38.38,
+    "metal": 41.68
+   }
+  },
+  "sources": {
+   "albedo": "brushed_concrete_2_diff.jpg",
+   "normal": "brushed_concrete_2_nor_gl.jpg",
+   "rough": "brushed_concrete_2_rough.png",
+   "ao": "brushed_concrete_2_ao.png",
+   "metal": "brushed_concrete_2_metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.551,
+   "p99": 1.631
+  },
+  "specAA": true,
+  "seconds": 30.2
+ }
+}

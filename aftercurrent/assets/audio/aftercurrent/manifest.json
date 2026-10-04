@@ -1,0 +1,252 @@
+{
+  "sampleRate": 48000,
+  "bpm": 138,
+  "bars": 32,
+  "loopSeconds": 55.652166666666666,
+  "assets": {
+    "score-space": {
+      "file": "score-space.ogg",
+      "gain": 1,
+      "loop": true,
+      "duration": 55.652167,
+      "role": "Synchronized 32-bar 138 BPM D-minor action stem",
+      "peak": 0.55,
+      "rmsDb": -18.11,
+      "sources": [
+        "Original score in tools/audio-build.py"
+      ],
+      "sha256": "58318d531bf3ef7e0a30de989f6578153d2718874ae1021548191ecd53fafa15"
+    },
+    "score-drive": {
+      "file": "score-drive.ogg",
+      "gain": 1,
+      "loop": true,
+      "duration": 55.652167,
+      "role": "Synchronized 32-bar 138 BPM D-minor action stem",
+      "peak": 0.55,
+      "rmsDb": -13.8,
+      "sources": [
+        "Original score in tools/audio-build.py"
+      ],
+      "sha256": "8a490629c0c8343f7cdf4949102b86d222a385fd9672e945a759b169603fc6c8"
+    },
+    "score-machinery": {
+      "file": "score-machinery.ogg",
+      "gain": 1,
+      "loop": true,
+      "duration": 55.652167,
+      "role": "Synchronized 32-bar 138 BPM D-minor action stem",
+      "peak": 0.62,
+      "rmsDb": -17.98,
+      "sources": [
+        "Original score in tools/audio-build.py",
+        "Kenney CC0 Impact Sounds: metal.hit.3, metal.light.2, impact-plank-0, impact-soft-0"
+      ],
+      "sha256": "176ce3de5107fc66193a9caabd704f8269438ea476235d24bc1c39fb2308ebec"
+    },
+    "score-thread": {
+      "file": "score-thread.ogg",
+      "gain": 1,
+      "loop": true,
+      "duration": 55.652167,
+      "role": "Synchronized 32-bar 138 BPM D-minor action stem",
+      "peak": 0.55,
+      "rmsDb": -20.25,
+      "sources": [
+        "Original score in tools/audio-build.py"
+      ],
+      "sha256": "02cf6dbc41c8fb9e6e96e5c3b88e71b5430e1016e1e77ffd0639604b76e955af"
+    },
+    "amb-wind": {
+      "file": "amb-wind.ogg",
+      "gain": 0.18,
+      "loop": true,
+      "duration": 16.0,
+      "role": "Recorded wind through hall openings",
+      "peak": 0.45,
+      "rmsDb": -23.85,
+      "sources": [
+        "BigSoundBank #0904; existing lib/wind.a.0.ogg"
+      ],
+      "sha256": "203259f5dc5b3c6bdd84f70350f207b358670d28bc159532f1834ec356d0fd81"
+    },
+    "amb-turbine": {
+      "file": "amb-turbine.ogg",
+      "gain": 0.24,
+      "loop": true,
+      "duration": 16.0,
+      "role": "Continuous rotating machinery with pressure texture",
+      "peak": 0.45,
+      "rmsDb": -17.29,
+      "sources": [
+        "Original resonant motor synthesis",
+        "BigSoundBank #0904 filtered texture"
+      ],
+      "sha256": "d42c2163e2b6c952a7e9f7dc5171b5578b25f1f880aac5d0b4ef4742365440b4"
+    },
+    "amb-water": {
+      "file": "amb-water.ogg",
+      "gain": 0.19,
+      "loop": true,
+      "duration": 16.0,
+      "role": "Original turbulent cooling-water synthesis",
+      "peak": 0.5,
+      "rmsDb": -20.96,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "94a3f50f24e7419f714562c361bff2cbe669fc122dc3e4c2abb025650d2981b6"
+    },
+    "clamp-windup": {
+      "file": "clamp-windup.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.88,
+      "role": "0.88-second servo strain rising before committed pounce",
+      "peak": 0.62,
+      "rmsDb": -14.05,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "20078491b745f4d3d7ae6b55f4f598ebf98af787fdefc4cf6bfe4a91a211a4d2"
+    },
+    "relay-windup": {
+      "file": "relay-windup.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 1.0,
+      "role": "One-second transformer charge; distinct from floor charger",
+      "peak": 0.62,
+      "rmsDb": -13.65,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "15a43f12f071005a13e255ce9bf3ec6453782d58678b92f4f224ab0b7ef8f802"
+    },
+    "clamp-release": {
+      "file": "clamp-release.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.29,
+      "role": "Pneumatic clutch release and heavy rotating drive",
+      "peak": 0.62,
+      "rmsDb": -15.15,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "130cab60841f7427c07cc982f699512c7697be3a399dc2a0450c9ab5be853fb0"
+    },
+    "relay-release": {
+      "file": "relay-release.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.32,
+      "role": "Magnetic slug release with short metallic decay",
+      "peak": 0.62,
+      "rmsDb": -13.46,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "62c93d115ee9be0674fce01a65bace49366ab8ce413d213660c6e6efe15307c9"
+    },
+    "charge-catch": {
+      "file": "charge-catch.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.46,
+      "role": "charge catch",
+      "peak": 0.6,
+      "rmsDb": -13.4,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "299234d6b828cf98fbbea6d23249eabfe485c6b8fc26ffb40b02030d6f7f7c01"
+    },
+    "charge-discharge": {
+      "file": "charge-discharge.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.58,
+      "role": "charge discharge",
+      "peak": 0.6,
+      "rmsDb": -18.43,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "9caf0d9f04ab4c7d7cbc8fe34792470301591af86e240faaf9831e967bc0518c"
+    },
+    "relay-open": {
+      "file": "relay-open.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.62,
+      "role": "relay open",
+      "peak": 0.6,
+      "rmsDb": -14.9,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "e836f05ba75c087594384e829988bb138e13d647978ba39a4cdaeaee976dcddb"
+    },
+    "ui-confirm": {
+      "file": "ui-confirm.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.23,
+      "role": "ui confirm",
+      "peak": 0.6,
+      "rmsDb": -12.36,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "3346d81da1d98698ccc38761a17945e1840b7249476457f178c9302e5c51d55e"
+    },
+    "ui-denied": {
+      "file": "ui-denied.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.16,
+      "role": "ui denied",
+      "peak": 0.6,
+      "rmsDb": -11.94,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "9846eade73287a16430aa5c8bc362241b4b230837483d67c2c6d73afd67371df"
+    },
+    "ui-focus": {
+      "file": "ui-focus.ogg",
+      "gain": 1,
+      "loop": false,
+      "duration": 0.075,
+      "role": "ui focus",
+      "peak": 0.6,
+      "rmsDb": -11.97,
+      "sources": [
+        "Original composition and physical-model synthesis in tools/audio-build.py"
+      ],
+      "sha256": "e2a804a54476486618be14aa49de753657d4f6428cf25df5b044a4a393372564"
+    }
+  },
+  "licenses": [
+    {
+      "source": "Kenney Impact Sounds / RPG Audio",
+      "license": "CC0 1.0",
+      "url": "https://kenney.nl/assets/impact-sounds"
+    },
+    {
+      "source": "Free Firearm Sound Library",
+      "license": "CC0 1.0",
+      "url": "https://opengameart.org/content/the-free-firearm-sound-library"
+    },
+    {
+      "source": "Joseph SARDIN / BigSoundBank #0904",
+      "license": "CC0/public-domain license",
+      "url": "https://bigsoundbank.com/licenses.html"
+    },
+    {
+      "source": "New music and synthesized layers",
+      "license": "Original work made for this project; no third-party music or paid generation"
+    }
+  ]
+}

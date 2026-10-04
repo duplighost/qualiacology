@@ -1,0 +1,92 @@
+{
+  "source": "https://polyhaven.com/a/fir_tree_01",
+  "authors": [
+    "Rob Tuytel",
+    "Rico Cilliers"
+  ],
+  "license": "CC0-1.0",
+  "sourceLOD": "Authored LOD2. Every complete crossed/folded spray retained at every level, including authored UVs and corner normals. Only v1 opaque branch/trunk reductions differ between levels. No random thinning or flat-sheet substitute.",
+  "records": [
+    {
+      "variant": "a",
+      "level": 0,
+      "sprayInstances": 1716,
+      "needleTriangles": 33753,
+      "totalTriangles": 48141,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    },
+    {
+      "variant": "a",
+      "level": 1,
+      "sprayInstances": 1716,
+      "needleTriangles": 33753,
+      "totalTriangles": 38904,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    },
+    {
+      "variant": "a",
+      "level": 2,
+      "sprayInstances": 1716,
+      "needleTriangles": 33753,
+      "totalTriangles": 35373,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    },
+    {
+      "variant": "b",
+      "level": 0,
+      "sprayInstances": 1024,
+      "needleTriangles": 17920,
+      "totalTriangles": 27202,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    },
+    {
+      "variant": "b",
+      "level": 1,
+      "sprayInstances": 1024,
+      "needleTriangles": 17920,
+      "totalTriangles": 21114,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    },
+    {
+      "variant": "b",
+      "level": 2,
+      "sprayInstances": 1024,
+      "needleTriangles": 17920,
+      "totalTriangles": 19059,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    },
+    {
+      "variant": "c",
+      "level": 0,
+      "sprayInstances": 418,
+      "needleTriangles": 5016,
+      "totalTriangles": 14278,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    },
+    {
+      "variant": "c",
+      "level": 1,
+      "sprayInstances": 418,
+      "needleTriangles": 5016,
+      "totalTriangles": 7585,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    },
+    {
+      "variant": "c",
+      "level": 2,
+      "sprayInstances": 418,
+      "needleTriangles": 5016,
+      "totalTriangles": 5923,
+      "allOriginalPlacements": true,
+      "sourceCornerNormalsAndUVsPreserved": true
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "version": 3,
+  "texture": "hall-bounce.exr",
+  "uvs": "hall-uvs.bin",
+  "meshes": [
+    {
+      "name": "architecture-floor",
+      "vertices": 360,
+      "offset": 0
+    },
+    {
+      "name": "architecture-concrete",
+      "vertices": 8640,
+      "offset": 720
+    },
+    {
+      "name": "architecture-plaster",
+      "vertices": 8424,
+      "offset": 18000
+    },
+    {
+      "name": "architecture-roof",
+      "vertices": 792,
+      "offset": 34848
+    }
+  ],
+  "size": 1024,
+  "samples": 128,
+  "sun": {
+    "position": [
+      32,
+      8,
+      5
+    ],
+    "target": [
+      0,
+      0,
+      -10
+    ],
+    "color": [
+      1,
+      0.7681511472425809,
+      0.4735314961384573
+    ],
+    "strength": 3.2
+  },
+  "skyStrength": 1.45,
+  "method": "Occluded sky direct plus indirect; sun indirect; real-time sun direct retained. Receiver albedo excluded. Bounce materials use mesh surface-area sampled linear albedo and effective metalness/roughness.",
+  "transport": {
+    "method": "1024 equal-world-surface-area UV samples per mesh; linear GPU texture values times material tint; effective mapped roughness and metalness",
+    "samplesPerMesh": 1024
+  },
+  "sourceSha256": "e473c872238bb89e5026e767ec761ee3a7a3419d05906f42d58e5a30c63a9f06",
+  "seconds": 155.01,
+  "rgbStats": {
+    "mean": 0.37859246134757996,
+    "max": 2.964891195297241
+  },
+  "reflectionProbe": {
+    "file": "hall-probe.rgba16f",
+    "width": 384,
+    "height": 512,
+    "format": "RGBA16F",
+    "sha256": "1a6a5c4e13d9a5f7f4f3c24df356a849e459fcbc751b8919d46ff395c3332e6b"
+  }
+}

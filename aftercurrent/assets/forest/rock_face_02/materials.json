@@ -1,0 +1,63 @@
+{
+ "rock_face_02": {
+  "files": {
+   "albedo": "rock_face_02.albedo.dds",
+   "normal": "rock_face_02.normal.ktx2",
+   "orm": "rock_face_02.orm.dds"
+  },
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 37.29,
+   "normalXY": 41.78,
+   "orm": {
+    "ao": 99,
+    "rough": 43.72,
+    "metal": 44.34
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.103,
+   "p99": 4.205
+  },
+  "specAA": true,
+  "seconds": 63.6,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": false,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

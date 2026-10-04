@@ -1,0 +1,186 @@
+{
+  "createdAt": "2026-10-02T12:52:30.548Z",
+  "scope": "Exact verified local CC0 copies, no donor writes; base beach maps/models are shared rather than duplicated.",
+  "models": [
+    {
+      "id": "dead_tree_trunk_02",
+      "title": "Dead Tree Trunk 02",
+      "url": "https://polyhaven.com/a/dead_tree_trunk_02",
+      "licence": "CC0 1.0",
+      "author": "Jenelle van Heerden, Rico Cilliers",
+      "bytes": 4906925,
+      "triangles": {
+        "source": 83128,
+        "lod0": 19999,
+        "lod1": 4999
+      },
+      "budget": {
+        "lod0": 20000,
+        "lod1": 5000
+      },
+      "class": "hero",
+      "dims": [
+        4.0525,
+        1.0567,
+        1.0562
+      ],
+      "shippedBytes": 1417860,
+      "parts": [
+        {
+          "name": "dead_tree_trunk_02",
+          "movable": false,
+          "tris": 19999,
+          "pivot": [
+            -0.1013,
+            0.3284,
+            -0.0272
+          ]
+        }
+      ],
+      "rigged": false,
+      "animated": [],
+      "processed": "2026-09-22",
+      "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+    },
+    {
+      "id": "rusted_spade_01",
+      "title": "Rusted Spade 01",
+      "url": "https://polyhaven.com/a/rusted_spade_01",
+      "licence": "CC0 1.0",
+      "author": "Blemonade",
+      "bytes": 2423156,
+      "triangles": {
+        "source": 11436,
+        "lod0": 2999,
+        "lod1": null
+      },
+      "budget": {
+        "lod0": 3000,
+        "lod1": null
+      },
+      "class": "small",
+      "dims": [
+        0.1681,
+        1.1009,
+        0.0456
+      ],
+      "shippedBytes": 321939,
+      "parts": [
+        {
+          "name": "rusted_spade_01",
+          "movable": false,
+          "tris": 2999,
+          "pivot": [
+            0,
+            0.5032,
+            0.0002
+          ]
+        }
+      ],
+      "rigged": false,
+      "animated": [],
+      "processed": "2026-09-22",
+      "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+    }
+  ],
+  "files": [
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.albedo.dds",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.albedo.dds",
+      "relative": "props/dead_tree_trunk_02/dead_tree_trunk_02.albedo.dds",
+      "bytes": 699192,
+      "sha256": "fb1b1f495ecb731c23103ae8e8c1da60101830bda03260220aa6fd8125ddc353"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.colliders.json",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.colliders.json",
+      "relative": "props/dead_tree_trunk_02/dead_tree_trunk_02.colliders.json",
+      "bytes": 531,
+      "sha256": "13291cab369aa1a7e14c5801808a3ce0322073a9318fffbe0cca2c0d8019edbb"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.glb",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.glb",
+      "relative": "props/dead_tree_trunk_02/dead_tree_trunk_02.glb",
+      "bytes": 192264,
+      "sha256": "ad2911a482c192cc292d766675569c0713921894b9bebbd8e810dc8c9e1343fb"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.normal.ktx2",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.normal.ktx2",
+      "relative": "props/dead_tree_trunk_02/dead_tree_trunk_02.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "fb274d2e735d0c350b4708e375770a3666e59d21ce63b0f9a4b8f41abdaacc22"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.orm.dds",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.orm.dds",
+      "relative": "props/dead_tree_trunk_02/dead_tree_trunk_02.orm.dds",
+      "bytes": 174904,
+      "sha256": "b6c4ee90dee4a0e3edc2f03c00b13169e3a1a5963e4a3e3227159d78490c8dc7"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.source.json",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\dead_tree_trunk_02\\dead_tree_trunk_02.source.json",
+      "relative": "props/dead_tree_trunk_02/dead_tree_trunk_02.source.json",
+      "bytes": 734,
+      "sha256": "9968ceb442bb063c94b954664ca3d3af1bfecdd1bb65307534d23bafccc54ad7"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\dead_tree_trunk_02\\materials.json",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\dead_tree_trunk_02\\materials.json",
+      "relative": "props/dead_tree_trunk_02/materials.json",
+      "bytes": 951,
+      "sha256": "211c4d4f5100a838521c355c6687fc9c11e817d828f887cce6a0975e16d27e88"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rusted_spade_01\\materials.json",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\rusted_spade_01\\materials.json",
+      "relative": "props/rusted_spade_01/materials.json",
+      "bytes": 936,
+      "sha256": "5626795b1c79de2e9469e02149d42ad9326e88a026512ad4e74e13364bcdda7d"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rusted_spade_01\\rusted_spade_01.albedo.dds",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\rusted_spade_01\\rusted_spade_01.albedo.dds",
+      "relative": "props/rusted_spade_01/rusted_spade_01.albedo.dds",
+      "bytes": 174904,
+      "sha256": "fb23c0e1823fe09c3aa9e8ff1732207107b60f9b4c202f4b0f93fbe0c4455291"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rusted_spade_01\\rusted_spade_01.colliders.json",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\rusted_spade_01\\rusted_spade_01.colliders.json",
+      "relative": "props/rusted_spade_01/rusted_spade_01.colliders.json",
+      "bytes": 513,
+      "sha256": "65207b45cf98fddb10ce05bdf9b793eaeaecd9f507d4d56a50d476ef11855acd"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rusted_spade_01\\rusted_spade_01.glb",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\rusted_spade_01\\rusted_spade_01.glb",
+      "relative": "props/rusted_spade_01/rusted_spade_01.glb",
+      "bytes": 13912,
+      "sha256": "851e571b6389fcf146bc920ee1b23c8bc53890e0d17cb0ed31a5226ac6601be8"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rusted_spade_01\\rusted_spade_01.normal.ktx2",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\rusted_spade_01\\rusted_spade_01.normal.ktx2",
+      "relative": "props/rusted_spade_01/rusted_spade_01.normal.ktx2",
+      "bytes": 87840,
+      "sha256": "bb128946a6f668edea2edc80094f5a53fa4dbdc72f10ea98d5a67f37ffd415e3"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rusted_spade_01\\rusted_spade_01.orm.dds",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\rusted_spade_01\\rusted_spade_01.orm.dds",
+      "relative": "props/rusted_spade_01/rusted_spade_01.orm.dds",
+      "bytes": 43832,
+      "sha256": "6817ea6b88b733b5e63784b62cffb6aaf1ebaec10dfd7142fd15dbb883227e84"
+    },
+    {
+      "source": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\props\\rusted_spade_01\\rusted_spade_01.source.json",
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\artifacts\\strand-work\\assets\\props\\rusted_spade_01\\rusted_spade_01.source.json",
+      "relative": "props/rusted_spade_01/rusted_spade_01.source.json",
+      "bytes": 687,
+      "sha256": "9c43e2d87c2ece46553e5a56c7958bcee673d55c2751a7072eb61b877d197221"
+    }
+  ]
+}

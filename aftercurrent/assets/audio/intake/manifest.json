@@ -1,0 +1,317 @@
+{
+  "sampleRate": 48000,
+  "kind": "local finite physical foley cues",
+  "perceptualStatus": "Export and numerical checks only; actual game playback and subjective hearing require review.",
+  "provenance": {
+    "recorded": "Kenney CC0 Impact/RPG packs and BigSoundBank #1674 already present in assets/audio/manifest.json",
+    "synthesized": "Existing AFTERCURRENT water/step-mud wet layer plus original motor/contact DSP in tools/build-intake-audio.py"
+  },
+  "assets": {
+    "skimmer-intake": {
+      "file": "skimmer-intake.ogg",
+      "loop": false,
+      "role": "Impeller draws water before committed wake charge",
+      "event": "skimmer enemyAttack windup wakeCharge, duration .85",
+      "sources": [
+        "aftercurrent/amb-water.ogg",
+        "lib/step.mud.0.ogg",
+        "lib/step.mud.1.ogg",
+        "lib/step.mud.2.ogg",
+        "lib/step.mud.3.ogg",
+        "Original variable-speed impeller DSP"
+      ],
+      "sourceStats": {
+        "seconds": 0.85,
+        "samplePeakDbFS": -5.352124803540629,
+        "rmsDbFS": -21.95120131399046,
+        "dc": 0.00011683781847899476,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2203.576751889988
+      },
+      "decodedStats": {
+        "seconds": 0.8706666666666667,
+        "samplePeakDbFS": -5.5662713669035915,
+        "rmsDbFS": -22.3447057464281,
+        "dc": 0.00021876334131315536,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2128.3587248685467
+      },
+      "decodedFramePaddingSamples": 992,
+      "sha256": "20e43094e788ee90e57880216bd0bce3deb2ee0e9ba1f76839d59d978872e54f"
+    },
+    "skimmer-wake": {
+      "file": "skimmer-wake.ogg",
+      "loop": false,
+      "role": "Broad close water wake with driven impeller; cut on impact or recovery",
+      "event": "skimmer enemyAttack release wakeCharge",
+      "sources": [
+        "aftercurrent/amb-water.ogg",
+        "lib/metal.light.2.ogg",
+        "lib/step.mud.0.ogg",
+        "lib/step.mud.1.ogg",
+        "lib/step.mud.2.ogg",
+        "lib/step.mud.3.ogg",
+        "Original variable-speed impeller DSP"
+      ],
+      "sourceStats": {
+        "seconds": 1.65,
+        "samplePeakDbFS": -5.192746210115122,
+        "rmsDbFS": -19.358291579841698,
+        "dc": 7.470901469655818e-07,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 3100.889823599575
+      },
+      "decodedStats": {
+        "seconds": 1.65,
+        "samplePeakDbFS": -5.910331741602884,
+        "rmsDbFS": -19.72237037625,
+        "dc": -6.043251090804304e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 3044.0940462890812
+      },
+      "decodedFramePaddingSamples": 0,
+      "sha256": "3f35f88278719c75de40eaefe0f296a470834ac4655a26abd251fdb6f350b275"
+    },
+    "skimmer-airlock": {
+      "file": "skimmer-airlock.ogg",
+      "loop": false,
+      "role": "Intake cough, slowing rotor and lifted filter detent; confirms beach/interrupt",
+      "event": "skimmer enemyAttack stall intake or parry interrupted",
+      "sources": [
+        "aftercurrent/amb-water.ogg",
+        "lib/metal.light.1.ogg",
+        "lib/latch.1.ogg",
+        "Original impeller run-down DSP"
+      ],
+      "sourceStats": {
+        "seconds": 0.72,
+        "samplePeakDbFS": -5.514482607984219,
+        "rmsDbFS": -22.748789447859753,
+        "dc": 1.546981790671864e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2044.4112097475022
+      },
+      "decodedStats": {
+        "seconds": 0.74,
+        "samplePeakDbFS": -5.613077054973371,
+        "rmsDbFS": -23.041132718946713,
+        "dc": -6.773170001656734e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 1988.009525296226
+      },
+      "decodedFramePaddingSamples": 960,
+      "sha256": "4a60b4ba00e8c5c88cfa9bb8394a8413c24ee492c81d5345ac6ec08597429ddd"
+    },
+    "skimmer-settle": {
+      "file": "skimmer-settle.ogg",
+      "loop": false,
+      "role": "Metal hull settles into shallow water, with final wet drain",
+      "event": "skimmer kill",
+      "sources": [
+        "lib/metal.hit.3.ogg",
+        "lib/metal.light.0.ogg",
+        "aftercurrent/amb-water.ogg"
+      ],
+      "sourceStats": {
+        "seconds": 0.85,
+        "samplePeakDbFS": -5.352124803540629,
+        "rmsDbFS": -24.754909637603614,
+        "dc": -0.00013105840888768072,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 1608.0939183269315
+      },
+      "decodedStats": {
+        "seconds": 0.8473333333333334,
+        "samplePeakDbFS": -5.455415273837564,
+        "rmsDbFS": -24.88664485809347,
+        "dc": -0.00012998420040104096,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 1564.635763566691
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "fcca9e9331516f563d53dddec452f37b6a3cde73354272fa6306e495e6611a78"
+    },
+    "picket-index": {
+      "file": "picket-index.ogg",
+      "loop": false,
+      "role": "Three dry mechanical indices wind the surveying head, without a musical warning beep",
+      "event": "picket enemyAttack windup lowSweepBeam, duration 1.1 or .55 after cable turn",
+      "sources": [
+        "lib/musicbox.wind.0.ogg",
+        "lib/latch.0.ogg",
+        "lib/latch.1.ogg",
+        "Original lightly loaded bearing DSP"
+      ],
+      "sourceStats": {
+        "seconds": 1.1,
+        "samplePeakDbFS": -6.020599913279624,
+        "rmsDbFS": -30.82443770729651,
+        "dc": -1.6146457141279483e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 4848.839491014565
+      },
+      "decodedStats": {
+        "seconds": 1.1,
+        "samplePeakDbFS": -6.091628644807935,
+        "rmsDbFS": -31.079838143974445,
+        "dc": -7.997573189170866e-06,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 4676.3884018402405
+      },
+      "decodedFramePaddingSamples": 0,
+      "sha256": "67d3a75a3e0a5e5e65c812be2df3bc55a184de83fc0c305a4aaa02bb3ea620a6"
+    },
+    "picket-sweep": {
+      "file": "picket-sweep.ogg",
+      "loop": false,
+      "role": "Shutter opens, dry head bearing traverses, travel detent closes",
+      "event": "picket enemyAttack release lowSweepBeam, cut if interrupted/killed/asleep",
+      "sources": [
+        "lib/metal.light.7.ogg",
+        "lib/latch.0.ogg",
+        "Original surveying-head bearing and contact DSP"
+      ],
+      "sourceStats": {
+        "seconds": 1.5,
+        "samplePeakDbFS": -6.402811964179485,
+        "rmsDbFS": -22.171057968366526,
+        "dc": 4.298666471966838e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 722.3967635649483
+      },
+      "decodedStats": {
+        "seconds": 1.5,
+        "samplePeakDbFS": -6.955270335240447,
+        "rmsDbFS": -22.226719034380817,
+        "dc": -7.534774532235705e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 680.0231062761079
+      },
+      "decodedFramePaddingSamples": 0,
+      "sha256": "0bc5068aa394289b288addb02bbca6e41ae0bcffa6e8b13d02176909665c81fe"
+    },
+    "picket-detent": {
+      "file": "picket-detent.ogg",
+      "loop": false,
+      "role": "Head drive interrupted at its physical detent",
+      "event": "picket parry interrupted",
+      "sources": [
+        "lib/latch.1.ogg",
+        "lib/metal.light.5.ogg"
+      ],
+      "sourceStats": {
+        "seconds": 0.43,
+        "samplePeakDbFS": -6.3717919487633745,
+        "rmsDbFS": -28.764237728785492,
+        "dc": -3.683677791170505e-06,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2131.357760424039
+      },
+      "decodedStats": {
+        "seconds": 0.4493333333333333,
+        "samplePeakDbFS": -6.368323222035389,
+        "rmsDbFS": -29.158236100525418,
+        "dc": -1.0862571697504218e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2057.357266711441
+      },
+      "decodedFramePaddingSamples": 928,
+      "sha256": "3b4d595d120d68e8beef443799b53ed3388633d33306bcdc5f14826abc6535c8"
+    },
+    "picket-collapse": {
+      "file": "picket-collapse.ogg",
+      "loop": false,
+      "role": "Survey head folds onto the planted steel base and stone",
+      "event": "picket kill",
+      "sources": [
+        "lib/metal.hit.6.ogg",
+        "lib/stone.hit.2.ogg",
+        "lib/metal.light.5.ogg"
+      ],
+      "sourceStats": {
+        "seconds": 0.78,
+        "samplePeakDbFS": -7.846047939270486,
+        "rmsDbFS": -27.26482294898847,
+        "dc": -0.001105499018172043,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 662.3560064895906
+      },
+      "decodedStats": {
+        "seconds": 0.7773333333333333,
+        "samplePeakDbFS": -8.05736337561064,
+        "rmsDbFS": -27.24543417920276,
+        "dc": -0.0011358819462402201,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 657.1877802992341
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "3d0186826aac7753f697e9dbea8496124a57365a62538f10f4c1b4f4f700f119"
+    }
+  },
+  "sourceFiles": {
+    "aftercurrent/amb-water.ogg": {
+      "sha256": "94a3f50f24e7419f714562c361bff2cbe669fc122dc3e4c2abb025650d2981b6",
+      "seconds": 16.0
+    },
+    "lib/step.mud.0.ogg": {
+      "sha256": "e0fd91597898142c8629f5ca795de8b60fcdabfc801602a6abe1464a8c1184a0",
+      "seconds": 0.3973333333333333
+    },
+    "lib/step.mud.1.ogg": {
+      "sha256": "b9189de8bb920642960e62d79ace0910d4b9005074f49e3a1b1b7a2d5acc7a46",
+      "seconds": 0.3973333333333333
+    },
+    "lib/step.mud.2.ogg": {
+      "sha256": "a87ea6941ead67dab99bbb38876d5ec29c553398c4a4df845a4d1f39f37ea5e2",
+      "seconds": 0.3973333333333333
+    },
+    "lib/step.mud.3.ogg": {
+      "sha256": "8745c1dcb506484c47352966799a5684d3cb5a58e2dd600839d26c02f5587b99",
+      "seconds": 0.3973333333333333
+    },
+    "lib/metal.light.2.ogg": {
+      "sha256": "bd6b4078b6b5fc2b53021ceab655569d4d6f539930745aba0a12034616a9f1ee",
+      "seconds": 0.22933333333333333
+    },
+    "lib/metal.light.1.ogg": {
+      "sha256": "3db4a3382ad1882b5b7a7a52cfd81a1055581e8c855803518d4354d689e64f37",
+      "seconds": 0.24533333333333332
+    },
+    "lib/latch.1.ogg": {
+      "sha256": "70f4625bd1a3769a995503873c9b4cdb11b5bc03eff92d2de39b2ba07193901c",
+      "seconds": 0.3473333333333333
+    },
+    "lib/metal.hit.3.ogg": {
+      "sha256": "6a2c7b461e639701f632563fd430d39035801dad7443c140b778fbaa50b10790",
+      "seconds": 0.24733333333333332
+    },
+    "lib/metal.light.0.ogg": {
+      "sha256": "61b0004cd4c484321b95dcec382ab245ce9d1c96ce3994e688639007991c43cc",
+      "seconds": 0.36933333333333335
+    },
+    "lib/musicbox.wind.0.ogg": {
+      "sha256": "35d34955b61bfb3b97f86180013a75f9fec828acf09f287f48c83c6b21b72a7e",
+      "seconds": 2.916
+    },
+    "lib/latch.0.ogg": {
+      "sha256": "b0b18b6de7dd58855c9114ce79800e819ef746c9dc2ea198de7d52cd0ce7644f",
+      "seconds": 0.15133333333333332
+    },
+    "lib/metal.light.7.ogg": {
+      "sha256": "67b00b4789d4a9fe585f77734fe89aa3560879c363481eb4f98783606914a2bd",
+      "seconds": 0.12733333333333333
+    },
+    "lib/metal.light.5.ogg": {
+      "sha256": "bb20657e1e055f6fdf5e2463e10173a4d9b8aba4a4f5248fb76b4ec5ca5a262e",
+      "seconds": 0.15133333333333332
+    },
+    "lib/metal.hit.6.ogg": {
+      "sha256": "916cba6e990497fec70b99522231e570eccb8dc2df5963936b97b3cd0f0f2e9f",
+      "seconds": 0.35333333333333333
+    },
+    "lib/stone.hit.2.ogg": {
+      "sha256": "6320a3b8f56cce035172332ea18f99a7109378a53b95977cdf590b470a542b76",
+      "seconds": 0.5693333333333334
+    }
+  }
+}
