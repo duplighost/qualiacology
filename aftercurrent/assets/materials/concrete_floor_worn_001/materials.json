@@ -1,0 +1,50 @@
+{
+ "concrete_floor_worn_001": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "concrete_floor_worn_001.albedo.dds",
+   "normal": "concrete_floor_worn_001.normal.ktx2",
+   "orm": "concrete_floor_worn_001.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 44.3,
+   "normalXY": 54.65,
+   "orm": {
+    "ao": 39.37,
+    "rough": 41.04,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "concrete_floor_worn_001_diff.png",
+   "normal": "concrete_floor_worn_001_nor_gl.png",
+   "rough": "concrete_floor_worn_001_rough.png",
+   "ao": "concrete_floor_worn_001_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.25,
+   "p99": 0.701
+  },
+  "specAA": true,
+  "seconds": 9.0,
+  "metresPerTile": [
+   3.0,
+   3.0
+  ]
+ }
+}

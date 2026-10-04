@@ -1,0 +1,55 @@
+{
+ "monastery_stone_floor": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "monastery_stone_floor.albedo.dds",
+   "normal": "monastery_stone_floor.normal.ktx2",
+   "orm": "monastery_stone_floor.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 39.95,
+   "normalXY": 41.78,
+   "orm": {
+    "ao": 37.26,
+    "rough": 39.4,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "monastery_stone_floor_diff.png",
+   "normal": "monastery_stone_floor_nor_gl.png",
+   "rough": "monastery_stone_floor_rough.png",
+   "ao": "monastery_stone_floor_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.041,
+   "p99": 4.874
+  },
+  "specAA": true,
+  "seconds": 13.0,
+  "metresPerTile": [
+   1.8,
+   1.8
+  ],
+  "source": {
+   "page": "https://polyhaven.com/a/monastery_stone_floor",
+   "licence": "CC0 1.0",
+   "author": "Poly Haven"
+  }
+ }
+}

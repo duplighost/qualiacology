@@ -1,0 +1,9 @@
+CLAMP cargo-capture crawler body and articulated suspension
+Original model, forged jaws, hydraulic linkages and articulated legs authored for Alex / Qualiacology for AFTERCURRENT.
+
+Photographic texture source: Green Metal Rust by Rob Tuytel / Poly Haven.
+https://polyhaven.com/a/green_metal_rust
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/
+Photographic paint is projected, tinted and baked into the original machine.
+No third-party model geometry is included.
+Draco compression changes delivery geometry encoding; approved body image bytes and material definitions are preserved.

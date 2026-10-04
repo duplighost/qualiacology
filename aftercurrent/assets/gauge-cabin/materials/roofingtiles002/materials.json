@@ -1,0 +1,19 @@
+{
+  "roofingtiles002": {
+    "files": {
+      "albedo": "roofingtiles002.albedo.dds",
+      "normal": "roofingtiles002.normal.ktx2",
+      "orm": "roofingtiles002.orm.dds"
+    },
+    "metresPerTile": [
+      2,
+      2
+    ],
+    "source": {
+      "page": "https://ambientcg.com/a/RoofingTiles002",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Roofing Tiles 002"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "method": "48 uniform upper-hemisphere sky-visibility rays against staged static shadow casters.",
+  "min": [
+    -11.7,
+    0.55,
+    -14.7
+  ],
+  "max": [
+    -3,
+    6.55,
+    16.05
+  ],
+  "size": [
+    18,
+    12,
+    62
+  ],
+  "data": "west-house-visibility.bin",
+  "samples": 48,
+  "geometrySHA256": "9f2140f1e3f960b2cda4b6cec2ad58b88ff998f42435aaf01d81c60d7772937e",
+  "textureSHA256": "d0773a42942b14dccd76671b85bfcb7cdcef03ce0ecfd31044e9527fc73b7026",
+  "skyFloor": 0.34
+}

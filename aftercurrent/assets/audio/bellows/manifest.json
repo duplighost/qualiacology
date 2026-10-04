@@ -1,0 +1,135 @@
+{
+  "sampleRate": 48000,
+  "assets": {
+    "bellows-compress": {
+      "file": "bellows-compress.ogg",
+      "duration": 0.8973333333333333,
+      "peak": 0.5674023032188416,
+      "rmsDb": -26.946392059326172,
+      "sha256": "d79b35203df405232c1533dfe8f128b4c5696ce08eaab0b1c973239acc83ad09",
+      "role": "Canvas concertina and low air loading before the committed forward blast",
+      "sourceFiles": [
+        "cloth.0.ogg",
+        "wind.gust.0.ogg",
+        "latch.1.ogg"
+      ],
+      "loop": false,
+      "bytes": 12390
+    },
+    "bellows-air": {
+      "file": "bellows-air.ogg",
+      "duration": 1.7,
+      "peak": 0.543640673160553,
+      "rmsDb": -19.714881896972656,
+      "sha256": "f6c12d044560c139d8eff93d69fb075f4fdca3a004dd6e5ac3201ca6efa425dd",
+      "role": "Finite forward air discharge; dies with attack, death or sleep",
+      "sourceFiles": [
+        "wind.gust.0.ogg"
+      ],
+      "loop": false,
+      "bytes": 18461
+    },
+    "bellows-capsule-seat": {
+      "file": "bellows-capsule-seat.ogg",
+      "duration": 0.6973333333333334,
+      "peak": 0.5371634364128113,
+      "rmsDb": -29.975093841552734,
+      "sha256": "0c8607c94c950a2fe7baeb49897782eae714c58cf53c721e50bc12b44f5d2a85",
+      "role": "Mechanical service capsule seats behind opening shutter",
+      "sourceFiles": [
+        "latch.1.ogg",
+        "cloth.0.ogg"
+      ],
+      "loop": false,
+      "bytes": 10210
+    },
+    "bellows-capsule-eject": {
+      "file": "bellows-capsule-eject.ogg",
+      "duration": 0.31733333333333336,
+      "peak": 0.569266140460968,
+      "rmsDb": -24.756977081298828,
+      "sha256": "27b4be10e947c519c124e0d7b3ec60309055f75cbfeebd612a1b8ea7e4446a5a",
+      "role": "Latch release and short pneumatic capsule ejection",
+      "sourceFiles": [
+        "latch.1.ogg",
+        "wind.gust.0.ogg"
+      ],
+      "loop": false,
+      "bytes": 7606
+    },
+    "bellows-safety-relief": {
+      "file": "bellows-safety-relief.ogg",
+      "duration": 1.7,
+      "peak": 0.5193771123886108,
+      "rmsDb": -24.43702507019043,
+      "sha256": "05ce679d03b2ea4dfc06ed5d4affff5fa188209d9a02077b12eee66f323d5971",
+      "role": "Rear safety valve snaps open and pressure exhales after an actual returned catch charge",
+      "sourceFiles": [
+        "latch.1.ogg",
+        "wind.gust.0.ogg"
+      ],
+      "loop": false,
+      "bytes": 19270
+    }
+  },
+  "sources": {
+    "cloth.0.ogg": {
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\public\\assets\\audio\\lib\\cloth.0.ogg",
+      "sha256": "9fed94637a46e0dc3dae8197f1a3181978fc9ae8c34690cf09bc61fd612e66b7",
+      "source": {
+        "files": [
+          "lib/cloth.0.ogg",
+          "lib/cloth.1.ogg",
+          "lib/cloth.2.ogg",
+          "lib/cloth.3.ogg"
+        ],
+        "gain": 0.35,
+        "len": [
+          0.51,
+          0.306,
+          0.432,
+          0.382
+        ],
+        "note": "Kenney RPG cloth"
+      }
+    },
+    "latch.1.ogg": {
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\public\\assets\\audio\\lib\\latch.1.ogg",
+      "sha256": "70f4625bd1a3769a995503873c9b4cdb11b5bc03eff92d2de39b2ba07193901c",
+      "source": {
+        "files": [
+          "lib/latch.0.ogg",
+          "lib/latch.1.ogg"
+        ],
+        "gain": 0.45,
+        "len": [
+          0.154,
+          0.35
+        ],
+        "note": "Kenney RPG latch and click"
+      }
+    },
+    "wind.gust.0.ogg": {
+      "path": "C:\\Users\\Alex\\Projects\\aftercurrent\\public\\assets\\audio\\lib\\wind.gust.0.ogg",
+      "sha256": "aae48863f29e5a9470309c7ebfcc8eaf12ead8a84f2d1d1dda199a063f659c34",
+      "source": {
+        "files": [
+          "lib/wind.gust.0.ogg",
+          "lib/wind.gust.1.ogg",
+          "lib/wind.gust.2.ogg",
+          "lib/wind.gust.3.ogg"
+        ],
+        "gain": 0.6,
+        "len": [
+          5.5,
+          6.0,
+          5.0,
+          6.5
+        ],
+        "note": "BigSoundBank #0904: gusts through dry leaves (a swell on the calm stretches, no birds, no knocks)"
+      }
+    }
+  },
+  "licence": "Existing source library: Kenney CC0 cloth/latch, BigSoundBank recorded wind; exact inherited provenance retained.",
+  "subjectiveListening": "Pending native game listening; decoded peaks and finite PCM only."
+}

@@ -1,0 +1,45 @@
+{
+  "forest_cards": {
+    "size": [
+      2048,
+      1024
+    ],
+    "alpha": true,
+    "wrap": false,
+    "files": {
+      "albedo": "forest_cards.albedo.dds",
+      "normal": "forest_cards.normal.ktx2"
+    },
+    "bytes": {
+      "albedo": 2796368,
+      "normal": 2796752
+    },
+    "psnr": {
+      "albedo": 40.9,
+      "alpha": 41.21,
+      "normalXY": 44.37
+    },
+    "sources": {
+      "albedo": "cards_albedo.png",
+      "normal": "cards_normal.png",
+      "alpha": "cards_alpha.png"
+    },
+    "format": {
+      "albedo": "DXT5",
+      "normal": "BC5_UNORM"
+    },
+    "coverage": [
+      0.1046,
+      0.1046,
+      0.1046,
+      0.1046,
+      0.1046,
+      0.105
+    ],
+    "normalErrorDeg": {
+      "mean": 0.483,
+      "p99": 6.05
+    },
+    "seconds": 31.4
+  }
+}

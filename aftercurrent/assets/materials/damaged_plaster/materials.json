@@ -1,0 +1,52 @@
+{
+ "damaged_plaster": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "damaged_plaster.albedo.dds",
+   "normal": "damaged_plaster.normal.ktx2",
+   "orm": "damaged_plaster.orm.dds"
+  },
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 5592944,
+   "orm": 2796344
+  },
+  "psnr": {
+   "albedo": 38.38,
+   "normalXY": 43.69,
+   "orm": {
+    "ao": 39.81,
+    "rough": 45.43,
+    "metal": 99
+   }
+  },
+  "sources": {
+   "albedo": "damaged_plaster_diff_2k.png",
+   "normal": "damaged_plaster_nor_gl_2k.png",
+   "rough": "damaged_plaster_rough_2k.png",
+   "ao": "damaged_plaster_ao_2k.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.815,
+   "p99": 4.294
+  },
+  "specAA": true,
+  "seconds": 29.8,
+  "metresPerTile": [
+   1.85,
+   1.85
+  ],
+  "source": "https://polyhaven.com/a/damaged_plaster",
+  "license": "CC0-1.0"
+ }
+}

@@ -1,0 +1,88 @@
+{
+  "source": "https://polyhaven.com/a/fir_tree_01",
+  "license": "CC0-1.0",
+  "authors": [
+    "Rob Tuytel",
+    "Rico Cilliers"
+  ],
+  "geometry": "Three authored Poly Haven LOD2 tree forms. Every complete crossed/folded foliage spray and its source UVs/corner normals are retained at every level. Only the solid branches and trunks vary by LOD.",
+  "textures": "Original fir trunk/bark photo sets. Runtime fir_twig set already in project supplies the exact matching needle atlas. Albedo/ORM BC1, normals BC5, linear-light mip chain.",
+  "files": [
+    {
+      "file": "fir_bark.albedo.dds",
+      "bytes": 174904,
+      "sha256": "828e5fe9dfa8c195176195bd7e0c57d744baf94312b3deddfd3cadc376777da5"
+    },
+    {
+      "file": "fir_bark.normal.ktx2",
+      "bytes": 350016,
+      "sha256": "eb9a8234a86af6d6cfd7aba54fe209e65c29261d95fa409a80b9dd181b4544e7"
+    },
+    {
+      "file": "fir_bark.orm.dds",
+      "bytes": 174904,
+      "sha256": "f5a77a74489409edd2cc4f859032507c1709078dca2820651483fc6286d95e94"
+    },
+    {
+      "file": "fir_trees.glb",
+      "bytes": 4395176,
+      "sha256": "c230d64ace48a960f903a8d246705e15674f28f1e413980f856d64b67e438aa8"
+    },
+    {
+      "file": "fir_trunk_a.albedo.dds",
+      "bytes": 699192,
+      "sha256": "8195447dd88ab63e88dd3a6b561c1ca0544cf7fa1485cde280c435d86e1d8b50"
+    },
+    {
+      "file": "fir_trunk_a.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "a09ee49cfb9b478e20d75e8a1a4fc038e7ae3585d79e80172c21a2bed9acccd1"
+    },
+    {
+      "file": "fir_trunk_a.orm.dds",
+      "bytes": 699192,
+      "sha256": "c11529c60194f336951991240f2a55aabc31fe305aa0d68093304701949a0870"
+    },
+    {
+      "file": "fir_trunk_b.albedo.dds",
+      "bytes": 699192,
+      "sha256": "82a6931e8300be6ae49a55629c30e3cb8867b85e340da1ccb83f82ec8f555914"
+    },
+    {
+      "file": "fir_trunk_b.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "ccbf6dcf416d5b06a9c5ff328d29dc7134658555bab0e7c2c5153f95dce6fb2b"
+    },
+    {
+      "file": "fir_trunk_b.orm.dds",
+      "bytes": 699192,
+      "sha256": "5d52fdd015aced06892ae1b2203508cbef8eb204e18520d35b4a47f48f4afbc1"
+    },
+    {
+      "file": "fir_trunk_c.albedo.dds",
+      "bytes": 699192,
+      "sha256": "aeb70bc088bbbcf6b838071735e6ac166613a915fcad86c240ae68f8b8942ff4"
+    },
+    {
+      "file": "fir_trunk_c.normal.ktx2",
+      "bytes": 1398608,
+      "sha256": "4656f77eb99bf0320c6d8a2bfee191b938f54b988685848d5b03e79ce64d0181"
+    },
+    {
+      "file": "fir_trunk_c.orm.dds",
+      "bytes": 699192,
+      "sha256": "77ebb16d91b07681362c81e096d5a870acb3e0bbdfb6028a59145ba6c358624f"
+    },
+    {
+      "file": "geometry.json",
+      "bytes": 2571,
+      "sha256": "0218344509577c5fb74e6ae0e6babbad2c519a90c01f0e73546863a2517c4652"
+    },
+    {
+      "file": "materials.json",
+      "bytes": 2989,
+      "sha256": "ace026033b27892270bc9ac5e146a90f25199fb5181c5c97ddef15e4f1bf04cc"
+    }
+  ],
+  "reduction": "No random foliage thinning or flattened-sheet approximation. Existing opaque tube reduction and corrected edge normals retained from the frozen v1 derivative. Exact decoded foliage arrays are identical across LODs."
+}

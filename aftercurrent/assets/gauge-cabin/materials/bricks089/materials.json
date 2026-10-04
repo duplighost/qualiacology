@@ -1,0 +1,19 @@
+{
+  "bricks089": {
+    "files": {
+      "albedo": "bricks089.albedo.dds",
+      "normal": "bricks089.normal.ktx2",
+      "orm": "bricks089.orm.dds"
+    },
+    "metresPerTile": [
+      2.2,
+      1.1
+    ],
+    "source": {
+      "page": "https://ambientcg.com/a/Bricks089",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "donor": "curfew/work/visual-overhaul/masonry-research/Bricks089"
+    }
+  }
+}

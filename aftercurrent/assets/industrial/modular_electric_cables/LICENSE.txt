@@ -1,0 +1,8 @@
+Modular Electric Cables
+Authors: Kuutti Siitonen
+Source: https://polyhaven.com/a/modular_electric_cables
+License: CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/
+License statement: https://polyhaven.com/license
+
+Original geometry and material files are unmodified.

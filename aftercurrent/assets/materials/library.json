@@ -1,0 +1,792 @@
+{
+  "sets": {
+    "concrete035": {
+      "files": {
+        "albedo": "concrete035/concrete035.albedo.dds",
+        "normal": "concrete035/concrete035.normal.ktx2",
+        "orm": "concrete035/concrete035.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        512
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 546928,
+      "metres": [
+        2.0,
+        2.0
+      ],
+      "mean": [
+        0.2401,
+        0.2329,
+        0.1939
+      ],
+      "use": "old stained concrete",
+      "source": {
+        "page": "https://ambientcg.com/a/Concrete035",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Concrete 035"
+      }
+    },
+    "concrete047a": {
+      "files": {
+        "albedo": "concrete047a/concrete047a.albedo.dds",
+        "normal": "concrete047a/concrete047a.normal.ktx2",
+        "orm": "concrete047a/concrete047a.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1093040,
+      "metres": [
+        2.0,
+        2.0
+      ],
+      "mean": [
+        0.2866,
+        0.2486,
+        0.1754
+      ],
+      "use": "basement concrete",
+      "source": {
+        "page": "https://ambientcg.com/a/Concrete047A",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Concrete 047 A"
+      }
+    },
+    "metal046b": {
+      "files": {
+        "albedo": "metal046b/metal046b.albedo.dds",
+        "normal": "metal046b/metal046b.normal.ktx2",
+        "orm": "metal046b/metal046b.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1093040,
+      "metres": [
+        1.0,
+        1.0
+      ],
+      "mean": [
+        0.0504,
+        0.0504,
+        0.0508
+      ],
+      "use": "dark painted iron",
+      "source": {
+        "page": "https://ambientcg.com/a/Metal046B",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Metal 046 B"
+      }
+    },
+    "rust003": {
+      "files": {
+        "albedo": "rust003/rust003.albedo.dds",
+        "normal": "rust003/rust003.normal.ktx2",
+        "orm": "rust003/rust003.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1093040,
+      "metres": [
+        1.0,
+        1.0
+      ],
+      "mean": [
+        0.1376,
+        0.0365,
+        0.0122
+      ],
+      "use": "rust",
+      "source": {
+        "page": "https://ambientcg.com/a/Rust003",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Rust 003"
+      }
+    },
+    "rock001": {
+      "files": {
+        "albedo": "rock001/rock001.albedo.dds",
+        "normal": "rock001/rock001.normal.ktx2",
+        "orm": "rock001/rock001.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1224112,
+      "metres": [
+        2.0,
+        2.0
+      ],
+      "mean": [
+        0.1869,
+        0.1838,
+        0.1615
+      ],
+      "use": "granite",
+      "source": {
+        "page": "https://ambientcg.com/a/Rock001",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Rock 001"
+      }
+    },
+    "moss002": {
+      "files": {
+        "albedo": "moss002/moss002.albedo.dds",
+        "normal": "moss002/moss002.normal.ktx2",
+        "orm": "moss002/moss002.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1093040,
+      "metres": [
+        1.0,
+        1.0
+      ],
+      "mean": [
+        0.0743,
+        0.1393,
+        0.0112
+      ],
+      "use": "moss",
+      "source": {
+        "page": "https://ambientcg.com/a/Moss002",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Moss 002"
+      }
+    },
+    "pine_bark": {
+      "files": {
+        "albedo": "pine_bark/pine_bark.albedo.dds",
+        "normal": "pine_bark/pine_bark.normal.ktx2",
+        "orm": "pine_bark/pine_bark.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1224112,
+      "metres": [
+        1,
+        1
+      ],
+      "mean": [
+        0.0505,
+        0.0407,
+        0.0323
+      ],
+      "use": "pine branch bark",
+      "source": {
+        "page": "https://polyhaven.com/a/pine_tree_01",
+        "licence": "CC0 1.0",
+        "author": "Rob Tuytel, Rico Cilliers",
+        "title": "Pine Tree 01"
+      }
+    },
+    "pine_twig": {
+      "files": {
+        "albedo": "pine_twig/pine_twig.albedo.dds",
+        "normal": "pine_twig/pine_twig.normal.ktx2",
+        "orm": "pine_twig/pine_twig.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT5",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "wrap": false,
+      "bytes": 1792104,
+      "metres": [
+        1,
+        1
+      ],
+      "mean": [
+        0.0978,
+        0.0776,
+        0.0524
+      ],
+      "use": "pine needle card (alpha)",
+      "source": {
+        "page": "https://polyhaven.com/a/pine_tree_01",
+        "licence": "CC0 1.0",
+        "author": "Rob Tuytel, Rico Cilliers",
+        "title": "Pine Tree 01"
+      }
+    },
+    "fabric001": {
+      "files": {
+        "albedo": "fabric001/fabric001.albedo.dds",
+        "normal": "fabric001/fabric001.normal.ktx2",
+        "orm": "fabric001/fabric001.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        256,
+        512
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 153680,
+      "metres": [
+        0.5,
+        0.5
+      ],
+      "mean": [
+        0.5461,
+        0.5316,
+        0.5026
+      ],
+      "use": "white cotton (dust sheets)",
+      "source": {
+        "page": "https://ambientcg.com/a/Fabric001",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Fabric 001"
+      }
+    },
+    "leather014": {
+      "files": {
+        "albedo": "leather014/leather014.albedo.dds",
+        "normal": "leather014/leather014.normal.ktx2",
+        "orm": "leather014/leather014.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        512,
+        512
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 306576,
+      "metres": [
+        0.8,
+        0.8
+      ],
+      "mean": [
+        0.079,
+        0.0374,
+        0.0327
+      ],
+      "use": "oxblood leather",
+      "source": {
+        "page": "https://ambientcg.com/a/Leather014",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Leather 014"
+      }
+    },
+    "bricks026": {
+      "files": {
+        "albedo": "bricks026/bricks026.albedo.dds",
+        "normal": "bricks026/bricks026.normal.ktx2",
+        "orm": "bricks026/bricks026.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1224112,
+      "metres": [
+        1.2,
+        1.2
+      ],
+      "mean": [
+        0.3474,
+        0.242,
+        0.1919
+      ],
+      "use": "old red brick",
+      "source": {
+        "page": "https://ambientcg.com/a/Bricks026",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Bricks 026"
+      }
+    },
+    "corrugatedsteel009": {
+      "files": {
+        "albedo": "corrugatedsteel009/corrugatedsteel009.albedo.dds",
+        "normal": "corrugatedsteel009/corrugatedsteel009.normal.ktx2",
+        "orm": "corrugatedsteel009/corrugatedsteel009.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        512
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 612464,
+      "metres": [
+        2.0,
+        1.0
+      ],
+      "mean": [
+        0.2297,
+        0.2279,
+        0.2279
+      ],
+      "use": "corrugated sheds",
+      "source": {
+        "page": "https://ambientcg.com/a/CorrugatedSteel009",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "donor": "curfew/work/visual-overhaul/material-research/CorrugatedSteel009"
+      }
+    },
+    "fir_twig": {
+      "files": {
+        "albedo": "fir_twig/fir_twig.albedo.dds",
+        "normal": "fir_twig/fir_twig.normal.ktx2",
+        "orm": "fir_twig/fir_twig.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT5",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "wrap": false,
+      "bytes": 1792104,
+      "metres": [
+        1,
+        1
+      ],
+      "mean": [
+        0.0947,
+        0.0871,
+        0.033
+      ],
+      "use": "fir needle card (alpha)",
+      "source": {
+        "page": "https://polyhaven.com/a/fir_tree_01",
+        "licence": "CC0 1.0",
+        "author": "Rob Tuytel, Rico Cilliers",
+        "title": "Fir Tree 01"
+      }
+    },
+    "plaster007": {
+      "files": {
+        "albedo": "plaster007/plaster007.albedo.dds",
+        "normal": "plaster007/plaster007.normal.ktx2",
+        "orm": "plaster007/plaster007.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1093040,
+      "metres": [
+        2.0,
+        2.0
+      ],
+      "mean": [
+        0.5225,
+        0.5168,
+        0.4741
+      ],
+      "use": "old cracked plaster, stucco",
+      "source": {
+        "page": "https://ambientcg.com/a/Plaster007",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "donor": "curfew/work/visual-overhaul/material-research/Plaster007"
+      }
+    }
+  },
+  "materials": {
+    "floor.concrete": {
+      "set": "concrete047a",
+      "scale": [
+        2,
+        2
+      ],
+      "surface": "concrete"
+    },
+    "stone.granite": {
+      "set": "rock001",
+      "scale": [
+        2,
+        2
+      ],
+      "surface": "stone"
+    },
+    "concrete.basement": {
+      "set": "concrete047a",
+      "scale": [
+        2,
+        2
+      ],
+      "surface": "concrete"
+    },
+    "concrete.old": {
+      "set": "concrete035",
+      "scale": [
+        2,
+        2
+      ],
+      "surface": "concrete"
+    },
+    "concrete.foundation": {
+      "set": "concrete035",
+      "scale": [
+        2,
+        2
+      ],
+      "tint": "#B7B3AA",
+      "surface": "concrete"
+    },
+    "concrete.sidewalk": {
+      "set": "concrete047a",
+      "scale": [
+        1.5,
+        1.5
+      ],
+      "surface": "concrete"
+    },
+    "metal.rust": {
+      "set": "rust003",
+      "scale": [
+        1,
+        1
+      ],
+      "surface": "metal"
+    },
+    "metal.iron": {
+      "set": "metal046b",
+      "scale": [
+        1,
+        1
+      ],
+      "surface": "metal"
+    },
+    "ground.moss": {
+      "set": "moss002",
+      "scale": [
+        1,
+        1
+      ],
+      "surface": "grass"
+    },
+    "bark.pine": {
+      "set": "pine_bark",
+      "scale": [
+        1,
+        1
+      ],
+      "surface": "wood"
+    },
+    "foliage.pine-twig": {
+      "set": "pine_twig",
+      "scale": [
+        1,
+        1
+      ],
+      "surface": "leaves"
+    },
+    "metal.black": {
+      "set": "metal046b",
+      "scale": [
+        0.5,
+        0.5
+      ],
+      "tint": "#2A2A2B",
+      "tintNormalize": true,
+      "roughness": 0.8,
+      "surface": "metal"
+    },
+    "metal.lead": {
+      "set": "metal046b",
+      "scale": [
+        1,
+        1
+      ],
+      "tint": "#5E6164",
+      "tintNormalize": true,
+      "roughness": 0.9,
+      "surface": "metal"
+    },
+    "concrete.cap": {
+      "set": "concrete035",
+      "scale": [
+        1,
+        1
+      ],
+      "tint": "#C8C4BA",
+      "surface": "concrete"
+    },
+    "concrete.steps": {
+      "set": "concrete035",
+      "scale": [
+        1.5,
+        1.5
+      ],
+      "tint": "#D6D2C8",
+      "surface": "concrete"
+    },
+    "concrete.wet": {
+      "set": "concrete035",
+      "scale": [
+        2,
+        2
+      ],
+      "tint": "#8E8A84",
+      "roughness": 0.55,
+      "surface": "concrete"
+    },
+    "concrete.garage": {
+      "set": "concrete047a",
+      "scale": [
+        2,
+        2
+      ],
+      "tint": "#C8C4BC",
+      "surface": "concrete"
+    },
+    "concrete.block": {
+      "set": "concrete035",
+      "scale": [
+        2,
+        2
+      ],
+      "tint": "#E4E0D6",
+      "surface": "concrete"
+    },
+    "concrete.hale-cellar": {
+      "set": "concrete047a",
+      "scale": [
+        2,
+        2
+      ],
+      "tint": "#8A8C88",
+      "tintNormalize": true,
+      "roughness": 0.8,
+      "normalScale": 0.7,
+      "surface": "concrete"
+    },
+    "concrete.pruitt-cellar": {
+      "set": "concrete035",
+      "scale": [
+        2,
+        2
+      ],
+      "tint": "#6F6A62",
+      "tintNormalize": true,
+      "surface": "concrete"
+    },
+    "concrete.adler-cellar": {
+      "set": "concrete047a",
+      "scale": [
+        2,
+        2
+      ],
+      "tint": "#7E7B74",
+      "tintNormalize": true,
+      "surface": "concrete"
+    },
+    "ivy.dark": {
+      "set": "moss002",
+      "scale": [
+        0.7,
+        0.7
+      ],
+      "tint": "#27321F",
+      "tintNormalize": true,
+      "roughness": 1.1,
+      "surface": "wood"
+    }
+  },
+  "aliases": {
+    "metal.finial": "metal.black",
+    "fixture.black": "metal.black",
+    "iron.black": "metal.black",
+    "iron.lamp-post": "metal.black",
+    "iron.manhole": "metal.iron",
+    "iron.rusted": "metal.rust",
+    "iron.wire": "metal.black",
+    "foundation.concrete": "concrete.foundation",
+    "shutter.iron": "metal.black",
+    "concrete.block-painted": "concrete.block",
+    "concrete.drain-floor": "concrete.old",
+    "concrete.drain-wet": "concrete.wet",
+    "concrete.drive": "concrete.sidewalk",
+    "concrete.garage-epoxy": "concrete.garage",
+    "concrete.joint": "concrete.old",
+    "concrete.pit-oily": "concrete.wet",
+    "concrete.poured": "concrete.foundation",
+    "concrete.poured-painted-cd": "concrete.foundation",
+    "stone.granite-grave": "stone.granite",
+    "curb.granite": "stone.granite",
+    "hedge.privet": "ground.moss",
+    "sidewalk.concrete": "concrete.sidewalk",
+    "sidewalk.flag": "concrete.sidewalk"
+  },
+  "families": {
+    "metal.painted": {
+      "set": "metal046b",
+      "scale": [
+        1,
+        1
+      ],
+      "surface": "metal",
+      "tintNormalize": true,
+      "use": "painted iron and steel"
+    }
+  },
+  "colours": {
+    "white": "#ECE9E1",
+    "ivory": "#EFE8D6",
+    "cream": "#EDE2C6",
+    "butter": "#F0DB98",
+    "pale-yellow": "#EEE2A8",
+    "yellow": "#E4C860",
+    "gold": "#C9A25A",
+    "ochre": "#C49A48",
+    "harvest-gold": "#C8942F",
+    "orange": "#C0662B",
+    "pumpkin": "#D2691E",
+    "red": "#8E2B25",
+    "oxblood": "#5C2226",
+    "dusty-rose": "#D2A49E",
+    "pink": "#E2B6BB",
+    "plum": "#6B475B",
+    "lavender": "#B6A8C8",
+    "slate-blue": "#7D8FA5",
+    "pale-blue": "#B8CEDF",
+    "blue": "#4E6A8F",
+    "grey-blue": "#8B9AA7",
+    "navy": "#2E3A55",
+    "teal": "#3E6D6D",
+    "mint": "#BED7C1",
+    "sage": "#A6B499",
+    "green": "#6E8D59",
+    "avocado": "#8B8E49",
+    "dark-green": "#2F4A3A",
+    "olive": "#6B6B3D",
+    "tan": "#C1A47D",
+    "beige": "#CDBA98",
+    "brown": "#6A4D35",
+    "chocolate": "#4A3328",
+    "grey": "#999994",
+    "warm-grey": "#8F8A80",
+    "charcoal": "#3B3E41",
+    "black": "#29292A",
+    "forest-green": "#2E4A36",
+    "rose": "#C99C98",
+    "rust": "#9A4A2A",
+    "terracotta": "#A65A3C",
+    "greige": "#B7AFA2",
+    "sky-blue": "#A9C6DC",
+    "walnut": "#5A3E2E",
+    "oak": "#A47C54",
+    "honey": "#BC8E54",
+    "cherry": "#7C412E",
+    "mahogany": "#5E2E24",
+    "pine": "#C49C68",
+    "dark": "#3A2B22",
+    "brass": "#C4A064",
+    "bronze": "#7E5E3E",
+    "ebony": "#2A221E"
+  },
+  "provenance": {
+    "donorPath": "C:\\Users\\Alex\\Projects\\olly-olly-wt\\integration-20260923\\public\\assets\\materials\\library.json",
+    "operation": "Selected material sets and only referencing semantic material recipes; no source asset changes."
+  }
+}

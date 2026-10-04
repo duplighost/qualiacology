@@ -1,0 +1,47 @@
+{
+ "metal_plate": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "metal_plate.albedo.dds",
+   "normal": "metal_plate.normal.ktx2",
+   "orm": "metal_plate.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 41.23,
+   "normalXY": 48.89,
+   "orm": {
+    "ao": 34.6,
+    "rough": 32.3,
+    "metal": 32.78
+   }
+  },
+  "sources": {
+   "albedo": "metal_plate_diff.png",
+   "normal": "metal_plate_nor_gl.png",
+   "rough": "metal_plate_rough.png",
+   "ao": "metal_plate_ao.png",
+   "metal": "metal_plate_metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.478,
+   "p99": 1.636
+  },
+  "specAA": true,
+  "seconds": 8.4
+ }
+}

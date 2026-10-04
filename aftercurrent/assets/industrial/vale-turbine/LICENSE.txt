@@ -1,0 +1,7 @@
+Vale Hydro Alternator
+Original mesh and assembly authored for Alex for AFTERCURRENT.
+
+Photographic material source: Green Metal Rust by Rob Tuytel / Poly Haven.
+https://polyhaven.com/a/green_metal_rust
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/
+Photographic paint source is modified, projected and baked into this original model.

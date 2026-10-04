@@ -1,0 +1,174 @@
+{
+ "fir_bark": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "fir_bark.albedo.dds",
+   "normal": "fir_bark.normal.ktx2",
+   "orm": "fir_bark.orm.dds"
+  },
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 40.29,
+   "normalXY": 38.73,
+   "orm": {
+    "ao": 99.0,
+    "rough": 48.23,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.689,
+   "p99": 4.82
+  },
+  "specAA": true,
+  "seconds": 4.6
+ },
+ "fir_trunk_a": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "fir_trunk_a.albedo.dds",
+   "normal": "fir_trunk_a.normal.ktx2",
+   "orm": "fir_trunk_a.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 38.75,
+   "normalXY": 40.21,
+   "orm": {
+    "ao": 99.0,
+    "rough": 42.31,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.235,
+   "p99": 4.918
+  },
+  "specAA": true,
+  "seconds": 13.3
+ },
+ "fir_trunk_b": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "fir_trunk_b.albedo.dds",
+   "normal": "fir_trunk_b.normal.ktx2",
+   "orm": "fir_trunk_b.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 40.6,
+   "normalXY": 40.38,
+   "orm": {
+    "ao": 99.0,
+    "rough": 43.48,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.155,
+   "p99": 5.021
+  },
+  "specAA": true,
+  "seconds": 12.7
+ },
+ "fir_trunk_c": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "fir_trunk_c.albedo.dds",
+   "normal": "fir_trunk_c.normal.ktx2",
+   "orm": "fir_trunk_c.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 39.24,
+   "normalXY": 39.03,
+   "orm": {
+    "ao": 99.0,
+    "rough": 41.48,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.461,
+   "p99": 5.398
+  },
+  "specAA": true,
+  "seconds": 12.5
+ }
+}

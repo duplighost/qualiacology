@@ -1,0 +1,74 @@
+{
+ "kloofendal_overcast_puresky": {
+  "backplate": "kloofendal_overcast_puresky.jpg",
+  "light": "kloofendal_overcast_puresky_1k.hdr",
+  "linearScale": 5.637886597938144,
+  "elevationRange": [
+   -12,
+   90
+  ],
+  "source": "https://polyhaven.com/a/kloofendal_overcast_puresky",
+  "license": "CC0-1.0",
+  "author": "Poly Haven",
+  "horizonLuminance": 0.8419,
+  "upperLuminance": 1.3147
+ },
+ "fouriesburg_mountain_cloudy": {
+  "backplate": "fouriesburg_mountain_cloudy.jpg",
+  "light": "fouriesburg_mountain_cloudy_1k.hdr",
+  "linearScale": 3.3666237113402064,
+  "elevationRange": [
+   -12,
+   90
+  ],
+  "source": "https://polyhaven.com/a/fouriesburg_mountain_cloudy",
+  "license": "CC0-1.0",
+  "author": "Poly Haven",
+  "horizonLuminance": 0.796,
+  "upperLuminance": 1.4158
+ },
+ "shudu_lake": {
+  "backplate": "shudu_lake.jpg",
+  "light": "shudu_lake_1k.hdr",
+  "linearScale": 3.125,
+  "elevationRange": [
+   -12,
+   90
+  ],
+  "source": "https://polyhaven.com/a/shudu_lake",
+  "license": "CC0-1.0",
+  "author": "Poly Haven",
+  "horizonLuminance": 0.3511,
+  "upperLuminance": 0.8183
+ },
+ "waterbuck_trail": {
+  "backplate": "waterbuck_trail.jpg",
+  "light": "waterbuck_trail_1k.hdr",
+  "linearScale": 2.73840206185567,
+  "elevationRange": [
+   -12,
+   90
+  ],
+  "source": "https://polyhaven.com/a/waterbuck_trail",
+  "license": "CC0-1.0",
+  "author": "Poly Haven",
+  "horizonLuminance": 0.5577,
+  "upperLuminance": 1.7188
+ },
+ "kloppenheim_06_puresky": {
+  "backplate": "kloppenheim_06_puresky.jpg",
+  "light": "kloppenheim_06_puresky_1k.hdr",
+  "linearScale": 4.289881229400635,
+  "elevationRange": [
+   -12,
+   90
+  ],
+  "source": "https://polyhaven.com/a/kloppenheim_06_puresky",
+  "license": "CC0-1.0",
+  "author": "Poly Haven",
+  "horizonLuminance": 0.8728,
+  "upperLuminance": 0.6012,
+  "sunAzimuth": 0.7033,
+  "sunElevation": 4.65
+ }
+}

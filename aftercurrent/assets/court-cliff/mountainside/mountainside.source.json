@@ -1,0 +1,104 @@
+{
+  "id": "mountainside",
+  "title": "Mountainside",
+  "url": "https://polyhaven.com/a/mountainside",
+  "licence": "CC0 1.0",
+  "licenceURL": "https://polyhaven.com/license",
+  "legalCodeURL": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+  "authors": {
+    "Dario Barresi": "Photography",
+    "Rico Cilliers": "Processing"
+  },
+  "retrievedAt": "2026-10-02T18:27:40.572661-04:00",
+  "sourceFiles": [
+    {
+      "path": "mountainside_2k.gltf",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/mountainside/mountainside_2k.gltf",
+      "bytes": 2776,
+      "md5": "f9e86e343ba6cc47caed1ba69d1c3e8d",
+      "sha256": "ccdbbb75744b764b19c8868e5f47b6a85e62961fa2f7fe3dc9b73b219c89834d"
+    },
+    {
+      "path": "mountainside.bin",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/mountainside/mountainside.bin",
+      "bytes": 4409280,
+      "md5": "a4ac37444e3313bd9f9ff459eb71418d",
+      "sha256": "08e4ca60e050045de8224d12d23af84f9406bc558943038114d81e184158d953"
+    },
+    {
+      "path": "mountainside_diff_4k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/mountainside/mountainside_diff_4k.jpg",
+      "bytes": 13492897,
+      "md5": "111e596e02d0ec169ab822427fb7ece9",
+      "sha256": "a8dce0eb7e1a0979bd627644ce74d4cf504935cfbae1d4cd8c7fc734145eb089"
+    },
+    {
+      "path": "mountainside_nor_gl_2k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/mountainside/mountainside_nor_gl_2k.jpg",
+      "bytes": 4568125,
+      "md5": "7a83e68eb3f05eeb3e09da657019d9ad",
+      "sha256": "dbfd022b4dad44a2d6fb30b7bd68d44a7349a22c06a9701bcfbedc8e73400a87"
+    },
+    {
+      "path": "mountainside_arm_2k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/mountainside/mountainside_arm_2k.jpg",
+      "bytes": 2829509,
+      "md5": "8e30dcef790c72c1334d4a5b5f88e5a0",
+      "sha256": "a494e404df96eb43df11ae7b4c14901461d129af0ae6b3ecc8f75390c3b41c35"
+    }
+  ],
+  "catalogSourceTriangles": 287755,
+  "downloadedGLTFTriangles": 153472,
+  "derivedTriangles": {
+    "LOD0": 35000,
+    "LOD1": 8000
+  },
+  "process": "CPU meshoptimizer 1.1.1 attribute-aware simplification from preserved glTF; locked boundaries/extrema and additional fold vertices, unchanged retained normals and UVs; floor-centred pivot; existing project DDS/BC5 encoder with full mip chains. Source GLTF is the downloaded 153472-triangle export, not the full 287755-triangle catalog source.",
+  "units": "metres",
+  "up": "+Y",
+  "bounds": {
+    "min": [
+      -5.104649543762207,
+      0,
+      -2.6234471797943115
+    ],
+    "max": [
+      5.104649543762207,
+      10.522143363952637,
+      2.6234471797943115
+    ],
+    "size": [
+      10.209299087524414,
+      10.522143363952637,
+      5.246894359588623
+    ]
+  },
+  "frontDirection": [
+    0.07377528057595864,
+    0.22743692535807294,
+    0.9709941570162021
+  ],
+  "pivotTranslation": [
+    -0.07814431190490723,
+    0.19979140162467957,
+    1.0577170848846436
+  ],
+  "textures": {
+    "albedo": [
+      4096,
+      4096,
+      "DXT1 sRGB"
+    ],
+    "normal": [
+      2048,
+      2048,
+      "BC5 linear OpenGL"
+    ],
+    "arm": [
+      2048,
+      2048,
+      "DXT1 linear AO/Roughness/Metal"
+    ]
+  },
+  "runtimeLicenseCopy": "LICENSE-Poly-Haven.html"
+}

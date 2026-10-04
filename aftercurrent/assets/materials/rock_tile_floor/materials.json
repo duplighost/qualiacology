@@ -1,0 +1,55 @@
+{
+ "rock_tile_floor": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "rock_tile_floor.albedo.dds",
+   "normal": "rock_tile_floor.normal.ktx2",
+   "orm": "rock_tile_floor.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 33.13,
+   "normalXY": 43.61,
+   "orm": {
+    "ao": 37.17,
+    "rough": 38.55,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "rock_tile_floor_diff.png",
+   "normal": "rock_tile_floor_nor_gl.png",
+   "rough": "rock_tile_floor_rough.png",
+   "ao": "rock_tile_floor_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.913,
+   "p99": 2.963
+  },
+  "specAA": true,
+  "seconds": 13.0,
+  "metresPerTile": [
+   1.96,
+   1.96
+  ],
+  "source": {
+   "page": "https://polyhaven.com/a/rock_tile_floor",
+   "licence": "CC0 1.0",
+   "author": "Poly Haven"
+  }
+ }
+}

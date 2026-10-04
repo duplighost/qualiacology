@@ -1,0 +1,52 @@
+{
+ "grey_roof_tiles_02": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "grey_roof_tiles_02.albedo.dds",
+   "normal": "grey_roof_tiles_02.normal.ktx2",
+   "orm": "grey_roof_tiles_02.orm.dds"
+  },
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 5592944,
+   "orm": 2796344
+  },
+  "psnr": {
+   "albedo": 38.42,
+   "normalXY": 45.76,
+   "orm": {
+    "ao": 36.32,
+    "rough": 37.27,
+    "metal": 99
+   }
+  },
+  "sources": {
+   "albedo": "grey_roof_tiles_02_diff_2k.png",
+   "normal": "grey_roof_tiles_02_nor_gl_2k.png",
+   "rough": "grey_roof_tiles_02_rough_2k.png",
+   "ao": "grey_roof_tiles_02_ao_2k.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.63,
+   "p99": 3.727
+  },
+  "specAA": true,
+  "seconds": 30.4,
+  "metresPerTile": [
+   1.5,
+   1.5
+  ],
+  "source": "https://polyhaven.com/a/grey_roof_tiles_02",
+  "license": "CC0-1.0"
+ }
+}

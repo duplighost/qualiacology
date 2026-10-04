@@ -1,0 +1,19 @@
+{
+  "asset": "cable-cuff.glb",
+  "creator": "Alex / Qualiacology with Codex",
+  "source": "Original hard-surface model authored in tools/build-cable-cuff.py",
+  "units": "metres",
+  "forward": "-Z",
+  "pivot": "left wrist",
+  "meshes": 10,
+  "triangles": 31740,
+  "bytes": 832508,
+  "materials": 7,
+  "movingParts": [
+    "Reel",
+    "JawL",
+    "JawR"
+  ],
+  "thirdPartyGeometry": false,
+  "revision": "compact machined casing, measured anatomical grip, cover seams, inset serial and load markings, localized edge contact polish"
+}

@@ -1,0 +1,45 @@
+{
+ "structural_paint": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "structural_paint.albedo.dds",
+   "normal": "structural_paint.normal.ktx2",
+   "orm": "structural_paint.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 43.59,
+   "normalXY": 68.58,
+   "orm": {
+    "ao": 99.0,
+    "rough": 48.81,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "structural_paint_diff.jpg",
+   "normal": "structural_paint_nor_gl.jpg",
+   "rough": "structural_paint_rough.jpg"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.036,
+   "p99": 0.192
+  },
+  "specAA": true,
+  "seconds": 8.4
+ }
+}

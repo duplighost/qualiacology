@@ -1,0 +1,135 @@
+{
+  "scope": "Five byte-identical existing CC0 material maps; no donor writes. Launch, cradle, boathouse, workshop fittings, terrain and rail mechanism geometry are newly authored for AFTERCURRENT, not scanned complete machines.",
+  "sourceLibrary": {
+    "absolutePath": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\library.json",
+    "path": "../olly-olly/public/assets/materials/library.json",
+    "sha256": "a4f261af2efd7dc6788cbff753c4314e11ebf852d30992508704413064550a68",
+    "bytes": 132125
+  },
+  "sets": [
+    {
+      "id": "wood049",
+      "files": {
+        "albedo": "wood049/wood049.albedo.dds",
+        "normal": "wood049/wood049.normal.ktx2",
+        "orm": "wood049/wood049.orm.dds"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM",
+        "orm": "DXT1"
+      },
+      "size": [
+        1024,
+        1024
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 1224112,
+      "metres": [
+        1.2,
+        1.2
+      ],
+      "mean": [
+        0.2022,
+        0.1273,
+        0.077
+      ],
+      "use": "sawn wood (joists, raw timber)",
+      "source": {
+        "page": "https://ambientcg.com/a/Wood049",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "donor": "winterline/public/assets/materials/Wood049"
+      },
+      "useInAftercurrent": "Structural timber, clinker hull strakes, planks and repair stock; local longitudinal UVs follow each piece."
+    },
+    {
+      "id": "woodsiding011",
+      "files": {
+        "albedo": "woodsiding011/woodsiding011.albedo.dds",
+        "normal": "woodsiding011/woodsiding011.normal.ktx2"
+      },
+      "format": {
+        "albedo": "DXT1",
+        "normal": "BC5_UNORM"
+      },
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha": false,
+      "wrap": true,
+      "bytes": 4194952,
+      "metres": [
+        2,
+        2
+      ],
+      "mean": [
+        0.1332,
+        0.1062,
+        0.0801
+      ],
+      "use": "weathered grey boards (Hollis, sheds)",
+      "source": {
+        "page": "https://ambientcg.com/a/WoodSiding011",
+        "licence": "CC0 1.0",
+        "author": "ambientCG (Lennart Demes)",
+        "title": "Wood Siding 011"
+      },
+      "useInAftercurrent": "Weathered roof surface; local UVs cover the sloped roof sheets."
+    }
+  ],
+  "files": [
+    {
+      "sourceAbsolutePath": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\wood049\\wood049.albedo.dds",
+      "staged": "artifacts/boatworks-work/assets/timber/wood049.albedo.dds",
+      "target": "public/assets/environments/boatworks/timber/wood049.albedo.dds",
+      "sha256": "247785044d29bd3e92f1d5d951dae1c6677044617d97e6257ebc9297373a3cd7",
+      "bytes": 699192,
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/a/Wood049"
+    },
+    {
+      "sourceAbsolutePath": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\wood049\\wood049.normal.ktx2",
+      "staged": "artifacts/boatworks-work/assets/timber/wood049.normal.ktx2",
+      "target": "public/assets/environments/boatworks/timber/wood049.normal.ktx2",
+      "sha256": "5460b8e7ed2945a4fbcc69cff537855ec2b24e1e09436a44a8f9f0149b1cbde9",
+      "bytes": 350016,
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/a/Wood049"
+    },
+    {
+      "sourceAbsolutePath": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\wood049\\wood049.orm.dds",
+      "staged": "artifacts/boatworks-work/assets/timber/wood049.orm.dds",
+      "target": "public/assets/environments/boatworks/timber/wood049.orm.dds",
+      "sha256": "8ac9ff2469a350c590de3eb666c84f384fe6d53910afd6003e354fd6b3373e05",
+      "bytes": 174904,
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/a/Wood049"
+    },
+    {
+      "sourceAbsolutePath": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\woodsiding011\\woodsiding011.albedo.dds",
+      "staged": "artifacts/boatworks-work/assets/wood/woodsiding011.albedo.dds",
+      "target": "public/assets/environments/boatworks/wood/woodsiding011.albedo.dds",
+      "sha256": "5f1aa85383834ac1909307dc08854bdecc49efe3314713b1a457c04a47fada09",
+      "bytes": 2796344,
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/a/WoodSiding011"
+    },
+    {
+      "sourceAbsolutePath": "C:\\Users\\Alex\\Projects\\olly-olly\\public\\assets\\materials\\woodsiding011\\woodsiding011.normal.ktx2",
+      "staged": "artifacts/boatworks-work/assets/wood/woodsiding011.normal.ktx2",
+      "target": "public/assets/environments/boatworks/wood/woodsiding011.normal.ktx2",
+      "sha256": "4647fb99990cce94fc07b21caaa4402c1fdc5f03a95e14ea25a419e287ee6094",
+      "bytes": 1398608,
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/a/WoodSiding011"
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "asset": "overhead_crane",
+  "name": "Overhead Crane",
+  "source": "https://polyhaven.com/a/overhead_crane",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "license_statement": "https://polyhaven.com/license",
+  "authors": {
+    "Timothy3D": "All"
+  },
+  "source_polycount": 89964,
+  "source_dimensions_mm": [
+    12491.660118103027,
+    4000.000476837158,
+    5132.581472396851
+  ],
+  "downloaded_utc": "2026-10-01T05:01:26.198109+00:00",
+  "resolution": "2k",
+  "metadata": {
+    "type": 2,
+    "name": "Overhead Crane",
+    "categories": [
+      "collection: project_lighthouse",
+      "industrial",
+      "tools"
+    ],
+    "category": "Industrial & Infrastructure",
+    "tags": [
+      "gantry",
+      "machinery",
+      "shipyard",
+      "dock",
+      "transport container",
+      "hoist",
+      "wheels",
+      "winch",
+      "pully"
+    ],
+    "description": "Free 8K model of a weathered overhead crane hoist: arched steel beam, trolley wheels, cable drum, pulleys and worn hook, with bolts, grime and chipped paint.",
+    "authors": {
+      "Timothy3D": "All"
+    },
+    "donated": true,
+    "category_id": "f9f72c1f-d49e-52d8-9c2a-fe27dddfac1f",
+    "max_resolution": [
+      8192,
+      8192
+    ],
+    "polycount": 89964,
+    "files_hash": "2a3542eda64a36e958257ff4d679e743f0f67c2b",
+    "texel_density": 2717.480584825906,
+    "dimensions": [
+      12491.660118103027,
+      4000.000476837158,
+      5132.581472396851
+    ],
+    "date_published": 1783036800,
+    "staging": null,
+    "collections": [
+      "project_lighthouse"
+    ],
+    "attributes": {
+      "material": [
+        "steel",
+        "rubber"
+      ],
+      "condition": [
+        "weathered"
+      ]
+    },
+    "img_version": "fe2fb591",
+    "download_count": 370,
+    "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/overhead_crane.png?width=256&height=256&v=fe2fb591"
+  },
+  "files": [
+    {
+      "path": "overhead_crane_2k.gltf",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/overhead_crane/overhead_crane_2k.gltf",
+      "bytes": 9310,
+      "md5": "bb56d6c9d56bde407857e781a01876af",
+      "sha256": "d5d963f2cf54006a9931e9d68274c1135c0528e2f5f832009b188f7d0d617c71"
+    },
+    {
+      "path": "textures/overhead_crane_trim_nor_gl_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/overhead_crane/overhead_crane_trim_nor_gl_2k.jpg",
+      "bytes": 3264905,
+      "md5": "141255bf82b693466bdf7710723b8587",
+      "sha256": "5661f301ddb3380581bacab81c01630a8ac36029fe5baeb730216dc64c3d9696"
+    },
+    {
+      "path": "textures/overhead_crane_trim_diff_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/overhead_crane/overhead_crane_trim_diff_2k.jpg",
+      "bytes": 1884375,
+      "md5": "879d5f98e248b37d735f6826cf03b570",
+      "sha256": "87c49f0abd50367bce0964f89e4d2a7a842a5cdfbe0131b5a5fde6dce430fd90"
+    },
+    {
+      "path": "textures/overhead_crane_trim_arm_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/overhead_crane/overhead_crane_trim_arm_2k.jpg",
+      "bytes": 2993980,
+      "md5": "328d01288b062b8af906df30a7ddf1dd",
+      "sha256": "28810c7016b496ecab47cd20e7ee7d29eb368d4d10223a6f44a10dceda69e941"
+    },
+    {
+      "path": "textures/overhead_crane_nor_gl_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/overhead_crane/overhead_crane_nor_gl_2k.jpg",
+      "bytes": 3246311,
+      "md5": "cfcc1b177480ecfaf8d2f60add4a1ac4",
+      "sha256": "b63798b5a2e3dc58a215cf1ef35451242f5e31f02ccfeb5d9323c096072017ab"
+    },
+    {
+      "path": "textures/overhead_crane_diff_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/overhead_crane/overhead_crane_diff_2k.jpg",
+      "bytes": 2244557,
+      "md5": "3aaf3bbf8072745a8c02ad569409b44a",
+      "sha256": "796347fde192bf73317c88bd169e04c9d4c7b7e75d111b4ab63e835d603cc962"
+    },
+    {
+      "path": "textures/overhead_crane_arm_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/overhead_crane/overhead_crane_arm_2k.jpg",
+      "bytes": 2767592,
+      "md5": "167de1c8f5abe066cd0659382fb7a7d6",
+      "sha256": "36700ea0d48af2f70f58976492736ac14733eb05b0c0e15a88f45d2f77542724"
+    },
+    {
+      "path": "overhead_crane.bin",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/overhead_crane/overhead_crane.bin",
+      "bytes": 3022220,
+      "md5": "5bb23b84cbd931824b458c87f587400b",
+      "sha256": "6fcbc59c9b2e563c08206d0d3ff2560872e7697991c33997eecf882315ef9b47"
+    }
+  ]
+}

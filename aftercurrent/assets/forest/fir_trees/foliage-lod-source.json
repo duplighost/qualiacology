@@ -1,0 +1,112 @@
+{
+  "source": "https://polyhaven.com/a/fir_tree_01",
+  "license": "CC0-1.0",
+  "authors": [
+    "Rob Tuytel",
+    "Rico Cilliers"
+  ],
+  "canonicalModel": {
+    "path": "fir_trees.glb",
+    "sha256": "c230d64ace48a960f903a8d246705e15674f28f1e413980f856d64b67e438aa8",
+    "changed": false
+  },
+  "derivative": "AFTERCURRENT middle/far real-mesh foliage index reduction. Every connected source foliage patch is retained. Existing source vertices, normals, UVs and wind identities are unchanged; only selected patch boundary vertices are omitted from triangle indices. No imposter, billboard, card-population thinning or replacement canopy. All near foliage and opaque geometry remain as supplied.",
+  "payload": {
+    "file": "foliage-lod.bin",
+    "bytes": 470892,
+    "sha256": "c4ed81c8d0c59f7bd1bdc6a5064bc1663269e0cc4c175ad0e5a55cda3cb99219"
+  },
+  "constraints": {
+    "middle": {
+      "maxWorldMappingError": 0.045,
+      "maxNormalVectorError": 0.14
+    },
+    "far": {
+      "maxWorldMappingError": 0.08,
+      "maxNormalVectorError": 0.24
+    },
+    "alphaLossPerPatchMax": 0.03,
+    "alphaGainPerPatchMax": 0.04,
+    "alphaGridStride": 2
+  },
+  "levels": [
+    {
+      "variant": "a",
+      "sourceTriangles": 33753,
+      "levels": [
+        {
+          "level": 1,
+          "triangles": 24796,
+          "reduction": 0.26536900423666043,
+          "reducedPatches": 1334,
+          "maxMappingError": 0.034265090387982276,
+          "maxNormalError": 0.11481830400227641,
+          "maxAlphaLoss": 0.029017160686427457,
+          "maxAlphaGain": 0.028705148205928236
+        },
+        {
+          "level": 2,
+          "triangles": 20976,
+          "reduction": 0.378544129410719,
+          "reducedPatches": 1716,
+          "maxMappingError": 0.046758716768190975,
+          "maxNormalError": 0.2344701667428812,
+          "maxAlphaLoss": 0.029017160686427457,
+          "maxAlphaGain": 0.028705148205928236
+        }
+      ]
+    },
+    {
+      "variant": "b",
+      "sourceTriangles": 17920,
+      "levels": [
+        {
+          "level": 1,
+          "triangles": 14080,
+          "reduction": 0.2142857142857143,
+          "reducedPatches": 640,
+          "maxMappingError": 0.03348280646679916,
+          "maxNormalError": 0.11442410805875013,
+          "maxAlphaLoss": 0.029017160686427457,
+          "maxAlphaGain": 0.028705148205928236
+        },
+        {
+          "level": 2,
+          "triangles": 11520,
+          "reduction": 0.3571428571428571,
+          "reducedPatches": 896,
+          "maxMappingError": 0.04563286209721335,
+          "maxNormalError": 0.23449234972443503,
+          "maxAlphaLoss": 0.029017160686427457,
+          "maxAlphaGain": 0.028705148205928236
+        }
+      ]
+    },
+    {
+      "variant": "c",
+      "sourceTriangles": 5016,
+      "levels": [
+        {
+          "level": 1,
+          "triangles": 3555,
+          "reduction": 0.291267942583732,
+          "reducedPatches": 313,
+          "maxMappingError": 0.025746143941198327,
+          "maxNormalError": 0.11469502444938386,
+          "maxAlphaLoss": 0.02902621722846442,
+          "maxAlphaGain": 0.02902621722846442
+        },
+        {
+          "level": 2,
+          "triangles": 3555,
+          "reduction": 0.291267942583732,
+          "reducedPatches": 313,
+          "maxMappingError": 0.025746143941198327,
+          "maxNormalError": 0.11469502444938386,
+          "maxAlphaLoss": 0.02902621722846442,
+          "maxAlphaGain": 0.02902621722846442
+        }
+      ]
+    }
+  ]
+}

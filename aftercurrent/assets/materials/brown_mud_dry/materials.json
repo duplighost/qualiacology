@@ -1,0 +1,52 @@
+{
+ "brown_mud_dry": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "brown_mud_dry.albedo.dds",
+   "normal": "brown_mud_dry.normal.ktx2",
+   "orm": "brown_mud_dry.orm.dds"
+  },
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 5592944,
+   "orm": 2796344
+  },
+  "psnr": {
+   "albedo": 32.2,
+   "normalXY": 37.12,
+   "orm": {
+    "ao": 33.87,
+    "rough": 33.4,
+    "metal": 99
+   }
+  },
+  "sources": {
+   "albedo": "brown_mud_dry_diff_2k.png",
+   "normal": "brown_mud_dry_nor_gl_2k.png",
+   "rough": "brown_mud_dry_rough_2k.png",
+   "ao": "brown_mud_dry_ao_2k.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 2.302,
+   "p99": 7.934
+  },
+  "specAA": true,
+  "seconds": 29.8,
+  "metresPerTile": [
+   1.3,
+   1.3
+  ],
+  "source": "https://polyhaven.com/a/brown_mud_dry",
+  "license": "CC0-1.0"
+ }
+}

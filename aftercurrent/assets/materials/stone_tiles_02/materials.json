@@ -1,0 +1,55 @@
+{
+ "stone_tiles_02": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "stone_tiles_02.albedo.dds",
+   "normal": "stone_tiles_02.normal.ktx2",
+   "orm": "stone_tiles_02.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 39.29,
+   "normalXY": 46.75,
+   "orm": {
+    "ao": 40.73,
+    "rough": 41.6,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "stone_tiles_02_diff.png",
+   "normal": "stone_tiles_02_nor_gl.png",
+   "rough": "stone_tiles_02_rough.png",
+   "ao": "stone_tiles_02_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.586,
+   "p99": 2.427
+  },
+  "specAA": true,
+  "seconds": 17.1,
+  "metresPerTile": [
+   2.0,
+   2.0
+  ],
+  "source": {
+   "page": "https://polyhaven.com/a/stone_tiles_02",
+   "licence": "CC0 1.0",
+   "author": "Poly Haven"
+  }
+ }
+}

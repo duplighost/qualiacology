@@ -1,0 +1,62 @@
+{
+  "marble_cliff_05": {
+    "size": [
+      4096,
+      4096
+    ],
+    "alpha": false,
+    "wrap": true,
+    "files": {
+      "albedo": "marble_cliff_05.albedo.dds",
+      "normal": "marble_cliff_05.normal.ktx2",
+      "orm": "marble_cliff_05.orm.dds"
+    },
+    "bytes": {
+      "albedo": 11184952,
+      "normal": 5592944,
+      "orm": 2796344
+    },
+    "psnr": {
+      "albedo": 38.57,
+      "normalXY": 44.76,
+      "orm": {
+        "ao": 40.41,
+        "rough": 42.38,
+        "metal": 99.0
+      }
+    },
+    "sources": {
+      "albedo": "marble_cliff_05_diff_4k.jpg",
+      "normal": "nor_gl_2k.png",
+      "rough": "rough_2k.png",
+      "ao": "ao_2k.png"
+    },
+    "format": {
+      "albedo": "DXT1",
+      "normal": "BC5_UNORM",
+      "orm": "DXT1"
+    },
+    "normalErrorDeg": {
+      "mean": 0.737,
+      "p99": 3.499
+    },
+    "specAA": true,
+    "seconds": 104.0,
+    "metresPerTile": [
+      20.0020694732666,
+      20.001800537109375
+    ],
+    "source": "https://polyhaven.com/a/marble_cliff_05",
+    "author": "Amal Kumar",
+    "license": "CC0-1.0",
+    "licenseURL": "https://polyhaven.com/license",
+    "normalSize": [
+      2048,
+      2048
+    ],
+    "ormSize": [
+      2048,
+      2048
+    ]
+  }
+}

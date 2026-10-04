@@ -1,0 +1,90 @@
+{
+ "accumulator": {
+  "file": "C:/Users/Alex/Projects/aftercurrent/public/assets/industrial/plant-kit\\accumulator.glb",
+  "triangles": 17916,
+  "materials": [
+   "dark",
+   "paint",
+   "red",
+   "steel",
+   "white",
+   "yellow"
+  ]
+ },
+ "transformer": {
+  "file": "C:/Users/Alex/Projects/aftercurrent/public/assets/industrial/plant-kit\\transformer.glb",
+  "triangles": 27296,
+  "materials": [
+   "copper",
+   "dark",
+   "paint",
+   "red",
+   "steel",
+   "white",
+   "yellow"
+  ]
+ },
+ "oil_tank": {
+  "file": "C:/Users/Alex/Projects/aftercurrent/public/assets/industrial/plant-kit\\oil_tank.glb",
+  "triangles": 12100,
+  "materials": [
+   "dark",
+   "paint",
+   "red",
+   "rust",
+   "steel",
+   "white",
+   "yellow"
+  ]
+ },
+ "switchgear_module": {
+  "file": "C:/Users/Alex/Projects/aftercurrent/public/assets/industrial/plant-kit\\switchgear_module.glb",
+  "triangles": 4708,
+  "materials": [
+   "black",
+   "dark",
+   "gallery",
+   "paint",
+   "red",
+   "signal",
+   "steel",
+   "white"
+  ]
+ },
+ "rotor": {
+  "file": "C:/Users/Alex/Projects/aftercurrent/public/assets/industrial/plant-kit\\rotor.glb",
+  "triangles": 9252,
+  "materials": [
+   "copper",
+   "dark",
+   "paint",
+   "steel",
+   "white",
+   "yellow"
+  ]
+ },
+ "flywheel": {
+  "file": "C:/Users/Alex/Projects/aftercurrent/public/assets/industrial/plant-kit\\flywheel.glb",
+  "triangles": 8052,
+  "materials": [
+   "dark",
+   "gallery",
+   "paint",
+   "steel",
+   "yellow"
+  ]
+ },
+ "racking": {
+  "file": "C:/Users/Alex/Projects/aftercurrent/public/assets/industrial/plant-kit\\racking.glb",
+  "triangles": 27148,
+  "materials": [
+   "black",
+   "dark",
+   "paint",
+   "red",
+   "rust",
+   "steel",
+   "white"
+  ]
+ }
+}

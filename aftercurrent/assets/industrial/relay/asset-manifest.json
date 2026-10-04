@@ -1,0 +1,107 @@
+{
+  "asset": "RELAY suspended power-transfer head",
+  "revision": 1,
+  "source_script": "tools/build-relay.py",
+  "original_model": "Original geometry and assembly authored for Alex for AFTERCURRENT.",
+  "runtime": {
+    "file": "relay.glb",
+    "bytes": 609992,
+    "sha256": "72c86e62efa6a5c2701fd30a0ab550974126b0db895f5a35f9041f6d4678cc68",
+    "triangles": 38704,
+    "draw_calls": 8,
+    "materials": 2,
+    "shared_textures": [
+      {
+        "file": "relay_normal.png",
+        "bytes": 906249,
+        "sha256": "105f6ede67d6ded2e3d620fa2800658fd710da5f085e18f68a97e2803910b6b1"
+      },
+      {
+        "file": "relay_orm.png",
+        "bytes": 3398818,
+        "sha256": "8523bd06aac69b11db625efbea0a802679e9070584d88714b77ddaae2472de17"
+      },
+      {
+        "file": "relay_basecolor.png",
+        "bytes": 1438470,
+        "sha256": "3f28b2ada10a1c458d9505eeae04f3dedeea10e9ec718dee429ed9fb79583277"
+      }
+    ],
+    "coordinate_system": "Metres, Y-up, forward +Z. Root on floor. Core centre Y=2.35."
+  },
+  "rig": {
+    "core": "RELAY_Core",
+    "core_origin": [
+      0,
+      2.35,
+      0
+    ],
+    "guards": [
+      {
+        "node": "RELAY_Guard_L",
+        "side": -1,
+        "pivot": [
+          -0.67,
+          0,
+          0.47
+        ]
+      },
+      {
+        "node": "RELAY_Guard_R",
+        "side": 1,
+        "pivot": [
+          0.67,
+          0,
+          0.47
+        ]
+      }
+    ],
+    "hand": "RELAY_Hand",
+    "hand_pivot": [
+      0,
+      -0.61,
+      0.12
+    ],
+    "mount": "RELAY_Mount",
+    "cable": "RELAY_Cable",
+    "terminal": "RELAY_Terminal",
+    "emitter": "RELAY_Emitter",
+    "cable_rest_height": 1,
+    "cable_bottom": 3.57,
+    "opening_rotation_y": "side * opening * 1.37",
+    "emitter_aperture_core_local": [
+      0,
+      0,
+      0.585
+    ]
+  },
+  "verification": {
+    "decoded_triangles": 38704,
+    "decoded_bounds": {
+      "min": [
+        -0.8035184741020203,
+        0.9274998903274536,
+        -0.6299999952316284
+      ],
+      "max": [
+        0.8035281300544739,
+        4.9000020027160645,
+        0.8996702432632446
+      ]
+    },
+    "maximum_bounds_error_m": 9.655952453613281e-06,
+    "uv_quantization": "Disabled; source UV floats retained",
+    "normals_bits": 12,
+    "position_bits": 16
+  },
+  "source_material": {
+    "url": "https://polyhaven.com/a/green_metal_rust",
+    "author": "Rob Tuytel",
+    "license": "CC0-1.0"
+  },
+  "construction_references": [
+    "https://www.boschrexroth.com/en/gb/c/resistance-welding/",
+    "https://www.hitachienergy.com/us/en/products-and-solutions/surge-arresters/high-voltage-surge-arresters/porcelain-housed-surge-arrester-exlim"
+  ],
+  "preview_evidence": "CPU studio previews are authoring inspection; game lighting, motion and performance are verified separately."
+}

@@ -1,0 +1,19 @@
+{
+  "fabric001": {
+    "files": {
+      "albedo": "fabric001.albedo.dds",
+      "normal": "fabric001.normal.ktx2",
+      "orm": "fabric001.orm.dds"
+    },
+    "metresPerTile": [
+      0.5,
+      0.5
+    ],
+    "source": {
+      "page": "https://ambientcg.com/a/Fabric001",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Fabric 001"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+ "cobblestone_floor_04": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "cobblestone_floor_04.albedo.dds",
+   "normal": "cobblestone_floor_04.normal.ktx2",
+   "orm": "cobblestone_floor_04.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 35.16,
+   "normalXY": 41.01,
+   "orm": {
+    "ao": 31.68,
+    "rough": 31.11,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "cobblestone_floor_04_diff.png",
+   "normal": "cobblestone_floor_04_nor_gl.png",
+   "rough": "cobblestone_floor_04_rough.png",
+   "ao": "cobblestone_floor_04_ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.048,
+   "p99": 4.979
+  },
+  "specAA": true,
+  "seconds": 18.0,
+  "metresPerTile": [
+   1.5,
+   1.5
+  ],
+  "source": {
+   "page": "https://polyhaven.com/a/cobblestone_floor_04",
+   "licence": "CC0 1.0",
+   "author": "Poly Haven"
+  }
+ }
+}

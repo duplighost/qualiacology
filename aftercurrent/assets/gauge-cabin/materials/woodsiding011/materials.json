@@ -1,0 +1,18 @@
+{
+  "woodsiding011": {
+    "files": {
+      "albedo": "woodsiding011.albedo.dds",
+      "normal": "woodsiding011.normal.ktx2"
+    },
+    "metresPerTile": [
+      2,
+      2
+    ],
+    "source": {
+      "page": "https://ambientcg.com/a/WoodSiding011",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Wood Siding 011"
+    }
+  }
+}

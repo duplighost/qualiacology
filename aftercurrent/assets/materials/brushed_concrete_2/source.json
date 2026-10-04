@@ -1,0 +1,32 @@
+{
+  "name": "brushed_concrete_2",
+  "license": "CC0-1.0",
+  "source": "https://polyhaven.com/a/brushed_concrete_2",
+  "authors": [
+    "Dario Barresi",
+    "Dimitrios Savva"
+  ],
+  "processing": "Full linear-light mip chain, BC1 albedo/ORM and BC5 normal. Structural enamel retinted preserving photographed RGB variation.",
+  "outputs": [
+    {
+      "file": "brushed_concrete_2.albedo.dds",
+      "bytes": 2796344,
+      "sha256": "0f22f583d6ebe349935f71a9c79044f22765823e307cdff9df7716a3c6656541"
+    },
+    {
+      "file": "brushed_concrete_2.normal.ktx2",
+      "bytes": 5592944,
+      "sha256": "f7c92408d4076700d80d1c006212dbb0252e026fa96af31c5c4eff780cbcd41e"
+    },
+    {
+      "file": "brushed_concrete_2.orm.dds",
+      "bytes": 2796344,
+      "sha256": "5a1a94a7d344da33220241978c91907164bca0e529a20ee51c10fca5dfd50d5d"
+    },
+    {
+      "file": "materials.json",
+      "bytes": 921,
+      "sha256": "3b04c77da97ce5566eca0bd2c9fcc85fac46e418b880e214c8b54149b1914f3e"
+    }
+  ]
+}

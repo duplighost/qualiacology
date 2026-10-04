@@ -1,0 +1,289 @@
+{
+  "asset": "RAKER travelling dual trash rake",
+  "revision": 3,
+  "status": "staged production candidate, no runtime or AAA approval",
+  "contract": {
+    "revision": 1,
+    "coordinateSystem": "fi11-local metres, Y up; water runs toward negative Z",
+    "room": {
+      "size": [
+        44,
+        22,
+        46
+      ],
+      "entry": [
+        0,
+        0,
+        23
+      ],
+      "exit": [
+        0,
+        0,
+        -23
+      ]
+    },
+    "water": {
+      "level": 0,
+      "bed": -0.85,
+      "halfWidth": 14.4,
+      "minZ": -13,
+      "maxZ": 16.4,
+      "bankHeight": 1.2,
+      "outerBank": 20.8
+    },
+    "bridge": {
+      "homeZ": -4,
+      "travel": [
+        -7,
+        7
+      ],
+      "railX": 16.2,
+      "railY": 5,
+      "beamY": 5.9,
+      "halfDepth": 0.9
+    },
+    "basket": {
+      "centerX": 6.8,
+      "width": 12.6,
+      "homeY": 1.9,
+      "lowY": 0.18,
+      "sweepY": 0.4,
+      "maximumY": 2.7,
+      "floorOffsetY": -0.6,
+      "tineTopOffsetY": -0.5,
+      "floorHalfDepth": 0.7,
+      "floorCenterZ": 0.43,
+      "backZ": -0.31,
+      "crossingOffsetY": 1.37,
+      "crossingCenterX": 15.95,
+      "crossingSize": [
+        5.7,
+        0.24,
+        0.34
+      ]
+    },
+    "shoe": {
+      "centerX": 13.3,
+      "position": [
+        13.3,
+        2.59,
+        0.43
+      ],
+      "size": [
+        0.44,
+        0.38,
+        1.5
+      ]
+    },
+    "timber": {
+      "centerX": 10.0,
+      "startZ": 12.0,
+      "radius": 0.38,
+      "length": 7.6,
+      "floatCenterY": 0.14,
+      "eyeOffset": [
+        0,
+        0.53,
+        0.05
+      ]
+    },
+    "gates": {
+      "centerX": 10.0,
+      "positionY": 0.9,
+      "z": 9.8,
+      "size": [
+        8.4,
+        3.0,
+        0.16
+      ],
+      "lift": 3.9
+    },
+    "controls": {
+      "service-channel": [
+        -18.8,
+        2.45,
+        13.0
+      ],
+      "timber-a": [
+        18.8,
+        2.45,
+        12.0
+      ],
+      "timber-b": [
+        -18.8,
+        2.45,
+        -12.0
+      ],
+      "rake-isolator": [
+        0,
+        4.0,
+        -16.3
+      ]
+    },
+    "counter": "divert the physical side sluices, release real floating timbers, catch them under a rising basket and jam its visible outer guide; isolate only after two earned jams",
+    "inspiration": [
+      {
+        "url": "https://www.muhr.com/en/coarse-fine-screening.html",
+        "use": "functional reference for mobile coarse trash rake and independent gripper, no copied geometry or downloaded manufacturer assets"
+      }
+    ],
+    "ownership": "Original RAKER geometry, rig, environment and encounter. Existing CC0 metal surface photographs are attributed in delivery. Reused AFTERCURRENT helper code is read-only.",
+    "pivots": {
+      "Rails": [
+        0,
+        0,
+        0
+      ],
+      "Bridge": [
+        0,
+        0,
+        0
+      ],
+      "Motor": [
+        0,
+        7.12,
+        0
+      ],
+      "BasketL": [
+        -6.8,
+        1.9,
+        0
+      ],
+      "DrumL": [
+        -12.1,
+        7.12,
+        0
+      ],
+      "ChainL": [
+        -12.1,
+        7.12,
+        0
+      ],
+      "GateL": [
+        -10,
+        0.9,
+        9.8
+      ],
+      "TimberL": [
+        -10,
+        0.14,
+        12
+      ],
+      "RestraintL": [
+        -10,
+        0.14,
+        12
+      ],
+      "BasketR": [
+        6.8,
+        1.9,
+        0
+      ],
+      "DrumR": [
+        12.1,
+        7.12,
+        0
+      ],
+      "ChainR": [
+        12.1,
+        7.12,
+        0
+      ],
+      "GateR": [
+        10,
+        0.9,
+        9.8
+      ],
+      "TimberR": [
+        10,
+        0.14,
+        12
+      ],
+      "RestraintR": [
+        10,
+        0.14,
+        12
+      ]
+    },
+    "parents": {
+      "Motor": "Bridge",
+      "BasketL": "Bridge",
+      "DrumL": "Bridge",
+      "ChainL": "Bridge",
+      "BasketR": "Bridge",
+      "DrumR": "Bridge",
+      "ChainR": "Bridge"
+    },
+    "attachments": {
+      "TimberEyeL": {
+        "parent": "TimberL",
+        "position": [
+          -10,
+          0.67,
+          12.05
+        ]
+      },
+      "GuideContactL": {
+        "parent": "Bridge",
+        "position": [
+          -13.3,
+          2.4,
+          0.43
+        ]
+      },
+      "TimberEyeR": {
+        "parent": "TimberR",
+        "position": [
+          10,
+          0.67,
+          12.05
+        ]
+      },
+      "GuideContactR": {
+        "parent": "Bridge",
+        "position": [
+          13.3,
+          2.4,
+          0.43
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "triangles": 69252,
+    "materials": [
+      "RAKER civil / photographed PBR atlas",
+      "RAKER machine / photographed PBR atlas"
+    ],
+    "min": [
+      -19.450000762939453,
+      -0.9000000953674316,
+      -14.6899995803833
+    ],
+    "max": [
+      19.450000762939453,
+      7.795000076293945,
+      14.6899995803833
+    ]
+  },
+  "originalGeometry": true,
+  "sourceSHA256": "a3a9f719f090a0ac06e781a282594c3316138735cc06257ae80fc90a1a209395",
+  "sources": [
+    {
+      "url": "https://polyhaven.com/a/green_metal_rust",
+      "author": "Rob Tuytel",
+      "license": "CC0-1.0"
+    },
+    {
+      "url": "https://ambientcg.com/view?id=Metal046B",
+      "author": "Lennart Demes",
+      "license": "CC0-1.0"
+    },
+    {
+      "url": "https://polyhaven.com/a/pine_tree_01",
+      "author": "Rob Tuytel (photography), Rico Cilliers (modeling)",
+      "license": "CC0-1.0",
+      "use": "Existing pine bark texture decoded from local DDS, cylindrical reprojection and stripped fibre treatment; no donor geometry."
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "donorEdited": false,
+  "files": [
+    {
+      "sha256": "6b99c72e511ee2129bc117314a8024a25ff7d13a4db71c95808747237aba7115",
+      "bytes": 699192,
+      "file": "materials/ground048/ground048.albedo.dds"
+    },
+    {
+      "sha256": "d055559c2a9812ed0534237aee82da5f62a0afc553c8a0624c2c83a9533eb4b5",
+      "bytes": 350016,
+      "file": "materials/ground048/ground048.normal.ktx2"
+    },
+    {
+      "sha256": "6fd9afe3a0c4dc7a18baf1fb422529af6494a925c8d03e9118617dec65edee35",
+      "bytes": 43832,
+      "file": "materials/ground048/ground048.orm.dds"
+    },
+    {
+      "sha256": "c9b6a0535faed39daf49c8e7fead9ac3890aba4e0cd67ca3b985ce86ee851f56",
+      "bytes": 720,
+      "file": "materials/ground048/materials.json"
+    },
+    {
+      "sha256": "18fab187b4cc5ecf372a909403a5547b68727537b41c60de50b8418e7e9373b9",
+      "bytes": 699192,
+      "file": "materials/gravel022/gravel022.albedo.dds"
+    },
+    {
+      "sha256": "dcc14eeac25aba83b33fa562c1baee28e3d66baac98897688372dae6f8fc6b0c",
+      "bytes": 350016,
+      "file": "materials/gravel022/gravel022.normal.ktx2"
+    },
+    {
+      "sha256": "b7d2fb3f39c6fc4b9df2a6bf107f14eede85b0379182d78c376f515be7771834",
+      "bytes": 174904,
+      "file": "materials/gravel022/gravel022.orm.dds"
+    },
+    {
+      "sha256": "7584ea970084ee22240d542c6226dc6eadf8792d9892534d095fc04c1abc2db4",
+      "bytes": 718,
+      "file": "materials/gravel022/materials.json"
+    }
+  ],
+  "licences": {
+    "ground048": {
+      "page": "https://ambientcg.com/a/Ground048",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Ground 048"
+    },
+    "gravel022": {
+      "page": "https://ambientcg.com/a/Gravel022",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "title": "Gravel 022"
+    }
+  },
+  "changes": "Exact file copies. No texture re-encoding or colour editing."
+}

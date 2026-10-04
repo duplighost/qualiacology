@@ -1,0 +1,126 @@
+{
+  "asset": "modular_industrial_pipes_01",
+  "name": "Modular Industrial Pipes 01",
+  "source": "https://polyhaven.com/a/modular_industrial_pipes_01",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "license_statement": "https://polyhaven.com/license",
+  "authors": {
+    "Jorge Camacho": "All"
+  },
+  "source_polycount": 12340,
+  "source_dimensions_mm": [
+    1402.8016328811646,
+    307.5956106185913,
+    1954.6396136283875
+  ],
+  "downloaded_utc": "2026-10-01T05:01:30.895857+00:00",
+  "resolution": "2k",
+  "metadata": {
+    "donated": true,
+    "type": 2,
+    "name": "Modular Industrial Pipes 01",
+    "authors": {
+      "Jorge Camacho": "All"
+    },
+    "date_published": 1623767625,
+    "staging": null,
+    "categories": [
+      "industrial",
+      "structures"
+    ],
+    "tags": [
+      "pipes",
+      "factory",
+      "steam",
+      "modular",
+      "industrial",
+      "utility",
+      "infrastructure"
+    ],
+    "max_resolution": [
+      8192,
+      8192
+    ],
+    "polycount": 12340,
+    "texel_density": 8023.010254819843,
+    "dimensions": [
+      1402.8016328811646,
+      307.5956106185913,
+      1954.6396136283875
+    ],
+    "files_hash": "43a80d0f0f527ea832f00a5d6512ec0ef70a5910",
+    "description": "Free 8K modular industrial pipe set, aged blue-gray metal with rusted flanges, elbows, tees, crosses, straight runs and a red-handled valve with gauge.",
+    "category_id": "b703c8b8-a174-5bb6-977f-cce9baa4b27d",
+    "category": "Industrial & Infrastructure/Pipes & Ducts/Modular Pipes",
+    "attributes": {
+      "condition": [
+        "rusted"
+      ],
+      "material": [
+        "metal"
+      ]
+    },
+    "img_version": "7f0c137b",
+    "download_count": 31725,
+    "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/modular_industrial_pipes_01.png?width=256&height=256&v=7f0c137b"
+  },
+  "files": [
+    {
+      "path": "modular_industrial_pipes_01_2k.gltf",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/modular_industrial_pipes_01/modular_industrial_pipes_01_2k.gltf",
+      "bytes": 15014,
+      "md5": "bbebab7237a94e81b515705590912085",
+      "sha256": "cfa5b78079a89be885bfffadd9e3d82980c455c1a41a72aea6a01f9b3ace75b1"
+    },
+    {
+      "path": "textures/modular_industrial_pipes_01_group01_nor_gl_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/modular_industrial_pipes_01/modular_industrial_pipes_01_group01_nor_gl_2k.jpg",
+      "bytes": 2788490,
+      "md5": "99560301689fdf0a73c11c556b6d1007",
+      "sha256": "6ef90f868c2224d9f7de8d9639601c4dd915dc8c51144db0526e9ab940f2b9c4"
+    },
+    {
+      "path": "textures/modular_industrial_pipes_01_group01_arm_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/modular_industrial_pipes_01/modular_industrial_pipes_01_group01_arm_2k.jpg",
+      "bytes": 3197008,
+      "md5": "d08cbdc8251a683bd13e4a8647c18b3d",
+      "sha256": "13474d35bd64ccbffaee7cf15b6c889294a45c924a8da37b24dbb13924b5f9ee"
+    },
+    {
+      "path": "modular_industrial_pipes_01.bin",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/modular_industrial_pipes_01/modular_industrial_pipes_01.bin",
+      "bytes": 515160,
+      "md5": "a18d063dc719e19b9c20d2f8c0a8bec4",
+      "sha256": "2e11e1a7dabd56b1e158364f48b0b388bf316fcab61a01274740db75dbafa448"
+    },
+    {
+      "path": "textures/modular_industrial_pipes_01_group02_nor_gl_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/modular_industrial_pipes_01/modular_industrial_pipes_01_group02_nor_gl_2k.jpg",
+      "bytes": 2840017,
+      "md5": "abdd30e0897de12a41860d242f395ab2",
+      "sha256": "c9ec4ba0df837c7684f2c42adb9722c4ecb9284db7a5dd3190af90da3d89c5e0"
+    },
+    {
+      "path": "textures/modular_industrial_pipes_01_group02_arm_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/modular_industrial_pipes_01/modular_industrial_pipes_01_group02_arm_2k.jpg",
+      "bytes": 3302784,
+      "md5": "4f158e99ce400d82fd73f598cbf3581d",
+      "sha256": "b114cf8d9ef958cbabd9f1cf5f4a0b33b8301d2aa7b4600a4e3f346c5d7b5be3"
+    },
+    {
+      "path": "textures/modular_industrial_pipes_01_group02_diff_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/modular_industrial_pipes_01/modular_industrial_pipes_01_group02_diff_2k.jpg",
+      "bytes": 2024502,
+      "md5": "eb892cae76bb2ddee13128c365f3b61e",
+      "sha256": "89c4de4912204e62bb238cb626a3ddad3ba128799ecb834edf1086d7afc62966"
+    },
+    {
+      "path": "textures/modular_industrial_pipes_01_group01_diff_2k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/modular_industrial_pipes_01/modular_industrial_pipes_01_group01_diff_2k.jpg",
+      "bytes": 1934173,
+      "md5": "a0e9a3734c94e78233be0e594b193d37",
+      "sha256": "310a12247dfbbcaacafa1106e6b7cfc4b68c4d2674b6464b2e8199a21c3f5ed7"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+ "file": "village.glb",
+ "triangles": {
+  "cottage_shell": 2668,
+  "cottage_roof": 404,
+  "house_shell": 4436,
+  "house_roof": 676,
+  "barn_shell": 908,
+  "barn_roof": 616,
+  "bridge": 284,
+  "wall": 3300,
+  "boat": 664,
+  "stone_a": 276,
+  "stone_b": 88,
+  "stone_c": 276,
+  "cross": 132,
+  "urn": 448,
+  "rubble": 1308,
+  "gatepost": 308
+ }
+}

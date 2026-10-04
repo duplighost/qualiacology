@@ -1,0 +1,177 @@
+{
+ "id": "painted_wooden_cabinet",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "painted_wooden_cabinet.painted_wooden_cabinet.0",
+   "part": "painted_wooden_cabinet",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.5909,
+    "z": -0.0351
+   },
+   "h": {
+    "x": 0.5973,
+    "y": 0.5909,
+    "z": 0.2732
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet.painted_wooden_cabinet_door_02.0",
+   "part": "painted_wooden_cabinet_door_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.2816,
+    "y": 0.5172,
+    "z": 0.2004
+   },
+   "h": {
+    "x": 0.2796,
+    "y": 0.3628,
+    "z": 0.0175
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet.painted_wooden_cabinet_door_02.1",
+   "part": "painted_wooden_cabinet_door_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.032,
+    "y": 0.5138,
+    "z": 0.2266
+   },
+   "h": {
+    "x": 0.03,
+    "y": 0.0229,
+    "z": 0.0087
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet.painted_wooden_cabinet_door_01.0",
+   "part": "painted_wooden_cabinet_door_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.283,
+    "y": 0.5172,
+    "z": 0.195
+   },
+   "h": {
+    "x": 0.2829,
+    "y": 0.3628,
+    "z": 0.0121
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet.painted_wooden_cabinet_drawer_02.0",
+   "part": "painted_wooden_cabinet_drawer_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.2712,
+    "y": 1.0227,
+    "z": 0.0318
+   },
+   "h": {
+    "x": 0.2552,
+    "y": 0.1094,
+    "z": 0.2025
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet.painted_wooden_cabinet_drawer_02.1",
+   "part": "painted_wooden_cabinet_drawer_02",
+   "kind": "obb",
+   "c": {
+    "x": 0.2712,
+    "y": 1.0589,
+    "z": 0.2431
+   },
+   "h": {
+    "x": 0.0547,
+    "y": 0.0171,
+    "z": 0.0088
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet.painted_wooden_cabinet_drawer_01.0",
+   "part": "painted_wooden_cabinet_drawer_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.2788,
+    "y": 1.0227,
+    "z": 0.0882
+   },
+   "h": {
+    "x": 0.2552,
+    "y": 0.1094,
+    "z": 0.2025
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet.painted_wooden_cabinet_drawer_01.1",
+   "part": "painted_wooden_cabinet_drawer_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.2788,
+    "y": 1.059,
+    "z": 0.2995
+   },
+   "h": {
+    "x": 0.0547,
+    "y": 0.017,
+    "z": 0.0088
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

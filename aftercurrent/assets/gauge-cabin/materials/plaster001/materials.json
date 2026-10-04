@@ -1,0 +1,19 @@
+{
+  "plaster001": {
+    "files": {
+      "albedo": "plaster001.albedo.dds",
+      "normal": "plaster001.normal.ktx2",
+      "orm": "plaster001.orm.dds"
+    },
+    "metresPerTile": [
+      2,
+      2
+    ],
+    "source": {
+      "page": "https://ambientcg.com/a/Plaster001",
+      "licence": "CC0 1.0",
+      "author": "ambientCG (Lennart Demes)",
+      "donor": "winterline/public/assets/materials/Plaster001"
+    }
+  }
+}

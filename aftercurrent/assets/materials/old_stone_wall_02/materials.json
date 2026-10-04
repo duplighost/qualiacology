@@ -1,0 +1,52 @@
+{
+ "old_stone_wall_02": {
+  "size": [
+   2048,
+   2048
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "old_stone_wall_02.albedo.dds",
+   "normal": "old_stone_wall_02.normal.ktx2",
+   "orm": "old_stone_wall_02.orm.dds"
+  },
+  "bytes": {
+   "albedo": 2796344,
+   "normal": 5592944,
+   "orm": 2796344
+  },
+  "psnr": {
+   "albedo": 38.79,
+   "normalXY": 41.47,
+   "orm": {
+    "ao": 42.12,
+    "rough": 50.58,
+    "metal": 99
+   }
+  },
+  "sources": {
+   "albedo": "old_stone_wall_02_diff_2k.png",
+   "normal": "old_stone_wall_02_nor_gl_2k.png",
+   "rough": "old_stone_wall_02_rough_2k.png",
+   "ao": "old_stone_wall_02_ao_2k.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 1.198,
+   "p99": 3.906
+  },
+  "specAA": true,
+  "seconds": 29.9,
+  "metresPerTile": [
+   2.085,
+   2.085
+  ],
+  "source": "https://polyhaven.com/a/old_stone_wall_02",
+  "license": "CC0-1.0"
+ }
+}

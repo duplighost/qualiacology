@@ -1,0 +1,399 @@
+{
+  "kind": "staged physical Governor one-shot foley",
+  "sampleRate": 48000,
+  "perceptualStatus": "Numerical/export checks only; the model cannot accept audio input. Actual Web Audio and human hearing remain unverified.",
+  "provenance": {
+    "recorded": "Existing licensed library: Kenney CC0 impacts/latches; BigSoundBank winding/creak recordings documented in assets/audio/manifest.json.",
+    "synthesized": "Original motor, air, structure and contact DSP in tools/build-governor-audio.py."
+  },
+  "assets": {
+    "governor-sweep-load": {
+      "file": "governor-sweep-load.ogg",
+      "loop": false,
+      "role": "Brake unloads into the low sweep drive",
+      "sources": [
+        "lib/door.creak.1.ogg",
+        "lib/metal.light.4.ogg",
+        "Original variable-speed motor DSP"
+      ],
+      "sourceStats": {
+        "seconds": 1.1,
+        "samplePeakDbFS": -4.8825028865501725,
+        "rmsDbFS": -13.199833265151282,
+        "dc": -0.0007074850010055316,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 213.10632243600526
+      },
+      "decodedStats": {
+        "seconds": 1.1,
+        "samplePeakDbFS": -5.172860140590406,
+        "rmsDbFS": -13.168226442843583,
+        "dc": -0.0006343395024235921,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 209.60739059166542
+      },
+      "decodedFramePaddingSamples": 0,
+      "sha256": "7df4556af6c159620811f7421c11d4ecf917cbb3427198ebbc6eab47faae222d"
+    },
+    "governor-sweep-run": {
+      "file": "governor-sweep-run.ogg",
+      "loop": false,
+      "role": "One moving truss sweep with a drive clutch; no assumed hit",
+      "sources": [
+        "lib/latch.1.ogg",
+        "Original sweep air and motor DSP"
+      ],
+      "sourceStats": {
+        "seconds": 1.35,
+        "samplePeakDbFS": -5.192746210115122,
+        "rmsDbFS": -22.070173257977302,
+        "dc": -3.2316311320450075e-06,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 654.2625312317782
+      },
+      "decodedStats": {
+        "seconds": 1.35,
+        "samplePeakDbFS": -5.103019646169478,
+        "rmsDbFS": -22.147829613267103,
+        "dc": 0.00010342578718695399,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 611.9798051226928
+      },
+      "decodedFramePaddingSamples": 0,
+      "sha256": "250d5620a4eabd85a0326a63288107b6435227f33919339d235bbd077d38edb3"
+    },
+    "governor-hoist-track": {
+      "file": "governor-hoist-track.ogg",
+      "loop": false,
+      "role": "Loaded trolley rolls while the hoist tracks the player",
+      "sources": [
+        "lib/musicbox.wind.1.ogg",
+        "lib/metal.light.0.ogg",
+        "lib/metal.light.1.ogg",
+        "lib/metal.light.2.ogg",
+        "Original hoist motor DSP"
+      ],
+      "sourceStats": {
+        "seconds": 1.25,
+        "samplePeakDbFS": -5.352124803540629,
+        "rmsDbFS": -17.811583192378883,
+        "dc": -0.0005362185432934204,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 308.0794287289563
+      },
+      "decodedStats": {
+        "seconds": 1.25,
+        "samplePeakDbFS": -5.547809913611381,
+        "rmsDbFS": -17.784026694966887,
+        "dc": -0.0005239859522541489,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 292.3754309419393
+      },
+      "decodedFramePaddingSamples": 0,
+      "sha256": "5c02efdd908dd19eca91d075f8c6c0cadb3df862aae6b5a6f21e6cde7b9383d5"
+    },
+    "governor-drop-latch": {
+      "file": "governor-drop-latch.ogg",
+      "loop": false,
+      "role": "Distinct target lock at the selected floor point",
+      "sources": [
+        "lib/latch.0.ogg",
+        "lib/metal.light.4.ogg"
+      ],
+      "sourceStats": {
+        "seconds": 0.28,
+        "samplePeakDbFS": -4.582959767157116,
+        "rmsDbFS": -24.4991861009441,
+        "dc": 1.1798697974553454e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 3505.752310666119
+      },
+      "decodedStats": {
+        "seconds": 0.2773333333333333,
+        "samplePeakDbFS": -5.261891307398152,
+        "rmsDbFS": -24.72461183965502,
+        "dc": 1.9169670470041102e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 3449.442468515398
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "c9aa6ef02da617d5ebdbc06f5345b66687514cd982d6d0a33cdd9fdc6606971f"
+    },
+    "governor-falling-weight": {
+      "file": "governor-falling-weight.ogg",
+      "loop": false,
+      "role": "Hoist release and air displaced by the accelerating weight; no impact",
+      "sources": [
+        "lib/latch.1.ogg",
+        "Original falling-air/cable DSP"
+      ],
+      "sourceStats": {
+        "seconds": 0.9,
+        "samplePeakDbFS": -6.375175252488256,
+        "rmsDbFS": -30.38110408104725,
+        "dc": -2.5496708079805545e-07,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2726.8667257554293
+      },
+      "decodedStats": {
+        "seconds": 0.8973333333333333,
+        "samplePeakDbFS": -6.901253874543051,
+        "rmsDbFS": -30.70647388779112,
+        "dc": 4.2706437150225545e-06,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2630.7852258544617
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "c00fcebe0a28fbd4ead8127d05f54bbb7e6b4d85217a1b13f5223bec8833931a"
+    },
+    "governor-weight-impact": {
+      "file": "governor-weight-impact.ogg",
+      "loop": false,
+      "role": "Heavy collision at the actual hit point, then structural decay",
+      "sources": [
+        "lib/metal.hit.7.ogg",
+        "lib/stone.hit.1.ogg",
+        "lib/metal.light.0.ogg",
+        "lib/metal.light.1.ogg",
+        "lib/metal.light.2.ogg",
+        "Original structural low mode DSP"
+      ],
+      "sourceStats": {
+        "seconds": 0.88,
+        "samplePeakDbFS": -6.7673830736819856,
+        "rmsDbFS": -27.39676671515147,
+        "dc": -0.0013482460510301187,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 337.2747550301142
+      },
+      "decodedStats": {
+        "seconds": 0.8773333333333333,
+        "samplePeakDbFS": -6.927242815375077,
+        "rmsDbFS": -27.358004474829638,
+        "dc": -0.0013283331815494345,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 324.65298071830387
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "2b0aa18911fe12ca7e69829b825d11c68220b4ca777d4bb4a84690c5fa3431c7"
+    },
+    "governor-arc-charge": {
+      "file": "governor-arc-charge.ogg",
+      "loop": false,
+      "role": "Loaded discharge collar with accelerating contact sparks",
+      "sources": [
+        "lib/latch.1.ogg",
+        "Original charge and electrical contact DSP"
+      ],
+      "sourceStats": {
+        "seconds": 0.95,
+        "samplePeakDbFS": -5.352124803540629,
+        "rmsDbFS": -17.364533866357355,
+        "dc": -7.075217065344495e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 288.44965887729205
+      },
+      "decodedStats": {
+        "seconds": 0.9693333333333334,
+        "samplePeakDbFS": -5.558993809788349,
+        "rmsDbFS": -17.40216692874688,
+        "dc": 2.360766582269985e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 279.1630564725244
+      },
+      "decodedFramePaddingSamples": 928,
+      "sha256": "73acd5905f92316ddbaf46a804672d965b00bde79fcdf0cfa3ee9adfeda27080"
+    },
+    "governor-arc-release": {
+      "file": "governor-arc-release.ogg",
+      "loop": false,
+      "role": "Short physical three-contact discharge, exactly on projectile release",
+      "sources": [
+        "Original electrical discharge DSP"
+      ],
+      "sourceStats": {
+        "seconds": 0.2,
+        "samplePeakDbFS": -9.342136638360078,
+        "rmsDbFS": -26.445644293014297,
+        "dc": -0.00023536477697133545,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2554.683745155527
+      },
+      "decodedStats": {
+        "seconds": 0.19733333333333333,
+        "samplePeakDbFS": -9.16042712442255,
+        "rmsDbFS": -26.72722099247086,
+        "dc": -0.0001285842879787166,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 2379.8066536163205
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "a85e59f8f2cd24b27e62d96ab245279c4e1f526f7595d6a9c405f968e7df5d48"
+    },
+    "governor-keeper-release": {
+      "file": "governor-keeper-release.ogg",
+      "loop": false,
+      "role": "Copper return keeper opens with a spring detent",
+      "sources": [
+        "lib/latch.0.ogg",
+        "lib/metal.light.8.ogg"
+      ],
+      "sourceStats": {
+        "seconds": 0.55,
+        "samplePeakDbFS": -5.192746210115122,
+        "rmsDbFS": -28.500075365597993,
+        "dc": 2.614633552390485e-06,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 3915.444976614698
+      },
+      "decodedStats": {
+        "seconds": 0.5473333333333333,
+        "samplePeakDbFS": -5.542813313201042,
+        "rmsDbFS": -28.738903920025543,
+        "dc": -9.674063662898062e-06,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 3800.292811513816
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "a6e2e9d931abbf6da4a5a353324d64f760ae161fa48e9ccf81b48b2da70dc484"
+    },
+    "governor-guard-break": {
+      "file": "governor-guard-break.ogg",
+      "loop": false,
+      "role": "The struck guard shears and swings on its hinge",
+      "sources": [
+        "lib/metal.hit.8.ogg",
+        "lib/metal.light.6.ogg",
+        "lib/door.creak.4.ogg"
+      ],
+      "sourceStats": {
+        "seconds": 0.7,
+        "samplePeakDbFS": -6.028553086368468,
+        "rmsDbFS": -27.961675439445933,
+        "dc": -0.0012975797374969612,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 929.1080316829584
+      },
+      "decodedStats": {
+        "seconds": 0.6973333333333334,
+        "samplePeakDbFS": -6.318901911874314,
+        "rmsDbFS": -28.04724199673133,
+        "dc": -0.0013138506167635164,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 917.8193351077207
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "ee0d41872f48d988738b5148802a1a94763e805611d8aa19916329da14d74324"
+    },
+    "governor-brake-seat": {
+      "file": "governor-brake-seat.ogg",
+      "loop": false,
+      "role": "A newly engaged brake slows and seats in the physical rotor",
+      "sources": [
+        "lib/door.creak.2.ogg",
+        "lib/metal.hit.2.ogg",
+        "Original rotor run-down DSP"
+      ],
+      "sourceStats": {
+        "seconds": 0.82,
+        "samplePeakDbFS": -5.036239459875991,
+        "rmsDbFS": -24.26611849569102,
+        "dc": 5.715398890107201e-05,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 660.6644584505596
+      },
+      "decodedStats": {
+        "seconds": 0.8173333333333334,
+        "samplePeakDbFS": -5.1430172137763766,
+        "rmsDbFS": -24.29331927584286,
+        "dc": 7.962568783174286e-06,
+        "samplesAtFullScale": 0,
+        "spectralCentroidHz": 650.0965341068555
+      },
+      "decodedFramePaddingSamples": -128,
+      "sha256": "20a84690d86f6d8288830728369c5d564a075d8d81845a1f534af1576c8a9b23"
+    }
+  },
+  "sourceFiles": {
+    "lib/door.creak.1.ogg": {
+      "sha256": "514ef796a79ec7c9f0695967cca78cf6519a2e228561486cba9f737dbd343ee3",
+      "seconds": 1.45
+    },
+    "lib/metal.light.4.ogg": {
+      "sha256": "bbff134875131b7c8c745c7f316ea362f1a75c8dc25cb87a2bc6c1cb25c57807",
+      "seconds": 0.20733333333333334
+    },
+    "lib/latch.1.ogg": {
+      "sha256": "70f4625bd1a3769a995503873c9b4cdb11b5bc03eff92d2de39b2ba07193901c",
+      "seconds": 0.3473333333333333
+    },
+    "lib/musicbox.wind.1.ogg": {
+      "sha256": "18405fba3de50a94077ab39d42d08d0738fb5a5a9227372169fa26696b39d445",
+      "seconds": 2.528
+    },
+    "lib/metal.light.0.ogg": {
+      "sha256": "61b0004cd4c484321b95dcec382ab245ce9d1c96ce3994e688639007991c43cc",
+      "seconds": 0.36933333333333335
+    },
+    "lib/metal.light.1.ogg": {
+      "sha256": "3db4a3382ad1882b5b7a7a52cfd81a1055581e8c855803518d4354d689e64f37",
+      "seconds": 0.24533333333333332
+    },
+    "lib/metal.light.2.ogg": {
+      "sha256": "bd6b4078b6b5fc2b53021ceab655569d4d6f539930745aba0a12034616a9f1ee",
+      "seconds": 0.22933333333333333
+    },
+    "lib/latch.0.ogg": {
+      "sha256": "b0b18b6de7dd58855c9114ce79800e819ef746c9dc2ea198de7d52cd0ce7644f",
+      "seconds": 0.15133333333333332
+    },
+    "lib/metal.hit.7.ogg": {
+      "sha256": "896bff0e861af3e174f9a2e637aad95ccf2423896bda413db8707a0a8286d9bb",
+      "seconds": 0.11133333333333334
+    },
+    "lib/stone.hit.1.ogg": {
+      "sha256": "cd3b27983dba1387953185e73f97f11955f0bbd048e7798d1352519d152c5173",
+      "seconds": 0.5473333333333333
+    },
+    "lib/metal.light.8.ogg": {
+      "sha256": "5b7c76688c59475fc80ed208638696e07a8a8a2a41c0ed674eec732925225927",
+      "seconds": 0.20733333333333334
+    },
+    "lib/metal.hit.8.ogg": {
+      "sha256": "a634501204de57e27fbdbc1e5b0f0ed4f81ff5ba03851ceb836be0093641860c",
+      "seconds": 0.20133333333333334
+    },
+    "lib/metal.light.6.ogg": {
+      "sha256": "83d59c80d27f64c968681c33e711607f8a1a97a27fbf242c9daa71a3ba909a4a",
+      "seconds": 0.16733333333333333
+    },
+    "lib/door.creak.4.ogg": {
+      "sha256": "2f46f909af72f9cafdf58a6c3fc23b79e9353c2def79d6237c59ff4dd52bb6fc",
+      "seconds": 1.1
+    },
+    "lib/door.creak.2.ogg": {
+      "sha256": "40ed626857b8bac90e50939fd85aaba7b4fd293c8f48af2f4c2cbe8cdb147135",
+      "seconds": 1.4
+    },
+    "lib/metal.hit.2.ogg": {
+      "sha256": "1cc34b471fcb570121ed3c32bffad320464ada2bae56d8c86ca3fb8a5dc7a1bc",
+      "seconds": 0.11333333333333333
+    },
+    "aftercurrent/score-drive.ogg": {
+      "sha256": "8a490629c0c8343f7cdf4949102b86d222a385fd9672e945a759b169603fc6c8",
+      "seconds": 55.652166666666666
+    },
+    "aftercurrent/score-machinery.ogg": {
+      "sha256": "176ce3de5107fc66193a9caabd704f8269438ea476235d24bc1c39fb2308ebec",
+      "seconds": 55.652166666666666
+    },
+    "aftercurrent/score-thread.ogg": {
+      "sha256": "02cf6dbc41c8fb9e6e96e5c3b88e71b5430e1016e1e77ffd0639604b76e955af",
+      "seconds": 55.652166666666666
+    },
+    "aftercurrent/amb-turbine.ogg": {
+      "sha256": "d42c2163e2b6c952a7e9f7dc5171b5578b25f1f880aac5d0b4ef4742365440b4",
+      "seconds": 16.0
+    }
+  }
+}
