@@ -206,6 +206,18 @@
       "actionLabel": "Play FREE PLAY"
     },
     {
+      "slug": "hand-me-down",
+      "title": "HAND-ME-DOWN",
+      "descriptor": "Slot car chase",
+      "group": "action",
+      "image": "/assets/games/hand-me-down-card-v20261005.jpg",
+      "alt": "A slot car track on a wooden attic floor at night: an orange car and a white one sliding round a bend with their headlights on, past three lit jack-o’-lanterns, with cardboard boxes in the dark behind",
+      "summary": "A slot car set on an attic floor on Halloween night. Hold to go, let go to brake, and stay on the track. Nobody is holding the other hand control, and its car is coming round behind you. Catch it before it catches you. The boxes up here say R’s ROOM. One button: the mouse or Space.",
+      "metaDescription": "HAND-ME-DOWN is a one-button slot car game on an attic floor on Halloween night: hold to go, let go to brake, and catch the other car before it catches you. Mouse or Space.",
+      "controls": "hold left mouse or Space to go, let go to brake · Esc pause · M mute · F full screen",
+      "actionLabel": "Play HAND-ME-DOWN"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",
