@@ -176,3 +176,8 @@
 /free-play.html  /free-play/  301!
 /freeplay  /free-play/  302
 /pinball  /free-play/  302
+
+# --- HAND-ME-DOWN ---
+/hand-me-down.html  /hand-me-down/  301!
+/handmedown  /hand-me-down/  302
+/slotcars  /hand-me-down/  302
