@@ -1,0 +1,46 @@
+{
+ "fishscale": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "fishscale.albedo.dds",
+   "normal": "fishscale.normal.ktx2",
+   "orm": "fishscale.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 45.06,
+   "normalXY": 50.13,
+   "orm": {
+    "ao": 37.38,
+    "rough": 38.91,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.23,
+   "p99": 3.516
+  },
+  "specAA": true,
+  "seconds": 5.6
+ }
+}

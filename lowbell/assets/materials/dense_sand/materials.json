@@ -1,0 +1,46 @@
+{
+ "dense_sand": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "dense_sand.albedo.dds",
+   "normal": "dense_sand.normal.ktx2",
+   "orm": "dense_sand.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 1398608,
+   "orm": 699192
+  },
+  "psnr": {
+   "albedo": 41.82,
+   "normalXY": 44.94,
+   "orm": {
+    "ao": 39.18,
+    "rough": 40.89,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "dense_sand_diff.jpg",
+   "normal": "dense_sand_nor_gl.jpg",
+   "rough": "dense_sand_rough.jpg",
+   "ao": "dense_sand_ao.jpg"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.714,
+   "p99": 2.87
+  },
+  "specAA": true,
+  "seconds": 13.4
+ }
+}

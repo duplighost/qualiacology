@@ -31,6 +31,9 @@ The selected local OLLY excerpts retain that project's recorded-source manifest:
 | step.leaves | [Leaves #0137](https://bigsoundbank.com/feet-in-leaves-s0137.html) |
 | step.creaky | [Wooden stairs #3212](https://bigsoundbank.com/step-wooden-staircase-1-s3212.html) |
 | twig | [Twigs #1301](https://bigsoundbank.com/steps-on-the-twigs-s1301.html) |
+| falls.roar | [Mountain Stream #7 #3222](https://bigsoundbank.com/mountain-stream-7-s3222.html), 36 second excerpt (the falls) |
+| falls.cascade | [Small Cascade #0507](https://bigsoundbank.com/small-cascade-s0507.html), 26 second excerpt (the side fall on the ledge) |
+| falls.lap | [Pontoon, marina #1444](https://bigsoundbank.com/pontoon-marina-s1444.html), 32 second excerpt (the lagoon in the grotto) |
 
 New rain excerpts are taken from the source site's public MP3 recording, trimmed,
 converted to mono 48 kHz, DC removed, close-droplet peaks softly limited, level

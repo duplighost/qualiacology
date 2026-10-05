@@ -660,6 +660,39 @@
         2.3
       ],
       "note": "nornalbion; CC-BY-4.0; https://freesound.org/people/nornalbion/sounds/195733/"
+    },
+    "falls.roar": {
+      "files": [
+        "falls.roar.0.ogg"
+      ],
+      "gain": 1.0,
+      "len": [
+        36
+      ],
+      "loop": true,
+      "note": "Joseph Sardin / BigSoundBank; CC0-1.0; https://bigsoundbank.com/mountain-stream-7-s3222.html"
+    },
+    "falls.cascade": {
+      "files": [
+        "falls.cascade.0.ogg"
+      ],
+      "gain": 0.9,
+      "len": [
+        26
+      ],
+      "loop": true,
+      "note": "Joseph Sardin / BigSoundBank; CC0-1.0; https://bigsoundbank.com/small-cascade-s0507.html"
+    },
+    "falls.lap": {
+      "files": [
+        "falls.lap.0.ogg"
+      ],
+      "gain": 0.8,
+      "len": [
+        32
+      ],
+      "loop": true,
+      "note": "Joseph Sardin / BigSoundBank; CC0-1.0; https://bigsoundbank.com/pontoon-marina-s1444.html"
     }
   }
 }

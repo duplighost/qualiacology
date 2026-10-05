@@ -1,0 +1,45 @@
+{
+ "stainedwood": {
+  "size": [
+   2048,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "stainedwood.albedo.dds",
+   "normal": "stainedwood.normal.ktx2",
+   "orm": "stainedwood.orm.dds"
+  },
+  "bytes": {
+   "albedo": 1398248,
+   "normal": 699568,
+   "orm": 87528
+  },
+  "psnr": {
+   "albedo": 41.45,
+   "normalXY": 71.38,
+   "orm": {
+    "ao": 99.0,
+    "rough": 42.93,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.025,
+   "p99": 0.13
+  },
+  "specAA": false,
+  "seconds": 10.1
+ }
+}
