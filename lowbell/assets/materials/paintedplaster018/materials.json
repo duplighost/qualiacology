@@ -1,0 +1,46 @@
+{
+ "paintedplaster018": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "paintedplaster018.albedo.dds",
+   "normal": "paintedplaster018.normal.ktx2",
+   "orm": "paintedplaster018.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.24,
+   "normalXY": 43.14,
+   "orm": {
+    "ao": 34.73,
+    "rough": 36.13,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.929,
+   "p99": 3.232
+  },
+  "specAA": false,
+  "seconds": 4.1
+ }
+}
