@@ -1,0 +1,15 @@
+{
+ "id": "ollie-asleep",
+ "title": "Ollie on the crypt bench, before his sheet comes back (ui/crypt-stage.js)",
+ "made": "2026-10-05",
+ "steps": [
+  "picture: black-forest-labs/FLUX.1-schnell (Hugging Face Space, 4 steps): a seven year old boy asleep, curled on his side, grey hooded sweatshirt with the hood up, dark blue jeans, white socks, no shoes, on a plain grey ground",
+  "shape: tencent/Hunyuan3D-2 (Hugging Face Space, /shape_generation, 30 steps, octree 256, seed 1234) from that picture",
+  "colour and size: Blender 5.2, cut to 40000 faces; the picture's own camera found by laying his outline over the picture's (bearing -26, height 55, roll 30, overlap 0.87); each point that camera sees coloured from the picture, the rest from their nearest coloured points (vertex colour 'Col', the picture's sRGB values)"
+ ],
+ "licences": {
+  "FLUX.1-schnell": "Apache-2.0 (its outputs are free to use)",
+  "Hunyuan3D-2": "Tencent Hunyuan 3D 2.0 Community License (outputs may be used; the model is not redistributed here)"
+ },
+ "triangles": 40000
+}
