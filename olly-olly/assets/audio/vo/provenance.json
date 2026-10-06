@@ -2308,6 +2308,326 @@
         "asr": "every clip kept came back with at least 80% of its words, in order",
         "listening": "No subjective listening claim; performances require Alexs ear."
       }
+    },
+    {
+      "generated": "2026-10-05",
+      "spec": "voice-more-20261005.json",
+      "sources": {
+        "crypt-promise-back": {
+          "file": "raw/crypt-promise-back.mp3",
+          "sha256": "f20e133480b4d7fa4b8e046a5221aa74f2922a205442ba71d1a6877180c95a13",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, gentle] I'm taking your bag first. [long pause] [quiet, steady, a promise] Then I'm coming back for you. I promise.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "e5dd45a3-1fc9-48a6-bd2b-9e453e6da78a",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/09e205ba-660b-4a8f-8377-3a36d67dd4a8.mp3",
+          "pauses": [
+            1.31
+          ],
+          "longestPauseInsideALine": 0.66
+        },
+        "crypt-him-2b": {
+          "file": "raw/crypt-him-2b.mp3",
+          "sha256": "1973f57076402d897b6fbf7b5e701391d1c12e6dd2aab1d6ce5dc2f5ae5c07c6",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, heartbroken] So you took your shoes off, and folded your sheet for a pillow.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "19ed473a-2f66-4f2d-be87-67ac5fb191fb",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/f16a3a0d-653c-4442-be74-cf76b0b2d680.mp3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "crypt-again": {
+          "file": "raw/crypt-again.mp3",
+          "sha256": "201853fd52169271440a8dd3dafecc6b30c3212f8260e6d5fa9fc40becc8a72d",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, breaking, tender] There you are.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "c1e0a8e9-ef15-4f41-90f2-236aa89bc73f",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/300914af-a6f1-46a3-9eb1-6813dab583b2.mp3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "home-carry": {
+          "file": "raw/home-carry.mp3",
+          "sha256": "8067e7a6523b6a9292b456fd102f4fff3f0993a91dedb7f09c9ad1c22a8409dd",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[quiet, tender, tired] We did the whole route, Ollie. [long pause] [quiet, tender] Halloween's over. Let's get you home.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "8cf28ee7-833b-49be-b857-74d9b3e95c42",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/937e1e58-a03e-459a-b6b9-ce04b0ca90d5.mp3",
+          "pauses": [
+            1.19
+          ],
+          "longestPauseInsideALine": 0.62
+        },
+        "home-night": {
+          "file": "raw/home-night.mp3",
+          "sha256": "de83c19150b969840c40da6608514dc9ba585fa6cc6a1a3002004328f6d3b408",
+          "provider": "Picsart (via Codex)",
+          "model": "eleven-v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": {
+            "model": "eleven-v4",
+            "prompt": "[whispered, tender] Night, Ollie.",
+            "extra": {
+              "voiceId": "UgBBYS2sOqTuMpoF3BR0",
+              "stability": 0.55,
+              "similarityBoost": 0.75,
+              "language": "en"
+            },
+            "async": false,
+            "saveToDrive": false,
+            "count": 1
+          },
+          "resultId": "a9397f58-dd7e-47a6-a914-9ab64a67297c",
+          "sourceUrl": "https://gcdn.picsart.com/editing-temp/0404819a-ee4f-4c3a-81bf-476416b79157.mp3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        }
+      },
+      "clips": [
+        {
+          "key": "found-bag",
+          "text": "I'm taking your bag first.",
+          "tag": "quiet, gentle",
+          "file": "found-bag.ogg",
+          "source": "crypt-promise-back",
+          "sourceCutSeconds": [
+            0.0049,
+            2.32
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.959608,
+          "duration": 2.3151,
+          "bytes": 24637,
+          "sha256": "ddf70d5e1e8dc7b5fecc67b05b45d51a8d3490f7b4487d96aa66d671ddf73432",
+          "peakDb": -9.17,
+          "rmsDb": -30.83,
+          "clippedSamples": 0,
+          "heard": "I'm taking your bag first.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "found-back",
+          "text": "Then I'm coming back for you. I promise.",
+          "tag": "quiet, steady, a promise",
+          "file": "found-back.ogg",
+          "source": "crypt-promise-back",
+          "sourceCutSeconds": [
+            2.32,
+            5.5678
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.521641,
+          "duration": 3.2478,
+          "bytes": 32336,
+          "sha256": "5935a9ee2707dc02ec751abf1fdd6660a4d4134631667fe45e23fe7ec56497d3",
+          "peakDb": -10.71,
+          "rmsDb": -28.82,
+          "clippedSamples": 0,
+          "heard": "Then I'm coming back for you, I promise.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "him-2b",
+          "text": "So you took your shoes off, and folded your sheet for a pillow.",
+          "tag": "quiet, heartbroken",
+          "file": "him-2b.ogg",
+          "source": "crypt-him-2b",
+          "sourceCutSeconds": [
+            0.1146,
+            3.9512
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.026133,
+          "duration": 3.8365,
+          "bytes": 39284,
+          "sha256": "e8ee20b31b0ae2d312acadd1cb4bc968a2e8350d19657717f68397d9b7e6a34d",
+          "peakDb": -9.87,
+          "rmsDb": -27.18,
+          "clippedSamples": 0,
+          "heard": "So you took your shoes off and folded your sheet for a pillow.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "there",
+          "text": "There you are.",
+          "tag": "quiet, breaking, tender",
+          "file": "there.ogg",
+          "source": "crypt-again",
+          "sourceCutSeconds": [
+            0.0,
+            1.3521
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.989909,
+          "duration": 1.3521,
+          "bytes": 15593,
+          "sha256": "798753222a75cc3415562348787c4998abd2f38d369b71070e78a10d30216351",
+          "peakDb": -11.75,
+          "rmsDb": -27.62,
+          "clippedSamples": 0,
+          "heard": "There you are.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "carry-1",
+          "text": "We did the whole route, Ollie.",
+          "tag": "quiet, tender, tired",
+          "file": "carry-1.ogg",
+          "source": "home-carry",
+          "sourceCutSeconds": [
+            0.1995,
+            2.3099
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.232047,
+          "duration": 2.1105,
+          "bytes": 22592,
+          "sha256": "1627375d5be385e9783922d305562ce0dd4d03ca5bd734104289d7ea7e55e14d",
+          "peakDb": -12.81,
+          "rmsDb": -27.32,
+          "clippedSamples": 0,
+          "heard": "We did the whole route, Ollie.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "carry-2",
+          "text": "Halloween's over. Let's get you home.",
+          "tag": "quiet, tender",
+          "file": "carry-2.ogg",
+          "source": "home-carry",
+          "sourceCutSeconds": [
+            3.1337,
+            5.5834
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.431202,
+          "duration": 2.4497,
+          "bytes": 25074,
+          "sha256": "b839bf97cf62e8964ac6dceede728772ce731fb7efb89d6d2d9fcdeb6994de26",
+          "peakDb": -12.14,
+          "rmsDb": -28.06,
+          "clippedSamples": 0,
+          "heard": "Halloween's over. Let's get you home.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "night",
+          "text": "Night, Ollie.",
+          "tag": "whispered, tender",
+          "file": "night.ogg",
+          "source": "home-night",
+          "sourceCutSeconds": [
+            0.1795,
+            1.4618
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.398253,
+          "duration": 1.2823,
+          "bytes": 15786,
+          "sha256": "db838fdf8f56eebe4197c6786fbfb1c01472dab8899563ac8c49a3b01da95ff4",
+          "peakDb": -9.64,
+          "rmsDb": -28.7,
+          "clippedSamples": 0,
+          "heard": "Night, Ollie.",
+          "wordsBack": 1.0
+        }
+      ],
+      "credits": {
+        "before": {
+          "balance": 288,
+          "total": 288,
+          "resettable": 288,
+          "accumulative": 0,
+          "overdraftUsage": 0,
+          "nextResetDate": "2026-10-21T01:00:24.431Z",
+          "links": {
+            "learnMore": "https://picsart.com/ai-playground?utm_origin=gen_ai_mcp&utm_action=gen_ai_mcp_credits"
+          }
+        },
+        "after": {
+          "balance": 283,
+          "total": 283,
+          "resettable": 283,
+          "accumulative": 0,
+          "overdraftUsage": 0,
+          "nextResetDate": "2026-10-21T01:00:24.431Z",
+          "links": {
+            "learnMore": "https://picsart.com/ai-playground?utm_origin=gen_ai_mcp&utm_action=gen_ai_mcp_credits"
+          }
+        }
+      },
+      "processing": "tools/audio/voice-more.py: each take cut at the middles of its longest pauses, then the 2 Oct Sam chain (voice-clips.py): RMS boundary trim, 70 Hz-9.5 kHz, active RMS -23 dBFS with -6 dBFS peak ceiling, 12 ms fades, mono 44.1 kHz Vorbis q5; read back by faster-whisper small.en.",
+      "verification": {
+        "asr": "every clip kept came back with at least 80% of its words, in order",
+        "listening": "No subjective listening claim; performances require Alexs ear."
+      }
     }
   ]
 }
