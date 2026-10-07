@@ -64,6 +64,6 @@ touching site.css/site.js/templates.
    (`node build/scripts/static-server.mjs --root=. --port=4173`) and confirm
    the game boots from the site and `/games/` shows the new card.
 
-9. Ship per the router: feature branch, PR, deploy preview, Alex's approval,
+9. Ship per `AGENTS.md`: feature branch, PR, deploy preview, Alex's approval,
    merge, then verify production (game route 200, card assets 200, `/games/`
    shows it).

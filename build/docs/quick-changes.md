@@ -40,7 +40,7 @@ roster, "Showing N worlds.") reads or derives from it via
 `build/scripts/expected.mjs`. A mismatch fails the build immediately with a
 message naming the fix. Never hardcode a catalog count anywhere else.
 
-Then ship per the router checklist: branch, commit, push, PR, deploy preview,
+Then ship per `AGENTS.md`: branch, commit, push, PR, deploy preview,
 Alex's approval, merge, verify production.
 
 **Counts go stale — derive, don't trust.** Any baseline number you find in a
