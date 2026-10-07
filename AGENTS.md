@@ -63,7 +63,8 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | hand-me-down | `Projects\hand-me-down` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | lowbell | `Projects\lowbell` | `node tools/build-site-copy.mjs ..\qualiacology` there; never hand-edit the site copy |
 | skip | `Projects\skip` | `node build-site-copy.mjs --site=<this repo>` there; never hand-edit the site copy |
-| tideglass | `Projects	ideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
+| free-play | `Projects\free-play` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
+| tideglass | `Projects\tideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
 | spaceboarding | `Projects\spaceboarding` | copy `assets src styles.css vendor`; keep the site's index.html shell |
 | fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
 | vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
