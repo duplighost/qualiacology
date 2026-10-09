@@ -1,0 +1,27 @@
+{
+ "built": "tools/blender/wagon_build.py",
+ "objects": 261,
+ "triangles": 117388,
+ "eye": [
+  -0.36500000953674316,
+  -0.30000001192092896,
+  1.1549999713897705
+ ],
+ "wheel": {
+  "at": [
+   -0.36500000953674316,
+   0.10000000149011612,
+   0.8550000190734863
+  ],
+  "tilt": 65,
+  "r": 0.19
+ },
+ "door": {
+  "y0": 0.47,
+  "y1": -0.672
+ },
+ "wheelbase": 2.64,
+ "track": 1.43,
+ "tyre": 0.315,
+ "frame": "Blender X right, Y forward, Z up; the GLB is -Z forward, +Y up, origin on the ground mid-wheelbase"
+}
