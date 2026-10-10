@@ -132,8 +132,8 @@ diffuseColor.rgb *= uReveal;`;
 // evenly, which is a neon toy and is what the note on ART.md 5.4 was guarding against. So
 // the fresnel is now WEIGHTED BY THE MOON: an edge facing the moon takes the light, an edge
 // facing away keeps a quarter of it so the far side is drawn but not lit. That is a real
-// light on a real shape, it can carry a much larger gain without brightening the body's
-// mass, and it is the same thing that fixed the trunks (world/flora.js, uRimAmt).
+// light on a real shape, and it can carry a much larger gain without brightening the
+// body's mass. Bodies only: the same rim on the trunks lit the woods (world/flora.js).
 const SHELL_RIM = `#include <emissivemap_fragment>
 float rimF = 1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0);
 rimF = rimF * rimF * rimF;
