@@ -1,7 +1,7 @@
 {
  "built": "tools/blender/wagon_build.py",
- "objects": 261,
- "triangles": 117388,
+ "objects": 265,
+ "triangles": 118972,
  "eye": [
   -0.36500000953674316,
   -0.30000001192092896,
