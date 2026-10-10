@@ -5,6 +5,8 @@ import {VIEW_POSITION_GLSL} from './depth-position.js';
 // Integrate moonlight through the current shadow map. Scene depth ends each ray
 // at the first visible surface; buildings and the moving canopy shade the air.
 // A small spatial field has no history buffer, so it cannot leave motion trails.
+// uGain is 0 (was .055): the lit air lifted every open view 13% and the forests 3%
+// over the night Alex tuned. The valley mist below still integrates through here.
 export class MoonAirField {
   constructor(ctx) {
     this.ctx=ctx;this.depthMistEnabled=true;
@@ -14,7 +16,7 @@ export class MoonAirField {
       tDepth:{value:null},tShadow:{value:null},tCloudField:{value:null},uInvProjection:{value:new THREE.Matrix4()},
       uCameraWorld:{value:new THREE.Matrix4()},uShadowMatrix:{value:new THREE.Matrix4()},
       uEye:{value:new THREE.Vector3()},uToMoon:{value:new THREE.Vector3()},
-      uRadiance:{value:new THREE.Color()},uDensity:{value:.01},uGain:{value:.055},uReady:{value:0},
+      uRadiance:{value:new THREE.Color()},uDensity:{value:.01},uGain:{value:0},uReady:{value:0},
       uMistReady:{value:0},uMistTime:{value:0},uMistCol:{value:new THREE.Color()},uMistMoonCol:{value:new THREE.Color()},
       uMistMoonDir:{value:new THREE.Vector3()},uMistLayer0:{value:new THREE.Vector4()},uMistLayer1:{value:new THREE.Vector4()},
       uMistDrift0:{value:new THREE.Vector2()},uMistDrift1:{value:new THREE.Vector2()}

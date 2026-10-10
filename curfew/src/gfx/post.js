@@ -258,7 +258,7 @@ const GradeShader = {
 
       // --- split tone: cool shadows, warm highlights [still postfx.js:32-34] ----
       float hi = smoothstep(0.28, 0.88, lum);
-      col = mix(col * vec3(0.97, 0.985, 1.025), col * vec3(1.025, 1.005, 0.975), hi);
+      col = mix(col * vec3(0.90, 0.95, 1.07), col * vec3(1.07, 1.01, 0.90), hi);
 
       // --- halation on the brightest spots only --------------------------------
       col += vec3(1.0, 0.72, 0.42) * smoothstep(0.66, 1.10, lum) * (0.02 + uPulse * 0.10);

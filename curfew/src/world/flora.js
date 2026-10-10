@@ -1780,7 +1780,6 @@ export class Flora {
       uMoonView: { value: new THREE.Vector3(0, 0, 1) },
       uGlowColor: { value: new THREE.Vector3(0.42, 0.55, 0.86) },   // cold moon, linear
       uGlowAmt: { value: 0.55 },
-      uRimAmt: { value: 0.50 },
       // The form term's strength, 0 = off. A UNIFORM and not a GLSL constant on
       // purpose: with six lanes landing edits into the same build, two runs ten
       // minutes apart are not a controlled A/B - the first attempt at this term
@@ -1959,7 +1958,6 @@ export class Flora {
       shader.uniforms.uMoonView = this.wind.uMoonView;
       shader.uniforms.uGlowColor = this.wind.uGlowColor;
       shader.uniforms.uGlowAmt = this.wind.uGlowAmt;
-      shader.uniforms.uRimAmt = this.wind.uRimAmt;
       shader.uniforms.uFormAmt = this.wind.uFormAmt;
       shader.uniforms.uTier = uni.uTier;
       shader.uniforms.uBandNear = uni.uBandNear;
@@ -2053,7 +2051,6 @@ export class Flora {
           'uniform vec3 uMoonView;',
           'uniform vec3 uGlowColor;',
           'uniform float uGlowAmt;',
-          'uniform float uRimAmt;',
           'uniform float uFormAmt;',
           'uniform sampler2D uBarkScan;',
           'uniform sampler2D uBarkHeight;',
@@ -2189,20 +2186,10 @@ export class Flora {
           // changing totalEmissiveRadiance here used to contribute zero pixels.
           '  outgoingLight += uGlowColor * (trans * 0.75 + wrapT * 0.10)',
           '    * uGlowAmt * diffuseColor.rgb * vFWind * vFoliage;',
-          // THE MOON ON THE SILHOUETTE. The form term above multiplies a trunk's edges by
-          // FORM_EDGE to make it read as a cylinder, and it does - but it also welds every
-          // trunk to the one standing behind it, which is why the closed woods read as one
-          // flat dark mass while the same trees against open sky read beautifully. This is
-          // the missing separation, and it is light rather than albedo: it rides on the
-          // moon's own colour, only on the side the moon is on, only where the surface has
-          // turned away from the eye, and only on WOOD - a leaf card has no silhouette of
-          // its own worth lighting and already has the translucency above.
-          '  float ndvR = abs(dot(normalize(normal), vvv));',
-          '  float rim = pow(1.0 - ndvR, 3.6) * smoothstep(-0.35, 0.55, dot(normalize(normal), mlv));',
-          // A thin branch is grazing along its whole length, so an unweighted rim lights
-          // the entire twig instead of its edge and the crown fills with white spears.
-          // vFWind already knows how twig-like a vertex is - it is why the tips move.
-          '  outgoingLight += uGlowColor * rim * uRimAmt * (1.0 - vFoliage) * (1.0 - vFWind * 0.55);',
+          // NO MOON RIM ON THE TRUNKS. One shipped on 2026-09-21 to separate the closed
+          // woods, and that flat dark mass was the darkness Alex had tuned so the torch is
+          // needed. The rim is never shadowed, so it lit every trunk in every stand: forest
+          // frames measured 46% brighter than 2026-09-18, the rim alone 35 points of it.
           '}',
           '#include <opaque_fragment>',
         ].join('\n')
@@ -4203,8 +4190,6 @@ export class Flora {
         const i = clamp(lights.moon.intensity / Math.max(0.001, CFG.lights.moon.intensity), 0, 2);
         _tintCol.copy(lights.moon.color);
         this.wind.uGlowAmt.value = 0.55 * i;
-        // The rim IS the moon: no moon, no silver edge.
-        this.wind.uRimAmt.value = 0.50 * i;
         this.wind.uGlowColor.value.set(_tintCol.r * 0.72, _tintCol.g * 0.78, _tintCol.b * 0.86);
         this.impostors.setTint(0.55 + _tintCol.r * 0.45 * i, 0.55 + _tintCol.g * 0.45 * i, 0.55 + _tintCol.b * 0.45 * i);
       }
