@@ -3829,6 +3829,129 @@
         "asr": "every clip kept came back with at least 80% of its words, in order (small.en; one not heard whole is heard again by medium.en and the better reading counts)",
         "listening": "No subjective listening claim; performances require Alexs ear."
       }
+    },
+    {
+      "generated": "2026-10-10",
+      "spec": "voice-more-20261010.json",
+      "sources": {
+        "sorry-4-v2": {
+          "file": "raw/sorry-4-v2.mp3",
+          "sha256": "aabb082db2af92fbe6a6f0215f0d2c339c3670727e742b76dfc0202a1d3dc9a7",
+          "provider": "ElevenLabs (Claude connector)",
+          "model": "eleven_v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": "[quiet, bitter] \"Next week,\" Miss Abernathy wrote. \"Next year,\" Marsh wrote. Everybody was going to get to you later.",
+          "resultId": "lghBVB0xHKgIYyqRCbr0",
+          "sourceUrl": "https://storage.googleapis.com/xi-backend/database/workspace/7244da29fd1949798277ae8ab22f83df/content_generation/ljUM2y5yD5whSH2bJdLQ/lghBVB0xHKgIYyqRCbr0/content.mp3?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=xi-backend-prod%40xi-labs.iam.gserviceaccount.com%2F20261010%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261010T215307Z&X-Goog-Expires=7200&X-Goog-SignedHeaders=host&X-Goog-Signature=4fb5c343db6be4f96aa050b1d221e8c8bf2ea895d92e80604d6b2b9631c174a68ee7ead86fa875334bed8f6bf9eb186087a064b705071bf134fb6d21d384dbd3d40ebcf1b6de36d11302186b5e4521b8ace66593be7515eb8a896514001740bfd7882a72cb49132782cf700e72f77540825388dcc954f040e0c8343a0bd40010f1cafb7533c2d8a107f1b26c3ac709202bc7d31ec143d0b78e411a3272de4327d9d7b8d4047bb47e2d5692f1287d3e233c3a214017f1e97dc01296903e091f659876194417d93e712557b07565b85c66a6cbdf99062a4dfcb8c72e6c740a766adcb46d2c9b4f6cc5b647c5b38c616bfca93b4144150925a930609090d18e8451",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "give-decker-v2": {
+          "file": "raw/give-decker-v2.mp3",
+          "sha256": "effa93385c387496aafeae2e26f7ca749c49bd7fd6b7875d8fda1f5bd45a38b8",
+          "provider": "ElevenLabs (Claude connector)",
+          "model": "eleven_v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": "[quiet, ashamed] Nothing from the Deckers'. I was holding the bowl.",
+          "resultId": "Xrp5MlvwukKc2jAODqVD",
+          "sourceUrl": "https://storage.googleapis.com/xi-backend/database/workspace/7244da29fd1949798277ae8ab22f83df/content_generation/Ocxu2EvkfOWZ6m7KQ6ec/Xrp5MlvwukKc2jAODqVD/content.mp3?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=xi-backend-prod%40xi-labs.iam.gserviceaccount.com%2F20261010%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261010T215348Z&X-Goog-Expires=7200&X-Goog-SignedHeaders=host&X-Goog-Signature=801375bf8d5e5b09da343a04877dec75bc21cfab012aec1667911abc79603919c95386fb24a2fba952080156ee69e9da5e384b1c8f732fbf4a12ac027b7df8af64a0ca5c91d4bf6fd58e35e14767556d95a80269c2e8809d2f3836068370765544f70aa56cfc0134c8993e7e53bb3a20a2728ee145e9f5de3564ee48964e8fd206a07a63e40a085a34a6bc4d3835edb3e647d3d3e02aa7671b8e62d8817e95ce8d74cda6fd3360f4c139d17f78fbc35b88fe47b62b9e9c200337e28247f22fa45baa5b7b01a2b2838934d2d768a9680b90960cdb81f51fd02405cd3c12d3ede607e400766852d0f72c4fec5e9c95fd0aa9fba8af551582aab8bc5d092edc69d3",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "give-brennan-v3": {
+          "file": "raw/give-brennan-v3.mp3",
+          "sha256": "757a48643e32935f687e72d279b15aa2bf274a4fbe89f2b3bd33021573e33352",
+          "provider": "ElevenLabs (Claude connector)",
+          "model": "eleven_v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": "[quiet, gentle] Fruit snacks. From your friend. He's three. He draws you with his dog.",
+          "resultId": "15oTOnCR7kSgNaoaPRPC",
+          "sourceUrl": "https://storage.googleapis.com/xi-backend/database/workspace/7244da29fd1949798277ae8ab22f83df/content_generation/imiOnkKnENyt4YJkSjRd/15oTOnCR7kSgNaoaPRPC/content.mp3?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=xi-backend-prod%40xi-labs.iam.gserviceaccount.com%2F20261010%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261010T215423Z&X-Goog-Expires=7200&X-Goog-SignedHeaders=host&X-Goog-Signature=147c92cfe64e282e9b1f7252f657b1edb0f13e9e723b43930103da3aa46be02241e058da543bd0e59949dc8ffbdc334c27714e2e1632bf80e806eea04c056ebe0ae2c62aba972bdc7e81a62c3356f32a992105e3755d007c9ee70b8416551276bbdaec95d37aa95e5ed9da23c008b0aaa10d2d6f9a6cb032f104c680c7cea73bc5f7b454f626ce27208b7177187c7c8565152155268b3d6a094ddf2d61b3e30e7799413df5c41761635283fe4a5dd44dc6d5de0fc0c03ff023862aabd95404d2f444a5648784a4ad047ef3b038486be6794f1015b02c871a65394ed55a3a8523727807c1a7ec0fc4d31157c7ea525a5f7021e74ae205f240d2d9297b4ad30011",
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        }
+      },
+      "clips": [
+        {
+          "key": "sorry-4-v2",
+          "text": "\"Next week,\" Miss Abernathy wrote. \"Next year,\" Marsh wrote. Everybody was going to get to you later.",
+          "tag": "quiet, bitter",
+          "file": "sorry-4-v2.ogg",
+          "source": "sorry-4-v2",
+          "sourceCutSeconds": [
+            0.1446,
+            7.7775
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 3.690024,
+          "duration": 7.6329,
+          "bytes": 73831,
+          "sha256": "38d55d283914e329f16692efba60b4c125ed1534c864d18bb34892b984fa46f8",
+          "peakDb": -9.49,
+          "rmsDb": -31.36,
+          "clippedSamples": 0,
+          "heard": "Next week, Miss Abernathy wrote. Next year, Marsh wrote. Everybody was going to get to you later.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "give-decker-v2",
+          "text": "Nothing from the Deckers'. I was holding the bowl.",
+          "tag": "quiet, ashamed",
+          "file": "give-decker-v2.ogg",
+          "source": "give-decker-v2",
+          "sourceCutSeconds": [
+            0.1146,
+            3.1979
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 4.837237,
+          "duration": 3.0832,
+          "bytes": 33300,
+          "sha256": "11495a60f036edd7ffccafbcd2a194bae42f13483d4df53c3797378e596ea5db",
+          "peakDb": -11.38,
+          "rmsDb": -27.6,
+          "clippedSamples": 0,
+          "heard": "Nothing from the deckers. I was holding the bowl.",
+          "heardMedium": "Nothing from the deckers. I was holding the bowl.",
+          "wordsBack": 0.889
+        },
+        {
+          "key": "give-brennan-v3",
+          "text": "Fruit snacks. From your friend. He's three. He draws you with his dog.",
+          "tag": "quiet, gentle",
+          "file": "give-brennan-v3.ogg",
+          "source": "give-brennan-v3",
+          "sourceCutSeconds": [
+            0.1146,
+            5.363
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 5.219661,
+          "duration": 5.2483,
+          "bytes": 53621,
+          "sha256": "883016a525282797477cfce5a1869a1ca0e747f45ac578efedc4a0a8b584fb53",
+          "peakDb": -10.36,
+          "rmsDb": -28.63,
+          "clippedSamples": 0,
+          "heard": "Fruit Snacks from your friend. He's three. He draws you with his dog.",
+          "wordsBack": 1.0
+        }
+      ],
+      "credits": {
+        "before": null,
+        "after": null
+      },
+      "processing": "tools/audio/voice-more.py: each take cut at the middles of its longest pauses, then the 2 Oct Sam chain (voice-clips.py): RMS boundary trim, 70 Hz-9.5 kHz, active RMS -23 dBFS with -6 dBFS peak ceiling, 12 ms fades, mono 44.1 kHz Vorbis q5; read back by faster-whisper small.en.",
+      "verification": {
+        "asr": "every clip kept came back with at least 80% of its words, in order (small.en; one not heard whole is heard again by medium.en and the better reading counts)",
+        "listening": "No subjective listening claim; performances require Alexs ear."
+      }
     }
   ]
 }
