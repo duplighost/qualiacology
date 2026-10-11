@@ -3952,6 +3952,181 @@
         "asr": "every clip kept came back with at least 80% of its words, in order (small.en; one not heard whole is heard again by medium.en and the better reading counts)",
         "listening": "No subjective listening claim; performances require Alexs ear."
       }
+    },
+    {
+      "generated": "2026-10-10",
+      "spec": "voice-intro-20261010.json",
+      "sources": {
+        "intro-sam": {
+          "file": "raw/intro-sam.mp3",
+          "sha256": "567528d013397cb41772cc4ebf7def7e600b0137249b45317a14eb32777af8d2",
+          "provider": "ElevenLabs (Alex's account)",
+          "model": "eleven_v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": "Made by Alex in his ElevenLabs account, 10 Oct (Mark, speed 100, stability 44, similarity 75, v4, as the file's name says)",
+          "resultId": "ElevenLabs_2026-10-10T23_02_56_Mark - Natural Conversations_pvc_sp100_s44_sb75_v4.mp3",
+          "sourceUrl": null,
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        }
+      },
+      "clips": [
+        {
+          "key": "intro-sam",
+          "text": "My name is Sam Hale and I killed my little brother Ollie.",
+          "tag": "flat",
+          "file": "intro-sam.ogg",
+          "source": "intro-sam",
+          "sourceCutSeconds": [
+            0.0448,
+            3.4743
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.673884,
+          "duration": 3.4295,
+          "bytes": 38246,
+          "sha256": "48fa9fa6e069e9fb7fbfe72eb42ddcf93436fd1716a27ead93119c497b39583f",
+          "peakDb": -11.62,
+          "rmsDb": -26.98,
+          "clippedSamples": 0,
+          "heard": "My name is Sam Hale, and I killed my little brother Ollie.",
+          "wordsBack": 1.0
+        }
+      ],
+      "credits": {
+        "before": null,
+        "after": null
+      },
+      "processing": "tools/audio/voice-more.py: each take cut at the middles of its longest pauses, then the 2 Oct Sam chain (voice-clips.py): RMS boundary trim, 70 Hz-9.5 kHz, active RMS -23 dBFS with -6 dBFS peak ceiling, 12 ms fades, mono 44.1 kHz Vorbis q5; read back by faster-whisper small.en.",
+      "verification": {
+        "asr": "every clip kept came back with at least 80% of its words, in order (small.en; one not heard whole is heard again by medium.en and the better reading counts)",
+        "listening": "No subjective listening claim; performances require Alexs ear."
+      }
+    },
+    {
+      "generated": "2026-10-10",
+      "spec": "voice-jacks-20261010.json",
+      "sources": {
+        "hale-jacks-1": {
+          "file": "raw/hale-jacks-1.mp3",
+          "sha256": "bfe6f5faacf865baded502d729729be01cd98611b1166f868893babe786e4f1e",
+          "provider": "ElevenLabs (Alex's account)",
+          "model": "eleven_v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": "Made by Alex in his ElevenLabs account, 10 Oct (Mark, speed 100, stability 44, similarity 75, v4)",
+          "resultId": "ElevenLabs_2026-10-10T23_49_48_Mark - Natural Conversations_pvc_sp100_s44_sb75_v4.mp3",
+          "sourceUrl": null,
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "hale-jacks-2": {
+          "file": "raw/hale-jacks-2.mp3",
+          "sha256": "84cb52a043cd6c166cf3a2f71ed6936b78011808ba3281a4914d0cb9ff394fc6",
+          "provider": "ElevenLabs (Alex's account)",
+          "model": "eleven_v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": "Made by Alex in his ElevenLabs account, 10 Oct (Mark, speed 100, stability 44, similarity 75, v4)",
+          "resultId": "ElevenLabs_2026-10-10T23_51_23_Mark - Natural Conversations_pvc_sp100_s44_sb75_v4.mp3",
+          "sourceUrl": null,
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        },
+        "hale-jacks-3": {
+          "file": "raw/hale-jacks-3.mp3",
+          "sha256": "19e5a385d740e684225eb0b4cb3a59b0263776e9a5cf222ce3be06c3ea1f55ef",
+          "provider": "ElevenLabs (Alex's account)",
+          "model": "eleven_v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": "Made by Alex in his ElevenLabs account, 10 Oct (Mark, speed 100, stability 44, similarity 75, v4)",
+          "resultId": "ElevenLabs_2026-10-10T23_52_04_Mark - Natural Conversations_pvc_sp100_s44_sb75_v4.mp3",
+          "sourceUrl": null,
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        }
+      },
+      "clips": [
+        {
+          "key": "hale-jacks-1",
+          "text": "They're getting up.",
+          "tag": "flat",
+          "file": "hale-jacks-1.ogg",
+          "source": "hale-jacks-1",
+          "sourceCutSeconds": [
+            0.0797,
+            1.5816
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.871289,
+          "duration": 1.5018,
+          "bytes": 17666,
+          "sha256": "3357ffc563c47e7684de9f957523e57a565fc0551c5ae7d6cd64ed99ab9cd968",
+          "peakDb": -12.33,
+          "rmsDb": -28.96,
+          "clippedSamples": 0,
+          "heard": "They're getting up.",
+          "wordsBack": 1.0
+        },
+        {
+          "key": "hale-jacks-2",
+          "text": "Okay.",
+          "tag": "flat",
+          "file": "hale-jacks-2.ogg",
+          "source": "hale-jacks-2",
+          "sourceCutSeconds": [
+            0.0598,
+            1.1076
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.101572,
+          "duration": 1.0479,
+          "bytes": 13097,
+          "sha256": "a574a34a03da09b427ccfd69c0ab30d02c732dc9de555907d15d41879900f4e7",
+          "peakDb": -9.26,
+          "rmsDb": -29.99,
+          "clippedSamples": 0,
+          "heard": "Okay.",
+          "wordsBack": 1.0,
+          "note": "The take says it twice; it ends after the first, between the two."
+        },
+        {
+          "key": "hale-jacks-3",
+          "text": "I guess this is my life now.",
+          "tag": "flat",
+          "file": "hale-jacks-3.ogg",
+          "source": "hale-jacks-3",
+          "sourceCutSeconds": [
+            0.0947,
+            2.25
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 2.123928,
+          "duration": 2.1554,
+          "bytes": 24458,
+          "sha256": "ab8acc5ee0134d453cd16fe17afc81222ce1b000c084b867824a0580b36f4862",
+          "peakDb": -10.62,
+          "rmsDb": -28.08,
+          "clippedSamples": 0,
+          "heard": "I guess this is my life now.",
+          "wordsBack": 1.0
+        }
+      ],
+      "credits": {
+        "before": null,
+        "after": null
+      },
+      "processing": "tools/audio/voice-more.py: each take cut at the middles of its longest pauses, then the 2 Oct Sam chain (voice-clips.py): RMS boundary trim, 70 Hz-9.5 kHz, active RMS -23 dBFS with -6 dBFS peak ceiling, 12 ms fades, mono 44.1 kHz Vorbis q5; read back by faster-whisper small.en.",
+      "verification": {
+        "asr": "every clip kept came back with at least 80% of its words, in order (small.en; one not heard whole is heard again by medium.en and the better reading counts)",
+        "listening": "No subjective listening claim; performances require Alexs ear."
+      }
     }
   ]
 }
