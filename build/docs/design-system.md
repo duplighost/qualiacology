@@ -78,29 +78,18 @@ a suite that runs at 390px and 1440px with no hover emulation.
   NOT on `.card-meta`) so every button in a row shares a baseline while
   metadata stays welded to its summary. Alex rejected the ragged-baseline
   alternative on sight.
-- **The homepage principal fills its cell with picture, not with gap.** Slot
-  1 of the featured row spans two grid rows. The card stretches and
-  `.card-media` takes `flex: 1 0 auto`, so the *frame* absorbs the slack
-  (measured slack 1px at every width; the old `height: auto` fix left
-  322–373px of dead page). `flex-shrink: 0` keeps 16/9 as a hard floor — the
-  frame only grows, running **0.72 (720px) to 1.12 (≥1664px)**, so a 16/9
-  master gets centre-cropped on its sides, hardest at narrow widths. Art with a
-  centred subject survives (FETCH did, through every day it held this slot);
-  art with important edges needs a `featuredImage` (see `images.md`) or a
-  different slot — LIL BIG BANG ships one. The whole rule is
-  scoped inside `@media (min-width: 45rem)` — the mobile scroll rail stays
-  plain 16/9.
+- **The homepage featured games are three equal 16:9 cards**, the same row
+  as `/games/`, every picture whole. Alex picked this on 11 Oct 2026 over a
+  double-height first card, which stretched its picture to a near-square
+  frame (about half the art showed) that ran past the bottom of a laptop
+  screen.
 
 ## Things that are load-bearing and look optional
 
-- **`sizes` on the homepage principal is not the card `sizes`.** Every other
-  catalog card is a 31vw grid cell; slot 1 is the 1.85fr column of a 1.85/1
-  grid — 59–61vw until `.plate-bleed > *` caps the shelf at `100rem`, past
-  which it is a flat 1020px. Described as 31vw until 2026-08-29, the browser
-  picked the 480w file for an 875px slot — a 1.8x upscale on the largest,
-  first-painted image on the site, invisible to every gate because nothing
-  asserts on `currentSrc`. If you change the featured grid's column ratio,
-  change `principalSizes` in `catalogPicture()` with it.
+- **`sizes` in `catalogPicture()` must describe the real slot width.**
+  Nothing asserts on `currentSrc`, so a `sizes` that under-asks silently
+  upscales the picture (a 31vw description once got a 480w file stretched
+  over an 875px slot). Change it whenever a card grid's columns change.
 - `heroPicture()`'s `<source media="(max-width: 44.99rem)">` phone crop and
   the CSS `aspect-ratio` switch **must use the same breakpoint**, or a band
   of widths gets a CSS box and a downloaded image with different ratios.
