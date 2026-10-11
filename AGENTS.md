@@ -61,7 +61,6 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | pocket-sun | `Projects\pocket-sun` | `npm run build:site` then `npm run copy:site` there |
 | hearse | `Projects\hearse` | `node tools/build-site-copy.mjs` there; never hand-edit the site copy |
 | hand-me-down | `Projects\hand-me-down` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| lowbell | `Projects\lowbell` | `node tools/build-site-copy.mjs ..\qualiacology` there; never hand-edit the site copy |
 | skip | `Projects\skip` | `node build-site-copy.mjs --site=<this repo>` there; never hand-edit the site copy |
 | free-play | `Projects\free-play` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | tideglass | `Projects\tideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
