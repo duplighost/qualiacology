@@ -31,8 +31,7 @@ touching site.css/site.js/templates.
    master `assets/games/<slug>-card-clean.webp` (or .jpg) at 1280×720, plus
    responsive tiers `assets/catalog/games/<slug>-{480,800,1200}.{avif,webp}`,
    generated with `python build/qa/catalog-art.py build` and checked with
-   `... audit`. SVG cards skip the catalog set. Optional `featuredImage` for
-   homepage slot 1 — see `images.md`.
+   `... audit`. SVG cards skip the catalog set.
 
 4. **Catalog entry** in `build/src/content/site-data.json`: slug, title,
    descriptor, `group` (one of `action` / `horror` / `worlds`), summary

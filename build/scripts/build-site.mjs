@@ -62,17 +62,6 @@ function validateData() {
     for (const item of records) {
       assert(item.slug && item.title && item.summary && item.image, `Incomplete ${label} record: ${item.slug || "unknown"}`);
       assert(existsSync(join(outputRoot, item.image.slice(1))), `Missing ${label} image: ${item.image}`);
-      // Optional tall cut for the homepage principal. Declare the master's real pixel
-      // size here so the build never has to decode an image; catalog-art.py checks the
-      // declaration against the file. Only slot 1 of the featured row reads it, so it
-      // is dead weight on a game that is not featured first - say so rather than
-      // letting someone wonder why their new art never appears.
-      if (item.featuredImage) {
-        const tall = item.featuredImage;
-        assert(tall.src && tall.width > 0 && tall.height > 0, `${label} ${item.slug}: featuredImage needs src, width, height`);
-        assert(!item.image.endsWith(".svg"), `${label} ${item.slug}: featuredImage cannot pair with an SVG card`);
-        assert(existsSync(join(outputRoot, tall.src.slice(1))), `Missing ${label} featuredImage: ${tall.src}`);
-      }
     }
   }
 
@@ -237,7 +226,7 @@ function heroPicture() {
   </picture>`;
 }
 
-function catalogPicture(item, type, eager = false, principal = false) {
+function catalogPicture(item, type, eager = false) {
   const isGame = type === "games";
   // 1200/900 exist because the plate rail makes cards 440px wide, and a 2x screen then
   // needs 880 device px - the 800w file was already under-resolving at the OLD 386px.
@@ -245,40 +234,24 @@ function catalogPicture(item, type, eager = false, principal = false) {
   // Intrinsic size must match the real art (16:9 games, 1:1 albums) so the
   // browser reserves the right box and nothing shifts while images load.
   const dimensions = isGame ? [800, 450] : [600, 600];
-  // The homepage principal is NOT a 31vw card - it is the 1.85fr column of a 1.85/1
-  // grid, so it runs 59-61vw until `.plate-bleed > *` caps the shelf at 100rem, past
-  // which it is a flat 1020px. Describing it as 31vw made the browser pick the 480w
-  // file for an 875px slot: a 1.8x upscale on the largest, first-painted image on the
-  // site. Slightly generous on purpose - `sizes` that over-asks costs bytes, `sizes`
-  // that under-asks costs the picture.
-  const principalSizes = "(min-width: 1664px) 1020px, (min-width: 720px) 62vw, 86vw";
-  const cardSizes = "(min-width: 1120px) 31vw, (min-width: 720px) 48vw, 86vw";
-  const sizes = principal ? principalSizes : cardSizes;
+  const sizes = "(min-width: 1120px) 31vw, (min-width: 720px) 48vw, 86vw";
   const loading = eager ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
 
   if (item.image.endsWith(".svg")) {
     return `<img src="${escapeHtml(versioned(item.image))}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">`;
   }
 
-  // A game may ship a SECOND master cut for the homepage principal, whose frame runs
-  // square-to-portrait rather than 16/9 (see the featured-fill rule in site.css). It
-  // cannot simply replace `image`, because that one is also the /games/ shelf card and
-  // that grid IS 16/9. Optional, and only the principal slot ever reads it: without it
-  // the principal just crops the 16/9 master, which is what every game does today.
-  const tall = principal && item.featuredImage ? item.featuredImage : null;
-  const root = `/assets/catalog/${type}/${item.slug}${tall ? "-featured" : ""}`;
-  const fallback = tall ? tall.src : item.image;
-  const box = tall ? [tall.width, tall.height] : dimensions;
+  const root = `/assets/catalog/${type}/${item.slug}`;
   const src = (width, ext) => `${escapeHtml(versioned(`${root}-${width}.${ext}`))} ${width}w`;
   const set = (ext) => widths.map((width) => src(width, ext)).join(", ");
   return `<picture>
     <source type="image/avif" srcset="${set("avif")}" sizes="${sizes}">
     <source type="image/webp" srcset="${set("webp")}" sizes="${sizes}">
-    <img src="${escapeHtml(versioned(fallback))}" width="${box[0]}" height="${box[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">
+    <img src="${escapeHtml(versioned(item.image))}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">
   </picture>`;
 }
 
-function gameCard(game, index, { eager = false, principal = false } = {}) {
+function gameCard(game, index, { eager = false } = {}) {
   // Controls are post-decision information sitting in the pre-decision slot: eight
   // tracked items telling you how to play a thing you have not chosen yet. They stay
   // on each game's own page, where they answer a question you are actually asking.
@@ -291,7 +264,7 @@ function gameCard(game, index, { eager = false, principal = false } = {}) {
     <article class="work-card">
       <span class="card-index" aria-hidden="true"></span>
       <a class="card-media" href="${routeForGame(game)}">
-        ${catalogPicture(game, "games", eager, principal)}
+        ${catalogPicture(game, "games", eager)}
       </a>
       <div class="card-body">
         <p class="card-kicker">${escapeHtml(game.descriptor)}</p>
@@ -429,7 +402,7 @@ function homepage() {
       </div>
       <div class="plate-bleed">
         <ul class="card-list homepage-shelf" data-featured-games="${featuredGames.length}">
-          ${featuredGames.map((item, index) => gameCard(item, index, { eager: index === 0, principal: index === 0 })).join("\n")}
+          ${featuredGames.map((item, index) => gameCard(item, index, { eager: index === 0 })).join("\n")}
         </ul>
       </div>
     </section>
