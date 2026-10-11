@@ -3952,6 +3952,58 @@
         "asr": "every clip kept came back with at least 80% of its words, in order (small.en; one not heard whole is heard again by medium.en and the better reading counts)",
         "listening": "No subjective listening claim; performances require Alexs ear."
       }
+    },
+    {
+      "generated": "2026-10-10",
+      "spec": "voice-intro-20261010.json",
+      "sources": {
+        "intro-sam": {
+          "file": "raw/intro-sam.mp3",
+          "sha256": "567528d013397cb41772cc4ebf7def7e600b0137249b45317a14eb32777af8d2",
+          "provider": "ElevenLabs (Alex's account)",
+          "model": "eleven_v4",
+          "voice": "UgBBYS2sOqTuMpoF3BR0",
+          "voiceName": "Mark",
+          "request": "Made by Alex in his ElevenLabs account, 10 Oct (Mark, speed 100, stability 44, similarity 75, v4, as the file's name says)",
+          "resultId": "ElevenLabs_2026-10-10T23_02_56_Mark - Natural Conversations_pvc_sp100_s44_sb75_v4.mp3",
+          "sourceUrl": null,
+          "pauses": [],
+          "longestPauseInsideALine": 0
+        }
+      },
+      "clips": [
+        {
+          "key": "intro-sam",
+          "text": "My name is Sam Hale and I killed my little brother Ollie.",
+          "tag": "flat",
+          "file": "intro-sam.ogg",
+          "source": "intro-sam",
+          "sourceCutSeconds": [
+            0.0448,
+            3.4743
+          ],
+          "filters": "highpass=f=70,lowpass=f=9500",
+          "activeRmsTargetDb": -23,
+          "gain": 1.673884,
+          "duration": 3.4295,
+          "bytes": 38246,
+          "sha256": "48fa9fa6e069e9fb7fbfe72eb42ddcf93436fd1716a27ead93119c497b39583f",
+          "peakDb": -11.62,
+          "rmsDb": -26.98,
+          "clippedSamples": 0,
+          "heard": "My name is Sam Hale, and I killed my little brother Ollie.",
+          "wordsBack": 1.0
+        }
+      ],
+      "credits": {
+        "before": null,
+        "after": null
+      },
+      "processing": "tools/audio/voice-more.py: each take cut at the middles of its longest pauses, then the 2 Oct Sam chain (voice-clips.py): RMS boundary trim, 70 Hz-9.5 kHz, active RMS -23 dBFS with -6 dBFS peak ceiling, 12 ms fades, mono 44.1 kHz Vorbis q5; read back by faster-whisper small.en.",
+      "verification": {
+        "asr": "every clip kept came back with at least 80% of its words, in order (small.en; one not heard whole is heard again by medium.en and the better reading counts)",
+        "listening": "No subjective listening claim; performances require Alexs ear."
+      }
     }
   ]
 }
