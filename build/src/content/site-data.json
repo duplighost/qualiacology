@@ -192,6 +192,19 @@
       "actionLabel": "Play HAND-ME-DOWN"
     },
     {
+      "slug": "belfry",
+      "title": "BELFRY",
+      "descriptor": "Echolocation night flight",
+      "group": "action",
+      "image": "/assets/games/belfry-card-v20261012b.jpg",
+      "alt": "Bats wheeling over a dark town under a thin crescent moon, the ground made of points of pale light, a house with pink and blue party windows on the far street",
+      "summary": "A bat on Halloween night. It’s dark, and you only see what makes a sound. The colony left for the winter roost while you were asleep, and they’re hunting all over town on the way. Find them. Every one you find clicks too, so the more of you there are, the more you can see. Owls only take the ones on their own. Keyboard and mouse.",
+      "metaDescription": "BELFRY is a first-person browser game about being a bat on Halloween night, where the only light is sound. The colony has gone on ahead; find them across the town, the cemetery, the woods, the river and the storm, and get everyone home before morning. Keyboard and mouse.",
+      "controls": "mouse steers · hold left mouse or W to beat your wings · right mouse or Space to shout (it calls the others and turns owls) · S brakes · Esc pause · M mute · F full screen",
+      "actionLabel": "Let go",
+      "duration": "Ten minutes or so"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",
