@@ -192,6 +192,19 @@
       "actionLabel": "Play HAND-ME-DOWN"
     },
     {
+      "slug": "belfry",
+      "title": "BELFRY",
+      "descriptor": "Echolocation night flight",
+      "group": "action",
+      "image": "/assets/games/belfry-card-v20261012.jpg",
+      "alt": "A cemetery at night seen from just above the stones: a wave of gold light rolling across it behind a mausoleum, and a ring of pale light sweeping over box tombs, crosses and an obelisk in front, dark pines beyond",
+      "summary": "A bat on Halloween night. It’s dark, and you only see what makes a sound: your own clicks, a dog, a doorbell, the bells at midnight, thunder. Fly from the belfry through the town, the cemetery, the woods and the storm, and get to the others before morning. One of the kids out trick-or-treating doesn’t echo. Keyboard and mouse.",
+      "metaDescription": "BELFRY is a first-person browser game about being a bat on Halloween night, where the only light is sound. Fly from the belfry through the town, the cemetery, the woods, the river and the storm, and get to the others before morning. Keyboard and mouse.",
+      "controls": "mouse steers · hold left mouse or W to beat your wings · right mouse or Space to shout · S brakes · Esc pause · M mute · F full screen",
+      "actionLabel": "Let go",
+      "duration": "Ten minutes or so"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",
