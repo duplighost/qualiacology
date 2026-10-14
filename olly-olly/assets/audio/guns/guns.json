@@ -4,18 +4,18 @@
   "pistol-report-1.ogg",
   "pistol-report-2.ogg"
  ],
- "pistol-tail-out": [
-  "pistol-tail-out-0.ogg",
-  "pistol-tail-out-1.ogg"
+ "pistol-tail-in": [
+  "pistol-tail-in-0.ogg",
+  "pistol-tail-in-1.ogg"
  ],
  "carbine-report": [
   "carbine-report-0.ogg",
   "carbine-report-1.ogg",
   "carbine-report-2.ogg"
  ],
- "carbine-tail-out": [
-  "carbine-tail-out-0.ogg",
-  "carbine-tail-out-1.ogg"
+ "carbine-tail-in": [
+  "carbine-tail-in-0.ogg",
+  "carbine-tail-in-1.ogg"
  ],
  "shotgun-report": [
   "shotgun-report-0.ogg",
@@ -23,10 +23,9 @@
   "shotgun-report-2.ogg",
   "shotgun-report-3.ogg"
  ],
- "shotgun-tail-out": [
-  "shotgun-tail-out-0.ogg",
-  "shotgun-tail-out-1.ogg",
-  "shotgun-tail-out-2.ogg"
+ "shotgun-tail-in": [
+  "shotgun-tail-in-0.ogg",
+  "shotgun-tail-in-1.ogg"
  ],
  "rifle-report": [
   "rifle-report-0.ogg",
@@ -34,26 +33,27 @@
   "rifle-report-2.ogg",
   "rifle-report-3.ogg"
  ],
+ "rifle-tail-in": [
+  "rifle-tail-in-0.ogg",
+  "rifle-tail-in-1.ogg"
+ ],
+ "pistol-tail-out": [
+  "pistol-tail-out-0.ogg",
+  "pistol-tail-out-1.ogg"
+ ],
+ "carbine-tail-out": [
+  "carbine-tail-out-0.ogg",
+  "carbine-tail-out-1.ogg"
+ ],
+ "shotgun-tail-out": [
+  "shotgun-tail-out-0.ogg",
+  "shotgun-tail-out-1.ogg",
+  "shotgun-tail-out-2.ogg"
+ ],
  "rifle-tail-out": [
   "rifle-tail-out-0.ogg",
   "rifle-tail-out-1.ogg",
   "rifle-tail-out-2.ogg"
- ],
- "pistol-tail-in": [
-  "pistol-tail-in-0.ogg",
-  "pistol-tail-in-1.ogg"
- ],
- "carbine-tail-in": [
-  "carbine-tail-in-0.ogg",
-  "carbine-tail-in-1.ogg"
- ],
- "shotgun-tail-in": [
-  "shotgun-tail-in-0.ogg",
-  "shotgun-tail-in-1.ogg"
- ],
- "rifle-tail-in": [
-  "rifle-tail-in-0.ogg",
-  "rifle-tail-in-1.ogg"
  ],
  "cracker-pop": [
   "cracker-pop-0.ogg",
@@ -112,11 +112,11 @@
  "head-tick": [
   "head-tick.ogg"
  ],
- "kill-thunk": [
-  "kill-thunk.ogg"
- ],
  "kill-tone": [
   "kill-tone.ogg"
+ ],
+ "kill-thunk": [
+  "kill-thunk.ogg"
  ],
  "brass": [
   "brass-0.ogg",
@@ -138,11 +138,6 @@
  "fuse": [
   "fuse.ogg"
  ],
- "impact-wood": [
-  "impact-wood-0.ogg",
-  "impact-wood-1.ogg",
-  "impact-wood-2.ogg"
- ],
  "impact-plank": [
   "impact-plank-0.ogg",
   "impact-plank-1.ogg",
@@ -158,11 +153,6 @@
   "impact-punch-1.ogg",
   "impact-punch-2.ogg"
  ],
- "impact-metal": [
-  "impact-metal-0.ogg",
-  "impact-metal-1.ogg",
-  "impact-metal-2.ogg"
- ],
  "impact-dirt": [
   "impact-dirt-0.ogg",
   "impact-dirt-1.ogg",
@@ -172,11 +162,6 @@
   "break-wood-0.ogg",
   "break-wood-1.ogg",
   "break-wood-2.ogg"
- ],
- "impact-glass": [
-  "impact-glass-0.ogg",
-  "impact-glass-1.ogg",
-  "impact-glass-2.ogg"
  ],
  "latch": [
   "latch-0.ogg",
@@ -189,5 +174,80 @@
  "pumpkin": [
   "pumpkin-0.ogg",
   "pumpkin-1.ogg"
+ ],
+ "flesh": [
+  "flesh-0.ogg",
+  "flesh-1.ogg",
+  "flesh-2.ogg",
+  "flesh-3.ogg"
+ ],
+ "flesh-heavy": [
+  "flesh-heavy-0.ogg",
+  "flesh-heavy-1.ogg",
+  "flesh-heavy-2.ogg",
+  "flesh-heavy-3.ogg"
+ ],
+ "crunch": [
+  "crunch-0.ogg",
+  "crunch-1.ogg",
+  "crunch-2.ogg"
+ ],
+ "gore": [
+  "gore-0.ogg",
+  "gore-1.ogg",
+  "gore-2.ogg"
+ ],
+ "felt": [
+  "felt-0.ogg",
+  "felt-1.ogg",
+  "felt-2.ogg"
+ ],
+ "felt-heavy": [
+  "felt-heavy-0.ogg",
+  "felt-heavy-1.ogg",
+  "felt-heavy-2.ogg"
+ ],
+ "straw-hit": [
+  "straw-hit-0.ogg",
+  "straw-hit-1.ogg",
+  "straw-hit-2.ogg"
+ ],
+ "shell-hit": [
+  "shell-hit-0.ogg",
+  "shell-hit-1.ogg",
+  "shell-hit-2.ogg"
+ ],
+ "bullet-wood": [
+  "bullet-wood-0.ogg",
+  "bullet-wood-1.ogg",
+  "bullet-wood-2.ogg",
+  "bullet-wood-3.ogg"
+ ],
+ "bullet-stone": [
+  "bullet-stone-0.ogg",
+  "bullet-stone-1.ogg",
+  "bullet-stone-2.ogg",
+  "bullet-stone-3.ogg"
+ ],
+ "bullet-dirt": [
+  "bullet-dirt-0.ogg",
+  "bullet-dirt-1.ogg",
+  "bullet-dirt-2.ogg",
+  "bullet-dirt-3.ogg"
+ ],
+ "bullet-metal": [
+  "bullet-metal-0.ogg",
+  "bullet-metal-1.ogg",
+  "bullet-metal-2.ogg"
+ ],
+ "bullet-soft": [
+  "bullet-soft-0.ogg",
+  "bullet-soft-1.ogg",
+  "bullet-soft-2.ogg"
+ ],
+ "bullet-water": [
+  "bullet-water-0.ogg",
+  "bullet-water-1.ogg",
+  "bullet-water-2.ogg"
  ]
 }
