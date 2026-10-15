@@ -217,6 +217,18 @@
       "actionLabel": "Step out"
     },
     {
+      "slug": "borrowed",
+      "title": "BORROWED",
+      "descriptor": "Possession action-adventure",
+      "group": "action",
+      "image": "/assets/games/borrowed-card-v20261015.jpg",
+      "alt": "A borrowed brass bell facing the huge crowned Keeper on a stone island in the drowned town.",
+      "summary": "You are a ghost in a drowned town. Borrow a bell to break glass and return shots, a kiln to thaw the pipes, or a stone mason to charge through the anchors. The machines bring the districts back. The Keeper wants the light for itself. Keyboard and mouse.",
+      "metaDescription": "A ghost in a drowned mechanical town. Borrow a bell, a kiln, or a stone mason, restore the three districts, and break the locks on the Keeper’s heart. Keyboard and mouse.",
+      "controls": "WASD move · mouse aim · click or E borrow a body · Space ring / fire / charge · Shift dodge · Q leave · Tab map · Esc pause · M sound · F fullscreen",
+      "actionLabel": "Borrow a body"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",
