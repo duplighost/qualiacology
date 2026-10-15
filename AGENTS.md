@@ -70,6 +70,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
 | strung | `Projects\strung` | `node build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | lead, rally, rocket-shoes, eaten-path, wick, galaxy-sandbox, the-last-room, secondhand-saint | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
+| borrowed | `Projects\borrowed` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | everything else | this repo | the site copy is the only source |
 
 ## Access and machine notes
