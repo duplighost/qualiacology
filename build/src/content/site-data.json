@@ -205,6 +205,18 @@
       "duration": "Ten minutes or so"
     },
     {
+      "slug": "strung",
+      "title": "STRUNG",
+      "descriptor": "Musical high-wire walk",
+      "group": "action",
+      "image": "/assets/games/strung-card-v20261015.jpg",
+      "alt": "A tightrope walker with a long balance pole, seen from behind, halfway across a rope between two buildings on a rainy night, hundreds of lit windows, a DINER sign on the left, the moon over the roofs",
+      "summary": "A tightrope across a city at night, eight ropes from roof to roof to the clock tower. Every rope is a string and your feet play it. Lean and it goes out of tune. There’s a net until there isn’t. Mouse, or two thumbs on a phone.",
+      "metaDescription": "STRUNG is a browser game about walking a tightrope across a city at night, eight ropes from roof to roof to the clock tower. Every rope is a string and your feet play it. Lean and it goes out of tune. Mouse, or two thumbs on a phone.",
+      "controls": "hold the mouse button to walk · move the mouse left and right to balance (the side the cursor is on gets heavier) · click as you fall to catch the rope, hold to climb back · on a phone, hold the right side to walk and slide a thumb on the left side to balance",
+      "actionLabel": "Step out"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",

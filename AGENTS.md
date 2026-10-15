@@ -67,6 +67,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | spaceboarding | `Projects\spaceboarding` | copy `assets src styles.css vendor`; keep the site's index.html shell |
 | fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
 | vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
+| strung | `Projects\strung` | `node build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | lead, rally, rocket-shoes, eaten-path, wick, galaxy-sandbox, the-last-room, secondhand-saint | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
 | everything else | this repo | the site copy is the only source |
 

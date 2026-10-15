@@ -186,3 +186,9 @@
 /belfry.html  /belfry/  301!
 /bat  /belfry/  302
 /bats  /belfry/  302
+
+# --- STRUNG ---
+/strung.html  /strung/  301!
+/tightrope  /strung/  302
+/highwire  /strung/  302
+/wire  /strung/  302
