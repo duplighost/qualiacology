@@ -78,6 +78,19 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "collateral",
+      "title": "COLLATERAL",
+      "descriptor": "First-person catch-and-throw",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/collateral-card-v20261016.jpg",
+      "alt": "A heavy gauntlet with a wheel on the back of the hand, its chain run up to a gold ring on a stone facade under huge arches at sunset",
+      "summary": "Take it. Throw it back. Hold to catch their fire while the world slows, and the gauntlet tears up whatever you look at. Let go and all of it goes back at them. Five districts, one above the next, and the only way up is through the floor. Keyboard and mouse.",
+      "metaDescription": "COLLATERAL is a first-person browser game: catch an army's fire with a gauntlet, tear up the city around you, and throw all of it back. Five districts, a boss in each. Keyboard and mouse.",
+      "controls": "Desktop only · WASD + mouse · hold left to catch, let go to throw · right mouse hooks · Shift dash · Space double jump · C in the air slams",
+      "actionLabel": "Take it"
+    },
+    {
       "slug": "kickmoon",
       "title": "KICKMOON",
       "descriptor": "First-person moon collectathon",
