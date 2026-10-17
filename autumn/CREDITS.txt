@@ -3,9 +3,9 @@ AUTUMN - Alexander Duncan Guitar / Qualiacology
 Forest generation, procedural tree shapes, landscape, arrangements, animation,
 waterways, and sound synthesis created for this game.
 
-Autumn canopy and fallen maple imagery generated with OpenAI's built-in image
+Autumn canopy, fallen maple, and waterfall imagery generated with OpenAI's built-in image
 generation tool for this game. Runtime files: textures/autumn-canopy-v1.png and
-textures/fallen-maple-v1.png. The original generated alpha is preserved.
+textures/fallen-maple-v1.png, and textures/waterfall-v1.png. The original generated alpha is preserved.
 
 Scanned PBR textures: Poly Haven, CC0.
 https://polyhaven.com/a/leaves_forest_ground
@@ -14,6 +14,8 @@ https://polyhaven.com/a/mossy_rock
 https://polyhaven.com/a/forest_ground_04
 https://polyhaven.com/a/fern_02
 https://polyhaven.com/a/tree_small_02 (geometry simplified; seasonal recoloring)
+https://polyhaven.com/a/rock_moss_set_01
+https://polyhaven.com/a/rock_boulder_cracked
 https://polyhaven.com/license
 
 Recorded footsteps: TinyWorlds, Different steps on wood, stone, leaves, gravel and mud, CC0.
@@ -37,3 +39,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+WATERFALL IMAGE GENERATION PROMPT
+Create a photographic texture asset for a realistic 3D nature video game: a single broad naturally irregular curtain of falling waterfall water, front-on, isolated against a fully transparent background. Vertical rectangular composition. The sheet is approximately 7 meters tall and 4 meters wide in implied scale. Water starts along a gently uneven horizontal lip at the very top without any visible rock. Thin silvery transparent streamlets gather into multiple heavier white cascades, with darker transparent gaps, subtle fine droplets, wisps of mist, and natural turbulent variation. The water accelerates downward and fans out slightly at the bottom into soft loose spray, no pool shown. Real long-exposure outdoor waterfall photograph at a modest shutter speed, detailed distinct streaks and flowing translucent water, beautiful convincing real fluid detail. Mostly soft translucent silver grey and white water, preserve true alpha transparency through the water and empty gaps; no uniformly opaque white rectangle. No rocks, no trees, no ground, no pool, no landscape, no sky, no background color, no borders, no words. Straight front view with no perspective so the alpha texture can wrap onto a curved 3D ribbon. The edges of the waterfall must be irregular and feather into individual narrow falling streams.
