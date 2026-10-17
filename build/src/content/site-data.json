@@ -65,6 +65,19 @@
       "actionLabel": "Go out"
     },
     {
+      "slug": "dead-air",
+      "title": "DEAD AIR",
+      "descriptor": "Linear FPS",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/dead-air-card-clean.jpg",
+      "alt": "First-person view of the broadcast fortress and its transmitter above a wet concrete approach",
+      "summary": "A linear FPS.",
+      "metaDescription": "A linear FPS.",
+      "controls": "WASD + mouse · click fire · right mouse catch · Shift dash · Space jump · C slide · R reload · 1–3 weapons · E use · Esc pause",
+      "actionLabel": "Play"
+    },
+    {
       "slug": "curfew",
       "title": "We Were Promised Morning",
       "descriptor": "open-world night horror",
@@ -91,17 +104,18 @@
       "actionLabel": "Take it"
     },
     {
-      "slug": "dead-air",
-      "title": "DEAD AIR",
-      "descriptor": "Linear FPS",
-      "group": "action",
+      "slug": "in-every-direction",
+      "title": "IN EVERY DIRECTION",
+      "descriptor": "Endless autumn walk",
+      "group": "worlds",
       "featured": false,
-      "image": "/assets/games/dead-air-card-clean.jpg",
-      "alt": "First-person view of the broadcast fortress and its transmitter above a wet concrete approach",
-      "summary": "A linear FPS.",
-      "metaDescription": "A linear FPS.",
-      "controls": "WASD + mouse · click fire · right mouse catch · Shift dash · Space jump · C slide · R reload · 1–3 weapons · E use · Esc pause",
-      "actionLabel": "Play"
+      "image": "/assets/games/in-every-direction-card-v20261016.jpg",
+      "alt": "A leaf-covered path under a big red maple in an autumn forest, a birch beside it, golden bracken on either side and the low sun in the haze",
+      "summary": "First person. An autumn forest that goes on forever in every direction, with crunching leaves, piles of leaves and falling leaves. A swing in a huge old tree, a cabin with smoke coming out of the chimney, a bench someone put where the view is, and so many more that it’s impossible to find them all. No HUD. Keyboard and mouse.",
+      "metaDescription": "IN EVERY DIRECTION is a first-person walk through an autumn forest that goes on forever in every direction. Crunching leaves, piles of leaves, falling leaves, and special places all through it, so many it’s impossible to find them all. Keyboard and mouse.",
+      "controls": "Desktop only · mouse looks · WASD or arrows walk · Shift hurries · Space jumps · Esc pause · M mute · F full screen",
+      "actionLabel": "Walk in",
+      "duration": "As long as you like"
     },
     {
       "slug": "kickmoon",
