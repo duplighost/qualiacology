@@ -91,6 +91,19 @@
       "actionLabel": "Take it"
     },
     {
+      "slug": "dead-air",
+      "title": "DEAD AIR",
+      "descriptor": "Linear FPS",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/dead-air-card-clean.jpg",
+      "alt": "First-person view of the broadcast fortress and its transmitter above a wet concrete approach",
+      "summary": "A linear FPS.",
+      "metaDescription": "A linear FPS.",
+      "controls": "WASD + mouse · click fire · right mouse catch · Shift dash · Space jump · C slide · R reload · 1–3 weapons · E use · Esc pause",
+      "actionLabel": "Play"
+    },
+    {
       "slug": "kickmoon",
       "title": "KICKMOON",
       "descriptor": "First-person moon collectathon",
