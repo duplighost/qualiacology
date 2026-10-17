@@ -192,3 +192,8 @@
 /tightrope  /strung/  302
 /highwire  /strung/  302
 /wire  /strung/  302
+
+# --- IN EVERY DIRECTION ---
+/in-every-direction.html  /in-every-direction/  301!
+/forest  /in-every-direction/  302
+/leaves  /in-every-direction/  302
