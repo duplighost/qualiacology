@@ -1,3 +1,7 @@
+# DEAD AIR audio sources
+
+The firearm and footstep acquisition record below comes from Alex's WINTERLINE library. DEAD AIR includes the carbine and shotgun excerpts and four concrete steps. The original preparation-script references describe that library.
+
 # Firearm recordings
 
 The runtime WAV files are excerpts prepared directly from **The Free Firearm Sound Library**, created and recorded by **Ben Jaszczak, Brian Nelson, Kevin Heras, and Matthew Nanney**.
@@ -30,3 +34,9 @@ Modifications: genuine separate takes isolated, converted to 48 kHz mono, DC off
 - Download used: https://bigsoundbank.com/UPLOAD/mp3/0514.mp3
 
 Modifications: four distinct steps trimmed from the original recording, level adjusted and faded; mono 48 kHz PCM WAV. The exact cuts and preparation script are retained under `work/audio-sources`.
+
+## Coastal ambience and foley
+
+`sea.ogg`: Sea waves (0698), Joseph SARDIN / BigSoundBank, CC0. https://bigsoundbank.com/sea-waves-s0698.html . A 36-second excerpt starting at 22 seconds, faded and converted to Ogg Vorbis.
+
+`metal_hit_01/02/03.ogg`, `metal_close_01.ogg`, `lock_open_01.ogg`, `metal_slam_01.ogg`, `metal_falling_01.ogg`, `wood_hit_01.ogg`: rubberduck, 100 CC0 metal and wood SFX, CC0. https://opengameart.org/content/100-cc0-metal-and-wood-sfx . Runtime playback applies pitch, distance attenuation, low-pass filtering and room reverb.
