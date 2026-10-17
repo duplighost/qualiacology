@@ -1,0 +1,59 @@
+AUTUMN - Alexander Duncan Guitar / Qualiacology
+
+Forest generation, procedural tree shapes, landscape, arrangements, animation,
+waterways, and sound synthesis created for this game.
+
+Autumn canopy and fallen maple imagery generated with OpenAI's built-in image
+generation tool for this game. Runtime files: textures/autumn-canopy-v1.png and
+textures/fallen-maple-v1.png. The original generated alpha is preserved.
+Water, falls, spray, animal geometry and movement are rendered in real time.
+
+Scanned PBR textures: Poly Haven, CC0.
+https://polyhaven.com/a/leaves_forest_ground
+https://polyhaven.com/a/bark_brown_02
+https://polyhaven.com/a/mossy_rock
+https://polyhaven.com/a/forest_ground_04
+https://polyhaven.com/a/fern_02
+https://polyhaven.com/a/rock_moss_set_01
+https://polyhaven.com/a/rock_boulder_cracked
+https://polyhaven.com/a/grass_medium_01
+https://polyhaven.com/a/leafy_grass
+https://polyhaven.com/a/rocky_trail_02
+https://polyhaven.com/a/dry_riverbed_rock
+https://polyhaven.com/a/autumn_field_puresky
+https://polyhaven.com/license
+
+Recorded footsteps: TinyWorlds, Different steps on wood, stone, leaves, gravel and mud, CC0.
+https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud
+
+Three.js, MIT License, Copyright 2010-2025 three.js authors.
+https://github.com/mrdoob/three.js/blob/dev/LICENSE
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Recorded local wildlife and water, CC0, BigSoundBank / LaSonotheque:
+Robin 1 and Robin 4, Joseph Sardin:
+https://bigsoundbank.com/robin-1-s1667.html
+https://bigsoundbank.com/rouge-gorge-4-s1670.html
+Common Blackbird 3, Le tiroir du fond:
+https://bigsoundbank.com/merle-noir-3-s3476.html
+Small Cascade, Joseph Sardin:
+https://bigsoundbank.com/small-cascade-s0507.html
+Small waterfall 2, gamin:
+https://bigsoundbank.com/small-waterfall-2-s0219.html
+Splash, small 6:
+https://bigsoundbank.com/splash-small-6-s1534.html

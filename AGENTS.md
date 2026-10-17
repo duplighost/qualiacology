@@ -71,6 +71,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | strung | `Projects\strung` | `node build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | collateral | `Projects\collateral` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | lead, rally, rocket-shoes, eaten-path, wick, galaxy-sandbox, the-last-room, secondhand-saint | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
+| autumn | `Projects/autumn` | `npm.cmd run build`, then `node tools/build-site-copy.mjs <site-folder>` there |
 | everything else | this repo | the site copy is the only source |
 
 ## Access and machine notes

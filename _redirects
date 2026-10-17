@@ -192,3 +192,7 @@
 /tightrope  /strung/  302
 /highwire  /strung/  302
 /wire  /strung/  302
+
+# --- AUTUMN ---
+/autumn.html  /autumn/  301!
+/autumn  /autumn/  302
