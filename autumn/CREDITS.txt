@@ -1,7 +1,15 @@
 AUTUMN - Alexander Duncan Guitar / Qualiacology
 
-Forest generation, procedural tree shapes, landscape, arrangements, animation,
-waterways, and sound synthesis created for this game.
+Forest generation, landscape, arrangements, animation, waterways, and wildlife
+created for AUTUMN, with ideas gathered from Alex's forest games:
+In Every Direction, Ever October, The Long October, October Forever, and
+previous AUTUMN versions. These projects were created for Alexander Duncan Guitar.
+
+Botanical branching, leaf shapes and conifer atlas adapted from In Every Direction.
+Paper-birch texture drawing and generated photographic leaf sprays adapted from
+Ever October. Runtime foliage: textures/october-leaf-sprays.png.
+The continuous world recombines 36 authored place designs with varying terrain,
+planting, seasons of leaf colour, wildlife and waterways.
 
 Autumn canopy and fallen maple imagery generated with OpenAI's built-in image
 generation tool for this game. Runtime files: textures/autumn-canopy-v1.png and
@@ -57,3 +65,7 @@ Small waterfall 2, gamin:
 https://bigsoundbank.com/small-waterfall-2-s0219.html
 Splash, small 6:
 https://bigsoundbank.com/splash-small-6-s1534.html
+
+Leaf footstep recordings edited into 12 sprites by Ever October, reused here:
+Feet in Leaves #1, Joseph SARDIN, CC0.
+https://bigsoundbank.com/feet-in-leaves-s0137.html
