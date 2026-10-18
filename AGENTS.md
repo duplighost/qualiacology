@@ -70,6 +70,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
 | strung | `Projects\strung` | `node build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | collateral | `Projects\collateral` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
+| in-every-direction | `Projects\in-every-direction` | `node tools/build-site-copy.mjs <this repo>` there (it writes the card too); never hand-edit the site copy |
 | lead, rally, rocket-shoes, eaten-path, wick, galaxy-sandbox, the-last-room, secondhand-saint | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
 | autumn | `Projects/autumn` | `npm.cmd run build`, then `node tools/build-site-copy.mjs <site-folder>` there |
 | everything else | this repo | the site copy is the only source |

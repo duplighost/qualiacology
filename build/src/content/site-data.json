@@ -104,6 +104,20 @@
       "actionLabel": "Walk"
     },
     {
+      "slug": "in-every-direction",
+      "title": "IN EVERY DIRECTION",
+      "descriptor": "Endless autumn walk",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/in-every-direction-card-v20261016.jpg",
+      "alt": "A leaf-covered path under a big red maple in an autumn forest, a birch beside it, golden bracken on either side and the low sun in the haze",
+      "summary": "First person. An autumn forest that goes on forever in every direction, with crunching leaves, piles of leaves and falling leaves. A swing in a huge old tree, a cabin with smoke coming out of the chimney, a bench someone put where the view is, and so many more that it’s impossible to find them all. No HUD. Keyboard and mouse.",
+      "metaDescription": "IN EVERY DIRECTION is a first-person walk through an autumn forest that goes on forever in every direction. Crunching leaves, piles of leaves, falling leaves, and special places all through it, so many it’s impossible to find them all. Keyboard and mouse.",
+      "controls": "Desktop only · mouse looks · WASD or arrows walk · Shift hurries · Space jumps · Esc pause · M mute · F full screen",
+      "actionLabel": "Walk in",
+      "duration": "As long as you like"
+    },
+    {
       "slug": "kickmoon",
       "title": "KICKMOON",
       "descriptor": "First-person moon collectathon",
