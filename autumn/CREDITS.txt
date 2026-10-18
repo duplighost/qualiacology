@@ -88,3 +88,10 @@ Joseph SARDIN / BigSoundBank, CC0.
 https://bigsoundbank.com/steps-in-the-snow-3-s3363.html
 Owl hoots, ice resonance, snow impressions and snow shedding are synthesized
 or rendered in real time for this game.
+
+Spring expansion: 44 authored place arrangements, alongside 36 autumn and 40 winter designs.
+The endless landscape recombines these arrangements with continuous terrain and habitats.
+Spring flower meshes, blossom sprays, pendulous waterside trees, butterflies, bees,
+dragonflies, frogs, petals, drifting seeds and damp footprints are generated for this game.
+Frog calls and localized bee flight are synthesized in real time. Bird, water, wind
+and footstep recordings retain the credits above.
