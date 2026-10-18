@@ -4769,7 +4769,6 @@ vaultP=(modelMatrix*vec4(position,1.)).xyz;`),f.fragmentShader=`uniform sampler2
 podPoint=position;`),y.fragmentShader=`varying vec3 podPoint;
    float hullHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
    float hullNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hullHash(i),hullHash(i+vec2(1,0)),f.x),mix(hullHash(i+vec2(0,1)),hullHash(i+vec2(1,1)),f.x),f.y);}
-   
 `+y.fragmentShader,y.fragmentShader=y.fragmentShader.replace("#include <map_fragment>",`#include <map_fragment>
    float soot=smoothstep(1.,3.,podPoint.z)*smoothstep(-.2,1.,podPoint.x)*(.55+hullNoise(podPoint.xy*9.)*.45);
    float stain=hullNoise(podPoint.xz*11.)*.08+hullNoise(podPoint.xz*37.)*.035;
