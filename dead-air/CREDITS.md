@@ -38,3 +38,5 @@ October 17 revision: Creature vocals and wet impact layers use rubberduck's **80
 Grass footsteps: Kenney, **Impact Sounds**, Creative Commons CC0. Five original Ogg recordings, selected from https://kenney.nl/assets/impact-sounds .
 
 **Rock Face** — Dario Barresi and Greg Zaal / Poly Haven, CC0. [Source](https://polyhaven.com/a/rock_face). 2K color, normal and roughness surfaces, projected onto the terrain cliffs.
+
+The fifth revision adds open forest clearings, moss-covered formations and hanging vines, curved sail canopies, height-dependent aerial perspective, region lighting, breakable armor, interruptible creature attacks and penetrating induction effects. Quiver Tree 02 and Coastal Cliff 02 are used again in the playable world; their scanned geometry is grounded and scaled within the authored scenery. `assets/planet/living-ground-v5.png` was generated with the built-in OpenAI image tool and covers the terrain with small living plants; its complete prompt and generation mode are retained in `assets/planet/LIVING-GROUND-SOURCE.json`. No new audio generation service was used for this revision.
