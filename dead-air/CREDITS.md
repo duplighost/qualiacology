@@ -52,3 +52,5 @@ The ninth revision adds folded understory leaves and helical blossoms using the 
 The tenth revision reshapes the opening creatures and their attack poses, adds tissue and shell shading and articulated covers for the Crown Stag's organs, and attaches impact wounds to the animated models. Creature and guardian shots use the visible geometry, accelerated with the credited three-mesh-bvh library. The models and material changes were authored for this game using the existing credited surface images. No new external assets or audio were acquired.
 
 `rifle-v11-0.wav` and `rifle-v11-1.wav` are shortened edits of the credited rifle-heavy recordings. The initial 52 milliseconds are retained, with a faster decay and no increase in peak level. The processing is reproducible with `tools/design-audio-v11.py`.
+
+The Heartland's branching buttresses, perforated leaf vaults, split root cover and low feeding-root network are authored geometry. Their bark, membrane and folded-leaf surfaces reuse the credited images above. The scene adds local groundcover placement and regional lighting; no new external assets or audio were acquired for this revision.
