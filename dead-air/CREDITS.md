@@ -29,3 +29,12 @@ The source weapon metadata records limitations in the original mirror provenance
 - **Alien leaf atlas** — generated for this game with OpenAI's built-in image generation. The saved prompt and generation mode are in `assets/planet/SOURCES.json`. Applied to curved geometry with wind, roughness and surface relief.
 - **Forest and Stream #1 (2713)** — Pierre SIBANARCO, CC0, via [BigSoundBank](https://bigsoundbank.com/foret-et-ruisseau-1-s2713.html). A 60-second excerpt, fades, level normalization and playback-rate changes for the planet's ambience.
 - **three-mesh-bvh** — Garrett Johnson, MIT. `BVH-LICENSE.txt` accompanies the source and game.
+
+
+October 17 revision: Creature vocals and wet impact layers use rubberduck's **80 CC0 creature SFX**, CC0: https://opengameart.org/content/80-cc0-creature-sfx . Selected bug, monster, roar, hurt and spit performances were pitch shifted, filtered, layered and level adjusted. The heavier rifle, breacher and induction reports are newly mixed from the credited Free Firearm Sound Library and rubberduck Foley. Reproducible processing: `tools/design-audio.py`.
+
+`assets/planet/chitin-v4.png` and `canopy-v4.png` were generated with the built-in OpenAI image tool for this game and applied to the creature and canopy geometry. Their complete prompts and mode are retained in `assets/planet/CHITIN-SOURCE.json` and `CANOPY-SOURCE.json`.
+
+Grass footsteps: Kenney, **Impact Sounds**, Creative Commons CC0. Five original Ogg recordings, selected from https://kenney.nl/assets/impact-sounds .
+
+**Rock Face** — Dario Barresi and Greg Zaal / Poly Haven, CC0. [Source](https://polyhaven.com/a/rock_face). 2K color, normal and roughness surfaces, projected onto the terrain cliffs.

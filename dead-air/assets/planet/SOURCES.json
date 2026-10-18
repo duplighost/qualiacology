@@ -69,5 +69,17 @@
     "mode": "Built-in image generation",
     "file": "leaves.png",
     "prompt": "Photorealistic natural RGBA botanical texture atlas for curved 3D foliage meshes. Exact 2 by 2 grid of four separate whole alien leaves, stems at bottom and points at top, orthographic flat specimens. Top left teal with lime veins; top right plum and crimson with gold veins; bottom left coral pink with indigo veins; bottom right jade with cyan and yellow veins. Extraordinary vein, cellular, waxy detail, neutral diffuse lighting, true alpha transparent background, no labels, no shadows, no perspective, no cartoon."
+  },
+  "cliff": {
+    "creator": "Dario Barresi and Greg Zaal",
+    "source": "https://polyhaven.com/a/rock_face",
+    "license": "CC0",
+    "resolution": "2K",
+    "files": [
+      "cliff-color.jpg",
+      "cliff-normal.jpg",
+      "cliff-rough.jpg"
+    ],
+    "modifications": "Triplanar cliff shading with geological bands and slope blending."
   }
 }

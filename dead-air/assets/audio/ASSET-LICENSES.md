@@ -43,3 +43,8 @@ Modifications: four distinct steps trimmed from the original recording, level ad
 
 
 Forest and Stream #1 (2713), Pierre SIBANARCO, CC0, https://bigsoundbank.com/foret-et-ruisseau-1-s2713.html . Download: https://bigsoundbank.com/UPLOAD/ogg/2713.ogg . A 60-second excerpt from 00:34, with two-second fades and normalized level, exported as forest.ogg. Playback rate changes in game.
+
+
+October 17 revision: Creature vocals and wet impact layers use rubberduck's **80 CC0 creature SFX**, CC0: https://opengameart.org/content/80-cc0-creature-sfx . Selected bug, monster, roar, hurt and spit performances were pitch shifted, filtered, layered and level adjusted. The heavier rifle, breacher and induction reports are newly mixed from the credited Free Firearm Sound Library and rubberduck Foley. Reproducible processing: `tools/design-audio.py`.
+
+Grass footsteps: Kenney, **Impact Sounds**, Creative Commons CC0. Five original Ogg recordings, selected from https://kenney.nl/assets/impact-sounds .
