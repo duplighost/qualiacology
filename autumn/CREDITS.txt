@@ -8,7 +8,7 @@ previous AUTUMN versions. These projects were created for Alexander Duncan Guita
 Botanical branching, leaf shapes and conifer atlas adapted from In Every Direction.
 Paper-birch texture drawing and generated photographic leaf sprays adapted from
 Ever October. Runtime foliage: textures/october-leaf-sprays.png.
-The continuous world recombines 36 authored place designs with varying terrain,
+The continuous world recombines 36 autumn and 40 winter authored place designs with varying terrain,
 planting, seasons of leaf colour, wildlife and waterways.
 
 Autumn canopy and fallen maple imagery generated with OpenAI's built-in image
@@ -80,3 +80,11 @@ Rico Cilliers and Rob Tuytel: https://polyhaven.com/a/fir_tree_01
 
 Scanned waterfall cliff: Poly Haven Rock Face 01, CC0.
 https://polyhaven.com/a/rock_face_01
+
+Winter snow surface: Poly Haven Snow 02, Rob Tuytel, CC0.
+https://polyhaven.com/a/snow_02
+Winter footfalls edited into 16 individual samples: Steps in the Snow #3,
+Joseph SARDIN / BigSoundBank, CC0.
+https://bigsoundbank.com/steps-in-the-snow-3-s3363.html
+Owl hoots, ice resonance, snow impressions and snow shedding are synthesized
+or rendered in real time for this game.
