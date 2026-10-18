@@ -40,3 +40,6 @@ Modifications: four distinct steps trimmed from the original recording, level ad
 `sea.ogg`: Sea waves (0698), Joseph SARDIN / BigSoundBank, CC0. https://bigsoundbank.com/sea-waves-s0698.html . A 36-second excerpt starting at 22 seconds, faded and converted to Ogg Vorbis.
 
 `metal_hit_01/02/03.ogg`, `metal_close_01.ogg`, `lock_open_01.ogg`, `metal_slam_01.ogg`, `metal_falling_01.ogg`, `wood_hit_01.ogg`: rubberduck, 100 CC0 metal and wood SFX, CC0. https://opengameart.org/content/100-cc0-metal-and-wood-sfx . Runtime playback applies pitch, distance attenuation, low-pass filtering and room reverb.
+
+
+Forest and Stream #1 (2713), Pierre SIBANARCO, CC0, https://bigsoundbank.com/foret-et-ruisseau-1-s2713.html . Download: https://bigsoundbank.com/UPLOAD/ogg/2713.ogg . A 60-second excerpt from 00:34, with two-second fades and normalized level, exported as forest.ogg. Playback rate changes in game.

@@ -1,6 +1,6 @@
 # DEAD AIR — asset credits
 
-Campaign layout, combat, industrial architecture, armor, mechanical enemies, effects, interface, and sound arrangement created for DEAD AIR. The scanned characters, firearms, surfaces, sky, barrier, and recordings below are licensed source assets.
+The alien campaign, terrain, branching routes, flora arrangements, creature models, behavior, effects, interface and sound arrangement were made for DEAD AIR. Photographic surfaces and scanned nature assets are credited below. The source package also retains the previous industrial version and its provenance; unused industrial and character assets are excluded from the playable build.
 
 The first-person weapon and hand adaptations below were copied from Alex's local WINTERLINE asset library. The supporting weapon alignment, magazine motion, shotgun mechanics, hand posing and glove shader were adapted from that project's code. Original license and provenance notes remain in `assets/weapons/ASSET-LICENSES.md` and `SHOTGUN-LICENSE.md`.
 
@@ -20,3 +20,12 @@ The first-person weapon and hand adaptations below were copied from Alex's local
 - **Three.js** — Three.js authors, MIT. The license is included in the source package's `THREE-LICENSE.txt`.
 
 The source weapon metadata records limitations in the original mirror provenance. Those limitations remain applicable. All attribution and license files are included with the source and hosted game.
+
+## Alien planet revision
+
+- **Fern 02** — Rob Tuytel and Rico Cilliers; **Rock Moss Set 01** — Kless Gyzen; **Pine Roots**, **Coastal Cliff 02**, **Mossy Rock**, **Bark Brown 02** — Rob Tuytel; **Quiver Tree 02** — Dario Barresi and Rico Cilliers; **Grass Medium 01** and **Forest Ground 04** — Rob Tuytel and Rico Cilliers. Poly Haven, CC0. Repacked and optimized geometry, hue adaptations, instancing and wind animation. Individual source URLs and acquisition records: `assets/planet/SOURCES.json`.
+- **Kloppenheim 06 PureSky** — Poly Haven, CC0. [Source](https://polyhaven.com/a/kloppenheim_06_puresky). HDR environment lighting and sky.
+- **Jupiter map** — Solar System Scope / INOVE, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Source and license](https://www.solarsystemscope.com/textures/). Atmospheric blending and lighting in the alien sky.
+- **Alien leaf atlas** — generated for this game with OpenAI's built-in image generation. The saved prompt and generation mode are in `assets/planet/SOURCES.json`. Applied to curved geometry with wind, roughness and surface relief.
+- **Forest and Stream #1 (2713)** — Pierre SIBANARCO, CC0, via [BigSoundBank](https://bigsoundbank.com/foret-et-ruisseau-1-s2713.html). A 60-second excerpt, fades, level normalization and playback-rate changes for the planet's ambience.
+- **three-mesh-bvh** — Garrett Johnson, MIT. `BVH-LICENSE.txt` accompanies the source and game.
