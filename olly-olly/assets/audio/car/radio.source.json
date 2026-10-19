@@ -1,0 +1,8 @@
+{
+ "file": "radio-sexy-trauma-costume.ogg",
+ "song": "Sexy Trauma Costume",
+ "by": "Alex (qualiacology), his own song, given for the car radio on 8 Oct 2026 (\"an old song i did that i thought would be hilarious if it was playing on the radio in the car\")",
+ "source": "SEXY TRAUMA COSTUME_.mp3 (214.9 s, 48 kHz stereo)",
+ "processing": "the first 80 s; highpass 160 Hz, lowpass 5.2 kHz, compressor 3:1 at -18 dB, 2 s fade out at 78 s, loudnorm -18 LUFS; mono 44.1 kHz Vorbis q3 (ffmpeg)",
+ "plays": "src/audio/wagon.system.js: from its first word, after his two lines at the tape's end; ducked under every line said out loud; dragged down when the back seat kicks; static after"
+}

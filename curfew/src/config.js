@@ -573,10 +573,10 @@ export const CFG = {
     // ('the house feels empty' meant lighting, twice). A sweep of hemi/ambient/albedo
     // against the ground and treeline bands settled here: ground 27, treeline 20, under
     // 8% black. Dark enough to want the torch, light enough to read as shape.
-    // Cool silver skylight preserves the original fill luminance while letting
-    // stone, bark and snow retain their own colour instead of one blue wash.
-    hemi:  { sky: 0x93a2b0, ground: 0x241f18, intensity: 4.4 },
-    ambient: { colour: 0x73808e, intensity: 0.66 },
+    // 2026-09-20 swapped these for a silver fill of equal luminance; restored 2026-10-10
+    // with the rest of the tuned night, because silver read warm bark and ground lighter.
+    hemi:  { sky: 0x6b82ad, ground: 0x241f18, intensity: 6.8 },
+    ambient: { colour: 0x44556e, intensity: 1.55 },
     // ROUND 16, THE LIGHT LANE — "LIGHT POOLS WITH REAL LIGHT AND SHADOW SIDES".
     //
     // Every lamp in the county that is a LIGHT rather than an emissive panel is a borrowed

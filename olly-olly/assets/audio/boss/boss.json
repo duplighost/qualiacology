@@ -1,0 +1,127 @@
+{
+ "sr": 48000,
+ "sounds": {
+  "boss.pileRoar": {
+   "files": [
+    "pile-roar-0.ogg",
+    "pile-roar-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    2.76,
+    2.76
+   ],
+   "note": "Enormous monster roar, deep wet guttural throat, slow and menacing, close-mic"
+  },
+  "boss.pileGrowl": {
+   "files": [
+    "pile-growl-0.ogg",
+    "pile-growl-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    1.338,
+    1.328
+   ],
+   "note": "Deep wet monster growl, short and threatening, close-mic"
+  },
+  "boss.pileDeath": {
+   "files": [
+    "pile-death-0.ogg",
+    "pile-death-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    4.16,
+    4.16
+   ],
+   "note": "Giant monster's long dying roar, collapsing, fading into a wet gurgle and crackling embers"
+  },
+  "boss.pileStep": {
+   "files": [
+    "pile-step-0.ogg",
+    "pile-step-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    0.8,
+    0.8
+   ],
+   "note": "Massive heavy footstep on wet soft earth, deep thud with a squelch of rotten pulp"
+  },
+  "boss.hunter": {
+   "files": [
+    "pile-hunter-0.ogg",
+    "pile-hunter-1.ogg"
+   ],
+   "gain": 1.4,
+   "len": [
+    2.22,
+    2.22
+   ],
+   "loop": true,
+   "note": "Steady roar of a burning pumpkin tumbling through the air, constant whooshing flames and a low hollow howl, continuous, no pauses"
+  },
+  "boss.harvestShriek": {
+   "files": [
+    "harvest-shriek-0.ogg",
+    "harvest-shriek-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    1.716,
+    1.76
+   ],
+   "note": "Inhuman raspy shriek, dry torn throat, high and piercing, creature in a cornfield"
+  },
+  "boss.harvestBreath": {
+   "files": [
+    "harvest-breath-0.ogg",
+    "harvest-breath-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    3.97,
+    3.97
+   ],
+   "loop": true,
+   "note": "Slow dry rasping breath of a creature through a burlap sack, rattling exhale, close-mic"
+  },
+  "boss.harvestRasp": {
+   "files": [
+    "harvest-rasp-0.ogg",
+    "harvest-rasp-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    1.0,
+    1.0
+   ],
+   "note": "Dry rattling hiss of a creature about to strike, straw crackling, close-mic"
+  },
+  "boss.harvestHurt": {
+   "files": [
+    "harvest-hurt-0.ogg",
+    "harvest-hurt-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    0.68,
+    0.68
+   ],
+   "note": "Short pained screech of a creature, dry and raspy, cut off"
+  },
+  "boss.harvestDeath": {
+   "files": [
+    "harvest-death-0.ogg",
+    "harvest-death-1.ogg"
+   ],
+   "gain": 1,
+   "len": [
+    3.388,
+    3.4
+   ],
+   "note": "Long dying shriek of a creature, raspy, falling apart into crackling straw and snapping wood"
+  }
+ }
+}

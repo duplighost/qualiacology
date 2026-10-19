@@ -1909,41 +1909,12 @@ body[data-page="psych"] .subhero h1 {
     aspect-ratio: 41 / 16;
   }
 
+  /* The homepage's featured games use this same row of three, every picture whole. A
+     double-height first card stretched its 16:9 picture to a near-square frame that
+     showed about half of it and ran past the bottom of a laptop screen; Alex picked the
+     plain row on 11 Oct 2026. */
   .card-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  /* One principal plate and two studies. Three identical cards at the same size as the
-     full catalog meant "featured" had no visual meaning at all - the row said nothing
-     the /games/ grid did not already say. Scoped above the mobile scroll-snap rail
-     (max-width: 44.99rem), so the rail's negative margin is never unwound. */
-  .homepage-shelf[data-featured-games] {
-    grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr);
-  }
-
-  .homepage-shelf[data-featured-games] > li:first-child {
-    grid-row: span 2;
-  }
-
-  /* The principal spans two rows, so its cell is far taller than its own content. The
-     first fix for that was `height: auto` on the card - it stopped stretching, which
-     did stop the action floating 380px below the summary, but it paid for it with
-     322-373px of dead page under the card at EVERY desktop width (measured 720-2200).
-     The card stretches again; the PICTURE absorbs the slack instead of the gap above
-     the button, so the action stays welded to the summary and the column bottoms line
-     up with the two studies beside it. `flex-shrink: 0` keeps 16/9 as a hard floor -
-     the frame can only ever grow. */
-  .homepage-shelf[data-featured-games] > li:first-child .work-card {
-    height: 100%;
-  }
-
-  .homepage-shelf[data-featured-games] > li:first-child .card-media {
-    min-height: 0;
-    flex: 1 0 auto;
-  }
-
-  .homepage-shelf[data-featured-games] > li:first-child .card-body {
-    flex: 0 0 auto;
   }
 
   .section-heading {

@@ -52,32 +52,6 @@
   },
   "games": [
     {
-      "slug": "aftercurrent",
-      "title": "AFTERCURRENT",
-      "descriptor": "First-person action in a dam at night",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/aftercurrent-card-clean.jpg",
-      "alt": "A man in a white shirt behind the bars of a lit lift cage in a rock shaft, one hand on the bars, looking out",
-      "summary": "Your brother is trapped in the lower lift. One night in the dam with your family’s name on it: the turbine halls, the forest along the shore, the caves under the lake. Keyboard and mouse.",
-      "metaDescription": "AFTERCURRENT is a first-person action game set in a hydro dam at night. Your brother is trapped in the lower lift.",
-      "controls": "WASD + mouse · click fire · right click cable: hold to pull, catch and throw back · Space jump · Shift dash · Ctrl slide · E use · Tab circuit",
-      "actionLabel": "Go in"
-    },
-    {
-      "slug": "lowbell",
-      "title": "LOWBELL",
-      "descriptor": "Haunted-house survival horror",
-      "group": "horror",
-      "featured": false,
-      "image": "/assets/games/lowbell-card-v20261004.jpg",
-      "alt": "A dark ballroom under one lit chandelier, and a crowd of drowned men in waistcoats shuffling across the floorboards toward you, the nearest with his head lolled to one side and his mouth hanging open",
-      "summary": "Lowbell is yours, and so is everything in it. A big house on a rainy night: a ballroom, a library, a cellar, a chapel and its graves. The drowned come up the drive, something under a sheet comes down from upstairs, and the statue in the chapel gets up at six. The night doesn’t end. Keyboard and mouse.",
-      "metaDescription": "LOWBELL is a first-person survival horror shooter set in a big haunted house on a rainy night that doesn’t end: a ballroom, a library, a chapel and its graves, the drowned, and bosses that wake as the night goes on. Keyboard and mouse.",
-      "controls": "WASD + mouse · Shift dash · Space jump, again in the air · click fire, right click aim · 1 2 3 guns or the wheel · R reload · F torch · E use · T skills · M map · Esc pause",
-      "actionLabel": "Enter the night"
-    },
-    {
       "slug": "olly-olly",
       "title": "OLLY OLLY",
       "descriptor": "Halloween first-person horror",
@@ -102,6 +76,33 @@
       "metaDescription": "We Were Promised Morning is a first-person open-world horror game set in one dark county of forest and back roads where the sun does not come back.",
       "controls": "WASD + mouse - Shift to sprint - F for the torch - E for the car - headphones recommended",
       "actionLabel": "Go outside"
+    },
+    {
+      "slug": "collateral",
+      "title": "COLLATERAL",
+      "descriptor": "First-person catch-and-throw",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/collateral-card-v20261016.jpg",
+      "alt": "A heavy gauntlet with a wheel on the back of the hand, its chain run up to a gold ring on a stone facade under huge arches at sunset",
+      "summary": "Take it. Throw it back. Hold to catch their fire while the world slows, and the gauntlet tears up whatever you look at. Let go and all of it goes back at them. Five districts, one above the next, and the only way up is through the floor. Keyboard and mouse.",
+      "metaDescription": "COLLATERAL is a first-person browser game: catch an army's fire with a gauntlet, tear up the city around you, and throw all of it back. Five districts, a boss in each. Keyboard and mouse.",
+      "controls": "Desktop only · WASD + mouse · hold left to catch, let go to throw · right mouse hooks · Shift dash · Space double jump · C in the air slams",
+      "actionLabel": "Take it"
+    },
+    {
+      "slug": "in-every-direction",
+      "title": "IN EVERY DIRECTION",
+      "descriptor": "Endless walk through all four seasons",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/in-every-direction-card-seasons-v20261018.jpg",
+      "alt": "A still pond in an autumn wood, red maples and dark spruces round it and reflected in it, cattails along its near edge, two pale trunks close by on the right",
+      "summary": "First person. An autumn forest that goes on forever in every direction, with crunching leaves, piles of leaves and falling leaves. A swing in a huge old tree, a cabin with smoke coming out of the chimney, a bench someone put where the view is, and so many more that it’s impossible to find them all. Walk north and it slowly turns to winter, west into spring, south into summer, and you can get lost in any of them forever. The sun rises in the east and sets in the west, and at night the sky is filled with stars and different animals come out. No HUD. Keyboard and mouse.",
+      "metaDescription": "IN EVERY DIRECTION is a first-person walk through an autumn forest that goes on forever in every direction. Crunching leaves, piles of leaves, falling leaves, and special places all through it, so many it’s impossible to find them all. Walk north and it turns to winter, west to spring, south to summer, and each of those goes on forever too. The sun rises and sets, and at night the sky is filled with stars and different animals come out. Keyboard and mouse.",
+      "controls": "Desktop only · mouse looks · WASD or arrows walk · Shift hurries · hold C creeps · Space jumps · Esc pause · M mute · F full screen",
+      "actionLabel": "Walk in",
+      "duration": "As long as you like"
     },
     {
       "slug": "kickmoon",
@@ -185,7 +186,7 @@
       "title": "SKIP",
       "descriptor": "Round-the-world stone skip",
       "group": "action",
-      "featured": true,
+      "featured": false,
       "image": "/assets/games/skip-card-v20261002.jpg",
       "alt": "A stone skimming a bay at dusk past a red-and-white buoy, its ring on the moon’s path across the water, a lighthouse and hills behind",
       "summary": "Skip a stone off a beach at dusk. Click or tap as it touches the water. If you keep going it travels all the way around the world: the bay, a creek, a town, a church, the ice, the open sea, and back to the beach by morning. Mouse, or one thumb on a phone.",
@@ -218,11 +219,36 @@
       "actionLabel": "Play HAND-ME-DOWN"
     },
     {
+      "slug": "belfry",
+      "title": "BELFRY",
+      "descriptor": "Echolocation night flight",
+      "group": "action",
+      "image": "/assets/games/belfry-card-v20261012b.jpg",
+      "alt": "Bats wheeling over a dark town under a thin crescent moon, the ground made of points of pale light, a house with pink and blue party windows on the far street",
+      "summary": "A bat on Halloween night. It’s dark, and you only see what makes a sound. The colony left for the winter roost while you were asleep, and they’re hunting all over town on the way. Find them. Every one you find clicks too, so the more of you there are, the more you can see. Keyboard and mouse, or two thumbs on a phone held sideways.",
+      "metaDescription": "BELFRY is a first-person browser game about being a bat on Halloween night, where the only light is sound. The colony has gone on ahead; find them across the town, the cemetery, the woods, the river and the storm, and get everyone home before morning. Keyboard and mouse, or two thumbs on a phone held sideways.",
+      "controls": "mouse steers · hold left mouse or W to beat your wings · right mouse or Space to shout (it calls the others and turns owls) · S brakes · Esc pause · M mute · F full screen · phone held sideways: left thumb steers, hold the right to beat your wings, tap it to shout",
+      "actionLabel": "Let go",
+      "duration": "Ten minutes or so"
+    },
+    {
+      "slug": "strung",
+      "title": "STRUNG",
+      "descriptor": "Musical high-wire walk",
+      "group": "action",
+      "image": "/assets/games/strung-card-v20261015.jpg",
+      "alt": "A tightrope walker with a long balance pole, seen from behind, halfway across a rope between two buildings on a rainy night, hundreds of lit windows, a DINER sign on the left, the moon over the roofs",
+      "summary": "A tightrope across a city at night, eight ropes from roof to roof to the clock tower. Every rope is a string and your feet play it. Lean and it goes out of tune. There’s a net until there isn’t. Mouse, or two thumbs on a phone.",
+      "metaDescription": "STRUNG is a browser game about walking a tightrope across a city at night, eight ropes from roof to roof to the clock tower. Every rope is a string and your feet play it. Lean and it goes out of tune. Mouse, or two thumbs on a phone.",
+      "controls": "hold the mouse button to walk · move the mouse left and right to balance (the side the cursor is on gets heavier) · click as you fall to catch the rope, hold to climb back · on a phone, hold the right side to walk and slide a thumb on the left side to balance",
+      "actionLabel": "Step out"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",
       "group": "horror",
-      "featured": false,
+      "featured": true,
       "image": "/assets/games/fetch-card-keyart-v20260830.webp",
       "alt": "A cracked skull held in two hands as a wet, long-haired figure climbs through a ruined window from a moonlit graveyard",
       "summary": "You wake up holding a skull you cannot get rid of. Thrown, it zips straight back — it is the key, the weapon, the only light, and the last thing you want in your hands. The bedroom door is locked from the inside, and the way out is down.",

@@ -181,3 +181,19 @@
 /hand-me-down.html  /hand-me-down/  301!
 /handmedown  /hand-me-down/  302
 /slotcars  /hand-me-down/  302
+
+# --- BELFRY ---
+/belfry.html  /belfry/  301!
+/bat  /belfry/  302
+/bats  /belfry/  302
+
+# --- STRUNG ---
+/strung.html  /strung/  301!
+/tightrope  /strung/  302
+/highwire  /strung/  302
+/wire  /strung/  302
+
+# --- IN EVERY DIRECTION ---
+/in-every-direction.html  /in-every-direction/  301!
+/forest  /in-every-direction/  302
+/leaves  /in-every-direction/  302

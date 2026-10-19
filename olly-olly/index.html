@@ -18,8 +18,8 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <script type="module" crossorigin src="./assets/index-CjCiJ9LP.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BQ1kxk4r.css">
+  <script type="module" crossorigin src="./assets/index-DwuzJTFZ.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BJtNDiSL.css">
 </head>
 <body>
 <a class="home-link" href="/">Qualiacology</a>
@@ -34,9 +34,7 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
     <nav class="menu-links" aria-label="Title menu">
       <button data-again hidden>AGAIN!</button>
       <button id="new-night" hidden>New night</button>
-      <button data-panel="porches-panel">Porches</button>
       <button data-panel="settings-panel">Settings</button>
-      <button data-panel="credits-panel">Credits</button>
     </nav>
   </div>
   <div class="menu-signature">Alex · Qualiacology</div>
@@ -48,7 +46,6 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
     <nav class="menu-links" aria-label="Pause menu">
       <button data-panel="story-panel">Tonight</button>
       <button data-panel="supplies-panel">Supplies</button>
-      <button data-panel="porches-panel">Porches</button>
       <button data-panel="settings-panel">Settings</button>
       <button data-panel="credits-panel">Credits</button>
       <button id="return-title">Title</button>
@@ -60,7 +57,8 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
   <div class="panel-heading"><h2 id="supplies-title">Supplies</h2><button data-close aria-label="Close supplies">Close</button></div>
   <table class="supplies"><thead><tr><th scope="col">Weapon</th><th scope="col">Loaded</th><th scope="col">Spare</th></tr></thead><tbody id="supplies-weapons"></tbody></table>
   <p class="supplies-crackers">Firecrackers <span id="supplies-crackers">0</span></p>
-  <p class="supplies-crackers">Candy <span id="supplies-candy">guns hit 0% harder</span></p>
+  <p class="supplies-crackers">Candy <span id="supplies-candy">none yet</span></p>
+  <p class="supplies-crackers">Glow sticks <span id="supplies-glow">none yet</span></p>
 </dialog>
 <dialog id="story-panel" aria-labelledby="story-title">
   <div class="panel-heading"><h2 id="story-title">Tonight</h2><button data-close aria-label="Close">Close</button></div>
@@ -86,20 +84,12 @@ if(m)new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['hidden
   </details>
   <button id="reset-settings" class="quiet-button">Reset settings</button>
 </dialog>
-<dialog id="porches-panel" aria-labelledby="porches-title">
-  <div class="panel-heading"><h2 id="porches-title">Porches</h2><button data-close aria-label="Close porch records">Close</button></div>
-  <p class="porch-note">Ghost: all discoveries. Sweet: the candy. Heart: a clear without a hit. Bat: a clear under the target time.</p>
-  <p class="porch-note">Filled circles are earned. Empty circles are not earned yet.</p>
-  <table class="porch-records"><thead><tr><th scope="col">House</th><th scope="col">Ghost</th><th scope="col">Sweet</th><th scope="col">Heart</th><th scope="col">Bat</th></tr></thead><tbody id="porch-records"></tbody></table>
-  <p class="porch-note">Continue keeps any hits. Earned decorations stay through new nights.</p>
-</dialog>
 <dialog id="credits-panel" aria-labelledby="credits-title">
   <div class="panel-heading"><h2 id="credits-title">OLLY OLLY</h2><button data-close aria-label="Close credits">Close</button></div>
   <p>A game by Alex · <a href="https://qualiacology.com" target="_blank" rel="noopener">Qualiacology</a></p>
   <p class="credit-thanks">Thank you for playing.</p>
   <h3>Music</h3>
   <p>“Another Hundred” — Doopliss. The credits song.</p>
-  <p><button id="roll-credits" class="quiet-button" hidden>Watch the credits</button></p>
   <h3>Models and animation</h3>
   <p>AK74m — creationwasteland. Springfield Armory XD Mod.2 — raimeiyonke. Weapon animations — Cransh.
     Remington 870 — 8sianDude / haoliu95. Eric Rigged 001 hands and character adaptations — Renderpeople.</p>

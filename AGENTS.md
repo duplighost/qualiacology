@@ -61,13 +61,16 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | pocket-sun | `Projects\pocket-sun` | `npm run build:site` then `npm run copy:site` there |
 | hearse | `Projects\hearse` | `node tools/build-site-copy.mjs` there; never hand-edit the site copy |
 | hand-me-down | `Projects\hand-me-down` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| lowbell | `Projects\lowbell` | `node tools/build-site-copy.mjs ..\qualiacology` there; never hand-edit the site copy |
+| belfry | `Projects\belfry` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | skip | `Projects\skip` | `node build-site-copy.mjs --site=<this repo>` there; never hand-edit the site copy |
 | free-play | `Projects\free-play` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | tideglass | `Projects\tideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
 | spaceboarding | `Projects\spaceboarding` | copy `assets src styles.css vendor`; keep the site's index.html shell |
 | fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
 | vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
+| strung | `Projects\strung` | `node build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
+| collateral | `Projects\collateral` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
+| in-every-direction | `Projects\in-every-direction` | `node tools/build-site-copy.mjs <this repo>` there (it writes the card too); never hand-edit the site copy |
 | lead, rally, rocket-shoes, eaten-path, wick, galaxy-sandbox, the-last-room, secondhand-saint | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
 | everything else | this repo | the site copy is the only source |
 
