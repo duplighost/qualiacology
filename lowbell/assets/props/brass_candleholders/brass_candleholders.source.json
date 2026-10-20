@@ -1,0 +1,60 @@
+{
+ "id": "brass_candleholders",
+ "title": "Brass Candleholders",
+ "url": "https://polyhaven.com/a/brass_candleholders",
+ "licence": "CC0 1.0",
+ "author": "Tina",
+ "bytes": 9502440,
+ "triangles": {
+  "source": 41936,
+  "lod0": 4497,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 4500,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  1.0564,
+  0.8353,
+  0.3663
+ ],
+ "shippedBytes": 1469395,
+ "parts": [
+  {
+   "name": "brass_candleholder_03",
+   "movable": false,
+   "tris": 3450,
+   "pivot": [
+    0.3222,
+    0.0005,
+    -0.0001
+   ]
+  },
+  {
+   "name": "brass_candleholder_02",
+   "movable": false,
+   "tris": 793,
+   "pivot": [
+    -0.0778,
+    0.0005,
+    -0.0001
+   ]
+  },
+  {
+   "name": "brass_candleholder_01",
+   "movable": false,
+   "tris": 254,
+   "pivot": [
+    -0.4778,
+    0.0005,
+    -0.0001
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

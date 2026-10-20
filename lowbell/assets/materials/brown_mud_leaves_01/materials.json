@@ -1,0 +1,47 @@
+{
+ "brown_mud_leaves_01": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "brown_mud_leaves_01.albedo.dds",
+   "normal": "brown_mud_leaves_01.normal.ktx2",
+   "orm": "brown_mud_leaves_01.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 33.24,
+   "normalXY": 37.07,
+   "orm": {
+    "ao": 35.41,
+    "rough": 34.75,
+    "metal": 42.27
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "metal": "metal.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 2.125,
+   "p99": 5.009
+  },
+  "specAA": false,
+  "seconds": 4.1
+ }
+}

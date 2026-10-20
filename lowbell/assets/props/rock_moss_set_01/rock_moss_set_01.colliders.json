@@ -1,0 +1,135 @@
+{
+ "id": "rock_moss_set_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "rock_moss_set_01.rock_moss_set_01_rock01.0",
+   "part": "rock_moss_set_01_rock01",
+   "kind": "obb",
+   "c": {
+    "x": -2.877,
+    "y": 0.7393,
+    "z": -1.7856
+   },
+   "h": {
+    "x": 1.1163,
+    "y": 0.7414,
+    "z": 1.6952
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "stone"
+  },
+  {
+   "id": "rock_moss_set_01.rock_moss_set_01_rock02.0",
+   "part": "rock_moss_set_01_rock02",
+   "kind": "obb",
+   "c": {
+    "x": -0.0328,
+    "y": 0.83,
+    "z": -1.7918
+   },
+   "h": {
+    "x": 1.3216,
+    "y": 0.6259,
+    "z": 1.6367
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "stone"
+  },
+  {
+   "id": "rock_moss_set_01.rock_moss_set_01_rock03.0",
+   "part": "rock_moss_set_01_rock03",
+   "kind": "obb",
+   "c": {
+    "x": 2.9473,
+    "y": 0.8025,
+    "z": -1.7586
+   },
+   "h": {
+    "x": 1.0532,
+    "y": 0.5495,
+    "z": 1.0409
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "stone"
+  },
+  {
+   "id": "rock_moss_set_01.rock_moss_set_01_rock04.0",
+   "part": "rock_moss_set_01_rock04",
+   "kind": "obb",
+   "c": {
+    "x": -2.6762,
+    "y": 0.8857,
+    "z": 2.0227
+   },
+   "h": {
+    "x": 1.0672,
+    "y": 0.8868,
+    "z": 0.9821
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "stone"
+  },
+  {
+   "id": "rock_moss_set_01.rock_moss_set_01_rock05.0",
+   "part": "rock_moss_set_01_rock05",
+   "kind": "obb",
+   "c": {
+    "x": 0.1071,
+    "y": 0.6903,
+    "z": 1.975
+   },
+   "h": {
+    "x": 0.9119,
+    "y": 0.6057,
+    "z": 1.5025
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "stone"
+  },
+  {
+   "id": "rock_moss_set_01.rock_moss_set_01_rock06.0",
+   "part": "rock_moss_set_01_rock06",
+   "kind": "obb",
+   "c": {
+    "x": 2.5756,
+    "y": 0.762,
+    "z": 1.8201
+   },
+   "h": {
+    "x": 1.0688,
+    "y": 0.6264,
+    "z": 1.3823
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "stone"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "id": "Sofa_01",
+ "title": "Sofa 01",
+ "url": "https://polyhaven.com/a/Sofa_01",
+ "licence": "CC0 1.0",
+ "author": "Kirill Sannikov",
+ "bytes": 517935,
+ "triangles": {
+  "source": 4101,
+  "lod0": 4101,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.5715,
+  0.7965,
+  0.658
+ ],
+ "shippedBytes": 1247006,
+ "parts": [
+  {
+   "name": "Sofa_01",
+   "movable": false,
+   "tris": 4101,
+   "pivot": [
+    -0.0076,
+    0.0006,
+    0.0322
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

@@ -1,0 +1,72 @@
+{
+ "id": "wooden_crate_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "wooden_crate_01.wooden_crate_01.0",
+   "part": "wooden_crate_01",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.161,
+    "z": 0.0003
+   },
+   "h": {
+    "x": 0.4126,
+    "y": 0.161,
+    "z": 0.2042
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "wooden_crate_01.wooden_crate_01_lid.0",
+   "part": "wooden_crate_01_lid",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.3222,
+    "z": -0.0083
+   },
+   "h": {
+    "x": 0.3539,
+    "y": 0.0148,
+    "z": 0.1961
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "wooden_crate_01.wooden_crate_01_latch.0",
+   "part": "wooden_crate_01_latch",
+   "kind": "obb",
+   "c": {
+    "x": -0.0032,
+    "y": 0.2954,
+    "z": 0.1608
+   },
+   "h": {
+    "x": 0.0129,
+    "y": 0.0483,
+    "z": 0.0379
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

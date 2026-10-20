@@ -1,0 +1,63 @@
+{
+ "wooden_crate_02": {
+  "files": {
+   "albedo": "wooden_crate_02.albedo.dds",
+   "normal": "wooden_crate_02.normal.ktx2",
+   "orm": "wooden_crate_02.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 39.37,
+   "normalXY": 46.1,
+   "orm": {
+    "ao": 99,
+    "rough": 32.64,
+    "metal": 36.17
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.444,
+   "p99": 4.085
+  },
+  "specAA": false,
+  "seconds": 1.8,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

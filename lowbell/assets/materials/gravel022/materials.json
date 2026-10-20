@@ -1,0 +1,46 @@
+{
+ "gravel022": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "gravel022.albedo.dds",
+   "normal": "gravel022.normal.ktx2",
+   "orm": "gravel022.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 36.1,
+   "normalXY": 34.96,
+   "orm": {
+    "ao": 28.61,
+    "rough": 32.71,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 2.863,
+   "p99": 7.48
+  },
+  "specAA": true,
+  "seconds": 5.0
+ }
+}

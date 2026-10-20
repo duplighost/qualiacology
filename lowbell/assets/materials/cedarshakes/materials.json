@@ -1,0 +1,46 @@
+{
+ "cedarshakes": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "cedarshakes.albedo.dds",
+   "normal": "cedarshakes.normal.ktx2",
+   "orm": "cedarshakes.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 41.72,
+   "normalXY": 45.81,
+   "orm": {
+    "ao": 36.17,
+    "rough": 34.0,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.547,
+   "p99": 3.403
+  },
+  "specAA": true,
+  "seconds": 4.9
+ }
+}

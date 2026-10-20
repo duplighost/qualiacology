@@ -1,0 +1,45 @@
+{
+ "concrete035": {
+  "size": [
+   1024,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "concrete035.albedo.dds",
+   "normal": "concrete035.normal.ktx2",
+   "orm": "concrete035.orm.dds"
+  },
+  "bytes": {
+   "albedo": 349672,
+   "normal": 175264,
+   "orm": 21992
+  },
+  "psnr": {
+   "albedo": 38.17,
+   "normalXY": 57.41,
+   "orm": {
+    "ao": 99.0,
+    "rough": 40.67,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.175,
+   "p99": 0.545
+  },
+  "specAA": false,
+  "seconds": 2.1
+ }
+}

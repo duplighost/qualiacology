@@ -1,0 +1,40 @@
+{
+ "id": "stone_fire_pit",
+ "title": "Stone Fire Pit",
+ "url": "https://polyhaven.com/a/stone_fire_pit",
+ "licence": "CC0 1.0",
+ "author": "Sebastian Platen",
+ "bytes": 2535945,
+ "triangles": {
+  "source": 3887,
+  "lod0": 3887,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "large",
+ "dims": [
+  1.4485,
+  0.3883,
+  1.4332
+ ],
+ "shippedBytes": 588555,
+ "parts": [
+  {
+   "name": "stone_fire_pit",
+   "movable": false,
+   "tris": 3887,
+   "pivot": [
+    0.0121,
+    0.1934,
+    -0.0017
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

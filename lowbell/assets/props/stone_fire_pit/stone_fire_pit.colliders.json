@@ -1,0 +1,30 @@
+{
+ "id": "stone_fire_pit",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "stone_fire_pit.stone_fire_pit.0",
+   "part": "stone_fire_pit",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.1942,
+    "z": 0
+   },
+   "h": {
+    "x": 0.7242,
+    "y": 0.1942,
+    "z": 0.7166
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "VAULT"
+   ],
+   "surface": "stone"
+  }
+ ]
+}

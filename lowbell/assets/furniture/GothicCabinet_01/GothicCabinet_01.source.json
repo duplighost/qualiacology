@@ -1,0 +1,85 @@
+{
+ "id": "GothicCabinet_01",
+ "title": "Gothic Cabinet 01",
+ "url": "https://polyhaven.com/a/GothicCabinet_01",
+ "licence": "CC0 1.0",
+ "author": "Kirill Sannikov",
+ "bytes": 1015446,
+ "triangles": {
+  "source": 12170,
+  "lod0": 7998,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  1.7191,
+  2.3609,
+  1.0156
+ ],
+ "shippedBytes": 1300532,
+ "parts": [
+  {
+   "name": "GothicCabinet_01",
+   "movable": false,
+   "tris": 2444,
+   "pivot": [
+    0,
+    0,
+    -0.0505
+   ]
+  },
+  {
+   "name": "GothicCabinet_01_door4",
+   "movable": true,
+   "tris": 1387,
+   "pivot": [
+    0.7222,
+    0.7418,
+    0.3833
+   ]
+  },
+  {
+   "name": "GothicCabinet_01_door3",
+   "movable": true,
+   "tris": 1390,
+   "pivot": [
+    -0.7045,
+    0.7418,
+    0.3833
+   ]
+  },
+  {
+   "name": "GothicCabinet_01_door2",
+   "movable": true,
+   "tris": 1387,
+   "pivot": [
+    0.7222,
+    1.7458,
+    0.3833
+   ]
+  },
+  {
+   "name": "GothicCabinet_01_door1",
+   "movable": true,
+   "tris": 1390,
+   "pivot": [
+    -0.7045,
+    1.7458,
+    0.3833
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "GothicCabinet_01_door4",
+  "GothicCabinet_01_door3",
+  "GothicCabinet_01_door2",
+  "GothicCabinet_01_door1"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

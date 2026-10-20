@@ -1,0 +1,51 @@
+{
+ "id": "hatchet",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "hatchet.hatchet.0",
+   "part": "hatchet",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.1419,
+    "z": -0.0174
+   },
+   "h": {
+    "x": 0.013,
+    "y": 0.1418,
+    "z": 0.0348
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "hatchet.hatchet.1",
+   "part": "hatchet",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.2537,
+    "z": 0.0347
+   },
+   "h": {
+    "x": 0.0043,
+    "y": 0.0348,
+    "z": 0.0174
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

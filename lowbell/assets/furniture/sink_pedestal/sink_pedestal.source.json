@@ -1,0 +1,32 @@
+{
+ "id": "sink_pedestal",
+ "title": "sink pedestal",
+ "url": "modelled for OLLY OLLY (tools/blender/dress_pieces.py)",
+ "licence": "modelled for OLLY OLLY",
+ "author": "OLLY OLLY",
+ "bytes": 0,
+ "triangles": {
+  "source": 1432,
+  "lod0": 1432,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.55,
+  0.909,
+  0.42
+ ],
+ "use": "pedestal sink",
+ "modelled": true,
+ "surface": "tile",
+ "parts": [],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/blender/dress_pieces.py",
+ "shippedBytes": 14634
+}

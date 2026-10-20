@@ -1,0 +1,15 @@
+{
+  "mediaType": "audio",
+  "url": "https://cdn.creativeclaw.co/u/d47a3b90/audio/e127c24b-1525-4ec9-a046-a6e09a4fe15c.mp3",
+  "prompt": "An original 160-second instrumental survival-horror game exploration underscore, for moving through an exquisitely furnished abandoned mansion and its rainy grounds at night. Beautiful, intimate, haunted, quietly propulsive. Chamber electroacoustic score at a restrained 78 BPM in D minor with suspended seconds; an unobtrusive pulse felt beneath long breaths. Small palette only: low bowed cello harmonics, soft prepared-piano felt notes, occasional rubbed wineglass tones, a very low rounded analog pulse, sparse muted wood taps. Memorable delicate four-note piano figure, heard only occasionally, never a busy tune. No percussion beat dominating the sound. Start with room and bowed strings, introduce the piano figure by 12 seconds. Between 35 and 70 seconds gently deepen the pulse and string tension without becoming loud or adding instruments; ease away at 80 seconds. A second restrained harmonic development between 95 and 130 seconds, then let the same D suspended harmony return. The final fifteen seconds thin back to quiet string harmonics with a natural four-second decay. Musical rather than generic drone, unsettling beauty without jump-scare hits or trailer drama. Soft transients, open natural dynamics, carefully detailed close recording with a short dark chamber around it, clean warm low end, restrained 1–5 kHz so footsteps, distant monster calls and gunshot mechanisms can remain clear. No sound effects, no rain recording, no weapon sounds, no braams, no risers, no harsh scraping, no cymbal crashes. Instrumental only: no speech, no singing, no choir, no chanting or wordless voices.",
+  "model": "music/elevenlabs-music-v2.5",
+  "provider": "elevenlabs",
+  "jobId": "93c1415e-1728-4363-9bc0-6fe22ecf1c52",
+  "creditsUsed": 80,
+  "creditsRemaining": 8,
+  "generationDurationMs": 20320,
+  "filename": "rooms-before-dawn.mp3",
+  "role": "Original exploration underscore",
+  "integrationStatus": "Generated source; playback balance and in-game transitions still under review",
+  "date": "2026-10-02"
+}

@@ -1,0 +1,30 @@
+LOWBELL lantern keeper: retained source attribution
+
+Jack source:
+C:/Users/Alex/Projects/olly-olly-wt/integration-20260923/public/assets/characters/jack/
+
+Eric Rigged 001 by Renderpeople, Creative Commons Attribution 4.0:
+https://sketchfab.com/3d-models/eric-rigged-001-rigged-3d-business-man-a46bc9f67aaa415bb4f3241eef900e7f
+https://creativecommons.org/licenses/by/4.0/
+Full license text is retained at ../CC-BY-4.0.txt.
+
+The current OLLY OLLY public/ASSET-LICENSES.md records that the Jack pipeline
+resamples the Renderpeople skeleton and locomotion, transfers skin weights,
+and builds its straw, clothing and pumpkin geometry. Locomotion was retained
+from the Winterline Mixamo / Three.js Soldier conversion, then hunched and
+resampled. Additional creature actions were authored for OLLY OLLY.
+Do not distribute the embedded animation clips as a standalone library.
+
+LOWBELL changes: original asset bytes retained. Runtime uses JackBody and the
+shriek carving JackHeadB, the original compressed atlas, muted cloth/rind
+grading, physical bone reactions and captured-pose ragdoll. Overhead lantern
+throw and hand attachment are new procedural poses on those actual joints.
+
+Lantern geometry already retained elsewhere in this game:
+assets/props/Lantern_01/Lantern_01.glb
+Lantern 01 by Rajil Jose Macatangay, Poly Haven, CC0 1.0:
+https://polyhaven.com/a/Lantern_01
+https://creativecommons.org/publicdomain/zero/1.0/
+The adjacent Lantern_01.source.json records processing to 3,999 triangles.
+LOWBELL keeper usage preserves that geometry, scales its height to 0.42 m,
+and gives its metal and glass explicit soot-dark brass/smoked-glass materials.

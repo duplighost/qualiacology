@@ -1,0 +1,63 @@
+{
+ "wicker_basket_01": {
+  "files": {
+   "albedo": "wicker_basket_01.albedo.dds",
+   "normal": "wicker_basket_01.normal.ktx2",
+   "orm": "wicker_basket_01.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.48,
+   "normalXY": 55.23,
+   "orm": {
+    "ao": 99,
+    "rough": 43.1,
+    "metal": 42.58
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.217,
+   "p99": 0.709
+  },
+  "specAA": false,
+  "seconds": 1.9,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

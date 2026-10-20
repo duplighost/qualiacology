@@ -1,0 +1,63 @@
+{
+ "id": "vintage_grandfather_clock_01",
+ "title": "Vintage Grandfather Clock 01",
+ "url": "https://polyhaven.com/a/vintage_grandfather_clock_01",
+ "licence": "CC0 1.0",
+ "author": "Yann Kervran, James Ray Cock",
+ "bytes": 2357132,
+ "triangles": {
+  "source": 8582,
+  "lod0": 8582,
+  "lod1": 4997
+ },
+ "budget": {
+  "lod0": 20000,
+  "lod1": 5000
+ },
+ "class": "hero",
+ "dims": [
+  0.6256,
+  2.1906,
+  0.4266
+ ],
+ "shippedBytes": 2377558,
+ "parts": [
+  {
+   "name": "vintage_grandfather_clock_01",
+   "movable": false,
+   "tris": 8382,
+   "pivot": [
+    0,
+    0.0001,
+    -0.0251
+   ]
+  },
+  {
+   "name": "vintage_grandfather_clock_01_minute_hand",
+   "movable": true,
+   "tris": 116,
+   "pivot": [
+    0,
+    1.732,
+    0.1004
+   ]
+  },
+  {
+   "name": "vintage_grandfather_clock_01_houd_hand",
+   "movable": true,
+   "tris": 84,
+   "pivot": [
+    0,
+    1.732,
+    0.1004
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [
+  "vintage_grandfather_clock_01_minute_hand",
+  "vintage_grandfather_clock_01_houd_hand"
+ ],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

@@ -1,0 +1,130 @@
+{
+ "id": "tea_set_01",
+ "title": "Tea Set 01",
+ "url": "https://polyhaven.com/a/tea_set_01",
+ "licence": "CC0 1.0",
+ "author": "James Ray Cock, Rico Cilliers, Jurita Burger",
+ "bytes": 2282591,
+ "triangles": {
+  "source": 40296,
+  "lod0": 4992,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 5000,
+  "lod1": null
+ },
+ "class": "small",
+ "dims": [
+  0.9184,
+  0.1651,
+  0.484
+ ],
+ "shippedBytes": 352326,
+ "parts": [
+  {
+   "name": "tea_set_01_plate_large_square_01",
+   "movable": false,
+   "tris": 392,
+   "pivot": [
+    -0.3652,
+    0.0008,
+    -0.147
+   ]
+  },
+  {
+   "name": "tea_set_01_cup_small_01",
+   "movable": false,
+   "tris": 515,
+   "pivot": [
+    0.1348,
+    0.0008,
+    0.103
+   ]
+  },
+  {
+   "name": "tea_set_01_saucer_circular_03",
+   "movable": false,
+   "tris": 356,
+   "pivot": [
+    0.3848,
+    0.0008,
+    -0.147
+   ]
+  },
+  {
+   "name": "tea_set_01_plate_large_circular_03",
+   "movable": false,
+   "tris": 392,
+   "pivot": [
+    -0.1152,
+    0.0008,
+    -0.147
+   ]
+  },
+  {
+   "name": "tea_set_01_sugar_cup_01",
+   "movable": false,
+   "tris": 643,
+   "pivot": [
+    -0.1152,
+    0.0008,
+    0.103
+   ]
+  },
+  {
+   "name": "tea_set_01_teapot_01",
+   "movable": false,
+   "tris": 1046,
+   "pivot": [
+    -0.3652,
+    0.0008,
+    0.103
+   ]
+  },
+  {
+   "name": "tea_set_01_cup_small_02",
+   "movable": false,
+   "tris": 515,
+   "pivot": [
+    0.3848,
+    0.0008,
+    0.103
+   ]
+  },
+  {
+   "name": "tea_set_01_saucer_circular_04",
+   "movable": false,
+   "tris": 356,
+   "pivot": [
+    0.1348,
+    0.0008,
+    -0.147
+   ]
+  },
+  {
+   "name": "tea_set_01_sugar_cup_01_lid",
+   "movable": false,
+   "tris": 317,
+   "pivot": [
+    -0.1152,
+    0.0011,
+    0.103
+   ]
+  },
+  {
+   "name": "tea_set_01_teapot_01_lid",
+   "movable": false,
+   "tris": 460,
+   "pivot": [
+    -0.3652,
+    0.0024,
+    0.103
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

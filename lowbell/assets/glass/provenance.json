@@ -1,0 +1,121 @@
+{
+  "schema": 1,
+  "project": "LOWBELL",
+  "purpose": "Original chapel memorial glass color maps; supporting quarries and physical lead are authored in src/world/stained-glass.js.",
+  "provenance_note": "Generated expressly for this project from text prompts; no external image inputs. No CC0 or third-party artwork license is asserted.",
+  "inspection": {
+    "source_contact_sheet": "D:/Codex-Asset-Cache/fps-research-20261002/chapel-glass-source-review.png",
+    "source_pixels_reviewed": true,
+    "runtime_player_view_reviewed": false
+  },
+  "assets": [
+    {
+      "id": "lantern-bearer",
+      "title": "The lantern bearer",
+      "kind": "original AI-generated art",
+      "generator": "OpenAI built-in imagegen tool",
+      "reference_images": [],
+      "external_art_sources": [],
+      "generated_file": "C:/Users/Alex/.codex/generated_images/01a0fbed-b835-7752-a4b1-9d55177f703e/exec-b097917b-3d3b-442f-b0a4-e2381df58f56.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: original stained-glass COLOR TEXTURE for a Victorian family mortuary chapel in a realistic horror game; not a room rendering. Produce a tall rectangular, front-on, perfectly orthographic photographic conservation record of one extraordinarily crafted late-19th-century leaded glass panel, filling the image edge to edge. A solemn adult female lantern-bearer in deeply folded ivory and muted oxblood robes stands on a narrow old stone stair, looking down at a small amber lantern held carefully between both hands. A cypress, white lilies, and a small brown wren appear in the ornamental lower register. Restrained desaturated cobalt, oxidized olive, warm amber, ivory and wine glass; no rainbow. Real thin black lead cames follow every individually cut piece; delicate kiln-fired grisaille paint defines face, hands, cloth folds, leaves; bubbled/rippled handmade glass with slight age, variable density, modest weathering along lead. Legible graceful main figure and sophisticated restrained floral border. Even soft transmitted illumination, the brightest ivory is soft gray-white, no bloom, no glare, no cast shadows, no photography reflections. FULL RECTANGULAR GLASS FIELD, not an arch or window shape; final aperture will be cut by game geometry. Keep head and key figure inside central 70% width and lower 85% height to survive pointed aperture clipping. No exterior stone frame, no architecture around it, no black/transparent margins, no lettering, no text, no signatures. Authentic physical glass and exquisite painted craft, not an illustration poster, not a digital mosaic, not saturated fantasy concept art. Portrait aspect ratio approximately 1:2.5, highly detailed.",
+      "source": {
+        "path": "source/lantern-bearer.png",
+        "bytes": 3174348,
+        "sha256": "9a893cea9732de32ec4fe6f416d675e4d9a2ddda52849a8f49eef01b5a708dca",
+        "dimensions": [
+          793,
+          1981
+        ]
+      },
+      "runtime": {
+        "path": "lantern-bearer.webp",
+        "bytes": 689196,
+        "sha256": "debaeb084cedf1303d96d33efc0cb343821042cd61e0593f2c759cedef1d4b62",
+        "dimensions": [
+          793,
+          1981
+        ]
+      },
+      "runtime_conversion": {
+        "tool": "Python Pillow",
+        "format": "WebP",
+        "quality": 94,
+        "method": 6,
+        "resized": false,
+        "art_edits": false
+      }
+    },
+    {
+      "id": "wren-key-rose",
+      "title": "The wren and the key",
+      "kind": "original AI-generated art",
+      "generator": "OpenAI built-in imagegen tool",
+      "reference_images": [],
+      "external_art_sources": [],
+      "generated_file": "C:/Users/Alex/.codex/generated_images/01a0fbed-b835-7752-a4b1-9d55177f703e/exec-8ab0f926-0286-4f4e-90ff-4e5655944495.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: ORIGINAL ROSE-WINDOW COLOR TEXTURE for a late-Victorian family mortuary chapel in a realistic horror game. Produce a perfectly front-on, orthographic, square photographic conservation record of an exquisite physical circular stained-glass rose, centered exactly, diameter 96% of image width, with dark neutral glass continuing into the square corners. No stone, no surrounding wall, no perspective. The design is divided into EXACTLY EIGHT radial petals around a small central circular roundel (roundel radius 25% of full radius); structural boundaries at multiples of 45 degrees must be clear lead lines, so the artwork aligns with eight existing stone spokes in the game. Inside center roundel: a natural small brown WREN perched on a single old BRONZE KEY over quiet ivory glass. Inside the eight petals: alternating cypress sprigs, white lilies and folded mourning ribbons; fine decorative vine and small floral borders. Main shapes legible, quiet areas between fine details. Limited palette of aged ivory, wine-red, desaturated cobalt blue, oxidized olive and honey amber; muted jewel glass rather than bright rainbow. Real uneven hand-blown translucent glass with tiny bubbles, undulations, black lead cames of consistent plausible width, delicate kiln-fired grisaille leaf/bird details and modest age around joins. Every color has physical glass texture; use individual cut pieces, not a painted digital poster. Soft even transmitted lighting, rich color but no bloom, no shiny glare, no light beams, no room reflections, no glowing central lamp. No text, no heraldic lettering, no signatures, no watermark. Entire circular design contained within image; square aspect ratio, very detailed.",
+      "source": {
+        "path": "source/wren-key-rose.png",
+        "bytes": 3245689,
+        "sha256": "f39cb0f7e64d56bf54c3c41701b546730bab9c0e79d05d4f1da5cc6ad9247474",
+        "dimensions": [
+          1254,
+          1254
+        ]
+      },
+      "runtime": {
+        "path": "wren-key-rose.webp",
+        "bytes": 683810,
+        "sha256": "774bf8e78f33c3768ae051d6e25fa47dbe7d1670664803005719edc3ecc9a99d",
+        "dimensions": [
+          1254,
+          1254
+        ]
+      },
+      "runtime_conversion": {
+        "tool": "Python Pillow",
+        "format": "WebP",
+        "quality": 94,
+        "method": 6,
+        "resized": false,
+        "art_edits": false
+      }
+    },
+    {
+      "id": "cypress-crossing",
+      "title": "The crossing",
+      "kind": "original AI-generated art",
+      "generator": "OpenAI built-in imagegen tool",
+      "reference_images": [],
+      "external_art_sources": [],
+      "generated_file": "C:/Users/Alex/.codex/generated_images/01a0fbed-b835-7752-a4b1-9d55177f703e/exec-232976bc-e932-456c-b7ef-6a72573dd3a1.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: ORIGINAL STAINED-GLASS COLOR TEXTURE, companion to a Victorian family mortuary chapel's lantern-bearer memorial. Perfectly orthographic, front-on conservation photograph of a single tall rectangular leaded glass panel, edge-to-edge glass, approximately 1:2.5 portrait aspect. A dramatically different composition without a person: an ancient narrow stone footbridge crossing a dark slow river under two wind-bent cypresses; white lilies emerge beside a worn iron gate in the foreground, a small distant chapel bell tower rises against a quiet early dawn. Long serpentine river shapes lead from bottom foreground to upper distant tower. The composition must be exquisitely made of individually cut uneven glass and delicate fired grisaille brushwork, NOT a painted landscape poster. Fine black lead cames follow tree branches, river, stones, hills, leaves. Sophisticated late-19th-century Arts and Crafts memorial glass, coherent limited palette of deep muted teal and desaturated cobalt water, antique honey amber dawn, olive leaves, ivory flowers, and small restrained oxblood border accents. Natural bubbles, ripple, variable translucent color density, slight old dust at lead joins, subtle age, not wrecked. Fine narrow botanical side borders and quiet ornamental lower register. Soft even transmitted light with no bloom or glare, no bright white/yellow glowing rectangle. Full RECTANGLE with no pointed arch, no stone frame, no surrounding church, no visible room, no perspective, no opaque margins. Keep important bridge, gate and tower within center70% width and lower85% height for later exact architectural aperture clipping. No text, letters, signatures or watermark. Real physical glass, cinematic richness through craft rather than excessive saturation.",
+      "source": {
+        "path": "source/cypress-crossing.png",
+        "bytes": 3270159,
+        "sha256": "c555935c79d66c17d13cabf2efea87b06cefee4a08ac64c1ffcc5585974d5f31",
+        "dimensions": [
+          793,
+          1983
+        ]
+      },
+      "runtime": {
+        "path": "cypress-crossing.webp",
+        "bytes": 750234,
+        "sha256": "3005c8a540682d98eed5275465e73a5434e063922c201e7fca7246ed0da2e86b",
+        "dimensions": [
+          793,
+          1983
+        ]
+      },
+      "runtime_conversion": {
+        "tool": "Python Pillow",
+        "format": "WebP",
+        "quality": 94,
+        "method": 6,
+        "resized": false,
+        "art_edits": false
+      }
+    }
+  ]
+}

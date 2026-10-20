@@ -1,0 +1,114 @@
+{
+ "id": "painted_wooden_cabinet_02",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "painted_wooden_cabinet_02.painted_wooden_cabinet_02.0",
+   "part": "painted_wooden_cabinet_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 1.2847,
+    "z": -0.1615
+   },
+   "h": {
+    "x": 0.4985,
+    "y": 1.2838,
+    "z": 0.1894
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet_02.painted_wooden_cabinet_02.1",
+   "part": "painted_wooden_cabinet_02",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.5836,
+    "z": 0.1657
+   },
+   "h": {
+    "x": 0.4985,
+    "y": 0.5835,
+    "z": 0.1378
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet_02.painted_wooden_cabinet_02_drawer.0",
+   "part": "painted_wooden_cabinet_02_drawer",
+   "kind": "obb",
+   "c": {
+    "x": -0.0003,
+    "y": 1.0188,
+    "z": 0.0916
+   },
+   "h": {
+    "x": 0.4624,
+    "y": 0.1094,
+    "z": 0.2594
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet_02.painted_wooden_cabinet_02_door.0",
+   "part": "painted_wooden_cabinet_02_door",
+   "kind": "obb",
+   "c": {
+    "x": -0.0005,
+    "y": 0.4483,
+    "z": 0.2781
+   },
+   "h": {
+    "x": 0.2844,
+    "y": 0.4128,
+    "z": 0.0183
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  },
+  {
+   "id": "painted_wooden_cabinet_02.painted_wooden_cabinet_02_door.1",
+   "part": "painted_wooden_cabinet_02_door",
+   "kind": "obb",
+   "c": {
+    "x": -0.1833,
+    "y": 0.4864,
+    "z": 0.3147
+   },
+   "h": {
+    "x": 0.0203,
+    "y": 0.0124,
+    "z": 0.0183
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

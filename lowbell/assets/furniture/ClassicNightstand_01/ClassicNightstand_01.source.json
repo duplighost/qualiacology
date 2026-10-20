@@ -1,0 +1,40 @@
+{
+ "id": "ClassicNightstand_01",
+ "title": "Classic Nightstand 01",
+ "url": "https://polyhaven.com/a/ClassicNightstand_01",
+ "licence": "CC0 1.0",
+ "author": "Kirill Sannikov",
+ "bytes": 444940,
+ "triangles": {
+  "source": 2002,
+  "lod0": 2002,
+  "lod1": null
+ },
+ "budget": {
+  "lod0": 8000,
+  "lod1": null
+ },
+ "class": "furniture",
+ "dims": [
+  0.5678,
+  0.7,
+  0.4242
+ ],
+ "shippedBytes": 1239486,
+ "parts": [
+  {
+   "name": "ClassicNightstand_01",
+   "movable": false,
+   "tris": 2002,
+   "pivot": [
+    0,
+    0,
+    0
+   ]
+  }
+ ],
+ "rigged": false,
+ "animated": [],
+ "processed": "2026-09-22",
+ "tools": "tools/assets/process_props.mjs + tools/blender/prop_process.py + tools/textures/encode.py"
+}

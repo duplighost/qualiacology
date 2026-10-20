@@ -1,0 +1,56 @@
+{
+ "lattice": {
+  "size": [
+   512,
+   512
+  ],
+  "alpha": true,
+  "wrap": false,
+  "files": {
+   "albedo": "lattice.albedo.dds",
+   "normal": "lattice.normal.ktx2",
+   "orm": "lattice.orm.dds"
+  },
+  "bytes": {
+   "albedo": 349680,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 42.65,
+   "alpha": 99.0,
+   "normalXY": 48.63,
+   "orm": {
+    "ao": 42.21,
+    "rough": 40.78,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png",
+   "alpha": "alpha.png"
+  },
+  "format": {
+   "albedo": "DXT5",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "coverage": [
+   0.6143,
+   0.6191,
+   0.6289,
+   0.6484,
+   0.6211,
+   0.625
+  ],
+  "normalErrorDeg": {
+   "mean": 0.324,
+   "p99": 3.206
+  },
+  "specAA": true,
+  "seconds": 2.3
+ }
+}

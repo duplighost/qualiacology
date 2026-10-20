@@ -1,0 +1,63 @@
+{
+ "tea_set_01": {
+  "files": {
+   "albedo": "tea_set_01.albedo.dds",
+   "normal": "tea_set_01.normal.ktx2",
+   "orm": "tea_set_01.orm.dds"
+  },
+  "size": [
+   512,
+   512
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 174904,
+   "normal": 87840,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 40.41,
+   "normalXY": 56.51,
+   "orm": {
+    "ao": 99,
+    "rough": 38.45,
+    "metal": 34.48
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.128,
+   "p99": 0.983
+  },
+  "specAA": true,
+  "seconds": 1.4,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

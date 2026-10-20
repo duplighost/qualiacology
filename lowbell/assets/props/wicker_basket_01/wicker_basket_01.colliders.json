@@ -1,0 +1,30 @@
+{
+ "id": "wicker_basket_01",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "wicker_basket_01.wicker_basket_01.0",
+   "part": "wicker_basket_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.0002,
+    "y": 0.059,
+    "z": 0.0003
+   },
+   "h": {
+    "x": 0.1918,
+    "y": 0.0593,
+    "z": 0.1467
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "wood"
+  }
+ ]
+}

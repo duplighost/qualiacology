@@ -1,0 +1,15 @@
+{
+  "name": "Mask trick-or-treater",
+  "body": {
+    "title": "Eric Rigged 001",
+    "creator": "Renderpeople",
+    "source": "https://sketchfab.com/3d-models/eric-rigged-001-rigged-3d-business-man-a46bc9f67aaa415bb4f3241eef900e7f",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "localDonor": "winterline/public/assets/characters/eric.glb",
+    "changes": "Removed human face and neck; clothing darkened and made matte; cloth mesh simplified; fingers and twist joints merged; dark gloves; 22-joint OLLY OLLY animation rig."
+  },
+  "locomotion": "Idle, Walk and Run from the existing Winterline Mixamo / Three.js Soldier conversion; hunched and resampled in OLLY OLLY's Jack pipeline.",
+  "authoredForGame": "Four pull-over rubber masks (skull, old man, devil, ghoul) sculpted in Blender from the scan's own head and baked to texture; black satin hood, collar and cape; a pillowcase; Jack Lunge, Window, Climb, Vault, Stagger and Rise clips.",
+  "build": "tools/blender/mask_build.py"
+}

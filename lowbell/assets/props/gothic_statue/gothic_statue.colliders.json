@@ -1,0 +1,30 @@
+{
+ "id": "gothic_statue",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "gothic_statue.gothic_statue.0",
+   "part": "gothic_statue",
+   "kind": "obb",
+   "c": {
+    "x": 0,
+    "y": 0.8699,
+    "z": 0
+   },
+   "h": {
+    "x": 0.7387,
+    "y": 0.8699,
+    "z": 0.7819
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "stone"
+  }
+ ]
+}

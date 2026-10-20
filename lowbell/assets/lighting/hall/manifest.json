@@ -1,0 +1,962 @@
+{
+  "version": 1,
+  "method": "CPU triangle-visibility one diffuse bounce; direct secondary; directional irradiance with distance moments; energy-conserving GGX-filtered diffuse room radiance",
+  "format": "rgba16f-little-endian-linear",
+  "bounds": {
+    "min": [
+      -11,
+      0,
+      -9
+    ],
+    "max": [
+      11,
+      9.8,
+      21
+    ]
+  },
+  "grid": {
+    "min": [
+      -10.8,
+      0.24,
+      -8.8
+    ],
+    "max": [
+      10.8,
+      9.56,
+      20.8
+    ],
+    "count": [
+      12,
+      9,
+      17
+    ],
+    "tileSize": 10
+  },
+  "fixtures": [
+    {
+      "id": "hall-warm",
+      "position": [
+        0,
+        7.2,
+        13.5
+      ],
+      "color": 16762251,
+      "intensity": 64,
+      "range": 23,
+      "lighting": {
+        "volume": "arrival-stair",
+        "role": "primary",
+        "room": "hall",
+        "runtimeIntensity": 64
+      }
+    },
+    {
+      "id": "stair-warm",
+      "position": [
+        0,
+        7.2,
+        -0.5
+      ],
+      "color": 16764569,
+      "intensity": 50,
+      "range": 21,
+      "lighting": {
+        "volume": "arrival-stair",
+        "role": "primary",
+        "room": "stair-hall",
+        "runtimeIntensity": 50
+      }
+    },
+    {
+      "id": "stair-waiting-candle-light",
+      "position": [
+        6.58,
+        1.845,
+        3.5
+      ],
+      "color": 16760444,
+      "intensity": 3.6,
+      "range": 4.5,
+      "lighting": {
+        "volume": "arrival-stair",
+        "role": "baked-secondary",
+        "runtimeIntensity": 3.6
+      }
+    },
+    {
+      "id": "stair-picture-light",
+      "position": [
+        0,
+        8.08,
+        -8.46
+      ],
+      "color": 16765088,
+      "intensity": 7.6,
+      "range": 4,
+      "lighting": {
+        "volume": "arrival-stair",
+        "role": "baked-secondary",
+        "runtimeIntensity": 7.6
+      }
+    }
+  ],
+  "irradiance": {
+    "file": "irradiance.bin",
+    "width": 120,
+    "height": 1530,
+    "bytes": 1468800,
+    "sha256": "0b543504ad5660be7c4a3083a910a618e6bfbea58969e8e6d78906812285cfc7"
+  },
+  "visibility": {
+    "file": "visibility.bin",
+    "width": 120,
+    "height": 1530,
+    "bytes": 1468800,
+    "sha256": "2afe14f9c50c126842194dd50239da7fc7e51979278be9d582fe69d412883e86"
+  },
+  "reflections": [
+    {
+      "id": "arrival",
+      "position": [
+        0,
+        3.8,
+        13.5
+      ],
+      "min": [
+        -11,
+        0,
+        5.8
+      ],
+      "max": [
+        11,
+        9.8,
+        21
+      ],
+      "baseMean": [
+        0.06689056761899041,
+        0.03138290686435045,
+        0.01048423451910056
+      ],
+      "levels": [
+        {
+          "file": "arrival-0.bin",
+          "width": 256,
+          "height": 128,
+          "bytes": 262144,
+          "sha256": "f8df176b53e22c4f3ae7787bf9da04c3af7ad858b182957adaa29744d44ec621"
+        },
+        {
+          "file": "arrival-1.bin",
+          "width": 128,
+          "height": 64,
+          "bytes": 65536,
+          "sha256": "0a27f0d40507a9e813887a008fdddcafd7791379bfb1424310ad39c462802de5"
+        },
+        {
+          "file": "arrival-2.bin",
+          "width": 64,
+          "height": 32,
+          "bytes": 16384,
+          "sha256": "49d1a80dcb987aaa44db947a2e5067185a11408dcb1dc951446659656ac5d70f"
+        },
+        {
+          "file": "arrival-3.bin",
+          "width": 32,
+          "height": 16,
+          "bytes": 4096,
+          "sha256": "a644ed60592123342d2cbab8eb1c71c74043fbc2350a00451da31bd68e462784"
+        },
+        {
+          "file": "arrival-4.bin",
+          "width": 16,
+          "height": 8,
+          "bytes": 1024,
+          "sha256": "9913b24d6ecc4cea7189be97792761a8ee9857bfd5927355b76a7323c51b0e73"
+        },
+        {
+          "file": "arrival-5.bin",
+          "width": 8,
+          "height": 4,
+          "bytes": 256,
+          "sha256": "6404b94b5968e33c6b0e9c1a70f58bd1172f48050e6e1de6c6d8697c386bfca4"
+        },
+        {
+          "file": "arrival-6.bin",
+          "width": 4,
+          "height": 2,
+          "bytes": 64,
+          "sha256": "b219be91411a944f65c4592fd7b584b3b30c6e082f7a4830e78b395be6c72a9e"
+        },
+        {
+          "file": "arrival-7.bin",
+          "width": 2,
+          "height": 1,
+          "bytes": 16,
+          "sha256": "86419de958107b1f7ce5b8b9613d5d2077840752f9c5ece0cc45d251e1d9c30e"
+        },
+        {
+          "file": "arrival-8.bin",
+          "width": 1,
+          "height": 1,
+          "bytes": 8,
+          "sha256": "2357fe9966d1838f86a90d42a096f08b7b4317befd36258f13310b06e08bd4bb"
+        }
+      ]
+    },
+    {
+      "id": "stair",
+      "position": [
+        0,
+        4.4,
+        -0.5
+      ],
+      "min": [
+        -11,
+        0,
+        -9
+      ],
+      "max": [
+        11,
+        9.8,
+        8.2
+      ],
+      "baseMean": [
+        0.0566626304685284,
+        0.028356474475491403,
+        0.010142371117570081
+      ],
+      "levels": [
+        {
+          "file": "stair-0.bin",
+          "width": 256,
+          "height": 128,
+          "bytes": 262144,
+          "sha256": "72880deffca995474843ad963a7e2cf9e38d1adc91ad2015def268745565f0fb"
+        },
+        {
+          "file": "stair-1.bin",
+          "width": 128,
+          "height": 64,
+          "bytes": 65536,
+          "sha256": "9a8652a016e35db647be3420054c9333c495e39d41373d10e29596c432a55c71"
+        },
+        {
+          "file": "stair-2.bin",
+          "width": 64,
+          "height": 32,
+          "bytes": 16384,
+          "sha256": "c0b7cc3da4277b439ba0e2b50119886a1eb9991d6bb686b2e31ef1faaef0d666"
+        },
+        {
+          "file": "stair-3.bin",
+          "width": 32,
+          "height": 16,
+          "bytes": 4096,
+          "sha256": "f6867674b511cdead4e315ada3c28a1350b08c6695343447e9704141be366273"
+        },
+        {
+          "file": "stair-4.bin",
+          "width": 16,
+          "height": 8,
+          "bytes": 1024,
+          "sha256": "12d0b6a74cb7bf02efefd5c8fcc3126b37087f8246191bf7661a123166964501"
+        },
+        {
+          "file": "stair-5.bin",
+          "width": 8,
+          "height": 4,
+          "bytes": 256,
+          "sha256": "ce91b30cf892860c4916331ca2b4a6da1bffbac283f4d0fe5deb12510897f494"
+        },
+        {
+          "file": "stair-6.bin",
+          "width": 4,
+          "height": 2,
+          "bytes": 64,
+          "sha256": "aed8c3d5508cbe56574e3e5adc77bee745eab9857a81c0b1939820c9ed717f3b"
+        },
+        {
+          "file": "stair-7.bin",
+          "width": 2,
+          "height": 1,
+          "bytes": 16,
+          "sha256": "42c04ddd7c58a4d24b438c0e5b3b041f39cc6f147a8c9d3e3a137f9fcf535a74"
+        },
+        {
+          "file": "stair-8.bin",
+          "width": 1,
+          "height": 1,
+          "bytes": 8,
+          "sha256": "3324754cda2fb2b63d45d32a018d3c2cf3068c978ea8548884e36e30b4ad41f9"
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "inputHash": "df0a3c115590cd9f4e8e72a2e5606510b009808d1bb676b758011f12a5379354",
+    "geometryHash": "56030ae38704b2a689c94e0b38c8da6ab320970e27ea265f66eef8da3424d280",
+    "inputFiles": [
+      {
+        "path": "public/assets/art/lowbell-family-portrait.png",
+        "sha256": "b5c3aa3c8be10beb0405e308bf25497f33d370f54101a1e77d5395cfe2e67540"
+      },
+      {
+        "path": "public/assets/furniture/ArmChair_01/Armchair_01.albedo.dds",
+        "sha256": "12e49c329569f5c9474262c2c07229419a912014939e690e5dd983f48b6f0c92"
+      },
+      {
+        "path": "public/assets/furniture/ArmChair_01/ArmChair_01.glb",
+        "sha256": "93b82e1b24e725264d5d80ff0fe16d67182e11001e810c3f2ebb8ef3ac397dc9"
+      },
+      {
+        "path": "public/assets/furniture/ArmChair_01/Armchair_01.orm.dds",
+        "sha256": "50130fae0ffe4b61522387495a1a5bdbbf5056f5a52865dac0d979ef1c7c0c0b"
+      },
+      {
+        "path": "public/assets/furniture/ArmChair_01/materials.json",
+        "sha256": "33b47c6cfafc411250daeb837d7994acaf762a3dcdb9778809ae841836d3d288"
+      },
+      {
+        "path": "public/assets/furniture/bath_clawfoot/bath_clawfoot.glb",
+        "sha256": "f5a1513cc8bc1f7474cb431217afc59aebd8f7d23bc1f7bd92fa521cd6633800"
+      },
+      {
+        "path": "public/assets/furniture/bath_clawfoot/materials.json",
+        "sha256": "666088c083b349b30b392b8026c386a65104cc7f740f7d1a1566ba77629f267a"
+      },
+      {
+        "path": "public/assets/furniture/bed_double_chenille/bed_double_chenille.glb",
+        "sha256": "d794b2b0bc32a634c7f3e6b7c80a186a1ef7e0951b7d26000e94bb1e442d2b93"
+      },
+      {
+        "path": "public/assets/furniture/bed_double_chenille/materials.json",
+        "sha256": "3ede7fbe7772d27d1d7ece99dbbb2bd85cf79b7b4954bd27f34de30e8bf56b6f"
+      },
+      {
+        "path": "public/assets/furniture/Chandelier_01/basecolor_classic_chandelier_1.albedo.dds",
+        "sha256": "4bc843be1970939acdd0dc9e776381521e2e5bfe87029a9ff3a57396e0d5a4af"
+      },
+      {
+        "path": "public/assets/furniture/Chandelier_01/basecolor_classic_chandelier_1.orm.dds",
+        "sha256": "d277bbaf69e965eea6d96a92bde40618b5f61c45840dc18cf7adc041c873d01e"
+      },
+      {
+        "path": "public/assets/furniture/Chandelier_01/Chandelier_01.glb",
+        "sha256": "c5007d2628789a482591b4a3e4a519a96a64e575fc44414f396576f9379a1c08"
+      },
+      {
+        "path": "public/assets/furniture/Chandelier_01/materials.json",
+        "sha256": "d99fe25b8571c80f4d64f06a5d11a5013776f321481d93f8d4a1802606399702"
+      },
+      {
+        "path": "public/assets/furniture/ClassicConsole_01/ClassicConsole_01.albedo.dds",
+        "sha256": "6616e408dabb822ac7a247beda3af689a7e8825c6a9939b795a736fb4b127eb0"
+      },
+      {
+        "path": "public/assets/furniture/ClassicConsole_01/ClassicConsole_01.glb",
+        "sha256": "038deef5c08aae4f9f16f94e0c5a501b74c5e738d91d2ec4c069e800d113ab07"
+      },
+      {
+        "path": "public/assets/furniture/ClassicConsole_01/ClassicConsole_01.orm.dds",
+        "sha256": "c4fa45bfd0810d288ddb7d8fb4c657983e01a19f083b55e4e1d563190756f04e"
+      },
+      {
+        "path": "public/assets/furniture/ClassicConsole_01/materials.json",
+        "sha256": "a78644309b1eda0a77d18ad6de167864dcae4618052049f7e8c33a343c3864e4"
+      },
+      {
+        "path": "public/assets/furniture/dining_table/dining_table.albedo.dds",
+        "sha256": "6a7ec26e1a86904fdbfe7990a78acf0877f880f76e99a3ee30fb945d48435e8e"
+      },
+      {
+        "path": "public/assets/furniture/dining_table/dining_table.glb",
+        "sha256": "48ceaa00ae366f32ad8359022fe138ca1d03e310478c8a90cc6d8952f371d9d1"
+      },
+      {
+        "path": "public/assets/furniture/dining_table/dining_table.orm.dds",
+        "sha256": "912ce205c91c816fbc4307d443e164225bd67ea51c3b32664c40341c7e3fdd15"
+      },
+      {
+        "path": "public/assets/furniture/dining_table/materials.json",
+        "sha256": "efa4c06818dc14b6c219466cec7db39e123850be16a2a6e2b922cf4ef4990f4e"
+      },
+      {
+        "path": "public/assets/furniture/GothicCabinet_01/GothicCabinet_01.albedo.dds",
+        "sha256": "17223bc6178dc644df5f5d5f017c4475f1b4c564b177bb28f45876a29a695a5c"
+      },
+      {
+        "path": "public/assets/furniture/GothicCabinet_01/GothicCabinet_01.glb",
+        "sha256": "611a3b2c36c682f2f77b87b4f6de2af6d969f435ea36e5cd59ed3e582d0c2376"
+      },
+      {
+        "path": "public/assets/furniture/GothicCabinet_01/GothicCabinet_01.orm.dds",
+        "sha256": "3dbbfe3742d813f33987b2f08768dc1d5a1e58d77b0b48dfdfd09fc2e8151fb6"
+      },
+      {
+        "path": "public/assets/furniture/GothicCabinet_01/materials.json",
+        "sha256": "6e92e426bb86ff5a6b6ba9e29a0c869401a2c61c4fdbda7a30ec0b910d925de3"
+      },
+      {
+        "path": "public/assets/furniture/ornate_mirror_01/materials.json",
+        "sha256": "d7354c9fb326dd23f9aaa0ba8f5647fd6ba643ce10c2a137ea5fcd98c8992334"
+      },
+      {
+        "path": "public/assets/furniture/ornate_mirror_01/ornate_mirror_01.albedo.dds",
+        "sha256": "ce1953c510ed17b428323d7c0c8140d8334cb4fb09e777ec2d69a9d6e3dbd6f5"
+      },
+      {
+        "path": "public/assets/furniture/ornate_mirror_01/ornate_mirror_01.glb",
+        "sha256": "3ac54e4b17b5c612ec126112915ddaf8193b1c04917b7073e6301503c9a3f30a"
+      },
+      {
+        "path": "public/assets/furniture/ornate_mirror_01/ornate_mirror_01.orm.dds",
+        "sha256": "fa1ec84eb0f2e08dadab10787da566543133d615ec410214b793a28cf7b28c1e"
+      },
+      {
+        "path": "public/assets/furniture/painted_wooden_chair_01/materials.json",
+        "sha256": "b4b88ddd1f899829d0b89effb0c5711b786d6053a8567244bb55d5c47d7aa1d9"
+      },
+      {
+        "path": "public/assets/furniture/painted_wooden_chair_01/painted_wooden_chair_01.albedo.dds",
+        "sha256": "a7e645b1a857593699836d5b146b2b941f78fa4f41f98fb869220c7d2875dd76"
+      },
+      {
+        "path": "public/assets/furniture/painted_wooden_chair_01/painted_wooden_chair_01.glb",
+        "sha256": "19cc97b26c17d14d9b5c40e084ab8cca4a5ad19b2d4625a493d6a7425b9404ac"
+      },
+      {
+        "path": "public/assets/furniture/painted_wooden_chair_01/painted_wooden_chair_01.orm.dds",
+        "sha256": "544fe0036898721413787d82549bb168e32f3a18933549e8a9b81751c1b631c5"
+      },
+      {
+        "path": "public/assets/furniture/sink_pedestal/materials.json",
+        "sha256": "0cd8a5bbeffc065010ae2afec7904cdd24487769bed0654b968ce9d98aa9a0cd"
+      },
+      {
+        "path": "public/assets/furniture/sink_pedestal/sink_pedestal.glb",
+        "sha256": "178967caada49b8f4a453b82fedc6d730ef2f21c86bcbadbfd798c896ff883c7"
+      },
+      {
+        "path": "public/assets/furniture/Sofa_01/materials.json",
+        "sha256": "90fc7f740caa5ede5b2e0fef99f4797d2581950770062e69067b311f71bc3f5e"
+      },
+      {
+        "path": "public/assets/furniture/Sofa_01/Sofa_01.albedo.dds",
+        "sha256": "43ddbbf2f3e6e3f7d3ec9bec40541b92a17597e4eede2856a8d8cf0b9396854c"
+      },
+      {
+        "path": "public/assets/furniture/Sofa_01/Sofa_01.glb",
+        "sha256": "2b33725cc0f3a069d1b1f219272e1a1ebcb9310b1c74a29fd4fdac7161f7a66a"
+      },
+      {
+        "path": "public/assets/furniture/Sofa_01/Sofa_01.orm.dds",
+        "sha256": "69bb80f1da02b1c3ff2729df6f064a32ea5f4034806dfb1d0f4808b85c348d90"
+      },
+      {
+        "path": "public/assets/furniture/toilet/materials.json",
+        "sha256": "e54267f70bb4ce247b791fae75e1522bada01c754aad1d7cd12b4bf4b0f8a2a9"
+      },
+      {
+        "path": "public/assets/furniture/toilet/toilet.glb",
+        "sha256": "8b956c1fa6565ba285125449a95553e932d6c8d51654fc78fe123e311f6ecc2d"
+      },
+      {
+        "path": "public/assets/furniture/vintage_grandfather_clock_01/materials.json",
+        "sha256": "12da0428684f5ca8d333378062a25ccc0822442d4f5917abe8dddc38f045cb9f"
+      },
+      {
+        "path": "public/assets/furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.albedo.dds",
+        "sha256": "5bb97989f39e7411f5ea9973503a0a6706994ac1c3089de043b91378c5243cd4"
+      },
+      {
+        "path": "public/assets/furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.glb",
+        "sha256": "0e882190f34f24f70afab3860c1bdb8834ae8e489ec98252471b281d2d3ec5c6"
+      },
+      {
+        "path": "public/assets/furniture/vintage_grandfather_clock_01/vintage_grandfather_clock_01.orm.dds",
+        "sha256": "a9c011b739fc166676d0a02e09dab86636c4ec201c52edeb2edec72dab3dabda"
+      },
+      {
+        "path": "public/assets/furniture/wooden_bookshelf_worn/materials.json",
+        "sha256": "4bcbf472585fa2c2a696d0b9d337a337e03e1061b509feb0d96bb90ae94e0cf9"
+      },
+      {
+        "path": "public/assets/furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.albedo.dds",
+        "sha256": "1f5261550a0ce11a4bf948952c01b72419c5bf3e154cfc2b22c3a7d4644c8631"
+      },
+      {
+        "path": "public/assets/furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.glb",
+        "sha256": "a314066ea9c90b15cfb4c668921d9add70b4cf685d62374744eea36b1a06ef05"
+      },
+      {
+        "path": "public/assets/furniture/wooden_bookshelf_worn/wooden_bookshelf_worn.orm.dds",
+        "sha256": "b3da0f5019e37b4729ae78125d6b5d861a0f7c174973104c29acb65a1d58ca6f"
+      },
+      {
+        "path": "public/assets/materials/brass/brass.albedo.dds",
+        "sha256": "0b414ee21246fe8e76bba98ab3b55817778e7cfd83b1767a4d69e2d18d7c0fae"
+      },
+      {
+        "path": "public/assets/materials/brass/brass.orm.dds",
+        "sha256": "ec74e7d0358927318920f7aa19cb9374ddb21a5b680faf608f0ac818519d3bc2"
+      },
+      {
+        "path": "public/assets/materials/bricks023/bricks023.albedo.dds",
+        "sha256": "ce3a8b6c28153d5cb4e4fbec5d525b06e8255ed53f098267487addbc0b3c376a"
+      },
+      {
+        "path": "public/assets/materials/bricks023/bricks023.orm.dds",
+        "sha256": "8407c93c2061e6f2d4252651599110bb9274a24734e21a9e64fedf1f11e86d65"
+      },
+      {
+        "path": "public/assets/materials/concrete047a/concrete047a.albedo.dds",
+        "sha256": "a10f6ec8cab04dfec6eb5cd8cbbb99a68aa4999f04db28ea1c4785644eefbb87"
+      },
+      {
+        "path": "public/assets/materials/concrete047a/concrete047a.orm.dds",
+        "sha256": "a4cda9ad8fd830948023332d6cad09ec4e90eb226c04a690471e4f6f2d75f362"
+      },
+      {
+        "path": "public/assets/materials/fabric001/fabric001.albedo.dds",
+        "sha256": "72afce43895efbea6794ac1dd6d7d2db7fbbf0884be862b3d1e1bc636af08c06"
+      },
+      {
+        "path": "public/assets/materials/fabric001/fabric001.orm.dds",
+        "sha256": "0fe60ac9832daaf6d7917f94763bbbbba45d1998e5f9850b56c9823b3134342d"
+      },
+      {
+        "path": "public/assets/materials/grass004/grass004.albedo.dds",
+        "sha256": "ef2b720971ab1e354029f6d79e120191d74f8a88c112e5ed2aef53f653bab2f5"
+      },
+      {
+        "path": "public/assets/materials/grass004/grass004.orm.dds",
+        "sha256": "fd7fad038ec43e6c9bd55bcb516d5c2979ea9f070e5543a07ce4cd393fba41ed"
+      },
+      {
+        "path": "public/assets/materials/marble012/marble012.albedo.dds",
+        "sha256": "ff4dba839803fa2eb89e78163571f5312c3a4429ceb65722c4055c999fd17d3c"
+      },
+      {
+        "path": "public/assets/materials/marble012/marble012.orm.dds",
+        "sha256": "dff1ab95f64273b2103581195ca79bbd690bca22b0bddcf9f08b5acd9bcf4fa7"
+      },
+      {
+        "path": "public/assets/materials/metal046b/metal046b.albedo.dds",
+        "sha256": "863b1ded746471da0a6f083070f64cc7876c3e189f2d7483d5c6a1e235d37de0"
+      },
+      {
+        "path": "public/assets/materials/metal046b/metal046b.orm.dds",
+        "sha256": "507cfce4aab2543521f10ffa858c2d07d1b52e5b77b6eaa2a587bbbeb644fbd0"
+      },
+      {
+        "path": "public/assets/materials/pavingstones138/pavingstones138.albedo.dds",
+        "sha256": "7995073dd14d4b48af7efa284efb3c3019dd3a9560cef9b6224cee0dc3439c0b"
+      },
+      {
+        "path": "public/assets/materials/pavingstones138/pavingstones138.orm.dds",
+        "sha256": "16c8f69f976b363991f9b0df45d004d21de5f023417cc49d5f46c34e54fccfa4"
+      },
+      {
+        "path": "public/assets/materials/plaster001/plaster001.albedo.dds",
+        "sha256": "3623123483daf84c6605f19661779544dc507c37df0bb5b91da4c53de64b7d97"
+      },
+      {
+        "path": "public/assets/materials/plaster001/plaster001.orm.dds",
+        "sha256": "39dec8d17c7415ae9b74c03e58ef28d41a4f5bd3a876b8d21e4d75d7a4d95ac3"
+      },
+      {
+        "path": "public/assets/materials/roofingtiles003/roofingtiles003.albedo.dds",
+        "sha256": "a0f2029c57504a0c3acade6c0fdd700672b16bf9543c1ba97020b5737d6b739b"
+      },
+      {
+        "path": "public/assets/materials/roofingtiles003/roofingtiles003.orm.dds",
+        "sha256": "ab49a78f7c2de68bb7fbfaa9370d7f0167deca0e39b2020eed0263c36258e1e9"
+      },
+      {
+        "path": "public/assets/materials/tiles071/tiles071.albedo.dds",
+        "sha256": "33346fd2cb5491bb11dae50ea22f0e99c1c8785248d20e830d832f0effb7261d"
+      },
+      {
+        "path": "public/assets/materials/tiles071/tiles071.orm.dds",
+        "sha256": "62a57e225ad0ce62460a7f922af4376143138322170236390ed11c9622e0918f"
+      },
+      {
+        "path": "public/assets/materials/wood049/wood049.albedo.dds",
+        "sha256": "247785044d29bd3e92f1d5d951dae1c6677044617d97e6257ebc9297373a3cd7"
+      },
+      {
+        "path": "public/assets/materials/wood049/wood049.orm.dds",
+        "sha256": "8ac9ff2469a350c590de3eb666c84f384fe6d53910afd6003e354fd6b3373e05"
+      },
+      {
+        "path": "public/assets/materials/woodfloor051/woodfloor051.albedo.dds",
+        "sha256": "bfb8c0ba25ab064ec1571d03d693e47652ed7115bfff681ff00eef80b44dbceb"
+      },
+      {
+        "path": "public/assets/materials/woodfloor051/woodfloor051.orm.dds",
+        "sha256": "17e729e64af3b9e10cf3c6c480bb31706f6d762750a4affeadf40dccda06ecb8"
+      },
+      {
+        "path": "public/assets/materials/wp-damask-green/wp-damask-green.albedo.dds",
+        "sha256": "395a6777bb718d49f5db9fc013f34ad67d827fba078d7eddf8e07e5b928b3a16"
+      },
+      {
+        "path": "public/assets/materials/wp-damask-green/wp-damask-green.orm.dds",
+        "sha256": "99b7c0269d517efff1c74c319bbf2405fbf77c00bd86c99aa8ff01613d058e47"
+      },
+      {
+        "path": "public/assets/paper/kowalski.albedo.dds",
+        "sha256": "41304fff4c95d26f7c7b7f38a24a2200e339ba52757c66578bc1344b75962d19"
+      },
+      {
+        "path": "public/assets/paper/kowalski.orm.dds",
+        "sha256": "2817514d63dcc2dbd6f0b22df543f2f7ccda82b9df9f294e37bc47e5c39c2ec8"
+      },
+      {
+        "path": "public/assets/paper/sets/chenille.albedo.dds",
+        "sha256": "4c98f056c57a350e09290236a390fc9f4246c86891081b0608df8008376f0b87"
+      },
+      {
+        "path": "public/assets/paper/sets/chenille.orm.dds",
+        "sha256": "7dedc1c3f05db20dc21bb5e451c8cb4033fb60f08a167a3363eff14fee2f4a31"
+      },
+      {
+        "path": "public/assets/props/_draco/draco_decoder.wasm",
+        "sha256": "a680d927bed9cb864ddbd63521868891af2bfbe755092761b4837487618df8ac"
+      },
+      {
+        "path": "public/assets/props/antique_ceramic_vase_01/antique_ceramic_vase_01.albedo.dds",
+        "sha256": "6345a4a1a781af2c486a2bacc1c1e5d0c2692561f4d71532de24fcd35ff908f4"
+      },
+      {
+        "path": "public/assets/props/antique_ceramic_vase_01/antique_ceramic_vase_01.glb",
+        "sha256": "fa4aaa82ad4f8cd951996014c8a2e902544c307aea4a00796b434487bd08fdd1"
+      },
+      {
+        "path": "public/assets/props/antique_ceramic_vase_01/antique_ceramic_vase_01.orm.dds",
+        "sha256": "2b369501632a4bc8ed8c65ad2d5877d93811861a659e67156f089f963bc0fb96"
+      },
+      {
+        "path": "public/assets/props/antique_ceramic_vase_01/materials.json",
+        "sha256": "159b9f4688667743a1b97b3e443fc3dd6b14105088c5c2673e760a0201785d61"
+      },
+      {
+        "path": "public/assets/props/book_encyclopedia_set_01/book_encyclopedia_set_01_cover.albedo.dds",
+        "sha256": "dac8806558b5fac70f36b93a9f3a9aa7d0cfb5e27be1b7686c39ccf4b1e20666"
+      },
+      {
+        "path": "public/assets/props/book_encyclopedia_set_01/book_encyclopedia_set_01_cover.orm.dds",
+        "sha256": "b16c7bab5b000526021da186c727fc47ebf951c20dd2af1b2df96878d1aaf4b7"
+      },
+      {
+        "path": "public/assets/props/book_encyclopedia_set_01/book_encyclopedia_set_01_paper.albedo.dds",
+        "sha256": "c7791563a8d3b1c7b99878565fd0a819ef77fb9f2647317d6ebaf70bab794278"
+      },
+      {
+        "path": "public/assets/props/book_encyclopedia_set_01/book_encyclopedia_set_01.glb",
+        "sha256": "cbdbecbc5925939b77c82afec121f336cbe56dc8411dabc16ab9e580f1ccd6ed"
+      },
+      {
+        "path": "public/assets/props/book_encyclopedia_set_01/materials.json",
+        "sha256": "b9f9f64630a24c5b6cb1cc44225accbd4df7c30a7d4b782cb01d399ec0cc7fcc"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_01.albedo.dds",
+        "sha256": "5b198d84b5bfb83eb583718c4821f757b3367199a9ea9de186558984341faa9e"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_01.orm.dds",
+        "sha256": "4823481391b74d0ad7a2709f2a96e7ea92f89650ef89f6b1866c268c7c082d33"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_02.albedo.dds",
+        "sha256": "09fd56a3a6114083355571ab89584a1cd541ca5203bf6840ec6c682149192f08"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_02.orm.dds",
+        "sha256": "8ac0e5d4af1c95472352d04d77d38c2a7b34602a49d2c277d3a626ae4c6aafca"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_03.albedo.dds",
+        "sha256": "ab3503bb061b521cbab696e1e535fae6fe76369ba050fd1c1afd605c91b92ffa"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_03.orm.dds",
+        "sha256": "2aa8d7cd23585f460930dbc22828de699c253e3ee3f6aecc53e7a11d11c539f2"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_candles.albedo.dds",
+        "sha256": "f055b0eedf53d1d1556a1ee8fa42373b3e71b8a734859e7a2fb104b63904dc74"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_candles.orm.dds",
+        "sha256": "0ef9b76e010758d31e1ba44de55248783ad2810f9189cacc457a0a7c035c7ddd"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders_flame.albedo.dds",
+        "sha256": "f21b2c91027367bcb047b3f2988982ebeabeb5dafa615173cca85bc9ead8123d"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/brass_candleholders.glb",
+        "sha256": "04f256b79b7ad281e50793d53f9e0e585f112de477baf20203579f074366947b"
+      },
+      {
+        "path": "public/assets/props/brass_candleholders/materials.json",
+        "sha256": "4e9367d3aa4f0356e7c14af3b3cb9c9138ba2531a83af5b187c92d6fecee7e21"
+      },
+      {
+        "path": "public/assets/props/fancy_picture_frame_01/fancy_picture_frame_01_canvas.albedo.dds",
+        "sha256": "1e96453488e790a49ba26c523287aab574c86ae561954c269c8463ad28e346c9"
+      },
+      {
+        "path": "public/assets/props/fancy_picture_frame_01/fancy_picture_frame_01_canvas.orm.dds",
+        "sha256": "51b438499ba5f3f3a4af2c0765f011d6d738bd3f7337d06a6010810e50fa7892"
+      },
+      {
+        "path": "public/assets/props/fancy_picture_frame_01/fancy_picture_frame_01.albedo.dds",
+        "sha256": "df7d55dfeed98d278c7e1a5a98c9f278dca8f06cb9f90d8f8ba0d54e4ca6b583"
+      },
+      {
+        "path": "public/assets/props/fancy_picture_frame_01/fancy_picture_frame_01.glb",
+        "sha256": "e6a79414bb73265330e17e0cb5273c4eb45ca3496dcdf039529c5ddcb69e395f"
+      },
+      {
+        "path": "public/assets/props/fancy_picture_frame_01/fancy_picture_frame_01.orm.dds",
+        "sha256": "d3e24cdcecdad42214d533d83943887634b8522b1fffa35143ed161ac05ac62c"
+      },
+      {
+        "path": "public/assets/props/fancy_picture_frame_01/materials.json",
+        "sha256": "716910ad2c23dccf37abb22f8ab559e8da152837d82fc5d7446d57df7d28097e"
+      },
+      {
+        "path": "public/assets/props/Lantern_01/Lantern_01.glb",
+        "sha256": "d1fc08bc2fe23c02abefbf3fe13bd1187db109763017a39fde6b1a18bcd64e20"
+      },
+      {
+        "path": "public/assets/props/Lantern_01/materials.json",
+        "sha256": "87580d1609006ddba452b6c19f8b4977162459861fe618ce299940125736e377"
+      },
+      {
+        "path": "public/assets/props/large_iron_gate/large_iron_gate.albedo.dds",
+        "sha256": "69dc3dd9380a0fcbb806c12b955f541147e2267b404ef9e8e6fdef124a761369"
+      },
+      {
+        "path": "public/assets/props/large_iron_gate/large_iron_gate.glb",
+        "sha256": "6b3f62590cdce82a17cd2f323095c0a9e7f10981738b84145557cedf6213ce98"
+      },
+      {
+        "path": "public/assets/props/large_iron_gate/large_iron_gate.orm.dds",
+        "sha256": "1edece5019ff6002046a3f05b4ac2a741e850ac218b1a8f217b9affead85120c"
+      },
+      {
+        "path": "public/assets/props/large_iron_gate/materials.json",
+        "sha256": "8c8665d40d6eb4f8f89c417c0d1ddc68f354db7a09529c70a86d0e6b8bb7a556"
+      },
+      {
+        "path": "public/assets/props/marble_bust_01/marble_bust_01.albedo.dds",
+        "sha256": "973f43ae5aa47f39029a0d5b6457a41cd232844f294f8f1a6c1e51f6b9f416a1"
+      },
+      {
+        "path": "public/assets/props/marble_bust_01/marble_bust_01.glb",
+        "sha256": "704f14119aa5e5cfe2dea632c3d8691ed03756efae3335f1bfb09303117d65d8"
+      },
+      {
+        "path": "public/assets/props/marble_bust_01/marble_bust_01.orm.dds",
+        "sha256": "c94a3a5dc9a78ee40a9c90bf67384db577cc7f11af9df365ea902367cba3b05b"
+      },
+      {
+        "path": "public/assets/props/marble_bust_01/materials.json",
+        "sha256": "17a244698ad67970f04bb5ccba1105c226b71f9c1710a3d28fbcbfb6ff677fe4"
+      },
+      {
+        "path": "public/assets/props/potted_plant_01/materials.json",
+        "sha256": "565a496a22449a78e3c2154d79033ef9e2c7d115d2e1bd3f58bd7865ce666654"
+      },
+      {
+        "path": "public/assets/props/potted_plant_01/potted_plant_01_leaves.albedo.dds",
+        "sha256": "52a03d03863e6f724a6c85fa420259fc5a2166d9de834ed584c88214955f0645"
+      },
+      {
+        "path": "public/assets/props/potted_plant_01/potted_plant_01_leaves.orm.dds",
+        "sha256": "882504ff33d2602db0fd927f99641a6c981937a244136820882b9beec72cf8d7"
+      },
+      {
+        "path": "public/assets/props/potted_plant_01/potted_plant_01_pot.albedo.dds",
+        "sha256": "260fcb0ec8d0e6c9e2893dd9b6e139f6a80c824eb64320c079eb7e4d838751b8"
+      },
+      {
+        "path": "public/assets/props/potted_plant_01/potted_plant_01_pot.orm.dds",
+        "sha256": "b91e8166e2f4dcaf4bad3503a9331242712c0c4ffe21477385008a212243375b"
+      },
+      {
+        "path": "public/assets/props/potted_plant_01/potted_plant_01.glb",
+        "sha256": "ea7edbabb8a04d3741f97f7e8c73b5f34daef70c4bc1ecf2f8ec501c26685bd4"
+      },
+      {
+        "path": "public/assets/props/rug_persian_k/materials.json",
+        "sha256": "2033bfd6ed72b510ac36a4be7d3eb7666765446a95f2581d97aab42498ea1ba7"
+      },
+      {
+        "path": "public/assets/props/rug_persian_k/rug_persian_k.glb",
+        "sha256": "9e49a4daedc33a765de91ee294a2efe3a577ec62730dc1b5f1c6d973363ab370"
+      },
+      {
+        "path": "public/assets/props/tea_set_01/materials.json",
+        "sha256": "999df75e52cf04b5829206d8daffd31cb8bb3e70a940e6700c520fad072b5f73"
+      },
+      {
+        "path": "public/assets/props/tea_set_01/tea_set_01.albedo.dds",
+        "sha256": "aa27124bf890eca612d3e5eaf67437daece5426b53ae6c753e66c88f537903e9"
+      },
+      {
+        "path": "public/assets/props/tea_set_01/tea_set_01.glb",
+        "sha256": "5a850bf5fe1b71f5bcfd912fc41b76953862acad8bbee973b9c8ec8ed47c3d33"
+      },
+      {
+        "path": "public/assets/props/tea_set_01/tea_set_01.orm.dds",
+        "sha256": "ef464f9f7048e170a9a05989bec4a71269ee331312aa60ce037fb66831f1b6cc"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/materials.json",
+        "sha256": "385df44a825b80bc9ead2779ada0b9b3f6fa3ba3426a6c1f55dbafaf3525920a"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_clearwater.albedo.dds",
+        "sha256": "ceedb2f190b0449dcb2ceb0a71f657142a98eddbeb63a5575aee56d232e0b075"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_clearwater.orm.dds",
+        "sha256": "fa3e72de23a482d01ef0bda7e584ec90f26978c3489c622b00ff94160cb1c9c4"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_ftero_vinea_01.albedo.dds",
+        "sha256": "00b28d47aa6a525b9de6099534167e68b0dbd58df99c4fafa358f65737294b39"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_ftero_vinea_01.orm.dds",
+        "sha256": "3c84bc2ce05507b44aa5e52684606ada895be0e016b6f5860e9f170824d2096e"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_ftero_vinea_02.albedo.dds",
+        "sha256": "eb64731942f95baf5c0f87502e6a9b64d9df5c2aa448c5af022219e07645a5c5"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_ftero_vinea_02.orm.dds",
+        "sha256": "1990195c0326748344243b389d942083988d8a1cc466e1be0ace6746e5d50115"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_intertwine.albedo.dds",
+        "sha256": "5021232dd9dbe3f1f5f4a2c171a06f53099a9be31e01dbd1db93f93b9d306dde"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_intertwine.orm.dds",
+        "sha256": "bde292da5b0f8d846d710d1d1c388beb2c0c1753f583d615e28163869596b874"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_seal_cork.albedo.dds",
+        "sha256": "8482bd7b4355c6c3482da69218c5a6b1d0630eae5c57da657651b93d45c6ad0b"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01_seal_cork.orm.dds",
+        "sha256": "c9d1bc217e95431a61f23990890fd1e3aebcb9351cbeeb620241ad6356abc1ca"
+      },
+      {
+        "path": "public/assets/props/wine_bottles_01/wine_bottles_01.glb",
+        "sha256": "1c1b028201af4a52dd425381acf1ecfe1e6076c0e85b358cf3eb0cf11185ef9d"
+      },
+      {
+        "path": "public/assets/sky/solitude_night_2k.hdr",
+        "sha256": "8dbd0abf5e9fbe19ecf0d6a1c461754a1b63713d96a0b99375dc56d7077749bb"
+      },
+      {
+        "path": "src/core/assets.js",
+        "sha256": "a991a287b0ffac321e1bebd67ff01c0c35f3f7da8c4c6b33669fb2afd880b598"
+      },
+      {
+        "path": "src/core/collision.js",
+        "sha256": "462d53ff7ee491724da992b3ab7efcc1501a3134d8f080d0cba6461bdb5c21d9"
+      },
+      {
+        "path": "src/world/architectural-details.js",
+        "sha256": "7ed9a161362bf45c2d1a8126a9f90b12df2cbb4c36a1e1e1b9ea11ad11243c74"
+      },
+      {
+        "path": "src/world/build-estate.js",
+        "sha256": "f972af08990f6c54977a4c5382bb304d9c49d574a5098d907effc4e8da7be552"
+      },
+      {
+        "path": "src/world/estate-plan.js",
+        "sha256": "1d60e45f980e640b2a70902916374fbed8cb0b186d691a3cb473a687bfd42070"
+      },
+      {
+        "path": "src/world/hall-lighting-data.js",
+        "sha256": "4740f5a3a48733bb86104eac533ca0e6bd231fdd519fa26e4a0c8ce75df13a2e"
+      },
+      {
+        "path": "src/world/hall-materials.js",
+        "sha256": "b65e358e9838b15530f7e7c77fb47d961fe82623a5e7ff96650d35d181e4a200"
+      },
+      {
+        "path": "src/world/interactions.js",
+        "sha256": "c73124c695e34bd294c3fc705baeb7deefe242f1275db7eb2ffa8575ebe4d649"
+      },
+      {
+        "path": "src/world/prop-test-assets.mjs",
+        "sha256": "f928c2cb671b5a208b105331df77c217cc34d759294fd72e2672a37cea30e804"
+      },
+      {
+        "path": "src/world/spatial-batches.js",
+        "sha256": "157e71666b5617a988f6af6081b50e4cc50625055593476b5a9550677cd86460"
+      }
+    ],
+    "tools": [
+      {
+        "path": "tools/bake-hall-lighting.mjs",
+        "sha256": "de62b87e2c5b4ba80cccd3a75e5d91e564404fbfccee2a2e809f37d8b37e4f8d"
+      },
+      {
+        "path": "tools/hall-lighting-rays.mjs",
+        "sha256": "44b3b629fb1c062075c457f0d507ecbf27e52c4e9e566ec6536e15f6b9897f53"
+      },
+      {
+        "path": "tools/hall-lighting-source.mjs",
+        "sha256": "ab17554a7afbb086fc9c21fb9e43e2bfb0f378b3355b81185ff7db3266b8acf9"
+      }
+    ],
+    "excluded": "Moving doors/furniture, breakable panes, actors, mirror surface. No baked specular or flashlight.",
+    "directionsPerProbe": 384,
+    "probeCount": 1836,
+    "invalidProbes": 329,
+    "source": {
+      "triangles": 598663,
+      "materials": 346,
+      "skippedDynamicMeshes": 412
+    },
+    "bvh": {
+      "triangles": 598663,
+      "nodes": 146473,
+      "rays": 1887442,
+      "triangleTests": 374168866
+    },
+    "averageIrradiance": 0.04949883622669678,
+    "assetBytes": 3636656,
+    "milliseconds": 105083,
+    "runtimeRevision": {
+      "id": "hall-probes-v2",
+      "radianceRebaked": false,
+      "preservedBakeInputHash": "df0a3c115590cd9f4e8e72a2e5606510b009808d1bb676b758011f12a5379354",
+      "reason": "Runtime parallax proxies now overlap z 5.8 to 8.2; primary spot and point share the boundary fade; disposed materials release hooks and listeners. Capture centres, probe radiance, visibility and reflection mip binaries are unchanged.",
+      "sources": [
+        {
+          "path": "src/world/hall-lighting.js",
+          "sha256": "113f0542e609eead1e6d726718e8d1dc4e58ce3db365789191f7da32e58dcf6f"
+        },
+        {
+          "path": "src/world/hall-lighting-data.js",
+          "sha256": "eec8c48baa41f2e862f91aedd07c07704f32450b6d1d38c287ded2030226baba"
+        }
+      ],
+      "unchangedBinaryAssets": 20
+    }
+  }
+}

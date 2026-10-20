@@ -1,0 +1,72 @@
+{
+ "id": "brass_candleholders",
+ "units": "m",
+ "up": "+y",
+ "pivot": "floor centre",
+ "note": "Asset space. Place with the piece: rotate c by the placement yaw, add the position, add yaw.",
+ "colliders": [
+  {
+   "id": "brass_candleholders.brass_candleholder_03.0",
+   "part": "brass_candleholder_03",
+   "kind": "obb",
+   "c": {
+    "x": 0.3224,
+    "y": 0.4176,
+    "z": 0
+   },
+   "h": {
+    "x": 0.2041,
+    "y": 0.4176,
+    "z": 0.1832
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "brass_candleholders.brass_candleholder_02.0",
+   "part": "brass_candleholder_02",
+   "kind": "obb",
+   "c": {
+    "x": -0.0778,
+    "y": 0.2009,
+    "z": -0.0025
+   },
+   "h": {
+    "x": 0.1311,
+    "y": 0.2004,
+    "z": 0.0524
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  },
+  {
+   "id": "brass_candleholders.brass_candleholder_01.0",
+   "part": "brass_candleholder_01",
+   "kind": "obb",
+   "c": {
+    "x": -0.4787,
+    "y": 0.1836,
+    "z": 0.0001
+   },
+   "h": {
+    "x": 0.0513,
+    "y": 0.1828,
+    "z": 0.0497
+   },
+   "yaw": 0,
+   "tags": [
+    "SOLID",
+    "NOMANTLE"
+   ],
+   "surface": "metal"
+  }
+ ]
+}

@@ -1,0 +1,88 @@
+{
+ "Chandelier_02": {
+  "files": {
+   "albedo": "Chandelier_02.albedo.dds",
+   "normal": "Chandelier_02.normal.ktx2",
+   "orm": "Chandelier_02.orm.dds"
+  },
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 39.33,
+   "normalXY": 43.89,
+   "orm": {
+    "ao": 99,
+    "rough": 37.52,
+    "metal": 33.46
+   }
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.786,
+   "p99": 4.52
+  },
+  "specAA": true,
+  "seconds": 5.3,
+  "factors": {},
+  "gltf": {
+   "baseColor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metallic": 1,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ },
+ "Chandelier_02_bulb": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.800000011920929,
+    0.800000011920929,
+    0.800000011920929,
+    1
+   ],
+   "roughness": 0.27272725105285645,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  }
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "lib:fabric.sheet|double": {
+  "files": {},
+  "gltf": {
+   "baseColor": [
+    0.7,
+    0.7,
+    0.7,
+    1
+   ],
+   "roughness": 0.7,
+   "metallic": 0,
+   "alphaMode": "OPAQUE",
+   "alphaCutoff": 0.5,
+   "doubleSided": true,
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "emissiveStrength": 1,
+   "transmission": 0,
+   "ior": 1.5,
+   "clearcoat": 0
+  },
+  "lib": "fabric.linen"
+ }
+}
