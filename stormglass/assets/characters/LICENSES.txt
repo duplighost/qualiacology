@@ -1,0 +1,59 @@
+STORMGLASS heroine asset provenance
+
+Candidate file: heroine-quaternius-candidate.glb
+
+Adapted from Alex's original Nera heroine in Secondhand Saint:
+C:/Users/Alex/Projects/secondhand-saint/assets/characters/nera-player-v016.glb
+Source SHA-256: a780b786862ede1e1e1bb08bc8fc6a3069632e0014daa529b9fcf893eea87d08
+The donor original was read and has not been modified.
+Complete anatomical body recovered from the editable source:
+C:/Users/Alex/Projects/secondhand-saint/work/character-pipeline/nera-shell-v016-final/nera-shell-v016.blend
+The original glove mask was removed in the derivative only, and the stored
+body shape/rest correction was baked into the new mesh.
+
+The body, rig, eyes, eyebrows, eyelashes, teeth, tongue and skin foundation
+were authored using MPFB 2.0.17 and MakeHuman system assets, distributed CC0.
+https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html
+https://creativecommons.org/publicdomain/zero/1.0/
+MPFB and Blender are authoring tools, not included in the browser game.
+
+The earlier culturalibre_hero-heroine_gloves_4 glove mesh has been removed
+from this derivative; hands and forearms now use the complete body surface.
+
+Hair: cortu_strawberry_cloud_hair by Cortu Johnstone, CC0.
+https://static.makehumancommunity.org/assets/assetpacks/hair01.html
+Official asset-pack page verified on 2026-10-21; names this exact asset CC0.
+The source .mhclo and .mhmat also identify Cortu Johnstone and CC0.
+Source files: D:/Tools/MakeHuman-CC0-hair01/cortu_strawberry_cloud_hair/
+Adaptations: fitted/reoriented geometry, auburn shader tint, head skinning,
+adjusted normal intensity and roughness. Original source files are untouched.
+
+Nera's earlier culturalibre_hair_17 CC-BY hair and original long hair-card layer
+were removed from this exported derivative; they are not included here.
+
+The earlier hard armor, pauldrons, cloak, and thin straps have been removed.
+STORMGLASS adds an original fitted ivory halter garment and boots from the
+CC0 body surface, proportional adjustments, a named sword attachment, and
+five preserved original clips (Run, Dodge, Heavy, Hit, Death) and five
+retargeted Quaternius clips (Idle, Guard, Slash1, Slash2, Slash3).
+Anatomical rest-roll alignment, proportional pelvis translation, explicit
+recovery timing, continuous quaternion signs, and foot correction are baked.
+Idle/Guard use independent analytical knee/foot grounding.
+
+No commercial-game characters, textures, animation clips, or trademarks were
+extracted or copied. No endorsement by the original asset creators is implied.
+
+Quaternius Universal Animation Library 1 and 2 (Standard), CC0.
+Original author: Quaternius. Exact downloaded package License.txt files were
+inspected and explicitly state CC0 1.0 Universal Public Domain Dedication.
+https://quaternius.com/packs/universalanimationlibrary.html
+https://quaternius.com/packs/universalanimationlibrary2.html
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Sources (originals remain unchanged):
+C:/Users/Alex/Projects/thaw/downloads/ual1/Universal_Animation_Library[Standard]-x/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb
+C:/Users/Alex/Projects/thaw/downloads/ual2/Universal_Animation_Library_2[Standard]-x/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb
+
+Used source clips: Sword_Idle; selected Sword_Block pose; Sword_Regular_A
+and Sword_Regular_A_Rec; Sword_Regular_B and Sword_Regular_B_Rec;
+Sword_Regular_C. Root-motion variants were inspected but not used.

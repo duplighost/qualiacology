@@ -1,0 +1,168 @@
+{
+ "asset": "chrome.glb",
+ "asset_sha256": "772431f1cefc6aefc9a42d0b2546a65615c8779ba922719870faf5bcded958fa",
+ "bytes": 4062592,
+ "convention": {
+  "up": "+Y",
+  "forward": "+Z",
+  "units": "metres",
+  "root_scale": 1.0,
+  "sole_y": 0.0,
+  "in_place": "every clip keeps the root still; the game moves the body. Loops: first frame == last frame.",
+  "sockets_axis": "each socket's local +Z points out of it (muzzle: along the bore; eye/visor: out of the face)"
+ },
+ "skeleton": {
+  "root_node": "Chrome_Rig",
+  "joints": 65,
+  "naming": "Quaternius universal rig (root pelvis spine_01..03 neck_01 Head clavicle/upperarm/lowerarm/hand _l/_r, thigh/calf/foot/ball _l/_r, fingers)",
+  "same_rig_as": "Quaternius Universal Animation Library 1 and 2"
+ },
+ "clips": {
+  "Attack": {
+   "duration": 1.7,
+   "loop": false,
+   "source": "UAL2 Sword_Regular_A + Sword_Regular_B (joined over 3 frames) + Sword_Regular_B_Rec eased back onto Idle t=0",
+   "contacts": [
+    0.3167,
+    0.85
+   ],
+   "contact_tip_speed_mps": [
+    53.62,
+    63.0
+   ],
+   "ground_offset_max_m": 0.0233,
+   "weapon_tip_max_horizontal_reach_m": 1.416,
+   "note": "two cuts: UAL2 Sword_Regular_A then Sword_Regular_B (joined over 3 frames), then Sword_Regular_B_Rec eased onto Idle t=0 by 1.7 s. 'contacts' = where the blade tip moves fastest in each cut"
+  },
+  "Death": {
+   "duration": 1.8,
+   "loop": false,
+   "source": "authored: the power cuts out, the head snaps back, the knees fold and it drops onto them, then pitches face down onto the street and lies crumpled, arms out; one servo twitch at 1.33 s",
+   "fold_deg": 130,
+   "ground_offset_max_m": 0.0296,
+   "weapon_tip_max_horizontal_reach_m": 1.4,
+   "note": "authored: the power cuts, the head snaps back, the knees fold and it drops onto them, pitches face down and lies crumpled on the street with its arms out; one last servo twitch at 1.33 s; holds from 1.0 s"
+  },
+  "Hit": {
+   "duration": 0.3333,
+   "loop": false,
+   "source": "UAL1 Hit_Chest",
+   "ground_offset_max_m": 0.0005,
+   "weapon_tip_max_horizontal_reach_m": 0.717,
+   "note": "UAL1 Hit_Chest"
+  },
+  "Idle": {
+   "duration": 1.6667,
+   "loop": true,
+   "source": "UAL1 Sword_Idle raised 6 cm out of its crouch (feet planted by IK), fists closed, a quick robotic glance at 0.5-1.2 s",
+   "ground_offset_max_m": 0.0005,
+   "weapon_tip_max_horizontal_reach_m": 0.996,
+   "note": "UAL1 Sword_Idle raised 6 cm out of its crouch (feet held by IK): blade hand low and forward, left fist up; a quick robotic glance to the side at 0.5-1.2 s; loops"
+  },
+  "Lunge": {
+   "duration": 1.6333,
+   "loop": false,
+   "source": "UAL2 Sword_Dash: drops low, drives forward and thrusts the blade, recovers onto Idle t=0",
+   "contact": 0.3833,
+   "contact_tip_speed_mps": 62.92,
+   "furthest_forward_at": 0.3667,
+   "ground_offset_max_m": 0.0199,
+   "weapon_tip_max_horizontal_reach_m": 1.429,
+   "note": "UAL2 Sword_Dash: drops low, drives forward, thrusts the blade at 'contact'; eases onto Idle t=0 at the end. The body motion is in place: city-enemies.js moves the root (lungeTravel) during the strike"
+  },
+  "Run": {
+   "duration": 0.9333,
+   "loop": true,
+   "source": "UAL1 Jog_Fwd_Loop, arms 30% toward the guard, head up",
+   "ground_offset_max_m": 0.0259,
+   "weapon_tip_max_horizontal_reach_m": 1.058,
+   "speed_mps": 6.498,
+   "speed_note": "natural ground speed (median slide of the planted foot); play at stride/speed_mps for planted feet",
+   "note": "UAL1 Jog_Fwd_Loop, arms 30% toward the guard, head up; dropped 4.8 cm so the feet land"
+  },
+  "Stagger": {
+   "duration": 1.0667,
+   "loop": false,
+   "source": "UAL2 Idle_Shield_Break",
+   "ground_offset_max_m": 0.0014,
+   "weapon_tip_max_horizontal_reach_m": 0.832,
+   "note": "UAL2 Idle_Shield_Break"
+  },
+  "Walk": {
+   "duration": 1.3333,
+   "loop": true,
+   "source": "UAL1 Walk_Loop, arms 55% toward the guard (a stalk)",
+   "ground_offset_max_m": 0.0019,
+   "weapon_tip_max_horizontal_reach_m": 0.932,
+   "speed_mps": 1.084,
+   "speed_note": "natural ground speed (median slide of the planted foot); play at stride/speed_mps for planted feet",
+   "note": "UAL1 Walk_Loop, arms held 55% toward the guard: a stalk"
+  }
+ },
+ "sockets": {
+  "weapon_grip": {
+   "parent_bone": "hand_r",
+   "idle_t0_yup": [
+    -0.3053,
+    1.0111,
+    -0.5013
+   ],
+   "idle_t0_local_z_yup": [
+    -0.6164,
+    -0.7493,
+    -0.2421
+   ],
+   "purpose": "the blade's root over the back of the right wrist, child of hand_r; grip->tip is the blade for sweeps and trails"
+  },
+  "weapon_tip": {
+   "parent_bone": "hand_r",
+   "idle_t0_yup": [
+    -0.6934,
+    0.5394,
+    -0.6537
+   ],
+   "idle_t0_local_z_yup": [
+    -0.6164,
+    -0.7493,
+    -0.2421
+   ],
+   "purpose": "the blade's point (0.4 m past the knuckles), child of hand_r; +Z along the blade. Every cut and the lunge hit with this blade"
+  },
+  "eye": {
+   "parent_bone": "Head",
+   "idle_t0_yup": [
+    -0.0451,
+    1.6099,
+    0.1094
+   ],
+   "idle_t0_local_z_yup": [
+    -0.2389,
+    -0.1598,
+    0.9578
+   ],
+   "purpose": "centre of the cyan eye slit, child of Head; +Z out of the face"
+  }
+ },
+ "meshes": {
+  "skinned_meshes": 1,
+  "triangles": 23508,
+  "materials": [
+   "chrome_armor_mat",
+   "chrome_eye"
+  ],
+  "draw_calls": 2
+ },
+ "materials": {
+  "chrome_armor_mat": "baked 2048 atlas (JPEG): baseColor, ORM (R occlusion, G roughness, B metalness), tangent normal. Chrome plates: metalness 1, base colour at real chrome reflectance (linear ~0.6, nothing painted in), roughness ~0.06-0.15 with faint smudges; dark chrome bands (base 0.1, roughness ~0.2); black glass visor band; dark ribbed rubber joints (metalness 0.15, roughness ~0.4). In the city it reads as a black mirror carrying the neon; for the brighter silver of Alex's frame give this material envMap = the city environment and envMapIntensity ~1.0 (three r180 uses scene.environmentIntensity 0.5 when a material has no envMap of its own)",
+  "chrome_eye": "untextured emissive cyan (linear 0.22, 0.85, 1.0), KHR_materials_emissive_strength 6: the eye slit, the sternum seam light, a line along each forearm and the blade's edge. city-enemies.js drives it as the tell"
+ },
+ "height_m": 1.75,
+ "idle_t0": {
+  "lowest_m": 0.0005,
+  "crown_m": 1.75,
+  "half_width_m": 0.693,
+  "front_m": 0.538,
+  "back_m": 0.654
+ },
+ "summary": "Chrome humanoid android: polished mirror plates with real gaps over dark ribbed joints, an ovoid head with a black glass visor band and a cyan eye slit, a few cyan seam lights, a blade on the back of the right hand. One skinned mesh: baked atlas + one emissive glow material."
+}

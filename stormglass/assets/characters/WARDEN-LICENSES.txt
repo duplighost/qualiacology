@@ -1,0 +1,23 @@
+STORMGLASS stormwarden enemy (stormwarden.glb) - provenance
+
+Body and skeleton
+  Quaternius "Universal Base Characters [Standard]" - Superhero_Male_FullBody.gltf
+  CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+  https://quaternius.com/packs/universalbasecharacters.html (downloaded from quaternius.itch.io)
+  Changes: head faces under the helm removed; original skin textures replaced by baked
+  mail/leather materials; scaled x1.0446.
+
+Animation
+  Quaternius "Universal Animation Library [Standard]" and "Universal Animation Library 2 [Standard]"
+  CC0 1.0. https://quaternius.com/packs/universalanimationlibrary.html and ...universalanimationlibrary2.html
+  Clips used (renamed): Sword_Idle->Idle, Walk_Loop->Walk, Jog_Fwd_Loop->Run, Sword_Attack->Attack,
+  Sword_Regular_A->AttackQuick, Sword_Regular_A_Rec->AttackQuickRecover,
+  Sword_Heavy_Combo->AttackHeavy, Sword_Block->Block, Hit_Chest->Hit, Hit_Knockback->HitHeavy,
+  Idle_Shield_Break->Stagger, Death01->Death. Location keys rescaled with the model.
+
+Armour, helm, horns, spikes, blade, tabard, materials and textures
+  Original, generated for STORMGLASS by Claude (Anthropic) with Blender 5.2 scripts:
+  C:/Users/Alex/Projects/thaw/tools/enemy/ (warden_lib.py, warden_mats.py, build_warden.py,
+  anim_setup.py, bake_export.py, fix_sockets_export.py). No third-party meshes or images.
+
+No commercial-game assets, scans or trademarks were used.
