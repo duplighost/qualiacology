@@ -116,6 +116,12 @@ const retiredRoutes = [
   // Its source stays in Projects\lowbell. It never had short links.
   "/lowbell/",
   "/lowbell/index.html",
+  // STORMGLASS came off the site 2026-10-22 (Alex: "can we take down the game "STORMGLASS" from the website?").
+  // Its source stays in Projects\stormglass. Its short link /storm went with it.
+  "/stormglass/",
+  "/stormglass/index.html",
+  "/stormglass.html",
+  "/storm",
 ];
 const results = [];
 const failures = [];

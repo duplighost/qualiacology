@@ -78,19 +78,6 @@
       "actionLabel": "Go outside"
     },
     {
-      "slug": "stormglass",
-      "title": "STORMGLASS",
-      "descriptor": "Third-person sword action",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/stormglass-card-v20261021.jpg",
-      "alt": "A red-haired woman in a white strap harness runs up a rain-soaked neon avenue across a zebra crossing, a glowing blue sword raised, pink and cyan signs reflected in the wet road",
-      "summary": "A rain-soaked neon city and a blade that catches lightning. Catch their strikes and their bullets, carry the charge to the dead circuits, and ride it back into them. Three circuits, then the Collector. Keyboard and mouse.",
-      "metaDescription": "STORMGLASS is a third-person sword game in the browser: a rain-soaked neon city, a blade that catches lightning, three dead circuits to light and the Collector at the end. Keyboard and mouse.",
-      "controls": "Desktop only · WASD move · mouse look · left click strike · right click catch · Shift evade · Space jump · E cast · Q release · Tab focus · Esc pause",
-      "actionLabel": "Play STORMGLASS"
-    },
-    {
       "slug": "collateral",
       "title": "COLLATERAL",
       "descriptor": "First-person catch-and-throw",
