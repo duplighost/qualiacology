@@ -1,0 +1,33 @@
+STORMGLASS Rooted One, Act III boss (rooted.glb) - provenance
+
+Body and skeleton
+  Quaternius "Universal Base Characters [Standard]" - Superhero_Male_FullBody.gltf
+  CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+  https://quaternius.com/packs/universalbasecharacters.html (downloaded from quaternius.itch.io)
+  Changes: rest pose re-proportioned (longer arms, shorter legs, broader chest); head, feet and
+  most hand detail hidden under new geometry; decimated; original textures replaced by baked
+  materials; three bones added (jaw, chest_plate_l, chest_plate_r); scaled x2.984.
+
+Animation
+  Quaternius "Universal Animation Library [Standard]" and "Universal Animation Library 2 [Standard]"
+  CC0 1.0. https://quaternius.com/packs/universalanimationlibrary.html and
+  https://quaternius.com/packs/universalanimationlibrary2.html
+  Clips used (renamed): Zombie_Idle_Loop->Idle, Zombie_Walk_Fwd_Loop->Walk, Jog_Fwd_Loop->Run,
+  Shield_Dash (frames 5-26.4)->Charge, Zombie_Scratch->Swipe, OverhandThrow->Throw, Hit_Chest->Hit,
+  Idle_Shield_Break->Stagger, NinjaJump_Start->LeapStart, NinjaJump_Land->LeapLand.
+  Punch_Cross lent its fist finger poses. Head/neck/spine corrections and an arm IK pass that keeps
+  the talons out of the floor are layered on top. Location keys rescaled with the model.
+  Slam, Roar, Collapse and Exposed are original, keyed pose-to-pose by script on the same rig.
+
+Bark, root strands, ribcage, head, jaw, teeth, thorns, conductor branches, talons, root feet,
+moss cards and moss texture, materials and baked textures
+  Original, generated for STORMGLASS by Claude (Anthropic) with Blender 5.2 scripts in
+  C:/Users/Alex/Projects/thaw/tools/enemy/ (rooted_lib.py, rooted_mats.py, build_rooted.py,
+  rooted_anim.py, anim_setup.py, rooted_target_top.py, bake_export.py, fix_sockets_export.py,
+  ground_offsets.py, meta_glb.py, rooted_pose_sockets.py, rooted_previews.py, rooted_json.py,
+  rooted_sheet.py, run_rooted.sh). No third-party meshes or images.
+
+Preview renders only (not in the GLB): the Quaternius CC0 Superhero_Female base, posed with the
+UAL1 Sword_Idle clip, stands in as a 1.78 m scale figure.
+
+No commercial-game assets, scans or trademarks were used.

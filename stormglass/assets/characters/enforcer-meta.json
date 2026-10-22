@@ -1,0 +1,233 @@
+{
+ "asset": "enforcer.glb",
+ "asset_sha256": "6f41cffa23d0b42f1573c6910a7561fcc4a482be38b01dab641b0f627533f23a",
+ "bytes": 3964428,
+ "convention": {
+  "up": "+Y",
+  "forward": "+Z",
+  "units": "metres",
+  "root_scale": 1.0,
+  "sole_y": 0.0,
+  "in_place": "every clip keeps the root still; the game moves the body. Loops: first frame == last frame.",
+  "sockets_axis": "each socket's local +Z points out of it (muzzle: along the bore; eye/visor: out of the face)"
+ },
+ "skeleton": {
+  "root_node": "Enforcer_Rig",
+  "joints": 65,
+  "naming": "Quaternius universal rig (root pelvis spine_01..03 neck_01 Head clavicle/upperarm/lowerarm/hand _l/_r, thigh/calf/foot/ball _l/_r, fingers)",
+  "same_rig_as": "Quaternius Universal Animation Library 1 and 2"
+ },
+ "clips": {
+  "Aim": {
+   "duration": 1.6667,
+   "loop": true,
+   "source": "authored on UAL1 Pistol_Idle_Loop (stance, breath): rifle shouldered, aim drifts under half a degree",
+   "ground_offset_max_m": 0.0005,
+   "weapon_butt_max_horizontal_reach_m": 0.22,
+   "note": "rifle shouldered and level on +Z, the sights drift under half a degree; loops. Fire starts and ends on Aim t=0"
+  },
+  "Death": {
+   "duration": 2.4,
+   "loop": false,
+   "source": "UAL1 Death01: falls on his back, rifle across his chest + rifle held in both hands",
+   "ground_offset_max_m": 0.0,
+   "weapon_butt_max_horizontal_reach_m": 0.757,
+   "note": "UAL1 Death01: falls on his back; the rifle comes across his chest as he goes down and ends lying on it, both hands on. Ends resting on his back pack about 1 cm off the street"
+  },
+  "Fire": {
+   "duration": 0.6,
+   "loop": false,
+   "source": "authored from Aim t=0: three rounds, recoil kicks the muzzle up ~6.5 deg and the stock back into the shoulder; ends on Aim t=0",
+   "shots": [
+    0.0333,
+    0.2,
+    0.3667
+   ],
+   "ground_offset_max_m": 0.0005,
+   "weapon_butt_max_horizontal_reach_m": 0.227,
+   "note": "three-round burst: muzzle flash / projectile at each 'shots' time; each round kicks the muzzle ~6.5 deg up and the stock back 2.8 cm, settles on Aim t=0 by 0.6 s"
+  },
+  "Hit": {
+   "duration": 0.3333,
+   "loop": false,
+   "source": "UAL1 Hit_Chest + rifle held in both hands",
+   "ground_offset_max_m": 0.0005,
+   "weapon_butt_max_horizontal_reach_m": 0.219,
+   "note": "UAL1 Hit_Chest with the rifle held in both hands"
+  },
+  "Idle": {
+   "duration": 1.6667,
+   "loop": true,
+   "source": "UAL1 Pistol_Idle_Loop (body) + rifle at low ready, both hands solved on",
+   "ground_offset_max_m": 0.0005,
+   "weapon_butt_max_horizontal_reach_m": 0.226,
+   "note": "rifle at low ready (muzzle down and across the body), both hands on it; breath from Pistol_Idle_Loop; loops"
+  },
+  "Melee": {
+   "duration": 1.1333,
+   "loop": false,
+   "source": "authored: cocks the rifle back, lunges on the left foot and swings the stock round into the face at head height, recovers to Idle t=0",
+   "contact": 0.3667,
+   "contact_socket": "weapon_butt",
+   "ground_offset_max_m": 0.0007,
+   "weapon_butt_max_horizontal_reach_m": 0.708,
+   "note": "rifle-butt stroke: winds back (0-0.23 s), lunges on the left foot and swings the stock round into the face at 1.47 m, centre front, 0.72 m ahead of the root at 'contact'; recovers to Idle t=0 by 1.13 s. contact_socket weapon_butt"
+  },
+  "Run": {
+   "duration": 0.9333,
+   "loop": true,
+   "source": "UAL1 Jog_Fwd_Loop (legs, hips) + rifle carried at port",
+   "ground_offset_max_m": 0.0188,
+   "weapon_butt_max_horizontal_reach_m": 0.267,
+   "speed_mps": 6.117,
+   "speed_note": "natural ground speed (median slide of the planted foot); play at stride/speed_mps for planted feet",
+   "note": "UAL1 Jog_Fwd_Loop legs, rifle carried across the chest (port); dropped 3.4 cm so the feet land"
+  },
+  "Stagger": {
+   "duration": 1.0667,
+   "loop": false,
+   "source": "UAL2 Idle_Shield_Break + rifle held in both hands",
+   "ground_offset_max_m": 0.0013,
+   "weapon_butt_max_horizontal_reach_m": 0.239,
+   "note": "UAL2 Idle_Shield_Break with the rifle held in both hands"
+  },
+  "StrafeL": {
+   "duration": 0.4,
+   "loop": true,
+   "source": "authored: side shuffle with a short float between steps, rifle shouldered and on the target",
+   "speed_mps": 2.0,
+   "cycle_s": 0.4,
+   "ground_offset_max_m": 0.0029,
+   "weapon_butt_max_horizontal_reach_m": 0.205,
+   "note": "moves toward his own left (+X when facing +Z): quick side shuffle, rifle shouldered on the target. Authored for the speed in speed_mps"
+  },
+  "StrafeR": {
+   "duration": 0.4,
+   "loop": true,
+   "source": "authored: side shuffle with a short float between steps, rifle shouldered and on the target",
+   "speed_mps": 2.0,
+   "cycle_s": 0.4,
+   "ground_offset_max_m": 0.003,
+   "weapon_butt_max_horizontal_reach_m": 0.205,
+   "note": "mirror of StrafeL toward his right (-X when facing +Z)"
+  },
+  "Walk": {
+   "duration": 1.3333,
+   "loop": true,
+   "source": "UAL1 Walk_Loop (legs, hips) + rifle at low ready",
+   "ground_offset_max_m": 0.0024,
+   "weapon_butt_max_horizontal_reach_m": 0.264,
+   "speed_mps": 1.024,
+   "speed_note": "natural ground speed (median slide of the planted foot); play at stride/speed_mps for planted feet",
+   "note": "UAL1 Walk_Loop legs, rifle at low ready, head held on the target"
+  }
+ },
+ "sockets": {
+  "muzzle": {
+   "parent_bone": "hand_r",
+   "idle_t0_yup": [
+    -0.0423,
+    0.957,
+    0.5668
+   ],
+   "idle_t0_local_z_yup": [
+    0.2642,
+    -0.4804,
+    0.8363
+   ],
+   "purpose": "shot origin at the muzzle brake's crown, child of hand_r; local +Z points out of the barrel (verified in three.js)"
+  },
+  "sight": {
+   "parent_bone": "hand_r",
+   "idle_t0_yup": [
+    -0.1132,
+    1.1654,
+    0.3491
+   ],
+   "idle_t0_local_z_yup": [
+    0.2642,
+    -0.4804,
+    0.8363
+   ],
+   "purpose": "the holographic sight's front lens (glows pink), child of hand_r; +Z along the bore"
+  },
+  "weapon_butt": {
+   "parent_bone": "hand_r",
+   "idle_t0_yup": [
+    -0.2243,
+    1.2623,
+    -0.0117
+   ],
+   "idle_t0_local_z_yup": [
+    0.2642,
+    -0.4804,
+    0.8363
+   ],
+   "purpose": "centre of the butt plate, child of hand_r: Melee's contact point (the stock is what hits)"
+  },
+  "weapon_grip": {
+   "parent_bone": "hand_r",
+   "idle_t0_yup": [
+    -0.1584,
+    1.0695,
+    0.1907
+   ],
+   "idle_t0_local_z_yup": [
+    0.2642,
+    -0.4804,
+    0.8363
+   ],
+   "purpose": "centre of the pistol grip inside the right fist, child of hand_r"
+  },
+  "weapon_tip": {
+   "parent_bone": "hand_r",
+   "idle_t0_yup": [
+    -0.0464,
+    0.9646,
+    0.5537
+   ],
+   "idle_t0_local_z_yup": [
+    0.2642,
+    -0.4804,
+    0.8363
+   ],
+   "purpose": "the rifle's front, 1.6 cm behind the crown, child of hand_r: the catch clash point"
+  },
+  "visor": {
+   "parent_bone": "Head",
+   "idle_t0_yup": [
+    -0.0123,
+    1.667,
+    0.1481
+   ],
+   "idle_t0_local_z_yup": [
+    0.0,
+    -0.0797,
+    0.9968
+   ],
+   "purpose": "centre of the pink slit on the helmet face, child of Head; +Z out of the face"
+  }
+ },
+ "meshes": {
+  "skinned_meshes": 1,
+  "triangles": 23242,
+  "materials": [
+   "enforcer_armor_mat",
+   "enforcer_visor"
+  ],
+  "draw_calls": 2
+ },
+ "materials": {
+  "enforcer_armor_mat": "baked 2048 atlas (JPEG): baseColor, ORM (R occlusion, G roughness, B metalness), tangent normal. Plates are satin black polymer (roughness ~0.42) and graphite (~0.35) with worn edges, a dark twill suit, rubber gloves and soles, gunmetal rifle parts, glossy black visor glass",
+  "enforcer_visor": "untextured emissive hot pink (linear 1.0, 0.09, 0.45), KHR_materials_emissive_strength 5: the visor slit, the rifle sight's lenses, a short light on each pauldron and one on the back pack. city-enemies.js drives its emissive colour/intensity as the tell; all of them flash together"
+ },
+ "height_m": 1.8203,
+ "idle_t0": {
+  "lowest_m": 0.0005,
+  "crown_m": 1.8203,
+  "half_width_m": 0.44,
+  "front_m": 0.575,
+  "back_m": 0.425
+ },
+ "summary": "Corp-sec trooper: matte black and graphite plates over a dark suit, closed helmet with a hot pink visor slit, heavy shoulders, compact bullpup in the right hand. One skinned mesh: baked atlas + one emissive glow material."
+}

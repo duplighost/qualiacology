@@ -1,0 +1,16 @@
+STORMGLASS wolf (wolf.glb) - provenance
+
+Model, skeleton and animation
+  Quaternius, "Ultimate Animated Animals" pack - Wolf. CC0 1.0 (public domain dedication).
+  https://quaternius.com/packs/ultimateanimatedanimals.html
+  Downloaded as a GLB from Poly Pizza (https://poly.pizza/m/P1gU3Qkr9r, marked Public Domain, author Quaternius).
+  Original file kept unmodified at C:/Users/Alex/Projects/thaw/downloads/polypizza-wolf/.
+  Changes: duplicate 'AnimalArmature|' clips and 'Eating' removed; scaled x0.5035 (ear tips 1.35 m) with
+  translations rescaled; flat-shaded vertices welded, sharp edges creased, one Catmull-Clark level; new
+  vertex-colour coat, per-vertex fur-length attribute, and eye/nose materials.
+
+Fur shader (fur.js)
+  Original, written for STORMGLASS by Claude (Anthropic).
+
+Build scripts: C:/Users/Alex/Projects/thaw/tools/enemy/build_wolf.py, wolf_timing.py, ground_offsets.py.
+No commercial-game assets, scans or trademarks were used.
