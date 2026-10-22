@@ -112,6 +112,10 @@ const retiredRoutes = [
   "/spiggot",
   "/rain-animal/",
   "/rain-animal.html",
+  // LOWBELL came off the site 2026-10-21 (Alex: "can you take lowbell off the website?").
+  // Its source stays in Projects\lowbell. It never had short links.
+  "/lowbell/",
+  "/lowbell/index.html",
 ];
 const results = [];
 const failures = [];
