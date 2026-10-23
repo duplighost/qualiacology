@@ -22,14 +22,35 @@ export function duckGeometry() {
   return g;
 }
 
+// an old brass key: a ring to hold it by, the shaft, the bit with its teeth (bow up)
+export function keyGeometry() {
+  const parts = [];
+  const paint = (g, c) => { const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g.index ? g.toNonIndexed() : g; };
+  const B = [1, 0.78, 0.36], D = [0.8, 0.56, 0.22];
+  const bow = new THREE.TorusGeometry(0.3, 0.075, 8, 22); bow.translate(0, 0.62, 0); parts.push(paint(bow, B));
+  for (const a of [0, Math.PI / 2]) { const c = new THREE.BoxGeometry(0.46, 0.05, 0.05); c.rotateZ(a); c.translate(0, 0.62, 0); parts.push(paint(c, D)); }
+  const collar = new THREE.CylinderGeometry(0.09, 0.09, 0.12, 10); collar.translate(0, 0.26, 0); parts.push(paint(collar, B));
+  const shaft = new THREE.CylinderGeometry(0.055, 0.055, 1.0, 10); shaft.translate(0, -0.3, 0); parts.push(paint(shaft, B));
+  for (const [y, w] of [[-0.62, 0.26], [-0.74, 0.2], [-0.5, 0.16]]) { const t = new THREE.BoxGeometry(w, 0.09, 0.05); t.translate(w / 2, y, 0); parts.push(paint(t, B)); }
+  const g = mergeGeometries(parts, false);
+  g.computeVertexNormals();
+  return g;
+}
+
 // diamonds to steer through, each one a note of a melody. Collected ones fly into the
 // board; missed ones go grey and drop away, so you always know which it was.
 export class Notes {
   constructor(scene, course, P, kind) {
     this.course = course;
     this.duck = kind === 'duck';
+    this.key = kind === 'key';
     let g;
-    if (this.duck) {
+    if (this.key) {
+      // Rent Free: the keys he gave her without knowing it
+      g = keyGeometry();
+      this.color = new THREE.Color(P.gem ?? 0xffc860);
+      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.28, metalness: 0.65, emissive: new THREE.Color(0x4a3008), emissiveIntensity: 1 });
+    } else if (this.duck) {
       // A Million Ducks: what you pick up are the ducks from the claw machine
       g = duckGeometry();
       this.color = new THREE.Color(P.gem ?? 0xffd23a);
@@ -113,7 +134,15 @@ export class Notes {
         const k = clamp((d - 2.5) / 6, 0, 1);
         bright *= 0.25 + 0.75 * k; scale *= this.duck ? k * (2 - k) : 0.55 + 0.45 * k;   // a duck is big: gone before the lens
       }
-      if (this.duck) {
+      if (this.key) {
+        // keys hang bow up and turn, catching the light
+        this._e.set(Math.sin(time * 1.9 + i) * 0.15, time * 2.2 + i * 1.7, Math.sin(time * 2.6 + i) * 0.12); q.setFromEuler(this._e);
+        s.setScalar(scale * 1.55);
+        m.compose(p, q, s);
+        this.mesh.setMatrixAt(k, m);
+        const db = n.got ? 2.4 : (ahead < -0.02 ? 0.45 : 1.25);
+        this.mesh.instanceColor.setXYZ(k, db, db, db * (ahead < -0.02 && !n.got ? 1.1 : 1));
+      } else if (this.duck) {
         // ducks face you coming, bobbing as if on water; bigger than a diamond, lit not glowing
         const yaw = this.course.sample(n.t).yaw + Math.PI;
         this._e.set(Math.sin(time * 3.1 + i) * 0.12, yaw + Math.sin(time * 1.7 + i * 2.3) * 0.35, Math.sin(time * 2.3 + i) * 0.15); q.setFromEuler(this._e);

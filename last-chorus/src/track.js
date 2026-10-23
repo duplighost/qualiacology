@@ -44,7 +44,7 @@ export class Track {
       for (let k = this._lastK; k <= kr; k++) {
         if (this.frozen.has(k)) continue;
         const tk = k / R;
-        const back = (t - tk) * rider.v;
+        const back = (t - tk) * (rider.stopping ? rider.stopV0 : rider.v);
         const yaw = c.sample(tk, this.s).yaw;
         this.frozen.set(k, [rider.xz.x - Math.sin(yaw) * back, rider.xz.z - Math.cos(yaw) * back]);
         this.lit.set(k, rider.flow);
@@ -54,7 +54,7 @@ export class Track {
       for (const key of this.frozen.keys()) { if (key < k0 - 4) { this.frozen.delete(key); this.lit.delete(key); } else break; }
     }
     // integrate ahead from the rider
-    const v0 = rider.v, va = Math.max(rider.vAvg, 18);
+    const v0 = rider.stopping ? rider.stopV0 : rider.v, va = rider.stopping ? rider.stopV0 : Math.max(rider.vAvg, 18);
     let x = rider.xz.x, z = rider.xz.z, tp = t;
     const N = this.N;
     for (let i = 0; i < N; i++) {
@@ -63,7 +63,7 @@ export class Track {
         const f = this.frozen.get(k);
         if (f) { this.wx[i] = f[0]; this.wz[i] = f[1]; }
         else {
-          const back = (t - tk) * rider.v, yaw = c.sample(tk, this.s).yaw;
+          const back = (t - tk) * (rider.stopping ? rider.stopV0 : rider.v), yaw = c.sample(tk, this.s).yaw;
           this.wx[i] = rider.xz.x - Math.sin(yaw) * back; this.wz[i] = rider.xz.z - Math.cos(yaw) * back;
         }
         continue;

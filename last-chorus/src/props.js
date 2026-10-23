@@ -81,12 +81,13 @@ export function glowMaterial() {
       uniform float uTime, uBeat;
       void main(){
         vUv = uv; vC = aTint;
-        // aWake.x = strength, aWake.y = blink mode (0 steady, 1 blink slow, 2 strobe A, 3 strobe B, 4 beat)
+        // aWake.x = strength, aWake.y = blink mode (0 steady, 1 blink slow, 2 strobe A, 3 strobe B, 4 beat, 5 turn signal)
         float m = aWake.y, k = 1.0;
         if (m > 0.5 && m < 1.5) k = step(0.5, fract(uTime * 0.8));
         else if (m > 1.5 && m < 2.5) k = step(0.5, fract(uTime * 3.0));
         else if (m > 2.5 && m < 3.5) k = 1.0 - step(0.5, fract(uTime * 3.0));
-        else if (m > 3.5) k = 0.55 + 0.9 * uBeat;
+        else if (m > 3.5 && m < 4.5) k = 0.55 + 0.9 * uBeat;
+        else if (m > 4.5) k = step(0.45, fract(uTime * 1.45));
         vA = aWake.x * k;
         vec4 c = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
         float s = length(instanceMatrix[0].xyz);

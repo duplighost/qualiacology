@@ -42,7 +42,7 @@ export function prepare(course, plan) {
     for (let i = 0; i < n; i++) { b[i] = s / (2 * r + 1); s += a[clamp(i + r + 1, 0, n - 1)] - a[clamp(i - r, 0, n - 1)]; }
     a = b;
   }
-  course._terrain = { base: a, flats: (plan && plan.flat) || [] };
+  course._terrain = { base: a, flats: (plan && plan.flat) || [], shelf: (plan && plan.shelf) || 7.5, drop: (plan && plan.drop) ?? 2.6 };
   return course._terrain;
 }
 
@@ -54,15 +54,15 @@ export function groundAt(course, t, x) {
   if (!T) return 0;
   const f = (t - course.t0) * RATE;
   const i = clamp(Math.floor(f), 0, course.n - 2), a = clamp(f - i, 0, 1);
-  let base = T.base[i] + (T.base[i + 1] - T.base[i]) * a - 2.6;
+  let base = T.base[i] + (T.base[i + 1] - T.base[i]) * a - T.drop;
   for (const [a0, a1, y] of T.flats) { const k = smooth(a0 - 4, a0, t) * (1 - smooth(a1, a1 + 4, t)); base += (y - base) * k; }
   base = Math.max(0, base);
-  const ax = Math.abs(x);
-  if (ax < 7.5) return base;
+  const ax = Math.abs(x), shelf = T.shelf;
+  if (ax < shelf) return base;
   const side = x > 0 ? 1 : -1;
   // how steeply the hill falls away here: changes slowly along the trail, differently each side
   const steep = 0.08 + 0.32 * nz(t * 0.021 + side * 3.1);
-  const hx = ax - 7.5;
+  const hx = ax - shelf;
   let y = base - steep * hx * (1 + hx / 260) + 6 * (nz(t * 0.06 + x * 0.011 + 9) - 0.5) * smooth(12, 60, ax);
   y *= 1 - smooth(230, 310, ax);
   return Math.max(0, y);
@@ -73,14 +73,14 @@ function terrainMaterial(P) {
     uniforms: {
       uSun: { value: new THREE.Color(P.moon) }, uSunDir: { value: new THREE.Vector3(...(P.moonDir || [0, 1, 0])).normalize() }, uSunK: { value: P.sunK ?? 1 },
       uSky: { value: new THREE.Color(P.skyLight ?? 0x8090a0) }, uBounce: { value: new THREE.Color(P.bounce ?? 0x404030) }, uHemiK: { value: P.hemiK ?? 1.5 },
-      uGrass: { value: new THREE.Color(P.ground) }, uDirt: { value: new THREE.Color(P.dirt ?? 0x8a6a4a) }, uWood: { value: 1 }, uDry: { value: 1 },
+      uGrass: { value: new THREE.Color(P.ground) }, uDirt: { value: new THREE.Color(P.dirt ?? 0x8a6a4a) }, uWood: { value: 1 }, uDry: { value: 1 }, uPath: { value: 1 }, uLawn: { value: 0 },
       uFog: { value: new THREE.Color(P.fog) }, uFogDensity: { value: P.fogDensity }, uCam: { value: new THREE.Vector3() },
     },
     vertexShader: /* glsl */`
       varying vec3 vN; varying vec3 vW; varying vec2 vUv;
       void main(){ vUv = uv; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uSun, uSunDir, uSky, uBounce, uGrass, uDirt, uFog, uCam; uniform float uSunK, uHemiK, uWood, uDry, uFogDensity;
+      uniform vec3 uSun, uSunDir, uSky, uBounce, uGrass, uDirt, uFog, uCam; uniform float uSunK, uHemiK, uWood, uDry, uFogDensity, uPath, uLawn;
       varying vec3 vN; varying vec3 vW; varying vec2 vUv;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float n2(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f); return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
@@ -93,7 +93,9 @@ function terrainMaterial(P) {
         vec3 leaves = mix(uGrass * vec3(0.55, 0.5, 0.36), vec3(0.2, 0.14, 0.08), 0.4) * (0.75 + 0.5 * pat);
         vec3 alb = mix(grass, leaves, uWood * smoothstep(8.0, 15.0, ax));
         // the path: packed dirt, wandering a little
-        float path = 1.0 - smoothstep(3.4, 5.0, ax + (n2(vec2(along * 0.12, 3.0)) - 0.5) * 1.8);
+        float path = (1.0 - smoothstep(3.4, 5.0, ax + (n2(vec2(along * 0.12, 3.0)) - 0.5) * 1.8)) * uPath;
+        // a town: mown lawns in stripes, a driveway now and then
+        alb = mix(alb, uGrass * (0.92 + 0.16 * step(0.5, fract(along / 3.0 + (ax > 9.0 ? 0.25 : 0.0)))), uLawn * smoothstep(8.0, 10.0, ax) * (1.0 - smoothstep(60.0, 90.0, ax)));
         vec3 dirt = uDirt * (0.8 + 0.35 * n2(vec2(along * 0.5, x * 1.3)));
         alb = mix(alb, dirt, path);
         // rock where it's steep

@@ -131,6 +131,62 @@ function mats() {
 
 function add(g, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; }
 
+// his car: a sensible sedan in a sensible colour, both hands at ten and two
+export function buildSedan(paint = 0xd8ccb4) {
+  const g = new THREE.Group();
+  const M = mats();
+  const W = 1.84;
+  const body = new THREE.MeshPhysicalMaterial({ color: paint, roughness: 0.3, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.06 });
+  // the body to the belt line, then the glass house, then the roof
+  add(g, profile([[-2.42, 0.3], [2.36, 0.3], [2.44, 0.6], [2.34, 0.84], [1.12, 0.95], [-1.86, 1.0], [-2.43, 0.95], [-2.47, 0.6]], W, 0.14), body, 0, 0, 0);
+  add(g, profile([[1.1, 0.93], [0.32, 1.33], [-0.96, 1.35], [-1.84, 0.98]], W - 0.2, 0.06), M.glass, 0, 0, 0);
+  add(g, roundBox(W - 0.24, 0.09, 1.24, 0.04), body, 0, 1.42, -0.32);
+  // pillars between the windows, so the glass reads as windows
+  for (const s of [-1, 1]) {
+    add(g, new THREE.BoxGeometry(0.05, 0.44, 0.09), body, s * (W / 2 - 0.1), 1.17, -0.4, 0, 0, 0);
+    add(g, new THREE.BoxGeometry(0.04, 0.03, 1.0), M.chrome, s * (W / 2 + 0.005), 0.95, 0.35);
+    add(g, roundBox(0.12, 0.1, 0.22, 0.03), body, s * (W / 2 + 0.06), 1.0, 0.95);                 // mirrors
+    add(g, new THREE.BoxGeometry(0.02, 0.03, 0.18), M.chrome, s * (W / 2 + 0.01), 0.74, 0.25);     // door handles
+    add(g, new THREE.BoxGeometry(0.02, 0.03, 0.18), M.chrome, s * (W / 2 + 0.01), 0.74, -0.85);
+    add(g, roundBox(0.42, 0.15, 0.06, 0.04), M.lensW, s * 0.6, 0.68, 2.39);                       // headlights
+    add(g, roundBox(0.46, 0.17, 0.06, 0.04), M.lensR, s * 0.58, 0.8, -2.45);                      // tail lights
+    add(g, roundBox(0.14, 0.08, 0.05, 0.02), M.lensA, s * 0.86, 0.6, 2.36);                       // indicators
+  }
+  add(g, roundBox(1.0, 0.18, 0.06, 0.04), M.black, 0, 0.54, 2.42);       // grille
+  add(g, roundBox(1.9, 0.14, 0.2, 0.06), M.trim, 0, 0.38, 2.42);         // bumpers
+  add(g, roundBox(1.9, 0.14, 0.2, 0.06), M.trim, 0, 0.42, -2.48);
+  const plate = new THREE.MeshBasicMaterial({ map: textTexture(['NOTHNG'], { w: 512, h: 256, bg: '#f4f2ea', color: '#1a3a8a', font: 'bold 120px "Arial Narrow", Arial, sans-serif' }) });
+  add(g, new THREE.PlaneGeometry(0.52, 0.13), plate, 0, 0.56, -2.59, 0, Math.PI, 0);
+  for (const s of [-1, 1]) for (const z of [1.45, -1.48]) {
+    const w = wheel(0.33, 0.22, M.rubber, M.chrome, M.chrome); w.position.set(s * (W / 2 - 0.12), 0.33, z); if (s < 0) w.rotation.y = Math.PI; g.add(w);
+    add(g, new THREE.TorusGeometry(0.4, 0.06, 6, 16, Math.PI), M.black, s * (W / 2 + 0.002), 0.33, z, 0, Math.PI / 2, 0);
+  }
+  // lights: heads, tails, and the indicator on the side he's turning to, blinking
+  g.userData.lights = [
+    [0.6, 0.68, 2.44, 1.5, [1, 0.96, 0.86], 1.4, 0], [-0.6, 0.68, 2.44, 1.5, [1, 0.96, 0.86], 1.4, 0],
+    [0.58, 0.8, -2.5, 1.2, [1, 0.08, 0.06], 1.6, 0], [-0.58, 0.8, -2.5, 1.2, [1, 0.08, 0.06], 1.6, 0],
+    [0.86, 0.6, 2.4, 1.3, [1, 0.6, 0.08], 2.6, 5], [0.9, 0.8, -2.5, 1.4, [1, 0.6, 0.08], 2.8, 5],
+  ];
+  return g;
+}
+
+// a patrol car: the sedan in black and white, a light bar on the roof
+export function buildPolice() {
+  const g = buildSedan(0x14161c);
+  const M = mats();
+  for (const s of [-1, 1]) add(g, new THREE.BoxGeometry(0.02, 0.4, 2.1), M.white, s * 0.935, 0.66, -0.25);
+  add(g, roundBox(1.34, 0.12, 0.36, 0.04), M.trim, 0, 1.52, -0.3);
+  const blue = new THREE.MeshStandardMaterial({ color: 0x000820, emissive: 0x2050ff, emissiveIntensity: 2.4, roughness: 0.2 });
+  add(g, roundBox(0.62, 0.15, 0.32, 0.05), M.lensR, -0.33, 1.62, -0.3);
+  add(g, roundBox(0.62, 0.15, 0.32, 0.05), blue, 0.33, 1.62, -0.3);
+  g.userData.lights = [
+    [0.6, 0.68, 2.44, 1.5, [1, 0.96, 0.86], 1.4, 0], [-0.6, 0.68, 2.44, 1.5, [1, 0.96, 0.86], 1.4, 0],
+    [0.58, 0.8, -2.5, 1.2, [1, 0.08, 0.06], 1.6, 0], [-0.58, 0.8, -2.5, 1.2, [1, 0.08, 0.06], 1.6, 0],
+    [-0.33, 1.7, -0.3, 6.5, [1, 0.06, 0.08], 4.6, 2], [0.33, 1.7, -0.3, 6.5, [0.12, 0.3, 1], 4.6, 3],
+  ];
+  return g;
+}
+
 // a Type III ambulance: cab up front, the patient box behind, light bar on top
 export function buildAmbulance() {
   const g = new THREE.Group();

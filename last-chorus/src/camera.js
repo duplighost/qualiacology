@@ -33,7 +33,7 @@ export class ChaseCam {
     // where the camera wants to be: a few metres back along the road we just rode
     this.lift += (clamp(airH, 0, 30) * 0.35 - this.lift) * Math.min(1, dt * 4);
     const dist = 4.3 + 2.4 * sp;
-    const back = dist / Math.max(v, 12);
+    const back = dist / Math.max(rider.stopping ? rider.stopV0 : v, 12);
     const height = 2.25 + (this.lift0 || 0) + 0.55 * sp - this.dip * 0.4;
     const want = track.at(t - back, rider.x * 0.5, height, this._a);
     want.y = Math.max(want.y, R.y - airH * 0.65 + 0.7);  // follow jumps partway
@@ -47,7 +47,7 @@ export class ChaseCam {
       const side = track.at(t + (tv.ahead ?? 0.12), tv.x ?? 4.6, tv.h ?? 1.1, this._c);
       want.lerp(side, titleK);
       const her = track.at(t - (tv.back ?? 0.02), rider.x, tv.lookH ?? 1.15, this._c);
-      ahead.lerp(her, titleK);
+      ahead.lerp(her, tv.lookFast ? Math.min(1, titleK * 3) : titleK);
     }
 
     // springs on offsets relative to the rider

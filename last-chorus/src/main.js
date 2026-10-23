@@ -17,6 +17,9 @@ import { HeartStage, Confetti, Vehicles, partyFrame } from './party.js';
 import { TrailWorld, HomeFinale } from './trail.js';
 import { CinemaWorld, ScreenFinale } from './cinema.js';
 import { ColdWorld, DoorFinale } from './cold.js';
+import { SundayWorld, TownLineFinale } from './sunday.js';
+import { SummerWorld, LampFinale } from './summer.js';
+import { HouseWorld, PortraitFinale } from './mansion.js';
 import { Hud } from './hud.js';
 import { Input } from './input.js';
 import { Screens } from './menu.js';
@@ -81,7 +84,7 @@ async function loadSong(index, onProgress = () => {}) {
 let menuSel = 0;
 function card(i) { const e = ALBUM[i]; return { title: e.title, accent: e.accent || '#ff4f9a', image: `assets/menu/${e.id}.jpg`, best: bestOf(e.id), inTime: pctOf(e.id) }; }
 function openMenu(sel = menuSel) {
-  if (S) { sound.stop(); sound.charge(false); sound.siren(0); }
+  if (S) { sound.stop(); sound.charge(false); sound.siren(0); sound.skid(0); }
   paused = false; ui.hidePause(); ui.hideEnd();
   state = 'menu';
   document.body.classList.remove('riding');
@@ -146,13 +149,13 @@ function build(S) {
   const trail = new Trail(scene, P);
   const fireworks = new Fireworks(scene, [P.jacket, P.edge, P.fret, P.window, 0xffffff]);
   const plan = S.entry.scenery || {};
-  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale }[plan.finale?.kind] || Wreck;
+  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale, town: TownLineFinale, lamp: LampFinale, portrait: PortraitFinale }[plan.finale?.kind] || Wreck;
   const finale = plan.finale ? new Finale(scene, course, P, plan.finale, town) : null;
   const vehicles = plan.vehicles ? new Vehicles(scene, course, plan.vehicles) : null;
-  const confetti = S.entry.confetti ? new Confetti(scene, [P.heart ?? P.glow, P.edge, P.fret, 0xffffff, P.windowAlt, 0x5ff2ff]) : null;
+  const confetti = S.entry.confetti ? new Confetti(scene, S.entry.confettiColors || [P.heart ?? P.glow, P.edge, P.fret, 0xffffff, P.windowAlt, 0x5ff2ff]) : null;
   const trains = plan.trains ? new Train(course, plan.trains.x, plan.trains.passes) : null;
   town.track = track;
-  const WORLDS = { trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld };
+  const WORLDS = { trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld };
   const world = WORLDS[S.entry.world] ? new WORLDS[S.entry.world](scene, { course, plan, P, track, rider, town }) : null;
   const hemi = new THREE.HemisphereLight(new THREE.Color(P.skyLight ?? 0x6a5a9a), new THREE.Color(P.bounce ?? 0x5a3a2a), P.hemiK ?? 1.9);
   scene.add(hemi);
@@ -231,6 +234,7 @@ function togglePause() {
 }
 function rideAgain() {
   ui.hideEnd();
+  sound.skid(0);
   state = 'loading'; sound.stop(); sound.charge(false);
   prepare(S).then(() => { state = 'title'; showTitle(); startRide(); });
 }
@@ -276,9 +280,12 @@ function frame(now) {
       inp.pressAt = songT - Math.max(0, nowMs - input.downAt) / 1000;
       inp.releaseAt = songT - Math.max(0, nowMs - input.upAt) / 1000;
     }
-    rider.advance(Math.max(rider.t, songT), inp);
+    // the music's over: the stop (song time slows with her from here)
+    if (!rider.stopping && songT > course.duration + 0.05 && rider.grounded) beginStop(S);
+    if (rider.stopping) stopFrame(S, dt);
+    else rider.advance(Math.max(rider.t, songT), inp);
     handleEvents(S, dt);
-    if (songT > course.duration + 2.5 && state === 'ride') endSong();
+    if (songT > course.duration + 3.0 && state === 'ride') endSong();
   }
   if (state === 'title') {
     // idle on the start line, breathing with nothing yet
@@ -331,7 +338,11 @@ function frame(now) {
   const orbit = S.finale && S.outroK ? { center: S.finale.group.position.clone().add(new THREE.Vector3(0, fo.y ?? 1.2, 0)), k: S.outroK, angle: orbitAngle, r: fo.r, h: fo.h } : null;
   // the end card sits on the left: look a little left of the place so it stands to the right of it
   if (orbit && fo.right) orbit.look = orbit.center.clone().add(new THREE.Vector3(-Math.sin(orbitAngle), 0, Math.cos(orbitAngle)).multiplyScalar(fo.right * (fo.r ?? 14)));
-  chase.update(track, rider, dt, S.titleK * S.titleK * (3 - 2 * S.titleK), orbit);
+  if (state === 'results' && rider.stopping) stopFrame(S, dt);
+  const tk = S.titleK * S.titleK * (3 - 2 * S.titleK);
+  const sk = S.stopK ? S.stopK * S.stopK * (3 - 2 * S.stopK) : 0;
+  chase.titleView = sk > tk ? S.stopView : (S.entry.titleView || null);
+  chase.update(track, rider, dt, Math.max(tk, sk), orbit);
 
   // the music: how much of the band you've earned
   const sp = clamp((rider.v - 18) / 40, 0, 1);
@@ -555,6 +566,40 @@ function musicMoments(S, sec) {
   }
 }
 
+// the end of a song: board across, heel edge in, spray, stopped. Song time runs at her
+// speed over the speed she had, so the road and the place she's arriving at hold still.
+function beginStop(S) {
+  const r = S.rider;
+  r.stopping = true; r.stopV0 = Math.max(12, r.v); r.stopVel = r.stopV0;
+  S.stopClock = r.t; S.stopK = 0;
+  // the camera comes round in front of her, off her front shoulder, to see it
+  S.stopView = { ahead: 4.4 / r.stopV0, x: -3.7, h: 1.4, back: 0.2 / r.stopV0, lookH: 0.9, lookFast: true };
+  S.stopH = 1.5;
+}
+function stopFrame(S, dt) {
+  const r = S.rider;
+  const decel = Math.max(22, r.stopV0 / 1.25);
+  r.stopVel = Math.max(0, r.stopVel - decel * dt);
+  S.stopClock += dt * r.stopVel / r.stopV0;
+  r.advance(Math.max(r.t, S.stopClock), { press: false, steer: 0 });
+  S.stopK = Math.min(1, (S.stopK || 0) + dt / 1.1);
+  // the camera goes up and over her on its way round, not through her
+  const sk = S.stopK * S.stopK * (3 - 2 * S.stopK);
+  S.stopView.h = S.stopH + 2.2 * Math.sin(Math.PI * sk);
+  const k = r.stopVel / r.stopV0;
+  sound.skid(paused ? 0 : Math.min(1, k * 1.3) * (r.stopVel > 0.5 ? 1 : 0));
+  // spray off the front edge, the way the board was going
+  if (r.stopVel > 1.5) {
+    const f = S.track.dirAt(r.t, S._sf || (S._sf = new THREE.Vector3()));
+    const p = S.track.at(r.t, r.x, 0.12, S._sp || (S._sp = new THREE.Vector3()));
+    p.addScaledVector(f, 0.7);
+    const n = Math.ceil(2 + 10 * k);
+    const c = new THREE.Color(S.P.edge).multiplyScalar(1.3 + 0.8 * k);
+    S.sparks.emit(p, f.clone().multiplyScalar(4 + r.stopVel * 0.45).add(new THREE.Vector3(0, 2.6 + 2.5 * k, 0)), c, n, { spread: 2.6 + 3 * k, life: 0.55, size: 0.15, grav: 9, drag: 1.2, jitter: 1.4 });
+    if (Math.random() < 0.5) S.sparks.emit(p, f.clone().multiplyScalar(3 + r.stopVel * 0.3).add(new THREE.Vector3(0, 1.5, 0)), new THREE.Color(1, 1, 1).multiplyScalar(1.2 * k + 0.4), 3, { spread: 2, life: 0.4, size: 0.22, grav: 7, drag: 2, jitter: 1.2 });
+  }
+}
+
 // moments a song asks for at exact times: a flash of lightning and its thunder, a knock
 function songMoments(S) {
   const list = S.entry.moments;
@@ -565,6 +610,17 @@ function songMoments(S) {
     S.momentsDone.add(m);
     if (m.kind === 'thunder') { S.flash = Math.max(S.flash, 0.55 * (m.k ?? 1)); post.comp.uniforms.uFlashColor.value.setRGB(0.75, 0.85, 1); setTimeout(() => sound.thunder(m.k ?? 1), 140); S.flashTint = 0.6; }
     if (m.kind === 'flash') { S.flash = Math.max(S.flash, m.k ?? 0.8); post.comp.uniforms.uFlashColor.value.setRGB(1, 0.95, 0.85); S.flashTint = 0.8; }
+    if (m.kind === 'fireworks') {
+      // shells from the alleys either side, a moment ahead of you
+      for (let i = 0; i < (m.n ?? 6); i++) {
+        const side = i % 2 ? 1 : -1;
+        const from = S.track.ground(t + (m.ahead ?? 2.0) + i * 0.16, side * (m.x ?? 34) * (0.8 + Math.random() * 0.7), new THREE.Vector3());
+        const to = from.clone(); to.y = (m.y ?? 42) + Math.random() * 26;
+        setTimeout(() => S.fireworks.launch(from, to, m.size ?? 0.9), i * (m.gap ?? 150));
+      }
+    }
+    // a knock at the door: two raps, a little shake
+    if (m.kind === 'knock') { for (let i = 0; i < (m.n ?? 2); i++) setTimeout(() => { sound.thud(m.k ?? 0.5); chase.impulse(0.3, 0.45, 0); }, i * (m.gap ?? 210)); }
     if (m.kind === 'thud') { sound.thud(m.k ?? 1); chase.impulse(1.1, 0.9, 0); S.muffle = Math.max(S.muffle, 0.6); S.hurt = 1; }
   }
 }

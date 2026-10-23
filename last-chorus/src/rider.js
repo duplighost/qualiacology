@@ -48,6 +48,7 @@ export class Rider {
     this.vAvg = v;
     this.events = [];
     this.xz = { x: 0, z: 0 };
+    this.stopping = false; this.stopV0 = 0; this.stopVel = 0;   // the stop at the end of a song
     this.lastVy = s.vy;
     this.stats = { valleys: 0, good: 0, perfect: 0, clean: 0, hard: 0, crashes: 0, notes: 0, notesTotal: 0, top: v, dist: 0, airTime: 0, flowSum: 0, flowN: 0,
       judged: 0, hits: 0, perfects: 0, goods: 0, bestStreak: 0 };
@@ -71,6 +72,19 @@ export class Rider {
 
   _step(dt, input) {
     const c = this.course, s = c.sample(this.t + dt, this.s);
+    if (this.stopping) {
+      // the song is over: board across, edge in, she brakes to a stop. Song time slows
+      // with her (main.js), and the road ahead stays laid out at the speed she had, so
+      // here a song second is still stopV0 metres; her own speed is stopVel.
+      this.y = s.y; this.vy = s.vy; this.grounded = true; this.press = false; this.air = 0;
+      this.vx *= Math.exp(-dt * 6); this.x += this.vx * dt;
+      const dist = this.stopV0 * dt;
+      this.xz.x += Math.sin(s.yaw) * dist; this.xz.z += Math.cos(s.yaw) * dist;
+      this.v = this.stopVel;
+      this.lastVy = s.vy;
+      this.t += dt;
+      return;
+    }
     const wiping = this.wipe > 0;
     const wantPress = !wiping && input.press;
     if (wantPress !== this.press) {
