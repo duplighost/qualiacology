@@ -8,6 +8,7 @@ export class Hud {
   constructor() {
     this.bar = $('#songbar'); this.shape = $('#shape'); this.title = $('#title'); this.speed = $('#speed');
     this.results = $('#results'); this.load = $('#loading');
+    this.jw = $('#judge .word'); this.js = $('#judge .streak'); this.gems = $('#gems'); this.gemN = $('#gems .n'); this.gemIcon = $('#gems .icon');
     this.g = this.shape.getContext('2d');
     this.lit = null;
   }
@@ -18,17 +19,21 @@ export class Hud {
     this.title.classList.remove('off');
     this.title.querySelector('.song').textContent = song.title;
     this.title.querySelector('.num').textContent = String((info.index ?? 0) + 1).padStart(2, '0');
-    this.title.querySelector('#prev').classList.toggle('off', !info.hasPrev);
-    this.title.querySelector('#next').classList.toggle('off', !info.hasNext);
-    this.title.classList.toggle('locked', !!info.locked);
-    this.title.querySelector('.best').textContent = info.locked ? 'FINISH THE ONE BEFORE IT' : (info.best ? 'BEST ' + (info.best / 1000).toFixed(2) + ' KM' : '');
-    this.bar.classList.remove('on'); this.speed.classList.remove('on');
+    this.title.querySelector('.best').textContent = info.best ? 'BEST ' + (info.best / 1000).toFixed(2) + ' KM' : '';
+    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on');
+    this.results.classList.remove('on'); this.results.innerHTML = '';
+  }
+
+  hideAll() {
+    this.title.classList.add('off');
+    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on');
     this.results.classList.remove('on'); this.results.innerHTML = '';
   }
 
   start(course) {
     this.title.classList.add('off');
-    this.bar.classList.add('on'); this.speed.classList.add('on');
+    this.bar.classList.add('on'); this.speed.classList.add('on'); this.gems.classList.add('on');
+    this.gemN.textContent = '0';
     this.course = course;
     this.lit = new Float32Array(240).fill(-1);
   }
@@ -63,6 +68,42 @@ export class Hud {
     this.speed.textContent = Math.round(rider.v * 3.6) + ' KM/H';
   }
 
+  // the word for a pump, the moment you let go
+  judge(grade, streak) {
+    const w = this.jw;
+    w.className = 'word ' + grade;
+    w.textContent = { perfect: 'PERFECT', good: 'GOOD', early: 'EARLY', late: 'LATE', miss: 'MISS' }[grade] || '';
+    const big = grade === 'perfect';
+    w.getAnimations().forEach((a) => a.cancel());
+    w.animate([{ opacity: 1, transform: `scale(${big ? 1.35 : 1.15})` }, { opacity: 1, transform: 'scale(1)', offset: 0.18 }, { opacity: 0, transform: 'scale(0.96)' }], { duration: big ? 620 : 480, easing: 'ease-out' });
+    const s = this.js;
+    s.getAnimations().forEach((a) => a.cancel());
+    if (streak >= 2 && (grade === 'perfect' || grade === 'good')) {
+      s.textContent = '×' + streak;
+      s.animate([{ opacity: 0.95, transform: 'translateY(-3px)' }, { opacity: 0.95, transform: 'translateY(0)', offset: 0.25 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' });
+    }
+  }
+
+  // ndc position of the rider's head: the judgment floats there, smoothed so it doesn't jitter
+  placeJudge(x, y) {
+    const el = this.jEl || (this.jEl = document.querySelector('#judge'));
+    const px = (x * 0.5 + 0.5) * window.innerWidth, py = (-y * 0.5 + 0.5) * window.innerHeight;
+    this.jx = this.jx === undefined ? px : this.jx + (px - this.jx) * 0.25;
+    this.jy = this.jy === undefined ? py : this.jy + (py - this.jy) * 0.25;
+    el.style.transform = `translate(${(this.jx - window.innerWidth / 2).toFixed(1)}px, ${Math.max(40, this.jy - 70).toFixed(1)}px)`;
+  }
+
+  // the counter's icon: a diamond, or for A Million Ducks a duck
+  setCollect(kind) {
+    this.gems.classList.toggle('duck', kind === 'duck');
+  }
+
+  gem(n) {
+    this.gemN.textContent = String(n);
+    this.gemIcon.getAnimations().forEach((a) => a.cancel());
+    this.gemIcon.animate([{ transform: 'scale(1.8)', filter: 'brightness(2)' }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 260, easing: 'ease-out' });
+  }
+
   showResults(song, stats, best, onAgain) {
     const inTime = stats.valleys ? Math.round(100 * stats.good / stats.valleys) : 0;
     const km = (stats.dist / 1000).toFixed(2);
@@ -79,6 +120,6 @@ export class Hud {
       </div>
       <div style="margin-top:34px;font-size:12px;letter-spacing:.2em;opacity:.5">SPACE TO GO AGAIN${onAgain ? '&nbsp;&nbsp;&nbsp;&#9656; NEXT SONG' : ''}</div>`;
     this.results.classList.add('on');
-    this.bar.classList.remove('on'); this.speed.classList.remove('on');
+    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on');
   }
 }

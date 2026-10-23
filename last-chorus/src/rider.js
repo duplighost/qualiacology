@@ -20,6 +20,9 @@ const LAND_FREE = 3.6;         // m/s of square-on impact the knees take for fre
 const LAND_FREE_DOWN = 9;      // ... and on falling ground: touching down on a downslope is how it's meant to go
 const IMPACT = 3.0;            // extra speed^2 lost per (excess m/s)^2
 const CRASH = 15;              // square-on m/s that throws you off the board
+// letting go at the bottom of a dip, seconds either side of it (the bottom is on the beat)
+export const WIN_PERFECT = 0.085;
+export const WIN_GOOD = 0.16;
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -46,7 +49,9 @@ export class Rider {
     this.events = [];
     this.xz = { x: 0, z: 0 };
     this.lastVy = s.vy;
-    this.stats = { valleys: 0, good: 0, perfect: 0, clean: 0, hard: 0, crashes: 0, notes: 0, notesTotal: 0, top: v, dist: 0, airTime: 0, flowSum: 0, flowN: 0 };
+    this.stats = { valleys: 0, good: 0, perfect: 0, clean: 0, hard: 0, crashes: 0, notes: 0, notesTotal: 0, top: v, dist: 0, airTime: 0, flowSum: 0, flowN: 0,
+      judged: 0, hits: 0, perfects: 0, goods: 0, bestStreak: 0 };
+    this.streak = 0; this.pend = null;
     this._noteIdx = 0;
     for (const n of this.course.notes) { n.got = false; n.gotT = undefined; }
   }
@@ -70,8 +75,15 @@ export class Rider {
     const wantPress = !wiping && input.press;
     if (wantPress !== this.press) {
       this.press = wantPress;
-      if (wantPress) this.pressT = this.t; else this.releaseT = this.t;
+      // the input's own timestamp when we have it, so judging isn't a frame late
+      if (wantPress) this.pressT = Math.min(this.t, input.pressAt ?? this.t);
+      else {
+        this.releaseT = Math.min(this.t, input.releaseAt ?? this.t);
+        if (this.pend) this._judge(this.releaseT - this.pend.t);
+      }
     }
+    // still holding well past the bottom: that one's late
+    if (this.pend && this.t - this.pend.t > WIN_GOOD) this._judge(this.t - this.pend.t);
 
     if (this.grounded) {
       const kHold = this.press ? K_PRESS : 1;
@@ -139,7 +151,7 @@ export class Rider {
     // steering: a quick critically-damped spring toward where you point
     const w = s.width - 1.0;
     const target = clamp(input.steer, -1, 1) * w;
-    const om = this.grounded ? 10 : 7.5;
+    const om = this.grounded ? 13 : 9;
     const ax = om * om * (target - this.x) - 2 * om * this.vx;
     this.vx += ax * dt; this.x += this.vx * dt;
     if (Math.abs(this.x) > w) { this.x = clamp(this.x, -w, w); this.vx *= -0.2; }
@@ -171,6 +183,33 @@ export class Rider {
     this.compress = 1;
     this.events.push({ type: 'valley', q, onBeat, t: this.t });
     this.desc = 0; this.descP = 0;
+    // judge the pump when you let go: already let go, or wait a moment for it
+    this.pend = { t: this.t, q };
+    if (!this.press) this._judge(this.releaseT - this.t);
+  }
+
+  // one pump, graded on how much of the way down you held and when you let go
+  _judge(err) {
+    const q = this.pend.q; this.pend = null;
+    const ae = Math.abs(err);
+    let grade;
+    if (q < 0.3) grade = 'miss';
+    else if (ae <= WIN_PERFECT && q >= 0.62) grade = 'perfect';
+    else if (ae <= WIN_GOOD && q >= 0.4) grade = 'good';
+    else grade = err < 0 ? 'early' : 'late';
+    const st = this.stats;
+    const lost = this.streak;
+    if (grade === 'perfect' || grade === 'good') {
+      this.streak++; st.hits++; st.judged++;
+      if (grade === 'perfect') st.perfects++; else st.goods++;
+      st.bestStreak = Math.max(st.bestStreak, this.streak);
+      // a clean hit kicks you on a little
+      if (this.grounded) {
+        const v = this.v, k = Math.max(0, 1 - v / 95);
+        this.E += (grade === 'perfect' ? 0.011 : 0.004) * k * v * v;
+      }
+    } else if (grade !== 'miss' || this.streak > 0) { st.judged++; this.streak = 0; }
+    this.events.push({ type: 'judge', grade, err, q, streak: this.streak, lost, t: this.t });
   }
 
   _land(s) {

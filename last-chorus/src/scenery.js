@@ -5,7 +5,7 @@
 // Things you pass while riding in time wake up: windows, signs, lamps.
 
 import * as THREE from 'three';
-import { GEO, buildingMaterial, tintMaterial, glowMaterial, signMaterial, makeAtlas, poolMaterial } from './props.js';
+import { GEO, buildingMaterial, tintMaterial, glowMaterial, signMaterial, makeAtlas, poolMaterial, storeMaterial } from './props.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 function mulberry32(a) { return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -59,6 +59,7 @@ export function makeMaterials(P, atlas) {
     pool: poolMaterial(),
     sign: signMaterial(atlas.tex, atlas.cols, atlas.rows),
     canopyLight: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2e0).multiplyScalar(2.5) }),
+    store: storeMaterial(),
   };
 }
 
@@ -77,6 +78,9 @@ export const LAYER_DEFS = {
   glow: (M) => [GEO.quad(), M.glow, 4200, { aTint: 3, aWake: 2 }],
   pool: (M) => [GEO.flat(), M.pool, 800, { aTint: 3, aWake: 2 }],
   fence: (M) => [GEO.fence(), M.tree, 500, TT],
+  roofKit: (M) => [GEO.roofKit(false), M.concrete, 260, TT], roofTank: (M) => [GEO.roofKit(true), M.concrete, 160, TT],
+  towerTop: (M) => [GEO.towerTop(), M.concrete, 140, TT],
+  store: (M) => [GEO.storefront(), M.store, 260, { aWake: 3 }], awning: (M) => [GEO.awning(), M.cloth, 260, TT],
 };
 
 // a place can add its own layers, parts and kits (see beach.js)
@@ -98,6 +102,7 @@ export class Scenery {
       { key: 'CLAMS', text: 'CLAM SHACK', color: '#ff8a5c' }, { key: 'FRIEDDOUGH', text: 'FRIED DOUGH', color: '#ffd166' }, { key: 'ICECREAM', text: 'ICE CREAM', color: '#ff9ed2' },
       { key: 'TAFFY', text: 'SALT WATER\nTAFFY', color: '#7fe0d2' }, { key: 'ARCADE', text: 'ARCADE', color: '#b48cff' }, { key: 'SURF', text: 'SURF SHOP', color: '#5ff2ff' },
       { key: 'DANCING', text: 'DANCING', color: '#ff4f9a' }, { key: 'LIVETONIGHT', text: 'LIVE\nTONIGHT', color: '#ffd166' }, { key: 'ENCORE', text: 'ENCORE', color: '#5ff2ff' },
+      ...((plan && plan.signs) || []),
       ...((plan && plan.lyrics) || []).map((l, i) => ({ key: 'LYR' + i, text: l.text, color: l.color || '#ffffff', core: '#ffffff', bg: l.bg || '#120914', frame: l.frame || P.fret && '#' + new THREE.Color(P.fret).getHexString() })),
     ];
     this.atlas = makeAtlas(signs, 4, 12);
@@ -134,7 +139,7 @@ export class Scenery {
       // billboards stand a little ahead of the moment the line is sung, facing the road
       const i = (plan.lyrics || []).indexOf(l);
       const t = l.t + (l.lead ?? 1.4), side = l.side ?? (i % 2 ? -1 : 1);
-      this.items.push({ t, x: side * (l.x ?? 24), rot: side > 0 ? -0.35 : 0.35, h: l.h ?? 0, s: l.s ?? 1.25, parts: 'billboard', idx: this.atlas.index['LYR' + i], wake: 1, keepLit: true });
+      this.items.push({ t, x: side * (l.x ?? plan.lyricX ?? 24), rot: side > 0 ? -0.35 : 0.35, h: l.h ?? 0, s: l.s ?? plan.lyricS ?? 1.25, parts: plan.lyricPart || 'billboard', idx: this.atlas.index['LYR' + i], wake: 1, keepLit: true, floor: l.floor ?? plan.lyricFloor });
     }
     for (const t of plan.overpasses || []) this.items.push({ t, x: 0, rot: 0, s: 1, parts: 'overpass', tint: col(0x3a3442) });
     for (const r of plan.roads || []) this.roads.push(r);
@@ -168,6 +173,7 @@ export class Scenery {
     for (let i = this._lo; i < items.length; i++) {
       const it = items[i];
       if (it.t > t + 46) break;
+      if (it.ahead !== undefined && it.t > t + it.ahead) continue;
       if (!it.passed && it.t < t + 0.7 + Math.abs(it.x) / 90) { it.passed = true; it.target = Math.max(it.wake0 ?? 0, flowWake * clamp(1.3 - Math.abs(it.x) / 200, 0.3, 1)); }
       const tgt = Math.max(it.passed ? it.target : (it.wake0 ?? 0), this.wakeAll, it.keepLit ? 1 : 0);
       it.wakeNow = (it.wakeNow ?? it.wake0 ?? 0) + (tgt - (it.wakeNow ?? it.wake0 ?? 0)) * Math.min(1, dt * (1.2 + (it.seed ?? 0.5) * 2.5));
@@ -214,6 +220,7 @@ export class Scenery {
     this.mats.sign.uniforms.uFogColor.value.set(color);
     this.mats.sign.uniforms.uFogDensity.value = density;
     this.mats.sign.uniforms.uCam.value.copy(cam);
+    this.mats.store.uniforms.uFog.value.set(color); this.mats.store.uniforms.uFogDensity.value = density; this.mats.store.uniforms.uCam.value.copy(cam);
     for (const r of this.roadMeshes) { r.mat.uniforms.uFog.value.set(color); r.mat.uniforms.uFogDensity.value = density; r.mat.uniforms.uCam.value.copy(cam); }
   }
 }
@@ -257,10 +264,29 @@ export const PARTS = {
     const o = local(p, it.yaw ?? 0, 0, 0, 0, S._o);
     if (it.porch) { const w = local(p, S.course.sample(it.t).yaw + it.rot, 0, 2.4 * it.s, 4.3 * it.s, S._o); glowAt(S, w.x, w.y, w.z, 1.6 * it.s, col(S.P.window), 0.5 + 1.2 * it.wakeNow); poolAt(S, w.x, p.y + 0.06, w.z + 0.0, 7 * it.s, col(S.P.window), 0.25 + 0.7 * it.wakeNow); }
   },
-  block(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(it.s, it.sy ?? it.s, it.s)); S.layers.block.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint }); },
+  block(S, it, p, q) {
+    const m = S._m, sy = it.sy ?? it.s;
+    m.compose(p, q, S._s.set(it.s, sy, it.s)); S.layers.block.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
+    // the roof: parapet, air handlers, now and then a water tank
+    S._o.copy(p); S._o.y = p.y + 24 * sy;
+    m.compose(S._o, q, S._s.set(it.s, it.s, it.s));
+    const dark = [it.tint[0] * 0.42, it.tint[1] * 0.42, it.tint[2] * 0.45];
+    S.layers[it.seed > 0.62 ? 'roofTank' : 'roofKit'].add(m, { aTint: dark });
+    // shops along the street on the blocks that front it
+    if (Math.abs(it.x) < 34 && !it.noShop) {
+      m.compose(p, q, S._s.set(it.s, Math.min(1.2, Math.max(0.85, sy)), it.s));
+      S.layers.store.add(m, { aWake: [0.25 + 0.75 * it.wakeNow, (it.seed * 7.31) % 1, 0] });
+      const awn = it.seed * 13.7 % 1;
+      S.layers.awning.add(m, { aTint: col([0x8a2030, 0x204a6a, 0x2a5a3a, 0x6a4a20][Math.floor(awn * 4)]) });
+    }
+  },
   tower(S, it, p, q, yaw) {
     const m = S._m, sy = it.sy ?? it.s; m.compose(p, q, S._s.set(it.s, sy, it.s)); S.layers.tower.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
-    glowAt(S, p.x, 64 * sy + 1.5, p.z, 3.2, [1, 0.08, 0.08], 1.6, 1);   // aircraft light
+    // a stepped crown and a mast with the aircraft light at the top
+    S._o.copy(p); S._o.y = p.y + 64 * sy;
+    m.compose(S._o, q, S._s.set(it.s, it.s, it.s));
+    S.layers.towerTop.add(m, { aTint: [it.tint[0] * 0.5, it.tint[1] * 0.5, it.tint[2] * 0.55] });
+    glowAt(S, p.x, 64 * sy + 23 * it.s, p.z, 3.4, [1, 0.08, 0.08], 1.7, 1);
   },
   shop(S, it, p, q, yaw) {
     const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.shop.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
@@ -299,6 +325,7 @@ export const PARTS = {
     for (const z of [-2.9, 2.9]) { const w = local(p, yaw, 0, 12.6, z, S._o); glowAt(S, w.x, w.y, w.z, 4.6, col(S.P.street), 0.6 + 0.9 * it.wakeNow); poolAt(S, w.x, p.y + 0.07, w.z, 20, col(S.P.street), 0.3 + 0.7 * it.wakeNow); }
   },
   billboard(S, it, p, q) {
+    if (S.floorFn && it.floor) p.y = S.floorFn(it.t, it.x);
     const fq = faceQ(S, it);
     const m = S._m; m.compose(p, fq, S._s.set(it.s, it.s, it.s)); S.layers.billboard.add(m, { aTint: [0.18, 0.16, 0.22] });
     S.layers.board.add(m, { aIdx: it.idx, aWake: [it.keepLit ? 1 : 0.3 + 0.7 * it.wakeNow, 0] });
@@ -307,6 +334,7 @@ export const PARTS = {
     for (const x of [-4, 4]) { const w = local(p, by, x * it.s, 10.6 * it.s, 1.2 * it.s, S._o); glowAt(S, w.x, w.y, w.z, 2.2 * it.s, [1, 0.95, 0.85], 0.9); }
   },
   sign(S, it, p, q) {
+    if (S.floorFn && it.floor) p.y = S.floorFn(it.t, it.x);
     const m = S._m; m.compose(p, faceQ(S, it), S._s.set(it.s, it.s, it.s));
     S.layers.signPole.add(m, { aTint: [0.2, 0.2, 0.25] });
     S.layers.sign.add(m, { aIdx: it.idx, aWake: [0.35 + 0.65 * it.wakeNow, 0] });
@@ -417,11 +445,11 @@ class Road {
         uFog: { value: new THREE.Color(P.fog) }, uFogDensity: { value: P.fogDensity }, uCam: { value: new THREE.Vector3() },
         uLamp: { value: new THREE.Color(r.lampColor ?? P.street) }, uSky: { value: new THREE.Color(P.horizon) },
         uW: { value: r.width ?? 22 }, uWalk: { value: r.walk ?? 0 }, uTotal: { value: total }, uLanes: { value: r.laneLines ?? 1 },
-        uLampEvery: { value: r.lampEvery ?? 30 }, uMedian: { value: r.median ? 1 : 0 },
+        uLampEvery: { value: r.lampEvery ?? 30 }, uMedian: { value: r.median ? 1 : 0 }, uShade: { value: P.shade ?? 0 }, uSun: { value: new THREE.Color(P.moon ?? 0xffffff) }, uSnow: { value: P.snowGround ?? 0 }, uDry: { value: r.dry ? 1 : 0 },
       },
       vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */`
-        uniform vec3 uFog, uCam, uLamp, uSky; uniform float uFogDensity, uW, uWalk, uTotal, uLanes, uLampEvery, uMedian;
+        uniform vec3 uFog, uCam, uLamp, uSky, uSun; uniform float uFogDensity, uW, uWalk, uTotal, uLanes, uLampEvery, uMedian, uShade, uSnow, uDry;
         varying vec2 vUv; varying vec3 vW;
         float aa(float d, float w){ float f = fwidth(d); return 1.0 - smoothstep(w - f, w + f, abs(d)); }
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -451,6 +479,16 @@ class Road {
             for (int k = 1; k <= 3; k++) { if (float(k) > uLanes) break; float lx = uW * 0.5 * float(k) / (uLanes + 1.0); col += vec3(0.8) * aa(ax - lx, 0.07) * dash * 0.45 * step(0.5, uLanes); }
             col += vec3(0.85) * aa(ax - uW * 0.5 + 0.35, 0.09) * 0.4;
             col += vec3(1.0, 0.72, 0.18) * (aa(x - 0.17, 0.055) + aa(x + 0.17, 0.055)) * 0.42 * uMedian;
+          }
+          // by day: dry asphalt and pale concrete, the sun lying across it in bands between the buildings
+          if (uDry > 0.5) col = col * 3.2 + vec3(0.05, 0.05, 0.055);
+          col = mix(col, vec3(0.62, 0.66, 0.74) * (0.9 + 0.2 * h2(floor(vW.xz * 0.7))), uSnow * 0.45 * step(uW * 0.5, ax));
+          if (uShade > 0.001) {
+            float bandId = floor(along / 26.0), bandF = fract(along / 26.0);
+            float gap = 0.25 + 0.5 * h2(vec2(bandId, 1.7));
+            float sunny = smoothstep(0.0, 0.04, bandF - (1.0 - gap)) * smoothstep(1.0, 0.96, bandF);
+            col *= mix(1.0, 0.55 + 0.9 * sunny, uShade);
+            col += uSun * sunny * 0.05 * uShade;
           }
           float dd = length(uCam - vW);
           float fog = 1.0 - exp(-pow(dd * uFogDensity, 1.5));
