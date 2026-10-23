@@ -44,6 +44,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07050d; }
 #gems.on { opacity: .75; }
 #gems .icon { display: inline-block; margin-right: 8px; color: #ff9ed2; text-shadow: 0 0 10px currentColor; }
 #gems.key .icon { width: 9px; height: 18px; color: transparent; text-shadow: none; vertical-align: -3px; background: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 22'%3E%3Ccircle cx='5' cy='4.5' r='3.4' fill='none' stroke='%23ffc860' stroke-width='1.8'/%3E%3Cpath d='M4.1 8h1.8v13H4.1zM5.9 15.5h3v1.6h-3zM5.9 18.6h2.4v1.6H5.9z' fill='%23ffc860'/%3E%3C/svg%3E"); filter: drop-shadow(0 0 6px rgba(255, 200, 96, .6)); }
+#gems.lily .icon { width: 16px; height: 16px; color: transparent; text-shadow: none; vertical-align: -2px; background: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='%23fff6f8'%3E%3Cellipse rx='2.6' ry='9' transform='rotate(0) translate(0 -3)'/%3E%3Cellipse rx='2.6' ry='9' transform='rotate(60) translate(0 -3)'/%3E%3Cellipse rx='2.6' ry='9' transform='rotate(120) translate(0 -3)'/%3E%3Cellipse rx='2.6' ry='9' transform='rotate(180) translate(0 -3)'/%3E%3Cellipse rx='2.6' ry='9' transform='rotate(240) translate(0 -3)'/%3E%3Cellipse rx='2.6' ry='9' transform='rotate(300) translate(0 -3)'/%3E%3C/g%3E%3Ccircle r='2' fill='%23e8a040'/%3E%3C/svg%3E"); filter: drop-shadow(0 0 6px rgba(255, 230, 240, .6)); }
+#gems.corn .icon { width: 13px; height: 16px; color: transparent; text-shadow: none; vertical-align: -2px; background: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 32'%3E%3CclipPath id='c'%3E%3Cpath d='M2 29Q13 32 24 29Q19 13 14 2Q13 1 12 2Q7 13 2 29z'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23c)'%3E%3Crect width='26' height='32' fill='%23fff8ee'/%3E%3Crect y='11' width='26' height='11' fill='%23ff7a1a'/%3E%3Crect y='22' width='26' height='10' fill='%23ffcc22'/%3E%3C/g%3E%3C/svg%3E"); filter: drop-shadow(0 0 6px rgba(255, 160, 60, .6)); }
 #gems.duck .icon { width: 16px; height: 13px; color: transparent; text-shadow: none; vertical-align: -1px; background: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 26'%3E%3Cpath d='M20 2a6 6 0 0 0-6 6c0 1.3.4 2.4 1 3.4C10 10 4 11 2 14c-1 5 4 10 13 10s14-4 14-9c0-2.5-1.5-4.4-3.6-5.6A6 6 0 0 0 20 2z' fill='%23ffd23a'/%3E%3Cpath d='M25 6.5l5 1.2-5 1.8z' fill='%23ff7a1a'/%3E%3Ccircle cx='21.5' cy='6.5' r='1.2' fill='%23111'/%3E%3C/svg%3E"); filter: drop-shadow(0 0 6px rgba(255, 210, 58, .6)); }
 
 /* ---------- the screens around the rides ---------- */
@@ -55,15 +57,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07050d; }
 #menu .bg img.show { opacity: 1; animation: drift 14s ease-out forwards; }
 @keyframes drift { from { transform: scale(1.08); } to { transform: scale(1.0); } }
 #menu .shade, #load .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(6,3,12,.94) 0%, rgba(6,3,12,.74) 36%, rgba(6,3,12,.18) 72%, rgba(6,3,12,.05) 100%); }
-#menu .panel { position: absolute; left: 7vw; top: 50%; transform: translateY(-50%); width: min(680px, 62vw); }
-#menu .game { font-size: 15px; letter-spacing: .62em; font-weight: 700; opacity: .92; margin-bottom: 40px; }
-#menu .list { list-style: none; margin: 0; padding: 0; }
-#menu .list li { display: grid; grid-template-columns: 50px 1fr 104px 56px; align-items: baseline; padding: 15px 18px; font-size: 18px; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; opacity: .5; border-left: 2px solid transparent; transition: opacity .15s, background .15s, border-color .15s, padding-left .15s; }
+#menu .panel { position: absolute; left: 7vw; top: 50%; transform: translateY(-50%); width: min(760px, 62vw); }
+#menu .game { font-size: 15px; letter-spacing: .62em; font-weight: 700; opacity: .92; margin-bottom: clamp(14px, 3.2vh, 40px); }
+/* fifteen songs: rows size to the window; on a very short one the list scrolls to keep the pick in view */
+#menu .list { list-style: none; margin: 0; padding: 0; max-height: calc(100vh - 150px); overflow-y: auto; scrollbar-width: none; }
+#menu .list::-webkit-scrollbar { display: none; }
+#menu .list li { display: grid; grid-template-columns: 50px 1fr 104px 56px; align-items: baseline; padding: clamp(5px, 0.86vh, 12px) 18px; font-size: clamp(13px, 1.75vh, 17px); letter-spacing: .16em; text-transform: uppercase; cursor: pointer; opacity: .5; border-left: 2px solid transparent; transition: opacity .15s, background .15s, border-color .15s, padding-left .15s; }
 #menu .list li.sel { opacity: 1; border-left-color: var(--accent); background: linear-gradient(90deg, rgba(255,255,255,.09), rgba(255,255,255,0)); padding-left: 22px; }
 #menu .list li .num { opacity: .5; font-variant-numeric: tabular-nums; font-size: 13px; }
+#menu .list li .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #menu .list li .best, #menu .list li .pct { text-align: right; font-size: 12px; opacity: .7; font-variant-numeric: tabular-nums; }
 #menu .list li.sel .title { text-shadow: 0 0 18px var(--accent); }
-#menu .foot { margin-top: 40px; font-size: 11px; letter-spacing: .2em; opacity: .45; text-transform: uppercase; }
+#menu .foot { margin-top: clamp(14px, 3.2vh, 40px); font-size: 11px; letter-spacing: .2em; opacity: .45; text-transform: uppercase; }
 #menu .foot b { font-weight: 700; opacity: .9; }
 
 #load .img { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(3px) brightness(.75); transform: scale(1.04); }

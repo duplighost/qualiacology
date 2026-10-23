@@ -37,6 +37,40 @@ export function keyGeometry() {
   return g;
 }
 
+// a white lily, open toward +z, a bit of stem behind it and a leaf
+export function lilyGeometry() {
+  const parts = [];
+  const paint = (g, c) => { const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g.index ? g.toNonIndexed() : g; };
+  const W = [1, 0.98, 0.95], P = [1, 0.86, 0.9], G = [0.36, 0.6, 0.26], O = [0.86, 0.36, 0.1];
+  for (let k = 0; k < 6; k++) {
+    const pe = new THREE.SphereGeometry(1, 10, 6); pe.scale(0.17, 0.62, 0.05); pe.translate(0, 0.52, 0);
+    pe.rotateX(0.85 + (k % 2) * 0.18); pe.rotateY((k / 6) * Math.PI * 2 + (k % 2) * 0.25);
+    parts.push(paint(pe, k % 2 ? W : P));
+  }
+  const th = new THREE.CylinderGeometry(0.13, 0.04, 0.4, 8); th.translate(0, 0.18, 0); parts.push(paint(th, [0.8, 0.88, 0.6]));
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; const an = new THREE.SphereGeometry(0.035, 5, 4); an.scale(1, 2.2, 1); an.translate(Math.cos(a) * 0.1, 0.62, Math.sin(a) * 0.1); parts.push(paint(an, O)); }
+  const st = new THREE.CylinderGeometry(0.03, 0.035, 0.9, 6); st.translate(0, -0.42, 0); parts.push(paint(st, G));
+  const lf = new THREE.SphereGeometry(1, 8, 5); lf.scale(0.09, 0.42, 0.025); lf.rotateZ(0.7); lf.translate(0.2, -0.5, 0); parts.push(paint(lf, G));
+  const g = mergeGeometries(parts, false);
+  g.rotateX(Math.PI / 2);
+  g.computeVertexNormals();
+  return g;
+}
+
+// a candy corn: yellow at the base, orange through the middle, a white tip
+export function cornGeometry() {
+  const s = new THREE.Shape();
+  s.moveTo(-0.45, -0.5); s.quadraticCurveTo(0, -0.62, 0.45, -0.5); s.quadraticCurveTo(0.3, 0.2, 0.06, 0.58); s.quadraticCurveTo(0, 0.64, -0.06, 0.58); s.quadraticCurveTo(-0.3, 0.2, -0.45, -0.5);
+  let g = new THREE.ExtrudeGeometry(s, { depth: 0.28, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 3, curveSegments: 10 });
+  g.translate(0, 0, -0.14);
+  g = g.index ? g.toNonIndexed() : g;
+  const p = g.attributes.position, c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { const y = p.getY(i); c.set(y < -0.17 ? [1, 0.8, 0.14] : y < 0.22 ? [1, 0.46, 0.06] : [1, 0.98, 0.94], i * 3); }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
 // diamonds to steer through, each one a note of a melody. Collected ones fly into the
 // board; missed ones go grey and drop away, so you always know which it was.
 export class Notes {
@@ -44,8 +78,20 @@ export class Notes {
     this.course = course;
     this.duck = kind === 'duck';
     this.key = kind === 'key';
+    this.lily = kind === 'lily';
+    this.corn = kind === 'corn';
     let g;
-    if (this.key) {
+    if (this.corn) {
+      // Sexy Trauma Costume: candy corn from the bowl by the till
+      g = cornGeometry();
+      this.color = new THREE.Color(P.gem ?? 0xffb060);
+      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.35, metalness: 0.0, emissive: new THREE.Color(0x3a2008), emissiveIntensity: 1 });
+    } else if (this.lily) {
+      // Makeup Sex at Your Funeral: lilies from the casket
+      g = lilyGeometry();
+      this.color = new THREE.Color(P.gem ?? 0xfff2f6);
+      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.45, metalness: 0.0, emissive: new THREE.Color(0x3a3436), emissiveIntensity: 1 });
+    } else if (this.key) {
       // Rent Free: the keys he gave her without knowing it
       g = keyGeometry();
       this.color = new THREE.Color(P.gem ?? 0xffc860);
@@ -132,7 +178,7 @@ export class Notes {
       if (cam && !n.got) {
         const d = p.distanceTo(cam.position);
         const k = clamp((d - 2.5) / 6, 0, 1);
-        bright *= 0.25 + 0.75 * k; scale *= this.duck ? k * (2 - k) : 0.55 + 0.45 * k;   // a duck is big: gone before the lens
+        bright *= 0.25 + 0.75 * k; scale *= this.duck ? k * (2 - k) : this.lily || this.corn ? k * k : 0.55 + 0.45 * k;   // a duck is big: gone before the lens
       }
       if (this.key) {
         // keys hang bow up and turn, catching the light
@@ -142,6 +188,23 @@ export class Notes {
         this.mesh.setMatrixAt(k, m);
         const db = n.got ? 2.4 : (ahead < -0.02 ? 0.45 : 1.25);
         this.mesh.instanceColor.setXYZ(k, db, db, db * (ahead < -0.02 && !n.got ? 1.1 : 1));
+      } else if (this.corn) {
+        // candy corn turning in the air, tip up, catching the light
+        this._e.set(Math.sin(time * 2.4 + i) * 0.25, time * 2.0 + i * 1.3, Math.sin(time * 1.7 + i) * 0.2); q.setFromEuler(this._e);
+        s.setScalar(scale * 1.5);
+        m.compose(p, q, s);
+        this.mesh.setMatrixAt(k, m);
+        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.2);
+        this.mesh.instanceColor.setXYZ(k, db, db, db);
+      } else if (this.lily) {
+        // lilies face you coming, nodding and turning a little on their stems
+        const yaw = this.course.sample(n.t).yaw + Math.PI;
+        this._e.set(Math.sin(time * 2.1 + i) * 0.2 - 0.25, yaw + Math.sin(time * 1.3 + i * 2.3) * 0.4, time * 0.8 + i); q.setFromEuler(this._e);
+        s.setScalar(scale * 1.05);
+        m.compose(p, q, s);
+        this.mesh.setMatrixAt(k, m);
+        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.15);
+        this.mesh.instanceColor.setXYZ(k, db, db, db);
       } else if (this.duck) {
         // ducks face you coming, bobbing as if on water; bigger than a diamond, lit not glowing
         const yaw = this.course.sample(n.t).yaw + Math.PI;

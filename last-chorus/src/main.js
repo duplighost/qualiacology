@@ -20,6 +20,12 @@ import { ColdWorld, DoorFinale } from './cold.js';
 import { SundayWorld, TownLineFinale } from './sunday.js';
 import { SummerWorld, LampFinale } from './summer.js';
 import { HouseWorld, PortraitFinale } from './mansion.js';
+import { FuneralWorld, WeddingFinale } from './funeral.js';
+import { ClubWorld, BusStopFinale } from './club.js';
+import { SchoolWorld, CrownFinale } from './school.js';
+import { CandyWorld, BoomboxFinale } from './candy.js';
+import { CourtWorld, LipstickFinale } from './court.js';
+import { ShopWorld, TillFinale } from './costume.js';
 import { Hud } from './hud.js';
 import { Input } from './input.js';
 import { Screens } from './menu.js';
@@ -149,13 +155,13 @@ function build(S) {
   const trail = new Trail(scene, P);
   const fireworks = new Fireworks(scene, [P.jacket, P.edge, P.fret, P.window, 0xffffff]);
   const plan = S.entry.scenery || {};
-  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale, town: TownLineFinale, lamp: LampFinale, portrait: PortraitFinale }[plan.finale?.kind] || Wreck;
+  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale, town: TownLineFinale, lamp: LampFinale, portrait: PortraitFinale, wedding: WeddingFinale, busstop: BusStopFinale, crown: CrownFinale, boombox: BoomboxFinale, lipstick: LipstickFinale, till: TillFinale }[plan.finale?.kind] || Wreck;
   const finale = plan.finale ? new Finale(scene, course, P, plan.finale, town) : null;
   const vehicles = plan.vehicles ? new Vehicles(scene, course, plan.vehicles) : null;
-  const confetti = S.entry.confetti ? new Confetti(scene, S.entry.confettiColors || [P.heart ?? P.glow, P.edge, P.fret, 0xffffff, P.windowAlt, 0x5ff2ff]) : null;
+  const confetti = S.entry.confetti ? new Confetti(scene, S.entry.confettiColors || [P.heart ?? P.glow, P.edge, P.fret, 0xffffff, P.windowAlt, 0x5ff2ff], 1100, { normal: S.entry.confettiNormal }) : null;
   const trains = plan.trains ? new Train(course, plan.trains.x, plan.trains.passes) : null;
   town.track = track;
-  const WORLDS = { trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld };
+  const WORLDS = { trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld, funeral: FuneralWorld, club: ClubWorld, school: SchoolWorld, candy: CandyWorld, court: CourtWorld, shop: ShopWorld };
   const world = WORLDS[S.entry.world] ? new WORLDS[S.entry.world](scene, { course, plan, P, track, rider, town }) : null;
   const hemi = new THREE.HemisphereLight(new THREE.Color(P.skyLight ?? 0x6a5a9a), new THREE.Color(P.bounce ?? 0x5a3a2a), P.hemiK ?? 1.9);
   scene.add(hemi);
@@ -170,7 +176,7 @@ function build(S) {
   scene.add(fill);
   sound.setKey(S.chart.keyRoot, S.chart.keyMode === 'min');
   Object.assign(S, { world, momentsDone: new Set(), land, trains, P, look, hemi, moonLight, fillLight, weather, scene, course, rider, track, sky, ground, skyline, town, view, notes, rings, sparks, streaks, trail, fireworks, finale, plan, vehicles, confetti, hit: 0, pressGlow: 0, gems: 0, firedChorus: new Set(), pulse: 0, flash: 0, mixFlow: 0.42, muffle: 0, endT: null,
-    heartBeat: 0, heartLast: -1, heartDir: null, spikes: [], burstAt: new Set(), afterBeatT: 0 });
+    heartBeat: 0, heartLast: -1, heartDir: null, spikes: [], burstAt: new Set(), afterBeatT: 0, black: null });
   applyLook(S, look.at(0));
   rider.reset(0, 22);
   chase.first = true;
@@ -399,6 +405,11 @@ function frame(now) {
   S.flashTint = (S.flashTint || 0) * Math.exp(-dt * 3);
   if (S.flashTint < 0.02) pc.uFlashColor.value.setRGB(1, 0.6, 0.85);
   pc.uFlash.value = S.flash;
+  // the room losing focus (a song's looks can say how far), and lost time: everything gone dark
+  pc.uDaze.value = state === 'ride' || state === 'results' ? (S.P.daze ?? 0) : 0;
+  let black = 0;
+  if (S.black) { const u = (rider.t - S.black.t0) / S.black.dur; black = u < 0 || u > 1 ? 0 : S.black.k * Math.min(1, u * 12, (1 - u) * 5); }
+  pc.uExposure.value = 1 - black;
   pc.uBloom.value = 0.55 + 0.3 * S.mixFlow;
   post.render(S.scene, camera);
   if (state === 'ride') {
@@ -610,6 +621,12 @@ function songMoments(S) {
     S.momentsDone.add(m);
     if (m.kind === 'thunder') { S.flash = Math.max(S.flash, 0.55 * (m.k ?? 1)); post.comp.uniforms.uFlashColor.value.setRGB(0.75, 0.85, 1); setTimeout(() => sound.thunder(m.k ?? 1), 140); S.flashTint = 0.6; }
     if (m.kind === 'flash') { S.flash = Math.max(S.flash, m.k ?? 0.8); post.comp.uniforms.uFlashColor.value.setRGB(1, 0.95, 0.85); S.flashTint = 0.8; }
+    // a phone's camera: the click and the white of the flash
+    if (m.kind === 'shutter') { S.flash = Math.max(S.flash, m.k ?? 0.7); post.comp.uniforms.uFlashColor.value.setRGB(1, 1, 1); S.flashTint = 0.9; sound.shutter(m.k ?? 0.7); }
+    // a bell, in the song's key
+    if (m.kind === 'ring') sound.ring(m.k ?? 0.4, m.dur ?? 0.7);
+    if (m.kind === 'pop') { sound.pop(m.k ?? 0.5); S.flash = Math.max(S.flash, m.flash ?? 0.12); }
+    if (m.kind === 'bell') { for (let i = 0; i < (m.n ?? 1); i++) setTimeout(() => sound.bell(m.k ?? 0.6, m.degree ?? 0), i * (m.gap ?? 900)); }
     if (m.kind === 'fireworks') {
       // shells from the alleys either side, a moment ahead of you
       for (let i = 0; i < (m.n ?? 6); i++) {
@@ -621,6 +638,7 @@ function songMoments(S) {
     }
     // a knock at the door: two raps, a little shake
     if (m.kind === 'knock') { for (let i = 0; i < (m.n ?? 2); i++) setTimeout(() => { sound.thud(m.k ?? 0.5); chase.impulse(0.3, 0.45, 0); }, i * (m.gap ?? 210)); }
+    if (m.kind === 'blackout') S.black = { t0: m.t, dur: m.dur ?? 1.5, k: m.k ?? 0.95 };
     if (m.kind === 'thud') { sound.thud(m.k ?? 1); chase.impulse(1.1, 0.9, 0); S.muffle = Math.max(S.muffle, 0.6); S.hurt = 1; }
   }
 }

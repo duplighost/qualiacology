@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 const COLOR_KEYS = ['glass', 'cloud', 'water', 'sand', 'zenith', 'horizon', 'skyGlow', 'moon', 'fog', 'ground', 'street', 'roof', 'wall', 'tree', 'window', 'windowAlt', 'lamp', 'ribbon', 'edge', 'fret', 'glow', 'skyline', 'skyLight', 'bounce', 'heart', 'hold', 'gate', 'gem'];
-const NUM_KEYS = ['fogDensity', 'stars', 'sunSize', 'snow', 'rain', 'wake', 'snowGround', 'sunK', 'hemiK', 'fillK', 'clouds', 'dapple', 'shade', 'hills', 'breath', 'windowK'];
+const NUM_KEYS = ['fogDensity', 'stars', 'sunSize', 'snow', 'rain', 'wake', 'snowGround', 'sunK', 'hemiK', 'fillK', 'clouds', 'dapple', 'shade', 'hills', 'breath', 'windowK', 'daze'];
 const VEC_KEYS = ['glowDir', 'moonDir'];
 
 export class Look {
