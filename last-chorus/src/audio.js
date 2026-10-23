@@ -381,6 +381,46 @@ export class Sound {
     g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
     n.connect(f).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 3.3);
   }
+  // a phone camera's shutter: two quick clicks
+  shutter(level = 1) {
+    const c = this.ctx, t = c.currentTime;
+    [0, 0.07].forEach((dt, i) => {
+      const n = c.createBufferSource(); n.buffer = this._noise;
+      const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = i ? 3200 : 2400; f.Q.value = 1.2;
+      const g = c.createGain(); this._env(g, t + dt, 0.001, 0.14 * level, 0.035);
+      n.connect(f).connect(g).connect(this.sfx); n.start(t + dt, Math.random()); n.stop(t + dt + 0.08);
+    });
+  }
+  // a bell a way off: struck once, its partials ringing out, on a note of the song's key
+  bell(level = 0.6, degree = 0) {
+    const c = this.ctx, t = c.currentTime, f0 = this.note(degree, 1);
+    [[0.5, 0.5, 4.5], [1, 1, 3.6], [1.19, 0.5, 2.6], [1.5, 0.45, 2.2], [2.0, 0.35, 1.8], [2.52, 0.2, 1.2], [3.0, 0.14, 0.9]].forEach(([m, k, d]) => {
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f0 * m;
+      const g = c.createGain(); this._env(g, t, 0.004, 0.05 * k * level, d);
+      o.connect(g).connect(this.sfx); o.start(t); o.stop(t + d + 0.1);
+    });
+  }
+  // the school bell on the wall: the clapper going for a moment, then it stops
+  ring(level = 0.4, dur = 0.7) {
+    const c = this.ctx, t = c.currentTime;
+    const out = c.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.06 * level, t + 0.015); out.gain.setValueAtTime(0.06 * level, t + dur); out.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.45);
+    const vca = c.createGain(); vca.gain.value = 0.5;
+    const lfo = c.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 23;
+    const depth = c.createGain(); depth.gain.value = 0.5; lfo.connect(depth).connect(vca.gain);
+    [[1, 1], [2.76, 0.45], [5.4, 0.2], [8.93, 0.08]].forEach(([m, k]) => { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 1180 * m; const g = c.createGain(); g.gain.value = k; o.connect(g).connect(vca); o.start(t); o.stop(t + dur + 0.5); });
+    vca.connect(out).connect(this.sfx); lfo.start(t); lfo.stop(t + dur + 0.5);
+  }
+  // a bubble of gum going: a soft pop
+  pop(level = 0.5) {
+    const c = this.ctx, t = c.currentTime;
+    const n = c.createBufferSource(); n.buffer = this._noise;
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 0.9;
+    const g = c.createGain(); this._env(g, t, 0.001, 0.22 * level, 0.05);
+    n.connect(f).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 0.1);
+    const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(420, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.08);
+    const g2 = c.createGain(); this._env(g2, t, 0.002, 0.3 * level, 0.1);
+    o.connect(g2).connect(this.sfx); o.start(t); o.stop(t + 0.15);
+  }
   // a knock you feel more than hear
   thud(level = 1) {
     const c = this.ctx, t = c.currentTime;

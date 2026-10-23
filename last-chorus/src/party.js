@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { extend, glowAt, poolAt, col, local } from './scenery.js';
-import { buildAmbulance, buildBus, buildSedan, buildPolice } from './vehicles.js';
+import { buildAmbulance, buildBus, buildSedan, buildPolice, buildHearse } from './vehicles.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -156,7 +156,7 @@ export class HeartStage {
 
 // ---------- confetti in the air around you in the choruses ----------
 export class Confetti {
-  constructor(scene, colors, n = 1100) {
+  constructor(scene, colors, n = 1100, opts = {}) {
     this.n = n; this.on = 0;
     this.p = new Float32Array(n * 3); this.v = new Float32Array(n * 3); this.c = new Float32Array(n * 3); this.s = new Float32Array(n);
     const cs = colors.map((h) => new THREE.Color(h));
@@ -166,14 +166,16 @@ export class Confetti {
     g.setAttribute('color', new THREE.BufferAttribute(this.c, 3));
     g.setAttribute('aS', new THREE.BufferAttribute(this.s, 1));
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { uT: { value: 0 }, uA: { value: 0 } },
+      uniforms: { uT: { value: 0 }, uA: { value: 0 }, uNormal: { value: opts.normal ? 1 : 0 } },
       vertexShader: /* glsl */`attribute float aS; varying vec3 vC; varying float vF; uniform float uT;
+        uniform float uNormal;
         void main(){ vC = color; vF = abs(sin(uT * (3.0 + aS * 7.0) + aS * 40.0));
-          vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp(90.0 / -mv.z, 1.0, 9.0); gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: /* glsl */`uniform float uA; varying vec3 vC; varying float vF;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = uNormal > 0.5 ? clamp(200.0 / -mv.z, 2.0, 11.0) : clamp(90.0 / -mv.z, 1.0, 9.0); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: /* glsl */`uniform float uA, uNormal; varying vec3 vC; varying float vF;
         void main(){ vec2 d = abs(gl_PointCoord - 0.5); if (d.x > 0.5 || d.y > 0.12 + 0.38 * vF) discard;
+          if (uNormal > 0.5) { gl_FragColor = vec4(vC * (0.6 + 0.5 * vF), uA); return; }
           gl_FragColor = vec4(vC * (0.35 + 1.1 * vF * vF) * uA, 1.0); }`,
-      vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexColors: true, transparent: true, depthWrite: false, blending: opts.normal ? THREE.NormalBlending : THREE.AdditiveBlending,
     });
     this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; scene.add(this.points);
     this.geo = g;
@@ -223,7 +225,7 @@ export class Vehicles {
   constructor(scene, course, list) {
     this.course = course;
     this.list = list.map((v) => {
-      const obj = v.kind === 'bus' ? buildBus(v.route || '19') : v.kind === 'sedan' ? buildSedan(v.paint) : v.kind === 'police' ? buildPolice() : buildAmbulance();
+      const obj = v.kind === 'bus' ? buildBus(v.route || '19') : v.kind === 'sedan' ? buildSedan(v.paint) : v.kind === 'police' ? buildPolice() : v.kind === 'hearse' ? buildHearse() : buildAmbulance();
       obj.visible = false; scene.add(obj);
       const lights = obj.userData.lights || [];
       return { ...v, obj, lights };

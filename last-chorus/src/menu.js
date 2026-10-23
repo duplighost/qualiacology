@@ -40,6 +40,7 @@ export class Screens {
     if (i === this.sel && !instant && this.items[i]?.classList.contains('sel')) return;
     this.sel = i;
     this.items.forEach((li, k) => li.classList.toggle('sel', k === i));
+    if (instant) this._reveal();
     const src = this.songs[i].image;
     // crossfade the picture behind the list
     const back = this._bgFront === this.bgA ? this.bgB : this.bgA;
@@ -50,6 +51,8 @@ export class Screens {
     }
     this.menu.style.setProperty('--accent', this.songs[i].accent);
   }
+  // on a short window the list scrolls: keep the pick in view
+  _reveal() { const li = this.items[this.sel]; if (li) li.scrollIntoView({ block: 'nearest' }); }
   _choose() {
     if (this.active !== 'menu') return;
     const i = this.sel;
@@ -80,7 +83,7 @@ export class Screens {
           ${row('IN TIME', d.inTime + '%')}
           ${row('PERFECT', d.perfects)}
           ${row('LONGEST RUN', '×' + d.bestStreak)}
-          ${row(d.collect === 'duck' ? 'DUCKS' : d.collect === 'key' ? 'KEYS' : 'DIAMONDS', d.notes + ' / ' + d.notesTotal)}
+          ${row({ duck: 'DUCKS', key: 'KEYS', lily: 'LILIES', corn: 'CANDY CORN' }[d.collect] || 'DIAMONDS', d.notes + ' / ' + d.notesTotal)}
           ${row('TOP SPEED', Math.round(d.top * 3.6) + ' KM/H')}
           ${d.best && !d.newBest ? row('BEST', (d.best / 1000).toFixed(2) + ' KM') : ''}
         </div>
@@ -120,8 +123,8 @@ export class Screens {
     if (!this.active) return false;
     const k = e.code;
     if (this.active === 'menu') {
-      if (k === 'ArrowDown' || k === 'KeyS') { this._select((this.sel + 1) % this.items.length); return true; }
-      if (k === 'ArrowUp' || k === 'KeyW') { this._select((this.sel - 1 + this.items.length) % this.items.length); return true; }
+      if (k === 'ArrowDown' || k === 'KeyS') { this._select((this.sel + 1) % this.items.length); this._reveal(); return true; }
+      if (k === 'ArrowUp' || k === 'KeyW') { this._select((this.sel - 1 + this.items.length) % this.items.length); this._reveal(); return true; }
       if (k === 'Enter' || k === 'Space') { this._choose(); return true; }
       return true;
     }

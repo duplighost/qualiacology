@@ -103,7 +103,7 @@ export class Scenery {
       { key: 'TAFFY', text: 'SALT WATER\nTAFFY', color: '#7fe0d2' }, { key: 'ARCADE', text: 'ARCADE', color: '#b48cff' }, { key: 'SURF', text: 'SURF SHOP', color: '#5ff2ff' },
       { key: 'DANCING', text: 'DANCING', color: '#ff4f9a' }, { key: 'LIVETONIGHT', text: 'LIVE\nTONIGHT', color: '#ffd166' }, { key: 'ENCORE', text: 'ENCORE', color: '#5ff2ff' },
       ...((plan && plan.signs) || []),
-      ...((plan && plan.lyrics) || []).map((l, i) => ({ key: 'LYR' + i, text: l.text, color: l.color || plan.lyricColor || '#ffffff', core: l.core || plan.lyricCore || '#ffffff', bg: l.bg || plan.lyricBg || '#120914', frame: l.frame || P.fret && '#' + new THREE.Color(P.fret).getHexString() })),
+      ...((plan && plan.lyrics) || []).map((l, i) => ({ key: 'LYR' + i, text: l.text, color: l.color || plan.lyricColor || '#ffffff', core: l.core || plan.lyricCore || '#ffffff', bg: l.bg || plan.lyricBg || '#120914', font: l.font || plan.lyricFont, weight: l.weight || plan.lyricWeight, frame: l.frame || P.fret && '#' + new THREE.Color(P.fret).getHexString() })),
     ];
     this.atlas = makeAtlas(signs, 4, 12);
 
@@ -139,7 +139,7 @@ export class Scenery {
       // billboards stand a little ahead of the moment the line is sung, facing the road
       const i = (plan.lyrics || []).indexOf(l);
       const t = l.t + (l.lead ?? 1.4), side = l.side ?? (i % 2 ? -1 : 1);
-      this.items.push({ t, x: side * (l.x ?? plan.lyricX ?? 24), rot: side > 0 ? -0.35 : 0.35, h: l.h ?? 0, s: l.s ?? plan.lyricS ?? 1.25, parts: plan.lyricPart || 'billboard', idx: this.atlas.index['LYR' + i], wake: 1, keepLit: true, floor: l.floor ?? plan.lyricFloor });
+      this.items.push({ t, x: side * (l.x ?? plan.lyricX ?? 24), rot: side > 0 ? -0.35 : 0.35, h: l.h ?? 0, s: l.s ?? plan.lyricS ?? 1.25, parts: l.part || plan.lyricPart || 'billboard', idx: this.atlas.index['LYR' + i], wake: 1, keepLit: true, floor: l.floor ?? plan.lyricFloor });
     }
     for (const t of plan.overpasses || []) this.items.push({ t, x: 0, rot: 0, s: 1, parts: 'overpass', tint: col(0x3a3442) });
     for (const r of plan.roads || []) this.roads.push(r);

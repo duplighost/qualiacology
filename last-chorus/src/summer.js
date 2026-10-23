@@ -625,7 +625,7 @@ export class Room {
 
   update(track, rider, songT) {
     const sp = this.span, c = this.course;
-    const ta = Math.max(sp.from, rider.t - 4), tb = Math.min(sp.to, rider.t + 46);
+    const ta = Math.max(sp.from, rider.t - (rider.stopping ? 20 : 4)), tb = Math.min(sp.to, rider.t + 46);
     const shown = rider.t > (sp.showFrom ?? -1e9);
     const on = tb > ta + 0.05 && shown;
     this.mesh.visible = on;

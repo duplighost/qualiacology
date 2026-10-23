@@ -39,7 +39,7 @@ void main(){
 }`;
 
 const COMP = /* glsl */`
-uniform sampler2D tScene, tBloom; uniform vec2 uRes; uniform float uBloom, uExposure, uTime, uSpeed, uSat, uVig, uFlash, uGrain, uAberr, uDesat;
+uniform sampler2D tScene, tBloom; uniform vec2 uRes; uniform float uBloom, uExposure, uTime, uSpeed, uSat, uVig, uFlash, uGrain, uAberr, uDesat, uDaze;
 uniform vec3 uTint, uFlashColor, uLift;
 varying vec2 vUv;
 vec3 aces(vec3 x){ // ACES fitted (Hill)
@@ -51,6 +51,13 @@ float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx +
 vec3 srgb(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0/2.4)) - 0.055, step(0.0031308, c)); }
 void main(){
   vec2 uv = vUv;
+  // dazed: the room tilting a little and swimming
+  if (uDaze > 0.001) {
+    float a = sin(uTime * 0.7) * 0.022 * uDaze, asp = uRes.x / uRes.y;
+    vec2 c = uv - 0.5; c.x *= asp;
+    c = mat2(cos(a), -sin(a), sin(a), cos(a)) * c; c.x /= asp;
+    uv = c + 0.5 + vec2(sin(uTime * 1.3 + uv.y * 4.0), cos(uTime * 1.1 + uv.x * 3.0)) * 0.004 * uDaze;
+  }
   vec2 dc = uv - 0.5;
   float r = length(dc * vec2(uRes.x / uRes.y, 1.0));
   // speed blur: smear toward the centre, only at the edges
@@ -69,8 +76,14 @@ void main(){
     col += c * w; wsum += w;
   }
   col /= wsum;
+  // and seeing double
+  if (uDaze > 0.001) {
+    vec2 g = vec2(sin(uTime * 0.9), cos(uTime * 0.6) * 0.5) * 0.02 * uDaze;
+    vec3 ghost = vec3(texture2D(tScene, uv + g * 1.25).r, texture2D(tScene, uv + g).g, texture2D(tScene, uv + g * 0.75).b);
+    col = mix(col, ghost, 0.42 * uDaze);
+  }
   vec3 bloom = texture2D(tBloom, uv).rgb;
-  col += bloom * uBloom;
+  col += bloom * uBloom * (1.0 + 0.8 * uDaze);
   col += uFlashColor * uFlash;
   col *= uExposure * uTint;
   col = aces(col);
@@ -79,7 +92,7 @@ void main(){
   col = mix(col, vec3(l) * vec3(0.8, 0.85, 1.0), uDesat);
   col += uLift * (1.0 - col);
   // vignette
-  col *= 1.0 - uVig * smoothstep(0.35, 1.05, r);
+  col *= 1.0 - (uVig + 0.45 * uDaze) * smoothstep(0.35 - 0.15 * uDaze, 1.05, r);
   col = srgb(col);
   col += (h12(gl_FragCoord.xy + fract(uTime) * 917.0) - 0.5) * uGrain;
   gl_FragColor = vec4(col, 1.0);
@@ -98,7 +111,7 @@ export class Post {
       uniforms: {
         tScene: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uBloom: { value: 0.9 }, uExposure: { value: 1.0 },
         uTime: { value: 0 }, uSpeed: { value: 0 }, uSat: { value: 1.12 }, uVig: { value: 0.55 }, uFlash: { value: 0 }, uGrain: { value: 0.035 },
-        uAberr: { value: 0.0 }, uDesat: { value: 0 }, uTint: { value: new THREE.Color(1, 1, 1) }, uFlashColor: { value: new THREE.Color(1, 0.6, 0.85) },
+        uAberr: { value: 0.0 }, uDesat: { value: 0 }, uDaze: { value: 0 }, uTint: { value: new THREE.Color(1, 1, 1) }, uFlashColor: { value: new THREE.Color(1, 0.6, 0.85) },
         uLift: { value: new THREE.Color(0.012, 0.006, 0.02) },
       },
       vertexShader: VS, fragmentShader: COMP, depthTest: false, depthWrite: false,

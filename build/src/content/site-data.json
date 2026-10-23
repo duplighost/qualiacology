@@ -80,16 +80,16 @@
     {
       "slug": "last-chorus",
       "title": "LAST CHORUS",
-      "descriptor": "Hoverboard ride through nine songs",
+      "descriptor": "Hoverboard ride through fifteen songs",
       "group": "action",
       "featured": false,
       "image": "/assets/games/last-chorus-card-v20261023.jpg",
       "alt": "A rider on a glowing hoverboard track over a city at night, a huge red heart with a zipper down its middle hanging in the sky over the end of the street",
-      "summary": "A hoverboard ride over nine of my songs. The ground is the song: press down into each dip and let go up the other side. The hills are the bars, so riding well is riding in time. A city at night that ends in a car crash, a beach town through a whole year, a cinema lobby with a claw machine full of ducks, a sunny town where nothing happens every week, a morning that's technically freezing, an apartment that smells like summer, a hill on the first of August, the house inside his head, and a party with a heart hanging over it. Keyboard or mouse.",
-      "metaDescription": "LAST CHORUS is a hoverboard ride over nine of my songs. The ground is the song: hold to press down into each dip and let go up the other side, and the hills are the bars, so riding well is riding in time. Keyboard or mouse.",
+      "summary": "A hoverboard ride over fifteen of my songs. The ground is the song: press down into each dip and let go up the other side. The hills are the bars, so riding well is riding in time. A city at night that ends in a car crash, a beach town through a whole year, a cinema lobby with a claw machine full of ducks, a candy factory at night, a sunny town where nothing happens every week, a courthouse, a morning that's technically freezing, a high school on homecoming day, an apartment that smells like summer, a club on a night that goes wrong, a hill on the first of August, a funeral that ends in a wedding, the house inside his head, the back room of a costume shop, and a party with a heart hanging over it. Keyboard or mouse.",
+      "metaDescription": "LAST CHORUS is a hoverboard ride over fifteen of my songs. The ground is the song: hold to press down into each dip and let go up the other side, and the hills are the bars, so riding well is riding in time. Keyboard or mouse.",
       "controls": "Desktop only · hold Space or the mouse button to press down, let go to come up · mouse or A/D to steer · ↑ ↓ pick a song · Esc pause · P autopilot",
       "actionLabel": "Ride",
-      "duration": "Thirty-five minutes or so"
+      "duration": "Fifty-five minutes or so"
     },
     {
       "slug": "collateral",

@@ -97,6 +97,8 @@ export class Hud {
   setCollect(kind) {
     this.gems.classList.toggle('duck', kind === 'duck');
     this.gems.classList.toggle('key', kind === 'key');
+    this.gems.classList.toggle('lily', kind === 'lily');
+    this.gems.classList.toggle('corn', kind === 'corn');
   }
 
   gem(n) {
