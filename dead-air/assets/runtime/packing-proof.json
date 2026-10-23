@@ -1,0 +1,415 @@
+{
+  "assets/planet/ground-color.jpg": {
+    "before": 4529321,
+    "after": 2444878,
+    "size": [
+      2048,
+      2048
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 2.582
+  },
+  "assets/planet/ground-normal.jpg": {
+    "before": 5288849,
+    "after": 3885719,
+    "size": [
+      2048,
+      2048
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 2.256
+  },
+  "assets/planet/ground-rough.jpg": {
+    "before": 2509805,
+    "after": 1158169,
+    "size": [
+      2048,
+      2048
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 1.833
+  },
+  "assets/planet/bark-color.jpg": {
+    "before": 2356592,
+    "after": 2034485,
+    "size": [
+      2048,
+      2048
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 1.526
+  },
+  "assets/planet/bark-rough.jpg": {
+    "before": 1236654,
+    "after": 1078727,
+    "size": [
+      2048,
+      2048
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 0.815
+  },
+  "assets/planet/cliff-color.jpg": {
+    "before": 2971109,
+    "after": 1338353,
+    "size": [
+      2048,
+      2048
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 1.867
+  },
+  "assets/planet/cliff-normal.jpg": {
+    "before": 4158538,
+    "after": 2869102,
+    "size": [
+      2048,
+      2048
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 1.787
+  },
+  "assets/planet/cliff-rough.jpg": {
+    "before": 980027,
+    "after": 239932,
+    "size": [
+      2048,
+      2048
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 0.489
+  },
+  "assets/planet/living-ground-v5.png": {
+    "before": 4430263,
+    "after": 1316283,
+    "size": [
+      1254,
+      1254
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 3.359
+  },
+  "assets/planet/chitin-v4.png": {
+    "before": 4069627,
+    "after": 975572,
+    "size": [
+      1254,
+      1254
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 2.683
+  },
+  "assets/planet/canopy-v4.png": {
+    "before": 3131617,
+    "after": 689290,
+    "size": [
+      1254,
+      1254
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 2.135
+  },
+  "assets/planet/leaves.png": {
+    "before": 1992478,
+    "after": 1418144,
+    "size": [
+      1254,
+      1254
+    ],
+    "alphaLossless": true,
+    "meanChannelError": 0.0
+  },
+  "assets/planet/forest-sprays-v6.png": {
+    "before": 3004310,
+    "after": 2211566,
+    "size": [
+      1254,
+      1254
+    ],
+    "alphaLossless": true,
+    "meanChannelError": 0.0
+  },
+  "assets/planet/planet.jpg": {
+    "before": 498976,
+    "after": 480157,
+    "size": [
+      2048,
+      1024
+    ],
+    "alphaLossless": false,
+    "meanChannelError": 0.586
+  },
+  "assets/planet/fern_02-game.glb": {
+    "before": 5315256,
+    "after": 2057796,
+    "geometryAndAnimationBytesIdentical": true,
+    "images": [
+      {
+        "image": "fern_02_nor_gl",
+        "before": 1365615,
+        "after": 965383,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 0.529
+      },
+      {
+        "image": "fern_02_diff-fern_02_alpha",
+        "before": 2988607,
+        "after": 500266,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 0.518
+      },
+      {
+        "image": "fern_02_rough",
+        "before": 850856,
+        "after": 481970,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 0.364
+      }
+    ]
+  },
+  "assets/planet/grass_medium_01-game.glb": {
+    "before": 2808340,
+    "after": 1626092,
+    "geometryAndAnimationBytesIdentical": true,
+    "images": [
+      {
+        "image": "grass_medium_01_nor_gl",
+        "before": 956166,
+        "after": 704382,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 1.651
+      },
+      {
+        "image": "grass_medium_01_diff-grass_medium_01_alpha",
+        "before": 849016,
+        "after": 222893,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 0.692
+      },
+      {
+        "image": "grass_medium_01_rough",
+        "before": 679518,
+        "after": 375175,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 1.381
+      }
+    ]
+  },
+  "assets/planet/quiver_tree_02-game.glb": {
+    "before": 9367172,
+    "after": 5536964,
+    "geometryAndAnimationBytesIdentical": true,
+    "images": [
+      {
+        "image": "quiver_tree_02_nor_gl",
+        "before": 3785769,
+        "after": 2619147,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 1.649
+      },
+      {
+        "image": "quiver_tree_02_diff",
+        "before": 2532058,
+        "after": 1248375,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 1.445
+      },
+      {
+        "image": "quiver_tree_02_rough",
+        "before": 2717992,
+        "after": 1338090,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 1.353
+      }
+    ]
+  },
+  "assets/planet/coastal_cliff_02-game.glb": {
+    "before": 9284528,
+    "after": 5589120,
+    "geometryAndAnimationBytesIdentical": true,
+    "images": [
+      {
+        "image": "coastal_cliff_02_nor_gl",
+        "before": 4057806,
+        "after": 2839163,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 1.772
+      },
+      {
+        "image": "coastal_cliff_02_diff",
+        "before": 2655313,
+        "after": 1330325,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 1.627
+      },
+      {
+        "image": "coastal_cliff_02_rough",
+        "before": 2299007,
+        "after": 1147230,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 1.045
+      }
+    ]
+  },
+  "assets/weapons/carbine.glb": {
+    "before": 5724284,
+    "after": 5641656,
+    "geometryAndAnimationBytesIdentical": true,
+    "images": [
+      {
+        "image": 1,
+        "before": 1274083,
+        "after": 1273566,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 0.26
+      },
+      {
+        "image": 2,
+        "before": 1182093,
+        "after": 1099982,
+        "size": [
+          2048,
+          2048
+        ],
+        "alphaLossless": false,
+        "meanChannelError": 0.368
+      }
+    ]
+  },
+  "assets/weapons/shotgun.glb": {
+    "before": 7303404,
+    "after": 4173144,
+    "geometryAndAnimationBytesIdentical": true,
+    "images": [
+      {
+        "image": 0,
+        "before": 961188,
+        "after": 504974,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": true,
+        "meanChannelError": 0.0
+      },
+      {
+        "image": 1,
+        "before": 742260,
+        "after": 395402,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": true,
+        "meanChannelError": 0.0
+      },
+      {
+        "image": 2,
+        "before": 1128704,
+        "after": 567142,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": true,
+        "meanChannelError": 0.0
+      },
+      {
+        "image": 3,
+        "before": 1468640,
+        "after": 779478,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": true,
+        "meanChannelError": 0.0
+      },
+      {
+        "image": 4,
+        "before": 791780,
+        "after": 356836,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": true,
+        "meanChannelError": 0.0
+      },
+      {
+        "image": 5,
+        "before": 20660,
+        "after": 306,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": true,
+        "meanChannelError": 0.0
+      },
+      {
+        "image": 6,
+        "before": 1352552,
+        "after": 731044,
+        "size": [
+          1024,
+          1024
+        ],
+        "alphaLossless": true,
+        "meanChannelError": 0.0
+      }
+    ]
+  }
+}

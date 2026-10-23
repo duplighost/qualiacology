@@ -65,6 +65,19 @@
       "actionLabel": "Go out"
     },
     {
+      "slug": "dead-air",
+      "title": "DEAD AIR",
+      "descriptor": "Linear FPS",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/dead-air-card-v6.jpg",
+      "alt": "First-person view through dense alien foliage beside a winding stream, with tall trees and a planet in the sky",
+      "summary": "A linear FPS.",
+      "metaDescription": "A linear FPS.",
+      "controls": "WASD + mouse · click fire · right mouse aim · Q shove / counter · Shift dash · Space jump · C slide · R reload · 1–3 weapons · E read · Esc pause",
+      "actionLabel": "Play"
+    },
+    {
       "slug": "curfew",
       "title": "We Were Promised Morning",
       "descriptor": "open-world night horror",

@@ -1,0 +1,22 @@
+{
+  "assets/planet/ground-color.jpg": "assets/runtime/planet/ground-color.jpg",
+  "assets/planet/ground-normal.jpg": "assets/runtime/planet/ground-normal.jpg",
+  "assets/planet/ground-rough.jpg": "assets/runtime/planet/ground-rough.jpg",
+  "assets/planet/bark-color.jpg": "assets/runtime/planet/bark-color.jpg",
+  "assets/planet/bark-rough.jpg": "assets/runtime/planet/bark-rough.jpg",
+  "assets/planet/cliff-color.jpg": "assets/runtime/planet/cliff-color.jpg",
+  "assets/planet/cliff-normal.jpg": "assets/runtime/planet/cliff-normal.jpg",
+  "assets/planet/cliff-rough.jpg": "assets/runtime/planet/cliff-rough.jpg",
+  "assets/planet/living-ground-v5.png": "assets/runtime/planet/living-ground-v5.jpg",
+  "assets/planet/chitin-v4.png": "assets/runtime/planet/chitin-v4.jpg",
+  "assets/planet/canopy-v4.png": "assets/runtime/planet/canopy-v4.jpg",
+  "assets/planet/leaves.png": "assets/runtime/planet/leaves.webp",
+  "assets/planet/forest-sprays-v6.png": "assets/runtime/planet/forest-sprays-v6.webp",
+  "assets/planet/planet.jpg": "assets/runtime/planet/planet.jpg",
+  "assets/planet/fern_02-game.glb": "assets/runtime/planet/fern_02-game.glb",
+  "assets/planet/grass_medium_01-game.glb": "assets/runtime/planet/grass_medium_01-game.glb",
+  "assets/planet/quiver_tree_02-game.glb": "assets/runtime/planet/quiver_tree_02-game.glb",
+  "assets/planet/coastal_cliff_02-game.glb": "assets/runtime/planet/coastal_cliff_02-game.glb",
+  "assets/weapons/carbine.glb": "assets/runtime/weapons/carbine.glb",
+  "assets/weapons/shotgun.glb": "assets/runtime/weapons/shotgun.glb"
+}

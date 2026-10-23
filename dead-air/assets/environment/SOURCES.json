@@ -1,0 +1,55 @@
+{
+  "sky": {
+    "source": "https://polyhaven.com/a/overcast_soil_puresky",
+    "file": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/overcast_soil_puresky_2k.hdr",
+    "license": "CC0"
+  },
+  "barrier": {
+    "creator": "Amal Kumar",
+    "source": "https://polyhaven.com/a/concrete_road_barrier_02",
+    "file": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf",
+    "license": "CC0"
+  },
+  "foley": {
+    "creator": "rubberduck",
+    "source": "https://opengameart.org/content/100-cc0-metal-and-wood-sfx",
+    "file": "https://opengameart.org/sites/default/files/100-CC0-wood-metal-SFX.zip",
+    "license": "CC0"
+  },
+  "surfaces": [
+    {
+      "source": "https://ambientcg.com/view?id=Asphalt012",
+      "license": "CC0",
+      "via": "Alex WINTERLINE material library"
+    },
+    {
+      "source": "https://ambientcg.com/view?id=Plaster001",
+      "license": "CC0",
+      "via": "Alex WINTERLINE material library"
+    },
+    {
+      "source": "https://ambientcg.com/view?id=Bricks059",
+      "license": "CC0",
+      "via": "Alex WINTERLINE material library"
+    }
+  ],
+  "ambience": {
+    "creator": "Joseph SARDIN / BigSoundBank",
+    "source": "https://bigsoundbank.com/sea-waves-s0698.html",
+    "file": "https://bigsoundbank.com/UPLOAD/mp3/0698.mp3",
+    "license": "CC0",
+    "edit": "36 seconds from 22 seconds, short endpoint fades, Ogg Vorbis"
+  },
+  "portable_generator": {
+    "creator": "James Ray Cock",
+    "source": "https://polyhaven.com/a/portable_generator",
+    "file": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/portable_generator/portable_generator_1k.gltf",
+    "license": "CC0"
+  },
+  "barrel_03": {
+    "creator": "Serhii Khromov",
+    "source": "https://polyhaven.com/a/barrel_03",
+    "file": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/barrel_03/barrel_03_1k.gltf",
+    "license": "CC0"
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "fern_02": {
+    "creator": "Rob Tuytel, Rico Cilliers",
+    "source": "https://polyhaven.com/a/fern_02",
+    "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/fern_02/fern_02_2k.gltf",
+    "license": "CC0"
+  },
+  "rock_moss_set_01": {
+    "creator": "Kless Gyzen",
+    "source": "https://polyhaven.com/a/rock_moss_set_01",
+    "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/rock_moss_set_01/rock_moss_set_01_2k.gltf",
+    "license": "CC0"
+  },
+  "pine_roots": {
+    "creator": "Rob Tuytel",
+    "source": "https://polyhaven.com/a/pine_roots",
+    "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/pine_roots/pine_roots_1k.gltf",
+    "license": "CC0"
+  },
+  "ground": {
+    "creator": "Rob Tuytel, Rico Cilliers",
+    "source": "https://polyhaven.com/a/forest_ground_04",
+    "license": "CC0",
+    "resolution": "2K"
+  },
+  "rock": {
+    "creator": "Rob Tuytel",
+    "source": "https://polyhaven.com/a/mossy_rock",
+    "license": "CC0",
+    "resolution": "2K"
+  },
+  "bark": {
+    "creator": "Rob Tuytel",
+    "source": "https://polyhaven.com/a/bark_brown_02",
+    "license": "CC0",
+    "resolution": "2K"
+  },
+  "sky": {
+    "source": "https://polyhaven.com/a/kloppenheim_06_puresky",
+    "license": "CC0"
+  },
+  "quiver_tree_02": {
+    "creator": "Dario Barresi, Rico Cilliers",
+    "source": "https://polyhaven.com/a/quiver_tree_02",
+    "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/quiver_tree_02/quiver_tree_02_2k.gltf",
+    "license": "CC0"
+  },
+  "grass_medium_01": {
+    "creator": "Rob Tuytel, Rico Cilliers",
+    "source": "https://polyhaven.com/a/grass_medium_01",
+    "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_medium_01/grass_medium_01_1k.gltf",
+    "license": "CC0"
+  },
+  "coastal_cliff_02": {
+    "creator": "Rob Tuytel",
+    "source": "https://polyhaven.com/a/coastal_cliff_02",
+    "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/coastal_cliff_02/coastal_cliff_02_2k.gltf",
+    "license": "CC0"
+  },
+  "planet": {
+    "creator": "Solar System Scope / INOVE",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "download": "https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg",
+    "license": "CC BY 4.0",
+    "modifications": "Shader lighting and atmospheric blending in an alien sky."
+  },
+  "leaves": {
+    "creator": "OpenAI image generation for DEAD AIR",
+    "mode": "Built-in image generation",
+    "file": "leaves.png",
+    "prompt": "Photorealistic natural RGBA botanical texture atlas for curved 3D foliage meshes. Exact 2 by 2 grid of four separate whole alien leaves, stems at bottom and points at top, orthographic flat specimens. Top left teal with lime veins; top right plum and crimson with gold veins; bottom left coral pink with indigo veins; bottom right jade with cyan and yellow veins. Extraordinary vein, cellular, waxy detail, neutral diffuse lighting, true alpha transparent background, no labels, no shadows, no perspective, no cartoon."
+  },
+  "cliff": {
+    "creator": "Dario Barresi and Greg Zaal",
+    "source": "https://polyhaven.com/a/rock_face",
+    "license": "CC0",
+    "resolution": "2K",
+    "files": [
+      "cliff-color.jpg",
+      "cliff-normal.jpg",
+      "cliff-rough.jpg"
+    ],
+    "modifications": "Triplanar cliff shading with geological bands and slope blending."
+  }
+}
