@@ -1,0 +1,31 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: #07050d; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: none; }
+#hud { position: fixed; inset: 0; pointer-events: none; font-family: "Helvetica Neue", Arial, sans-serif; color: #fff; }
+
+#songbar { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); width: min(560px, 60vw); height: 22px; opacity: 0; transition: opacity 1.2s; }
+#songbar.on { opacity: .85; }
+#shape { width: 100%; height: 100%; display: block; }
+
+#title { position: absolute; left: 0; right: 0; bottom: 12vh; text-align: center; transition: opacity .9s; }
+#title .name { font-size: 15px; letter-spacing: .62em; font-weight: 700; padding-left: .62em; opacity: .92; }
+#title .pick { margin-top: 12px; display: flex; justify-content: center; align-items: center; gap: 18px; font-size: 13px; letter-spacing: .18em; text-transform: uppercase; }
+#title .song { opacity: .8; min-width: 260px; }
+#title .num { opacity: .4; font-variant-numeric: tabular-nums; }
+#title .arrow { opacity: .45; cursor: pointer; pointer-events: auto; padding: 6px 10px; font-size: 14px; }
+#title .arrow:hover { opacity: .95; }
+#title .arrow.off { visibility: hidden; }
+#title .best { margin-top: 8px; font-size: 11px; letter-spacing: .22em; opacity: .45; min-height: 14px; }
+#title.locked .song { opacity: .3; }
+#title.locked .hint { visibility: hidden; }
+#title .hint { margin-top: 26px; font-size: 12px; letter-spacing: .14em; opacity: .5; }
+#title .hint b { font-weight: 600; opacity: .9; }
+#title.off { opacity: 0; }
+
+#speed { position: absolute; right: 26px; bottom: 22px; font-size: 13px; letter-spacing: .12em; opacity: 0; font-variant-numeric: tabular-nums; transition: opacity 1s; }
+#speed.on { opacity: .6; }
+
+#results { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; flex-direction: column; padding-left: 8vw; opacity: 0; transition: opacity 1.4s; text-align: left; background: linear-gradient(90deg, rgba(8,4,14,.78) 0%, rgba(8,4,14,.45) 32%, rgba(8,4,14,0) 55%); }
+#results.on { opacity: 1; pointer-events: auto; }
+#loading { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 11px; letter-spacing: .3em; opacity: .5; }
+#paused { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 13px; letter-spacing: .6em; opacity: 0; transition: opacity .3s; }
+#paused.on { opacity: .8; }
