@@ -76,7 +76,9 @@ export class RiderView {
     this.char.rotation.y = -Math.PI / 2;      // regular stance: left foot forward, facing the right of the road
     this.char.position.y = 0.205;
     this.board.add(this.char);
-    this.pose = { crouch: 0.3, lean: 0, air: 0, wipe: 0, spin: 0, look: 0, hands: 0 };
+    this.pose = { crouch: 0.3, lean: 0, air: 0, wipe: 0, spin: 0, look: 0, hands: 0, grab: 0 };
+    this.trick = null;   // { kind, t, dur, turns }
+    this._tq = new THREE.Quaternion(); this._te = new THREE.Euler(0, 0, 0, 'YXZ'); this._tc = new THREE.Vector3(); this._tp = new THREE.Vector3();
     this.mats = [];
     this.ready = loadRider().then((g) => { if (g) this._attach(g); });
 
@@ -186,8 +188,10 @@ export class RiderView {
     const p = this.pose;
     p.lean += (clamp(rider.lean, -1, 1) - p.lean) * Math.min(1, dt * 10);
     p.air += ((rider.grounded ? 0 : 1) - p.air) * Math.min(1, dt * 9);
-    // a long flight and not diving: hands up
-    const handsT = !rider.grounded && rider.air > 0.45 && !rider.press && rider.wipe <= 0 ? 1 : 0;
+    // a long flight and not diving: hands up (unless she's busy with a trick)
+    const tk = this.trick && this.trick.kind;
+    const handsT = !rider.grounded && rider.air > 0.45 && !rider.press && rider.wipe <= 0 && (!tk || tk === 'spin') ? 1 : 0;
+    p.grab += ((tk === 'grab' || tk === 'flip' ? 1 : 0) - p.grab) * Math.min(1, dt * 10);
     p.hands += (handsT - p.hands) * Math.min(1, dt * (handsT ? 5 : 12));
     const crouchT = rider.press ? 0.92 : 0.32 + 0.12 * beatPulse;
     p.crouch += (clamp(crouchT + rider.compress * 0.5, 0, 1.15) - p.crouch) * Math.min(1, dt * (rider.press ? 18 : 9));
@@ -197,7 +201,24 @@ export class RiderView {
     this.root.position.copy(pos);
     this.root.rotation.order = 'YXZ';
     this.root.rotation.set(-pitch, yaw, -bank * 0.85 + p.lean * 0.42);
-    this.board.rotation.set(Math.sin(p.spin * 1.3) * 0.35 * p.wipe, Math.sin(p.spin) * 0.8 * p.wipe, 0);
+    // tricks turn the whole board (she's strapped to it): about her middle for flips and rolls
+    let ang = 0;
+    const tr = this.trick;
+    if (tr) {
+      tr.t += dt * (rider.grounded ? 7 : 1);          // touched down early: finish it fast
+      const f = Math.min(1, tr.t / tr.dur);
+      const e = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+      ang = e * Math.PI * 2 * tr.turns;
+      if (f >= 1) { this.landedTrick = tr.kind; this.trick = null; ang = 0; }
+    }
+    const kind = tr ? tr.kind : null;
+    this._te.set(Math.sin(p.spin * 1.3) * 0.35 * p.wipe + (kind === 'flip' ? -ang : 0), Math.sin(p.spin) * 0.8 * p.wipe + (kind === 'spin' ? ang : 0), kind === 'roll' ? ang : 0);
+    this.board.quaternion.setFromEuler(this._te);
+    if (kind === 'flip' || kind === 'roll') {
+      this._tc.set(0, 0.95, 0);
+      this._tp.copy(this._tc).applyQuaternion(this.board.quaternion);
+      this.board.position.copy(this._tc).sub(this._tp);
+    } else this.board.position.set(0, 0, 0);
 
     if (this.attached) this._pose(p, rider, dt);
 
@@ -211,10 +232,13 @@ export class RiderView {
     this.poolMat.uniforms.uK.value = (0.45 + 0.7 * rider.flow) / (1 + h * 0.7);
   }
 
+  // a trick for this flight; dur is how long she'll be up
+  startTrick(kind, dur, turns = 1) { this.trick = { kind, t: 0, dur: Math.max(0.32, dur), turns }; this.landedTrick = null; }
+
   _pose(p, rider, dt) {
     for (const [n, r] of Object.entries(this.rest)) { this.bones[n].quaternion.copy(r.q); this.bones[n].position.copy(r.p); }
     const c = clamp(p.crouch, 0, 1.15), air = p.air;
-    const flex = 0.22 + 0.42 * c + 0.5 * air;            // hip/knee bend, radians
+    const flex = 0.22 + 0.42 * c + 0.5 * air + 0.55 * p.grab;   // hip/knee bend, radians (tucked up in a grab)
     const spread = 0.17 + 0.03 * c;                         // feet apart along the board
     // drop the hips so the feet stay on the deck
     const legLen = 0.87;
@@ -239,8 +263,12 @@ export class RiderView {
     this._rot('Head', X, 0.12 + 0.1 * c);
     // arms: down and out for balance, up and wide in the air
     const hu = p.hands * p.hands * (3 - 2 * p.hands);
+    const gr = p.grab * p.grab * (3 - 2 * p.grab);
     const armDown = (1.05 - 0.75 * air - 0.15 * c) * (1 - hu) - 1.3 * hu;
-    this._rot('upperarm_l', Z, -armDown); this._rot('upperarm_r', Z, armDown);
+    // grab: the back hand reaches down to the edge of the board
+    const armR = armDown * (1 - gr) + 1.55 * gr;
+    this._rot('upperarm_l', Z, -armDown); this._rot('upperarm_r', Z, armR);
+    if (gr > 0.01) { this._rot('upperarm_r', X, -0.5 * gr); this._rot('lowerarm_r', Z, 0.35 * gr); this._rot('spine_01', X, 0.3 * gr); }
     this._rot('upperarm_l', Y, (0.35 + 0.25 * c) * (1 - hu)); this._rot('upperarm_r', Y, (-0.1 - 0.3 * c) * (1 - hu));
     this._rot('lowerarm_l', Y, (0.35 + 0.3 * c) * (1 - hu) + 0.25 * hu); this._rot('lowerarm_r', Y, (-0.35 - 0.3 * c) * (1 - hu) - 0.25 * hu);
     // lean arms with the line

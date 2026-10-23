@@ -34,18 +34,19 @@ export class ChaseCam {
     this.lift += (clamp(airH, 0, 30) * 0.35 - this.lift) * Math.min(1, dt * 4);
     const dist = 4.3 + 2.4 * sp;
     const back = dist / Math.max(v, 12);
-    const height = 1.75 + (this.lift0 || 0) + 0.55 * sp - this.dip * 0.4;
-    const want = track.at(t - back, rider.x * 0.85, height, this._a);
+    const height = 2.25 + (this.lift0 || 0) + 0.55 * sp - this.dip * 0.4;
+    const want = track.at(t - back, rider.x * 0.5, height, this._a);
     want.y = Math.max(want.y, R.y - airH * 0.65 + 0.7);  // follow jumps partway
     // look a little ahead of her, down the road
-    const ahead = track.at(t + 0.28 + 0.1 * sp, rider.x * 0.7, 0.8, this._b);
+    const ahead = track.at(t + 0.28 + 0.1 * sp, rider.x * 0.4, 0.8, this._b);
     ahead.y = ahead.y * 0.6 + (R.y - 0.2) * 0.4;
 
     if (titleK > 0) {
       // before the first press: off her shoulder, looking back past her at the road we came up
-      const side = track.at(t + 0.12, 4.6, 1.1, this._c);
+      const tv = this.titleView || {};
+      const side = track.at(t + (tv.ahead ?? 0.12), tv.x ?? 4.6, tv.h ?? 1.1, this._c);
       want.lerp(side, titleK);
-      const her = track.at(t - 0.02, rider.x, 1.15, this._c);
+      const her = track.at(t - (tv.back ?? 0.02), rider.x, tv.lookH ?? 1.15, this._c);
       ahead.lerp(her, titleK);
     }
 
@@ -56,6 +57,11 @@ export class ChaseCam {
     springTo(this.look, this.lookVel, ahead, 12, dt);
 
     const pos = this.cam.position.copy(R).add(this.off);
+    // glide over the small hills instead of bobbing with each one: the camera rides a
+    // smoothed height, so you see her dip into every valley rather than the whole screen
+    const cy = rider.course, ys = smoothHeight(cy, t);
+    const bob = (ground - ys) * (1 - titleK);
+    pos.y -= bob * 0.8;
     // never sink into the ribbon
     const floor = track.at(t - back, rider.x * 0.85, 0.5, this._c).y;
     if (pos.y < floor) pos.y = floor;
@@ -66,9 +72,10 @@ export class ChaseCam {
       this.shake *= Math.exp(-dt * 8);
     }
     this.cam.up.copy(this._up);
-    this.cam.lookAt(this._b.copy(R).add(this.look));
+    this._b.copy(R).add(this.look); this._b.y -= bob * 0.55;
+    this.cam.lookAt(this._b);
     const bank = track.bankAt(t);
-    const rollT = (bank * 0.35 - rider.lean * 0.05) * (1 - titleK);
+    const rollT = (bank * 0.25 - rider.lean * 0.03) * (1 - titleK);
     this.roll += (rollT - this.roll) * Math.min(1, dt * 4);
     this.cam.rotateZ(this.roll);
 
@@ -77,7 +84,7 @@ export class ChaseCam {
       const rr = orbit.r ?? 14, hh = orbit.h ?? 2.6;
       const o = new THREE.Vector3(orbit.center.x + Math.cos(orbit.angle) * rr, orbit.center.y + hh, orbit.center.z + Math.sin(orbit.angle) * rr);
       this.cam.position.lerp(o, k);
-      const look = this._b.copy(R).add(this.look).lerp(orbit.center, k);
+      const look = this._b.lerp(orbit.look || orbit.center, k);
       this.cam.lookAt(look);
       this.cam.rotateZ(this.roll * (1 - k));
     }
@@ -89,6 +96,16 @@ export class ChaseCam {
     this.dip *= Math.exp(-dt * 6);
     this.kick *= Math.exp(-dt * 3);
   }
+}
+
+// the course height averaged over the hills around t (a Gaussian over about a second)
+function smoothHeight(course, t) {
+  let sum = 0, wsum = 0;
+  for (let k = -6; k <= 6; k++) {
+    const w = Math.exp(-0.5 * (k * 0.1 / 0.3) ** 2);
+    sum += course.sample(t + k * 0.1).y * w; wsum += w;
+  }
+  return sum / wsum;
 }
 
 function springTo(x, v, target, w, dt) {

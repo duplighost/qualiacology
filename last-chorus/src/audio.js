@@ -227,13 +227,77 @@ export class Sound {
 
   pickup(degree) {
     const c = this.ctx, t = c.currentTime;
-    const f0 = this.note(degree, 2);
+    // the melody wanders; keep it inside two octaves, turning back at the edges
+    let d = ((degree % 18) + 18) % 18; if (d > 9) d = 18 - d;
+    const f0 = this.note(d - 2, 2);
+    // a glint on top so it reads even under a loud chorus
+    const gl = c.createOscillator(); gl.type = 'sine'; gl.frequency.value = f0 * 4;
+    const gg = c.createGain(); this._env(gg, t, 0.001, 0.025, 0.12);
+    gl.connect(gg).connect(this.sfx); gl.start(t); gl.stop(t + 0.2);
     const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = f0;
     const o2 = c.createOscillator(); o2.type = 'sine'; o2.frequency.value = f0 * 2;
     const g = c.createGain(); this._env(g, t, 0.002, 0.07, 0.5);
     const g2 = c.createGain(); this._env(g2, t, 0.002, 0.03, 0.3);
     o.connect(g).connect(this.sfx); o2.connect(g2).connect(this.sfx);
     o.start(t); o.stop(t + 0.7); o2.start(t); o2.stop(t + 0.5);
+  }
+
+  // a pump landed, judged when you let go. perfect: a punch on the beat with a bright
+  // edge and a chord of the song's key; good: the punch and one note; early/late: a dull tock
+  hit(grade, streak = 0) {
+    const c = this.ctx, t = c.currentTime;
+    if (grade === 'perfect' || grade === 'good') {
+      const big = grade === 'perfect';
+      const o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(big ? 150 : 130, t); o.frequency.exponentialRampToValueAtTime(52, t + 0.13);
+      const g = c.createGain(); this._env(g, t, 0.003, big ? 0.34 : 0.24, 0.16);
+      o.connect(g).connect(this.sfx); o.start(t); o.stop(t + 0.3);
+      // the bright edge: a short click of filtered noise
+      const n = c.createBufferSource(); n.buffer = this._noise;
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = big ? 5200 : 3800; bp.Q.value = 0.8;
+      const g2 = c.createGain(); this._env(g2, t, 0.001, big ? 0.16 : 0.09, 0.035);
+      n.connect(bp).connect(g2).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 0.08);
+      // the chord rises a step every eight in a row
+      const lift = Math.min(4, Math.floor(streak / 8));
+      const degs = big ? [lift, lift + 2, lift + 4] : [lift + 2];
+      degs.forEach((d, i) => {
+        const f0 = this.note(d, 2);
+        const s = c.createOscillator(); s.type = i ? 'sine' : 'triangle'; s.frequency.value = f0;
+        const gs = c.createGain(); this._env(gs, t + i * 0.012, 0.004, (big ? 0.05 : 0.04) / (1 + i * 0.4), big ? 0.55 : 0.35);
+        s.connect(gs).connect(this.sfx); s.start(t); s.stop(t + 0.9);
+      });
+    } else if (grade === 'early' || grade === 'late') {
+      const n = c.createBufferSource(); n.buffer = this._noise;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
+      const g = c.createGain(); this._env(g, t, 0.002, 0.08, 0.07);
+      n.connect(lp).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 0.12);
+    }
+  }
+
+  // eight in a row: a quick run up the key
+  flourish(streak) {
+    const c = this.ctx, t = c.currentTime;
+    const base = Math.min(3, Math.floor(streak / 8) - 1);
+    [0, 1, 2, 3, 5].forEach((d, i) => {
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = this.note(base + d, 3);
+      const g = c.createGain(); this._env(g, t + i * 0.045, 0.003, 0.035, 0.4);
+      o.connect(g).connect(this.sfx); o.start(t + i * 0.045); o.stop(t + i * 0.045 + 0.5);
+    });
+  }
+
+  // holding down a hill: a soft rush that rises the further down you get
+  charge(on, progress = 0) {
+    const c = this.ctx, now = c.currentTime;
+    if (!this._charge) {
+      const n = c.createBufferSource(); n.buffer = this._noise; n.loop = true;
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.6; bp.frequency.value = 400;
+      const g = c.createGain(); g.gain.value = 0;
+      n.connect(bp).connect(g).connect(this.sfx); n.start();
+      this._charge = { bp, g };
+    }
+    const s = this._charge;
+    s.bp.frequency.setTargetAtTime(380 + 1500 * progress * progress, now, 0.05);
+    s.g.gain.setTargetAtTime(on ? 0.012 + 0.03 * progress : 0, now, on ? 0.06 : 0.03);
   }
 
   // a siren going past: a slow wail, quiet, higher coming toward you and lower going away
@@ -288,6 +352,30 @@ export class Sound {
     const g = c.createGain(); this._env(g, t, 0.002, 0.5, 0.9);
     n.connect(f).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 1.1);
     this.duck(0.7, 1.4);
+  }
+
+  // thunder a way off: a low rolling rumble
+  thunder(level = 1) {
+    const c = this.ctx, t = c.currentTime;
+    const n = c.createBufferSource(); n.buffer = this._noise; n.loop = true;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(420, t); f.frequency.exponentialRampToValueAtTime(90, t + 2.6);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5 * level, t + 0.08);
+    g.gain.setValueAtTime(0.5 * level, t + 0.3); g.gain.exponentialRampToValueAtTime(0.18 * level, t + 0.9);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    n.connect(f).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 3.3);
+  }
+  // a knock you feel more than hear
+  thud(level = 1) {
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.25);
+    const g = c.createGain(); this._env(g, t, 0.003, 0.7 * level, 0.45);
+    o.connect(g).connect(this.sfx); o.start(t); o.stop(t + 0.5);
+    const n = c.createBufferSource(); n.buffer = this._noise;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+    const g2 = c.createGain(); this._env(g2, t, 0.002, 0.25 * level, 0.12);
+    n.connect(f).connect(g2).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 0.2);
+    this.duck(0.35, 0.5);
   }
 
   _noiseBuffer(sec) {

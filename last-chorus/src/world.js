@@ -14,6 +14,7 @@ export function makeSky(scene, P) {
       uGlow: { value: new THREE.Color(P.skyGlow) }, uGlowDir: { value: new THREE.Vector3(...P.glowDir).normalize() },
       uMoonDir: { value: new THREE.Vector3(...P.moonDir).normalize() }, uMoon: { value: new THREE.Color(P.moon) },
       uFlow: { value: 0.3 }, uTime: { value: 0 }, uPulse: { value: 0 }, uStars: { value: P.stars ?? 1 }, uSun: { value: P.sunSize ?? 0 },
+      uCloud: { value: new THREE.Color(P.cloud ?? 0xffffff) }, uCloudK: { value: P.cloud !== undefined ? 1 : 0 }, uClouds: { value: P.clouds ?? 0.45 },
       // Heart of the Party: a heart where the moon would be, and in the bridge a heart monitor under it
       uHeart: { value: 0 }, uHeartDir: { value: new THREE.Vector3(0, 0.15, 1).normalize() }, uHeartCol: { value: new THREE.Color(P.heart ?? 0xff2a50) },
       uHeartBeat: { value: 0 }, uHeartSize: { value: 0.115 },
@@ -22,7 +23,7 @@ export function makeSky(scene, P) {
     },
     vertexShader: `varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uZenith, uHorizon, uGlow, uGlowDir, uMoonDir, uMoon; uniform float uFlow, uTime, uPulse, uStars, uSun;
+      uniform vec3 uZenith, uHorizon, uGlow, uGlowDir, uMoonDir, uMoon, uCloud; uniform float uFlow, uTime, uPulse, uStars, uSun, uCloudK, uClouds;
       uniform float uHeart, uHeartBeat, uHeartSize, uMon, uMonNow; uniform vec3 uHeartDir, uHeartCol, uMonCol; uniform vec2 uSpk[16];
       varying vec3 vD;
       float dot2(vec2 v){ return dot(v, v); }
@@ -74,7 +75,9 @@ export function makeSky(scene, P) {
         // soft clouds lit from below by the town glow
         float cl = n3(d * vec3(3.0, 9.0, 3.0) + vec3(uTime * 0.004, 0.0, 0.0)) * 0.6 + n3(d * vec3(7.0, 20.0, 7.0)) * 0.4;
         cl = smoothstep(0.55, 0.85, cl) * smoothstep(0.02, 0.12, h) * smoothstep(0.55, 0.2, h);
-        col = mix(col, uHorizon * 0.9 + uGlow * 0.25 * gd, cl * 0.45);
+        // by day the clouds are white and lit by the sun on one side
+        vec3 cc = mix(uHorizon * 0.9 + uGlow * 0.25 * gd, uCloud * (0.82 + 0.3 * pow(max(dot(d, normalize(uMoonDir)), 0.0), 3.0)), uCloudK);
+        col = mix(col, cc, cl * uClouds);
         col *= 0.85 + 0.25 * uFlow;
         if (uHeart > 0.001 || uMon > 0.001) {
           vec3 hd = normalize(uHeartDir);
@@ -143,15 +146,31 @@ export function makeSkyline(scene, P) {
   const g = new THREE.CylinderGeometry(2600, 2600, 520, 160, 1, true);
   g.translate(0, 230, 0);
   const m = new THREE.ShaderMaterial({
-    uniforms: { uSil: { value: new THREE.Color(P.skyline ?? 0x150a1e) }, uFog: { value: new THREE.Color(P.fog) }, uWin: { value: new THREE.Color(P.window) }, uAlt: { value: new THREE.Color(P.windowAlt) }, uTime: { value: 0 }, uFlow: { value: 0.3 } },
+    uniforms: { uSil: { value: new THREE.Color(P.skyline ?? 0x150a1e) }, uFog: { value: new THREE.Color(P.fog) }, uWin: { value: new THREE.Color(P.window) }, uAlt: { value: new THREE.Color(P.windowAlt) }, uTime: { value: 0 }, uFlow: { value: 0.3 }, uStyle: { value: 0 }, uHills: { value: 0 } },
     vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uSil, uFog, uWin, uAlt; uniform float uTime, uFlow; varying vec3 vP;
+      uniform vec3 uSil, uFog, uWin, uAlt; uniform float uTime, uFlow, uStyle, uHills; varying vec3 vP;
       float h1(float x){ return fract(sin(x * 127.1) * 43758.5453); }
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n1(float x){ float i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(h1(i), h1(i + 1.0), f); }
       void main(){
         float ang = atan(vP.z, vP.x);
         float y = vP.y;                          // metres above ground, on a ring 2.6 km out
+        if (uStyle > 0.5) {
+          // far hills, two ranges, the near one furred with trees; a few lights in the valleys at dusk
+          float a = ang * 6.0;
+          float far = 90.0 + 170.0 * n1(a * 1.3 + 4.0) + 60.0 * n1(a * 4.1);
+          float near = 40.0 + 110.0 * n1(a * 2.2 + 11.0) + 30.0 * n1(a * 9.0) + 7.0 * n1(ang * 900.0);
+          if (y > max(far, near)) discard;
+          float front = step(y, near);
+          vec3 col = mix(mix(uFog, uSil, 0.35), uSil, front * (0.55 + 0.45 * smoothstep(near - 80.0, near, y)));
+          col = mix(col, uFog, 0.25 * (1.0 - smoothstep(0.0, 60.0, y)));
+          vec2 cell = vec2(ang * 1800.0, y / 3.0);
+          float on = step(h2(floor(cell)), 0.02 * uHills) * step(y, 24.0) * front;
+          col += uWin * on * 0.9;
+          gl_FragColor = vec4(col, 1.0);
+          return;
+        }
         // two layers of buildings: tall sparse towers, low dense blocks
         float u1 = ang * 260.0; float c1 = floor(u1);
         float hTall = pow(h1(c1), 3.0) * 210.0 * step(0.55, h1(c1 + 7.0));
@@ -189,15 +208,34 @@ export function makeGround(scene, P) {
     uniforms: {
       uCam: { value: new THREE.Vector3() }, uFog: { value: new THREE.Color(P.fog) }, uFogDensity: { value: P.fogDensity },
       uGround: { value: new THREE.Color(P.ground) }, uStreet: { value: new THREE.Color(P.street) }, uFlow: { value: 0.3 },
-      uHorizon: { value: new THREE.Color(P.horizon) },
+      uHorizon: { value: new THREE.Color(P.horizon) }, uStyle: { value: 0 }, uSnow: { value: P.snowGround ?? 0 },
     },
     vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uCam, uFog, uGround, uStreet, uHorizon; uniform float uFogDensity, uFlow; varying vec3 vW;
+      uniform vec3 uCam, uFog, uGround, uStreet, uHorizon; uniform float uFogDensity, uFlow, uStyle, uSnow; varying vec3 vW;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n2(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f); return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
       float line(float x, float w){ float f = fwidth(x); return 1.0 - smoothstep(w - f, w + f, abs(fract(x) - 0.5) * 2.0 - (1.0 - w)); }
       void main(){
         vec2 p = vW.xz;
+        if (uStyle > 0.5) {
+          // fields in patches, woods in dark clumps, lanes between them, lit farms at dusk
+          vec2 q = mat2(0.9, -0.43, 0.43, 0.9) * p;
+          vec2 fc = floor(q / vec2(140.0, 95.0));
+          float kind = h2(fc);
+          vec3 field = uGround * (0.8 + 0.5 * kind) * mix(vec3(1.0), vec3(1.25, 1.1, 0.6), step(0.62, kind));
+          float wood = smoothstep(0.55, 0.7, n2(p / 160.0) * 0.7 + n2(p / 37.0) * 0.3);
+          vec3 col = mix(field, uGround * vec3(0.38, 0.48, 0.32), wood);
+          vec2 e = abs(fract(q / vec2(140.0, 95.0)) - 0.5);
+          float lane = smoothstep(0.012, 0.0, 0.5 - max(e.x, e.y));
+          col = mix(col, uStreet * 0.3 + uGround * 0.4, lane * 0.6);
+          vec2 fp = fract(q / 70.0) - 0.5;
+          col += uStreet * smoothstep(0.03, 0.0, length(fp)) * step(0.8, h2(floor(q / 70.0))) * uFlow * 2.0;
+          float d = length(uCam - vW);
+          float fog = 1.0 - exp(-pow(d * uFogDensity, 1.5));
+          gl_FragColor = vec4(mix(col, uFog, clamp(fog, 0.0, 1.0)), 1.0);
+          return;
+        }
         vec3 col = uGround * (0.75 + 0.25 * h2(floor(p / 37.0)));
         // street grid: two scales, rotated a little so it doesn't line up with anything
         vec2 q = mat2(0.96, -0.28, 0.28, 0.96) * p;
@@ -209,6 +247,7 @@ export function makeGround(scene, P) {
         lamps = smoothstep(0.08, 0.0, length(lp)) * street;
         col = mix(col, uStreet * 0.35, street * 0.8);
         col += uStreet * lamps * 3.5;
+        col = mix(col, vec3(0.72, 0.77, 0.86) * (0.85 + 0.2 * h2(floor(p / 5.0))), uSnow * 0.7 * (1.0 - street * 0.6));
         float d = length(uCam - vW);
         float fog = 1.0 - exp(-pow(d * uFogDensity, 1.5));
         col = mix(col, uFog, clamp(fog, 0.0, 1.0));

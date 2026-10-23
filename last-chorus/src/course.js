@@ -62,6 +62,9 @@ export class Course {
     this.kind = new Uint8Array(n);
     this.energy = new Float32Array(n);
     this.press = new Int8Array(n);      // +1 where pressing gains (descent), -1 where it costs (ascent)
+    this.body = new Uint8Array(n);      // 1 inside a section's rollers (not a launch, kicker or catch)
+    this.hold = new Float32Array(n);    // inside a hold zone (crest to valley): 0..1 how far down; -1 outside
+    this.turn = new Float32Array(n).fill(1);   // how much the road may turn here (a section's turn, default 1)
     this.rand = mulberry32(hashStr(chart.id || chart.title || 'x'));
     this._beats();
     this._sections();
@@ -138,7 +141,7 @@ export class Course {
         const u = s;                       // leave the lip with the kicker's slope
         const k = 1 + (sec.lift ?? 0.012); // surface falls a hair faster than you: a float, not a gap
         const y0 = y;
-        pieces.push({ ta, tb, kind: sec.kind, f: (t) => { const tt = t - ta; return y0 + u * tt - 0.5 * G * k * tt * tt; } });
+        pieces.push({ ta, tb, kind: sec.kind, turn: sec.turn, f: (t) => { const tt = t - ta; return y0 + u * tt - 0.5 * G * k * tt * tt; } });
         y = y0 + u * L - 0.5 * G * k * L * L;
         s = u - G * k * L;
         // catch: bend the steep fall back to riding, and come out on the bar so
@@ -151,7 +154,7 @@ export class Course {
           const tc0 = this.beats[bL], tc1 = this.beats[bC], Lc = tc1 - tc0;
           const yc0 = y, sc0 = s, s1 = -1.5;
           const y1 = clamp(y + 0.5 * (s + s1) * Lc * 0.62, H_MIN + 2, H_MAX);
-          pieces.push({ ta: tc0, tb: tc1, kind: sec.kind, f: (t) => hermite(yc0, sc0, y1, s1, Lc, (t - tc0) / Lc) });
+          pieces.push({ ta: tc0, tb: tc1, kind: sec.kind, turn: sec.turn, f: (t) => hermite(yc0, sc0, y1, s1, Lc, (t - tc0) / Lc) });
           y = y1; s = s1;
           b = bC;
         } else b = bL;
@@ -183,7 +186,7 @@ export class Course {
           amps.push({ v0, v1, A: rollerAmp(c, v1 - v0) });
         }
         pieces.push({
-          ta, tb, kind: sec.kind, amps,
+          ta, tb, kind: sec.kind, amps, turn: sec.turn,
           f: (t) => {
             const tt = t - ta;
             // slope easing: blend from incoming slope s0 to trend over `ease` seconds
@@ -209,7 +212,7 @@ export class Course {
         const u = next.kick ?? 11;                   // m/s upward off the lip
         const rise = clamp(next.kickRise ?? (u * L * 0.42), 2, 14);
         const y0 = y, s0 = s, y1 = Math.min(y + rise, H_MAX);
-        pieces.push({ ta, tb, kind: sec.kind, f: (t) => hermite(y0, s0, y1, u, L, (t - ta) / L) });
+        pieces.push({ ta, tb, kind: sec.kind, turn: sec.turn, f: (t) => hermite(y0, s0, y1, u, L, (t - ta) / L) });
         y = y1; s = u;
       }
     }
@@ -224,6 +227,8 @@ export class Course {
       const p = pieces[Math.min(pi, pieces.length - 1)];
       Y[i] = p.f(Math.min(t, p.tb));
       this.kind[i] = KIND_ID[p.kind] ?? 1;
+      this.body[i] = p.amps ? 1 : 0;
+      this.turn[i] = p.turn ?? 1;
     }
     // never below the street: soft floor at 3 m
     for (let i = 0; i < n; i++) { const d = Y[i] - 3; Y[i] = 3 + (d > 0 ? d + Math.log1p(Math.exp(-d * 2)) / 2 : Math.log1p(Math.exp(d * 2)) / 2); }
@@ -247,6 +252,23 @@ export class Course {
     // the bottoms of the dips: where you let go, on the beat
     this.valleys = [];
     for (let i = 1; i < n; i++) if (this.vy[i - 1] < -0.3 && this.vy[i] >= -0.3) this.valleys.push(this.t0 + i / RATE);
+    // hold zones: each run downhill inside the rollers, from the crest to the valley.
+    // That is where you hold; the valley at its end is where you let go, on the beat.
+    this.hold.fill(-1);
+    this.crests = [];
+    let run = -1;
+    for (let i = 0; i <= n; i++) {
+      const down = i < n && this.vy[i] < -0.3 && this.body[i];
+      if (down && run < 0) run = i;
+      if (!down && run >= 0) {
+        const len = i - run;
+        if (len > RATE * 0.12) {
+          for (let k = run; k < i; k++) this.hold[k] = (k - run) / len;
+          this.crests.push(this.t0 + run / RATE);
+        }
+        run = -1;
+      }
+    }
   }
 
   _defaultTarget(sec, y, next) {
@@ -285,12 +307,13 @@ export class Course {
     const W = new Float32Array(n);
     for (let i = 0; i < n; i++) W[i] = KINDS[Object.keys(KIND_ID)[this.kind[i]]]?.curve ?? 0.5;
     const Ws = gaussSmooth(W, RATE * 1.2);
+    const Ts = gaussSmooth(this.turn, RATE * 1.5);
     let yaw = 0;
     for (let i = 0; i < n; i++) {
       const t = this.t0 + i / RATE;
       const w = Ws[i];
       const r = 0.055 * Math.sin(2 * Math.PI * t / P[0] + ph[0]) + 0.05 * Math.sin(2 * Math.PI * t / P[1] + ph[1]) * w + 0.03 * Math.sin(2 * Math.PI * t / P[2] + ph[2]) * w * w;
-      this.yawRate[i] = r * (0.6 + 0.8 * w);
+      this.yawRate[i] = r * (0.6 + 0.8 * w) * Ts[i];
       yaw += this.yawRate[i] / RATE;
       this.yaw[i] = yaw;
       this.width[i] = 0;
@@ -334,6 +357,8 @@ export class Course {
     out.yaw = L(this.yaw); out.yawRate = L(this.yawRate);
     out.width = L(this.width); out.energy = L(this.energy);
     out.kind = this.kind[i]; out.press = this.press[i];
+    const h0 = this.hold[i], h1 = this.hold[i + 1];
+    out.hold = h0 >= 0 && h1 >= 0 ? h0 + (h1 - h0) * a : (a < 0.5 ? h0 : h1);
     return out;
   }
 

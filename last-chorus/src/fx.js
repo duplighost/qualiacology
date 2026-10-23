@@ -4,59 +4,6 @@ import * as THREE from 'three';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
-export class Notes {
-  constructor(scene, course, P) {
-    this.course = course;
-    const g = new THREE.OctahedronGeometry(0.42, 0);
-    g.scale(0.8, 1.25, 0.8);
-    this.mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(P.glow).lerp(new THREE.Color(P.fret), 0.35).multiplyScalar(2.4) });
-    this.mesh = new THREE.InstancedMesh(g, this.mat, 256);
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.frustumCulled = false; this.mesh.count = 0;
-    scene.add(this.mesh);
-    // soft halo sprite per note
-    this.haloMat = new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: new THREE.Color(P.glow) } },
-      vertexShader: `varying vec2 vUv; void main(){ vUv=uv; vec4 c = modelViewMatrix * instanceMatrix * vec4(0.0,0.0,0.0,1.0); float s = length(instanceMatrix[0].xyz); c.xy += position.xy * s; gl_Position = projectionMatrix * c; }`,
-      fragmentShader: `uniform vec3 uColor; varying vec2 vUv; void main(){ float d = length(vUv-0.5)*2.0; gl_FragColor = vec4(uColor * exp(-d*d*6.0) * 0.9, 1.0); }`,
-      blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
-    });
-    this.halo = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), this.haloMat, 256);
-    this.halo.frustumCulled = false; this.halo.count = 0; scene.add(this.halo);
-    this._m = new THREE.Matrix4(); this._p = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._s = new THREE.Vector3(); this._e = new THREE.Euler();
-    this.lo = 0;
-  }
-
-  update(track, rider, time) {
-    const notes = this.course.notes, t = rider.t;
-    while (this.lo < notes.length && notes[this.lo].t < t - 1.5) this.lo++;
-    let k = 0;
-    const m = this._m, p = this._p, q = this._q, s = this._s;
-    for (let i = this.lo; i < notes.length && k < 256; i++) {
-      const n = notes[i];
-      if (n.t > t + 9) break;
-      let scale = n.bar ? 1.25 : 0.9;
-      if (n.got) {
-        if (n.gotT === undefined) n.gotT = t;
-        const age = t - n.gotT;
-        if (age > 0.35) continue;
-        scale *= 1 + age * 6;
-      } else if (n.t < t - 0.1) continue;
-      track.at(n.t, n.x, 1.15 + 0.12 * Math.sin(time * 4 + i), p);
-      this._e.set(0, time * 2.5 + i, 0); q.setFromEuler(this._e);
-      s.setScalar(scale);
-      m.compose(p, q, s);
-      this.mesh.setMatrixAt(k, m);
-      s.setScalar(scale * 3.2);
-      m.compose(p, q.identity(), s);
-      this.halo.setMatrixAt(k, m);
-      k++;
-    }
-    this.mesh.count = k; this.halo.count = k;
-    this.mesh.instanceMatrix.needsUpdate = true; this.halo.instanceMatrix.needsUpdate = true;
-  }
-}
-
 // a pool of glowing points: sparks, bursts, the trail off the board
 export class Sparks {
   constructor(scene, max = 1500) {
@@ -74,7 +21,7 @@ export class Sparks {
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uScale: { value: 600 } },
       vertexShader: `attribute float aA; attribute float aS; varying vec3 vC; varying float vA; uniform float uScale;
-        void main(){ vC = color; vA = aA; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = aS * uScale / -mv.z; gl_Position = projectionMatrix * mv; }`,
+        void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position,1.0); vA = aA * smoothstep(0.6, 2.4, -mv.z); gl_PointSize = min(aS * uScale / -mv.z, 80.0); gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `varying vec3 vC; varying float vA; void main(){ vec2 d = gl_PointCoord - 0.5; float r = dot(d,d)*4.0; float a = exp(-r*3.0); gl_FragColor = vec4(vC * a * vA, 1.0); }`,
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, vertexColors: true,
     });

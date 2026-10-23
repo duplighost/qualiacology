@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { extend, glowAt, poolAt, col, local } from './scenery.js';
+import { buildAmbulance, buildBus } from './vehicles.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -211,59 +212,6 @@ export class Confetti {
 }
 
 // ---------- vehicles: the ambulance in the second verse, the 19 in the bridge ----------
-function signTexture(text, fg = '#ffb347') {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
-  const g = c.getContext('2d');
-  g.fillStyle = '#050403'; g.fillRect(0, 0, 256, 64);
-  g.font = 'bold 50px "Arial Narrow", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.shadowColor = fg; g.shadowBlur = 10; g.fillStyle = fg; g.fillText(text, 128, 35);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  return t;
-}
-
-function box(w, h, l, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), mat); m.position.set(x, y, z); return m; }
-
-function buildAmbulance() {
-  const g = new THREE.Group();
-  const white = new THREE.MeshStandardMaterial({ color: 0xf2eff2, roughness: 0.45, metalness: 0.15 });
-  const red = new THREE.MeshStandardMaterial({ color: 0xd21a2a, roughness: 0.5, emissive: 0x400006 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x0b0d14, roughness: 0.1, metalness: 0.6 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x111114, roughness: 0.8 });
-  g.add(box(2.4, 2.6, 5.0, white, 0, 1.75, -1.0));       // the box
-  g.add(box(2.42, 0.38, 5.02, red, 0, 1.55, -1.0));      // stripe
-  g.add(box(2.25, 1.75, 1.9, white, 0, 1.33, 2.4));      // cab
-  g.add(box(2.1, 0.75, 0.08, glass, 0, 1.75, 3.36));     // windscreen
-  g.add(box(2.27, 0.7, 1.2, glass, 0, 1.75, 2.5));       // side windows
-  g.add(box(1.6, 0.18, 0.4, new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.5 }), 0, 2.3, 2.6));   // light bar
-  for (const [x, z] of [[-1.05, 2.3], [1.05, 2.3], [-1.05, -2.6], [1.05, -2.6]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 14), dark); w.rotation.z = Math.PI / 2; w.position.set(x, 0.42, z); g.add(w); }
-  // a red cross on the back doors
-  g.add(box(0.9, 0.28, 0.04, red, 0, 1.9, -3.52)); g.add(box(0.28, 0.9, 0.04, red, 0, 1.9, -3.52));
-  return g;
-}
-
-function buildBus(route) {
-  const g = new THREE.Group();
-  const paint = new THREE.MeshStandardMaterial({ color: 0xdde6ea, roughness: 0.5, metalness: 0.2 });
-  const band = new THREE.MeshStandardMaterial({ color: 0x1b6e7a, roughness: 0.5 });
-  const lit = new THREE.MeshStandardMaterial({ color: 0x221a12, emissive: new THREE.Color(0xffd29a), emissiveIntensity: 2.2, roughness: 0.3 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x101012, roughness: 0.8 });
-  g.add(box(2.55, 2.9, 11.6, paint, 0, 1.85, 0));
-  g.add(box(2.57, 0.5, 11.62, band, 0, 0.65, 0));
-  g.add(box(2.58, 1.05, 10.2, lit, 0, 2.15, -0.4));       // the windows, lit from inside
-  for (let i = 0; i < 9; i++) g.add(box(2.6, 1.07, 0.16, paint, 0, 2.15, -5.2 + i * 1.18));
-  g.add(box(2.3, 1.2, 0.06, lit, 0, 2.0, 5.81));          // windscreen glow
-  const sign = new THREE.MeshBasicMaterial({ map: signTexture(route) });
-  const front = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.45), sign); front.position.set(0, 3.0, 5.82); g.add(front);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.45), sign); back.position.set(0, 2.9, -5.82); back.rotation.y = Math.PI; g.add(back);
-  // the back window, lit, and somebody sitting by it
-  g.add(box(2.1, 0.95, 0.06, lit, 0, 2.05, -5.81));
-  const someone = new THREE.MeshStandardMaterial({ color: 0x0a0608, roughness: 0.9 });
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), someone); head.position.set(-0.85, 2.3, -3.2); g.add(head);
-  g.add(box(0.42, 0.5, 0.3, someone, -0.85, 1.95, -3.2));
-  for (const [x, z] of [[-1.15, 3.9], [1.15, 3.9], [-1.15, -3.6], [1.15, -3.6]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.32, 14), dark); w.rotation.z = Math.PI / 2; w.position.set(x, 0.5, z); g.add(w); }
-  return g;
-}
-
 export class Vehicles {
   // they ride the ribbon itself: anything down on the street is hidden under it
   constructor(scene, course, list) {
@@ -271,10 +219,7 @@ export class Vehicles {
     this.list = list.map((v) => {
       const obj = v.kind === 'bus' ? buildBus(v.route || '19') : buildAmbulance();
       obj.visible = false; scene.add(obj);
-      const lights = v.kind === 'bus'
-        ? [[0.9, 0.85, 5.85, 1.5, [1, 0.95, 0.8], 1.4, 0], [-0.9, 0.85, 5.85, 1.5, [1, 0.95, 0.8], 1.4, 0], [1.1, 0.95, -5.85, 1.1, [1, 0.1, 0.1], 1.4, 0], [-1.1, 0.95, -5.85, 1.1, [1, 0.1, 0.1], 1.4, 0], [0, 3.0, -5.9, 1.2, [1, 0.7, 0.3], 0.5, 0]]
-        : [[0.55, 2.38, 2.6, 2.8, [1, 0.1, 0.12], 2.8, 2], [-0.55, 2.38, 2.6, 2.8, [1, 1, 1], 2.6, 3], [1.15, 3.05, -3.45, 2.2, [1, 0.1, 0.12], 2.4, 3], [-1.15, 3.05, -3.45, 2.2, [1, 1, 1], 2.2, 2],
-          [0.8, 0.9, 3.4, 1.6, [1, 0.95, 0.85], 1.6, 0], [-0.8, 0.9, 3.4, 1.6, [1, 0.95, 0.85], 1.6, 0], [1.0, 0.9, -3.55, 1.1, [1, 0.08, 0.1], 1.4, 0], [-1.0, 0.9, -3.55, 1.1, [1, 0.08, 0.1], 1.4, 0]];
+      const lights = obj.userData.lights || [];
       return { ...v, obj, lights };
     });
     this._p = new THREE.Vector3(); this._f = new THREE.Vector3(); this._w = new THREE.Vector3(); this._m = new THREE.Matrix4();

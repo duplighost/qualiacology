@@ -17,6 +17,8 @@ export function buildingMaterial(P, cell, opts = {}) {
     sh.uniforms.uWarm = { value: new THREE.Color(P.window) };
     sh.uniforms.uCandy = { value: new THREE.Color(P.windowAlt) };
     sh.uniforms.uBeat = { value: 0 };
+    sh.uniforms.uWinK = { value: P.windowK ?? 1 };
+    sh.uniforms.uGlass = { value: new THREE.Color(P.glass ?? 0x030406) };
     m.userData.shader = sh;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec3 aWake; attribute vec3 aTint; varying vec3 vWake; varying vec3 vTint; varying vec2 vWin; varying float vUp; varying float vFace; varying float vObjY;')
@@ -27,7 +29,7 @@ export function buildingMaterial(P, cell, opts = {}) {
         vWin = vec2(sx / ${cell[0].toFixed(2)}, (position.y - ${(opts.sill ?? 1.2).toFixed(2)}) / ${cell[1].toFixed(2)});`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform vec3 uWarm, uCandy; uniform float uBeat; varying vec3 vWake; varying vec3 vTint; varying vec2 vWin; varying float vUp; varying float vFace; varying float vObjY;
+        uniform vec3 uWarm, uCandy, uGlass; uniform float uBeat, uWinK; varying vec3 vWake; varying vec3 vTint; varying vec2 vWin; varying float vUp; varying float vFace; varying float vObjY;
         float wh(vec2 p){ p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }`)
       .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb *= vTint;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
@@ -45,11 +47,11 @@ export function buildingMaterial(P, cell, opts = {}) {
         float on = mix(step(id, pOn) * m2.x * m2.y, pOn * 0.33, far) * wall;
         vec3 wc = mix(uWarm, uCandy, mix(step(0.8, wh(cellId * 1.7 + seedI)), 0.2, far));
         float flick = 0.8 + 0.2 * step(0.5, wh(cellId + 3.3)) + uBeat * 0.25 * step(0.9, wh(cellId + 9.1)) * vWake.x;
-        totalEmissiveRadiance += wc * on * flick * (0.45 + 1.4 * vWake.x);
+        totalEmissiveRadiance += wc * on * flick * (0.45 + 1.4 * vWake.x) * uWinK;
         // street light washing up the walls, stronger once the place is awake
         float up = exp(-max(vObjY, 0.0) * 0.32) * step(abs(vUp), 0.5);
-        totalEmissiveRadiance += diffuseColor.rgb * uWarm * up * (0.10 + 0.22 * vWake.x);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.01, 0.012, 0.022), mask * (1.0 - on) * 0.85);
+        totalEmissiveRadiance += diffuseColor.rgb * uWarm * up * (0.10 + 0.22 * vWake.x) * uWinK;
+        diffuseColor.rgb = mix(diffuseColor.rgb, uGlass, mask * (1.0 - on * uWinK) * 0.85);
         // boarded up for the winter: plywood over the glass, nothing lit behind it
         float ply = vWake.z * mask;
         totalEmissiveRadiance *= 1.0 - ply;
@@ -95,6 +97,46 @@ export function glowMaterial() {
       varying vec2 vUv; varying vec3 vC; varying float vA;
       void main(){ float d = length(vUv - 0.5) * 2.0; float a = exp(-d * d * 4.5) * 0.7 + exp(-d * d * 40.0) * 0.8; gl_FragColor = vec4(vC * a * vA, 1.0); }`,
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
+  });
+}
+
+// shop fronts: a canvas of four kinds of front (cafe, shop, bar, laundromat), one per instance,
+// lit as the block wakes up
+export function storeMaterial() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512;
+  const g = c.getContext('2d');
+  const kinds = [
+    { light: '#ffd9a0', frame: '#2a1c14', fill: (y) => { for (let i = 0; i < 5; i++) { g.fillStyle = '#5a3020'; g.fillRect(40 + i * 95, y + 86, 36, 26); g.fillRect(52 + i * 95, y + 70, 12, 18); } } },
+    { light: '#f4f6ff', frame: '#1a1c22', fill: (y) => { for (let r = 0; r < 3; r++) for (let i = 0; i < 9; i++) { g.fillStyle = ['#c84a5a', '#4a8ac8', '#e8c050', '#60b070'][(i + r) % 4]; g.fillRect(24 + i * 52, y + 22 + r * 30, 38, 18); } } },
+    { light: '#ff6fb4', frame: '#120a10', fill: (y) => { g.strokeStyle = '#ffd0f0'; g.lineWidth = 6; g.beginPath(); g.arc(256, y + 56, 34, 0, Math.PI * 2); g.stroke(); g.fillStyle = '#3a0a28'; g.fillRect(0, y + 96, 512, 32); } },
+    { light: '#bfe8ff', frame: '#1c2026', fill: (y) => { for (let i = 0; i < 6; i++) { g.fillStyle = '#e8eef4'; g.fillRect(28 + i * 80, y + 40, 64, 70); g.fillStyle = '#5a6a7a'; g.beginPath(); g.arc(60 + i * 80, y + 76, 22, 0, Math.PI * 2); g.fill(); } } },
+  ];
+  kinds.forEach((k, r) => {
+    const y = r * 128;
+    const grad = g.createLinearGradient(0, y, 0, y + 128);
+    grad.addColorStop(0, k.light); grad.addColorStop(1, '#3a2a20');
+    g.fillStyle = grad; g.fillRect(0, y, 512, 128);
+    k.fill(y);
+    // frames, a door, the sign band
+    g.fillStyle = k.frame;
+    for (let x = 0; x <= 512; x += 128) g.fillRect(x - 5, y, 10, 128);
+    g.fillRect(0, y, 512, 14); g.fillRect(0, y + 120, 512, 8);
+    g.fillRect(232, y + 30, 48, 98);
+  });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return new THREE.ShaderMaterial({
+    uniforms: { uMap: { value: t }, uFog: { value: new THREE.Color(0x200818) }, uFogDensity: { value: 0.002 }, uCam: { value: new THREE.Vector3() } },
+    vertexShader: /* glsl */`
+      attribute vec3 aWake; varying vec2 vUv; varying float vW; varying float vRow; varying vec3 vP;
+      void main(){ vUv = uv; vW = aWake.x; vRow = floor(aWake.y * 3.999); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vP = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uMap; uniform vec3 uFog, uCam; uniform float uFogDensity; varying vec2 vUv; varying float vW; varying float vRow; varying vec3 vP;
+      void main(){
+        vec2 uv = vec2(vUv.x, (3.0 - vRow + vUv.y) / 4.0);
+        vec3 c = texture2D(uMap, uv).rgb * (0.12 + 1.25 * vW);
+        float d = length(uCam - vP); float fog = 1.0 - exp(-pow(d * uFogDensity * 0.7, 1.5));
+        gl_FragColor = vec4(mix(c, uFog, clamp(fog, 0.0, 1.0)), 1.0);
+      }`,
   });
 }
 
@@ -250,6 +292,36 @@ export const GEO = {
     const parts = [tank, cap];
     for (let a = 0; a < 4; a++) { const l = new THREE.CylinderGeometry(0.25, 0.25, 18, 6); l.translate(Math.cos(a * 1.57) * 3.2, 9, Math.sin(a * 1.57) * 3.2); parts.push(l); }
     return merge(parts);
+  },
+  // what's on a flat roof: a parapet round the edge, air handlers, sometimes a water tank (roof at y = 0)
+  roofKit(tank) {
+    const parts = [];
+    for (const [w, d, x, z] of [[14.4, 0.4, 0, 7], [14.4, 0.4, 0, -7], [0.4, 14.4, 7, 0], [0.4, 14.4, -7, 0]]) { const b = new THREE.BoxGeometry(w, 1.1, d); b.translate(x, 0.55, z); parts.push(b); }
+    const ac = new THREE.BoxGeometry(2.4, 1.4, 3.2); ac.translate(-3, 0.7, -2.5); parts.push(ac);
+    const ac2 = new THREE.BoxGeometry(1.6, 1.0, 1.6); ac2.translate(2.6, 0.5, -3.8); parts.push(ac2);
+    const stair = new THREE.BoxGeometry(3, 2.6, 3); stair.translate(3.5, 1.3, 3.2); parts.push(stair);
+    if (tank) {
+      const t = new THREE.CylinderGeometry(1.7, 1.7, 3.2, 12); t.translate(-2.8, 4.6, 3.2); parts.push(t);
+      const c = new THREE.ConeGeometry(1.85, 1.1, 12); c.translate(-2.8, 6.75, 3.2); parts.push(c);
+      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const l = new THREE.CylinderGeometry(0.12, 0.12, 3, 5); l.translate(-2.8 + dx * 1.1, 1.5, 3.2 + dz * 1.1); parts.push(l); }
+    }
+    return merge(parts);
+  },
+  // the top of a tower: a stepped crown and a mast (tower roof at y = 0)
+  towerTop() {
+    const a = new THREE.BoxGeometry(14, 4, 14); a.translate(0, 2, 0);
+    const b = new THREE.BoxGeometry(8, 3, 8); b.translate(0, 5.5, 0);
+    const m = new THREE.CylinderGeometry(0.25, 0.4, 16, 6); m.translate(0, 15, 0);
+    return merge([a, b, m]);
+  },
+  // a lit shop front along the bottom of a block, with an awning (front face at z = +7)
+  storefront() {
+    const g = new THREE.PlaneGeometry(13, 3.6); g.translate(0, 2.1, 7.06);
+    return g;
+  },
+  awning() {
+    const g = new THREE.BoxGeometry(13.4, 0.2, 1.6); g.rotateX(0.32); g.translate(0, 4.25, 7.75);
+    return g;
   },
   quad() { return new THREE.PlaneGeometry(1, 1); },
   flat() { const g = new THREE.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2); return g; },

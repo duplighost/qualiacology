@@ -8,13 +8,18 @@ import { Scenery } from './scenery.js';
 import { RiderView } from './riderview.js';
 import { ChaseCam } from './camera.js';
 import { Post } from './post.js';
-import { Notes, Sparks, Streaks, Trail, Fireworks, Weather } from './fx.js';
+import { Sparks, Streaks, Trail, Fireworks, Weather } from './fx.js';
+import { Notes, Rings } from './feedback.js';
 import { Look, applyLook } from './look.js';
 import { Wreck } from './setpieces.js';
 import { Land, oceanMaterial, Train, FerrisWheel } from './beach.js';
 import { HeartStage, Confetti, Vehicles, partyFrame } from './party.js';
+import { TrailWorld, HomeFinale } from './trail.js';
+import { CinemaWorld, ScreenFinale } from './cinema.js';
+import { ColdWorld, DoorFinale } from './cold.js';
 import { Hud } from './hud.js';
 import { Input } from './input.js';
+import { Screens } from './menu.js';
 import { ALBUM, PALETTES } from './album.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -28,11 +33,12 @@ const post = new Post(renderer);
 const sound = new Sound();
 const input = new Input(canvas);
 const hud = new Hud();
+const ui = new Screens();
 const camera = new THREE.PerspectiveCamera(64, 1, 0.4, 9000);
 const chase = new ChaseCam(camera);
 
 let S = null;            // the current song session
-let state = 'loading';   // loading | title | ride | results
+let state = 'menu';      // menu | loading | title | ride | results
 let lastFrame = performance.now();
 let paused = false;
 const autopilot = { on: params.has('auto') };
@@ -52,39 +58,51 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-async function loadSong(index) {
+async function loadSong(index, onProgress = () => {}) {
   state = 'loading';
   const entry = ALBUM[index];
   const beats = await fetch(`data/beats/${entry.id}.json`).then((r) => r.json());
   const chart = { ...beats, ...entry };
   if (!S || S.id !== entry.id) {
     if (S && S.scene) disposeScene(S.scene);
-    hud.loading(0);
-    const buffer = await sound.decode(`assets/music/${entry.id}.ogg`, (p) => hud.loading(p));
-    hud.loading(1);
+    S = null;
+    onProgress(0.02);
+    const buffer = await sound.decode(`assets/music/${entry.id}.ogg`, (p) => onProgress(0.05 + 0.7 * p));
     S = { id: entry.id, index, entry, chart, buffer };
   }
+  onProgress(0.8);
   await prepare(S);
-  hud.loading(1);
+  onProgress(1);
+  const t0 = parseFloat(params.get('t') || '0');
+  S.startAt = t0 > 0 ? t0 : 0;
+}
+
+// ---------- the album: pick a song; then a loading card; then the start line ----------
+let menuSel = 0;
+function card(i) { const e = ALBUM[i]; return { title: e.title, accent: e.accent || '#ff4f9a', image: `assets/menu/${e.id}.jpg`, best: bestOf(e.id), inTime: pctOf(e.id) }; }
+function openMenu(sel = menuSel) {
+  if (S) { sound.stop(); sound.charge(false); sound.siren(0); }
+  paused = false; ui.hidePause(); ui.hideEnd();
+  state = 'menu';
+  document.body.classList.remove('riding');
+  hud.hideAll();
+  ui.showMenu(ALBUM.map((_, i) => card(i)), sel, (i) => { menuSel = i; sound.resume(); chooseSong(i); });
+}
+async function chooseSong(i) {
+  if (state === 'loading') return;
+  ui.hideEnd(); ui.hidePause();
+  if (S) { sound.stop(); sound.charge(false); sound.siren(0); }
+  ui.showLoading(card(i));
+  try { await loadSong(i, (p) => ui.setLoading(p)); } catch (e) { console.error(e); }
+  ui.hideLoading();
   state = 'title';
   showTitle();
-  const t0 = parseFloat(params.get('t') || '0');
-  if (t0 > 0) { S.startAt = t0; }
 }
+function pctOf(id) { try { return +localStorage.getItem('lc-pct-' + id) || 0; } catch (e) { return 0; } }
 
 function bestOf(id) { try { return +localStorage.getItem('lc-best-' + id) || 0; } catch (e) { return 0; } }
 function showTitle() {
-  const i = S.index;
-  hud.showTitle(S.entry, { index: i, hasPrev: i > 0, hasNext: i < ALBUM.length - 1, best: bestOf(S.id) });
-}
-let switching = false;
-async function switchSong(d) {
-  if (switching || !S) return;
-  const j = S.index + d;
-  if (j < 0 || j >= ALBUM.length) return;
-  switching = true;
-  S.startAt = 0;
-  try { await loadSong(j); } finally { switching = false; }
+  hud.showTitle(S.entry, { index: S.index, best: bestOf(S.id) });
 }
 
 // let go of a finished world's GPU memory before building the next one
@@ -116,38 +134,45 @@ function build(S) {
     land = new Land(scene, null, P, S.entry.land || {});
   }
   const skyline = makeSkyline(scene, P);
+  skyline.material.uniforms.uStyle.value = S.entry.skyline === 'hills' ? 1 : 0;
+  ground.material.uniforms.uStyle && (ground.material.uniforms.uStyle.value = S.entry.groundStyle === 'country' ? 1 : 0);
   const town = new Scenery(scene, course, P, S.entry.scenery, 11);
   const view = new RiderView(scene, P);
-  const notes = new Notes(scene, course, P);
+  const notes = new Notes(scene, course, P, S.entry.collect);
+  hud.setCollect(S.entry.collect);
+  const rings = new Rings(scene);
   const sparks = new Sparks(scene);
   const streaks = new Streaks(scene, P);
   const trail = new Trail(scene, P);
   const fireworks = new Fireworks(scene, [P.jacket, P.edge, P.fret, P.window, 0xffffff]);
   const plan = S.entry.scenery || {};
-  const Finale = { ferris: FerrisWheel, heart: HeartStage }[plan.finale?.kind] || Wreck;
+  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale }[plan.finale?.kind] || Wreck;
   const finale = plan.finale ? new Finale(scene, course, P, plan.finale, town) : null;
   const vehicles = plan.vehicles ? new Vehicles(scene, course, plan.vehicles) : null;
   const confetti = S.entry.confetti ? new Confetti(scene, [P.heart ?? P.glow, P.edge, P.fret, 0xffffff, P.windowAlt, 0x5ff2ff]) : null;
   const trains = plan.trains ? new Train(course, plan.trains.x, plan.trains.passes) : null;
   town.track = track;
-  const hemi = new THREE.HemisphereLight(new THREE.Color(P.skyLight ?? 0x6a5a9a), new THREE.Color(P.bounce ?? 0x5a3a2a), 1.9);
+  const WORLDS = { trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld };
+  const world = WORLDS[S.entry.world] ? new WORLDS[S.entry.world](scene, { course, plan, P, track, rider, town }) : null;
+  const hemi = new THREE.HemisphereLight(new THREE.Color(P.skyLight ?? 0x6a5a9a), new THREE.Color(P.bounce ?? 0x5a3a2a), P.hemiK ?? 1.9);
   scene.add(hemi);
   const weather = new Weather(scene);
-  const moonLight = new THREE.DirectionalLight(new THREE.Color(P.moon), 0.9);
+  const moonLight = new THREE.DirectionalLight(new THREE.Color(P.moon), P.sunK ?? 0.9);
   const moon = moonLight;
   moon.position.set(...P.moonDir).multiplyScalar(100);
   scene.add(moon);
-  const fillLight = new THREE.DirectionalLight(new THREE.Color(P.skyGlow), 0.7);
+  const fillLight = new THREE.DirectionalLight(new THREE.Color(P.skyGlow), P.fillK ?? 0.7);
   const fill = fillLight;
   fill.position.set(...P.glowDir).multiplyScalar(100);
   scene.add(fill);
   sound.setKey(S.chart.keyRoot, S.chart.keyMode === 'min');
-  Object.assign(S, { land, trains, P, look, hemi, moonLight, fillLight, weather, scene, course, rider, track, sky, ground, skyline, town, view, notes, sparks, streaks, trail, fireworks, finale, plan, vehicles, confetti, firedChorus: new Set(), pulse: 0, flash: 0, mixFlow: 0.42, muffle: 0, endT: null,
+  Object.assign(S, { world, momentsDone: new Set(), land, trains, P, look, hemi, moonLight, fillLight, weather, scene, course, rider, track, sky, ground, skyline, town, view, notes, rings, sparks, streaks, trail, fireworks, finale, plan, vehicles, confetti, hit: 0, pressGlow: 0, gems: 0, firedChorus: new Set(), pulse: 0, flash: 0, mixFlow: 0.42, muffle: 0, endT: null,
     heartBeat: 0, heartLast: -1, heartDir: null, spikes: [], burstAt: new Set(), afterBeatT: 0 });
   applyLook(S, look.at(0));
   rider.reset(0, 22);
   chase.first = true;
   chase.lift0 = S.entry.camLift || 0;
+  chase.titleView = S.entry.titleView || null;
   track.update(rider);
   window.__LC = { S, sound, input, autopilot, state: () => state, camera, renderer };
 
@@ -182,23 +207,32 @@ function startRide() {
 }
 
 input.onPress = () => {
-  if (paused) { togglePause(); return; }
+  if (ui.active) return;                       // a screen is up: it takes the keys and clicks
   if (state === 'title') startRide();
-  else if (state === 'results' && performance.now() - S.endShown > 900) { state = 'loading'; prepare(S).then(() => { state = 'title'; showTitle(); startRide(); }); }
 };
 input.onKey = (e) => {
+  if (ui.key(e)) return;
   if (e.code === 'KeyP') autopilot.on = !autopilot.on;
-  if ((state === 'title' || state === 'results') && (e.code === 'ArrowRight' || e.code === 'ArrowLeft')) switchSong(e.code === 'ArrowRight' ? 1 : -1);
   if (e.code === 'Escape' && state === 'ride') togglePause();
+  else if (e.code === 'Escape' && state === 'title') openMenu(S ? S.index : menuSel);
 };
-document.getElementById('prev').addEventListener('pointerdown', (e) => { e.stopPropagation(); switchSong(-1); });
-document.getElementById('next').addEventListener('pointerdown', (e) => { e.stopPropagation(); switchSong(1); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'ride' && !paused) togglePause(); });
 function togglePause() {
   paused = !paused;
-  if (paused) sound.ctx.suspend(); else sound.ctx.resume();
-  document.getElementById('paused').classList.toggle('on', paused);
+  if (paused) {
+    sound.ctx.suspend();
+    ui.showPause([
+      { label: 'Resume', key: 'esc', code: 'Escape', go: () => togglePause() },
+      { label: 'Start over', key: 'R', code: 'KeyR', go: () => { togglePause(); rideAgain(); } },
+      { label: 'All songs', key: 'M', code: 'KeyM', go: () => { sound.ctx.resume(); openMenu(S.index); } },
+    ]);
+  } else { sound.ctx.resume(); ui.hidePause(); }
   document.body.classList.toggle('riding', !paused && state === 'ride');
+}
+function rideAgain() {
+  ui.hideEnd();
+  state = 'loading'; sound.stop(); sound.charge(false);
+  prepare(S).then(() => { state = 'title'; showTitle(); startRide(); });
 }
 
 // ---------- the autopilot: rides like someone who knows the song ----------
@@ -230,13 +264,18 @@ function frame(now) {
       }
     }
   }
-  if (!S || state === 'loading') return;
+  if (!S || state === 'loading' || state === 'menu') return;
   const { rider, course, track, view, P } = S;
   const time = now / 1000;
 
   if (state === 'ride' && !paused) {
     const songT = sound.time();
     const inp = autopilot.on ? autoInput(S) : { press: input.press, steer: input.steer(dt) };
+    if (!autopilot.on) {
+      const nowMs = performance.now();
+      inp.pressAt = songT - Math.max(0, nowMs - input.downAt) / 1000;
+      inp.releaseAt = songT - Math.max(0, nowMs - input.upAt) / 1000;
+    }
     rider.advance(Math.max(rider.t, songT), inp);
     handleEvents(S, dt);
     if (songT > course.duration + 2.5 && state === 'ride') endSong();
@@ -257,7 +296,7 @@ function frame(now) {
   const sec = course.sectionAt(rider.t);
   S.town.beatLamps = sec.kind === 'chorus' || sec.kind === 'final';
   if (S.entry.heart) heartFrame(S, dt, songNow);
-  S.town.update(track, rider, songNow, dt, beatPulse, (T) => { if (S.finale) { S.finale.beat = S.heartBeat; S.finale.camPos = camera.position; S.finale.update(track, rider, songNow, dt, S.fireworks); } if (S.trains) S.trains.draw(T, rider, songNow); if (S.vehicles) S.vehicles.update(track, rider, songNow, T); });
+  S.town.update(track, rider, songNow, dt, beatPulse, (T) => { gatePosts(S, T, beatPulse); if (S.finale) { S.finale.beat = S.heartBeat; S.finale.camPos = camera.position; S.finale.update(track, rider, songNow, dt, S.fireworks); } if (S.trains) S.trains.draw(T, rider, songNow); if (S.world && S.world.draw) S.world.draw(T, rider, songNow); if (S.vehicles) S.vehicles.update(track, rider, songNow, T); });
   partyFrame(S, camera, beatPulse);
   if (S.vehicles) {
     // the ambulance's siren: louder close by, higher coming up behind you, lower pulling away
@@ -265,17 +304,33 @@ function frame(now) {
     if (amb) { const tau = amb.at + amb.rate * (songNow - amb.at); const lvl = state === 'ride' && songNow > amb.from && songNow < amb.to ? clamp(1 - Math.abs(tau - rider.t) / 6, 0, 1) : 0; sound.siren(lvl * lvl, tau < rider.t ? 1.05 : 0.95); }
   }
   if (S.land) { S.land.update(track, rider, time); const lu = S.land.mat.uniforms; lu.uCam.value.copy(camera.position); lu.uFog.value.set(S.P.fog); lu.uFogDensity.value = S.P.fogDensity; lu.uTown.value.set(S.P.ground); lu.uSky.value.set(S.P.horizon); lu.uSnow.value = S.P.snowGround ?? 0; lu.uWet.value = S.P.rain ?? 0; if (S.P.sand) lu.uSand.value.set(S.P.sand); }
-  if (state === 'ride') musicMoments(S, sec);
+  if (state === 'ride') { musicMoments(S, sec); songMoments(S); }
+  if (S.world) S.world.update(S, dt, camera, time);
   S.fireworks.update(dt);
   S.town.setFog(P.fog, P.fogDensity, camera.position);
-  S.notes.update(track, rider, time);
+  S.notes.update(track, rider, time, view.board, camera);
+  S.rings.update(track, rider, dt);
+  // holding down a hill: the zone lights up under you and a soft rush rises
+  const hs = course.sample(rider.t);
+  const holding = state === 'ride' && rider.press && hs.hold >= 0;
+  S.pressGlow += ((holding ? 1 : 0) - S.pressGlow) * Math.min(1, dt * (holding ? 14 : 8));
+  sound.charge(holding && !paused, Math.max(0, hs.hold));
+  S.hit *= Math.exp(-dt * 5);
   view.update(track, rider, dt, beatPulse);
   view.setTint(rider.flow);
   S.trail.push(view.board, state === 'ride' ? clamp(0.15 + 0.85 * rider.flow, 0, 1) * clamp((rider.v - 15) / 30, 0.2, 1) : 0);
   S.titleK = state === 'title' ? 1 : Math.max(0, (S.titleK || 0) - dt * 1.4);
   if (state === 'results' && S.finale) { S.outroK = Math.min(1, (S.outroK || 0) + dt / 2.2); S.orbitA = (S.orbitA ?? 2.2) + dt * 0.16; }
   const fo = (S.plan.finale && S.plan.finale.orbit) || {};
-  const orbit = S.finale && S.outroK ? { center: S.finale.group.position.clone().add(new THREE.Vector3(0, fo.y ?? 1.2, 0)), k: S.outroK, angle: S.orbitA, r: fo.r, h: fo.h } : null;
+  let orbitAngle = S.orbitA;
+  if (fo.facing && S.finale && S.outroK) {
+    // not round and round: in front of the place, swinging a little, from the road's side
+    const fp = S.finale.group.position, c0 = track.ground(S.finale.t - (fo.back ?? 2), 0, S._oc || (S._oc = new THREE.Vector3()));
+    orbitAngle = Math.atan2(c0.z - fp.z, c0.x - fp.x) + (fo.swing ?? 0.45) * Math.sin((S.orbitA - 2.2) * 0.9);
+  }
+  const orbit = S.finale && S.outroK ? { center: S.finale.group.position.clone().add(new THREE.Vector3(0, fo.y ?? 1.2, 0)), k: S.outroK, angle: orbitAngle, r: fo.r, h: fo.h } : null;
+  // the end card sits on the left: look a little left of the place so it stands to the right of it
+  if (orbit && fo.right) orbit.look = orbit.center.clone().add(new THREE.Vector3(-Math.sin(orbitAngle), 0, Math.cos(orbitAngle)).multiplyScalar(fo.right * (fo.r ?? 14)));
   chase.update(track, rider, dt, S.titleK * S.titleK * (3 - 2 * S.titleK), orbit);
 
   // the music: how much of the band you've earned
@@ -312,6 +367,8 @@ function frame(now) {
   S.track.mat.uniforms.uCam.value.copy(cu);
   S.track.mat.uniforms.uFlow.value = S.mixFlow;
   S.track.mat.uniforms.uPulse.value = beatPulse * (0.4 + 0.6 * rider.flow);
+  S.track.mat.uniforms.uPress.value = S.pressGlow;
+  S.track.mat.uniforms.uHit.value = S.hit;
   S.track.mat.uniforms.uTime.value = time;
   S.ground.material.uniforms.uCam.value.copy(cu);
   S.sky.position.copy(cu);
@@ -326,15 +383,24 @@ function frame(now) {
   pc.uSpeed.value = state === 'ride' ? clamp((rider.v - 25) / 55, 0, 1) : 0;
   pc.uAberr.value = 0.15 + 0.5 * pc.uSpeed.value;
   pc.uSat.value = 0.9 + 0.4 * S.mixFlow;
-  pc.uDesat.value = rider.wipe > 0 ? 0.5 : 0;
+  S.hurt = (S.hurt || 0) * Math.exp(-dt * 0.9);
+  pc.uDesat.value = Math.max(rider.wipe > 0 ? 0.5 : 0, 0.55 * S.hurt);
+  S.flashTint = (S.flashTint || 0) * Math.exp(-dt * 3);
+  if (S.flashTint < 0.02) pc.uFlashColor.value.setRGB(1, 0.6, 0.85);
   pc.uFlash.value = S.flash;
   pc.uBloom.value = 0.55 + 0.3 * S.mixFlow;
   post.render(S.scene, camera);
-  if (state === 'ride') hud.frame(rider, course);
+  if (state === 'ride') {
+    hud.frame(rider, course);
+    // the word for each pump sits just over her head
+    const hp = S._hp || (S._hp = new THREE.Vector3());
+    view.root.getWorldPosition(hp); hp.y += 2.6; hp.project(camera);
+    hud.placeJudge(hp.x, hp.y);
+  }
 }
 
 function handleEvents(S, dt) {
-  const { rider, sparks, track, P } = S;
+  const { rider, sparks, track, P, view } = S;
   for (const e of rider.events) {
     switch (e.type) {
       case 'valley': {
@@ -345,15 +411,9 @@ function handleEvents(S, dt) {
           if (q > 0.2) { S.spikes.push({ t: rider.t, a: 0.25 + 0.75 * q }); if (S.spikes.length > 16) S.spikes.shift(); sound.beep(q); }
           S.heartBeat = Math.max(S.heartBeat, q);
         }
-        if (q > 0.55) sound.thump(0.4 + 0.6 * q);
-        chase.impulse(0.12 + 0.25 * q, 0.35 * q, 0);
-        if (q > 0.6) {
-          const p = track.at(rider.t, rider.x, 0.1);
-          sparks.emit(p, new THREE.Vector3(0, 0, 0), new THREE.Color(P.glow).multiplyScalar(1.5 + q), Math.round(6 + 12 * q), { spread: 5, life: 0.5, size: 0.22, grav: 4 });
-        }
-        if (q > 0.85 && e.onBeat === 1) { S.flash = Math.max(S.flash, 0.06); sound.chime(0.5, 0); }
         break;
       }
+      case 'judge': judgeFeedback(S, e); break;
       case 'scrape': {
         sound.scrape(e.amount);
         const p = track.at(rider.t, rider.x + (Math.random() - 0.5) * 0.6, 0.12);
@@ -361,9 +421,28 @@ function handleEvents(S, dt) {
         sparks.emit(p, back, new THREE.Color(1.0, 0.62, 0.3).multiplyScalar(2.2), 6, { spread: 3, life: 0.35, size: 0.1, grav: 9, up: 0.6 });
         break;
       }
-      case 'takeoff': sound.whoosh(0.6 + clamp(e.vy / 10, 0, 0.6)); chase.impulse(0, 0, 0.4); break;
+      case 'takeoff': {
+        sound.whoosh(0.6 + clamp(e.vy / 10, 0, 0.6)); chase.impulse(0, 0, 0.4);
+        // on a run, she does something with the air: bigger the longer she'll be up
+        const T = airTimeAhead(rider, S.course);
+        if (rider.streak >= 3 && T > 0.5 && state === 'ride') {
+          const list = T > 1.3 ? [['flip', 1], ['spin', 2], ['roll', 1]] : T > 0.85 ? [['spin', 1], ['roll', 1], ['grab', 1]] : [['grab', 1], ['spin', 1]];
+          S.trickN = (S.trickN || 0) + 1;
+          const [kind, turns] = list[S.trickN % list.length];
+          view.startTrick(kind, T * (kind === 'grab' ? 0.9 : 0.78), turns);
+        }
+        break;
+      }
       case 'land': {
         sound.land(e.quality, e.hard);
+        // a trick finished and landed clean: a flash of it
+        if (view.landedTrick && e.hard <= 0.05) {
+          view.landedTrick = null;
+          const gold = new THREE.Color(1, 0.85, 0.45);
+          S.rings.fire(gold.clone().multiplyScalar(1.8), 4.5, 0.48, 0.05);
+          sparks.emit(track.at(rider.t, rider.x, 0.4), new THREE.Vector3(0, 3, 0), gold.multiplyScalar(3), 40, { spread: 8, life: 0.7, size: 0.2, grav: 4, up: 1.5 });
+          sound.chime(0.9, 4); S.flash = Math.max(S.flash, 0.1);
+        }
         if (e.hard > 0.05) {
           chase.impulse(0.5 + e.hard, 0.6 * e.hard, 0);
           const p = track.at(rider.t, rider.x, 0.1);
@@ -382,13 +461,75 @@ function handleEvents(S, dt) {
         break;
       case 'note': {
         sound.pickup(e.degree);
-        const p = track.at(e.note.t, e.note.x, 1.15);
-        sparks.emit(p, new THREE.Vector3(), new THREE.Color(P.fret).multiplyScalar(2.2), 14, { spread: 3.5, life: 0.45, size: 0.18, grav: 0 });
+        S.gems++; hud.gem(S.gems);
+        const p = track.at(e.note.t, e.note.x, 1.2);
+        const c = S.notes.color.clone();
+        sparks.emit(p, new THREE.Vector3(), c.clone().multiplyScalar(3), 26, { spread: 6, life: 0.5, size: 0.22, grav: 0, drag: 3 });
+        sparks.emit(p, new THREE.Vector3(), new THREE.Color(1, 1, 1).multiplyScalar(2.5), 8, { spread: 2.5, life: 0.3, size: 0.32, grav: 0, drag: 4 });
+        S.rings.fire(c.clone().multiplyScalar(1.4), 2.6, 0.26, 0.12);
         break;
       }
     }
   }
   rider.events.length = 0;
+}
+
+// the gates at the bottom of the coming dips: a light on each rail, so where to let go reads from far off
+function gatePosts(S, T, beatPulse) {
+  const { rider, course, track } = S;
+  if (state !== 'ride' && state !== 'title') return;
+  const v = course.valleys, t = rider.t;
+  let lo = 0, hi = v.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (v[m] < t - 0.05) lo = m + 1; else hi = m; }
+  const col = S._gateCol || (S._gateCol = [0, 0, 0]);
+  const c = new THREE.Color(S.P.gate ?? S.P.edge); col[0] = c.r; col[1] = c.g; col[2] = c.b;
+  const p = S._gp || (S._gp = new THREE.Vector3());
+  for (let i = lo; i < v.length && v[i] < t + 5.5; i++) {
+    const ahead = v[i] - t;
+    if (course.sample(v[i] - 0.15).hold < 0) continue;          // only dips you pump into
+    const w = course.sample(v[i]).width;
+    const k = (0.5 + 1.3 * Math.exp(-Math.max(0, ahead) * 0.55)) * (0.85 + 0.35 * beatPulse) * (ahead < 0 ? Math.max(0, 1 + ahead * 12) : 1);
+    for (const side of [-1, 1]) { track.at(v[i], side * (w + 0.1), 0.4, p); T.glow(p.x, p.y, p.z, 2.3, col, k); }
+  }
+}
+
+// how long she'll be in the air from here if she doesn't dive
+function airTimeAhead(r, c) {
+  let y = r.y, vy = r.vy, t = r.t;
+  const dt = 1 / 120;
+  for (let i = 0; i < 480; i++) {
+    t += dt; y += vy * dt - 0.5 * G * dt * dt; vy -= G * dt;
+    if (y <= c.sample(t).y) return t - r.t;
+  }
+  return 4;
+}
+
+// a pump, graded as you let go: the bigger the hit, the more the world answers
+function judgeFeedback(S, e) {
+  const { rider, sparks, track, P } = S;
+  if (state !== 'ride') return;
+  const g = e.grade;
+  if (g === 'miss' && !e.lost) return;              // not pumping at all: say nothing
+  hud.judge(g, e.streak);
+  sound.hit(g, e.streak);
+  const p = track.at(rider.t, rider.x, 0.15);
+  if (g === 'perfect') {
+    const gold = new THREE.Color(1, 0.82, 0.38);
+    S.rings.fire(gold.clone().multiplyScalar(1.7), 3.6, 0.4, 0.06);
+    S.rings.fire(new THREE.Color(P.gate ?? P.edge).multiplyScalar(1.3), 2.2, 0.34, 0.09, 0.06);
+    sparks.emit(p, new THREE.Vector3(0, 2, 0), gold.clone().multiplyScalar(3), 34, { spread: 7, life: 0.6, size: 0.22, grav: 5, up: 1.4 });
+    S.hit = 1;
+    chase.impulse(0, 0.12, 0.35);
+    if (e.streak > 0 && e.streak % 8 === 0) { sound.flourish(e.streak); S.rings.fire(gold.clone().multiplyScalar(2.2), 5.5, 0.55, 0.045, 0.1); }
+  } else if (g === 'good') {
+    S.rings.fire(new THREE.Color(1, 1, 1).multiplyScalar(1.1), 2.6, 0.32, 0.08);
+    sparks.emit(p, new THREE.Vector3(0, 1.5, 0), new THREE.Color(P.gate ?? P.edge).multiplyScalar(2.2), 16, { spread: 5, life: 0.45, size: 0.18, grav: 5 });
+    S.hit = Math.max(S.hit, 0.45);
+    chase.impulse(0, 0.06, 0.15);
+  } else if (e.lost >= 4) {
+    // a run broken: a dull grey crack where it ended
+    S.rings.fire(new THREE.Color(0.35, 0.33, 0.4), 2.2, 0.4, 0.12);
+  }
 }
 
 // the song's big moments reach the world: fireworks on the drops, the city on at the end
@@ -411,6 +552,20 @@ function musicMoments(S, sec) {
     S.finale.fire(earned);
     S.town.wakeAll = earned;
     S.flash = 0.25 * earned;
+  }
+}
+
+// moments a song asks for at exact times: a flash of lightning and its thunder, a knock
+function songMoments(S) {
+  const list = S.entry.moments;
+  if (!list) return;
+  const t = S.rider.t;
+  for (const m of list) {
+    if (S.momentsDone.has(m) || t < m.t || t > m.t + 0.5) continue;
+    S.momentsDone.add(m);
+    if (m.kind === 'thunder') { S.flash = Math.max(S.flash, 0.55 * (m.k ?? 1)); post.comp.uniforms.uFlashColor.value.setRGB(0.75, 0.85, 1); setTimeout(() => sound.thunder(m.k ?? 1), 140); S.flashTint = 0.6; }
+    if (m.kind === 'flash') { S.flash = Math.max(S.flash, m.k ?? 0.8); post.comp.uniforms.uFlashColor.value.setRGB(1, 0.95, 0.85); S.flashTint = 0.8; }
+    if (m.kind === 'thud') { sound.thud(m.k ?? 1); chase.impulse(1.1, 0.9, 0); S.muffle = Math.max(S.muffle, 0.6); S.hurt = 1; }
   }
 }
 
@@ -475,12 +630,26 @@ function smoothstepJS(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); retur
 function endSong() {
   state = 'results';
   document.body.classList.remove('riding');
-  const key = 'lc-best-' + S.id;
-  let best = 0;
-  try { best = +localStorage.getItem(key) || 0; if (S.rider.stats.dist > best) localStorage.setItem(key, S.rider.stats.dist); } catch (e) { /* private mode */ }
-  hud.showResults(S.entry, S.rider.stats, best, S.index < ALBUM.length - 1);
+  sound.charge(false); sound.siren(0);
+  const st = S.rider.stats;
+  const inTime = st.judged ? Math.round(100 * st.hits / st.judged) : 0;
+  let best = 0, newBest = false;
+  try {
+    best = +localStorage.getItem('lc-best-' + S.id) || 0;
+    if (st.dist > best) { localStorage.setItem('lc-best-' + S.id, st.dist); newBest = best > 0; }
+    if (inTime > (+localStorage.getItem('lc-pct-' + S.id) || 0)) localStorage.setItem('lc-pct-' + S.id, inTime);
+  } catch (e) { /* private mode */ }
+  hud.hideAll();
   S.endShown = performance.now();
+  const i = S.index, last = i >= ALBUM.length - 1;
+  const next = { label: 'Next song', key: 'enter', go: () => chooseSong(i + 1) };
+  const again = { label: 'Ride again', key: 'R', code: 'KeyR', go: rideAgain };
+  const menu = { label: 'All songs', key: 'M', code: 'KeyM', go: () => openMenu(last ? 0 : i + 1) };
+  const data = { title: S.entry.title, accent: S.entry.accent || '#ff4f9a', dist: st.dist, best, newBest, inTime, perfects: st.perfects, bestStreak: st.bestStreak, notes: st.notes, notesTotal: st.notesTotal, top: st.top, collect: S.entry.collect };
+  // let the ending breathe a moment before the card comes up
+  setTimeout(() => { if (state === 'results') ui.showEnd(data, last ? [menu, again] : [next, again, menu]); }, 1400);
 }
 
 requestAnimationFrame(frame);
-loadSong(clamp(parseInt(params.get('song') || '0', 10), 0, ALBUM.length - 1));
+if (params.has('song')) chooseSong(clamp(parseInt(params.get('song'), 10), 0, ALBUM.length - 1));
+else openMenu(0);
