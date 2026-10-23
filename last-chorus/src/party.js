@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { extend, glowAt, poolAt, col, local } from './scenery.js';
-import { buildAmbulance, buildBus } from './vehicles.js';
+import { buildAmbulance, buildBus, buildSedan, buildPolice } from './vehicles.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -212,12 +212,18 @@ export class Confetti {
 }
 
 // ---------- vehicles: the ambulance in the second verse, the 19 in the bridge ----------
+function leadAt(keys, t) {
+  if (t <= keys[0][0]) return keys[0][1];
+  for (let i = 1; i < keys.length; i++) if (t < keys[i][0]) { const [t0, a] = keys[i - 1], [t1, b] = keys[i], k = (t - t0) / (t1 - t0); return a + (b - a) * k * k * (3 - 2 * k); }
+  return keys[keys.length - 1][1];
+}
+
 export class Vehicles {
   // they ride the ribbon itself: anything down on the street is hidden under it
   constructor(scene, course, list) {
     this.course = course;
     this.list = list.map((v) => {
-      const obj = v.kind === 'bus' ? buildBus(v.route || '19') : buildAmbulance();
+      const obj = v.kind === 'bus' ? buildBus(v.route || '19') : v.kind === 'sedan' ? buildSedan(v.paint) : v.kind === 'police' ? buildPolice() : buildAmbulance();
       obj.visible = false; scene.add(obj);
       const lights = obj.userData.lights || [];
       return { ...v, obj, lights };
@@ -227,22 +233,40 @@ export class Vehicles {
   }
   update(track, rider, songT, S) {
     for (const v of this.list) {
-      const tau = v.at + v.rate * (songT - v.at);
+      // either a steady rate, or a lead over you that changes: lead: [[songT, seconds ahead], ...]
+      const tau = v.lead ? songT + leadAt(v.lead, songT) : v.at + v.rate * (songT - v.at);
       const show = songT > v.from && songT < v.to && tau > rider.t - 3 && tau < rider.t + 30;
       v.obj.visible = show;
       v.near = show ? Math.max(0, 1 - Math.abs(tau - rider.t) / 3) : 0;
       if (!show) continue;
       const w = this.course.sample(tau).width;
       const x = Math.sign(v.x) * Math.max(1.6, w - Math.abs(v.lane ?? 2.2));
-      const p = track.at(tau, x, 0.02, this._p);
-      const f = track.dirAt(tau, this._f);
-      this._e.set(-Math.asin(clamp(f.y, -1, 1)), Math.atan2(f.x, f.z), -track.bankAt(tau));
+      let p;
+      if (v.ground) {
+        // parked down on the street, not on the ribbon
+        p = track.ground(tau, v.x, this._p); if (S && S.floorFn) p.y = S.floorFn(tau, v.x);
+        const yaw = this.course.sample(tau).yaw;
+        this._e.set(0, yaw + (v.yaw || 0), 0);
+      } else {
+        p = track.at(tau, x, 0.02, this._p);
+        const f = track.dirAt(tau, this._f);
+        // a car coming the other way: turned round, so its pitch and lean turn round too
+        const rv = v.reverse ? -1 : 1;
+        this._e.set(-Math.asin(clamp(f.y, -1, 1)) * rv, Math.atan2(f.x, f.z) + (v.yaw || 0) + (v.reverse ? Math.PI : 0), -track.bankAt(tau) * rv);
+      }
       v.obj.position.copy(p); v.obj.rotation.copy(this._e);
       v.obj.updateMatrixWorld(true);
       if (!S) continue;
-      for (const [ox, oy, oz, size, c, k, mode] of v.lights) {
-        this._w.set(ox, oy, oz).applyMatrix4(v.obj.matrixWorld);
-        glowAt(S, this._w.x, this._w.y, this._w.z, size, c, k, mode);
+      // a parked car that starts: its lights come on at lightsOn
+      const on = v.lightsOn === undefined ? 1 : clamp((songT - v.lightsOn) / 0.12, 0, 1);
+      if (on <= 0) continue;
+      for (const [ox, oy, oz, size, c, k0, mode] of v.lights) {
+        if (v.hazard && mode !== 5) continue;
+        const k = k0 * on * (v.lightsOn !== undefined && mode === 0 && oz > 0 ? 1.8 : 1);
+        for (const sx of v.hazard ? [1, -1] : [1]) {
+          this._w.set(ox * sx, oy, oz).applyMatrix4(v.obj.matrixWorld);
+          glowAt(S, this._w.x, this._w.y, this._w.z, size, c, k, mode);
+        }
       }
     }
   }

@@ -3,6 +3,11 @@
 // kinds: intro verse pre chorus post bridge break final outro
 // start: 'launch' makes the section open with a lip you fly off (kick = m/s upward).
 
+// a doorway between the rooms of her apartment
+const DOOR = { kind: 'wall', hw: 11.5, hh: 30 };
+// and between the rooms of the house in his head
+const HDOOR = { kind: 'wall', hw: 11.5, hh: 30 };
+
 export const ALBUM = [
   {
     id: 'kiss-me-like-a-car-crash',
@@ -209,6 +214,109 @@ export const ALBUM = [
     },
   },
   {
+    // a Sunday in a sunny suburb, a case built out of nothing: the dentist three times this
+    // week, his car halfway down her street, brunch in broad daylight, the matinee. Nothing
+    // happened. In the end he makes his getaway at the speed limit, blinker on, gone for good.
+    id: 'nothing-happens-every-week',
+    accent: '#ff4a4a',
+    title: 'Nothing Happens Every Week',
+    startY: 8,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 7 },
+      { t: 6.22, kind: 'verse', c: 0.8, endY: 8 },                               // "you said you were at the dentist"
+      { t: 26.74, kind: 'pre', endY: 15 },                                       // "so where were you on the night of nothing much"
+      { t: 33.58, kind: 'pre', start: 'launch', launchBeats: 4, kick: 7, endY: 14 },   // "go on and plead the fifth"
+      { t: 39.05, kind: 'chorus', c: 1.1, endY: 9 },                             // "nothing happened, nothing happened"
+      { t: 59.59, kind: 'break', start: 'launch', launchBeats: 4, kick: 7, endY: 9 },  // "something you were always free to be"
+      { t: 63.69, kind: 'verse', c: 0.85, endY: 10 },                            // "I wrote it as a blessing"
+      { t: 85.62, kind: 'pre', endY: 20 },                                       // "what's with the hat and sunglasses?"
+      { t: 97.99, kind: 'chorus', endY: 10 },
+      { t: 121.37, kind: 'break', endY: 12 },                                    // "we held the door for each other till it closed"
+      { t: 126.88, kind: 'pre', endY: 22 },                                      // "your perfect alibi was the truth"
+      { t: 136.54, kind: 'break', rb: 8, endY: 20 },                             // "nothing happened. Say it slow"
+      { t: 142.01, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 10, endY: 12 },  // "the only charge that's ever gonna stick"
+      { t: 149.03, kind: 'break', endY: 12 },                                    // "court adjourned"
+      { t: 151.75, kind: 'post', start: 'launch', launchBeats: 4, kick: 7, endY: 10 },     // "before I ever took the stand"
+      { t: 155.96, kind: 'chorus', endY: 10 },
+      { t: 158.76, kind: 'break', start: 'launch', launchBeats: 4, kick: 6, endY: 10 },    // the bass goes
+      { t: 161.55, kind: 'pre', endY: 16 },
+      { t: 165.72, kind: 'chorus', c: 1.3, endY: 10 },                           // "now there's no one left to lie to me"
+      { t: 178.21, kind: 'break', start: 'launch', launchBeats: 4, kick: 8, endY: 12 },    // "like a free man breaking free"
+      { t: 180.97, kind: 'final', endY: 6, turn: 0.6 },                          // "you made your getaway at the speed limit"
+      { t: 193.45, kind: 'break', endY: 8, turn: 0.4 },                          // "nothing happened, nothing ever will again"
+      { t: 200.31, kind: 'final', c: 1.1, endY: 5, turn: 0.3 },
+      { t: 204.48, kind: 'outro', turn: 0.2 },
+    ],
+    palette: 'sunday',
+    world: 'sunday',
+    skyline: 'hills',
+    groundStyle: 'country',
+    looks: [
+      { t: -99, palette: 'sunday' },
+      { t: 121.4, palette: 'sundaylate', fade: 12 },       // "we held the door for each other till it closed"
+      { t: 181.0, palette: 'getaway', fade: 6 },           // "you made your getaway at the speed limit"
+    ],
+    confetti: [[92.6, 97.6]],                              // "you can shred the evidence"
+    confettiColors: [0xf4f2ea, 0xffffff, 0xe8e4d8, 0xf0ece0, 0xfffaf0, 0xdcd8cc],
+    scenery: {
+      signs: [
+        { key: 'DENTIST', text: 'DENTIST', color: '#2a6ad8', core: '#ffffff', bg: '#f4f8fa', size: 90 },
+        { key: 'BRUNCH', text: 'BRUNCH', color: '#ff5a3a', core: '#fff4e8', bg: '#2a2420', size: 96 },
+        { key: 'MATINEE', text: 'SUNDAY\nMATINEE', color: '#ffd166', core: '#ffffff', bg: '#3a1420', frame: '#ffd166', size: 74 },
+        { key: 'COURT', text: 'COURTHOUSE', color: '#f2efe6', core: '#ffffff', bg: '#2a3240', size: 78 },
+        { key: 'SPEED', text: 'SPEED\nLIMIT\n25', color: '#111111', core: '#111111', bg: '#f6f6f2', size: 64 },
+        { key: 'BARBER', text: 'BARBER', color: '#e8203a', core: '#ffffff', bg: '#f4f2ee' },
+        { key: 'PHARMACY', text: 'PHARMACY', color: '#2a9a4a', core: '#ffffff', bg: '#f4f2ee' },
+        { key: 'FLORIST', text: 'FLORIST', color: '#ff6fa8', core: '#ffffff', bg: '#f4f2ee' },
+        { key: 'HARDWARE', text: 'HARDWARE', color: '#d8602a', core: '#ffffff', bg: '#2a2a30' },
+        { key: 'BAKERY', text: 'BAKERY', color: '#c89a4a', core: '#fff8ec', bg: '#3a2418' },
+      ],
+      zones: [
+        { from: -4, to: 26.7, kits: ['sundaystreet'], clear: [[15.0, 16.3, 1], [7.0, 10.2, 0], [9.5, 10.6, 1, 'all']] },
+        { from: 7.0, to: 7.1, kits: ['tooth'], at: [7.4, 8.5, 9.6], x: 14.5 },     // "you said you were at the dentist / there's three teeth this week"
+        { from: 26.7, to: 63.7, kits: ['mainstreet'], string: true, clear: [[32.4, 33.8, -1]] },
+        { from: 33.0, to: 33.1, kits: ['cafe'], at: 33.0, x: -1 },                // "that broad daylight brunch"
+        { from: 26.7, to: 63.7, kits: ['evidence'] },
+        { from: 63.7, to: 74.4, kits: ['sundaystreet'] },
+        { from: 74.4, to: 78.4, kits: ['market'] },                               // "she tells me about the market"
+        { from: 79.6, to: 79.7, kits: ['matinee'], at: 79.6, x: 1 },              // "and the Sunday matinee"
+        { from: 78.4, to: 98.0, kits: ['mainstreet'] },
+        { from: 98.0, to: 121.4, kits: ['mainstreet'], string: true, signs: ['BARBER', 'BAKERY', 'FLORIST'] },
+        { from: 98.0, to: 121.4, kits: ['evidence'] },
+        { from: 121.4, to: 142.0, kits: ['sundaystreet'] },
+        { from: 142.5, to: 142.6, kits: ['bigframe'], at: 142.5, s: 2.5, sy: 1.9 },          // "I'll frame it hanging in the hall": you go through it
+        { from: 142.0, to: 156.0, kits: ['mainstreet'], signs: ['PHARMACY', 'HARDWARE'], clear: [[147.6, 152.4, 1]] },
+        { from: 150.2, to: 150.3, kits: ['courthouse'], at: 150.2, x: 1, dist: 33 },        // "court adjourned before I ever took the stand"
+        { from: 156.0, to: 181.0, kits: ['sundaystreet'], string: true },
+        { from: 156.0, to: 181.0, kits: ['evidence'] },
+        { from: 181.0, to: 196.0, kits: ['sundayedge'] },                         // the edge of town
+        { from: 182.0, to: 194.0, kits: ['speedsigns'], every: 2.6 },              // "at the speed limit"
+        { from: 196.0, to: 222.0, kits: ['fields'] },
+      ],
+      roads: [
+        { x: 0, width: 12, walk: 3, laneLines: 1, from: -10, to: 196, lanes: [-3, 3], density: 0.05, lampEvery: 40, dry: true, follow: true },
+        { x: 0, width: 10, walk: 0, laneLines: 1, from: 196, to: 230, traffic: false, lampEvery: 60, dry: true, follow: true },
+      ],
+      vehicles: [
+        { kind: 'sedan', paint: 0xd8ccb4, at: 15.9, rate: 0, x: 1, lane: 2.1, yaw: 0.5, hazard: true, from: 2, to: 18.8 },    // "your car's parked fully illegal, halfway down her street"
+        { kind: 'sedan', paint: 0xd8ccb4, lead: [[180.2, 0.35], [181.4, 0.55], [187.0, 0.6], [193.6, 3.2]], x: 0.001, lane: 99, from: 180.3, to: 194.4 },  // the getaway, blinker on
+      ],
+      lyricBg: '#f2efe6', lyricColor: '#1c1c1c', lyricCore: '#1c1c1c', lyricX: 25, lyricFloor: true,
+      shelf: 70, drop: 2.4,
+      lyrics: [
+        { t: 36.3, text: 'SHE TELLS ME\nEVERYTHING', side: 1 },
+        { t: 44.5, text: 'I CAUGHT YOU DOING\nNOTHING RED-HANDED', side: -1 },
+        { t: 47.3, text: 'FINGERPRINTS\nON NOTHING', side: 1 },
+        { t: 90.0, text: 'REAL SUBTLE, DUDE', side: -1 },
+        { t: 99.4, text: 'NOTHING HAPPENED', side: 1 },
+        { t: 128.1, text: 'YOUR PERFECT ALIBI\nWAS THE TRUTH', side: -1 },
+        { t: 168.5, text: 'NO ONE LEFT\nTO LIE TO ME', side: 1 },
+        { t: 193.2, text: 'GONE FOR GOOD', side: -1 },
+      ],
+      finale: { kind: 'town', t: 207.3, x: 17, s: 1.3, fireAt: 200.3, orbit: { r: 19, h: 4.4, y: 5.4, facing: true, back: 1.2, right: 0.3, swing: 0.25 } },
+    },
+  },
+  {
     // a clear morning, technically freezing. No coat; a coat is one more thing to carry.
     // Running the sunlit stretches, catching breath in the shade, early for every train
     // that pulls away. At the end the door's left unlocked and the cat thinks he hunts.
@@ -281,6 +389,123 @@ export const ALBUM = [
         { t: 197.1, text: 'I LEAVE THE DOOR\nUNLOCKED THESE DAYS', side: 1, x: 26 },
       ],
       finale: { kind: 'door', t: 222.6, x: 23, fireAt: 210.85, orbit: { r: 19, h: 3.5, y: 2.4, facing: true, back: 1.4, right: 0.3 } },
+    },
+  },
+  {
+    // a summer night in a hot apartment: the floor fan, the dishes, the mattress on the
+    // carpet. Fireworks in the alley, sirens down the block, thunder like the sky forgot to
+    // knock. In the end the walls fall through.
+    id: 'your-apartment-smells-like-summer',
+    accent: '#ff8a4f',
+    title: 'Your Apartment Smells Like Summer',
+    startY: 14,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                       // "I was young enough to love you"
+      { t: 10.67, kind: 'verse', c: 0.85, endY: 9 },                             // the band
+      { t: 20.81, kind: 'verse', c: 0.8, endY: 10, turn: 0.2 },                  // "your apartment smells like summer"
+      { t: 41.12, kind: 'verse', endY: 12, turn: 0.2 },                          // "there's a mattress on the carpet"
+      { t: 61.47, kind: 'pre', endY: 16, turn: 0.2 },                            // "and I know, I know, I know"
+      { t: 64.01, kind: 'break', endY: 15, turn: 0.2 },                          // "we are not built to stay"
+      { t: 67.83, kind: 'pre', endY: 20, turn: 0.2 },                            // "but your hand finds mine"
+      { t: 71.66, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 9 },   // out her window, into the chorus
+      { t: 91.99, kind: 'post', start: 'launch', launchBeats: 4, kick: 8, endY: 10 },     // "then I found you"
+      { t: 102.15, kind: 'verse', endY: 12 },                                    // "we eat cereal at midnight"
+      { t: 111.07, kind: 'post', start: 'launch', launchBeats: 4, kick: 10, endY: 12 },   // "but what for?" and the fireworks
+      { t: 125.10, kind: 'pre', endY: 22 },                                      // "but your voice hits me like a car is starting"
+      { t: 132.76, kind: 'chorus', c: 1.35 },
+      { t: 153.12, kind: 'post', start: 'launch', launchBeats: 4, kick: 8, endY: 12 },    // "then I found you"
+      { t: 162.06, kind: 'bridge', endY: 18, turn: 0.25 },                       // "maybe we're not tragic"
+      { t: 171.00, kind: 'pre', endY: 24, turn: 0.25 },                          // "maybe I should go now"
+      { t: 179.96, kind: 'break', endY: 22, turn: 0.25 },
+      { t: 182.56, kind: 'final', start: 'launch', launchBeats: 4, kick: 12, endY: 8, turn: 0.3 },   // through her door, the last chorus
+      { t: 211.94, kind: 'outro', endY: 6, turn: 0.3 },
+    ],
+    palette: 'summernight2',
+    world: 'summer',
+    looks: [
+      { t: -99, palette: 'summernight2' },
+      { t: 20.5, palette: 'apartment', fade: 0.3 },        // "your apartment smells like summer"
+      { t: 71.5, palette: 'rooftops', fade: 0.6 },         // out the window
+      { t: 102.0, palette: 'summernight2', fade: 5 },      // "we eat cereal at midnight"
+      { t: 118.6, palette: 'storm', fade: 9 },             // "like the sky forgot to knock"
+      { t: 161.8, palette: 'hallway', fade: 0.3 },         // "maybe all our magic is a busted hallway light"
+      { t: 182.5, palette: 'apartment', fade: 0.4 },       // her door
+      { t: 200.5, palette: 'afterstorm', fade: 2.5 },      // "love me while the walls fall through"
+    ],
+    moments: [
+      { t: 20.52, kind: 'flash', k: 0.7 },
+      { t: 112.4, kind: 'fireworks', n: 10, x: 34, y: 38, gap: 170, ahead: 4.2 },   // "there are fireworks in the alley"
+      { t: 116.3, kind: 'thunder', k: 0.8 },                              // "you keep laughing at the thunder"
+      { t: 119.2, kind: 'thunder', k: 1.0 },                              // "like the sky forgot to knock"
+      { t: 134.0, kind: 'thunder', k: 0.7 },
+      { t: 141.9, kind: 'thunder', k: 0.9 },
+      { t: 149.3, kind: 'thunder', k: 0.8 },
+      { t: 161.82, kind: 'flash', k: 0.55 },
+      { t: 200.55, kind: 'flash', k: 0.3 },
+    ],
+    scenery: {
+      signs: [
+        { key: 'OPEN24', text: 'OPEN\n24 HRS', color: '#ff4f6a', core: '#ffe8ec', bg: '#140810', size: 92 },
+        { key: 'MIDNIGHT', text: '12:00', color: '#5ff2ff', core: '#eaffff', bg: '#06101a', size: 150 },
+      ],
+      rooms: [
+        // room to room through her place, a doorway on the downbeat
+        { style: 'living', from: 20.55, to: 25.89, showFrom: 20.5, caps: [null, DOOR] },
+        { style: 'kitchen', from: 25.89, to: 30.97, showFrom: 20.5, caps: [null, DOOR] },
+        { style: 'living', from: 30.97, to: 36.03, showFrom: 20.5, caps: [null, DOOR] },
+        { style: 'living', from: 36.03, to: 41.12, showFrom: 20.5, caps: [null, DOOR] },
+        { style: 'bedroom', from: 41.12, to: 51.29, showFrom: 20.5, caps: [null, DOOR] },
+        { style: 'bedroom', from: 51.29, to: 61.47, showFrom: 20.5, caps: [null, DOOR] },
+        { style: 'living', from: 61.47, to: 71.66, showFrom: 20.5, caps: [null, { kind: 'wall', hw: 12.5, hh: 27, sill: 2.5 }] },
+        { style: 'hallway', from: 161.85, to: 182.56, showFrom: 161.8, caps: [null, { kind: 'wall', hw: 9.8, hh: 27 }] },
+        { style: 'living', from: 182.56, to: 187.64, showFrom: 161.8, caps: [null, DOOR] },
+        { style: 'bedroom', from: 187.64, to: 193.98, showFrom: 161.8, caps: [null, DOOR] },
+        { style: 'kitchen', from: 193.98, to: 240, showFrom: 161.8, fallAt: 200.58 },
+      ],
+      roomEvents: { war: 45.4, fight: 53.6, bust: 169.3 },
+      zones: [
+        { from: -4, to: 20.5, kits: ['tenements'], lines: 1.15, gaps: true },
+        // her apartment: "the floor fan shakes the room", "a tower of dirty dishes", "a dead plant still in bloom"
+        { from: 24.2, to: 24.3, kits: ['floorFan'], at: 24.2, x: -21, ahead: 3.65 },
+        { from: 28.4, to: 28.5, kits: ['dishes'], at: 28.4, x: 22, ahead: 7.85 },
+        { from: 30.2, to: 30.3, kits: ['plant'], at: 30.2, x: -19, s: 1.1, ahead: 9.65 },
+        { from: 38.6, to: 38.7, kits: ['floorFan'], at: 38.6, x: 22, face: 2.6, ahead: 18.05 },
+        // "a mattress on the carpet", "a photograph of someone you don't talk about at all"
+        { from: 43.6, to: 43.7, kits: ['mattress'], at: 43.6, x: 21, ahead: 23.05 },
+        { from: 48.4, to: 48.5, kits: ['photoBack'], at: 48.4, x: 37.3, y: 13, ahead: 27.85 },
+        { from: 58.6, to: 58.7, kits: ['plant'], at: 58.6, x: 20, s: 0.9, rot: 2.2, ahead: 38.05 },
+        { from: 66.4, to: 66.5, kits: ['floorFan'], at: 66.4, x: -20, face: 3.6, ahead: 45.85 },
+        // out the window and down the block, the low roofs in the chorus
+        { from: 71.7, to: 102.0, kits: ['tenements'], low: true, lines: 1.6, gaps: true },
+        { from: 102.0, to: 161.8, kits: ['tenements'], lines: 1.3, gaps: true },
+        // through her door again: the fan, the mattress, the plant, the dishes; then no walls
+        { from: 186.4, to: 186.5, kits: ['floorFan'], at: 186.4, x: -21, ahead: 24.55 },
+        { from: 191.0, to: 191.1, kits: ['mattress'], at: 191.0, x: 21, ahead: 29.15 },
+        { from: 195.4, to: 195.5, kits: ['plant'], at: 195.4, x: -19, s: 1.1, ahead: 33.55 },
+        { from: 198.8, to: 198.9, kits: ['dishes'], at: 198.8, x: 20, ahead: 36.95 },
+        { from: 205.0, to: 205.1, kits: ['floorFan'], at: 205.0, x: 22, face: 2.8, ahead: 43.15 },
+        { from: 210.4, to: 210.5, kits: ['mattress'], at: 210.4, x: -22, rot: -0.12, ahead: 48.55 },
+        { from: 196.0, to: 236.0, kits: ['farcity'], x: 86 },
+      ],
+      lyricBg: '#160a14', lyricColor: '#ffb070', lyricCore: '#fff0e0', lyricX: 21,
+      lyrics: [
+        { t: 0.4, text: 'YOUNG ENOUGH\nTO LOVE YOU', lead: 2.4, side: 1 },
+        { t: 5.0, text: 'BORED ENOUGH\nTO TRY', side: -1 },
+        { t: 77.96, text: 'KISS ME LIKE\nTHE RENT IS DUE', side: 1 },
+        { t: 80.42, text: 'EVERY GODDAMN\nSONG IS TRUE', side: -1 },
+        { t: 90.72, text: 'I WAS\nALMOST FINE', side: 1 },
+        { t: 102.46, text: 'CEREAL\nAT MIDNIGHT', side: -1 },
+        { t: 119.96, text: 'LIKE THE SKY\nFORGOT TO KNOCK', side: 1 },
+        { t: 155.08, text: 'THEN I\nFOUND YOU', side: -1 },
+      ],
+      finale: { kind: 'lamp', t: 218.4, x: -17, fireAt: 200.6, orbit: { r: 36, h: 5, y: 14, facing: true, back: 1.6, right: 0.3, swing: 0.3 } },
+      vehicles: [
+      // "there are sirens down the block": two of them, coming the other way
+      { kind: 'police', lead: [[114.2, 4.2], [117.4, -2.2]], x: -1, lane: 2.4, reverse: true, from: 114.1, to: 118.0 },
+      { kind: 'police', lead: [[114.9, 4.8], [118.3, -2.2]], x: -1, lane: 3.4, reverse: true, from: 114.8, to: 118.9 },
+      // "your voice hits me like a car is starting"
+      { kind: 'sedan', paint: 0x2a3a5a, at: 128.7, rate: 0, x: 1, lane: 2.4, reverse: true, yaw: 0.12, lightsOn: 127.8, from: 122.0, to: 129.5 },
+      ],
     },
   },
   {
@@ -380,6 +605,145 @@ export const ALBUM = [
     },
   },
   {
+    // she moved into his head back in May: the house he built in there to keep her out,
+    // and her portrait hung where his peace of mind used to. Knock, knock. She's never,
+    // never, never moving out. Sweet dreams, landlord.
+    id: 'rent-free',
+    accent: '#c86aff',
+    title: 'Rent Free',
+    startY: 10,
+    collect: 'key',
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 8, turn: 0.3 },                             // "honey, I'm home"
+      { t: 5.42, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 9, endY: 9, turn: 0.3 },     // "you can't stop thinking about me"
+      { t: 10.70, kind: 'verse', endY: 10, turn: 0.3 },                                     // "I moved into your hippocampus back in May"
+      { t: 20.00, kind: 'verse', c: 1.0, endY: 12, turn: 0.3 },                             // "home, my portrait where your peace of mind used to hang"
+      { t: 30.62, kind: 'verse', endY: 11, turn: 0.3 },                                     // "every room was mine"
+      { t: 41.22, kind: 'pre', endY: 17, turn: 0.3 },                                       // "you can't evict what you invited in"
+      { t: 61.13, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 9, endY: 9, turn: 0.3 },    // "I'm living rent free"
+      { t: 86.30, kind: 'post', endY: 11, turn: 0.3 },                                      // "knock, knock, who's there?"
+      { t: 88.95, kind: 'break', start: 'launch', launchBeats: 4, kick: 7, endY: 11, turn: 0.3 },    // "it's me everywhere"
+      { t: 91.60, kind: 'break', start: 'launch', launchBeats: 4, kick: 7, endY: 11, turn: 0.3 },    // "check under the stairs"
+      { t: 95.58, kind: 'verse', c: 0.9, endY: 12, turn: 0.3 },                             // "your new girl says you wake up screaming"
+      { t: 104.87, kind: 'verse', start: 'launch', launchBeats: 4, kick: 8, endY: 10, turn: 0.3 },   // "if you're subconscious, darling"
+      { t: 118.12, kind: 'break', rb: 8, endY: 14, turn: 0.3 },                             // "I picked the lock before you even drew the blueprint"
+      { t: 130.06, kind: 'chorus', endY: 9, turn: 0.3 },                                    // "I made myself eternal"
+      { t: 153.93, kind: 'post', endY: 12, turn: 0.3 },                                     // "every flashback"
+      { t: 161.89, kind: 'chorus', endY: 10, turn: 0.3 },
+      { t: 176.48, kind: 'verse', c: 0.9, endY: 14, turn: 0.3 },                            // "it's crowded in here with all my things"
+      { t: 187.09, kind: 'post', endY: 12, turn: 0.3 },                                     // "never truly alone"
+      { t: 196.36, kind: 'bridge', endY: 20, turn: 0.3 },                                   // "I'm the hesitation in your breath"
+      { t: 217.58, kind: 'final', start: 'launch', launchBeats: 4, kick: 11, turn: 0.3 },  // "I am home"
+      { t: 250.74, kind: 'break', rb: 8, endY: 12, turn: 0.3 },                             // "and the sickest part, the beautiful part"
+      { t: 254.72, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 8, endY: 10, turn: 0.3 },  // "you still leave the light on"
+      { t: 264.01, kind: 'bridge', endY: 12, turn: 0.3 },                                   // "oh, this is nice, I could stay here forever"
+      { t: 271.96, kind: 'chorus', endY: 10, turn: 0.3 },                                   // "you never change the locks"
+      { t: 293.21, kind: 'final', start: 'launch', launchBeats: 4, kick: 9, endY: 6, turn: 0.3 },   // "sweet dreams, landlord"
+      { t: 303.83, kind: 'outro', turn: 0.3 },
+    ],
+    palette: 'mansion',
+    world: 'house',
+    titleView: { ahead: -0.14, x: 2.4, h: 1.8, back: -0.55, lookH: 4.0 },   // behind her, the front door ahead
+    looks: [
+      { t: -99, palette: 'mansion' },
+      { t: 109.6, palette: 'attic', fade: 0.3 },             // "attic of your grief"
+      { t: 112.2, palette: 'blueprint', fade: 0.3 },         // "you built a house inside your head to kick me out"
+      { t: 120.0, palette: 'mansion', fade: 0.6 },
+      { t: 141.2, palette: 'moldy', fade: 8 },               // "the mold behind the walls of memory"
+      { t: 168.7, palette: 'mansion', fade: 2 },
+      { t: 196.4, palette: 'dim', fade: 3 },                 // "I'm the hesitation in your breath"
+      { t: 217.5, palette: 'mansion', fade: 0.4 },
+      { t: 250.7, palette: 'dim', fade: 1.5 },               // "you still leave the light on"
+      { t: 264.0, palette: 'mansion', fade: 3 },
+    ],
+    moments: [
+      { t: 87.3, kind: 'knock', k: 0.55 },                   // "knock, knock, who's there?"
+      { t: 90.1, kind: 'knock', k: 0.6 },
+      { t: 92.86, kind: 'knock', k: 0.65 },
+    ],
+    scenery: {
+      signs: [
+        { key: 'PEACE', text: 'PEACE OF MIND', color: '#2a1806', core: '#2a1806', bg: '#c8a050', size: 60 },
+        { key: 'ESTEEM', text: 'SELF-ESTEEM', color: '#2a1806', core: '#2a1806', bg: '#c8a050', size: 64 },
+        { key: 'JESUS', text: 'JESUS', color: '#2a1806', core: '#2a1806', bg: '#c8a050', size: 80 },
+        { key: 'MINE', text: 'MINE', color: '#2a1806', core: '#2a1806', bg: '#c8a050', size: 80 },
+        { key: 'HOME', text: 'HOME', color: '#2a1806', core: '#2a1806', bg: '#c8a050', size: 80 },
+        { key: 'THREEAM', text: '3:00', color: '#ff2a2a', core: '#ffd8d8', bg: '#0a0404', size: 150 },
+      ],
+      rooms: [
+        { style: 'foyer', from: 2.73, to: 10.70, caps: [{ kind: 'front', hw: 11, hh: 30 }, HDOOR] },      // "honey, I'm home": in at the front door
+        { style: 'gallery', from: 10.70, to: 30.62, caps: [null, HDOOR] },                               // "vaulted ceilings in your brain, crown molding on your spine"
+        { style: 'bedroom', from: 30.62, to: 33.27, caps: [null, HDOOR] },                               // "every room was mine, mine, mine"
+        { style: 'foyer', from: 33.27, to: 35.92, caps: [null, HDOOR] },
+        { style: 'gallery', from: 35.92, to: 38.57, caps: [null, HDOOR] },
+        { style: 'bedroom', from: 38.57, to: 41.22, caps: [null, HDOOR] },
+        { style: 'gallery', from: 41.22, to: 61.13, caps: [null, HDOOR] },                               // "can't exorcise the ghost that wears your skin"
+        { style: 'ballroom', from: 61.13, to: 86.30, caps: [null, HDOOR] },                              // "I'm living rent free"
+        { style: 'gallery', from: 86.30, to: 88.95, caps: [null, HDOOR] },                               // "knock, knock"
+        { style: 'gallery', from: 88.95, to: 91.60, caps: [null, HDOOR] },
+        { style: 'foyer', from: 91.60, to: 95.58, caps: [null, HDOOR] },                                 // "check under the stairs"
+        { style: 'bedroom', from: 95.58, to: 106.9, caps: [null, { kind: 'wall', hw: 10, hh: 16 }] },    // "to rearrange the sheets"
+        { style: 'crawl', from: 106.9, to: 109.6, caps: [null, { kind: 'wall', hw: 10, hh: 13 }] },      // "crawl space of your cortex"
+        { style: 'attic', from: 109.6, to: 112.2, caps: [null, { kind: 'wall', hw: 10.5, hh: 20 }] },    // "attic of your grief"
+        { style: 'blueprint', from: 112.2, to: 120.0, caps: [null, HDOOR] },                             // "before you even drew the blueprint"
+        { style: 'gallery', from: 120.0, to: 141.2, caps: [null, HDOOR] },                               // "you thought you'd heal"
+        { style: 'mold', from: 141.2, to: 151.28, caps: [null, HDOOR] },                                 // "the mold behind the walls of memory"
+        { style: 'mold', from: 151.28, to: 161.89, caps: [null, HDOOR] },                                // "every flashback's got my fingerprints"
+        { style: 'mold', from: 161.89, to: 168.72, caps: [null, HDOOR] },
+        { style: 'foyer', from: 168.72, to: 171.46, caps: [null, HDOOR] },                               // "welcome home"
+        { style: 'foyer', from: 171.46, to: 174.14, caps: [null, HDOOR] },                               // "welcome home"
+        { style: 'foyer', from: 174.14, to: 176.48, caps: [null, HDOOR] },                               // "welcome home"
+        { style: 'bedroom', from: 176.48, to: 180.78, caps: [null, HDOOR] },                             // "it's crowded in here with all my things"
+        { style: 'gallery', from: 180.78, to: 186.18, caps: [null, HDOOR] },                             // "my moods in every door"
+        { style: 'foyer', from: 186.18, to: 191.46, caps: [null, HDOOR] },                               // "my name on every floor"
+        { style: 'bedroom', from: 191.46, to: 196.36, caps: [null, HDOOR] },                             // "never truly alone"
+        { style: 'dark', from: 196.36, to: 217.58, caps: [null, HDOOR] },                                // "I'm the hesitation in your breath"
+        { style: 'ballroom', from: 217.58, to: 250.74, caps: [null, HDOOR] },                            // "I am home"
+        { style: 'dark', from: 250.74, to: 264.01, caps: [null, HDOOR] },                                // "you still leave the light on"
+        { style: 'foyer', from: 264.01, to: 277.0, caps: [null, HDOOR] },                                // "you never changed the locks"
+        { style: 'gallery', from: 277.0, to: 292.28, caps: [null, HDOOR] },                              // "you didn't even know you gave me keys"
+        { style: 'bedroom', from: 292.28, to: 330 },                                                     // "sweet dreams, landlord"
+      ],
+      roomEvents: { mold: 148.6, prints: 156.6 },
+      zones: [
+        // the gallery: her, all down both walls; then the three plaques
+        { from: 10.7, to: 21.6, kits: ['portraits'], W: 40, every: 1.33, offset: 0.95 },
+        { from: 23.0, to: 23.1, kits: ['portraits'], hang: true, at: [23.5, 26.15, 28.8], plaques: ['PEACE', 'ESTEEM', 'JESUS'], s: 0.95 },
+        // every room hers
+        { from: 30.6, to: 30.7, kits: ['portraits'], W: 50, at: [32.2, 34.9, 37.5, 40.1], sides: [1, -1, 1, -1], plaques: ['MINE', 'MINE', 'MINE', 'MINE'], v: 1 },
+        { from: 41.4, to: 60.0, kits: ['ghosts'], every: 1.25, x: 16, spread: 16 },
+        { from: 41.2, to: 61.1, kits: ['portraits'], W: 40, every: 2.65, offset: 1.4 },
+        { from: 60.3, to: 60.4, kits: ['wine'], at: 60.3, x: 21 },                       // "so pour yourself a drink / oh wait, I finished it"
+        { from: 62.0, to: 85.5, kits: ['ghosts'], every: 0.95, x: 22, spread: 36 },       // "every nightmare's got my furniture"
+        { from: 61.1, to: 86.3, kits: ['portraits'], W: 70, every: 2.65, offset: 2.0, s: 1.6 },
+        { from: 86.3, to: 95.6, kits: ['portraits'], W: 40, at: [87.6, 90.3], sides: [1, -1], v: 2 },
+        { from: 92.6, to: 92.7, kits: ['stairs'], at: 92.6 },                             // "check under the stairs"
+        { from: 100.9, to: 101.0, kits: ['nightstand'], at: 100.9, x: 30, clock: 'THREEAM', s: 2.0 },   // "stopping by at 3 a.m."
+        { from: 102.6, to: 102.7, kits: ['bed'], at: 102.6, x: -30 },                     // "to rearrange the sheets"
+        { from: 102.6, to: 102.7, kits: ['portraits'], W: 50, at: [102.6], sides: [-1], v: 3, s: 1.05, y: 10.5 },
+        { from: 120.0, to: 141.2, kits: ['portraits'], W: 40, every: 2.65, offset: 1.0 },
+        { from: 134.9, to: 135.0, kits: ['journal'], at: 134.9, x: -23, rot: 1.9, s: 1.1 },         // "in a wreath and drip in your journal"
+        { from: 141.2, to: 168.7, kits: ['portraits'], W: 40, every: 2.65, offset: 1.0 },
+        { from: 168.7, to: 176.5, kits: ['portraits'], W: 46, at: [170.2, 172.9, 175.4], sides: [1, -1, 1], v: 0 },
+        // crowded: her things in boxes, her furniture, her in every corner
+        { from: 176.6, to: 196.2, kits: ['crates'], every: 0.75, x: 17, spread: 22 },
+        { from: 177.0, to: 196.2, kits: ['ghosts'], every: 1.4, x: 20, spread: 20 },
+        { from: 176.5, to: 196.3, kits: ['portraits'], W: 46, every: 1.33, offset: 0.5 },
+        { from: 196.4, to: 217.5, kits: ['portraits'], W: 40, every: 1.33, offset: 0.7 },
+        { from: 217.6, to: 250.7, kits: ['ghosts'], every: 1.1, x: 24, spread: 36 },
+        { from: 217.6, to: 250.7, kits: ['portraits'], W: 70, every: 2.65, offset: 2.0, s: 1.6 },
+        { from: 237.2, to: 237.3, kits: ['portraits'], hang: true, at: [237.4], v: 1, s: 1.5, lift: 5 },   // "I'm already in the room"
+        { from: 258.8, to: 258.9, kits: ['sideLamp'], at: 258.8, x: -17, s: 1.4 },       // "you still leave the light on"
+        { from: 264.0, to: 292.2, kits: ['portraits'], W: 46, every: 2.65, offset: 1.2 },
+        { from: 276.95, to: 277.0, kits: ['locks'], at: 276.95, x: 13.4 },               // "you never changed the locks"
+        { from: 300.5, to: 300.6, kits: ['nightstand'], at: 300.5, x: 34 },
+        { from: 306.0, to: 306.1, kits: ['bed'], at: 306.0, x: -30 },                     // "sweet dreams, landlord"
+        { from: 306.0, to: 306.1, kits: ['portraits'], W: 50, at: [306.0], sides: [-1], v: 0, s: 1.05, y: 10.5, plaques: ['HOME'] },   // "this is home"
+      ],
+      finale: { kind: 'portrait', t: 306.0, x: -44, fireAt: 292.3, orbit: { r: 54, h: 2, y: 27, facing: true, back: 1.2, right: 0.3, swing: 0.2 } },
+    },
+  },
+  {
     // a party with somebody else's heart in it. The heart hangs over the city
     // all night and beats as hard as you keep the beat. In the bridge the band
     // leaves and the kick drum talks: the rails become a heart monitor that only
@@ -459,6 +823,69 @@ export const ALBUM = [
 ];
 
 export const PALETTES = {
+  // Nothing Happens Every Week: a bright Sunday, everything innocent, red for red-handed
+  sunday: {
+    zenith: 0x2c6ade, horizon: 0xc4d8ea, skyGlow: 0xfff0cc, glowDir: [0.5, 0.5, 0.7], skyline: 0x7a9a8a, moonDir: [0.5, 0.5, 0.7], moon: 0xfff2d8,
+    fog: 0xb8cce0, fogDensity: 0.0010, stars: 0, sunSize: 0.8, cloud: 0xffffff, clouds: 0.5, windowK: 0.1, glass: 0x4a5a6a,
+    ground: 0x5e8a34, street: 0xffe0a0, roof: 0x8a5a4a, wall: 0xe8e0d0, tree: 0x3a6a2a,
+    window: 0xffe0b0, windowAlt: 0xffb0c0, lamp: 0xffe0b0,
+    ribbon: 0x2a2a34, edge: 0xffffff, fret: 0xffe8e0, glow: 0xff5050, hold: 0xff2a3a, gate: 0xffffff,
+    skyLight: 0xb0ccff, bounce: 0x8a8a5a, sunK: 3.0, hemiK: 1.5, fillK: 0.3,
+    board: 0x1a1a24, suit: 0x2a2a3a, jacket: 0xffd23a, hair: 0x3a2418, shoes: 0xf4f0f8, gloves: 0x222230, rim: 0xffffff,
+  },
+  sundaylate: {
+    zenith: 0x3a72d8, horizon: 0xf0e4cc, skyGlow: 0xffe0b0, glowDir: [0.6, 0.32, 0.72], moonDir: [0.6, 0.32, 0.72], moon: 0xffe8c8,
+    fog: 0xe0d8cc, fogDensity: 0.0012, sunSize: 1, cloud: 0xfff8ec, clouds: 0.4, sunK: 2.8,
+  },
+  getaway: {
+    zenith: 0x2f5ec8, horizon: 0xffd8a0, skyGlow: 0xffb070, glowDir: [0.7, 0.14, 0.7], moonDir: [0.7, 0.14, 0.7], moon: 0xffc888,
+    fog: 0xe0c8a8, fogDensity: 0.0011, sunSize: 1.2, cloud: 0xffe0c0, clouds: 0.45, sunK: 2.4, hemiK: 1.4, edge: 0xffe8c0,
+  },
+  // Your Apartment Smells Like Summer: a hot night, orange windows, then the storm
+  summernight2: {
+    zenith: 0x0c0a24, horizon: 0x4a2a52, skyGlow: 0xff7a4a, glowDir: [0.2, 0.05, 1], skyline: 0x1a1024, moonDir: [-0.4, 0.5, 0.7], moon: 0xffe0c0,
+    fog: 0x2c1a34, fogDensity: 0.0019, stars: 0.5, sunSize: 0,
+    ground: 0x100c14, street: 0xffa050, roof: 0x22182a, wall: 0x3a2a30, tree: 0x0f1612,
+    window: 0xffb060, windowAlt: 0xff6a9a, lamp: 0xffa050,
+    ribbon: 0x201018, edge: 0xffb070, fret: 0xffe0c0, glow: 0xff6a4a, hold: 0xff4fa0, gate: 0xfff4e0,
+    skyLight: 0x6a4a8a, bounce: 0x5a3a2a, hemiK: 1.9, sunK: 0.8,
+    board: 0x1a1018, suit: 0x1a1420, jacket: 0xff8a4f, hair: 0x2a1a12, shoes: 0xf4f0f8, gloves: 0x111018, rim: 0xffc890,
+  },
+  // her apartment by the lamps, the summer night in the windows
+  apartment: {
+    fog: 0x2a1a16, fogDensity: 0.0026, stars: 0, rain: 0,
+    skyLight: 0xe0b890, bounce: 0x6a4030, hemiK: 1.8, sunK: 0.6, lamp: 0xffb060, edge: 0xffc890, glow: 0xffa060,
+  },
+  rooftops: {
+    zenith: 0x080a26, horizon: 0x3a2850, skyGlow: 0xff8a5a, fog: 0x22182e, fogDensity: 0.0015, stars: 0.8,
+    skyLight: 0x6a5a9a, hemiK: 1.9,
+  },
+  storm: {
+    zenith: 0x080a12, horizon: 0x262636, skyGlow: 0x5a6a8a, glowDir: [0.2, 0.1, 1], fog: 0x181a26, fogDensity: 0.0024, stars: 0, rain: 0.85,
+    skyLight: 0x5a6a90, bounce: 0x2a2a3a, hemiK: 1.7, lamp: 0xffa860, edge: 0xc8d8ff, glow: 0x8aa8ff,
+  },
+  hallway: {
+    fog: 0x16160e, fogDensity: 0.0032, stars: 0, rain: 0,
+    skyLight: 0xd0cca0, bounce: 0x3a3a24, hemiK: 1.5, lamp: 0xfff0c8, edge: 0xfff0c8, glow: 0xffe090,
+  },
+  afterstorm: {
+    zenith: 0x0a0a28, horizon: 0x5a3050, skyGlow: 0xff7a5a, glowDir: [0, 0.05, 1], fog: 0x24182a, fogDensity: 0.0011, stars: 0.9, rain: 0,
+    skyLight: 0x8a6a9a, hemiK: 1.9, lamp: 0xffb060, edge: 0xffb070, glow: 0xff6a4a,
+  },
+  attic: { fog: 0x1a120a, fogDensity: 0.004, skyLight: 0xc8a070, hemiK: 1.6, lamp: 0xffc070 },
+  blueprint: { fog: 0x0a1a3a, fogDensity: 0.0026, skyLight: 0xa8c0ff, hemiK: 1.8, lamp: 0xcfe0ff, edge: 0xffffff, glow: 0x8ab8ff, fret: 0xe8f0ff },
+  moldy: { fog: 0x0e160e, fogDensity: 0.0034, skyLight: 0x8a9a7a, hemiK: 1.6, lamp: 0xd8e0a0 },
+  dim: { fog: 0x08040a, fogDensity: 0.0042, skyLight: 0x5a4a6a, hemiK: 1.0, lamp: 0xffb060 },
+  // Rent Free: the house in his head, wine-dark and gold, her portrait on every wall
+  mansion: {
+    zenith: 0x0a0414, horizon: 0x2a1030, skyGlow: 0xc86aff, glowDir: [0, 0.2, 1], skyline: 0x10081a, moonDir: [0.3, 0.8, 0.4], moon: 0xffd8b0,
+    fog: 0x1a0818, fogDensity: 0.0034, stars: 0, sunSize: 0,
+    ground: 0x0a0408, street: 0xffc070, roof: 0x1a0e18, wall: 0x2a1424, tree: 0x0f1612,
+    window: 0xffc878, windowAlt: 0xd08aff, lamp: 0xffc070,
+    ribbon: 0x1e0a1a, edge: 0xffd27a, fret: 0xffe8f4, glow: 0xc86aff, hold: 0xc86aff, gate: 0xffffff, gem: 0xffc860,
+    skyLight: 0xb08aa0, bounce: 0x4a2030, hemiK: 1.9, sunK: 1.0,
+    board: 0x1a0e18, suit: 0x140a14, jacket: 0xc86aff, hair: 0x1a0e0a, shoes: 0xf4f0f8, gloves: 0x111018, rim: 0xffd27a,
+  },
   // A Million Ducks: the screen's blue in the dark, the lobby's red and gold, sodium lamps, a lamp in a bedroom
   auditorium: {
     zenith: 0x02030a, horizon: 0x0a1430, skyGlow: 0x2a6aff, glowDir: [0, 0.1, -1], skyline: 0x050810, moonDir: [0, 0.3, -1], moon: 0x8ab8ff,

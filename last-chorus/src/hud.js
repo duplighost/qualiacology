@@ -96,6 +96,7 @@ export class Hud {
   // the counter's icon: a diamond, or for A Million Ducks a duck
   setCollect(kind) {
     this.gems.classList.toggle('duck', kind === 'duck');
+    this.gems.classList.toggle('key', kind === 'key');
   }
 
   gem(n) {

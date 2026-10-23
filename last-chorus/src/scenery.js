@@ -103,12 +103,12 @@ export class Scenery {
       { key: 'TAFFY', text: 'SALT WATER\nTAFFY', color: '#7fe0d2' }, { key: 'ARCADE', text: 'ARCADE', color: '#b48cff' }, { key: 'SURF', text: 'SURF SHOP', color: '#5ff2ff' },
       { key: 'DANCING', text: 'DANCING', color: '#ff4f9a' }, { key: 'LIVETONIGHT', text: 'LIVE\nTONIGHT', color: '#ffd166' }, { key: 'ENCORE', text: 'ENCORE', color: '#5ff2ff' },
       ...((plan && plan.signs) || []),
-      ...((plan && plan.lyrics) || []).map((l, i) => ({ key: 'LYR' + i, text: l.text, color: l.color || '#ffffff', core: '#ffffff', bg: l.bg || '#120914', frame: l.frame || P.fret && '#' + new THREE.Color(P.fret).getHexString() })),
+      ...((plan && plan.lyrics) || []).map((l, i) => ({ key: 'LYR' + i, text: l.text, color: l.color || plan.lyricColor || '#ffffff', core: l.core || plan.lyricCore || '#ffffff', bg: l.bg || plan.lyricBg || '#120914', frame: l.frame || P.fret && '#' + new THREE.Color(P.fret).getHexString() })),
     ];
     this.atlas = makeAtlas(signs, 4, 12);
 
     this.scene = scene;
-    this.mats = makeMaterials(P, this.atlas);
+    this.mats = makeMaterials(P, this.atlas); this.mats.P = P;
     // layers are made the first time a part asks for one, so a song only builds what it uses
     this._layers = {};
     const defs = LAYER_DEFS;
@@ -190,6 +190,7 @@ export class Scenery {
       tau = ((tau + 8) % span + span) % span - 8;
       if (tau < t - 3 || tau > t + 34 || tau < car.from || tau > car.to) continue;
       track.ground(tau, car.x, p);
+      if (car.road.follow && this.floorFn) p.y = this.floorFn(tau, car.x);
       const yaw = this.course.sample(tau).yaw + (car.dir > 0 ? 0 : Math.PI);
       e.set(0, yaw, 0); q.setFromEuler(e);
       s.setScalar(1);
@@ -198,12 +199,12 @@ export class Scenery {
       // lights: head white-gold in front, tail red behind
       const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = -Math.cos(yaw), rz = Math.sin(yaw);
       for (const side of [-0.65, 0.65]) {
-        glowAt(this, p.x + fx * 2.3 + rx * side, 0.62, p.z + fz * 2.3 + rz * side, 1.6, [1.0, 0.92, 0.75], 1.4);
-        glowAt(this, p.x - fx * 2.3 + rx * side, 0.66, p.z - fz * 2.3 + rz * side, 1.25, [1.0, 0.08, 0.1], 1.2);
+        glowAt(this, p.x + fx * 2.3 + rx * side, p.y + 0.62, p.z + fz * 2.3 + rz * side, 1.6, [1.0, 0.92, 0.75], 1.4);
+        glowAt(this, p.x - fx * 2.3 + rx * side, p.y + 0.66, p.z - fz * 2.3 + rz * side, 1.25, [1.0, 0.08, 0.1], 1.2);
       }
       if (car.police) {
-        glowAt(this, p.x + rx * 0.4, 1.55, p.z + rz * 0.4, 2.2, [1, 0.05, 0.08], 2.4, 2);
-        glowAt(this, p.x - rx * 0.4, 1.55, p.z - rz * 0.4, 2.2, [0.1, 0.25, 1], 2.4, 3);
+        glowAt(this, p.x + rx * 0.4, p.y + 1.55, p.z + rz * 0.4, 2.2, [1, 0.05, 0.08], 2.4, 2);
+        glowAt(this, p.x - rx * 0.4, p.y + 1.55, p.z - rz * 0.4, 2.2, [0.1, 0.25, 1], 2.4, 3);
       }
     }
     if (extra) extra(this);
@@ -514,7 +515,7 @@ class Road {
         const x = r.x + (j - 1) * w * 0.5;
         track.ground(t, x, this._p);
         const o = (i * 3 + j) * 3;
-        this.pos[o] = this._p.x; this.pos[o + 1] = visible ? (r.y ?? 0.04) : -60; this.pos[o + 2] = this._p.z;
+        this.pos[o] = this._p.x; this.pos[o + 1] = visible ? (r.follow && this.floorFn ? this.floorFn(t, x) + 0.05 : (r.y ?? 0.04)) : -60; this.pos[o + 2] = this._p.z;
         this.uv[(i * 3 + j) * 2] = j / 2;
       }
       const cx = this.pos[(i * 3 + 1) * 3], cz = this.pos[(i * 3 + 1) * 3 + 2];

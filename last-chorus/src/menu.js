@@ -80,7 +80,7 @@ export class Screens {
           ${row('IN TIME', d.inTime + '%')}
           ${row('PERFECT', d.perfects)}
           ${row('LONGEST RUN', '×' + d.bestStreak)}
-          ${row(d.collect === 'duck' ? 'DUCKS' : 'DIAMONDS', d.notes + ' / ' + d.notesTotal)}
+          ${row(d.collect === 'duck' ? 'DUCKS' : d.collect === 'key' ? 'KEYS' : 'DIAMONDS', d.notes + ' / ' + d.notesTotal)}
           ${row('TOP SPEED', Math.round(d.top * 3.6) + ' KM/H')}
           ${d.best && !d.newBest ? row('BEST', (d.best / 1000).toFixed(2) + ' KM') : ''}
         </div>

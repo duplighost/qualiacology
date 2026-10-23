@@ -198,6 +198,12 @@ export class RiderView {
     p.wipe += ((rider.wipe > 0 ? 1 : 0) - p.wipe) * Math.min(1, dt * 6);
     if (rider.wipe > 0) p.spin += dt * 10; else p.spin *= Math.exp(-dt * 6);
 
+    // the stop at the end: swing the board across, sit back on the heel edge, then stand
+    const stopT = rider.stopping ? 1 : 0;
+    p.stop = (p.stop ?? 0) + (stopT - (p.stop ?? 0)) * Math.min(1, dt * (stopT ? 9 : 4));
+    const braking = rider.stopping && rider.stopV0 > 0 ? rider.stopVel / rider.stopV0 : 0;
+    p.edge = (p.edge ?? 0) + ((rider.stopping ? 0.2 + 0.55 * Math.sqrt(braking) : 0) - (p.edge ?? 0)) * Math.min(1, dt * 7);
+
     this.root.position.copy(pos);
     this.root.rotation.order = 'YXZ';
     this.root.rotation.set(-pitch, yaw, -bank * 0.85 + p.lean * 0.42);
@@ -214,6 +220,13 @@ export class RiderView {
     const kind = tr ? tr.kind : null;
     this._te.set(Math.sin(p.spin * 1.3) * 0.35 * p.wipe + (kind === 'flip' ? -ang : 0), Math.sin(p.spin) * 0.8 * p.wipe + (kind === 'spin' ? ang : 0), kind === 'roll' ? ang : 0);
     this.board.quaternion.setFromEuler(this._te);
+    if (p.stop > 0.001) {
+      const st = p.stop * p.stop * (3 - 2 * p.stop);
+      this._sq1 = this._sq1 || new THREE.Quaternion(); this._sq2 = this._sq2 || new THREE.Quaternion();
+      this._sq1.setFromAxisAngle(Y, st * Math.PI * 0.5);
+      this._sq2.setFromAxisAngle(X, -p.edge * st);
+      this.board.quaternion.premultiply(this._sq1).premultiply(this._sq2);
+    }
     if (kind === 'flip' || kind === 'roll') {
       this._tc.set(0, 0.95, 0);
       this._tp.copy(this._tc).applyQuaternion(this.board.quaternion);
@@ -237,7 +250,8 @@ export class RiderView {
 
   _pose(p, rider, dt) {
     for (const [n, r] of Object.entries(this.rest)) { this.bones[n].quaternion.copy(r.q); this.bones[n].position.copy(r.p); }
-    const c = clamp(p.crouch, 0, 1.15), air = p.air;
+    const st = (p.stop ?? 0) * (p.stop ?? 0) * (3 - 2 * (p.stop ?? 0)), sk = st * clamp(((p.edge ?? 0) - 0.2) / 0.55, 0, 1);
+    const c = clamp(p.crouch * (1 - st) + (0.58 + 0.55 * sk) * st, 0, 1.15), air = p.air;
     const flex = 0.22 + 0.42 * c + 0.5 * air + 0.55 * p.grab;   // hip/knee bend, radians (tucked up in a grab)
     const spread = 0.17 + 0.03 * c;                         // feet apart along the board
     // drop the hips so the feet stay on the deck
@@ -257,16 +271,19 @@ export class RiderView {
     this._rot('spine_02', Y, 0.25 + 0.1 * air);
     this._rot('spine_03', Y, 0.25);
     this._rot('spine_03', Z, -p.lean * 0.18);
-    // head: eyes down the road
-    this._rot('neck_01', Y, 0.45);
-    this._rot('Head', Y, 0.55);
+    // head: eyes down the road (in the stop, where the board was going: over her front shoulder)
+    this._rot('neck_01', Y, 0.45 - 0.35 * st);
+    this._rot('Head', Y, 0.55 - 0.45 * st);
+    if (st > 0.01) { this._rot('spine_01', X, -0.22 * sk); this._rot('spine_02', Y, -0.25 * st); }
     this._rot('Head', X, 0.12 + 0.1 * c);
     // arms: down and out for balance, up and wide in the air
     const hu = p.hands * p.hands * (3 - 2 * p.hands);
     const gr = p.grab * p.grab * (3 - 2 * p.grab);
-    const armDown = (1.05 - 0.75 * air - 0.15 * c) * (1 - hu) - 1.3 * hu;
+    let armDown = (1.05 - 0.75 * air - 0.15 * c) * (1 - hu) - 1.3 * hu;
+    armDown = armDown * (1 - st) + (0.3 - 0.15 * sk) * st;      // arms out for the stop: the front one up and out
     // grab: the back hand reaches down to the edge of the board
-    const armR = armDown * (1 - gr) + 1.55 * gr;
+    let armR = armDown * (1 - gr) + 1.55 * gr;
+    if (st > 0.01) { armR = armR * (1 - st) + (0.95 - 0.25 * sk) * st; this._rot('upperarm_r', X, -0.55 * st); this._rot('lowerarm_r', Z, 0.4 * st); }
     this._rot('upperarm_l', Z, -armDown); this._rot('upperarm_r', Z, armR);
     if (gr > 0.01) { this._rot('upperarm_r', X, -0.5 * gr); this._rot('lowerarm_r', Z, 0.35 * gr); this._rot('spine_01', X, 0.3 * gr); }
     this._rot('upperarm_l', Y, (0.35 + 0.25 * c) * (1 - hu)); this._rot('upperarm_r', Y, (-0.1 - 0.3 * c) * (1 - hu));

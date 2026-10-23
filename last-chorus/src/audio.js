@@ -300,6 +300,22 @@ export class Sound {
     s.g.gain.setTargetAtTime(on ? 0.012 + 0.03 * progress : 0, now, on ? 0.06 : 0.03);
   }
 
+  // the stop at the end: a soft hiss of spray off the edge, falling with her speed
+  skid(level = 0) {
+    const c = this.ctx, now = c.currentTime;
+    if (!this._skid) {
+      const n = c.createBufferSource(); n.buffer = this._noise; n.loop = true;
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.8; bp.frequency.value = 1800;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200;
+      const g = c.createGain(); g.gain.value = 0;
+      n.connect(bp).connect(lp).connect(g).connect(this.sfx); n.start();
+      this._skid = { bp, g };
+    }
+    const s = this._skid;
+    s.bp.frequency.setTargetAtTime(700 + 2600 * level, now, 0.06);
+    s.g.gain.setTargetAtTime(0.09 * level, now, level > 0.01 ? 0.04 : 0.12);
+  }
+
   // a siren going past: a slow wail, quiet, higher coming toward you and lower going away
   siren(level, doppler = 1) {
     const c = this.ctx, now = c.currentTime;
