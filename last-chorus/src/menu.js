@@ -21,13 +21,15 @@ export class Screens {
   showMenu(songs, selected, onChoose) {
     this.active = 'menu'; this.onChoose = onChoose; this.songs = songs;
     this.list.innerHTML = songs.map((s, i) => `
-      <li data-i="${i}" style="--accent:${s.accent}">
+      <li data-i="${i}" style="--accent:${s.accent}"${s.title.length > 34 ? ' class="long"' : ''}>
         <span class="num">${String(i + 1).padStart(2, '0')}</span>
         <span class="title">${esc(s.title)}</span>
         <span class="best">${s.best ? (s.best / 1000).toFixed(2) + ' KM' : ''}</span>
         <span class="pct">${s.inTime ? s.inTime + '%' : ''}</span>
       </li>`).join('');
     this.items = [...this.list.querySelectorAll('li')];
+    // fade the edge the list goes on past
+    if (!this._edges) { this._edges = () => { const L = this.list; L.classList.toggle('more-up', L.scrollTop > 2); L.classList.toggle('more-down', L.scrollTop + L.clientHeight < L.scrollHeight - 2); }; this.list.addEventListener('scroll', this._edges); window.addEventListener('resize', this._edges); }
     this.items.forEach((li) => {
       li.addEventListener('mouseenter', () => this._select(+li.dataset.i));
       li.addEventListener('click', (e) => { e.stopPropagation(); this._select(+li.dataset.i); this._choose(); });
@@ -52,7 +54,7 @@ export class Screens {
     this.menu.style.setProperty('--accent', this.songs[i].accent);
   }
   // on a short window the list scrolls: keep the pick in view
-  _reveal() { const li = this.items[this.sel]; if (li) li.scrollIntoView({ block: 'nearest' }); }
+  _reveal() { const li = this.items[this.sel]; if (li) li.scrollIntoView({ block: 'nearest' }); this._edges && this._edges(); }
   _choose() {
     if (this.active !== 'menu') return;
     const i = this.sel;
@@ -83,7 +85,7 @@ export class Screens {
           ${row('IN TIME', d.inTime + '%')}
           ${row('PERFECT', d.perfects)}
           ${row('LONGEST RUN', '×' + d.bestStreak)}
-          ${row({ duck: 'DUCKS', key: 'KEYS', lily: 'LILIES', corn: 'CANDY CORN' }[d.collect] || 'DIAMONDS', d.notes + ' / ' + d.notesTotal)}
+          ${row({ duck: 'DUCKS', key: 'KEYS', lily: 'LILIES', corn: 'CANDY CORN', chip: 'CHIPS', pick: 'PICKS', star: 'STARS', coin: 'COINS', quill: 'QUILLS', flake: 'SNOWFLAKES', apple: 'APPLES', bulb: 'LIGHTS', like: 'LIKES', ember: 'EMBERS', pearl: 'PEARLS' }[d.collect] || 'DIAMONDS', d.notes + ' / ' + d.notesTotal)}
           ${row('TOP SPEED', Math.round(d.top * 3.6) + ' KM/H')}
           ${d.best && !d.newBest ? row('BEST', (d.best / 1000).toFixed(2) + ' KM') : ''}
         </div>
