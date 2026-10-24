@@ -1148,6 +1148,8 @@ export class SmartWorld {
   constructor(scene, S) {
     this.S = S;
     prepare(S.course, S.plan);
+    // layers first used mid-ride, made now so the loading card compiles them (no stall when they come)
+    if (S.town) for (const k of ['aiCan', 'aiPot', 'aiSprout', 'pine', 'aiKnit', 'aiSofa', 'aiPlant', 'aiTwo']) void S.town.layers[k];
     this.mat = homeMaterial();
     this.rooms = (S.plan.rooms || []).map((sp) => new Room(scene, S.course, sp, this.mat, HOME));
     // the front door, on its hinge in the house's front

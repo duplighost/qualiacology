@@ -11,6 +11,34 @@ export class Hud {
     this.jw = $('#judge .word'); this.js = $('#judge .streak'); this.gems = $('#gems'); this.gemN = $('#gems .n'); this.gemIcon = $('#gems .icon');
     this.g = this.shape.getContext('2d');
     this.lit = null;
+    this.scoreEl = $('#score'); this.scoreN = $('#score .n'); this.scoreX = $('#score .x'); this.pops = $('#pops');
+    this.target = 0; this.shown = 0; this.multNow = 1;
+  }
+
+  // the points, top right, rolling up to what you have; the multiplier beside them
+  score(points, mult) {
+    this.target = points;
+    if (mult !== this.multNow) { this.multNow = mult; this.scoreX.textContent = mult > 1 ? '×' + mult : ''; this.scoreEl.classList.toggle('hot', mult >= 4); }
+  }
+  // a new multiplier: it jumps
+  mult(m) {
+    this.score(this.target, m);
+    this.scoreX.getAnimations().forEach((a) => a.cancel());
+    this.scoreX.animate([{ transform: 'scale(1.9)', filter: 'brightness(2.2)' }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 520, easing: 'cubic-bezier(.2,1.6,.4,1)' });
+  }
+  // what a trick or a gap was worth, rising off her
+  points(p, obj, camera) {
+    if (!p || !obj) return;
+    const v = this._pv || (this._pv = { x: 0, y: 0, z: 0 });
+    const w = obj.getWorldPosition ? obj.getWorldPosition(new (obj.position.constructor)()) : null;
+    if (!w) return;
+    w.y += 2.9; w.project(camera);
+    const el = document.createElement('div');
+    el.className = 'pop'; el.textContent = '+' + p;
+    el.style.left = ((w.x * 0.5 + 0.5) * window.innerWidth).toFixed(0) + 'px';
+    el.style.top = ((-w.y * 0.5 + 0.5) * window.innerHeight - 40).toFixed(0) + 'px';
+    this.pops.appendChild(el);
+    el.animate([{ opacity: 0, transform: 'translate(-50%, 6px) scale(0.8)' }, { opacity: 1, transform: 'translate(-50%, 0) scale(1.08)', offset: 0.18 }, { opacity: 0, transform: 'translate(-50%, -34px) scale(1)' }], { duration: 1100, easing: 'ease-out' }).onfinish = () => el.remove();
   }
 
   loading(p) { this.load.textContent = p >= 1 ? '' : 'LOADING ' + Math.round(p * 100); }
@@ -20,20 +48,21 @@ export class Hud {
     this.title.querySelector('.song').textContent = song.title;
     this.title.querySelector('.num').textContent = String((info.index ?? 0) + 1).padStart(2, '0');
     this.title.querySelector('.best').textContent = info.best ? 'BEST ' + (info.best / 1000).toFixed(2) + ' KM' : '';
-    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on');
+    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on'); this.scoreEl.classList.remove('on');
     this.results.classList.remove('on'); this.results.innerHTML = '';
   }
 
   hideAll() {
     this.title.classList.add('off');
-    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on');
+    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on'); this.scoreEl.classList.remove('on');
     this.results.classList.remove('on'); this.results.innerHTML = '';
   }
 
   start(course) {
     this.title.classList.add('off');
-    this.bar.classList.add('on'); this.speed.classList.add('on'); this.gems.classList.add('on');
+    this.bar.classList.add('on'); this.speed.classList.add('on'); this.gems.classList.add('on'); this.scoreEl.classList.add('on');
     this.gemN.textContent = '0';
+    this.target = 0; this.shown = 0; this.multNow = 0; this.score(0, 1); this.scoreN.textContent = '0';
     this.course = course;
     this.lit = new Float32Array(240).fill(-1);
   }
@@ -66,6 +95,25 @@ export class Hud {
     g.globalAlpha = 1; g.fillStyle = '#ffffff';
     g.fillRect(pos * W - 1, 0, 2, H);
     this.speed.textContent = Math.round(rider.v * 3.6) + ' KM/H';
+    this.target = rider.score.points;
+    if (this.shown !== this.target) {
+      this.shown += Math.max(1, Math.ceil((this.target - this.shown) * 0.18));
+      if (this.shown > this.target) this.shown = this.target;
+      this.scoreN.textContent = this.shown.toLocaleString('en-US');
+    }
+    if (rider.score.mult !== this.multNow) this.score(this.target, rider.score.mult);
+  }
+
+  // back from a pause: the beats left before she moves again
+  count(n) {
+    if (n === this._count) return;
+    this._count = n;
+    const el = this.countEl || (this.countEl = document.querySelector('#count'));
+    if (!el) return;
+    el.getAnimations().forEach((a) => a.cancel());
+    if (!n) { el.textContent = ''; return; }
+    el.textContent = String(n);
+    el.animate([{ opacity: 0.95, transform: 'translate(-50%, -50%) scale(1.25)' }, { opacity: 0.85, transform: 'translate(-50%, -50%) scale(1)', offset: 0.3 }, { opacity: 0.25, transform: 'translate(-50%, -50%) scale(0.96)' }], { duration: 420, easing: 'ease-out', fill: 'forwards' });
   }
 
   // the word for a pump, the moment you let go
@@ -93,23 +141,11 @@ export class Hud {
     el.style.transform = `translate(${(this.jx - window.innerWidth / 2).toFixed(1)}px, ${Math.max(40, this.jy - 70).toFixed(1)}px)`;
   }
 
-  // the counter's icon: a diamond, or for A Million Ducks a duck
+  // the counter's icon: the song's own pickup (a diamond if it has none)
   setCollect(kind) {
-    this.gems.classList.toggle('duck', kind === 'duck');
-    this.gems.classList.toggle('key', kind === 'key');
-    this.gems.classList.toggle('lily', kind === 'lily');
-    this.gems.classList.toggle('corn', kind === 'corn');
-    this.gems.classList.toggle('chip', kind === 'chip');
-    this.gems.classList.toggle('pick', kind === 'pick');
-    this.gems.classList.toggle('star', kind === 'star');
-    this.gems.classList.toggle('coin', kind === 'coin');
-    this.gems.classList.toggle('quill', kind === 'quill');
-    this.gems.classList.toggle('flake', kind === 'flake');
-    this.gems.classList.toggle('apple', kind === 'apple');
-    this.gems.classList.toggle('bulb', kind === 'bulb');
-    this.gems.classList.toggle('like', kind === 'like');
-    this.gems.classList.toggle('ember', kind === 'ember');
-    this.gems.classList.toggle('pearl', kind === 'pearl');
+    if (this._kind) this.gems.classList.remove(this._kind);
+    this._kind = kind && kind !== 'diamond' ? kind : null;
+    if (this._kind) this.gems.classList.add(this._kind);
   }
 
   gem(n) {

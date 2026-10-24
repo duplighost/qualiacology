@@ -5,11 +5,15 @@
 // mood ring in the dark; then out the loading dock onto your block, where it's still playing.
 
 import * as THREE from 'three';
+import { AA_GLSL } from './aa.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, col, glowAt, poolAt, local } from './scenery.js';
 import { tintMaterial } from './props.js';
 import { prepare, floorAt, groundAt } from './trail.js';
 import { Room, paint, rgb, seeded, box } from './summer.js';
+import { CdyRush } from './cdy-rush.js';
+import './cdy-sets.js';
+import './cdy-block.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -123,7 +127,7 @@ const CG = {
   // a wrapped sweet: the middle, a twist of wrapper either side
   wrapped() { const parts = []; parts.push(sph(1.4, 1.3, 1, 1, 0, 0, 0, 14, 10)); for (const s of [-1, 1]) { const c = new THREE.ConeGeometry(1.1, 1.6, 10); c.rotateZ(s * Math.PI / 2); c.translate(s * 2.4, 0, 0); parts.push(c); } return merge(parts.map((g) => paint(g, [1, 1, 1]))); },
   // a stamping press: two columns, the crown, the bed (the ram moves)
-  press() { const parts = [], frame = rgb(0x3a3e48), yel = rgb(0xffc81a); for (const x of [-7, 7]) parts.push(paint(box(3, 34, 4, x, 17, 0), frame)); parts.push(paint(box(19, 6, 6, 0, 35, 0), frame)); parts.push(paint(box(17, 5, 9, 0, 2.5, 0), frame)); for (const x of [-7, 7]) parts.push(paint(box(3.1, 1.2, 4.1, x, 6, 0), yel)); parts.push(paint(box(19.2, 1, 6.1, 0, 32.6, 0), yel)); return merge(parts); },
+  press() { const parts = [], frame = rgb(0xc8186a), yel = rgb(0xfff2f6), dark = rgb(0x2a1a24); for (const x of [-7, 7]) parts.push(paint(box(3, 34, 4, x, 17, 0), frame)); parts.push(paint(box(19, 6, 6, 0, 35, 0), frame)); parts.push(paint(box(17, 5, 9, 0, 2.5, 0), dark)); for (const x of [-7, 7]) for (const y of [6, 12, 18, 24]) parts.push(paint(box(3.1, 1.2, 4.1, x, y, 0), yel)); parts.push(paint(box(19.2, 1, 6.1, 0, 32.6, 0), yel)); return merge(parts); },
   ram() { const parts = []; parts.push(paint(box(11, 5, 6, 0, 0, 0), rgb(0x8a8e98))); parts.push(paint(box(9, 1.2, 5, 0, -3, 0), rgb(0xff5fb0))); parts.push(paint(box(1.6, 12, 1.6, 0, 8, 0), rgb(0x6a6e78))); return merge(parts); },
   // the mousetrap: the board, the spring, the trigger with the sweet on it (the hammer swings)
   trap() {
@@ -489,9 +493,9 @@ const flat = (W = 60, H = 50) => [
 const FACTORY = {
   rings: { flat },
   ringOf: () => 'flat',
-  styles: { cook: 0, floor: 1, press: 2, show: 3 },
-  dims: { cook: [50, 44], floor: [64, 54], press: [46, 42], show: [44, 38] },
-  lights: (id) => ({ 0: [24, 12], 1: [32, 16], 2: [20, 10], 3: [22, 11] }[id] || null),
+  styles: { cook: 0, floor: 1, press: 2, show: 3, sugar: 4, coat: 5, rainbow: 6, mix: 7 },
+  dims: { cook: [50, 44], floor: [64, 54], press: [46, 42], show: [44, 38], sugar: [48, 46], coat: [56, 50], rainbow: [60, 52], mix: [84, 66] },
+  lights: (id) => ({ 0: [24, 12], 1: [32, 16], 2: [20, 10], 3: [22, 11], 4: [22, 11], 5: [26, 13], 6: [30, 15], 7: [36, 18] }[id] || null),
 };
 
 function candyMaterial() {
@@ -499,18 +503,27 @@ function candyMaterial() {
     uniforms: {
       uStyle: { value: 0 }, uTime: { value: 0 }, uBeat: { value: 0 }, uFogDensity: { value: 0.003 }, uFog: { value: new THREE.Color() }, uCam: { value: new THREE.Vector3() },
       uWarm: { value: new THREE.Color(0xffb0d8) }, uLight: { value: new THREE.Color(1, 1, 1) }, uSkyTop: { value: new THREE.Color() }, uSkyLow: { value: new THREE.Color() }, uDark: { value: 0 },
+      uPulse: { value: 0 },
     },
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: /* glsl */`
-      uniform float uStyle, uTime, uBeat, uFogDensity, uDark;
+      uniform float uStyle, uTime, uBeat, uFogDensity, uDark, uPulse;
       uniform vec3 uFog, uCam, uWarm, uLight, uSkyTop, uSkyLow;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float n2(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f); return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
+      // grout lines that settle to their average where the tiles get small on screen
+      float grout(vec2 p, float w){
+        vec2 d = max(fwidth(p), vec2(1e-4)), f = abs(fract(p) - 0.5);
+        vec2 g = smoothstep(0.5 - w - d, 0.5 - w + d, f);
+        float mean = 1.0 - (1.0 - 2.0 * w) * (1.0 - 2.0 * w);
+        return mix(max(g.x, g.y), mean, clamp(max(d.x, d.y) * 2.5 - 0.6, 0.0, 1.0));
+      }
+      ${AA_GLSL}
       void main(){
         int part = int(vPart + 0.5);
         float x = vC.x, h = vC.y, along = vC.z;
@@ -518,7 +531,7 @@ function candyMaterial() {
         float st = uStyle;
         float wa = part == 6 ? x * 1.3 + 9.0 : (side > 0.0 ? along + 11.0 : along);
         bool onWall = part == 1 || part == 2 || part == 6;
-        vec2 fx = st < 0.5 ? vec2(24.0, 12.0) : st < 1.5 ? vec2(32.0, 16.0) : st < 2.5 ? vec2(20.0, 10.0) : vec2(22.0, 11.0);
+        vec2 fx = st < 0.5 ? vec2(24.0, 12.0) : st < 1.5 ? vec2(32.0, 16.0) : st < 2.5 ? vec2(20.0, 10.0) : st < 4.5 ? vec2(22.0, 11.0) : st < 5.5 ? vec2(26.0, 13.0) : st < 6.5 ? vec2(30.0, 15.0) : vec2(36.0, 18.0);
         float dl = mod(along - fx.y + fx.x * 0.5, fx.x) - fx.x * 0.5;
         float lightK = 0.62 + 0.45 * exp(-dl * dl / (fx.x * fx.x * 0.12));
         vec3 col;
@@ -534,7 +547,7 @@ function candyMaterial() {
           float mull = clamp(step(abs(wx), 0.3) + step(abs(mod(h, 6.0) - 3.0), 0.25), 0.0, 1.0);
           col = mix(col, uWarm * (0.85 + 0.4 * h2(vec2(floor((x + 10.0) / 20.0), 3.0))) * (1.0 - 0.7 * mull), step(arch, 0.0) * inWin);
           col = mix(col, vec3(0.82, 0.76, 0.64), step(abs(h - 45.0), 1.5));
-          col = mix(col, mix(vec3(0.85, 0.06, 0.12), vec3(0.95, 0.92, 0.92), step(0.5, fract((x + h) / 7.0))), step(56.0, h));
+          col = mix(col, mix(vec3(0.85, 0.06, 0.12), vec3(0.95, 0.92, 0.92), aaSq((x + h) / 7.0)), step(56.0, h));
           col = mix(col, vec3(0.2, 0.18, 0.2), step(abs(h - 56.0), 0.7));
         } else if (st < 0.5) {
           // the syrup kitchen: white tiles with pink grout, copper pipes along, green brick above; red quarry tiles underfoot
@@ -559,7 +572,7 @@ function candyMaterial() {
           } else if (h < 14.0) {
             col = vec3(0.45, 0.8, 0.68) * (0.85 + 0.15 * h2(vec2(floor(wa / 12.0), 2.0))) * (1.0 - 0.25 * step(abs(fract(wa / 3.0) - 0.5), 0.06));
           } else if (h < 16.0) {
-            col = mix(vec3(0.08), vec3(0.95, 0.75, 0.1), step(0.5, fract((wa + h) / 3.0)));
+            col = mix(vec3(0.08), vec3(0.95, 0.75, 0.1), aaSq((wa + h) / 3.0));
           } else {
             vec2 bq = vec2(wa / 2.4 + mod(floor(h / 1.0), 2.0) * 0.5, h / 1.0);
             col = vec3(0.92, 0.55, 0.68) * (0.85 + 0.15 * h2(floor(bq))) * (0.85 + 0.15 * edge(fract(bq), 0.06));
@@ -578,15 +591,15 @@ function candyMaterial() {
             vec2 pq = vec2(wa / 6.0, h / 4.0);
             col = vec3(0.24, 0.25, 0.27) * (0.85 + 0.15 * h2(floor(pq))) * (0.8 + 0.2 * edge(fract(pq), 0.03));
             vec2 rf = fract(pq) - 0.5; col += vec3(0.14) * step(length((rf - vec2(0.42, 0.4)) * vec2(6.0, 4.0)), 0.3);
-            if (h < 4.0) col = mix(vec3(0.06), vec3(0.95, 0.75, 0.1), step(0.5, fract((wa + h) / 3.0)));
+            if (h < 4.0) col = mix(vec3(0.06), vec3(0.95, 0.75, 0.1), aaSq((wa + h) / 3.0));
             col = mix(col, vec3(0.85, 0.08, 0.06) * (0.5 + 1.4 * uBeat), step(abs(h - 24.0), 0.9));
           }
-        } else {
+        } else if (st < 3.5) {
           // the showroom: candy-stripe paper, a mint dado, shelves of jars; black and white floor
-          if (part == 0) { vec2 tq = vec2(x, along) / 4.0; col = mix(vec3(0.92, 0.9, 0.88), vec3(0.08), mod(floor(tq.x) + floor(tq.y), 2.0)) * (0.8 + 0.2 * edge(fract(tq), 0.04)); }
+          if (part == 0) { vec2 tq = vec2(x, along) / 4.0; col = mix(vec3(0.92, 0.9, 0.88), vec3(0.08), aaChk(tq)) * (0.8 + 0.2 * edge(fract(tq), 0.04)); }
           else if (part == 3) { col = vec3(0.95, 0.72, 0.84) * 0.75; }
           else {
-            col = mix(vec3(0.98, 0.78, 0.88), vec3(1.0, 0.95, 0.97), step(0.5, fract(wa / 2.0)));
+            col = mix(vec3(0.98, 0.78, 0.88), vec3(1.0, 0.95, 0.97), aaSq(wa / 2.0));
             if (h < 8.0) col = vec3(0.55, 0.85, 0.75) * (0.85 + 0.15 * step(0.05, fract(wa / 4.0)));
             col = mix(col, vec3(0.95), step(abs(h - 8.0), 0.3));
             if (part != 6) for (int k = 0; k < 3; k++) {
@@ -600,8 +613,73 @@ function candyMaterial() {
               col = mix(col, vec3(0.6, 0.4, 0.3), step(abs(h - sy + 0.3), 0.3));
             }
           }
+        } else if (st < 4.5) {
+          // the sugar room: white tile with pink grout, a mint dado, a candy-stripe frieze, round
+          // windows on the night up top; a big pink and white checker underfoot; skylights
+          if (part == 0) { vec2 tq = vec2(x, along) / 6.0; col = mix(vec3(0.96, 0.93, 0.95), vec3(0.95, 0.5, 0.7), aaChk(tq)); col *= 0.92 + 0.08 * n2(vec2(x, along) * 0.2); }
+          else if (part == 3) { float sf = fract(along / 14.0); col = mix(vec3(0.9, 0.88, 0.92), mix(uSkyLow, uSkyTop, 0.5), step(abs(sf - 0.5), 0.18) * step(abs(x), 30.0)); }
+          else if (h < 7.0) { col = vec3(0.55, 0.88, 0.78) * (0.9 + 0.1 * step(0.5, fract(wa / 3.0))); col = mix(col, vec3(0.98), step(6.6, h)); }
+          else if (h < 26.0) { vec2 tq = vec2(wa / 2.4, h / 2.4); col = mix(vec3(0.97, 0.95, 0.96), vec3(0.98, 0.5, 0.72), aaChk(tq)); col = mix(col, vec3(0.85, 0.82, 0.86), grout(tq, 0.04)); }
+          else if (h < 29.0) { col = mix(vec3(0.95, 0.12, 0.3), vec3(0.98, 0.96, 0.96), aaSq((wa + h) / 2.5)); }
+          else {
+            col = vec3(0.86, 0.8, 0.95);
+            float wx = mod(wa, 14.0) - 7.0, wy = h - 36.0;
+            float r = length(vec2(wx, wy));
+            if (part != 6) { col = mix(col, mix(uSkyLow, uSkyTop, clamp((wy + 4.0) / 8.0, 0.0, 1.0)) * 1.2 + vec3(0.05), step(r, 4.0)); col = mix(col, vec3(0.95, 0.82, 0.4), step(abs(r - 4.3), 0.35)); }
+          }
+        } else if (st < 5.5) {
+          // the coating room: glossy pink walls with candy running down them from the top, the
+          // coating's drips longer on the beat; chocolate tile below; dark floor, strip lights
+          if (part == 0) { vec2 tq = vec2(x, along) / 5.0; col = vec3(0.22, 0.11, 0.07) * (0.85 + 0.25 * n2(floor(tq) * 3.1)); col = mix(col, vec3(0.32, 0.17, 0.1), grout(tq, 0.04)); col = mix(col, vec3(0.95, 0.4, 0.62), step(abs(abs(x) - 24.0), 0.6)); }
+          else if (part == 3) { col = vec3(0.08, 0.05, 0.07); col = mix(col, vec3(1.0, 0.6, 0.8) * (1.4 + 1.2 * uPulse), step(abs(mod(x + 6.0, 12.0) - 6.0), 0.35) * step(abs(x), 40.0)); }
+          else if (h < 9.0) { vec2 tq = vec2(wa / 2.0, h / 1.0); col = vec3(0.3, 0.15, 0.09) * (0.85 + 0.2 * h2(floor(tq))); col = mix(col, vec3(0.42, 0.22, 0.13), grout(tq, 0.05)); }
+          else {
+            col = vec3(0.95, 0.42, 0.66) * (0.85 + 0.15 * n2(vec2(wa * 0.3, h * 0.05)));
+            // drips: each column runs down from the top as far as its own clock takes it
+            float cid = floor(wa / 1.3), cf = fract(wa / 1.3);
+            float run = 6.0 + 20.0 * fract(h2(vec2(cid, 2.0)) + uTime * (0.05 + 0.08 * h2(vec2(cid, 5.0)))) + 4.0 * uPulse;
+            float top = 50.0 - run, head = smoothstep(0.0, 1.0, (h - top) * 0.6);
+            float drip = step(top, h) * smoothstep(0.42, 0.18, abs(cf - 0.5) - 0.1 * (1.0 - head));
+            col = mix(col, vec3(1.0, 0.72, 0.85), drip * 0.85);
+            col += vec3(1.0) * drip * pow(max(0.0, 1.0 - abs(cf - 0.4) * 6.0), 4.0) * 0.4;
+            col = mix(col, vec3(0.98, 0.9, 0.94), step(abs(h - 9.4), 0.4));
+          }
+        } else if (st < 6.5) {
+          // the rainbow room: broad stripes of every colour sliding down the walls, faster on the
+          // beat; a white floor that throws them back; dark above
+          if (part == 0) { col = vec3(0.92, 0.9, 0.93) * (0.9 + 0.1 * n2(vec2(x, along) * 0.15)); col = mix(col, vec3(0.75, 0.72, 0.8), grout(vec2(x, along) / 8.0, 0.02)); float ref = 0.5 + 0.5 * sin(along * 0.12 - uTime * 2.0); col = mix(col, 0.5 + 0.5 * cos(6.2832 * (along / 60.0 + vec3(0.0, 0.33, 0.67))), 0.18 * ref * smoothstep(40.0, 10.0, abs(x))); }
+          else if (part == 3) { col = vec3(0.06, 0.05, 0.08); }
+          else {
+            float sp = wa * 0.06 + h * 0.03 - uTime * (0.25 + 0.5 * uPulse);
+            float band = floor(sp * 6.0);
+            vec3 rb = 0.5 + 0.5 * cos(6.2832 * (band / 6.0 + vec3(0.0, 0.33, 0.67)));
+            col = mix(rb * 0.9 + 0.08, vec3(1.0), 0.15 * aaSq(sp * 12.0));
+            col *= 0.85 + 0.35 * uPulse;
+            if (h < 5.0) col = vec3(0.98, 0.96, 0.97);
+          }
+        } else {
+          // the mixing hall: tall riveted steel in pale mint, great arched windows on the night,
+          // a catwalk round it; steel plate underfoot with its safety lines
+          if (part == 0) { vec2 q = vec2(x, along) * 0.8; vec2 f = fract(q) - 0.5; float d = step(abs(f.x + f.y), 0.12) * step(abs(f.x - f.y), 0.6); col = vec3(0.3, 0.32, 0.34) * (0.85 + 0.25 * d); col = mix(col, vec3(0.95, 0.75, 0.1), step(abs(abs(x) - 34.0), 0.6)); }
+          else if (part == 3) { float sf = fract(along / 24.0); col = mix(vec3(0.1, 0.1, 0.12), vec3(0.2, 0.22, 0.24), step(abs(sf - 0.5), 0.05)); }
+          else {
+            vec2 pq = vec2(wa / 5.0, h / 3.0);
+            col = vec3(0.3, 0.4, 0.38) * (0.85 + 0.15 * h2(floor(pq))) * (0.85 + 0.15 * edge(fract(pq), 0.03));
+            float wx = mod(wa, 22.0) - 11.0;
+            float arch = h > 46.0 ? length(vec2(wx, h - 46.0)) - 8.0 : abs(wx) - 8.0;
+            if (part != 6 && h > 18.0 && arch < 0.0) {
+              vec3 night = mix(uSkyLow, uSkyTop, clamp((h - 18.0) / 36.0, 0.0, 1.0));
+              float mull = clamp(step(abs(wx), 0.3) + step(abs(mod(h, 6.0) - 3.0), 0.22), 0.0, 1.0);
+              col = mix(night, vec3(0.22, 0.26, 0.26), mull);
+            }
+            col = mix(col, vec3(0.12, 0.13, 0.15), step(abs(h - 16.0), 0.9));
+            col = mix(col, vec3(0.95, 0.75, 0.1), step(abs(h - 17.4), 0.2));
+            if (h < 3.0) col = mix(vec3(0.06), vec3(0.95, 0.75, 0.1), aaSq((wa + h) / 3.0));
+          }
         }
         if (part != 7) col *= lightK * uLight;
+        // the chorus: the walls breathe with the beat
+        if (onWall && part != 7) col *= 1.0 + 0.22 * uPulse;
         // the power gone: dark but for an amber light going round
         if (uDark > 0.001 && part != 7) {
           float sweep = pow(max(0.0, sin(wa * 0.11 - uTime * 3.5)), 8.0) * (onWall ? 1.0 : 0.35);
@@ -615,38 +693,8 @@ function candyMaterial() {
   });
 }
 
-// ---------- the end: the boombox on the stoop, still playing ----------
-export class BoomboxFinale {
-  constructor(scene, course, P, cfg, scenery) {
-    this.course = course; this.cfg = cfg; this.S = scenery; this.P = P;
-    this.t = cfg.t; this.x = cfg.x ?? -24;
-    prepare(course, scenery.plan);
-    this.group = new THREE.Group(); scene.add(this.group);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.3, emissive: 0x0e0e12 });
-    this.stoop = new THREE.Mesh(CG.stoop(), mat); this.group.add(this.stoop);
-    this.box = new THREE.Group(); this.box.position.set(0, 8.8, -6); this.group.add(this.box);
-    this.box.add(new THREE.Mesh(CG.boombox(), mat));
-    const coneM = new THREE.MeshStandardMaterial({ color: 0x1a1a20, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
-    this.cones = [-7, 7].map((x) => { const c = new THREE.Mesh(CG.cone(), coneM); c.position.set(x, 5.5, 3.6); this.box.add(c); return c; });
-    this.deck = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 3.0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff6ac8).multiplyScalar(1.4) }));
-    this.deck.position.set(0, 6.6, 3.3); this.box.add(this.deck);
-    this.fired = false; this.lit = 0.5; this._p = new THREE.Vector3(); this._w = new THREE.Vector3();
-  }
-  fire() { this.fired = true; }
-  update(track, rider, songT, dt) {
-    track.ground(this.t, this.x, this._p); this._p.y = groundAt(this.course, this.t, this.x);
-    this.group.position.copy(this._p);
-    this.group.rotation.set(0, this.course.sample(this.t).yaw + (this.x > 0 ? Math.PI / 2 : -Math.PI / 2), 0);
-    const b = this.course.beatAt(songT), pulse = Math.exp(-(b - Math.floor(b)) * 6);
-    for (const c of this.cones) c.scale.set(1 + 0.08 * pulse, 1 + 0.08 * pulse, 1 + 0.9 * pulse);
-    this.lit += ((this.fired ? 1.2 : 0.6) - this.lit) * Math.min(1, dt * 2);
-    const S = this.S; if (!S || this.t - rider.t > 46) return;
-    this.group.updateMatrixWorld(true);
-    this._w.set(0, 15, -3).applyMatrix4(this.group.matrixWorld);
-    S.glow(this._w.x, this._w.y, this._w.z, 16, [1, 0.45, 0.8], (0.4 + 0.5 * pulse) * this.lit);
-    S.pool(this._w.x, this._p.y + 0.1, this._w.z, 30, [1, 0.5, 0.8], 0.4 * this.lit);
-  }
-}
+// ---------- the end: the candy truck tipped on your block, the boombox on its load (cdy-block.js) ----------
+export { UnloadedFinale as BoomboxFinale } from './cdy-block.js';
 
 // ---------- the factory, per frame ----------
 export class CandyWorld {
@@ -658,8 +706,11 @@ export class CandyWorld {
     const c = S.course;
     if (S.town) { S.town.floorFn = (t, x) => groundAt(c, t, x); for (const r of S.town.roadMeshes) r.floorFn = S.town.floorFn; }
     this.dark = 0;
+    // the sugar rush: the cannons, the curtains, the hoppers, the candy canes (cdy-rush.js)
+    this.rush = new CdyRush(scene, S, S.plan.cdyRush || {});
   }
   update(S, dt, camera, time) {
+    this.rush.update(S, dt, camera, time);
     const u = this.mat.uniforms, P = S.P, t = S.rider.t, ev = S.plan.roomEvents || {};
     u.uTime.value = time; u.uCam.value.copy(camera.position); u.uBeat.value = S.town.beat || 0;
     u.uFog.value.set(P.fog); u.uFogDensity.value = P.fogDensity;
@@ -671,19 +722,31 @@ export class CandyWorld {
     // the power trips: a flicker, then dark
     let dark = win(ev.dark); if (dark > 0 && dark < 1) dark = dark * (Math.sin(time * 47) > 0 ? 1 : 0.4);
     this.dark = dark; u.uDark.value = dark; S.town.dark = dark;
+    u.uPulse.value = (S.lift ? S.lift.k : 0) * (S.town.beat || 0);
+    // the walk-ups' windows: the beat and its phase for the dancers, the party in the drop
+    const fl = S.town._layers.cdyFacade;
+    if (fl) {
+      const fu = fl.mesh.material.uniforms, b = S.course.beatAt(Math.max(t, 0));
+      fu.uBeat.value = S.town.beat || 0; fu.uPhase.value = (b % 2) / 2; fu.uParity.value = Math.floor(b) % 2; fu.uTime.value = time;
+      fu.uParty.value = S.town.party || 0; fu.uWin.value = P.windowK ?? 1.6;
+      fu.uWarm.value.set(P.window ?? 0xffc890); fu.uAlt.value.set(P.windowAlt ?? 0xff9ad8);
+      fu.uFog.value.set(P.fog); fu.uFogDensity.value = P.fogDensity ?? 0.002; fu.uCam.value.copy(camera.position);
+    }
     S.town.party = win(ev.party);
     for (const r of this.rooms) r.update(S.track, S.rider, t);
   }
   // the lights that hang in each room
   draw(T) {
+    this.rush.draw(T);
     const g = this._g || (this._g = new THREE.Vector3()), lamp = col(this.S.P.lamp ?? 0xfff0f8), k = 1 - this.dark;
     if (k < 0.02) return;
     for (const r of this.rooms) {
       if (!r.mesh.visible) continue;
       for (const f of r.fixtures) {
         const fy = floorAt(this.S.course, f.t);
-        const xs = r.style === 1 ? [-22, 22] : r.style === 3 ? [0] : [-14, 14];
-        for (const x of xs) { this.S.track.ground(f.t, x, g); T.glow(g.x, fy + r.H - (r.style === 1 ? 8 : 4), g.z, r.style === 3 ? 12 : 10, lamp, 0.75 * k); }
+        const xs = r.style === 1 ? [-22, 22] : r.style === 3 ? [0] : r.style === 7 ? [-30, 30] : r.style === 6 ? [-20, 0, 20] : r.style === 5 ? [-18, 18] : [-14, 14];
+        const drop = r.style === 1 ? 8 : r.style === 7 ? 14 : 4;
+        for (const x of xs) { this.S.track.ground(f.t, x, g); T.glow(g.x, fy + r.H - drop, g.z, r.style === 3 ? 12 : r.style === 7 ? 16 : 10, lamp, 0.75 * k); }
         if (r.style !== 2) { this.S.track.ground(f.t, 0, g); T.pool(g.x, fy + 0.08, g.z, r.style === 1 ? 60 : 40, lamp, 0.3 * k); }
       }
     }

@@ -82,16 +82,16 @@ export class ChaseCam {
     if (orbit && orbit.k > 0) {
       const k = orbit.k * orbit.k * (3 - 2 * orbit.k);
       const rr = orbit.r ?? 14, hh = orbit.h ?? 2.6;
-      const o = new THREE.Vector3(orbit.center.x + Math.cos(orbit.angle) * rr, orbit.center.y + hh, orbit.center.z + Math.sin(orbit.angle) * rr);
+      const o = orbit.pos ? orbit.pos.clone() : new THREE.Vector3(orbit.center.x + Math.cos(orbit.angle) * rr, orbit.center.y + hh, orbit.center.z + Math.sin(orbit.angle) * rr);
       this.cam.position.lerp(o, k);
       const look = this._b.lerp(orbit.look || orbit.center, k);
       this.cam.lookAt(look);
       this.cam.rotateZ(this.roll * (1 - k));
     }
-    const fovT = 58 + 20 * sp + this.kick * 6 + (rider.grounded ? 0 : 2);
+    const fovT = 58 + 20 * sp + this.kick * 6 + (rider.grounded ? 0 : 2) + (this.liftFov || 0);
     this.fov += (fovT - this.fov) * Math.min(1, dt * 3);
     this.cam.fov = this.fov * (1 - titleK) + 46 * titleK;
-    if (orbit && orbit.k > 0) this.cam.fov = this.cam.fov + (42 - this.cam.fov) * orbit.k;
+    if (orbit && orbit.k > 0) this.cam.fov = this.cam.fov + ((orbit.fov ?? 42) - this.cam.fov) * orbit.k;
     this.cam.updateProjectionMatrix();
     this.dip *= Math.exp(-dt * 6);
     this.kick *= Math.exp(-dt * 3);

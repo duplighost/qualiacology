@@ -104,7 +104,8 @@ export class Wreck {
     mk(this.paints[1], true);
     // two police coupes at angles, doors-open feel
     this.cops = [];
-    for (const [px, pz, r] of [[-9.5, 4.5, 2.3], [10.5, -5.5, -0.9]]) {
+    this.copSpots = this.cfg.onRibbon ? [[-4.2, 13, 2.6], [4.6, 15.5, -0.5]] : [[-9.5, 4.5, 2.3], [10.5, -5.5, -0.9]];
+    for (const [px, pz, r] of this.copSpots) {
       const before = this.cars.length;
       mk(0x111116, false);
       const holder = this.body.children[this.body.children.length - 1];
@@ -126,6 +127,9 @@ export class Wreck {
 
   update(track, rider, songT, dt, fireworks) {
     const p = track.ground(this.t, this.x, this._p || (this._p = new THREE.Vector3()));
+    // on her road itself (the middle of the highway), or on the ground the world gives it
+    if (this.cfg.onRibbon) p.y = this.course.sample(this.t).y + 0.02;
+    else if (this.groundFn) p.y = this.groundFn(this.t, this.x);
     const yaw = this.course.sample(this.t).yaw;
     this.group.position.copy(p);
     this.group.rotation.y = yaw + 0.35;
@@ -152,16 +156,19 @@ export class Wreck {
         const w = at(x, 0.75, z); S.glow(w[0], w[1], w[2], 1.4, [1, 0.55, 0.12], 2.2 * blink);
       }
       if (this.lit > 0.2) for (const z of [-0.55, 0.55]) for (const x of [-0.6, 0.6]) { const w = at(x, 0.7, z); S.glow(w[0], w[1], w[2], 3.2 * this.lit, [1, 0.95, 0.85], 2.5 * this.lit); }
-      for (let k = 0; k < 14; k++) {
-        const a = (k / 13 - 0.5) * 2.6, r = 9 + (k % 2) * 1.5;
-        const w = at(Math.sin(a) * r, 0.25, Math.cos(a) * r * 0.8 - 2);
+      // the road flares laid out round them in a heart, its point toward where she comes from
+      for (let k = 0; k < 30; k++) {
+        const u = (k / 30) * Math.PI * 2;
+        const hx = 16 * Math.pow(Math.sin(u), 3), hy = 13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u);
+        const hk = this.cfg.onRibbon ? 0.42 : 0.62;
+        const w = at(hx * hk, 0.25, hy * hk + 1.5);
         const fl = 0.7 + 0.3 * Math.sin(songT * 23 + k * 7.1);
-        S.glow(w[0], w[1], w[2], 1.6, [1, 0.12, 0.08], (0.8 + 1.6 * this.lit) * fl);
-        S.pool(w[0], p.y + 0.06, w[2], 5, [1, 0.15, 0.1], 0.5 + 0.6 * this.lit);
+        S.glow(w[0], w[1], w[2], 1.5, [1, 0.12, 0.08], (0.9 + 1.6 * this.lit) * fl);
+        S.pool(w[0], p.y + 0.06, w[2], 4.5, [1, 0.15, 0.1], 0.5 + 0.6 * this.lit);
       }
       S.pool(p.x, p.y + 0.07, p.z, 26, [1, 0.6, 0.25], (0.25 + 0.6 * this.lit) * (0.6 + 0.4 * blink));
       // police light bars on the two black-and-whites
-      for (const [lx, lz, r] of [[-9.5, 4.5, 2.3], [10.5, -5.5, -0.9]]) {
+      for (const [lx, lz, r] of this.copSpots) {
         const w = at(lx, 0, lz);
         const a = at(lx - Math.cos(r) * 0.45, 1.35, lz + Math.sin(r) * 0.45), b = at(lx + Math.cos(r) * 0.45, 1.35, lz - Math.sin(r) * 0.45);
         S.glow(a[0], a[1], a[2], 2.6, [1, 0.05, 0.08], 2.6, 2); S.glow(b[0], b[1], b[2], 2.6, [0.1, 0.25, 1], 2.6, 3);

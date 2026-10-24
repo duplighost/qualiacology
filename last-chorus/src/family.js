@@ -1,6 +1,6 @@
 // I FUCKED YOUR DAD. The family's year in their suburb, told back to him. The street at night and the
 // phone left unlocked; the supermarket: the frozen-foods aisle, a coffee, the cart, the scales; the
-// match struck, and the fire; his dad's driveway: the mug, the grill, the podium, the car; the
+// match struck, and the fire; his dad's driveway: the mug, the grill, the podium; the
 // sprinklers, the apple rotting on the branch; Christmas and a single click; the trophy; the helix,
 // same genetics; Thanksgiving, Father's Day, the table with the empty chair and the flames under the
 // dishes, the yard in the rain, the letters on the hill; revenge served cold; and at the end the

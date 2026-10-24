@@ -66,12 +66,62 @@ export class Course {
     this.hold = new Float32Array(n);    // inside a hold zone (crest to valley): 0..1 how far down; -1 outside
     this.turn = new Float32Array(n).fill(1);   // how much the road may turn here (a section's turn, default 1)
     this.rand = mulberry32(hashStr(chart.id || chart.title || 'x'));
+    this.gaps = []; this.rails = []; this.gapMask = null;
     this._beats();
     this._sections();
     this._profile();
     this._heading();
+    this._gapsBuild();
+    this._railsBuild();
     this._features();
   }
+
+  // ---------- gaps: where a launch's road breaks ----------
+  // Everyone leaves the lip at the same song time with the same upward speed (the kicker's),
+  // and nobody can dive over the hole, so where the flight comes down is known here. The hole
+  // runs from just past the lip to a little before that; the road is back in time to land on.
+  _gapsBuild() {
+    const s = {};
+    for (const g of this._gapLips || []) {
+      // fly it the way the rider does: off the lip at the surface's speed, skimming the
+      // rounded lip for a moment, then the first time the ground comes back up to meet her
+      let y = this.sample(g.lip, s).y, vy = s.vy, land = g.end;
+      const dt = 1 / 240;
+      for (let tt = dt; tt < 4; tt += dt) {
+        y += vy * dt - 0.5 * G * dt * dt; vy -= G * dt;
+        const ys = this.sample(g.lip + tt, s).y;
+        if (y <= ys) { if (tt < 0.35) { y = ys; vy = Math.max(vy, s.vy); continue; } land = g.lip + tt; break; }
+      }
+      const from = g.lip + 0.05, to = land - (g.sec.gapLand ?? 0.3);
+      if (to - from > 0.3) this.gaps.push({ lip: g.lip, from, to, land, kind: g.sec.gap === true ? 'gap' : g.sec.gap });
+    }
+    this.gapMask = new Uint8Array(this.n);
+    for (const g of this.gaps) {
+      const i0 = Math.max(0, Math.ceil((g.from - this.t0) * RATE)), i1 = Math.min(this.n - 1, Math.floor((g.to - this.t0) * RATE));
+      for (let i = i0; i <= i1; i++) this.gapMask[i] = 1;
+    }
+  }
+  // the gap whose hole is under song time t, if any
+  gapAt(t) {
+    if (!this.gaps.length) return null;
+    const i = Math.round((t - this.t0) * RATE);
+    if (i < 0 || i >= this.n || !this.gapMask[i]) return null;
+    for (const g of this.gaps) if (t >= g.from - 0.01 && t <= g.to + 0.01) return g;
+    return null;
+  }
+  // a gap's lip crossed between song times a and b
+  lipBetween(a, b) { for (const g of this.gaps) if (g.lip > a && g.lip <= b) return g; return null; }
+
+  // ---------- rails along the ribbon ----------
+  // set per song: { t (song seconds, snapped to the beat), bars or beats, x across, h above }
+  _railsBuild() {
+    for (const r of this.chart.rails || []) {
+      const b0 = this.nearestBeatIndex(r.t), b1 = Math.min(this.beats.length - 1, b0 + (r.beats ?? 4 * (r.bars ?? 2)));
+      this.rails.push({ t0: this.beats[b0], t1: this.beats[b1], b0, b1, x: r.x ?? 0, h: r.h ?? 0.55 });
+    }
+    this.rails.sort((a, b) => a.t0 - b.t0);
+  }
+  railAt(t) { for (const r of this.rails) if (t >= r.t0 && t <= r.t1) return r; return null; }
 
   // beat grid extended before 0 and past the end so every second has beats
   _beats() {
@@ -119,6 +169,7 @@ export class Course {
   // ---------- vertical profile ----------
   _profile() {
     const pieces = [];
+    this._gapLips = [];
     let y = this.chart.startY ?? 15, s = -1.0;   // start above the rooftops, already rolling downhill
     const H_MIN = 3.5, H_MAX = 58;
     const secs = this.sections;
@@ -141,6 +192,7 @@ export class Course {
         const u = s;                       // leave the lip with the kicker's slope
         const k = 1 + (sec.lift ?? 0.012); // surface falls a hair faster than you: a float, not a gap
         const y0 = y;
+        if (sec.gap) this._gapLips.push({ lip: ta, end: tb, sec });
         pieces.push({ ta, tb, kind: sec.kind, turn: sec.turn, f: (t) => { const tt = t - ta; return y0 + u * tt - 0.5 * G * k * tt * tt; } });
         y = y0 + u * L - 0.5 * G * k * L * L;
         s = u - G * k * L;
@@ -336,6 +388,11 @@ export class Course {
       for (let i = sec.b + 2; i < sec.e - 1; i += every) {
         const t = this.beats[i];
         if (t < 1 || t > this.duration - 1) continue;
+        // nothing to pick up over a hole
+        if (this.gapAt(t) || this.gapAt(t - 0.15)) continue;
+        // along a rail they run down the rail, every beat
+        const rail = this.railAt(t);
+        if (rail) { notes.push({ t, x: rail.x, beat: i, degree: deg, bar: this.isBar(i), got: false, rail: true }); continue; }
         // strings of 7 beats, rests between, weaving across the ribbon
         const k = i - sec.b;
         if ((k % 12) >= 8) continue;
@@ -345,6 +402,16 @@ export class Course {
         notes.push({ t, x, beat: i, degree: deg, bar: this.isBar(i), got: false });
       }
     }
+    // every rail carries a line of them, one a beat, whatever part of the song it's in
+    for (const r of this.rails) {
+      for (let i = r.b0 + 1; i < r.b1; i++) {
+        if (notes.some((n) => n.beat === i)) continue;
+        const t = this.beats[i];
+        if (t < 1 || t > this.duration - 1) continue;
+        notes.push({ t, x: r.x, beat: i, degree: i % 7, bar: this.isBar(i), got: false, rail: true });
+      }
+    }
+    notes.sort((a, b) => a.t - b.t);
     this.notes = notes;
   }
 
@@ -357,6 +424,7 @@ export class Course {
     out.yaw = L(this.yaw); out.yawRate = L(this.yawRate);
     out.width = L(this.width); out.energy = L(this.energy);
     out.kind = this.kind[i]; out.press = this.press[i];
+    out.gap = this.gapMask ? this.gapMask[i] : 0;
     const h0 = this.hold[i], h1 = this.hold[i + 1];
     out.hold = h0 >= 0 && h1 >= 0 ? h0 + (h1 - h0) * a : (a < 0.5 ? h0 : h1);
     return out;

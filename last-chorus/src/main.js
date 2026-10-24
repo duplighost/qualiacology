@@ -1,7 +1,8 @@
 import * as THREE from 'three';
+import './three-fix.js';   // (first: every material's shader keyed by what it really is)
 import { Sound } from './audio.js';
 import { Course, G } from './course.js';
-import { Rider, autoPress } from './rider.js';
+import { Rider, autoPress, autoSteer, parScore } from './rider.js';
 import { Track } from './track.js';
 import { makeSky, makeGround, makeSkyline } from './world.js';
 import { Scenery } from './scenery.js';
@@ -12,7 +13,7 @@ import { Sparks, Streaks, Trail, Fireworks, Weather } from './fx.js';
 import { Notes, Rings } from './feedback.js';
 import { Look, applyLook } from './look.js';
 import { Wreck } from './setpieces.js';
-import { Land, oceanMaterial, Train, FerrisWheel } from './beach.js';
+import { Land, oceanMaterial, Train, FerrisWheel, BeachWorld } from './beach.js';
 import { HeartStage, Confetti, Vehicles, partyFrame } from './party.js';
 import { TrailWorld, HomeFinale } from './trail.js';
 import { CinemaWorld, ScreenFinale } from './cinema.js';
@@ -21,6 +22,7 @@ import { SundayWorld, TownLineFinale } from './sunday.js';
 import { SummerWorld, LampFinale } from './summer.js';
 import { HouseWorld, PortraitFinale } from './mansion.js';
 import { FuneralWorld, WeddingFinale } from './funeral.js';
+import { CrashWorld } from './crash.js';
 import { ClubWorld, BusStopFinale } from './club.js';
 import { SchoolWorld, CrownFinale } from './school.js';
 import { CandyWorld, BoomboxFinale } from './candy.js';
@@ -41,6 +43,14 @@ import { EstateWorld, GlassHouseFinale } from './estate.js';
 import { Hud } from './hud.js';
 import { Input } from './input.js';
 import { Screens } from './menu.js';
+import { Gates } from './gates.js';
+import { Rails } from './rails.js';
+import { Lift } from './lift.js';
+import { mountBoard, BOARDS } from './hoverboard.js';
+import { SKATERS } from './skaters.js';
+import { gradeOf } from './score.js';
+import { progress, levelNeed } from './progress.js';
+import { Kit } from './kit.js';
 import { ALBUM, PALETTES } from './album.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -52,9 +62,11 @@ renderer.toneMapping = THREE.NoToneMapping;
 renderer.setPixelRatio(1);
 const post = new Post(renderer);
 const sound = new Sound();
+const kit = new Kit(sound);
 const input = new Input(canvas);
 const hud = new Hud();
 const ui = new Screens();
+ui.sfx = (kind, i) => sound.ui(kind, i);
 const camera = new THREE.PerspectiveCamera(64, 1, 0.4, 9000);
 const chase = new ChaseCam(camera);
 
@@ -100,14 +112,14 @@ async function loadSong(index, onProgress = () => {}) {
 
 // ---------- the album: pick a song; then a loading card; then the start line ----------
 let menuSel = 0;
-function card(i) { const e = ALBUM[i]; return { title: e.title, accent: e.accent || '#ff4f9a', image: `assets/menu/${e.id}.jpg`, best: bestOf(e.id), inTime: pctOf(e.id) }; }
+function card(i) { const e = ALBUM[i]; const p = progress.song(e.id); return { title: e.title, accent: e.accent || '#ff4f9a', image: `assets/menu/${e.id}.jpg`, best: p ? p.best : 0, grade: p ? p.grade : null }; }
 function openMenu(sel = menuSel) {
   if (S) { sound.stop(); sound.charge(false); sound.siren(0); sound.skid(0); }
   paused = false; ui.hidePause(); ui.hideEnd();
   state = 'menu';
   document.body.classList.remove('riding');
   hud.hideAll();
-  ui.showMenu(ALBUM.map((_, i) => card(i)), sel, (i) => { menuSel = i; sound.resume(); chooseSong(i); });
+  ui.showMenu(ALBUM.map((_, i) => card(i)), sel, (i) => { menuSel = i; sound.resume(); chooseSong(i); }, ME);
 }
 async function chooseSong(i) {
   if (state === 'loading') return;
@@ -119,6 +131,23 @@ async function chooseSong(i) {
   state = 'title';
   showTitle();
 }
+// you, for the song list: your level, the bar to the next, your riders and boards; a new one
+// costs a level's pick
+const ME = {
+  get() {
+    const p = progress.get();
+    return { level: p.level, xpFrac: p.xp / levelNeed(p.level), picks: p.picks, board: p.board, rider: p.rider,
+      riders: SKATERS.map((r) => ({ id: r.id, name: r.name, color: r.color, kind: 'rider', owned: p.ridersOwned.includes(r.id), image: `assets/riders/${r.id}.jpg` })),
+      boards: BOARDS.map((b) => ({ ...b, kind: 'board', owned: p.owned.includes(b.id), image: b.id === 'classic' ? null : `assets/boards/${b.id}.jpg` })) };
+  },
+  pick(kind, id) {
+    const p = progress.get();
+    const owned = kind === 'rider' ? p.ridersOwned : p.owned;
+    if (owned.includes(id)) { progress.choose(kind, id); kit.tick(1.5); return 'chosen'; }
+    if (p.picks > 0 && progress.unlock(kind, id)) { kit.levelUp(); return 'unlocked'; }
+    return false;
+  },
+};
 function pctOf(id) { try { return +localStorage.getItem('lc-pct-' + id) || 0; } catch (e) { return 0; } }
 
 function bestOf(id) { try { return +localStorage.getItem('lc-best-' + id) || 0; } catch (e) { return 0; } }
@@ -158,7 +187,9 @@ function build(S) {
   skyline.material.uniforms.uStyle.value = S.entry.skyline === 'hills' ? 1 : 0;
   ground.material.uniforms.uStyle && (ground.material.uniforms.uStyle.value = S.entry.groundStyle === 'country' ? 1 : 0);
   const town = new Scenery(scene, course, P, S.entry.scenery, 11);
-  const view = new RiderView(scene, P);
+  const view = new RiderView(scene, P, SKATERS.find((s) => s.id === (params.get('rider') || progress.get().rider)));
+  // the board she's chosen (?board= to try one)
+  const hoverboard = mountBoard(view, scene, params.get('board') || progress.get().board);
   const notes = new Notes(scene, course, P, S.entry.collect);
   hud.setCollect(S.entry.collect);
   const rings = new Rings(scene);
@@ -173,7 +204,7 @@ function build(S) {
   const confetti = S.entry.confetti ? new Confetti(scene, S.entry.confettiColors || [P.heart ?? P.glow, P.edge, P.fret, 0xffffff, P.windowAlt, 0x5ff2ff], 1100, { normal: S.entry.confettiNormal }) : null;
   const trains = plan.trains ? new Train(course, plan.trains.x, plan.trains.passes) : null;
   town.track = track;
-  const WORLDS = { trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld, funeral: FuneralWorld, club: ClubWorld, school: SchoolWorld, candy: CandyWorld, court: CourtWorld, shop: ShopWorld, smarthome: SmartWorld, venue: VenueWorld, launch: LaunchWorld, hotel: HotelWorld, library: LibraryWorld, ice: IceWorld, family: FamilyWorld, guest: GuestWorld, glam: GlamWorld, selfie: SelfieWorld, foundry: FoundryWorld, estate: EstateWorld };
+  const WORLDS = { crash: CrashWorld, beach: BeachWorld, trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld, funeral: FuneralWorld, club: ClubWorld, school: SchoolWorld, candy: CandyWorld, court: CourtWorld, shop: ShopWorld, smarthome: SmartWorld, venue: VenueWorld, launch: LaunchWorld, hotel: HotelWorld, library: LibraryWorld, ice: IceWorld, family: FamilyWorld, guest: GuestWorld, glam: GlamWorld, selfie: SelfieWorld, foundry: FoundryWorld, estate: EstateWorld };
   const world = WORLDS[S.entry.world] ? new WORLDS[S.entry.world](scene, { course, plan, P, track, rider, town }) : null;
   const hemi = new THREE.HemisphereLight(new THREE.Color(P.skyLight ?? 0x6a5a9a), new THREE.Color(P.bounce ?? 0x5a3a2a), P.hemiK ?? 1.9);
   scene.add(hemi);
@@ -187,10 +218,26 @@ function build(S) {
   fill.position.set(...P.glowDir).multiplyScalar(100);
   scene.add(fill);
   sound.setKey(S.chart.keyRoot, S.chart.keyMode === 'min');
-  Object.assign(S, { world, momentsDone: new Set(), land, trains, P, look, hemi, moonLight, fillLight, weather, scene, course, rider, track, sky, ground, skyline, town, view, notes, rings, sparks, streaks, trail, fireworks, finale, plan, vehicles, confetti, hit: 0, pressGlow: 0, gems: 0, firedChorus: new Set(), pulse: 0, flash: 0, mixFlow: 0.42, muffle: 0, endT: null,
-    heartBeat: 0, heartLast: -1, heartDir: null, spikes: [], burstAt: new Set(), afterBeatT: 0, black: null });
+  kit.setSong(course.beats, course.beatEnergy, S.entry.kit || {});
+  const gates = new Gates(scene, course, P, S.entry);
+  const rails = new Rails(scene, course, P);
+  const lift = new Lift(scene, course, P, S.entry);
+  Object.assign(S, { world, sound, momentsDone: new Set(), land, trains, P, look, hemi, moonLight, fillLight, weather, scene, course, rider, track, sky, ground, skyline, town, view, notes, rings, sparks, streaks, trail, fireworks, finale, plan, vehicles, confetti, gates, rails, lift, hoverboard, hit: 0, pressGlow: 0, gems: 0, firedChorus: new Set(), pulse: 0, flash: 0, mixFlow: 0.42, muffle: 0, endT: null,
+    heartBeat: 0, heartLast: -1, heartDir: null, spikes: [], burstAt: new Set(), afterBeatT: 0, black: null, pyro: 0,
+    countIn: null, went: false, crossed: false, resume: null, wdT: null, wdAt: 0, anchorAt: 0 });
   applyLook(S, look.at(0));
-  rider.reset(0, 22);
+  // the count-in: the four beats of the song's own grid before it starts. She waits on the
+  // title a little before the start line and rolls up to it on them.
+  // A quick song counts two bars, "one ... two ... one two three four"; a slower one, one bar.
+  const cb = course.beats; let k0 = 0; while (k0 < cb.length && cb[k0] < -0.02) k0++;
+  const fast = (S.chart.bpm || 120) >= 140, nb = fast ? 8 : 4;
+  const inBeats = []; for (let j = nb; j >= 1; j--) if (k0 - j >= 0 && cb[k0 - j] > course.t0 + 0.35) inBeats.push(cb[k0 - j]);
+  S.sticks = fast && inBeats.length === 8 ? [0, 2, 4, 5, 6, 7].map((i) => inBeats[i]) : inBeats;
+  S.stickAccent = fast && inBeats.length === 8 ? [true, false, true, false, false, false] : inBeats.map((_, i) => i === 0);
+  S.lampAt = fast && inBeats.length === 8 ? [inBeats[0], inBeats[2], inBeats[4], inBeats[6]] : inBeats;
+  S.startFrom = (inBeats[0] ?? -1.4) - 0.3;
+  const tq = parseFloat(params.get('t') || '0');
+  rider.reset(tq > 0 ? tq : S.startFrom, 22);
   chase.first = true;
   chase.lift0 = S.entry.camLift || 0;
   chase.titleView = S.entry.titleView || null;
@@ -202,16 +249,34 @@ function build(S) {
 // build the ride and wait until everything it will draw is loaded and compiled
 async function prepare(S) {
   build(S);
+  S.par = parScore(S.course);
+  S.rider.reset(S.rider.t, S.rider.v);
   await Promise.all([S.view.ready, S.finale && S.finale.ready].filter(Boolean));
   await precompile(S);
+  // a layer a place first wants mid-ride compiles in the background, hidden until it's ready,
+  // instead of the ride stopping while it compiles (it shows a moment late, far up the road)
+  if (S.town && renderer.compileAsync) S.town.onLate = (mesh) => {
+    mesh.visible = false;
+    const show = () => { mesh.visible = true; };
+    renderer.compileAsync(mesh, camera, S.scene).then(show, show);
+  };
 }
 
 // compile every shader now, hidden things included, so nothing compiles mid-ride
 async function precompile(S) {
-  const hidden = [];
-  S.scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+  const hidden = [], culled = [], empty = [];
+  S.scene.traverse((o) => {
+    if (!o.visible) { hidden.push(o); o.visible = true; }
+    if (o.frustumCulled) { culled.push(o); o.frustumCulled = false; }
+    if (o.isInstancedMesh && o.count === 0) { empty.push(o); o.count = 1; }
+  });
   try { if (renderer.compileAsync) await renderer.compileAsync(S.scene, camera); else renderer.compile(S.scene, camera); } catch (e) { /* compile is a hint */ }
+  // and draw it all once, under the loading card: on Windows a shader's first real draw still
+  // stalls (the rings on the first pump, a bus coming into view, the snow starting)
+  try { post.render(S.scene, camera); } catch (e) { /* a warm-up only */ }
   for (const o of hidden) o.visible = false;
+  for (const o of culled) o.frustumCulled = true;
+  for (const o of empty) o.count = 0;
 }
 
 function startRide() {
@@ -220,8 +285,20 @@ function startRide() {
   document.body.classList.add('riding');
   sound.resume();
   const t0 = S.startAt || 0;
-  S.rider.reset(t0, t0 > 0 ? 38 : 22);
-  sound.play(S.buffer, t0);
+  if (t0 > 0) {
+    S.rider.reset(t0, 38);
+    sound.play(S.buffer, t0);
+    S.countIn = null; S.went = true;
+  } else {
+    // count her in: sticks on the four beats before the song, the gate's lamps one a beat,
+    // and the music comes in as she crosses the line
+    S.rider.reset(S.startFrom, 22);
+    sound.play(S.buffer, S.startFrom);
+    S.countIn = { lamps: S.lampAt.slice() };
+    S.sticks.forEach((b, i) => kit.stick(sound.t0 + b, S.stickAccent[i]));
+    S.went = false;
+  }
+  S.crossed = false; S.wdT = null; S.resume = null;
   hud.start(S.course);
   S.titleK = 1;
   S.pressHint = 0;
@@ -237,35 +314,65 @@ input.onKey = (e) => {
   if (e.code === 'Escape' && state === 'ride') togglePause();
   else if (e.code === 'Escape' && state === 'title') openMenu(S ? S.index : menuSel);
 };
-document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'ride' && !paused) togglePause(); });
+// Pausing stops the song where she is and puts the audio to sleep. Leaving the tab, the
+// window, or the audio going away on its own all pause. Resuming waits for the audio to
+// really run, starts the song again a couple of beats back with sticks on them, and she
+// goes on exactly where she was. If the audio won't come back the card stays up.
+// (the autopilot rides on regardless: it's how the headless tools watch a ride)
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'ride' && !paused && !autopilot.on) togglePause(); });
+window.addEventListener('blur', () => { if (state === 'ride' && !paused && !autopilot.on) togglePause(); });
+sound.ctx.addEventListener('statechange', () => { if (state === 'ride' && !paused && !S?.resume && sound.ctx.state !== 'running' && S?.went !== undefined && !autopilot.on) togglePause(); });
+function pauseButtons() {
+  return [
+    { label: 'Resume', key: 'esc', code: 'Escape', go: () => togglePause() },
+    { label: 'Start over', key: 'R', code: 'KeyR', go: () => { paused = false; ui.hidePause(); rideAgain(); } },
+    { label: 'All songs', key: 'M', code: 'KeyM', go: () => { paused = false; ui.hidePause(); openMenu(S.index); } },
+  ];
+}
 function togglePause() {
-  paused = !paused;
-  if (paused) {
-    sound.ctx.suspend();
-    ui.showPause([
-      { label: 'Resume', key: 'esc', code: 'Escape', go: () => togglePause() },
-      { label: 'Start over', key: 'R', code: 'KeyR', go: () => { togglePause(); rideAgain(); } },
-      { label: 'All songs', key: 'M', code: 'KeyM', go: () => { sound.ctx.resume(); openMenu(S.index); } },
-    ]);
-  } else { sound.ctx.resume(); ui.hidePause(); }
+  if (state !== 'ride' || !S) return;
+  if (!paused) {
+    paused = true;
+    S.resume = null;
+    sound.pause(S.rider.t);
+    sound.charge(false); sound.skid(0); sound.siren(0);
+    ui.showPause(pauseButtons());
+  } else {
+    paused = false;
+    ui.hidePause();
+    resumeRide();
+  }
   document.body.classList.toggle('riding', !paused && state === 'ride');
 }
+async function resumeRide() {
+  const r = S.rider, c = S.course, t = r.t;
+  // the lead: the beats just before where she stopped, a second or so of them
+  const bi = Math.floor(c.beatAt(t));
+  let n = 2; while (n < 4 && t - c.timeOfBeat(bi - n + 1) < 0.95) n++;
+  const sticks = []; for (let k = bi - n + 1; k <= bi; k++) sticks.push(c.timeOfBeat(k));
+  const from = sticks[0] - 0.12;
+  S.resume = { t, from, sticks, n: 0 };
+  const ok = await sound.wake();
+  if (paused || state !== 'ride' || !S.resume) return;
+  if (!ok) { S.resume = null; paused = true; sound.pause(t); ui.showPause(pauseButtons()); document.body.classList.remove('riding'); return; }
+  sound.play(S.buffer, from, 0.3);
+  sticks.forEach((b, i) => kit.stick(sound.t0 + b, i === 0));
+  S.resume.playing = true;
+  S.wdT = null;
+}
 function rideAgain() {
-  ui.hideEnd();
+  ui.hideEnd(); ui.hidePause(); paused = false;
   sound.skid(0);
-  state = 'loading'; sound.stop(); sound.charge(false);
-  prepare(S).then(() => { state = 'title'; showTitle(); startRide(); });
+  state = 'loading'; sound.stop(); sound.charge(false); sound.siren(0);
+  hud.hideAll();
+  ui.showLoading(card(S.index)); ui.setLoading(0.85);
+  prepare(S).then(() => { ui.hideLoading(); state = 'title'; showTitle(); startRide(); });
 }
 
 // ---------- the autopilot: rides like someone who knows the song ----------
 function autoInput(S) {
   const r = S.rider, c = S.course;
-  const s = c.sample(r.t + 0.03);
-  const press = autoPress(r, c);
-  // steer toward the next note
-  let steer = 0;
-  for (const n of c.notes) if (n.t > r.t + 0.05 && !n.got) { steer = n.x / Math.max(1, s.width - 1.0); break; }
-  return { press, steer: clamp(steer, -1, 1) };
+  return { press: autoPress(r, c), steer: autoSteer(r, c) };
 }
 
 // ---------- frame ----------
@@ -292,16 +399,20 @@ function frame(now) {
 
   if (state === 'ride' && !paused) {
     const songT = sound.time();
+    watchClock(S, songT);
     const inp = autopilot.on ? autoInput(S) : { press: input.press, steer: input.steer(dt) };
     if (!autopilot.on) {
       const nowMs = performance.now();
       inp.pressAt = songT - Math.max(0, nowMs - input.downAt) / 1000;
       inp.releaseAt = songT - Math.max(0, nowMs - input.upAt) / 1000;
     }
+    // back from a pause: she holds where she was until the song comes round to her
+    if (S.resume && S.resume.playing && songT >= S.resume.t) S.resume = null;
     // the music's over: the stop (song time slows with her from here)
     if (!rider.stopping && songT > course.duration + 0.05 && rider.grounded) beginStop(S);
     if (rider.stopping) stopFrame(S, dt);
     else rider.advance(Math.max(rider.t, songT), inp);
+    startAndFinish(S, songT);
     handleEvents(S, dt);
     if (songT > course.duration + 3.0 && state === 'ride') endSong();
   }
@@ -315,9 +426,28 @@ function frame(now) {
   const bf = bpos - Math.floor(bpos);
   const beatPulse = state === 'ride' ? Math.exp(-bf * 6) : 0;
   S.flash *= Math.exp(-dt * 5);
+  // the chorus lift: its first beat hits, and the whole thing opens up while it lasts
+  if (S.lift.update(S, dt, beatPulse, state === 'ride' && !paused)) {
+    const ec = new THREE.Color(S.entry.lift?.flash ?? P.edge);
+    S.flash = Math.max(S.flash, 0.32 * (S.entry.lift?.flashK ?? 1)); post.comp.uniforms.uFlashColor.value.copy(ec).lerp(new THREE.Color(1, 1, 1), 0.45); S.flashTint = 0.9;
+    S.rings.fire(ec.clone().multiplyScalar(2.4), 9, 0.7, 0.04);
+    S.rings.fire(new THREE.Color(1, 1, 1).multiplyScalar(1.6), 5, 0.5, 0.06, 0.08);
+    chase.impulse(0.35, 0.25, 1.6);
+    const bp = track.at(rider.t, rider.x, 0.6);
+    S.sparks.emit(bp, new THREE.Vector3(0, 3, 0), ec.clone().multiplyScalar(3), 90, { spread: 11, life: 0.9, size: 0.26, grav: 4, up: 1.4 });
+  }
+  const LK = S.lift.k, LB = S.lift.beat, LD = S.lift.drop;
+  chase.liftFov = 7 * LK + 6 * LD;
 
   track.update(rider);
-  const songNow = state === 'ride' ? sound.time() : rider.t;
+  const songNow = state === 'ride' && !paused ? Math.max(rider.t, sound.time()) : rider.t;
+  S.gates.update(track, rider, dt, beatPulse, time);
+  S.rails.update(track, rider, beatPulse);
+  if (rider.rail && state === 'ride' && Math.random() < dt * 30) {
+    const p = track.at(rider.t, rider.x, rider.rail.h + 0.05);
+    S.sparks.emit(p, track.dirAt(rider.t, new THREE.Vector3()).multiplyScalar(-rider.v * 0.3), new THREE.Color(1, 0.75, 0.45).multiplyScalar(2.6), 3, { spread: 2.5, life: 0.4, size: 0.12, grav: 12, up: 0.8 });
+  }
+  if (S.pyro > 0) pyroFrame(S, dt);
   const sec = course.sectionAt(rider.t);
   S.town.beatLamps = sec.kind === 'chorus' || sec.kind === 'final';
   if (S.entry.heart) heartFrame(S, dt, songNow);
@@ -332,8 +462,12 @@ function frame(now) {
   if (state === 'ride') { musicMoments(S, sec); songMoments(S); }
   if (S.world) S.world.update(S, dt, camera, time);
   S.fireworks.update(dt);
-  S.town.setFog(P.fog, P.fogDensity, camera.position);
-  S.notes.update(track, rider, time, view.board, camera);
+  // the lift pulls the fog back: you see further while it lasts
+  const fogD = P.fogDensity * (1 - (S.entry.lift?.fog ?? 0.32) * LK);
+  S.town.setFog(P.fog, fogD, camera.position);
+  S.track.mat.uniforms.uFogDensity.value = fogD;
+  if (!S.land && S.ground.material.uniforms.uFogDensity) S.ground.material.uniforms.uFogDensity.value = fogD;
+  S.notes.update(track, rider, time, view.board, camera, beatPulse);
   S.rings.update(track, rider, dt);
   // holding down a hill: the zone lights up under you and a soft rush rises
   const hs = course.sample(rider.t);
@@ -343,7 +477,9 @@ function frame(now) {
   S.hit *= Math.exp(-dt * 5);
   view.update(track, rider, dt, beatPulse);
   view.setTint(rider.flow);
-  S.trail.push(view.board, state === 'ride' ? clamp(0.15 + 0.85 * rider.flow, 0, 1) * clamp((rider.v - 15) / 30, 0.2, 1) : 0);
+  if (S.hoverboard) { S.trail.mesh.visible = false; S.hoverboard.update(dt, { speed: state === 'ride' || state === 'results' ? rider.v : 0, beat: beatPulse, boost: clamp(rider.flow * (state === 'ride' ? 1 : 0.3), 0, 1), airborne: !rider.grounded }); }
+  // (faint while she's turning a trick: the tail going round in circles drew knots in the air)
+  else S.trail.push(view.board, state === 'ride' ? clamp(0.15 + 0.85 * rider.flow, 0, 1) * clamp((rider.v - 15) / 30, 0.2, 1) * (view.trick ? 0.12 : 1) : 0);
   S.titleK = state === 'title' ? 1 : Math.max(0, (S.titleK || 0) - dt * 1.4);
   if (state === 'results' && S.finale) { S.outroK = Math.min(1, (S.outroK || 0) + dt / 2.2); S.orbitA = (S.orbitA ?? 2.2) + dt * 0.16; }
   const fo = (S.plan.finale && S.plan.finale.orbit) || {};
@@ -353,11 +489,19 @@ function frame(now) {
     const fp = S.finale.group.position, c0 = track.ground(S.finale.t - (fo.back ?? 2), 0, S._oc || (S._oc = new THREE.Vector3()));
     orbitAngle = Math.atan2(c0.z - fp.z, c0.x - fp.x) + (fo.swing ?? 0.45) * Math.sin((S.orbitA - 2.2) * 0.9);
   }
-  const orbit = S.finale && S.outroK ? { center: S.finale.group.position.clone().add(new THREE.Vector3(0, fo.y ?? 1.2, 0)), k: S.outroK, angle: orbitAngle, r: fo.r, h: fo.h } : null;
+  let orbit = S.finale && S.outroK ? { center: S.finale.group.position.clone().add(new THREE.Vector3(0, fo.y ?? 1.2, 0)), k: S.outroK, angle: orbitAngle, r: fo.r, h: fo.h } : null;
   // the end card sits on the left: look a little left of the place so it stands to the right of it
   if (orbit && fo.right) orbit.look = orbit.center.clone().add(new THREE.Vector3(-Math.sin(orbitAngle), 0, Math.cos(orbitAngle)).multiplyScalar(fo.right * (fo.r ?? 14)));
+  // unless a song says otherwise, the end is a shot of her: behind and off her shoulder, her
+  // arms up on the right of the frame and the place she rode to filling it past her
+  if (orbit && fo.hero !== false) orbit = heroShot(S, fo, orbit);
   if (state === 'results' && rider.stopping) stopFrame(S, dt);
   const tk = S.titleK * S.titleK * (3 - 2 * S.titleK);
+  // her key light: behind her while riding (the side the chase camera sees), round to the
+  // camera's side for the title, so she isn't a silhouette on the start line
+  view.key.position.set(0.9 - 4.2 * tk, 2.7 - 0.3 * tk, -2.4 + 3.4 * tk);
+  view.titleK = tk;
+  view.key.intensity = 9 + 5 * tk;
   const sk = S.stopK ? S.stopK * S.stopK * (3 - 2 * S.stopK) : 0;
   chase.titleView = sk > tk ? S.stopView : (S.entry.titleView || null);
   chase.update(track, rider, dt, Math.max(tk, sk), orbit);
@@ -374,7 +518,7 @@ function frame(now) {
   // fx
   const vel = S._vel || (S._vel = new THREE.Vector3());
   track.dirAt(rider.t, vel).multiplyScalar(rider.v);
-  S.streaks.update(camera, vel, rider.v, state === 'ride' ? clamp((rider.v - 22) / 50, 0, 1) * (0.5 + 0.5 * S.mixFlow) : 0);
+  S.streaks.update(camera, vel, rider.v, state === 'ride' ? clamp((rider.v - 22) / 50, 0, 1) * (0.5 + 0.5 * S.mixFlow) + 0.45 * LK : 0);
   if (state === 'ride' && rider.grounded && rider.flow > 0.55 && Math.random() < dt * 40 * rider.flow) {
     const p = track.at(rider.t, rider.x + (Math.random() - 0.5) * 0.8, 0.15);
     S.sparks.emit(p, vel.clone().multiplyScalar(0.55), new THREE.Color(P.edge).multiplyScalar(1.2), 1, { spread: 0.8, life: 0.5, size: 0.12, grav: 0, drag: 0.6 });
@@ -411,7 +555,8 @@ function frame(now) {
   pc.uTime.value = time;
   pc.uSpeed.value = state === 'ride' ? clamp((rider.v - 25) / 55, 0, 1) : 0;
   pc.uAberr.value = 0.15 + 0.5 * pc.uSpeed.value;
-  pc.uSat.value = 0.9 + 0.4 * S.mixFlow;
+  pc.uSat.value = 0.9 + 0.4 * S.mixFlow + 0.16 * LK;
+  pc.uVig.value = 0.55 - 0.18 * LK;
   S.hurt = (S.hurt || 0) * Math.exp(-dt * 0.9);
   pc.uDesat.value = Math.max(rider.wipe > 0 ? 0.5 : 0, 0.55 * S.hurt);
   S.flashTint = (S.flashTint || 0) * Math.exp(-dt * 3);
@@ -421,10 +566,11 @@ function frame(now) {
   pc.uDaze.value = state === 'ride' || state === 'results' ? (S.P.daze ?? 0) : 0;
   let black = 0;
   if (S.black) { const u = (rider.t - S.black.t0) / S.black.dur; black = u < 0 || u > 1 ? 0 : S.black.k * Math.min(1, u * 12, (1 - u) * 5); }
-  pc.uExposure.value = 1 - black;
-  pc.uBloom.value = 0.55 + 0.3 * S.mixFlow;
+  pc.uExposure.value = (1 - black) * (1 + 0.04 * LB + 0.03 * LK);
+  pc.uBloom.value = 0.55 + 0.3 * S.mixFlow + 0.18 * LK + 0.22 * LD;
   post.render(S.scene, camera);
   if (state === 'ride') {
+    hud.count(S.resume && !paused ? S.resume.sticks.filter((b) => b > sound.time() + 0.01).length : 0);
     hud.frame(rider, course);
     // the word for each pump sits just over her head
     const hp = S._hp || (S._hp = new THREE.Vector3());
@@ -457,26 +603,47 @@ function handleEvents(S, dt) {
       }
       case 'takeoff': {
         sound.whoosh(0.6 + clamp(e.vy / 10, 0, 0.6)); chase.impulse(0, 0, 0.4);
-        // on a run, she does something with the air: bigger the longer she'll be up
-        const T = airTimeAhead(rider, S.course);
-        if (rider.streak >= 3 && T > 0.5 && state === 'ride') {
-          const list = T > 1.3 ? [['flip', 1], ['spin', 2], ['roll', 1]] : T > 0.85 ? [['spin', 1], ['roll', 1], ['grab', 1]] : [['grab', 1], ['spin', 1]];
-          S.trickN = (S.trickN || 0) + 1;
-          const [kind, turns] = list[S.trickN % list.length];
-          view.startTrick(kind, T * (kind === 'grab' ? 0.9 : 0.78), turns);
-        }
+        // on a run, she does something with the air (the physics picked it: rider.js)
+        if (e.trick && state === 'ride') view.startTrick(e.trick.kind, e.trick.dur, e.trick.turns, e.trick.combo);
+        if (e.why === 'gap') { S.flash = Math.max(S.flash, 0.12); chase.impulse(0.2, 0, 1.2); }
+        break;
+      }
+      case 'trick': {
+        if (!e.landed) { view.bail = 1; break; }
+        // a trick landed clean: a flash of gold and a cymbal on the next eighth
+        const gold = new THREE.Color(1, 0.85, 0.45);
+        S.rings.fire(gold.clone().multiplyScalar(1.8), 4.5, 0.48, 0.05);
+        sparks.emit(track.at(rider.t, rider.x, 0.4), new THREE.Vector3(0, 3, 0), gold.multiplyScalar(3), 40, { spread: 8, life: 0.7, size: 0.2, grav: 4, up: 1.5 });
+        kit.trick(e.t, e.kind === 'flip' || e.combo ? 1 : 0.6); S.flash = Math.max(S.flash, 0.1);
+        hud.points(e.points, view.root, camera);
+        break;
+      }
+      case 'gap': {
+        // over the hole and down on the far side
+        S.rings.fire(new THREE.Color(S.P.edge).multiplyScalar(2.2), 7, 0.6, 0.05);
+        S.flash = Math.max(S.flash, 0.16);
+        hud.points(e.points, view.root, camera);
+        break;
+      }
+      case 'grindStart': {
+        sound.grind(true); S.grindK = 1;
+        sparks.emit(track.at(rider.t, rider.x, e.rail.h), new THREE.Vector3(0, 2, 0), new THREE.Color(1, 0.8, 0.5).multiplyScalar(3), 30, { spread: 5, life: 0.5, size: 0.16, grav: 9 });
+        break;
+      }
+      case 'grind': {
+        kit.grind(S.course.timeOfBeat(e.beat));
+        const p = track.at(rider.t, rider.x, (rider.rail ? rider.rail.h : 0.5));
+        sparks.emit(p, track.dirAt(rider.t, new THREE.Vector3()).multiplyScalar(-6), new THREE.Color(S.P.edge).multiplyScalar(3), 22, { spread: 3, life: 0.45, size: 0.14, grav: 10 });
+        break;
+      }
+      case 'grindEnd': {
+        sound.grind(false);
+        if (e.onBeat) { kit.pop(e.t); S.rings.fire(new THREE.Color(S.P.edge).multiplyScalar(1.8), 4, 0.42, 0.06); hud.points(e.points, view.root, camera); }
         break;
       }
       case 'land': {
-        sound.land(e.quality, e.hard);
-        // a trick finished and landed clean: a flash of it
-        if (view.landedTrick && e.hard <= 0.05) {
-          view.landedTrick = null;
-          const gold = new THREE.Color(1, 0.85, 0.45);
-          S.rings.fire(gold.clone().multiplyScalar(1.8), 4.5, 0.48, 0.05);
-          sparks.emit(track.at(rider.t, rider.x, 0.4), new THREE.Vector3(0, 3, 0), gold.multiplyScalar(3), 40, { spread: 8, life: 0.7, size: 0.2, grav: 4, up: 1.5 });
-          sound.chime(0.9, 4); S.flash = Math.max(S.flash, 0.1);
-        }
+        if (e.hard > 0.05) sound.land(e.quality, e.hard);
+        else kit.land(e.t, e.quality);
         if (e.hard > 0.05) {
           chase.impulse(0.5 + e.hard, 0.6 * e.hard, 0);
           const p = track.at(rider.t, rider.x, 0.1);
@@ -494,7 +661,7 @@ function handleEvents(S, dt) {
         sound.crash(); S.muffle = 1; chase.impulse(1.4, 0.8, 0);
         break;
       case 'note': {
-        sound.pickup(e.degree);
+        kit.pickup(e.at, rider.score.mult, e.bar);
         S.gems++; hud.gem(S.gems);
         const p = track.at(e.note.t, e.note.x, 1.2);
         const c = S.notes.color.clone();
@@ -506,6 +673,82 @@ function handleEvents(S, dt) {
     }
   }
   rider.events.length = 0;
+}
+
+// The song clock has to keep moving under her. If it stalls while the audio says it's running,
+// start the song again from where she is; if the audio has gone, pause, which shows the way
+// back in. If it jumps (a stale reading, a device change), put the music back where she is
+// rather than throwing her forward or holding her still.
+function watchClock(S, songT) {
+  const r = S.rider, now = performance.now();
+  if (S.resume || r.stopping || songT > S.course.duration - 0.2) { S.wdT = null; return; }
+  if (S.wdT === null || songT > S.wdT + 1e-4) { S.wdT = songT; S.wdAt = now; }
+  else if (now - S.wdAt > 900) {
+    S.wdAt = now;
+    if (!sound.running && !autopilot.on) { togglePause(); return; }
+    sound.play(S.buffer, r.t); S.anchorAt = now; return;
+  }
+  if ((songT > r.t + 1.0 || songT < r.t - 0.75) && now - S.anchorAt > 2000 && r.t > 0) { S.anchorAt = now; sound.play(S.buffer, r.t); }
+}
+
+// the count-in lamps, the music coming in as she crosses the start line, and the finish going off
+function startAndFinish(S, songT) {
+  const { rider, gates } = S;
+  if (S.countIn) {
+    let n = 0; for (const b of S.countIn.lamps) if (songT >= b - 0.01) n++;
+    gates.setCount(n);
+  }
+  if (!S.went && songT >= 0) {
+    S.went = true; S.countIn = null; gates.go();
+    burstAt(S, gates.tops('start'), new THREE.Color(1, 1, 1), 1);
+    S.pyro = 1.4; S.pyroAt = gates.tops('start'); S.pyroCol = new THREE.Color(1, 0.9, 0.7);
+    S.rings.fire(new THREE.Color(S.P.edge).multiplyScalar(2), 6.5, 0.6, 0.05);
+    S.flash = Math.max(S.flash, 0.22); chase.impulse(0.2, 0.2, 0.9);
+  }
+  if (!S.crossed && rider.t >= S.course.duration) {
+    S.crossed = true; gates.cross();
+    burstAt(S, gates.tops('finish'), new THREE.Color(1, 0.82, 0.45), 1.4);
+    S.pyro = 2.2; S.pyroAt = gates.tops('finish'); S.pyroCol = new THREE.Color(1, 0.78, 0.4);
+    const T = S.track;
+    for (let i = 0; i < 6; i++) { const side = i % 2 ? 1 : -1; const from = T.ground(rider.t + 3 + i * 0.3, side * (22 + i * 4), new THREE.Vector3()); const to = from.clone(); to.y = 34 + Math.random() * 24; setTimeout(() => S.fireworks.launch(from, to, 1.0), i * 120); }
+    S.flash = Math.max(S.flash, 0.3); chase.impulse(0.3, 0.2, 1);
+  }
+}
+// fountains of sparks off the tops of the gate's towers for a moment
+function pyroFrame(S, dt) {
+  S.pyro -= dt;
+  const n = Math.ceil(dt * 260);
+  for (const p of S.pyroAt || []) S.sparks.emit(p, new THREE.Vector3(0, 9, 0), S.pyroCol.clone().multiplyScalar(2.6), n, { spread: 2.2, life: 0.9, size: 0.2, grav: 12, up: 2, drag: 0.4, jitter: 0.4 });
+}
+function burstAt(S, points, color, k) {
+  for (const p of points) {
+    S.sparks.emit(p, new THREE.Vector3(0, 4, 0), color.clone().multiplyScalar(3), Math.round(70 * k), { spread: 9, life: 1.1, size: 0.3, grav: 7, up: 1.6 });
+    S.sparks.emit(p, new THREE.Vector3(0, 2, 0), new THREE.Color(S.P.edge).multiplyScalar(3), Math.round(40 * k), { spread: 6, life: 0.8, size: 0.22, grav: 5 });
+  }
+}
+
+// the end shot: from the line between her and the finale, back and to the left of her, drifting
+function heroShot(S, fo, orbit) {
+  const H = S.view.root.position, F = S.finale.group.position;
+  let dx = F.x - H.x, dz = F.z - H.z, L = Math.hypot(dx, dz);
+  if (L < 1) { const f = S.track.dirAt(S.rider.t, new THREE.Vector3()); dx = f.x; dz = f.z; L = Math.hypot(dx, dz) || 1; }
+  const ux = dx / L, uz = dz / L, lx = uz, lz = -ux;           // toward the place, and to its left
+  const drift = Math.sin((S.orbitA - 2.2) * 0.45);
+  const back = (fo.heroBack ?? 6.2) * (1 + 0.06 * drift), side = (fo.heroSide ?? 2.7) + 0.5 * drift;
+  const ty = (F.y + (fo.y ?? 1.2)) * 0.45 + (H.y + 1.5) * 0.55;
+  const pos = new THREE.Vector3(H.x - ux * back + lx * side, H.y + (fo.heroUp ?? 1.7), H.z - uz * back + lz * side);
+  const look = new THREE.Vector3(H.x + ux * 10 + lx * side * 0.55, ty + (fo.heroTilt ?? 0.6), H.z + uz * 10 + lz * side * 0.55);
+  // heroPan (radians) turns the camera left, so she and the place sit further right of the end card
+  if (fo.heroPan) {
+    const ax = look.x - pos.x, az = look.z - pos.z, c = Math.cos(fo.heroPan), s = Math.sin(fo.heroPan);
+    look.x = pos.x + ax * c + az * s; look.z = pos.z - ax * s + az * c;
+  }
+  // she stays in the picture: the bottom of the board no lower than three quarters of the way down
+  const fov = fo.heroFov ?? 46, half = THREE.MathUtils.degToRad(fov / 2);
+  const hd = Math.hypot(look.x - pos.x, look.z - pos.z), fd = Math.max(0.5, Math.hypot(H.x - pos.x, H.z - pos.z));
+  const lim = Math.atan2(H.y - 0.25 - pos.y, fd) + half * 0.72;
+  if (Math.atan2(look.y - pos.y, hd) > lim) look.y = pos.y + Math.tan(lim) * hd;
+  return { ...orbit, pos, look, fov };
 }
 
 // the gates at the bottom of the coming dips: a light on each rail, so where to let go reads from far off
@@ -527,17 +770,6 @@ function gatePosts(S, T, beatPulse) {
   }
 }
 
-// how long she'll be in the air from here if she doesn't dive
-function airTimeAhead(r, c) {
-  let y = r.y, vy = r.vy, t = r.t;
-  const dt = 1 / 120;
-  for (let i = 0; i < 480; i++) {
-    t += dt; y += vy * dt - 0.5 * G * dt * dt; vy -= G * dt;
-    if (y <= c.sample(t).y) return t - r.t;
-  }
-  return 4;
-}
-
 // a pump, graded as you let go: the bigger the hit, the more the world answers
 function judgeFeedback(S, e) {
   const { rider, sparks, track, P } = S;
@@ -545,7 +777,11 @@ function judgeFeedback(S, e) {
   const g = e.grade;
   if (g === 'miss' && !e.lost) return;              // not pumping at all: say nothing
   hud.judge(g, e.streak);
-  sound.hit(g, e.streak);
+  const mult = rider.score.mult;
+  kit.pump(g, e.at ?? rider.t, mult, e.streak);
+  if (e.points) hud.score(rider.score.points, mult);
+  // a new multiplier: a short fill into the next beat and a ring
+  if ((g === 'perfect' || g === 'good') && e.streak > 0 && e.streak % 8 === 0 && e.streak <= 24) { kit.fill(rider.t, mult); hud.mult(mult); }
   const p = track.at(rider.t, rider.x, 0.15);
   if (g === 'perfect') {
     const gold = new THREE.Color(1, 0.82, 0.38);
@@ -554,7 +790,7 @@ function judgeFeedback(S, e) {
     sparks.emit(p, new THREE.Vector3(0, 2, 0), gold.clone().multiplyScalar(3), 34, { spread: 7, life: 0.6, size: 0.22, grav: 5, up: 1.4 });
     S.hit = 1;
     chase.impulse(0, 0.12, 0.35);
-    if (e.streak > 0 && e.streak % 8 === 0) { sound.flourish(e.streak); S.rings.fire(gold.clone().multiplyScalar(2.2), 5.5, 0.55, 0.045, 0.1); }
+    if (e.streak > 0 && e.streak % 8 === 0) S.rings.fire(gold.clone().multiplyScalar(2.2), 5.5, 0.55, 0.045, 0.1);
   } else if (g === 'good') {
     S.rings.fire(new THREE.Color(1, 1, 1).multiplyScalar(1.1), 2.6, 0.32, 0.08);
     sparks.emit(p, new THREE.Vector3(0, 1.5, 0), new THREE.Color(P.gate ?? P.edge).multiplyScalar(2.2), 16, { spread: 5, life: 0.45, size: 0.18, grav: 5 });
@@ -606,6 +842,7 @@ function stopFrame(S, dt) {
   S.stopClock += dt * r.stopVel / r.stopV0;
   r.advance(Math.max(r.t, S.stopClock), { press: false, steer: 0 });
   S.stopK = Math.min(1, (S.stopK || 0) + dt / 1.1);
+  if (r.stopVel < 2.5) S.view.cheering = true;
   // the camera goes up and over her on its way round, not through her
   const sk = S.stopK * S.stopK * (3 - 2 * S.stopK);
   S.stopView.h = S.stopH + 2.2 * Math.sin(Math.PI * sk);
@@ -652,6 +889,9 @@ function songMoments(S) {
     if (m.kind === 'knock') { for (let i = 0; i < (m.n ?? 2); i++) setTimeout(() => { sound.thud(m.k ?? 0.5); chase.impulse(0.3, 0.45, 0); }, i * (m.gap ?? 210)); }
     if (m.kind === 'blackout') S.black = { t0: m.t, dur: m.dur ?? 1.5, k: m.k ?? 0.95 };
     if (m.kind === 'thud') { sound.thud(m.k ?? 1); chase.impulse(1.1, 0.9, 0); S.muffle = Math.max(S.muffle, 0.6); S.hurt = 1; }
+    // a set-piece's hit down the street: a crunch, a little shake; glass going
+    if (m.kind === 'impact') { sound.impact(m.k ?? 0.6); chase.impulse(0.35 * (m.k ?? 0.6), 0.5, 0); S.flash = Math.max(S.flash, 0.06); }
+    if (m.kind === 'glass') sound.glass(m.k ?? 0.6);
   }
 }
 
@@ -716,24 +956,26 @@ function smoothstepJS(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); retur
 function endSong() {
   state = 'results';
   document.body.classList.remove('riding');
-  sound.charge(false); sound.siren(0);
-  const st = S.rider.stats;
+  sound.charge(false); sound.siren(0); sound.grind(false);
+  const st = S.rider.stats, points = S.rider.score.points;
   const inTime = st.judged ? Math.round(100 * st.hits / st.judged) : 0;
-  let best = 0, newBest = false;
-  try {
-    best = +localStorage.getItem('lc-best-' + S.id) || 0;
-    if (st.dist > best) { localStorage.setItem('lc-best-' + S.id, st.dist); newBest = best > 0; }
-    if (inTime > (+localStorage.getItem('lc-pct-' + S.id) || 0)) localStorage.setItem('lc-pct-' + S.id, inTime);
-  } catch (e) { /* private mode */ }
+  const grade = gradeOf(points, S.par);
+  const prev = progress.song(S.id);
+  const res = progress.finish(S.id, points, grade);
+  try { if (st.dist > (+localStorage.getItem('lc-best-' + S.id) || 0)) localStorage.setItem('lc-best-' + S.id, st.dist); } catch (e) { /* private mode */ }
   hud.hideAll();
   S.endShown = performance.now();
   const i = S.index, last = i >= ALBUM.length - 1;
   const next = { label: 'Next song', key: 'enter', go: () => chooseSong(i + 1) };
   const again = { label: 'Ride again', key: 'R', code: 'KeyR', go: rideAgain };
   const menu = { label: 'All songs', key: 'M', code: 'KeyM', go: () => openMenu(last ? 0 : i + 1) };
-  const data = { title: S.entry.title, accent: S.entry.accent || '#ff4f9a', dist: st.dist, best, newBest, inTime, perfects: st.perfects, bestStreak: st.bestStreak, notes: st.notes, notesTotal: st.notesTotal, top: st.top, collect: S.entry.collect };
+  const data = { title: S.entry.title, accent: S.entry.accent || '#ff4f9a', points, grade, best: prev ? prev.best : 0, newBest: !!(prev && prev.best > 0 && points > prev.best),
+    dist: st.dist, inTime, perfects: st.perfects, bestStreak: st.bestStreak, notes: st.notes, notesTotal: st.notesTotal, top: st.top, collect: S.entry.collect, tricks: st.tricks,
+    level: { before: res.before, gained: points, need: levelNeed } };
+  S.endData = data;
+  const fx = { tick: (k) => kit.tick(k), grade: (g) => kit.grade(g), rise: (d) => kit.rise(d), levelUp: () => { kit.levelUp(); S.cheer = Math.max(S.cheer || 0, 1); } };
   // let the ending breathe a moment before the card comes up
-  setTimeout(() => { if (state === 'results') ui.showEnd(data, last ? [menu, again] : [next, again, menu]); }, 1400);
+  setTimeout(() => { if (state === 'results') ui.showEnd(data, last ? [menu, again] : [next, again, menu], fx); }, 1400);
 }
 
 requestAnimationFrame(frame);
