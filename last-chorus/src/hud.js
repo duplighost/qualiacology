@@ -99,6 +99,17 @@ export class Hud {
     this.gems.classList.toggle('key', kind === 'key');
     this.gems.classList.toggle('lily', kind === 'lily');
     this.gems.classList.toggle('corn', kind === 'corn');
+    this.gems.classList.toggle('chip', kind === 'chip');
+    this.gems.classList.toggle('pick', kind === 'pick');
+    this.gems.classList.toggle('star', kind === 'star');
+    this.gems.classList.toggle('coin', kind === 'coin');
+    this.gems.classList.toggle('quill', kind === 'quill');
+    this.gems.classList.toggle('flake', kind === 'flake');
+    this.gems.classList.toggle('apple', kind === 'apple');
+    this.gems.classList.toggle('bulb', kind === 'bulb');
+    this.gems.classList.toggle('like', kind === 'like');
+    this.gems.classList.toggle('ember', kind === 'ember');
+    this.gems.classList.toggle('pearl', kind === 'pearl');
   }
 
   gem(n) {

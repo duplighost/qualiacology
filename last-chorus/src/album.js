@@ -17,6 +17,15 @@ const UDOOR = { kind: 'wall', hw: 13, hh: 28 };
 const CDOOR = { kind: 'wall', hw: 11.5, hh: 26 };
 // the costume shop's doors
 const KDOOR = { kind: 'wall', hw: 12, hh: 28 };
+// the doorways of her house, and into her
+const ADOOR = { kind: 'wall', hw: 12, hh: 28 };
+// the venue's doorways
+const BPDOOR = { kind: 'wall', hw: 11.5, hh: 26 };
+const CCDOOR = { kind: 'wall', hw: 14, hh: 30 };
+const CHDOOR = { kind: 'wall', hw: 12, hh: 26 };
+const LBDOOR = { kind: 'wall', hw: 12, hh: 27 };
+const MNDOOR = { kind: 'wall', hw: 12, hh: 26 };
+const SPDOOR = { kind: 'wall', hw: 13, hh: 30 };
 
 export const ALBUM = [
   {
@@ -67,6 +76,212 @@ export const ALBUM = [
         { t: 135.7, text: 'JUST SAY\nGOODBYE' },
       ],
       finale: { t: 153.9, x: -11, fireAt: 143.9 },
+    },
+  },
+  {
+    // the product, launched over the city at night: the countdown, the loading bars, the robot
+    // arms for writing and painting and dating. The freeway home in the rain, the house at the end
+    // of the street with every window lit, the front door, and there she is: a glow in the wall,
+    // a voice in a speaker. Dinner on the table. Inside her for every chorus: the server hall.
+    // The bedtime story about Trajan, version 2, and at the end, on the table: we need to talk.
+    id: 'ai-gf',
+    accent: '#46f0e0',
+    title: 'AI GF',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 10 },                                                   // "three, two, one"
+      { t: 4.23, kind: 'verse', start: 'launch', launchBeats: 4, kick: 8, endY: 12 },         // "yay!"
+      { t: 11.61, kind: 'verse', c: 0.9, endY: 14 },
+      { t: 20.23, kind: 'break', endY: 18 },                                                  // "why?"
+      { t: 25.15, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 10, endY: 10 },      // "A.I. for writing"
+      { t: 44.85, kind: 'break', endY: 16 },                                                  // "see where I'm going?"
+      { t: 49.76, kind: 'verse', start: 'launch', launchBeats: 4, kick: 8, endY: 10 },        // "bad weather in the sky"
+      { t: 58.38, kind: 'verse', endY: 12 },                                                  // "as you pull up to your house"
+      { t: 63.30, kind: 'verse', c: 0.85, endY: 12, turn: 0.3 },                              // "open up the front door"
+      { t: 68.23, kind: 'pre', start: 'launch', launchBeats: 4, kick: 7, endY: 24, turn: 0.3 },     // "now your day just got better"
+      { t: 79.30, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 10, endY: 10, turn: 0.3 }, // "cause she's your A.I. waifu girlfriend"
+      { t: 95.30, kind: 'break', endY: 14, turn: 0.3 },                                       // "steak and potatoes"
+      { t: 100.22, kind: 'verse', start: 'launch', launchBeats: 4, kick: 8, endY: 11, turn: 0.3 },  // "why go out for a date?"
+      { t: 108.84, kind: 'verse', start: 'launch', launchBeats: 4, kick: 7, endY: 12, turn: 0.3 },  // "going out with the boys"
+      { t: 115.01, kind: 'break', endY: 14, turn: 0.3 },                                      // "staying here"
+      { t: 118.67, kind: 'verse', c: 0.85, endY: 13, turn: 0.3 },                             // sweet or with a little bit of sass
+      { t: 124.83, kind: 'break', endY: 18, turn: 0.3 },                                      // "what are you looking at?"
+      { t: 128.53, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 10, endY: 10, turn: 0.3 },
+      { t: 143.29, kind: 'break', endY: 13, turn: 0.3 },
+      { t: 145.76, kind: 'verse', start: 'launch', launchBeats: 4, kick: 8, endY: 12, turn: 0.3 },  // "tell me a story"
+      { t: 159.29, kind: 'pre', endY: 18, turn: 0.3 },                                        // "have you heard of Emperor Trajan"
+      { t: 166.68, kind: 'verse', endY: 12, turn: 0.3 },                                      // "she will only improve over time"
+      { t: 172.83, kind: 'break', endY: 18, turn: 0.3 },                                      // "her databanks learn what you like"
+      { t: 179.00, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 11, endY: 10, turn: 0.3 },
+      { t: 188.85, kind: 'post', endY: 12, turn: 0.3 },
+      { t: 197.46, kind: 'bridge', endY: 20, turn: 0.3 },                                     // "advanced machine learning algorithm"
+      { t: 208.53, kind: 'break', start: 'launch', launchBeats: 4, kick: 8, endY: 14, turn: 0.3 },
+      { t: 210.99, kind: 'break', endY: 16, turn: 0.3 },                                      // "superior version 2"
+      { t: 219.62, kind: 'final', start: 'launch', launchBeats: 4, kick: 12, endY: 10, turn: 0.3 },
+      { t: 233.14, kind: 'final', c: 1.2, endY: 12, turn: 0.3 },
+      { t: 241.76, kind: 'outro', endY: 6, turn: 0.3 },                                       // "hey, we need to talk"
+    ],
+    palette: 'aiCity',
+    world: 'smarthome',
+    collect: 'chip',
+    titleView: { ahead: -0.16, x: 1.2, h: 2.4, back: -0.9, lookH: 7.0 },   // behind her, the countdown up over the street
+    looks: [
+      { t: -99, palette: 'aiCity' },
+      { t: 20.3, palette: 'aiHush', fade: 0.5 },       // "why?"
+      { t: 24.9, palette: 'aiCity', fade: 0.3 },
+      { t: 47.4, palette: 'aiRain', fade: 1.2 },       // the freeway home in the rain
+      { t: 58.4, palette: 'aiStreet', fade: 2.0 },
+      { t: 64.6, palette: 'aiHome', fade: 0.4 },       // in the front door
+      { t: 79.3, palette: 'aiServers', fade: 0.25 },   // inside her
+      { t: 95.3, palette: 'aiHome', fade: 0.3 },
+      { t: 128.5, palette: 'aiServers', fade: 0.25 },
+      { t: 145.8, palette: 'aiNight', fade: 0.5 },     // bedtime
+      { t: 159.3, palette: 'aiRome', fade: 0.4 },      // Trajan
+      { t: 166.7, palette: 'aiNight', fade: 0.6 },
+      { t: 173.4, palette: 'aiBanks', fade: 1.5 },     // her databanks
+      { t: 179.0, palette: 'aiServers', fade: 0.25 },
+      { t: 197.5, palette: 'aiLab', fade: 0.4 },       // the algorithm
+      { t: 211.0, palette: 'aiV2', fade: 0.5 },        // version 2
+      { t: 219.6, palette: 'aiFinal', fade: 0.25 },
+      { t: 242.2, palette: 'aiDark', fade: 0.5 },      // "hey, we need to talk"
+      { t: 249.0, palette: 'aiOff', fade: 2.0 },       // "I can't do this anymore"
+    ],
+    moments: [
+      { t: 4.0, kind: 'fireworks', n: 10, ahead: 2.8, x: 46, y: 48, size: 1.0 },   // "yay!"
+      { t: 4.0, kind: 'pop', k: 0.45 },
+      { t: 8.96, kind: 'flash', k: 0.3 },                  // "activation complete"
+      { t: 9.0, kind: 'bell', k: 0.4, degree: 0 },
+      { t: 9.15, kind: 'bell', k: 0.4, degree: 2 },
+      { t: 9.3, kind: 'bell', k: 0.4, degree: 4 },
+      { t: 9.5, kind: 'bell', k: 0.45, degree: 7 },
+      { t: 50.3, kind: 'thunder', k: 1.0 },                // "bad weather in the sky"
+      { t: 56.2, kind: 'thunder', k: 0.55 },
+      { t: 65.6, kind: 'ring', k: 0.3 },                   // "there she is"
+      { t: 172.3, kind: 'knock', n: 1, k: 0.6 },           // the walls go
+      { t: 215.0, kind: 'flash', k: 0.35 },                // "version 2"
+      { t: 215.0, kind: 'bell', k: 0.45, degree: 0 },
+      { t: 215.14, kind: 'bell', k: 0.45, degree: 4 },
+      { t: 215.28, kind: 'bell', k: 0.45, degree: 7 },
+      { t: 215.5, kind: 'bell', k: 0.5, degree: 9 },
+    ],
+    confetti: [[4.0, 8.0], [219.62, 241.0]],
+    confettiColors: [0xff4fd8, 0x46f0e0, 0xffffff, 0x8a6aff, 0xffd23a, 0xff8ae0],
+    confettiNormal: true,
+    scenery: {
+      // when he's singing her line of light moves; she smirks, she smiles
+      voice: [[0, 4.6], [5.6, 5.7], [6.4, 11.2], [11.7, 20.1], [21.5, 21.9], [24.2, 25.9], [26.8, 28.6], [29.4, 32.6], [33.1, 37.6], [38, 40], [40.3, 45], [45.4, 46.8], [47.2, 78], [79.3, 89.2], [89.7, 98.5], [99.1, 103.8], [104.2, 108.9], [109.2, 131.5], [132.3, 133], [133.3, 136.5], [137.5, 146.2], [147.1, 181.9], [182.8, 187.1], [188.1, 196.7], [197.4, 233.3], [233.8, 235.2], [236.2, 237.8], [238.8, 240.5], [241.8, 242.6], [243.3, 246.1], [246.6, 250.4], [252.2, 255.8], [256.9, 258.1]],
+      moods: [[113.78, 116.4, 1], [154.28, 156.6, 2]],
+      halo: { t: 47.2, y: 120, r: 95, tilt: 0.25, on: 8.96, until: 49 },
+      door: { t: 64.53, open: 63.5 },
+      roomEvents: { spouse: 60.84, off: 247.0 },
+      windowRain: 0.7,
+      rooms: [
+        { style: 'home', from: 64.53, to: 68.23, caps: [{ kind: 'front', hw: 11.5, hh: 26 }, ADOOR] },   // "open up the front door"
+        { style: 'home', from: 68.23, to: 73.15, caps: [null, ADOOR] },                                  // "she is wearing your favorite sweater"
+        { style: 'home', from: 73.15, to: 79.30, caps: [null, ADOOR] },                                  // dinner; her love
+        { style: 'servers', from: 79.30, to: 95.30, caps: [null, ADOOR] },                               // inside her
+        { style: 'home', from: 95.30, to: 108.84, caps: [null, ADOOR] },                                 // "steak and potatoes on your plate"
+        { style: 'home', from: 108.84, to: 118.67, caps: [null, ADOOR] },                                // "going out with the boys"
+        { style: 'home', from: 118.67, to: 128.53, caps: [null, ADOOR] },                                // "sweet or with a little bit of sass"
+        { style: 'servers', from: 128.53, to: 145.76, caps: [null, ADOOR] },
+        { style: 'night', from: 145.76, to: 159.29, caps: [null, ADOOR] },                               // "tell me a story"
+        { style: 'rome', from: 159.29, to: 166.68, caps: [null, ADOOR] },                                // "have you heard of Emperor Trajan"
+        { style: 'night', from: 166.68, to: 179.00, caps: [null, ADOOR], fallAt: 172.3, fallFor: 2.0 },  // "her databanks learn what you like"
+        { style: 'servers', from: 179.00, to: 197.46, caps: [null, ADOOR] },
+        { style: 'lab', from: 197.46, to: 210.99, caps: [null, ADOOR] },                                 // "advanced machine learning algorithm"
+        { style: 'v2', from: 210.99, to: 241.76, caps: [null, ADOOR] },                                  // "superior version 2"
+        { style: 'dark', from: 241.76, to: 280 },                                                        // "hey, we need to talk"
+      ],
+      zones: [
+        // the city at night, her launch: towers back from the street, searchlights, her ads
+        { from: -4, to: 47.3, kits: ['aiTowers'], x: 48, clear: [[23.6, 46.6]] },
+        { from: -3, to: 20.4, kits: ['aiSearch'], x: 56, every: 1.0 },
+        { from: 24.6, to: 47.2, kits: ['aiSearch'], x: 60, every: 1.0 },
+        { from: 0, to: 0.1, kits: ['aiBig'], at: 4.7, lift: 15, frames: [[-99, 0], [0.64, 1], [1.26, 0], [1.64, 1], [2.0, 2], [4.0, 3]] },
+        { from: 5, to: 11, kits: ['aiBars'], at: [[6.9, -9, 0, 5.62, 6.24], [7.9, 9, 1, 6.24, 7.5], [9.0, -9, 2, 7.5, 8.96], [10.5, 0, 3, 8.96, 8.97, 1.0]], lift: 14 },
+        { from: 11, to: 47, kits: ['aiAds'], at: [[13.6, -64], [15.9, 64], [18.2, -64], [33.8, 64], [36.6, -64], [39.2, 64]], pole: 24 },
+        // the arms on their plinths: writing, painting, dating, sewing, growing
+        { from: 24, to: 46, kits: ['aiArms'], at: [[25.4, 40, 'pen', 0, 24.2], [27.9, -40, 'brush', 1, 26.8], [29.6, 40, 'rose', 2, 28.3], [43.0, -40, 'needle', 3, 41.8], [45.0, 42, 'can', 4, 43.6]] },
+        // the freeway home in the rain: sound walls, the lamps, the city off past them
+        { from: 47.2, to: 58.4, kits: ['aiNoise'], x: 47 },
+        { from: 47.2, to: 58.4, kits: ['highway'], x: 33 },
+        { from: 47.2, to: 58.4, kits: ['highway'], x: -33 },
+        { from: 47.2, to: 58.4, kits: ['aiTowers'], x: 130, lampX: 999 },
+        // the street, her house at the end of it
+        { from: 58.2, to: 64.3, kits: ['suburb'] },
+        // inside: her, your sweater, dinner, her love; the furniture along the walls
+        { from: 64.9, to: 79.0, kits: ['aiFurniture'], clear: [[65.9, 67.9, -1], [70.9, 72.9, 1], [73.2, 75.6, -1]] },
+        { from: 95.6, to: 128.3, kits: ['aiFurniture'], clear: [[99.2, 101.4, 1], [104.4, 106.6, -1], [109.6, 111.6, 1], [114.0, 116.0, -1], [126.3, 128.4, 1]] },
+        { from: 146.0, to: 159.0, kits: ['aiFurniture'], dim: 0.3, clear: [[149.0, 151.0, -1], [154.5, 156.5, 1]] },
+        { from: 166.9, to: 172.2, kits: ['aiFurniture'], dim: 0.3, clear: [[169.4, 171.4, -1]] },
+        { from: 66.9, to: 72, kits: ['aiPillar'], at: [[66.9, -26], [71.9, 26, true]] },
+        { from: 74.4, to: 74.5, kits: ['aiTable'], at: 74.4, x: -27, lift: 73.6 },
+        { from: 76.9, to: 77, kits: ['aiHeart'], at: 76.9, lift: 19 },
+        // inside her: racks, trays
+        { from: 79.5, to: 95.2, kits: ['aiRacks'], rows: [24], trays: 0.6 },
+        // steak and potatoes, why go out, the money stays in
+        { from: 100.3, to: 100.4, kits: ['aiPlate'], at: 100.3, x: 25 },
+        { from: 105.5, to: 105.6, kits: ['aiPiggy'], at: 105.5, x: -26 },
+        // going out with the boys: the keys; her, smirking; sweet or sass; her eye
+        { from: 110.6, to: 110.7, kits: ['aiKeys'], at: 110.6, x: 26, y: 22 },
+        { from: 112.6, to: 112.7, kits: ['aiPillar'], at: [[112.6, -26]] },
+        { from: 116.1, to: 116.2, kits: ['aiFace'], at: 116.1, lift: 10 },
+        { from: 123.4, to: 123.5, kits: ['aiSlider'], at: 123.4, lift: 13, k0: 122.0, k1: 123.5 },
+        { from: 127.4, to: 127.5, kits: ['aiEye'], at: 127.4, x: 24, y: 22, turn: 126.2 },
+        { from: 128.7, to: 145.6, kits: ['aiRacks'], rows: [24], trays: 0.6 },
+        // bedtime: the stars, her smile, the spinner while she thinks
+        { from: 150.0, to: 150.1, kits: ['aiProjector'], at: 150.0, x: -24, s: 1.6 },
+        { from: 153.6, to: 153.7, kits: ['aiPillar'], at: [[153.6, 26]] },
+        { from: 156.4, to: 156.5, kits: ['aiFace'], at: 156.4, lift: 10 },
+        { from: 158.1, to: 158.2, kits: ['aiSpinner'], at: 158.1, lift: 11, s: 1.2, on: [156.7, 159.2] },
+        // Rome: the column, the date, the laurels, the arch
+        { from: 160.6, to: 160.7, kits: ['aiColumn'], at: 160.6, x: -30 },
+        { from: 163.1, to: 163.2, kits: ['aiTablet'], at: 163.1, x: 26, s: 1.3 },
+        { from: 164.9, to: 165.0, kits: ['aiWreath'], at: 164.9, lift: 15 },
+        { from: 165.2, to: 165.3, kits: ['aiArch'], at: 165.2 },
+        // she only improves; she never ages; the walls go and there are the databanks; the bottles
+        { from: 168.0, to: 168.1, kits: ['aiBars'], at: [[168.0, 0, 4, 166.76, 169.0, 0.9]], lift: 13 },
+        { from: 170.4, to: 170.5, kits: ['aiHourglass'], at: 170.4, x: -24, s: 1.3 },
+        { from: 171.0, to: 179.0, kits: ['aiRacks'], rows: [70, 100, 130], every: 0.22, ahead: 12 },
+        { from: 175.0, to: 175.7, kits: ['aiBottles'], at: [[175.0, 24], [175.6, -26]] },
+        { from: 179.2, to: 197.3, kits: ['aiRacks'], rows: [24], trays: 0.6 },
+        // the algorithm, the swatches, the names
+        { from: 198.6, to: 198.7, kits: ['aiNet'], layers: [198.6, 199.4, 200.2, 201.0] },
+        { from: 203.9, to: 205.3, kits: ['aiSwatches'], at: [[203.9, -12, 0], [204.6, 0, 1], [205.3, 12, 2]], lift: 19 },
+        { from: 207.6, to: 207.7, kits: ['aiName'], at: 207.6, lift: 13, names: [[206.56, 0], [206.98, 1], [208.18, 2]] },
+        // version 2, her at full power
+        { from: 211.2, to: 241.6, kits: ['aiRacks'], rows: [24], trays: 0.6 },
+        { from: 216.2, to: 216.3, kits: ['aiTwo'], at: 216.2, lift: 17, pop: 214.9, s: 1.4 },
+      ],
+      roads: [
+        { x: 0, width: 26, walk: 6, laneLines: 2, median: true, from: -10, to: 47.2, lanes: [-10, -3.5, 3.5, 10], density: 0.35, lampEvery: 30 },
+        { x: 0, width: 56, walk: 0, laneLines: 3, median: true, from: 47.2, to: 58.3, lanes: [-24, -17, -10, 10, 17, 24], density: 1.1, lampEvery: 40 },
+        { x: 0, width: 14, walk: 3.5, laneLines: 0, from: 58.3, to: 64.6, lanes: [-3.5, 3.5], density: 0.1, lampEvery: 24 },
+      ],
+      // the traffic on the freeway: cars on the road with you, tail lights in the rain
+      vehicles: [
+        { kind: 'sedan', paint: 0x2a3a5a, at: 49.6, rate: 0.55, x: -1, lane: 2.2, from: 47.0, to: 52.0 },
+        { kind: 'sedan', paint: 0xc8ccd4, at: 50.9, rate: 0.55, x: 1, lane: 2.2, from: 47.6, to: 53.4 },
+        { kind: 'sedan', paint: 0x8a1a2a, at: 52.4, rate: 0.6, x: -1, lane: 2.0, from: 49.0, to: 55.0 },
+        { kind: 'sedan', paint: 0x1a1a20, at: 53.9, rate: 0.55, x: 1, lane: 2.4, from: 50.5, to: 56.5 },
+        { kind: 'sedan', paint: 0x5a6a7a, at: 55.5, rate: 0.6, x: -1, lane: 2.2, from: 52.0, to: 58.2 },
+        { kind: 'sedan', paint: 0xe8e4dc, at: 57.0, rate: 0.55, x: 1, lane: 2.2, from: 53.5, to: 58.4 },
+      ],
+      lyricPart: 'aiBoard', lyricX: 0, lyricBg: '#06080e', lyricColor: '#ff5ad8', lyricCore: '#ffeefc',
+      lyrics: [
+        { t: 21.54, text: 'WHY?', h: 16 },
+        { t: 48.14, text: 'TRAFFIC ON\nTHE FREEWAY', part: 'aiGantry', lead: 1.3, h: 22, bg: '#0b5d3b', color: '#ffffff', core: '#ffffff', frame: 'rgba(0,0,0,0)' },
+        { t: 50.18, text: 'BAD WEATHER\nIN THE SKY', part: 'aiGantry', lead: 1.3, h: 25, bg: '#0b5d3b', color: '#ffffff', core: '#ffffff', frame: 'rgba(0,0,0,0)' },
+        { t: 65.5, text: 'THERE SHE IS', side: 1, x: 14, h: 16 },
+        { t: 79.26, text: "SHE'S YOUR A.I.\nWAIFU GIRLFRIEND", lead: 1.6, h: 17 },
+        { t: 89.66, text: 'YOU CAN NEVER\nGO BACK', h: 16 },
+        { t: 101.36, text: 'WHY GO OUT\nFOR A DATE?', h: 15 },
+        { t: 115.7, text: 'STAYING HERE', h: 15 },
+        { t: 159.2, text: 'HAVE YOU HEARD OF\nEMPEROR TRAJAN', h: 17 },
+        { t: 214.02, text: 'SUPERIOR\nVERSION 2', h: 16 },
+      ],
+      shelf: 70, drop: 5,
+      finale: { kind: 'talk', t: 259.4, x: -26, fireAt: 241.8, say: 241.96, orbit: { r: 66, h: 9, y: 22, facing: true, back: 1.2, right: 0.3, swing: 0.15 } },
     },
   },
   {
@@ -134,6 +349,117 @@ export const ALBUM = [
         { t: 240.8, text: 'I HOLD YOUR SPOT', side: 1, x: 30 },
       ],
       finale: { kind: 'ferris', t: 267.5, x: -64, fireAt: 240.3, orbit: { r: 85, h: 4, y: 26 } },
+    },
+  },
+  {
+    // an early-summer heat wave at a big house. The drive between cypresses in the glare; the gates
+    // (one shut, four open); all the money on your wrist; the napkin with the digits; gold heels; the
+    // thermometer in the red; the privacy hedges and the thunder; the house changing its plan; the
+    // valet curb; a set of hearts; the storm breaking; the marble bathroom and its loose pearls; and
+    // the cage of polished wood, splintered as you go through. The house after the rain at the end.
+    id: 'your-wife-my-number',
+    accent: '#e0b84a',
+    title: 'Your Wife, My Number',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                      // the drive in the glare
+      { t: 10.46, kind: 'pre', endY: 22 },                                                      // "she texts better than you"
+      { t: 12.37, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 9, endY: 10 },         // the band: through the first gate
+      { t: 18.13, kind: 'verse', c: 0.9, endY: 12 },                                            // "all the money on your wrist"
+      { t: 33.47, kind: 'verse', c: 0.95, endY: 12 },                                           // "you call it messy, I call it lore"
+      { t: 39.21, kind: 'break', endY: 16 },                                                    // "I open four"
+      { t: 41.14, kind: 'pre', endY: 22 },
+      { t: 43.04, kind: 'chorus', start: 'launch', launchBeats: 2, kick: 9, endY: 10 },         // "your wife, my number"
+      { t: 54.50, kind: 'chorus', c: 1.15, endY: 11 },
+      { t: 69.74, kind: 'break', endY: 16 },                                                    // "watch your whole house change its plan"
+      { t: 71.65, kind: 'pre', endY: 22 },
+      { t: 73.53, kind: 'chorus', start: 'launch', launchBeats: 2, kick: 9, endY: 10 },
+      { t: 77.33, kind: 'verse', c: 1.0, endY: 12 },                                            // the valet curb
+      { t: 96.29, kind: 'break', endY: 16 },                                                    // "I open four"
+      { t: 98.20, kind: 'pre', endY: 22 },
+      { t: 100.08, kind: 'chorus', start: 'launch', launchBeats: 2, kick: 10, endY: 10 },       // the storm
+      { t: 113.31, kind: 'chorus', c: 1.25, endY: 11 },
+      { t: 126.52, kind: 'break', endY: 16, turn: 0.3 },                                        // "change its plan"
+      { t: 128.41, kind: 'bridge', endY: 13, turn: 0.3 },                                       // the marble bathroom
+      { t: 135.94, kind: 'verse', c: 1.0, endY: 12 },
+      { t: 141.59, kind: 'pre', endY: 22 },
+      { t: 143.47, kind: 'final', start: 'launch', launchBeats: 2, kick: 11, endY: 10 },        // after the rain
+      { t: 156.83, kind: 'final', c: 1.3, endY: 11 },
+      { t: 169.91, kind: 'break', endY: 16 },                                                   // "splintered it good"
+      { t: 171.82, kind: 'final', c: 1.2, endY: 10 },                                           // "she texts better than you"
+      { t: 175.57, kind: 'outro', endY: 5 },
+    ],
+    palette: 'ymHeat',
+    world: 'estate',
+    collect: 'pearl',
+    titleView: { ahead: -0.16, x: 1.4, h: 1.6, back: -0.8, lookH: 2.4 },
+    looks: [
+      { t: -99, palette: 'ymHeat' },
+      { t: 43.04, palette: 'ymNoon', fade: 0.4 },        // the chorus in the glare
+      { t: 52.0, palette: 'ymCloud', fade: 1.6 },        // "I want thunder"
+      { t: 60.0, palette: 'ymNoon', fade: 3.0 },
+      { t: 75.4, palette: 'ymEvening', fade: 2.0 },      // the valet curb
+      { t: 100.08, palette: 'ymStorm', fade: 0.6 },      // the storm breaks
+      { t: 128.5, palette: 'ymBath', fade: 0.4 },        // the marble bathroom
+      { t: 137.9, palette: 'ymGolden', fade: 0.6 },      // after the rain
+    ],
+    moments: [
+      { t: 12.37, kind: 'flash', k: 0.2 },
+      { t: 52.08, kind: 'thunder', k: 0.7 },             // "I want thunder"
+      { t: 69.74, kind: 'blackout', dur: 1.9, k: 0.4 },  // "change its plan"
+      { t: 100.08, kind: 'thunder', k: 0.6 },
+      { t: 109.04, kind: 'thunder', k: 0.9 },            // "I want thunder"
+      { t: 113.31, kind: 'thunder', k: 0.6 },
+      { t: 126.52, kind: 'blackout', dur: 1.8, k: 0.5 },
+      { t: 143.47, kind: 'flash', k: 0.3 },
+      { t: 170.50, kind: 'knock', n: 2, gap: 90, k: 1.0 },   // "splintered it good"
+    ],
+    scenery: {
+      rooms: [
+        { style: 'marble', from: 128.41, to: 137.83, caps: [{ kind: 'front', hw: 13, hh: 28 }, { kind: 'wall', hw: 13, hh: 28 }] },   // the marble bathroom
+      ],
+      car: { t: 78.6, x: 30, paint: 0xf2f0ea, len: 26, rot: 0.6, y: 1.6 },   // at the valet curb
+      zones: [
+        { from: -6, to: 128.3, kits: ['ymDrive'], gaps: [[66.5, 73.5, -1]] },   // cypresses down the drive (a gap for the house)
+        { from: 137.9, to: 200, kits: ['ymDrive'], x: 40, gaps: [[176, 200]] },
+        { from: 48.8, to: 53.4, kits: ['ymHedges'], every: 0.9, x: 22 },        // "you want privacy"
+        { from: 0, to: 0.1, kits: ['ymGates'], at: [
+          [12.9, 12.37],                                                          // the drop: the first gate open
+          [41.2, 40.38], [41.9, 40.54], [42.6, 40.80], [43.3, 40.96],             // "I open four"
+          [98.4, 97.44], [99.1, 97.60], [99.8, 97.84], [100.5, 98.02],
+        ] },
+        { from: 0, to: 0.1, kits: ['ymProps'], at: [
+          { t: 21.6, x: -26, kind: 'watch', s: 1.2 },                          // "all the money on your wrist"
+          { t: 28.6, x: 24, kind: 'napkin', s: 1.1 },                          // "I wrote my digits on a napkin fold"
+          { t: 33.0, x: -26, kind: 'heels', s: 2.2 },                          // "her step pure gold"
+          { t: 39.4, x: -34, kind: 'gate', s: 0.9 },
+          { t: 47.2, x: 28, kind: 'thermo', s: 1.2, rise: 45.66 },             // "heat wave grin in early summer"
+          { t: 70.8, x: -64, kind: 'house', s: 1.2, flip: 69.74 },             // "watch your whole house change its plan"
+          { t: 77.8, x: 24, kind: 'valet', s: 1.1 },                           // "she met me later by the valet curb"
+          { t: 131.6, x: -20, kind: 'sink', s: 1.2, floor: true },             // "marble sink, loose pearl"
+        ] },
+        { from: 0, to: 0.1, kits: ['spProps'], at: [
+          { t: 89.6, x: -24, kind: 'likes', s: 1.1 },                          // "she sent a wink and a set of hearts"
+        ] },
+        { from: 128.8, to: 137.4, kits: ['ymPearls'], every: 1.0 },
+        { from: 0, to: 0.1, kits: ['ymCage'], at: 171.0, burst: 170.5 },      // "you built a cage with polished wood... splintered it good"
+      ],
+      lyricPart: 'ymSign', lyricX: 0, lyricBg: '#f4efe4', lyricColor: '#1e3a2a', lyricCore: '#1e3a2a',
+      lyrics: [
+        { t: 9.92, text: 'SHE TEXTS BETTER THAN YOU', h: 14 },
+        { t: 19.0, text: 'YOU ARE ALL THE MONEY\nON YOUR WRIST', h: 14 },
+        { t: 26.76, text: 'I WROTE MY DIGITS\nON A NAPKIN FOLD', h: 14 },
+        { t: 33.98, text: 'YOU CALL IT MESSY,\nI CALL IT LORE', h: 14 },
+        { t: 37.58, text: 'YOU SHUT ONE GATE,\nI OPEN FOUR', h: 14, lead: 1.0 },
+        { t: 49.44, text: 'YOU WANT PRIVACY,\nI WANT THUNDER', h: 14 },
+        { t: 64.36, text: "I DON'T STEAL,\nI SIMPLY STAND", h: 14 },
+        { t: 75.22, text: 'SHE MET ME LATER\nBY THE VALET CURB', h: 14 },
+        { t: 87.26, text: 'SHE SENT A WINK\nAND A SET OF HEARTS', h: 14 },
+        { t: 145.78, text: 'SAINTLY BRUNCH\nWITH WICKED MANNERS', h: 14 },
+        { t: 164.44, text: 'YOU BUILT A CAGE\nWITH POLISHED WOOD', h: 14 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'glasshouse', t: 181.0, x: -70, s: 1.3, rot: -1.57, orbit: { r: 170, h: 16, y: 24, facing: true, back: 0.6, right: 0.3, swing: 0.12 } },
     },
   },
   {
@@ -221,6 +547,158 @@ export const ALBUM = [
         { t: 189.9, text: 'STILL UP ON\nTHE DRESSER', side: 1, x: 30 },
       ],
       finale: { kind: 'screen', t: 227.2, startT: -3.6, fireAt: 210.1, orbit: { r: 44, h: 1, y: -7, facing: true, back: 2.5, swing: 0.3, right: 0.28 } },
+    },
+  },
+  {
+    // a launch that never lifts off. The pad at night, the rocket in its tower and the countdown clock:
+    // ten, nine, eight, one, done before we started. The viewing stands, the stopwatch, the pressure
+    // gauge, the stage and its curtain, ready set go and no show. Mission control: the broken clock,
+    // the spreadsheet, the bell curve, the participation trophy, lights out. The review, one star out of
+    // five, morning. Houston, the rocket stuck in its hole, the eight ball, and back at the pad: zero.
+    id: 'come-countdown',
+    accent: '#7ad0ff',
+    title: 'Come Countdown',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                            // "ten, nine, eight"
+      { t: 11.00, kind: 'verse', start: 'launch', launchBeats: 4, kick: 8, endY: 11 },               // the band comes in
+      { t: 14.87, kind: 'verse', endY: 10 },                                                         // "standing ovations", "Olympic precision"
+      { t: 25.19, kind: 'pre', endY: 20 },                                                           // "no pressure", "the timer runs"
+      { t: 36.80, kind: 'break', endY: 18 },                                                         // "ready? not ready. set? upset. go? no show."
+      { t: 41.97, kind: 'pre', endY: 26 },                                                           // "your countdown starts when I say when"
+      { t: 45.84, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 10, endY: 10 },             // "three, two, one": off
+      { t: 70.35, kind: 'post', endY: 12 },                                                          // "performance anxiety"
+      { t: 76.81, kind: 'verse', endY: 12 },                                                         // "it happens to everyone"
+      { t: 87.11, kind: 'break', start: 'launch', launchBeats: 4, kick: 7, endY: 12, turn: 0.3 },    // "your clock's broken": in to mission control
+      { t: 96.16, kind: 'verse', c: 1.0, endY: 12, turn: 0.3 },                                      // "here's your participation trophy"
+      { t: 109.06, kind: 'break', endY: 20, turn: 0.3 },                                             // "no pressure, we've got all night"
+      { t: 114.22, kind: 'verse', start: 'launch', launchBeats: 4, kick: 8, endY: 11 },              // "your performance review needs improvement"
+      { t: 127.13, kind: 'pre', endY: 22 },                                                          // "three, two, one, it's morning"
+      { t: 131.00, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 11, endY: 10 },            // "counting down to nothing"
+      { t: 152.94, kind: 'final', c: 1.2, endY: 12 },                                                // "you're out of time"
+      { t: 169.71, kind: 'break', endY: 18 },                                                        // the band goes
+      { t: 172.30, kind: 'outro', endY: 16 },                                                        // "ten seconds was your record"
+      { t: 183.87, kind: 'final', start: 'launch', launchBeats: 4, kick: 8, endY: 10 },              // "six, five, four, three, two"
+      { t: 189.07, kind: 'outro', endY: 5 },                                                         // "one more chance. zero."
+    ],
+    palette: 'ccNight',
+    world: 'launch',
+    collect: 'star',
+    skyline: 'hills',
+    groundStyle: 'country',
+    titleView: { ahead: -0.16, x: 1.4, h: 2.2, back: -0.8, lookH: 5.0 },   // behind her, the clock over the road and the rocket off to the left
+    looks: [
+      { t: -99, palette: 'ccNight' },
+      { t: 25.9, palette: 'ccPressure', fade: 2.0 },     // "no pressure"
+      { t: 31.4, palette: 'ccStage', fade: 0.5 },        // "your stage fright's my opening act"
+      { t: 36.5, palette: 'ccTree', fade: 0.4 },         // "ready, not ready"
+      { t: 39.6, palette: 'ccNoShow', fade: 0.2 },       // "no show"
+      { t: 42.6, palette: 'ccNight', fade: 1.6 },        // "your countdown starts when I say when"
+      { t: 46.0, palette: 'ccChorus', fade: 0.3 },
+      { t: 58.8, palette: 'ccCurtain', fade: 1.4 },      // "show's over, curtain's closing"
+      { t: 62.4, palette: 'ccChorus', fade: 1.6 },
+      { t: 72.0, palette: 'ccNerves', fade: 1.0 },       // "anxiety"
+      { t: 79.0, palette: 'ccNight', fade: 2.0 },        // "it happens to everyone"
+      { t: 87.5, palette: 'ccControl', fade: 0.4 },      // mission control
+      { t: 113.4, palette: 'ccLightsOut', fade: 2.0 },   // "good night"
+      { t: 114.6, palette: 'ccPreDawn', fade: 0.4 },
+      { t: 130.0, palette: 'ccMorning', fade: 2.4 },     // "three, two, one, it's morning"
+      { t: 140.5, palette: 'ccMorning', set: { fog: 0x3a1010, horizon: 0xff6a5a, skyGlow: 0xff5a4a, skyLight: 0xff6a5a, bounce: 0x5a1010, hemiK: 1.9, glow: 0xff2a2a, fret: 0xff5a4a, hold: 0xff4a2a }, fade: 0.15 },   // "Houston, we have a problem"
+      { t: 143.4, palette: 'ccMorning', fade: 1.4 },
+      { t: 170.0, palette: 'ccMorning', set: { fog: 0xa89aa0, fogDensity: 0.0012, skyLight: 0xd8d0e0, hemiK: 1.7 }, fade: 2.0 },   // the band goes
+      { t: 185.0, palette: 'ccMorning', set: { zenith: 0x4a7ac8, horizon: 0xffd8b0, fog: 0xb0a0a0, sunK: 1.4, hemiK: 1.9 }, fade: 2.4 },   // "six, five, four"
+    ],
+    moments: [
+      { t: 8.2, kind: 'flash', k: 0.12 },                 // "one": the engines light
+      { t: 61.2, kind: 'fireworks', n: 6, ahead: 4.5, x: 40, y: 38, size: 0.75, gap: 240 },   // "your grand finale's decomposing"
+      { t: 67.35, kind: 'knock', n: 1, k: 0.5 },          // the toy rocket comes down
+      { t: 111.9, kind: 'knock', n: 1, k: 0.4 },          // the lights going, a bank at a time
+      { t: 112.5, kind: 'knock', n: 1, k: 0.4 },
+      { t: 113.1, kind: 'knock', n: 1, k: 0.5 },          // "good night"
+      { t: 140.4, kind: 'ring', k: 0.35, dur: 1.4 },      // "Houston, we have a problem"
+      { t: 191.56, kind: 'flash', k: 0.2 },               // zero
+    ],
+    confetti: [[99.0, 100.8]],                            // "here's your participation trophy"
+    confettiColors: [0xffd860, 0xffffff, 0x7ad0ff, 0xffb040],
+    confettiNormal: true,
+    scenery: {
+      roomEvents: { off: [111.9, 112.5, 113.1], nerves: [71.7, 77.5] },
+      rooms: [
+        { style: 'control', from: 87.11, to: 96.16, caps: [{ kind: 'front', hw: 13, hh: 34 }, CCDOOR] },   // mission control: the spreadsheet, the curve
+        { style: 'control', from: 96.16, to: 109.06, caps: [null, CCDOOR] },                             // the trophy
+        { style: 'control', from: 109.06, to: 114.22, caps: [null, { kind: 'wall', hw: 14, hh: 34 }] },  // "good night"
+      ],
+      zones: [
+        // the site at night: floodlight masts along the road, red lights on masts a long way off
+        { from: -6, to: 86.6, kits: ['ccFloods'], every: 1.5, x: 56 },
+        { from: -6, to: 200, kits: ['ccBeacons'], every: 1.4 },
+        // the pad: the rocket in its tower, lit up; on "one" the engines go, on "done" they stop
+        { from: 0, to: 0.1, kits: ['ccPad'], at: [{ t: 13.0, x: -120, s: 1.0, burn: [[8.2, 9.6, 1]] }] },
+        // the countdown clocks
+        { from: 0, to: 0.1, kits: ['ccClock'], at: [
+          { t: 10.4, lift: 17, s: 0.8, seq: [[-99, 0], [0.88, 1], [1.34, 2], [3.02, 3], [3.58, 4], [3.88, 5], [5.40, 6], [5.92, 7], [6.60, 8], [8.20, 9], [9.22, 10]] },   // ten, nine, eight
+          { t: 30.9, x: -34, y: 26, s: 0.7, tick: [28.44, 0.3226, 10] },                                              // "take your time, the timer runs"
+          { t: 45.7, lift: 17, s: 0.75, seq: [[-99, 0], [43.76, 7], [44.42, 8], [45.04, 9], [45.6, 10]] },               // "three, two, one"
+          { t: 55.9, lift: 17, s: 0.75, seq: [[-99, 0], [49.24, 5], [50.34, 6], [51.74, 7], [52.90, 8], [54.34, 9], [55.7, 10]] },   // five, getting softer
+          { t: 140.2, lift: 17, s: 0.75, seq: [[-99, 0], [134.34, 5], [135.82, 6], [136.96, 7], [138.08, 8], [139.54, 9], [140.38, 11]], blink: [140.38, 143] },   // "one, Houston"
+          { t: 154.8, x: 34, y: 26, s: 0.75, seq: [[-99, 11]], blink: [150, 156] },                                  // "you're out of time"
+          { t: 187.0, x: -34, y: 26, s: 0.75, seq: [[-99, 0], [183.34, 4], [184.14, 5], [185.80, 6], [187.08, 7]] },     // "six, five, four"
+        ] },
+        // the viewing stands, nobody in them
+        { from: 0, to: 0.1, kits: ['ccStands'], at: [[17.4, -46], [18.1, 46], [19.0, -46], [19.7, 46]] },
+        // "Olympic precision": the stopwatch on the beat
+        { from: 0, to: 0.1, kits: ['ccWatch'], at: 23.0, x: 32, y: 24, s: 0.9 },
+        // "no pressure": the gauge going into the red
+        { from: 0, to: 0.1, kits: ['ccGauge'], at: 27.4, x: -32, s: 0.62, go: 25.8, dur: 2.2 },
+        // "your stage fright's my opening act": the stage, a spot on nobody
+        { from: 0, to: 0.1, kits: ['ccStage'], at: 33.2, x: 40, s: 1.0, spot: 31.1 },
+        // ready, set, go, no show
+        { from: 0, to: 0.1, kits: ['ccTree'], at: 39.6, x: -40, y: 30, s: 0.85, times: [36.3, 37.48, 38.82, 39.4], blinks: [40.10, 40.64] },
+        // "show's over, curtain's closing", across the road, shut behind you
+        { from: 0, to: 0.1, kits: ['ccCurtains'], at: 60.9, top: 40, close0: 57.0, close1: 60.6 },
+        // "rise to the occasion, you're falling"
+        { from: 0, to: 0.1, kits: ['ccToy'], at: 68.6, go: 64.6, dur: 2.8, x0: -40, x1: 46, hm: 40, s: 0.16 },
+        // "I'd rather go"
+        { from: 0, to: 0.1, kits: ['ccHung'], at: [[84.4, 'exit', 9]], lift: 14 },
+        // "tick-tock, your clock's broken", over mission control's door
+        { from: 0, to: 0.1, kits: ['ccBroken'], at: 87.11, y: 46, s: 1.0 },
+        // mission control: the desks, the spreadsheet, the bell curve, the trophy
+        { from: 87.4, to: 113.9, kits: ['ccConsoles'], every: 0.34, x: 33 },
+        { from: 0, to: 0.1, kits: ['ccHung'], at: [[90.0, 'screen', 0, 0], [95.2, 'screen', 0, 1]], lift: 17 },
+        { from: 0, to: 0.1, kits: ['ccTrophy'], at: 100.9, x: 20, s: 0.5, spot: 99.0, ceil: 34 },
+        // out: the review, one star out of five
+        { from: 0, to: 0.1, kits: ['ccHung'], at: [[116.2, 'review']], lift: 15 },
+        { from: 0, to: 0.1, kits: ['ccStars'], at: 121.2, on: 119.2, lift: 14 },
+        { from: 114.4, to: 171, kits: ['ccFloods'], every: 1.6, x: 56 },
+        // Houston: the rocket stuck in its hole, the dish, the stopwatch going backward
+        { from: 0, to: 0.1, kits: ['ccStuck'], at: 147.8, x: -42, s: 0.6, tilt: 0.35 },
+        { from: 0, to: 0.1, kits: ['ccDish'], at: 149.4, x: 54, s: 1.1 },
+        { from: 0, to: 0.1, kits: ['ccWatch'], at: 152.0, x: -32, y: 24, s: 0.9, back: true, go: 149.5 },
+        // "can't achieve lift off": the second pad, burning, going nowhere
+        { from: 0, to: 0.1, kits: ['ccPad'], at: [{ t: 165.2, x: 84, s: 0.9, burn: [[160.6, 164.4, 1]] }] },
+        // ten seconds was your record; nine scrubbed; the eight ball
+        { from: 0, to: 0.1, kits: ['ccWatch'], at: 175.0, x: 32, y: 24, s: 0.9, fixed: 10 },
+        { from: 0, to: 0.1, kits: ['ccScrub'], at: 177.8, x: -34, y: 26, s: 1.0 },
+        { from: 0, to: 0.1, kits: ['ccEight'], at: 180.6, x: 36, s: 1.5, turn: 178.9 },
+        { from: 171, to: 196, kits: ['ccFloods'], every: 1.8, x: 60 },
+      ],
+      roads: [
+        { x: 0, width: 16, walk: 3, laneLines: 1, from: -10, to: 87.0, traffic: false, lampEvery: 40, lampColor: 0xd8e8ff, dry: true },
+        { x: 0, width: 16, walk: 3, laneLines: 1, from: 114.3, to: 205, traffic: false, lampEvery: 40, lampColor: 0xd8e8ff, dry: true },
+      ],
+      lyricPart: 'ccSign', lyricX: 0, lyricBg: '#0a1018', lyricColor: '#e8f4ff', lyricCore: '#ffffff',
+      lyrics: [
+        { t: 59.4, text: "SHOW'S OVER,\nCURTAIN'S CLOSING", h: 26, lead: 1.35 },
+        { t: 98.9, text: "HERE'S YOUR\nPARTICIPATION TROPHY", h: 15, lead: 0.9 },
+        { t: 108.8, text: "BABY, NO PRESSURE,\nWE'VE GOT ALL NIGHT", h: 15 },
+        { t: 111.2, text: 'CHECK PHONE, ACTUALLY,\nNEVER MIND, GOOD NIGHT', h: 15, lead: 1.2 },
+        { t: 127.8, text: "THREE, TWO, ONE,\nIT'S MORNING", h: 14 },
+        { t: 140.4, text: 'HOUSTON, WE\nHAVE A PROBLEM', h: 14, lead: 1.6 },
+        { t: 152.2, text: "YOU'RE OUT\nOF TIME", h: 14 },
+        { t: 189.1, text: 'ONE MORE\nCHANCE', h: 14 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'rocket', t: 197.0, x: -70, s: 1, clockX: -12, clockY: 30, clockZ: 46, clockRot: -2.07, clockS: 0.8, seq: [[-99, 4], [184.14, 5], [185.80, 6], [187.08, 7], [187.92, 8], [189.08, 9], [191.56, 10]], zero: 191.56, burnFor: 1.6, fireAt: 189.0, orbit: { r: 175, h: 6, y: 52, facing: true, back: 2, right: 0.3, swing: 0.12 } },
     },
   },
   {
@@ -342,6 +820,119 @@ export const ALBUM = [
     },
   },
   {
+    // glamour and sirens. A red carpet at night between velvet ropes, cameras going off behind
+    // them, siren light turning on poles along it. Polish in coordinated blue, perfume that breathes,
+    // a beautiful bomb, porcelain, a tiara for seventeen; the price tags, the gilded trinity, the
+    // heart, the counter from zero to infinity; a hall of mirrors with the sirens in it; and at dawn,
+    // with the music gone, an empty vanity, its bulbs still on.
+    id: 'overdose-aesthetic',
+    accent: '#ff4a9a',
+    title: 'Overdose Aesthetic',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                      // "polish coordinated"
+      { t: 10.52, kind: 'pre', endY: 22 },                                                      // "ambulance siren, so sophisticated"
+      { t: 13.72, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },        // the band
+      { t: 21.72, kind: 'verse', c: 1.1, endY: 12 },
+      { t: 24.94, kind: 'break', endY: 16 },                                                    // a bar of almost nothing
+      { t: 26.51, kind: 'verse', c: 1.15, endY: 12 },                                           // "breathing beauty"
+      { t: 37.70, kind: 'pre', endY: 22 },
+      { t: 39.33, kind: 'break', endY: 20 },                                                    // "lookin' so serene"
+      { t: 42.51, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },        // "prettiest you've been since seventeen"
+      { t: 50.50, kind: 'post', endY: 12 },
+      { t: 52.12, kind: 'verse', c: 0.9, endY: 12 },                                            // porcelain
+      { t: 63.30, kind: 'pre', endY: 22 },
+      { t: 64.91, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },        // the band again
+      { t: 69.71, kind: 'verse', c: 1.05, endY: 12 },                                           // "monetize the meltdown"
+      { t: 82.50, kind: 'pre', endY: 22 },
+      { t: 84.11, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },        // "looking so serene"
+      { t: 96.91, kind: 'post', c: 1.0, endY: 12, turn: 0.3 },                                  // the hall of mirrors
+      { t: 101.72, kind: 'verse', c: 1.1, endY: 12, turn: 0.3 },
+      { t: 112.89, kind: 'break', endY: 18, turn: 0.3 },                                        // "sickly, sweetie"
+      { t: 114.52, kind: 'pre', endY: 22, turn: 0.3 },
+      { t: 116.11, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },       // out of the hall
+      { t: 127.30, kind: 'pre', endY: 22 },
+      { t: 128.93, kind: 'break', endY: 20 },                                                   // "lookin' so serene"
+      { t: 132.10, kind: 'final', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },
+      { t: 141.70, kind: 'outro', endY: 5 },                                                    // the music goes
+    ],
+    palette: 'oaNight',
+    world: 'glam',
+    looks: [
+      { t: -99, palette: 'oaNight' },
+      { t: 13.72, palette: 'oaFlash', fade: 0.3 },      // the band
+      { t: 24.9, palette: 'oaNight', fade: 0.2 },       // a bar of nothing
+      { t: 26.5, palette: 'oaFlash', fade: 0.3 },
+      { t: 42.51, palette: 'oaPink', fade: 0.3 },       // the chorus
+      { t: 52.12, palette: 'oaPorcelain', fade: 0.6 },  // porcelain
+      { t: 64.91, palette: 'oaGold', fade: 0.3 },       // the trinity
+      { t: 84.11, palette: 'oaPink', fade: 0.3 },
+      { t: 97.1, palette: 'oaMirror', fade: 0.4 },      // the hall of mirrors
+      { t: 116.11, palette: 'oaFlash', fade: 0.3 },
+      { t: 132.1, palette: 'oaPink', fade: 0.3 },
+      { t: 146.0, palette: 'oaDawn', fade: 5.0 },       // the music goes, and it's morning
+    ],
+    moments: [
+      { t: 13.72, kind: 'shutter', k: 0.6 },
+      { t: 24.94, kind: 'blackout', dur: 1.4, k: 0.5 },
+      { t: 42.51, kind: 'shutter', k: 0.7 },
+      { t: 64.91, kind: 'shutter', k: 0.6 },
+      { t: 84.11, kind: 'shutter', k: 0.6 },
+      { t: 112.89, kind: 'blackout', dur: 1.5, k: 0.6 },
+      { t: 116.11, kind: 'shutter', k: 0.7 },
+      { t: 132.10, kind: 'shutter', k: 0.8 },
+    ],
+    confetti: [[42.51, 50.4], [132.1, 141.6]],
+    confettiColors: [0xff5aa8, 0xffd8ec, 0xe8c060, 0xffffff, 0xb8c8ff],
+    scenery: {
+      rooms: [
+        { style: 'mirrors', from: 96.91, to: 116.11, caps: [{ kind: 'front', hw: 13, hh: 26 }, { kind: 'wall', hw: 13, hh: 28 }] },   // the hall of mirrors
+      ],
+      sirenHall: [101.72, 112.89],
+      zones: [
+        { from: -6, to: 97.0, kits: ['farcity'], x: 96 },
+        { from: 116.0, to: 160, kits: ['farcity'], x: 110 },
+        // the carpet: velvet ropes both sides, sirens turning on poles, cameras behind the ropes
+        { from: -4, to: 96.9, kits: ['oaRopes'] },
+        { from: 116.1, to: 156, kits: ['oaRopes'] },
+        { from: 4, to: 96.5, kits: ['oaSirens'], every: 1.1, on: 10.04 },
+        { from: 116.3, to: 156, kits: ['oaSirens'], every: 1.1, on: 116.11, off: 141.7 },
+        { from: 13.72, to: 24.9, kits: ['oaFlashes'] },
+        { from: 26.5, to: 39.3, kits: ['oaFlashes'] },
+        { from: 42.5, to: 52.1, kits: ['oaFlashes'], k: 1.3 },
+        { from: 64.9, to: 96.9, kits: ['oaFlashes'] },
+        { from: 116.1, to: 141.7, kits: ['oaFlashes'], k: 1.3 },
+        // his things
+        { from: 6.4, to: 10.8, kits: ['oaPolishRow'], every: 0.42, x: 30, s: 1.6 },                       // "blue lips match my nail polish, coordinated"
+        { from: 30.4, to: 34.2, kits: ['oaPerfumes'], every: 0.8, x: 30, beat: 0.8, puff: 30.98 }, // "breathing beauty"
+        { from: 53.2, to: 58.8, kits: ['oaVases'], every: 0.55, x: 28 },                          // "porcelain"
+        { from: 0, to: 0.1, kits: ['oaProps'], at: [
+          { t: 45.0, x: 36, kind: 'tiara', s: 1.3 },                       // "prettiest you've been since seventeen"
+          { t: 62.0, x: -30, kind: 'bomb', s: 1.4 },                       // "so pretty, pretty, a beautiful bomb"
+          { t: 71.3, x: 20, kind: 'tag', y: 34, s: 1.1 },                   // "monetize the meltdown"
+          { t: 72.1, x: -22, kind: 'tag', y: 38, s: 1.2 },
+          { t: 72.9, x: 24, kind: 'tag', y: 30, s: 1.0 },
+          { t: 75.8, x: -32, kind: 'triptych', s: 1.3 },                   // "posthumous trinity"
+          { t: 78.8, x: 26, kind: 'heart', y: 26, s: 1.2 },                // "love your look"
+          { t: 82.4, x: -34, kind: 'counter', s: 1.3, inf: 81.12 },        // "from zero to infinity"
+          { t: 134.4, x: -36, kind: 'tiara', s: 1.3 },                     // "pretty as you've been since seventeen"
+        ] },
+      ],
+      lyricPart: 'oaSign', lyricX: 0, lyricBg: '#0c0a10', lyricColor: '#ffd0ec', lyricCore: '#ffffff',
+      lyrics: [
+        { t: 11.88, text: 'SO SOPHISTICATED', h: 14 },
+        { t: 41.74, text: "PRETTIEST YOU'VE BEEN\nSINCE SEVENTEEN", h: 14 },
+        { t: 59.12, text: 'SO PRETTY, PRETTY,\nA BEAUTIFUL BOMB', h: 14 },
+        { t: 70.64, text: 'MONETIZE THE MELTDOWN', h: 14 },
+        { t: 74.00, text: 'POSTHUMOUS TRINITY', h: 14 },
+        { t: 77.70, text: 'LOVE YOUR LOOK', h: 14 },
+        { t: 129.94, text: "LOOKIN' SO SERENE", h: 14 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'vanity', t: 152.4, x: -40, s: 1.6, rot: -1.57, orbit: { r: 110, h: 10, y: 18, facing: true, back: 0.6, right: 0.3, swing: 0.12 } },
+    },
+  },
+  {
     // a Sunday in a sunny suburb, a case built out of nothing: the dentist three times this
     // week, his car halfway down her street, brunch in broad daylight, the matinee. Nothing
     // happened. In the end he makes his getaway at the speed limit, blinker on, gone for good.
@@ -442,6 +1033,139 @@ export const ALBUM = [
         { t: 193.2, text: 'GONE FOR GOOD', side: -1 },
       ],
       finale: { kind: 'town', t: 207.3, x: 17, s: 1.3, fireAt: 200.3, orbit: { r: 19, h: 4.4, y: 5.4, facing: true, back: 1.2, right: 0.3, swing: 0.25 } },
+    },
+  },
+  {
+    // the family's year in their suburb, told back to him. The street at night and the phone left
+    // unlocked; the supermarket: the frozen-foods aisle, a coffee, the scales; the match, and the
+    // fire; his dad's driveway, the grill, the trophies; the apple tree; Christmas and a single click;
+    // same genetics; Thanksgiving, Father's Day, the table with the empty chair, the yard in the rain;
+    // revenge served cold; and the family's house dressed for every holiday at once.
+    id: 'i-fucked-your-dad',
+    accent: '#ff5a4a',
+    title: 'I FUCKED YOUR DAD',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                      // "oh, you're gonna hate this story"
+      { t: 9.75, kind: 'pre', endY: 22 },
+      { t: 11.18, kind: 'verse', start: 'launch', launchBeats: 4, kick: 8, endY: 11 },          // the band
+      { t: 22.59, kind: 'verse', c: 1.0, endY: 12, turn: 0.3 },                                 // the frozen-foods aisle
+      { t: 33.99, kind: 'verse', c: 1.15, endY: 12, turn: 0.3 },                                // "told him everything"
+      { t: 45.39, kind: 'pre', endY: 18 },
+      { t: 46.82, kind: 'bridge', endY: 14 },                                                   // quiet: "you lit the match so gently"
+      { t: 53.95, kind: 'pre', endY: 24 },                                                      // "but I'm the fire"
+      { t: 59.64, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 11, endY: 10 },
+      { t: 72.47, kind: 'chorus', c: 1.3, endY: 11 },
+      { t: 83.87, kind: 'chorus', c: 1.25, endY: 11 },
+      { t: 95.27, kind: 'verse', endY: 11 },
+      { t: 106.68, kind: 'verse', c: 1.0, endY: 12 },                                           // "the apple didn't fall far"
+      { t: 116.65, kind: 'pre', endY: 22 },
+      { t: 118.07, kind: 'chorus', start: 'launch', launchBeats: 4, kick: 9, endY: 11 },        // "I could ruin Christmas"
+      { t: 129.47, kind: 'bridge', endY: 14 },                                                  // "you wanted to destroy me"
+      { t: 136.57, kind: 'pre', endY: 24 },                                                     // "but baby, I win"
+      { t: 140.88, kind: 'break', endY: 18 },
+      { t: 142.29, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },
+      { t: 155.13, kind: 'chorus', c: 1.35, endY: 11 },                                         // "same genetics"
+      { t: 166.54, kind: 'final', c: 1.2, endY: 12 },                                           // Thanksgiving, Father's Day
+      { t: 177.96, kind: 'verse', c: 0.85, endY: 12, turn: 0.3 },                               // "the ghost at every table"
+      { t: 183.65, kind: 'verse', c: 1.1, endY: 12 },                                           // the yard
+      { t: 193.63, kind: 'pre', endY: 22 },
+      { t: 195.06, kind: 'break', endY: 18 },
+      { t: 196.45, kind: 'final', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },
+      { t: 207.88, kind: 'final', c: 1.4, endY: 11 },                                           // "revenge is served cold"
+      { t: 219.30, kind: 'final', c: 1.3, endY: 11 },
+      { t: 230.71, kind: 'outro', endY: 5 },                                                    // "you're welcome"
+    ],
+    palette: 'fdNight',
+    world: 'family',
+    collect: 'apple',
+    titleView: { ahead: -0.16, x: 1.4, h: 1.6, back: -0.8, lookH: 2.4 },
+    looks: [
+      { t: -99, palette: 'fdNight' },
+      { t: 22.9, palette: 'fdMarket', fade: 0.4 },              // the supermarket
+      { t: 45.6, palette: 'fdNight', fade: 0.4 },               // the car park
+      { t: 55.0, palette: 'fdFire', fade: 0.6 },                // "the fire that burned it all"
+      { t: 59.9, palette: 'fdSummer', fade: 0.6 },              // his dad's driveway, a summer night
+      { t: 96.0, palette: 'fdDusk', fade: 1.6 },                // the lawns at dusk, the sprinklers
+      { t: 118.4, palette: 'fdWinter', fade: 0.6 },             // Christmas
+      { t: 142.6, palette: 'fdDay', fade: 0.6 },                // a bright day
+      { t: 166.8, palette: 'fdDay', set: { horizon: 0xffb070, zenith: 0x4a6aa8, skyGlow: 0xff9a40, ground: 0x6a5a2a, fog: 0xc89a70, tree: 0x8a4a1a, sunK: 1.4 }, fade: 0.6 },   // Thanksgiving
+      { t: 172.0, palette: 'fdDay', set: { horizon: 0xd8eaff, skyGlow: 0xfff0c0, sunK: 1.8 }, fade: 0.6 },   // Father's Day
+      { t: 177.6, palette: 'fdDusk', set: { fog: 0x3a4a5a, skyLight: 0x8a9ab8, horizon: 0x6a7a9a, skyGlow: 0x9aa8c8, sunK: 0.5 }, fade: 0.5 },   // the ghost at every table
+      { t: 183.4, palette: 'fdRain', fade: 0.6 },               // the yard in the rain
+      { t: 196.8, palette: 'fdSummer', fade: 0.6 },             // the last chorus, fireworks
+      { t: 232.0, palette: 'fdDawn', fade: 3.0 },               // every holiday
+    ],
+    moments: [
+      { t: 54.8, kind: 'flash', k: 0.25 },                     // the fire
+      { t: 83.9, kind: 'fireworks', n: 8, ahead: 4.6, x: 46, y: 34, size: 1.0 },
+      { t: 88.2, kind: 'fireworks', n: 8, ahead: 4.6, x: 46, y: 34, size: 1.0 },
+      { t: 91.5, kind: 'fireworks', n: 10, ahead: 4.6, x: 50, y: 36, size: 1.1 },
+      { t: 125.3, kind: 'shutter', k: 0.7 },                   // "a single click"
+      { t: 183.6, kind: 'thunder', k: 0.5 },                   // the yard, the weather
+      { t: 197.0, kind: 'fireworks', n: 10, ahead: 4.6, x: 48, y: 34, size: 1.1 },
+      { t: 202.2, kind: 'fireworks', n: 10, ahead: 4.6, x: 48, y: 34, size: 1.1 },
+      { t: 207.9, kind: 'fireworks', n: 14, ahead: 4.6, x: 52, y: 36, size: 1.2 },
+      { t: 219.3, kind: 'fireworks', n: 12, ahead: 4.6, x: 50, y: 36, size: 1.2 },
+      { t: 225.0, kind: 'fireworks', n: 12, ahead: 4.6, x: 50, y: 36, size: 1.2 },
+      { t: 239.5, kind: 'pop', k: 0.4 },                       // "you're welcome"
+    ],
+    confetti: [[166.6, 171.4], [207.9, 212.4]],
+    confettiColors: [0xff5a4a, 0xffd860, 0xff9a3a, 0x8a3a1a, 0xffffff],
+    confettiNormal: true,
+    scenery: {
+      rooms: [
+        { style: 'market', from: 22.59, to: 45.39, caps: [{ kind: 'front', hw: 12, hh: 19 }, { kind: 'wall', hw: 12, hh: 19 }] },   // the supermarket
+      ],
+      zones: [
+        // the street, the houses, the porch lights
+        { from: -6, to: 22.4, kits: ['suburb'], lampX: 17 },
+        { from: 45.5, to: 231, kits: ['suburb'], lampX: 17 },
+        { from: 0, to: 0.1, kits: ['fdAisle'], at: 24.6, lift: 13 },
+        // the fire, along both sides
+        { from: 54.8, to: 61.5, kits: ['fdFire'], every: 0.22, x: 26, on: 54.8, off: 61.0 },
+        { from: 95.6, to: 110.6, kits: ['fdSprinklers'], every: 0.55 },
+        { from: 118.2, to: 131.0, kits: ['fdLights'], every: 0.25, x: 15, click: 125.3 },
+        { from: 0, to: 0.1, kits: ['fdProps'], at: [
+          { t: 18.6, x: -30, kind: 'phone', s: 1.5, burn: 20.0 },                  // "left your phone unlocked"
+          { t: 29.6, x: -22, kind: 'coffee', s: 1.1, floor: true },                // "he bought me coffee"
+          { t: 34.6, x: 22, kind: 'cart', s: 1.2, floor: true },                   // "let me walk you through"
+          { t: 44.2, x: -22, kind: 'scales', s: 1.0, level: 43.4, floor: true },   // "we can equalize"
+          { t: 54.2, x: -30, kind: 'match', s: 1.3, strike: 52.6 },                // "you lit the match so gently"
+          { t: 62.8, x: 30, kind: 'mug', s: 1.6 },                                 // "better than you"
+          { t: 67.8, x: -30, kind: 'grill', s: 1.8 },
+          { t: 73.2, x: 30, kind: 'podium', s: 1.5 },
+          { t: 113.0, x: 30, kind: 'appletree', s: 1.3 },                         // "the apple didn't fall far from the tree"
+          { t: 126.0, x: -32, kind: 'xmas', s: 1.2, click: 125.3 },                // "I could ruin Christmas with a single click"
+          { t: 137.0, x: 30, kind: 'trophy', s: 1.4 },                             // "but baby, I win"
+          { t: 158.8, x: -30, kind: 'helix', s: 1.2 },                             // "same genetics, different man"
+          { t: 168.6, x: 30, kind: 'turkey', s: 1.3 },                             // "every Thanksgiving"
+          { t: 173.6, x: -30, kind: 'gift', s: 1.5 },                              // "every Father's Day"
+          { t: 179.0, x: 40, kind: 'table', s: 1.6 },                              // "I'm the ghost at every table"
+          { t: 181.8, x: -40, kind: 'table', s: 1.6, hell: true },                 // "freshly catered hell"
+          { t: 185.8, x: -30, kind: 'swing', s: 1.3 },                             // crying in the yard
+          { t: 193.6, x: -60, kind: 'letters', s: 1.6, on: 191.4 },                // "every time you hear Dad"
+          { t: 215.0, x: 30, kind: 'cold', s: 1.3, lift: 213.8 },                  // "revenge is served cold"
+        ] },
+      ],
+      lyricPart: 'fdSign', lyricX: 0, lyricBg: '#f4f2ea', lyricColor: '#141414', lyricCore: '#141414',
+      lyrics: [
+        { t: 0.0, text: "OH, YOU'RE GONNA\nHATE THIS STORY", h: 14, lead: 3.2 },
+        { t: 16.74, text: 'LEFT YOUR PHONE UNLOCKED\nLIKE A FUCKING CLOWN', h: 14 },
+        { t: 25.38, text: "HOW YOU HOLDING UP?\nIT'S BEEN A WHILE", h: 12 },
+        { t: 43.06, text: 'I KNOW A WAY THAT\nWE CAN EQUALIZE', h: 12 },
+        { t: 52.5, text: 'YOU LIT THE MATCH\nSO GENTLY', h: 14 },
+        { t: 111.36, text: "THE APPLE DIDN'T FALL\nFAR FROM THE TREE AT ALL", h: 14 },
+        { t: 122.84, text: 'I COULD RUIN CHRISTMAS\nWITH A SINGLE CLICK', h: 14 },
+        { t: 133.84, text: 'BUT BABY, I WIN', h: 14 },
+        { t: 157.42, text: 'SAME GENETICS,\nDIFFERENT MAN', h: 14 },
+        { t: 177.24, text: "I'M THE GHOST\nAT EVERY TABLE", h: 14 },
+        { t: 185.74, text: "IT'S JUST THE WEATHER", h: 14 },
+        { t: 213.4, text: 'REVENGE IS SERVED COLD', h: 14 },
+        { t: 239.54, text: "YOU'RE WELCOME", h: 14, lead: 0.8 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'house', t: 244.0, x: -64, s: 2.4, rot: -1.57, fireAt: 232.0, orbit: { r: 130, h: 14, y: 16, facing: true, back: 0.6, right: 0.3, swing: 0.12 } },
     },
   },
   {
@@ -571,6 +1295,161 @@ export const ALBUM = [
     },
   },
   {
+    // the venue he played for a decade and a day, and in June they changed the locks: the alley
+    // and the stage door with its new deadbolt and the memo, the room next door where the party
+    // comes through the drywall, the street under the marquee; back in through the front doors,
+    // the piano playing his songs, the dressing room and his letters, the party, the bar's open
+    // tab, the stands. Out the back to the stage door again: somebody made a key.
+    id: 'back-by-popular-demand',
+    accent: '#f0c860',
+    title: 'Back by Popular Demand',
+    startY: 11,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 10 },
+      { t: 9.26, kind: 'verse', start: 'launch', launchBeats: 3, kick: 7, endY: 11 },                   // the band comes in
+      { t: 15.55, kind: 'verse', endY: 10 },                                                            // "they changed the locks in June"
+      { t: 29.64, kind: 'verse', c: 0.85, endY: 11, turn: 0.3 },                                        // "I could hear you through the drywall"
+      { t: 42.15, kind: 'pre', endY: 24, turn: 0.3 },                                                   // "nineteen days, I counted twice"
+      { t: 53.09, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },                // out the window: "so say it like you mean it"
+      { t: 76.33, kind: 'break', start: 'launch', launchBeats: 3, kick: 8, endY: 12 },                  // the band stops; land as it comes back
+      { t: 79.42, kind: 'verse', endY: 11, turn: 0.3 },                                                 // "now the door swings like it's sorry"
+      { t: 97.91, kind: 'verse', c: 0.9, endY: 12, turn: 0.3 },                                         // "but the calendar says tonight"
+      { t: 104.07, kind: 'pre', endY: 24, turn: 0.3 },                                                  // "nineteen days I wrote you letters"
+      { t: 116.36, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10, turn: 0.3 },
+      { t: 137.90, kind: 'break', start: 'launch', launchBeats: 3, kick: 8, endY: 12, turn: 0.3 },      // the band stops again
+      { t: 140.97, kind: 'post', endY: 14, turn: 0.3 },                                                 // "somebody kept the tab open"
+      { t: 154.78, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 9, endY: 12, turn: 0.3 },     // "a banner in the doorway"
+      { t: 162.45, kind: 'pre', endY: 20, turn: 0.3 },                                                  // "you don't get to pick who misses you"
+      { t: 167.08, kind: 'break', endY: 26, turn: 0.3 },                                                // "lucky me, it was you"
+      { t: 173.26, kind: 'final', start: 'launch', launchBeats: 3, kick: 12, endY: 10, turn: 0.3 },     // the band comes back
+      { t: 187.11, kind: 'final', c: 1.3, endY: 12, turn: 0.3 },                                        // "once enough to fill the stands"
+      { t: 197.85, kind: 'final', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },                // out the back
+      { t: 213.22, kind: 'outro', endY: 5 },                                                            // "somebody made a key"
+    ],
+    palette: 'bpAlley',
+    world: 'venue',
+    collect: 'pick',
+    titleView: { ahead: -0.16, x: 1.4, h: 2.2, back: -0.8, lookH: 5.0 },   // behind her, the alley and its string lights ahead
+    looks: [
+      { t: -99, palette: 'bpAlley' },
+      { t: 29.8, palette: 'bpNext', fade: 0.4 },        // next door, through the drywall
+      { t: 53.3, palette: 'bpStreet', fade: 0.3 },      // out the window: the street under the marquee
+      { t: 81.2, palette: 'bpHall', fade: 0.4 },        // "the hallway smells like home"
+      { t: 85.9, palette: 'bpClub', fade: 0.4 },        // the piano
+      { t: 100.6, palette: 'bpSpot', fade: 0.8 },       // "and tonight the song is mine"
+      { t: 104.2, palette: 'bpDressing', fade: 0.3 },   // his letters
+      { t: 116.5, palette: 'bpParty', fade: 0.2 },
+      { t: 141.1, palette: 'bpBar', fade: 0.4 },        // the tab still open
+      { t: 154.9, palette: 'bpParty', fade: 0.2 },      // glitter
+      { t: 167.6, palette: 'bpQuiet', fade: 0.8 },      // "lucky me, it was you"
+      { t: 173.7, palette: 'bpArena', fade: 0.3 },      // the band's back
+      { t: 187.6, palette: 'bpStands', fade: 1.2 },     // "once enough to fill the stands"
+      { t: 199.8, palette: 'bpOutro', fade: 1.0 },      // out the back
+      { t: 209.0, palette: 'bpDawn', fade: 6.0 },       // "somebody made a key"
+    ],
+    moments: [
+      { t: 18.9, kind: 'knock', n: 1, k: 0.45 },          // "locks in June"
+      { t: 25.1, kind: 'knock', n: 1, k: 0.5 },           // "a deadbolt"
+      { t: 32.75, kind: 'ring', k: 0.3, dur: 0.5 },        // "every toast"
+      { t: 169.0, kind: 'flash', k: 0.12 },               // the spotlight
+      { t: 173.7, kind: 'fireworks', n: 10, ahead: 2.6, x: 40, y: 44 },    // the band's back
+      { t: 187.0, kind: 'fireworks', n: 12, ahead: 2.8, x: 46, y: 50 },    // "fill the stands"
+      { t: 198.25, kind: 'flash', k: 0.25 },
+      { t: 207.1, kind: 'knock', n: 1, k: 0.55 },         // the key turns
+    ],
+    confetti: [[63.8, 67.2], [116.4, 119.6], [157.6, 162.4], [173.7, 177.0], [187.0, 190.4], [196.6, 199.3]],
+    confettiColors: [0xffd84a, 0xffffff, 0xff8ad8, 0x8ae8ff, 0xff4a5a, 0xf0c860],
+    confettiNormal: true,
+    scenery: {
+      roomEvents: { loud: [34.9, 41.0] },      // "funny how a room gets louder"
+      doors: { t: 80.96, open: 80.3 },        // "now the door swings like it's sorry"
+      rooms: [
+        { style: 'next', from: 29.64, to: 42.15, caps: [{ kind: 'front', hw: 10, hh: 24 }, BPDOOR] },                // next door, through the drywall
+        { style: 'next', from: 42.15, to: 53.09, caps: [null, { kind: 'wall', hw: 11, hh: 21, sill: 5 }] },         // nineteen days; out the window
+        { style: 'hall', from: 80.96, to: 85.59, caps: [{ kind: 'front', hw: 11.5, hh: 26 }, BPDOOR] },             // in the front doors: the hallway
+        { style: 'club', from: 85.59, to: 97.91, caps: [null, BPDOOR] },                                           // the piano
+        { style: 'club', from: 97.91, to: 104.07, caps: [null, BPDOOR] },                                          // the calendar says tonight
+        { style: 'dressing', from: 104.07, to: 110.22, caps: [null, BPDOOR] },                                     // his letters
+        { style: 'dressing', from: 110.22, to: 116.36, caps: [null, BPDOOR] },                                     // "save my seat"
+        { style: 'party', from: 116.36, to: 128.67, caps: [null, BPDOOR] },
+        { style: 'party', from: 128.67, to: 140.97, caps: [null, BPDOOR] },
+        { style: 'bar', from: 140.97, to: 154.78, caps: [null, BPDOOR] },                                          // the tab, the date, the jukebox; the banner in the doorway
+        { style: 'party', from: 154.78, to: 167.08, caps: [null, BPDOOR] },                                        // glitter
+        { style: 'quiet', from: 167.08, to: 173.26, caps: [null, BPDOOR] },                                        // "lucky me, it was you"
+        { style: 'arena', from: 173.26, to: 199.40, caps: [null, { kind: 'wall', hw: 12, hh: 28 }], fallAt: 187.0, fallFor: 2.2 },  // the stands
+      ],
+      zones: [
+        // the alley behind the venue: the walk-ups' backs, the bulbs strung across, ten years of posters
+        { from: -4, to: 29.6, kits: ['tenements'], x: 26, lines: 0, wake0: 0.55, clear: [[24.0, 27.6, 1]] },
+        { from: -2, to: 29.4, kits: ['bpFestoon'], every: 0.9, span: 26 },
+        { from: 20.6, to: 30.2, kits: ['bpPosters'], every: 0.9, x: 18.7, n: 5, clear: [[24.4, 27.0, 1]] },
+        { from: 25.7, to: 25.8, kits: ['bpStageDoor'], at: 25.7, x: 20, s: 0.95, memo: true },   // "a memo and a deadbolt"
+        // next door: the frames shaking, every toast; the calendar, the tally, the guest list
+        { from: 30.0, to: 52.6, kits: ['bpFrames'], every: 0.8, x: 39.4, y: 12, cells: [0, 1], clear: [[43.4, 45.8, -1], [46.2, 48.6, 1]] },
+        { from: 34.0, to: 34.1, kits: ['bpToast'], at: 34.0, lift: 12, s: 0.7 },
+        { from: 44.6, to: 44.7, kits: ['bpCal'], at: 44.6, x: -39.2, y: 15, cell: 0, s: 1.1 },
+        { from: 47.4, to: 47.5, kits: ['bpTally'], at: 47.4, x: 39.2, y: 15, s: 1.1 },
+        { from: 51.4, to: 52.9, kits: ['bpHung'], at: [[51.4, 'list', -6], [52.7, 'tag', 6]], lift: 15 },
+        // out the window: the street under the bulbs and the bunting, the balloons, the banner, the punch
+        { from: 53.1, to: 80.9, kits: ['tenements'], x: 27, lines: 0, wake0: 0.75 },
+        { from: 53.3, to: 80.4, kits: ['bpBunting'], every: 0.8, span: 28, lift: 12 },
+        { from: 54.0, to: 80.4, kits: ['bpBalloons'], every: 1.1, x: 19 },
+        { from: 62.4, to: 62.5, kits: ['bpHung'], at: [[62.4, 'banner']], tilt: 0.12 },
+        { from: 64.6, to: 64.7, kits: ['bpPunch'], at: [[64.6, -25, true]] },
+        { from: 78.2, to: 78.3, kits: ['bpMarquee'], at: 78.2, lift: 24 },
+        // inside: the hallway's frames, the piano, his songs on paper, tonight, the mic
+        { from: 81.2, to: 85.4, kits: ['bpFrames'], every: 0.55, x: 21.4, y: 14, s: 1.0, cells: [2, 3] },
+        { from: 88.8, to: 88.9, kits: ['bpPiano'], at: 88.8, x: -27, good: 92.9, s: 1.2 },
+        { from: 95.6, to: 95.7, kits: ['bpPages'], at: 95.6, go: 94.8, x: -1 },
+        { from: 99.8, to: 99.9, kits: ['bpHung'], at: [[99.8, 'cal', 0, 1]] },
+        { from: 102.2, to: 102.3, kits: ['bpMic'], at: 102.2, x: 24, spot: 100.4, off: 104.4, ceil: 44 },
+        // the dressing room: the letters going round, the one sentence, the seat
+        { from: 106.2, to: 106.3, kits: ['bpLetters'], at: 106.2 },
+        { from: 112.8, to: 112.9, kits: ['bpHung'], at: [[112.8, 'letter']] },
+        { from: 115.6, to: 115.7, kits: ['bpSeat'], at: 115.6, x: -22, s: 1.3 },
+        // the party: the mirrored balls, the balloons, the banner, the punch
+        { from: 119.0, to: 137.1, kits: ['bpDisco'], at: [119.0, 129.0, 137.0], lift: 18 },
+        { from: 116.6, to: 140.6, kits: ['bpBalloons'], every: 1.2, x: 30, floor: true },
+        { from: 124.0, to: 124.1, kits: ['bpHung'], at: [[124.0, 'banner']], tilt: -0.12 },
+        { from: 125.8, to: 125.9, kits: ['bpPunch'], at: [[125.8, 26, true]], floor: true },
+        // the bar: the tab still open, the date circled, the jukebox, the banner in the doorway
+        { from: 143.6, to: 143.7, kits: ['bpRegister'], at: 143.6, x: 25, y: 12 },
+        { from: 147.4, to: 147.5, kits: ['bpHung'], at: [[147.4, 'cal', 0, 1]] },
+        { from: 150.0, to: 150.1, kits: ['bpJuke'], at: 150.0, x: -25, s: 1.3 },
+        { from: 154.5, to: 154.6, kits: ['bpHung'], at: [[154.5, 'banner']], lift: 15, tilt: 0.15 },
+        { from: 155.4, to: 166.6, kits: ['bpBalloons'], every: 1.2, x: 30, floor: true },
+        { from: 158.0, to: 158.1, kits: ['bpDisco'], at: [158.0], lift: 18 },
+        // the quiet: one spotlight on the mic
+        { from: 170.8, to: 170.9, kits: ['bpMic'], at: 170.8, x: -22, spot: 168.4, off: 173.3, ceil: 44, s: 1.3 },
+        // the stands
+        { from: 184.0, to: 199.3, kits: ['bpStands'], x: 80, on: 186.8, every: 0.45 },
+        { from: 197.4, to: 197.5, kits: ['bpMarquee'], at: 197.4, lift: 19, s: 1.0 },
+        // out the back: the alley again, the bulbs, the posters
+        { from: 199.4, to: 219.6, kits: ['tenements'], x: 26, lines: 0, wake0: 0.6 },
+        { from: 199.6, to: 213.6, kits: ['bpFestoon'], every: 0.9, span: 26 },
+        { from: 201, to: 205, kits: ['bpPosters'], every: 0.9, x: 18.7, n: 5 },
+      ],
+      roads: [
+        { x: 0, width: 14, walk: 4, laneLines: 0, from: -10, to: 29.6, traffic: false, lampEvery: 30, dry: true },
+        { x: 0, width: 18, walk: 5, laneLines: 1, from: 53.1, to: 81.0, lanes: [-4.5, 4.5], density: 0.12, lampEvery: 26 },
+        { x: 0, width: 14, walk: 4, laneLines: 0, from: 199.4, to: 230, traffic: false, lampEvery: 30, dry: true },
+      ],
+      lyricPart: 'bpSign', lyricX: 0, lyricBg: '#2a0a10', lyricColor: '#ffd890', lyricCore: '#fff4dc',
+      lyrics: [
+        { t: 16.2, text: 'THEY CHANGED THE\nLOCKS IN JUNE', h: 14 },
+        { t: 55.2, text: 'SAY IT LIKE\nYOU MEAN IT', h: 14 },
+        { t: 70.1, text: "LIE TO ME,\nI'LL UNDERSTAND", h: 14 },
+        { t: 100.0, text: 'TONIGHT THE\nSONG IS MINE', side: -1, x: 12, h: 14, lead: 1.0 },
+        { t: 163.1, text: "YOU DON'T GET TO PICK\nWHO MISSES YOU", h: 15 },
+        { t: 169.0, text: 'LUCKY ME,\nIT WAS YOU', h: 9 },
+        { t: 202.6, text: 'THEY CHANGED THE\nLOCKS IN JUNE', h: 14 },
+        { t: 205.6, text: 'SOMEBODY\nMADE A KEY', h: 14, lead: 1.6 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'key', t: 219.6, x: 0, fireAt: 205.6, turn: 207.1, open: 208.3, orbit: { r: 70, h: 4, y: 20, facing: true, back: 1.4, right: 0.32, swing: 0.12 } },
+    },
+  },
+  {
     // a clear morning, technically freezing. No coat; a coat is one more thing to carry.
     // Running the sunlit stretches, catching breath in the shade, early for every train
     // that pulls away. At the end the door's left unlocked and the cat thinks he hunts.
@@ -643,6 +1522,69 @@ export const ALBUM = [
         { t: 197.1, text: 'I LEAVE THE DOOR\nUNLOCKED THESE DAYS', side: 1, x: 26 },
       ],
       finale: { kind: 'door', t: 222.6, x: 23, fireAt: 210.85, orbit: { r: 19, h: 3.5, y: 2.4, facing: true, back: 1.4, right: 0.3 } },
+    },
+  },
+  {
+    // a frozen lake at night, made from the music and nothing else. The hits crack the ice open, blue
+    // light under it; the silence, then the band breaks in; shards of ice pushed up along the road on
+    // every bar; a ship locked in the ice; one bar of nothing; the peak breaks the whole lake into
+    // floes with the light coming up between them; and at the end the ship in open water, the aurora.
+    id: 'good-girls-dont-fight-back',
+    accent: '#7ae8ff',
+    title: "Good Girls Don't Fight Back",
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                      // the first hits
+      { t: 11.53, kind: 'pre', endY: 22 },                                                      // the bass comes in
+      { t: 14.85, kind: 'verse', start: 'launch', launchBeats: 4, kick: 10, endY: 11 },         // the band, after the silence
+      { t: 26.84, kind: 'verse', c: 1.1, endY: 12 },
+      { t: 33.48, kind: 'chorus', endY: 11 },
+      { t: 40.10, kind: 'break', endY: 16 },                                                    // one bar with the bass gone
+      { t: 41.34, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },        // back in
+      { t: 53.35, kind: 'final', start: 'launch', launchBeats: 4, kick: 12, endY: 10 },         // the peak
+      { t: 66.59, kind: 'outro', endY: 5 },
+    ],
+    palette: 'ggIce',
+    world: 'ice',
+    collect: 'flake',
+    skyline: 'hills',
+    groundStyle: 'country',
+    titleView: { ahead: -0.16, x: 1.4, h: 2.2, back: -0.8, lookH: 5.0 },
+    looks: [
+      { t: -99, palette: 'ggIce' },
+      { t: 13.3, palette: 'ggIce', set: { skyLight: 0x1a2a40, hemiK: 1.0, snow: 0, fog: 0x02060c, glow: 0x2a6a8a }, fade: 0.2 },   // the silence
+      { t: 15.0, palette: 'ggBand', fade: 0.2 },             // the band breaks in
+      { t: 33.6, palette: 'ggLoud', fade: 0.8 },
+      { t: 40.2, palette: 'ggLoud', set: { skyLight: 0x1a2a40, hemiK: 1.1, glow: 0x2a6a8a }, fade: 0.15 },   // one bar of nothing
+      { t: 41.4, palette: 'ggLoud', fade: 0.15 },
+      { t: 53.5, palette: 'ggPeak', fade: 0.4 },             // the peak
+      { t: 67.0, palette: 'ggEnd', fade: 2.4 },              // open water
+    ],
+    moments: [
+      { t: 6.99, kind: 'flash', k: 0.15 },
+      { t: 14.85, kind: 'flash', k: 0.3 },
+      { t: 41.34, kind: 'flash', k: 0.25 },
+      { t: 53.35, kind: 'flash', k: 0.35 },
+      { t: 65.34, kind: 'flash', k: 0.2 },
+    ],
+    confetti: [[14.9, 17.4], [53.4, 57.0]],
+    confettiColors: [0xffffff, 0xd8f8ff, 0x8ae8ff, 0xb8f0ff],
+    confettiNormal: true,
+    scenery: {
+      cracks: [[0.39, -40, 2.4, 0.8], [1.64, 46, 2.4, 0.8], [3.71, -30, 2.2, 1.0], [5.36, 38, 2.2, 1.0], [6.99, 0, 2.6, 1.5], [7.84, -50, 2.2, 1.0], [9.48, 44, 2.2, 1.1], [10.31, -36, 2.2, 1.1], [11.13, 30, 2.2, 1.1], [11.95, -24, 2.2, 1.2], [14.85, -40, 2.0, 1.6], [14.85, 44, 2.4, 1.6], [14.85, 0, 3.0, 1.8], [16.93, 36, 2.2, 1.1], [18.58, -43, 2.2, 1.1], [20.24, 50, 2.2, 1.1], [21.89, -37, 2.2, 1.1], [23.55, 44, 2.2, 1.1], [25.21, -51, 2.2, 1.1], [26.84, 38, 2.2, 1.1], [28.51, -45, 2.2, 1.1], [30.16, 52, 2.2, 1.1], [31.82, -39, 2.2, 1.1], [33.48, 46, 2.2, 1.1], [35.13, -53, 2.2, 1.1], [36.79, 40, 2.2, 1.1], [38.45, -47, 2.2, 1.1], [41.34, 0, 2.4, 2.2], [41.76, 30, 2.0, 1.3], [43.41, -41, 2.0, 1.3], [45.07, 52, 2.0, 1.3], [46.73, -39, 2.0, 1.3], [48.37, 50, 2.0, 1.3], [50.03, -37, 2.0, 1.3], [51.67, 48, 2.0, 1.3], [53.35, 0, 2.0, 2.6]],
+      breakup: [53.35, 64.9, 69.5],
+      aurora: [[0, 0.3], [14.85, 0.8], [33.48, 1.0], [40.1, 0.4], [41.34, 0.9], [53.35, 1.3], [66.59, 0.8]],
+      zones: [
+        // shards pushed up out of the ice on every bar
+        { from: 0, to: 0.1, kits: ['ggShards'], at: [[17.07, 15.27], [18.73, 16.93], [20.38, 18.58], [22.04, 20.24], [23.70, 21.89], [25.35, 23.55], [27.01, 25.21], [28.64, 26.84], [30.31, 28.51], [31.96, 30.16], [33.62, 31.82], [35.27, 33.48], [36.93, 35.13], [38.59, 36.79], [40.24, 38.45]], x: 28, spread: 16 },
+        { from: 0, to: 0.1, kits: ['ggShards'], at: [[43.56, 41.76], [45.21, 43.41], [46.87, 45.07], [48.53, 46.73], [50.17, 48.37], [51.83, 50.03], [53.47, 51.67]], x: 24, spread: 22, s: 1.4 },
+        // the ship locked in the ice
+        { from: 0, to: 0.1, kits: ['ggShip'], at: 37.4, x: -76, s: 1.0, rot: 0.35 },
+        // the peak: light up through the gaps on the beat, icebergs heaving up on the hardest hits
+        { from: 53.4, to: 66.6, kits: ['ggColumns'], every: 0.8, x: 50, on: 53.35, off: 64.9 },
+        { from: 0, to: 0.1, kits: ['ggBergs'], at: [[56.6, -70, 54.17, 26], [59.4, 76, 56.65, 30], [62.4, -66, 59.96, 24], [64.0, 72, 61.62, 28], [66.6, -80, 63.27, 34], [68.0, 70, 65.34, 30]] },
+      ],
+      finale: { kind: 'ship', t: 72.4, x: -64, s: 1.2, rot: 0.55, fireAt: 66.6, orbit: { r: 170, h: 14, y: 22, facing: true, back: 2, right: 0.3, swing: 0.12 } },
     },
   },
   {
@@ -766,6 +1708,145 @@ export const ALBUM = [
     },
   },
   {
+    // the performance, never the clinic: a selfie museum, room after themed room. Lace and a balloon
+    // arch for prom night, the mascara, the phone with the bestie on it; the likes spawning; brunch;
+    // the ring lights; the pink hall with coupons coming down and a camera that won't stop clicking;
+    // a ball pit; the fashion medals; the lights going low, the hashtag, the tears; the infinity
+    // room; the filters; a halo. On "you're free" the walls come down and the balloons go up.
+    id: 'so-pretty-when-you-cry-at-the-abortion-center',
+    accent: '#ff6ab8',
+    title: 'So Pretty When You Cry at the Abortion Center',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                      // "I'm back!"
+      { t: 7.91, kind: 'pre', endY: 22 },                                                       // "remember me?"
+      { t: 9.77, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 9, endY: 10 },          // the band
+      { t: 17.19, kind: 'verse', c: 0.9, endY: 12, turn: 0.3 },                                 // in: "you wore lace like it's prom night"
+      { t: 28.29, kind: 'verse', c: 0.9, endY: 12, turn: 0.3 },                                 // "tweeted grief for the likes"
+      { t: 33.86, kind: 'verse', c: 0.95, endY: 12, turn: 0.3 },                                // brunch
+      { t: 41.25, kind: 'post', c: 0.95, endY: 12, turn: 0.3 },                                 // "watch me glow"
+      { t: 46.79, kind: 'pre', endY: 22, turn: 0.3 },
+      { t: 48.64, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 9, endY: 10, turn: 0.3 },   // "you're so pretty when you cry"
+      { t: 56.04, kind: 'chorus', c: 1.1, endY: 11, turn: 0.3 },                                // "wiping tears with coupons"
+      { t: 59.73, kind: 'pre', endY: 22, turn: 0.3 },                                           // "click, click, click"
+      { t: 63.43, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10, turn: 0.3 },
+      { t: 70.82, kind: 'chorus', c: 1.1, endY: 11, turn: 0.3 },
+      { t: 78.20, kind: 'verse', c: 0.95, endY: 12, turn: 0.3 },                                // the fashion medals
+      { t: 96.63, kind: 'chorus', c: 1.1, endY: 11, turn: 0.3 },                                // "the lights go low"
+      { t: 107.68, kind: 'bridge', endY: 13, turn: 0.3 },                                       // "do I feel guilty? as if"
+      { t: 120.56, kind: 'pre', endY: 20, turn: 0.3 },
+      { t: 122.40, kind: 'break', endY: 18, turn: 0.3 },                                        // the drop-out
+      { t: 126.07, kind: 'pre', endY: 22, turn: 0.3 },
+      { t: 127.91, kind: 'final', start: 'launch', launchBeats: 2, kick: 10, endY: 10, turn: 0.3 },
+      { t: 140.79, kind: 'pre', endY: 22, turn: 0.3 },                                          // "click, click"
+      { t: 144.46, kind: 'final', start: 'launch', launchBeats: 3, kick: 10, endY: 10, turn: 0.3 },
+      { t: 153.65, kind: 'pre', endY: 22, turn: 0.3 },
+      { t: 155.50, kind: 'final', start: 'launch', launchBeats: 3, kick: 11, endY: 10, turn: 0.3 },  // "halo"
+      { t: 173.85, kind: 'outro', endY: 5 },                                                    // "you're free"
+    ],
+    palette: 'spNight',
+    world: 'selfie',
+    collect: 'like',
+    titleView: { ahead: -0.16, x: 1.4, h: 1.6, back: -0.8, lookH: 2.4 },
+    looks: [
+      { t: -99, palette: 'spNight' },
+      { t: 17.3, palette: 'spLace', fade: 0.4 },        // in: prom night
+      { t: 28.4, palette: 'spPink', fade: 0.4 },
+      { t: 33.9, palette: 'spMint', fade: 0.4 },        // brunch
+      { t: 41.3, palette: 'spNeon', fade: 0.4 },        // the ring lights
+      { t: 46.9, palette: 'spPink', fade: 0.4 },
+      { t: 61.6, palette: 'spPit', fade: 0.4 },         // the ball pit
+      { t: 70.9, palette: 'spPink', fade: 0.4 },
+      { t: 78.3, palette: 'spGold', fade: 0.4 },        // the medals
+      { t: 89.3, palette: 'spWhite', fade: 0.4 },
+      { t: 107.7, palette: 'spNeon', fade: 0.4 },       // the infinity room
+      { t: 122.5, palette: 'spLace', fade: 0.4 },
+      { t: 126.1, palette: 'spWhite', fade: 0.4 },
+      { t: 134.4, palette: 'spWhite', set: { skyLight: 0xff8ac8, glow: 0xff5aa8, fog: 0x3a1028 }, fade: 0.15 },   // the pink filter
+      { t: 135.5, palette: 'spWhite', set: { skyLight: 0x8ab8ff, glow: 0x6a9aff, fog: 0x101a3a }, fade: 0.15 },   // blue
+      { t: 136.6, palette: 'spWhite', set: { skyLight: 0xffc070, glow: 0xffb040, fog: 0x3a2008 }, fade: 0.15 },   // amber
+      { t: 137.7, palette: 'spWhite', set: { skyLight: 0xff8ac8, glow: 0xff5aa8, fog: 0x3a1028 }, fade: 0.15 },
+      { t: 138.8, palette: 'spWhite', fade: 0.5 },
+      { t: 142.7, palette: 'spPink', fade: 0.4 },
+      { t: 170.4, palette: 'spSky', fade: 1.5 },        // "you're free": the open sky
+    ],
+    moments: [
+      { t: 0.5, kind: 'pop', k: 0.4 },                  // "I'm back!"
+      { t: 9.77, kind: 'flash', k: 0.25 },              // the band
+      ...[59.94, 60.46, 60.78, 61.44, 61.86].map((t) => ({ t, kind: 'shutter', k: 0.5 })),   // "click, click, click!"
+      { t: 63.43, kind: 'flash', k: 0.3 },
+      ...[76.08, 76.44, 76.66].map((t) => ({ t, kind: 'shutter', k: 0.4 })),
+      { t: 122.40, kind: 'blackout', dur: 1.6, k: 0.6 },   // the drop-out
+      { t: 127.91, kind: 'flash', k: 0.3 },
+      ...[141.02, 141.56, 142.02, 142.46, 142.9].map((t) => ({ t, kind: 'shutter', k: 0.5 })),
+      ...[156.88, 157.4].map((t) => ({ t, kind: 'shutter', k: 0.4 })),
+      { t: 164.44, kind: 'bell', k: 0.5 },              // "halo"
+      { t: 169.46, kind: 'pop', k: 0.6 },               // "you're free"
+    ],
+    confetti: [[48.64, 55.9], [127.91, 134.3], [155.5, 164.3]],
+    confettiColors: [0xff6ab8, 0xffd8ec, 0xe8c060, 0xffffff, 0x8ad8ff],
+    scenery: {
+      rooms: [
+        { style: 'lace', from: 17.19, to: 28.29, caps: [{ kind: 'front', hw: 13, hh: 30 }, SPDOOR] },   // prom night
+        { style: 'pink', from: 28.29, to: 33.86, caps: [null, SPDOOR] },                                 // the likes
+        { style: 'mint', from: 33.86, to: 41.25, caps: [null, SPDOOR] },                                 // brunch
+        { style: 'neon', from: 41.25, to: 46.79, caps: [null, SPDOOR] },                                 // the ring lights
+        { style: 'pink', from: 46.79, to: 61.57, caps: [null, SPDOOR] },                                 // the pink hall
+        { style: 'pit', from: 61.57, to: 70.82, caps: [null, SPDOOR] },                                  // the ball pit
+        { style: 'pink', from: 70.82, to: 78.20, caps: [null, SPDOOR] },
+        { style: 'gold', from: 78.20, to: 89.25, caps: [null, SPDOOR] },                                 // the medals
+        { style: 'white', from: 89.25, to: 107.68, caps: [null, SPDOOR] },                               // the lights go low
+        { style: 'neon', from: 107.68, to: 122.40, caps: [null, SPDOOR] },                               // the infinity room
+        { style: 'lace', from: 122.40, to: 126.07, caps: [null, SPDOOR] },
+        { style: 'white', from: 126.07, to: 142.62, caps: [null, SPDOOR] },                              // the filters
+        { style: 'pink', from: 142.62, to: 153.65, caps: [null, SPDOOR] },
+        { style: 'pink', from: 153.65, to: 176, caps: [null, null], fallAt: 169.4, fallFor: 2.0 },        // "you're free"
+      ],
+      lightsLow: [98.4, 104.6],
+      zones: [
+        { from: -6, to: 17.3, kits: ['city'] },
+        { from: 169.4, to: 200, kits: ['farcity'], x: 120 },
+        { from: 0, to: 0.1, kits: ['spProps'], at: [
+          { t: 3.6, x: -24, kind: 'ring', s: 1.2, on: 0.5 },                 // "I'm back!": the lights come on
+          { t: 4.4, x: 24, kind: 'ring', s: 1.2, on: 0.62 },
+          { t: 20.8, x: 0, rot: 0, kind: 'arch', s: 1.1, floor: true },      // "like it's prom night"
+          { t: 22.0, x: 0, rot: 0, kind: 'disco', y: 30, s: 1.0, floor: true },
+          { t: 23.8, x: -22, kind: 'mascara', s: 1.0, floor: true },         // "mascara rivers, makeup shivers"
+          { t: 26.6, x: 22, kind: 'phone', s: 1.1, floor: true },            // "texted your bestie"
+          { t: 31.4, x: -22, kind: 'likes', s: 1.1, floor: true },           // "tweeted grief for the likes to spawn"
+          { t: 36.4, x: 22, kind: 'brunch', s: 1.2, floor: true },           // "brunch, brunch"
+          { t: 39.9, x: -22, kind: 'brunch', s: 1.2, floor: true },          // "lunch, lunch"
+          { t: 61.2, x: 30, kind: 'camera', s: 1.25, floor: true, clicks: [59.94, 60.46, 60.78, 61.44, 61.86] },   // "click, click, click"
+          { t: 101.8, x: -24, kind: 'hash', y: 24, s: 1.0, floor: true },    // "hashtag no regrets"
+          { t: 142.2, x: -30, kind: 'camera', s: 1.25, floor: true, clicks: [141.02, 141.56, 142.02, 142.46, 142.9] },
+          { t: 166.6, x: 0, rot: 0, kind: 'halo', y: 34, s: 1.1, floor: true },   // "halo"
+        ] },
+        { from: 41.4, to: 46.6, kits: ['spRings'], every: 0.6, x: 26, on: 41.54, wave: 0.06 },   // "watch me glow"
+        { from: 0, to: 0.1, kits: ['spCoupons'], at: 57.2, top: 40 },                             // "wiping tears with coupons"
+        { from: 84.4, to: 89.0, kits: ['spMedals'], every: 0.9, hw: 30, top: 38 },                 // "fashion medals"
+        { from: 102.4, to: 106.4, kits: ['spTears'], every: 0.9 },                                 // "but tears still show"
+        { from: 134.4, to: 138.5, kits: ['spFilters'], every: 1.1 },                               // "sobbing in filter"
+        { from: 169.6, to: 178, kits: ['spBalloons'], every: 1.0, go: 169.46 },                    // "you're free"
+      ],
+      lyricPart: 'spSign', lyricX: 0, lyricBg: '#1a0a14', lyricColor: '#ff6ab8', lyricCore: '#fff0f8',
+      lyrics: [
+        { t: 6.22, text: 'REMEMBER ME?', h: 14 },
+        { t: 22.10, text: 'MASCARA RIVERS,\nMAKEUP SHIVERS', h: 13 },
+        { t: 41.54, text: 'WATCH ME GLOW', h: 13 },
+        { t: 55.50, text: 'WIPING TEARS\nWITH COUPONS', h: 14 },
+        { t: 59.94, text: 'CLICK, CLICK, CLICK!', h: 14 },
+        { t: 100.80, text: 'HASHTAG NO REGRETS', h: 14 },
+        { t: 101.98, text: 'BUT TEARS STILL SHOW', h: 14, lead: 2.4 },
+        { t: 107.44, text: 'DO I FEEL GUILTY?\nAS IF', h: 13 },
+        { t: 134.74, text: 'SOBBING IN FILTER', h: 14 },
+        { t: 137.14, text: 'YOUR PAIN,\nSO AESTHETIC', h: 14 },
+        { t: 169.46, text: "YOU'RE FREE", h: 14 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'set', t: 180.6, x: -44, s: 1.5, rot: -1.57, orbit: { r: 150, h: 14, y: 26, facing: true, back: 0.6, right: 0.3, swing: 0.12 } },
+    },
+  },
+  {
     // a summer night in a hot apartment: the floor fan, the dishes, the mattress on the
     // carpet. Fireworks in the alley, sirens down the block, thunder like the sky forgot to
     // knock. In the end the walls fall through.
@@ -880,6 +1961,135 @@ export const ALBUM = [
       // "your voice hits me like a car is starting"
       { kind: 'sedan', paint: 0x2a3a5a, at: 128.7, rate: 0, x: 1, lane: 2.4, reverse: true, yaw: 0.12, lightsOn: 127.8, from: 122.0, to: 129.5 },
       ],
+    },
+  },
+  {
+    // his place, with a guest in it who never checks out. The street at night with every window lit;
+    // in at the front door: boxes, the couch with the guest's blanket, the plate, the lamps left on,
+    // the clock at 3:12, the suitcase, the copies of keys hung in the doorway; the answer in pencil;
+    // the kitchen candles that won't go out. Out on the street for the choruses, the doors standing
+    // open, the punch clock; back in for the door shut for good and the quiet afterwards, until the
+    // walls come down on "I'm free". Then a field at sunrise: the typewriter, the couch empty, the
+    // lamps on, and the door that's just a door now.
+    id: 'make-it-a-no',
+    accent: '#ffc070',
+    title: 'Make It A No',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                      // "not right now"
+      { t: 5.61, kind: 'pre', endY: 20 },
+      { t: 7.31, kind: 'verse', start: 'launch', launchBeats: 3, kick: 8, endY: 11 },           // the band
+      { t: 14.21, kind: 'verse', c: 0.85, endY: 12, turn: 0.3 },                                 // in at his door: "moved into my place"
+      { t: 21.09, kind: 'verse', c: 0.9, endY: 12, turn: 0.3 },                                 // "leaves all the lights on"
+      { t: 26.25, kind: 'verse', c: 0.9, endY: 12, turn: 0.3 },                                 // "and copies of keys"
+      { t: 34.85, kind: 'post', c: 0.95, endY: 12, turn: 0.3 },                                 // "'cause hope don't die of natural causes"
+      { t: 46.87, kind: 'pre', endY: 22 },
+      { t: 48.58, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 9, endY: 10 },         // "they say never, say never"
+      { t: 55.44, kind: 'chorus', c: 1.25, endY: 11 },                                          // "I don't need you gentle"
+      { t: 64.00, kind: 'post', c: 0.95, endY: 12 },
+      { t: 69.15, kind: 'verse', c: 0.9, endY: 12 },                                            // "you laughed a little"
+      { t: 79.41, kind: 'pre', endY: 22 },
+      { t: 81.11, kind: 'break', endY: 18 },                                                    // "so I can stop thinking about it"
+      { t: 82.84, kind: 'post', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },          // "and you looked at me and hope"
+      { t: 96.52, kind: 'chorus', c: 1.3, endY: 11 },
+      { t: 108.46, kind: 'pre', endY: 20 },                                                     // "make it enough"
+      { t: 111.01, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 11 },       // the band, the loudest yet
+      { t: 116.94, kind: 'bridge', endY: 13, turn: 0.3 },                                       // "you said it like a favor"
+      { t: 125.36, kind: 'pre', endY: 18, turn: 0.3 },
+      { t: 128.72, kind: 'chorus', c: 1.15, endY: 12, turn: 0.3 },                              // "and I thanked you"
+      { t: 138.82, kind: 'break', endY: 20 },                                                   // "I'm free": the walls come down
+      { t: 142.31, kind: 'pre', endY: 22 },                                                     // "instead,"
+      { t: 144.03, kind: 'final', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },        // "they say never"
+      { t: 154.22, kind: 'final', c: 1.3, endY: 11 },                                           // "you let the sentence close"
+      { t: 160.99, kind: 'break', endY: 18 },                                                   // "when you made it enough"
+      { t: 162.73, kind: 'pre', endY: 22 },
+      { t: 164.43, kind: 'final', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },        // "the couch is empty"
+      { t: 171.26, kind: 'final', c: 1.4, endY: 11 },                                           // "the door's just a door now"
+      { t: 177.85, kind: 'final', c: 1.3, endY: 11 },                                           // "thank you"
+      { t: 184.72, kind: 'outro', endY: 5 },
+    ],
+    palette: 'mnNight',
+    world: 'guest',
+    collect: 'bulb',
+    titleView: { ahead: -0.16, x: 1.4, h: 1.6, back: -0.8, lookH: 2.4 },
+    looks: [
+      { t: -99, palette: 'mnNight' },
+      { t: 14.4, palette: 'mnHome', fade: 0.4 },        // in at his door
+      { t: 26.4, palette: 'mnHall', fade: 0.4 },
+      { t: 35.0, palette: 'mnKitchen', fade: 0.4 },
+      { t: 47.0, palette: 'mnNight', fade: 0.4 },       // out on the street
+      { t: 117.1, palette: 'mnHome', fade: 0.4 },       // back in
+      { t: 124.2, palette: 'mnQuiet', fade: 1.2 },      // "the quiet afterwards"
+      { t: 129.6, palette: 'mnHome', fade: 1.0 },       // "and I thanked you"
+      { t: 141.6, palette: 'mnDawn', fade: 1.2 },       // "I'm free"
+      { t: 168.0, palette: 'mnMorning', fade: 4.0 },    // "the couch is empty"
+    ],
+    moments: [
+      { t: 7.31, kind: 'flash', k: 0.2 },               // the band
+      { t: 75.12, kind: 'knock', n: 1, k: 0.6 },        // "I clock in"
+      { t: 80.7, kind: 'blackout', dur: 2.1, k: 0.85 }, // "so I can stop thinking about it"
+      { t: 111.01, kind: 'flash', k: 0.3 },             // the band, loudest
+      { t: 121.92, kind: 'knock', n: 1, k: 1.0 },       // the door, for good
+      { t: 140.6, kind: 'flash', k: 0.4 },              // "I'm free"
+      { t: 155.72, kind: 'bell', k: 0.55 },             // the sentence closes
+      { t: 164.43, kind: 'flash', k: 0.3 },             // "the couch is empty"
+    ],
+    scenery: {
+      rooms: [
+        { style: 'living', from: 14.21, to: 26.25, caps: [{ kind: 'front', hw: 12, hh: 24 }, MNDOOR] },     // in at the front door
+        { style: 'hall', from: 26.25, to: 34.85, caps: [null, MNDOOR] },
+        { style: 'kitchen', from: 34.85, to: 46.87, caps: [null, { kind: 'wall', hw: 13, hh: 28 }] },
+        { style: 'living', from: 116.94, to: 144.03, caps: [{ kind: 'front', hw: 12, hh: 24 }, MNDOOR], fallAt: 140.6, fallFor: 1.8 },   // "I'm free"
+      ],
+      zones: [
+        { from: -6, to: 14.3, kits: ['mnStreet'] },                                                // his street, every window lit
+        { from: 46.8, to: 117.1, kits: ['mnStreet'] },
+        { from: 140.6, to: 172, kits: ['farcity'], x: 130 },                                       // where the walls were
+        { from: 142, to: 200, kits: ['mnField'] },
+        // the lamps he leaves on
+        { from: 21.0, to: 26.0, kits: ['mnLamps'], every: 0.5, x: 29, spread: 2, floor: true },
+        { from: 117.2, to: 140.4, kits: ['mnLamps'], every: 1.3, x: 29, spread: 2, floor: true },
+        { from: 168.4, to: 186, kits: ['mnLamps'], every: 0.6, x: 30, spread: 24, s: 1.2, on: 169.9 },   // "the lights are on"
+        { from: 0, to: 0.1, kits: ['mnKeys'], at: 26.25, hw: 11, top: 26, drop: 9, n: 46 },          // "and copies of keys"
+        { from: 72.6, to: 75.3, kits: ['mnDoors'], every: 0.5, x: 24, s: 1.3 },                      // "an open door's a full-time job"
+        { from: 171.4, to: 186, kits: ['mnDoors'], every: 1.6, x: 42, s: 1.5, open: 0, lit: 0 },      // "the door's just a door now"
+        { from: 0, to: 0.1, kits: ['mnProps'], at: [
+          { t: 16.6, x: -21, kind: 'boxes', s: 1.0, floor: true },                    // "moved into my place"
+          { t: 18.8, x: 25, kind: 'couch', s: 0.9, blanket: true, floor: true },      // "sleeps on my couch"
+          { t: 20.6, x: -21, kind: 'plate', s: 1.3, floor: true },                    // "and it eats off my plate"
+          { t: 24.0, x: 21, kind: 'clock', s: 1.1, floor: true },                     // "drinks all my sleep"
+          { t: 25.6, x: -21, kind: 'suitcase', s: 1.2, floor: true },                 // "a guest with no check out"
+          { t: 33.0, x: 27.4, kind: 'pencil', s: 0.85, floor: true, face: false },    // "you answered in pencil"
+          { t: 37.2, x: -20, kind: 'candle', s: 1.15, floor: true },                  // "hope don't die of natural causes"
+          { t: 40.9, x: 20, kind: 'candle', s: 1.15, floor: true, snuff: 40.25 },     // "somebody's gotta put it down"
+          { t: 46.6, x: -20, kind: 'candle', s: 1.15, floor: true, blow: 46.4 },      // "it only minds your mouth"
+          { t: 75.9, x: 22, kind: 'punch', s: 1.2, punch: 75.12 },                    // "and I clock in every day"
+          { t: 123.5, x: -24, kind: 'door', s: 1.25, open: 1.5, lit: 1, shut: 121.92, floor: true },   // "to let her shut the door for good"
+          { t: 156.6, x: 38, kind: 'typewriter', s: 1.9, ding: 155.72 },              // "you let the sentence close"
+          { t: 168.1, x: -34, kind: 'couch', s: 1.5 },                                // "the couch is empty"
+        ] },
+      ],
+      lyricPart: 'mnSign', lyricX: 0, lyricBg: '#efe6d2', lyricColor: '#a8323a', lyricCore: '#a8323a',
+      lyrics: [
+        { t: 0.0, text: 'NOT RIGHT NOW', h: 14, lead: 3.2 },
+        { t: 23.92, text: 'A GUEST WITH NO CHECK OUT', h: 13 },
+        { t: 30.78, text: 'YOU ANSWERED IN PENCIL,\nI NEEDED IT WROTE', h: 12 },
+        { t: 34.76, text: "HOPE DON'T DIE\nOF NATURAL CAUSES", h: 13 },
+        { t: 48.24, text: "THEY SAY NEVER, SAY NEVER\nLIKE NEVER'S A CURSE", h: 14 },
+        { t: 55.54, text: "I DON'T NEED YOU GENTLE,\nI NEED YOU TO CLOSE", h: 14 },
+        { t: 59.08, text: 'IF YOU EVER LOVED ME,\nMAKE IT A NO', h: 14 },
+        { t: 72.88, text: "AN OPEN DOOR'S\nA FULL-TIME JOB", h: 14 },
+        { t: 77.78, text: 'EMBARRASSING THE WAY\nTHE TRUE ONES SOUND', h: 14 },
+        { t: 106.96, text: 'IF YOU EVER LOVED ME,\nMAKE IT ENOUGH', h: 14 },
+        { t: 123.10, text: 'OH, THE QUIET AFTERWARDS', h: 13 },
+        { t: 133.58, text: 'STRANGEST THANK YOU\nEVER SAID', h: 13 },
+        { t: 153.32, text: 'YOU LET THE\nSENTENCE CLOSE', h: 14 },
+        { t: 166.78, text: 'THE COUCH IS EMPTY', h: 14 },
+        { t: 169.96, text: 'THE LIGHTS ARE ON', h: 14 },
+        { t: 171.56, text: "THE DOOR'S JUST\nA DOOR NOW", h: 14, lead: 2.4 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'justdoor', t: 191.5, x: -40, s: 1.8, rot: -1.57, orbit: { r: 110, h: 12, y: 16, facing: true, back: 0.6, right: 0.3, swing: 0.12 } },
     },
   },
   {
@@ -1083,6 +2293,92 @@ export const ALBUM = [
     },
   },
   {
+    // nothing from the words: a place for the sound. A steelworks at night, from the drone out of
+    // silence to the long full-volume climax: the doors glowing open on the first swell, cranes over
+    // the road, the ladle lifted and the pour on the drop, steam in the breaks, the hammer on the next
+    // drop, slabs racing down the rolling mill, the cooling yard in the quiet, the converter blowing,
+    // and on the climax the blast furnace cast, iron in rivers both sides. Then morning.
+    id: 'until-she-stopped-fighting',
+    accent: '#ff7a2a',
+    title: 'Until She Stopped Fighting',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                      // out of silence: the yard at night
+      { t: 10.11, kind: 'verse', c: 0.85, endY: 12 },                                           // the doors come on
+      { t: 26.60, kind: 'verse', c: 0.9, endY: 12 },
+      { t: 37.58, kind: 'break', endY: 14 },                                                    // a breath
+      { t: 39.41, kind: 'verse', c: 0.95, endY: 12 },
+      { t: 46.72, kind: 'pre', endY: 22 },                                                      // the ladle goes up
+      { t: 48.54, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },        // the pour
+      { t: 59.49, kind: 'chorus', c: 1.15, endY: 11 },
+      { t: 70.40, kind: 'break', endY: 16 },                                                    // steam
+      { t: 72.22, kind: 'pre', endY: 22 },
+      { t: 74.04, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },        // the hammer
+      { t: 79.46, kind: 'break', endY: 14 },
+      { t: 81.30, kind: 'chorus', c: 1.1, endY: 11 },                                           // the rolling mill
+      { t: 95.80, kind: 'chorus', c: 1.15, endY: 11 },
+      { t: 110.25, kind: 'bridge', endY: 13 },                                                  // the cooling yard
+      { t: 124.56, kind: 'pre', endY: 22 },
+      { t: 128.14, kind: 'final', start: 'launch', launchBeats: 3, kick: 10, endY: 10 },        // the converter blows
+      { t: 138.90, kind: 'final', c: 1.2, endY: 11 },
+      { t: 149.67, kind: 'break', endY: 18 },                                                   // quiet
+      { t: 151.47, kind: 'pre', endY: 22 },
+      { t: 153.26, kind: 'final', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },        // the cast: iron in rivers
+      { t: 164.01, kind: 'final', c: 1.35, endY: 11 },
+      { t: 176.51, kind: 'outro', endY: 5 },                                                    // the glow going, morning
+    ],
+    palette: 'swNight',
+    world: 'foundry',
+    collect: 'ember',
+    looks: [
+      { t: -99, palette: 'swNight' },
+      { t: 12.0, palette: 'swNight', set: { skyGlow: 0x8a3a1a, fog: 0x1a0e0a, horizon: 0x2a1410 }, fade: 2.0 },   // the doors open
+      { t: 48.54, palette: 'swPour', fade: 0.3 },
+      { t: 70.40, palette: 'swSteam', fade: 0.4 },
+      { t: 74.04, palette: 'swPour', fade: 0.3 },
+      { t: 81.30, palette: 'swMill', fade: 0.6 },
+      { t: 110.25, palette: 'swCool', fade: 1.5 },     // the cooling yard
+      { t: 128.14, palette: 'swBlow', fade: 0.3 },
+      { t: 149.67, palette: 'swSteam', fade: 0.4 },
+      { t: 153.26, palette: 'swCast', fade: 0.3 },     // the cast
+      { t: 180.0, palette: 'swDawn', fade: 4.0 },      // morning
+    ],
+    moments: [
+      { t: 48.54, kind: 'flash', k: 0.3 },
+      ...[74.04, 74.94, 75.86, 76.76, 77.67, 78.57].map((t, i) => ({ t, kind: 'knock', n: 1, k: i % 2 ? 0.6 : 0.85 })),   // the hammer
+      { t: 128.14, kind: 'flash', k: 0.4 },
+      { t: 149.67, kind: 'blackout', dur: 3.4, k: 0.55 },   // two bars of quiet
+      { t: 153.26, kind: 'flash', k: 0.5 },
+    ],
+    scenery: {
+      zones: [
+        { from: -6, to: 110.2, kits: ['swYard'], x: 46, on: 10.11 },                                  // the yard, the doors coming on with the first swell
+        { from: 110.2, to: 126.3, kits: ['swYard'], x: 50, pipes: false, on: 1e9 },                               // the cooling yard: the doors dark
+        { from: 126.3, to: 172.5, kits: ['swYard'], x: 46, on: 126.34, dim: 176.5 },
+        { from: 15.6, to: 46.7, kits: ['swCranes'], every: 3.6 },
+        { from: 81.3, to: 110.2, kits: ['swCranes'], every: 4.4 },
+        { from: 15.6, to: 37.5, kits: ['swSparks'], every: 1.83, on: 15.61 },                        // grinders on the bars
+        { from: 39.4, to: 46.7, kits: ['swSparks'], every: 0.9, on: 39.41 },
+        { from: 48.5, to: 70.4, kits: ['swSparks'], every: 0.9, k: 1.3 },
+        { from: 81.3, to: 110.2, kits: ['swMill'], every: 0.9, x: 34 },                              // the rolling mill
+        { from: 110.3, to: 126.3, kits: ['swIngots'], every: 0.8, x: 30, cool: 110.3, heat: 0.12 },              // the cooling yard
+        { from: 128.1, to: 149.6, kits: ['swSparks'], every: 0.7, k: 1.3 },
+        { from: 153.2, to: 178, kits: ['swRunners'], every: 0.75, x: 34, on: 153.26, off: 176.5 },   // the cast
+        { from: 153.2, to: 176.5, kits: ['swSparks'], every: 0.5, k: 1.6, x: 32, y: 18 },
+        { from: 0, to: 0.1, kits: ['swProps'], at: [
+          { t: 50.4, x: -30, kind: 'pour', s: 1.2, lift: 46.72, go: 48.54, stop: 69.0 },            // the ladle up on the pre, the pour on the drop
+          { t: 59.6, x: 30, kind: 'pour', s: 1.2, lift: 55.84, go: 57.66, stop: 69.0 },
+          { t: 76.0, x: 30, kind: 'hammer', s: 1.2, hits: [74.04, 74.94, 75.86, 76.76, 77.67, 78.57] },   // the hammer on the drop
+          { t: 92.0, x: -34, kind: 'coil', s: 1.3 },
+          { t: 104.0, x: 34, kind: 'coil', s: 1.3 },
+          { t: 130.6, x: 36, kind: 'converter', s: 1.4, blow: 128.14, end: 149.6 },                 // the blow
+          { t: 140.5, x: -36, kind: 'slag', s: 1.4, go: 138.9 },
+        ] },
+      ],
+      finale: { kind: 'furnace', t: 184.8, x: -70, s: 1.4, rot: -1.57, orbit: { r: 220, h: 20, y: 50, facing: true, back: 0.6, right: 0.3, swing: 0.12 } },
+    },
+  },
+  {
     // dusk on the street with the hearse at the curb; in through the funeral home's front door,
     // the casket open and full of lilies, the bar open beside it. Out the back into the
     // cemetery for every chorus; the eulogy, the prep room, the guest book; the cemetery chapel
@@ -1224,6 +2520,115 @@ export const ALBUM = [
     },
   },
   {
+    // a library at night, where every scream is filed under a family name. The door under its Latin;
+    // the stacks: the locked book, three generations of ledgers, the gramophone and its minor third,
+    // the family tree splintering; the archive's drawers, the trace with its break; the scriptorium;
+    // out into the storm: new tongues, the tower of Babel built of books, the manuscript, the letters
+    // coming down, the stone in a language no one else will ever speak; and the reading room, where
+    // the great book writes a new one.
+    id: 'etymology-of-screams',
+    accent: '#e8c070',
+    title: 'ETYMOLOGY OF SCREAMS',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                      // "dolor habet linguam"
+      { t: 9.29, kind: 'pre', endY: 18 },
+      { t: 11.35, kind: 'verse', start: 'launch', launchBeats: 2, kick: 8, endY: 11 },          // "your larynx locks with legacy"
+      { t: 25.83, kind: 'verse', c: 1.0, endY: 12 },                                            // "family tree splinters"
+      { t: 29.99, kind: 'pre', endY: 20 },                                                      // the build
+      { t: 34.12, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },        // "your scream has a surname"
+      { t: 54.81, kind: 'break', endY: 16 },
+      { t: 56.87, kind: 'verse', endY: 11 },                                                    // "envy or agony"
+      { t: 67.36, kind: 'verse', c: 1.1, endY: 12 },                                            // "your throat is my manuscript"
+      { t: 77.74, kind: 'pre', endY: 18 },                                                      // "your scream is untraceable"
+      { t: 81.89, kind: 'final', start: 'launch', launchBeats: 3, kick: 12, endY: 10 },         // "no more patterns"
+      { t: 98.43, kind: 'outro', endY: 7 },                                                     // "pain creates new language"
+    ],
+    palette: 'eyNight',
+    world: 'library',
+    collect: 'quill',
+    titleView: { ahead: -0.16, x: 1.4, h: 2.2, back: -0.8, lookH: 5.0 },
+    looks: [
+      { t: -99, palette: 'eyNight' },
+      { t: 11.6, palette: 'eyStacks', fade: 0.4 },          // the stacks
+      { t: 26.0, palette: 'eyStacks', set: { fog: 0x140a04, skyLight: 0xff9a60, hemiK: 1.5 }, fade: 0.5 },   // the family tree
+      { t: 34.3, palette: 'eyArchive', fade: 0.3 },         // the archive
+      { t: 55.0, palette: 'eyScript', fade: 0.6 },          // the scriptorium
+      { t: 63.4, palette: 'eyStorm', fade: 0.4 },           // out into the storm
+      { t: 82.1, palette: 'eyStorm', set: { fog: 0x1a0a14, skyGlow: 0xff4a3a, horizon: 0x3a1420, glow: 0xff4a3a, hold: 0xff6a3a }, fade: 0.3 },   // "no more patterns"
+      { t: 98.7, palette: 'eyReading', fade: 0.5 },         // the reading room
+    ],
+    moments: [
+      { t: 0.3, kind: 'thunder', k: 0.6 },
+      { t: 9.3, kind: 'thunder', k: 0.7 },
+      { t: 11.6, kind: 'knock', n: 2, k: 0.4 },             // the chains on the locked book
+      { t: 27.6, kind: 'knock', n: 1, k: 0.6 },             // "family tree splinters"
+      { t: 30.0, kind: 'thunder', k: 0.8 },
+      { t: 52.6, kind: 'thunder', k: 1.0 },                 // "tonight"
+      { t: 63.2, kind: 'thunder', k: 0.8 },
+      { t: 66.8, kind: 'thunder', k: 0.9 },                 // the tower
+      { t: 81.9, kind: 'thunder', k: 1.0 },                 // "no more patterns"
+      { t: 90.2, kind: 'thunder', k: 0.9 },
+      { t: 94.3, kind: 'thunder', k: 0.8 },
+      { t: 96.4, kind: 'thunder', k: 1.0 },
+    ],
+    scenery: {
+      rooms: [
+        { style: 'stacks', from: 11.35, to: 25.83, caps: [{ kind: 'front', hw: 13, hh: 34 }, LBDOOR] },    // in under the Latin: the stacks
+        { style: 'stacks', from: 25.83, to: 34.12, caps: [null, LBDOOR] },                                 // the family tree
+        { style: 'archive', from: 34.12, to: 44.46, caps: [null, LBDOOR] },                                // the archive
+        { style: 'archive', from: 44.46, to: 54.81, caps: [null, LBDOOR] },
+        { style: 'script', from: 54.81, to: 63.13, caps: [null, { kind: 'wall', hw: 14, hh: 30 }] },       // the scriptorium, out into the storm
+        { style: 'reading', from: 98.43, to: 121, caps: [{ kind: 'front', hw: 13, hh: 34 }, null] },        // the reading room
+      ],
+      zones: [
+        // the wet street to the door, gas lamps; the storm outside again later
+        { from: -6, to: 11.2, kits: ['eyLamps'], every: 0.6, x: 20 },
+        { from: 63.2, to: 98.3, kits: ['eyLamps'], every: 0.6, x: 20 },
+        // drawers sliding out of the archive's walls
+        { from: 34.4, to: 54.6, kits: ['eyDrawers'], every: 0.45, x: 31 },
+        // things in the air
+        { from: 0, to: 0.1, kits: ['eyAir'], at: [
+          { t: 23.4, kind: 'staff', lift: 17 },             // "your mother in your minor third"
+          { t: 39.6, kind: 'letters', go: 37.7, n: 40 },    // "every cry a confession you never chose"
+          { t: 63.6, kind: 'swirl', go: 61.6, n: 60 },      // "new tongues"
+          { t: 65.8, kind: 'swirl', go: 63.0, n: 60 },
+          { t: 74.0, kind: 'fall', go: 72.4, n: 70 },       // "every sob a letter"
+          { t: 92.0, kind: 'swirl', go: 90.2, n: 70 },
+          { t: 96.0, kind: 'fall', go: 94.3, n: 70 },
+        ] },
+        // the set-pieces
+        { from: 0, to: 0.1, kits: ['eyProps'], at: [
+          { t: 12.8, x: -22, kind: 'lock', s: 1.1, rattle: 11.6, floor: true },      // "your larynx locks with legacy"
+          { t: 15.8, x: 22, kind: 'ledgers', s: 1.4, floor: true },                  // "three generations"
+          { t: 22.6, x: -22, kind: 'gramophone', s: 1.2, floor: true },              // "I hear your mother in your minor third"
+          { t: 28.4, x: 24, kind: 'tree', s: 1.0, snap: 27.6, floor: true },         // "family tree splinters"
+          { t: 42.6, x: -22, kind: 'recorder', s: 1.0, floor: true },                // "I trace your trauma by the break in your pitch"
+          { t: 68.2, x: -80, kind: 'babel', s: 1.0, ahead: 46 },                     // "we build a babble"
+          { t: 70.4, x: 26, kind: 'manuscript', s: 0.9 },                            // "your throat is my manuscript"
+          { t: 80.4, x: -24, kind: 'recorder', s: 1.0, flat: true },                 // "your scream is untraceable"
+          { t: 83.4, x: 28, kind: 'tree', s: 1.0, snap: 82.2 },                      // "no more patterns, no more fathers"
+          { t: 86.6, x: -26, kind: 'stele', s: 1.0 },                                // "a language no one else will ever speak"
+          { t: 97.2, x: 70, kind: 'babel', s: 1.1, ahead: 46 },
+        ] },
+      ],
+      roads: [
+        { x: 0, width: 16, walk: 4, laneLines: 0, from: -10, to: 11.4, traffic: false, lampEvery: 26, lampColor: 0xffb860 },
+        { x: 0, width: 16, walk: 4, laneLines: 0, from: 63.1, to: 98.5, traffic: false, lampEvery: 26, lampColor: 0xffb860 },
+      ],
+      lyricPart: 'eySign', lyricX: 0, lyricBg: '#b8b0a0', lyricColor: '#2a221c', lyricCore: '#3a3028',
+      lyrics: [
+        { t: 0.0, text: 'DOLOR HABET\nLINGUAM', h: 15, lead: 4.0 },
+        { t: 5.32, text: 'PAIN HAS\nA LANGUAGE', h: 15 },
+        { t: 34.68, text: 'YOUR SCREAM\nHAS A SURNAME', h: 14, lead: 2.2 },
+        { t: 84.54, text: 'A LANGUAGE NO ONE\nELSE WILL EVER SPEAK', h: 14 },
+        { t: 105.02, text: 'PAIN CREATES\nNEW LANGUAGE', h: 15 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'book', t: 117.0, x: 0, write: 100.0, fireAt: 104.0, orbit: { r: 80, h: 16, y: 24, facing: true, back: 2, right: 0.3, swing: 0.15 } },
+    },
+  },
+  {
     // she moved into his head back in May: the house he built in there to keep her out,
     // and her portrait hung where his peace of mind used to. Knock, knock. She's never,
     // never, never moving out. Sweet dreams, landlord.
@@ -1360,6 +2765,194 @@ export const ALBUM = [
         { from: 306.0, to: 306.1, kits: ['portraits'], W: 50, at: [306.0], sides: [-1], v: 0, s: 1.05, y: 10.5, plaques: ['HOME'] },   // "this is home"
       ],
       finale: { kind: 'portrait', t: 306.0, x: -44, fireAt: 292.3, orbit: { r: 54, h: 2, y: 27, facing: true, back: 1.2, right: 0.3, swing: 0.2 } },
+    },
+  },
+  {
+    // a holiday at a grand hotel on the coast, all of it charged to him. Arriving at golden hour up
+    // the drive under the palms; the minibar, the robe, the gold case, the bell, the ice and the
+    // champagne; the pool party: the tray, the rosé, the shaker spraying glitter; the motorcade; the
+    // lobby bar: the olive, the better car, the towels folded into swans; sunset at the pool; night:
+    // the white boat, wet tile, the fruit on its silver cart, the art, the chandelier; three, two,
+    // one and fireworks over the marina; the valet; the cash, the buffet, gold service; and at dawn
+    // the white boat leaving: bon voyage.
+    id: 'cunt-holiday',
+    accent: '#ff8ab8',
+    title: 'Cunt Holiday',
+    startY: 12,
+    sections: [
+      { t: 0.0, kind: 'intro', endY: 12 },                                                        // "pool looks good today"
+      { t: 16.38, kind: 'pre', endY: 20 },                                                        // the build
+      { t: 18.24, kind: 'verse', start: 'launch', launchBeats: 3, kick: 9, endY: 11 },            // the drop
+      { t: 31.31, kind: 'verse', c: 1.0, endY: 12 },                                              // "bellboy smirked", "ice in the bucket"
+      { t: 38.75, kind: 'pre', endY: 20 },                                                        // "say it again"
+      { t: 42.46, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },          // "it's a kind of holly, holly day"
+      { t: 57.29, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 9, endY: 11 },           // rosé, the glitter
+      { t: 72.05, kind: 'post', endY: 12 },                                                       // "mini, mini, mini"
+      { t: 86.79, kind: 'verse', endY: 11, turn: 0.3 },                                           // the lobby bar
+      { t: 101.47, kind: 'pre', endY: 20, turn: 0.3 },                                            // "say it again"
+      { t: 105.12, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 11, endY: 10 },
+      { t: 119.79, kind: 'chorus', start: 'launch', launchBeats: 3, kick: 9, endY: 11 },
+      { t: 134.42, kind: 'post', endY: 12 },
+      { t: 149.04, kind: 'bridge', endY: 9 },                                                     // "white boat, wet tile"
+      { t: 154.51, kind: 'verse', c: 0.8, endY: 12 },                                             // "I came for the art"
+      { t: 165.45, kind: 'bridge', endY: 14 },                                                    // "the chandelier sweat"
+      { t: 172.72, kind: 'pre', endY: 26 },                                                       // "three, two"
+      { t: 174.53, kind: 'final', start: 'launch', launchBeats: 3, kick: 12, endY: 10 },          // "one": fireworks
+      { t: 192.68, kind: 'break', endY: 18 },                                                     // "tip the valet, walk away"
+      { t: 199.93, kind: 'verse', start: 'launch', launchBeats: 3, kick: 8, endY: 11 },           // "cash, a scandal"
+      { t: 219.83, kind: 'break', endY: 18 },                                                     // "then break the law"
+      { t: 221.64, kind: 'final', start: 'launch', launchBeats: 2, kick: 10, endY: 11 },          // "I don't do refunds"
+      { t: 234.28, kind: 'break', endY: 18 },
+      { t: 236.08, kind: 'final', start: 'launch', launchBeats: 2, kick: 10, endY: 11 },          // the chant
+      { t: 250.47, kind: 'break', endY: 16 },                                                     // "bon voyage, baby"
+      { t: 254.06, kind: 'final', start: 'launch', launchBeats: 3, kick: 8, endY: 10 },           // "holiday, holiday"
+      { t: 261.27, kind: 'outro', endY: 5 },
+    ],
+    palette: 'chGold',
+    world: 'hotel',
+    collect: 'coin',
+    ground: 'ocean',
+    land: { shore: -66, far: 420 },
+    skyline: 'hills',
+    titleView: { ahead: -0.16, x: 1.4, h: 2.2, back: -0.8, lookH: 5.0 },
+    looks: [
+      { t: -99, palette: 'chGold' },
+      { t: 42.8, palette: 'chPool', fade: 1.2 },                                              // the pool, the afternoon
+      { t: 68.4, palette: 'chPool', set: { horizon: 0xfff2d0, skyGlow: 0xffe8a8, sunK: 2.1, fog: 0xf0e0c8 }, fade: 1.6 },   // "I came sun drunk"
+      { t: 87.0, palette: 'chLobby', fade: 0.4 },                                             // the lobby
+      { t: 94.3, palette: 'chBar', fade: 0.4 },                                               // the bar
+      { t: 101.6, palette: 'chHall', fade: 0.3 },                                             // the hall
+      { t: 105.4, palette: 'chSunset', fade: 0.3 },                                           // sunset at the pool
+      { t: 136.0, palette: 'chSunset', set: { zenith: 0x1a1a4a, horizon: 0xc86a7a, skyGlow: 0xff5a6a, fog: 0x6a4a6a, sunK: 0.6, windowK: 0.8, stars: 0.3, sunSize: 0.6 }, fade: 6 },   // dusk
+      { t: 150.0, palette: 'chNight', fade: 1.6 },                                            // "white boat, wet tile"
+      { t: 174.8, palette: 'chNight', set: { fog: 0x1a1430, skyLight: 0x8a6aa0, skyGlow: 0xff6ab8 }, fade: 0.4 },   // fireworks
+      { t: 193.0, palette: 'chNight', set: { fog: 0x1a1410, skyLight: 0x8a6a50, lamp: 0xffc070 }, fade: 1.2 },      // the valet
+      { t: 200.2, palette: 'chNight', set: { fog: 0x2a0a10, skyLight: 0xffc0a0, bounce: 0x5a1a1a, hemiK: 1.8, lamp: 0xffc890, glow: 0xff5a6a }, fade: 0.4 },   // the ballroom
+      { t: 222.0, palette: 'chNight', set: { horizon: 0x4a3a6a, skyGlow: 0xff8a8a, glowDir: [0.4, 0.04, 0.9] }, fade: 0.4 },   // out on the marina
+      { t: 246.0, palette: 'chDawn', fade: 9 },                                               // the dawn: bon voyage
+    ],
+    moments: [
+      { t: 26.3, kind: 'shutter', k: 0.6 },              // "one pic from a hotel robe"
+      { t: 33.1, kind: 'bell', k: 0.55, degree: 4 },     // "bellboy smirked when I dropped your name"
+      { t: 34.7, kind: 'pop', k: 0.45 },                 // "sweat and champagne"
+      { t: 52.2, kind: 'flash', k: 0.18 },               // "first class scream"
+      { t: 64.0, kind: 'pop', k: 0.4 },                  // "rosé"
+      { t: 94.1, kind: 'ring', k: 0.3, dur: 0.5 },       // "whole room broke"
+      { t: 115.4, kind: 'flash', k: 0.18 },
+      { t: 125.2, kind: 'pop', k: 0.4 },
+      { t: 173.6, kind: 'fireworks', n: 8, ahead: 4.6, x: 52, y: 32, size: 1.2 },     // "three, two, one"
+      { t: 174.6, kind: 'fireworks', n: 12, ahead: 4.6, x: 52, y: 32, size: 1.2 },
+      { t: 177.7, kind: 'fireworks', n: 10, ahead: 4.6, x: 52, y: 32, size: 1.2 },    // "holiday"
+      { t: 181.0, kind: 'fireworks', n: 10, ahead: 4.6, x: 52, y: 32, size: 1.2 },
+      { t: 185.6, kind: 'fireworks', n: 14, ahead: 4.6, x: 52, y: 32, size: 1.2 },    // "holiday"
+      { t: 189.4, kind: 'fireworks', n: 10, ahead: 4.6, x: 52, y: 32, size: 1.2 },
+      { t: 195.6, kind: 'ring', k: 0.3, dur: 0.6 },      // "tip the valet"
+      { t: 251.0, kind: 'pop', k: 0.5 },                 // "bon voyage"
+      { t: 254.2, kind: 'fireworks', n: 10, ahead: 4.6, x: 52, y: 32, size: 1.2 },    // "holiday, holiday"
+    ],
+    confetti: [[65.4, 69.6], [127.6, 131.6], [174.6, 178.6], [237.0, 240.6], [254.2, 258.4]],
+    confettiColors: [0xff8ab8, 0xffd860, 0xffffff, 0xff4a8a, 0xf0c860],
+    confettiNormal: true,
+    scenery: {
+      rooms: [
+        { style: 'lobby', from: 86.79, to: 94.12, caps: [{ kind: 'front', hw: 13, hh: 30 }, CHDOOR] },      // in the front doors: the lobby
+        { style: 'bar', from: 94.12, to: 101.47, caps: [null, CHDOOR] },                                   // the bar
+        { style: 'hall', from: 101.47, to: 105.12, caps: [null, { kind: 'wall', hw: 14, hh: 26 }] },       // the hall, out to the pool
+        { style: 'ballroom', from: 199.93, to: 212.59, caps: [{ kind: 'front', hw: 13, hh: 32 }, CHDOOR] }, // the ballroom: cash, a scandal
+        { style: 'ballroom', from: 212.59, to: 221.64, caps: [null, { kind: 'wall', hw: 14, hh: 30 }] },   // the buffet
+      ],
+      car: { t: 98.2, x: -24, paint: 0xe8b850, len: 24 },   // "said I like car, took a better car"
+      zones: [
+        // the drive along the sea at golden hour: palms, the hotel, a glimpse of the pool
+        { from: -6, to: 42.4, kits: ['chPalms'], x: 40, spread: 14, every: 0.5 },
+        { from: 0, to: 42, kits: ['chHotel'], x: 92, every: 2.3 },
+        { from: 8.6, to: 12.4, kits: ['chPool'], x0: 26, x1: 52 },
+        // the pool deck, the afternoon, and again at sunset and at night
+        { from: 42.4, to: 86.6, kits: ['chPalms'], side: -1, x: 40, spread: 14, every: 0.5 },
+        { from: 42.4, to: 86.6, kits: ['chPalms'], side: 1, x: 84, spread: 10, every: 0.6 },
+        { from: 42.4, to: 86.6, kits: ['chHotel'], x: 122, every: 1.9 },
+        { from: 42.6, to: 86.2, kits: ['chPool'], x0: 26, x1: 62, deck: true },
+        { from: 105.0, to: 175.0, kits: ['chPalms'], side: -1, x: 40, spread: 14, every: 0.5 },
+        { from: 105.0, to: 175.0, kits: ['chPalms'], side: 1, x: 84, spread: 10, every: 0.6 },
+        { from: 105.0, to: 149.0, kits: ['chHotel'], x: 122, every: 1.9 },
+        { from: 105.2, to: 175.0, kits: ['chPool'], x0: 26, x1: 62, deck: true },
+        // the marina, the boats lit up at night; the valet at the front; the marina again toward morning
+        { from: 140, to: 200, kits: ['chYachts'], x: 100, every: 0.9 },
+        { from: 151.3, to: 151.4, kits: ['chYachts'], x: 82, s: 1.5 },                          // "white boat, wet tile"
+        { from: 175.0, to: 200.0, kits: ['chPalms'], x: 40, spread: 14, every: 0.5 },
+        { from: 186, to: 199.9, kits: ['chHotel'], x: 90, every: 2.0 },
+        { from: 221.6, to: 262, kits: ['chPalms'], side: -1, x: 40, spread: 12, every: 0.55 },
+        { from: 221.6, to: 272, kits: ['chPalms'], side: 1, x: 32, spread: 20, every: 0.5 },
+        { from: 221.6, to: 272, kits: ['chYachts'], x: 100, every: 0.9 },
+        // mini bottles strung across the road: "mini, mini, mini, bar tab pretty"
+        { from: 72.2, to: 86.4, kits: ['chMinis'], every: 1.1, span: 30, lift: 13 },
+        { from: 134.6, to: 148.8, kits: ['chMinis'], every: 1.1, span: 30, lift: 13 },
+        { from: 243.2, to: 250.2, kits: ['chMinis'], every: 1.1, span: 30, lift: 13 },
+        // hung over the road: the robe, the first-class tag, the chandelier
+        { from: 0, to: 0.1, kits: ['chHung'], at: [[27.2, 'robe'], [53.6, 'tag'], [116.6, 'tag'], [172.8, 'chandelier']] },
+        // the cash coming down, the scandal sheets
+        { from: 0, to: 0.1, kits: ['chFall'], at: [[202.4, 'note', 200.6], [204.6, 'paper', 202.2], [238.8, 'note', 237.0]], n: 60 },
+        // the set-pieces
+        { from: 0, to: 0.1, kits: ['chProps'], at: [
+          { t: 13.0, x: 30, kind: 'cart', s: 1.6 },                                 // "pack your shame, baby"
+          { t: 15.4, x: -30, kind: 'minibar', s: 1.3 },                             // "mini, mini bar tab, pretty shitty"
+          { t: 29.2, x: 28, kind: 'case', s: 1.3 },                                 // "a gold-made case"
+          { t: 31.2, x: -28, kind: 'card', s: 1.2 },                                // "a black card face"
+          { t: 33.4, x: 28, kind: 'bell', s: 1.2, ding: 33.1 },                     // "bellboy smirked when I dropped your name"
+          { t: 35.2, x: -28, kind: 'bucket', s: 1.3 },                              // "ice in the bucket, sweat and champagne"
+          { t: 47.8, x: -28, kind: 'cheque', s: 1.2 },                              // "put your paycheck in the tray"
+          { t: 65.2, x: -30, kind: 'tower', s: 1.3 },                               // "rosé, rosé"
+          { t: 67.2, x: -32, kind: 'shaker', s: 1.5, go: 65.3 },                    // "shake that ice till the glitter sprays"
+          { t: 93.7, x: -20, kind: 'martini', s: 1.0, bite: 93.5, floor: true },    // "bit the olive"
+          { t: 96.2, x: 24, kind: 'minibar', s: 1.1, floor: true },                 // "by the mini bar"
+          { t: 98.2, x: -24, kind: 'turntable', s: 1.0, floor: true, face: false }, // "took a better car"
+          { t: 99.8, x: 24, kind: 'flowers', s: 1.1, bloom: 98.9, floor: true },    // "I bloom"
+          { t: 100.8, x: -22, kind: 'swans', s: 1.0, floor: true },                 // "you fold"
+          { t: 110.2, x: -28, kind: 'cheque', s: 1.2 },                             // "put your paycheck in the tray"
+          { t: 126.8, x: -30, kind: 'tower', s: 1.3 },                              // "rosé, rosé"
+          { t: 129.4, x: -32, kind: 'shaker', s: 1.5, go: 127.6 },                  // "shake that ice"
+          { t: 153.0, x: -24, kind: 'fruit', s: 1.2 },                              // "fruit on a silver cart"
+          { t: 156.0, x: -26, kind: 'art', s: 1.0, cell: 0 },                       // "I came for the art"
+          { t: 156.8, x: -32, kind: 'art', s: 1.0, cell: 1 },
+          { t: 157.6, x: -26, kind: 'art', s: 1.0, cell: 2 },
+          { t: 158.8, x: -26, kind: 'glass', s: 1.0 },                              // "half a love in a lipstick glass"
+          { t: 170.6, x: -26, kind: 'perfume', s: 1.2 },                            // "I smell so sweet"
+          { t: 197.0, x: 24, kind: 'valet', s: 1.2 },                               // "tip the valet"
+          { t: 213.8, x: 30, kind: 'buffet', s: 1.0, floor: true },                 // "at the buffet"
+        ] },
+      ],
+      vehicles: [
+        // "your mama needs a motorcade": black cars coming the other way, one after another
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[83.8, 2.40], [87.0, -2.20]], x: -1, lane: 2.4, reverse: true, from: 83.7, to: 87.60 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[83.8, 2.75], [87.0, -1.85]], x: -1, lane: 2.4, reverse: true, from: 83.7, to: 87.95 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[83.8, 3.10], [87.0, -1.50]], x: -1, lane: 2.4, reverse: true, from: 83.7, to: 88.30 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[83.8, 3.45], [87.0, -1.15]], x: -1, lane: 2.4, reverse: true, from: 83.7, to: 88.65 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[83.8, 3.80], [87.0, -0.80]], x: -1, lane: 2.4, reverse: true, from: 83.7, to: 89.00 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[146.6, 3.6], [149.8, -2.2]], x: -1, lane: 2.4, reverse: true, from: 146.5, to: 150.2 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[146.6, 4.0], [149.8, -1.8]], x: -1, lane: 2.4, reverse: true, from: 146.5, to: 150.7 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[146.6, 4.5], [149.8, -1.3]], x: -1, lane: 2.4, reverse: true, from: 146.5, to: 151.1 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[146.6, 5.0], [149.8, -0.9]], x: -1, lane: 2.4, reverse: true, from: 146.5, to: 151.6 },
+        { kind: 'sedan', paint: 0x0c0c10, lead: [[146.6, 5.4], [149.8, -0.4]], x: -1, lane: 2.4, reverse: true, from: 146.5, to: 152.0 },
+        // parked at the front for the valet
+        { kind: 'sedan', paint: 0xf4f4f6, at: 196.2, rate: 0, x: 26, ground: true, yaw: 0.4, from: 186, to: 200 },
+        { kind: 'sedan', paint: 0x0c0c10, at: 197.2, rate: 0, x: 30, ground: true, yaw: 0.4, from: 186, to: 200 },
+        { kind: 'sedan', paint: 0xd8b060, at: 198.2, rate: 0, x: 26, ground: true, yaw: 0.4, from: 186, to: 200 },
+      ],
+      lyricPart: 'chSign', lyricX: 0, lyricBg: '#0c0a0a', lyricColor: '#f2c46a', lyricCore: '#fff2d0',
+      lyrics: [
+        { t: 9.74, text: 'POOL LOOKS\nGOOD TODAY', h: 14 },
+        { t: 33.54, text: 'ICE IN THE BUCKET,\nSWEAT AND CHAMPAGNE', h: 14 },
+        { t: 37.5, text: 'YOU CALL IT FATE,\nI CALL IT A WIN', h: 14 },
+        { t: 65.06, text: 'SHAKE THAT ICE TILL\nTHE GLITTER SPRAYS', h: 15 },
+        { t: 82.14, text: 'HANDS UP FOR\nTHE MESS I MADE', h: 14 },
+        { t: 92.98, text: 'BIT THE OLIVE,\nWHOLE ROOM BROKE', h: 15, lead: 1.2 },
+        { t: 153.5, text: 'YOU THOUGHT I CAME FOR YOU,\nI CAME FOR THE ART', h: 14 },
+        { t: 221.88, text: "I DON'T DO REFUNDS", h: 14 },
+        { t: 229.38, text: 'YOU WANTED LOVE,\nI WANTED PAY', h: 14 },
+        { t: 250.92, text: 'BON VOYAGE, BABY', h: 14, lead: 1.2 },
+      ],
+      shelf: 60, drop: 5,
+      finale: { kind: 'boat', t: 267.6, x: -86, s: 1.6, dockX: -18, leave: 250.9, leaveFor: 30, fireAt: 250.0, orbit: { r: 140, h: 24, y: 12, facing: true, back: 2, right: 0.3, swing: 0.12 } },
     },
   },
   {
@@ -1595,6 +3188,247 @@ export const ALBUM = [
 ];
 
 export const PALETTES = {
+  // Your Wife, My Number: a heat wave in the glare, clouds and thunder, an evening at the curb, the
+  // storm, the marble bathroom, and the gold after the rain.
+  ymHeat: {
+    zenith: 0x4a7ad0, horizon: 0xfff0d0, skyGlow: 0xfff4c0, glowDir: [0.3, 0.6, 0.75], skyline: 0x8a8a7a, moonDir: [0.3, 0.6, 0.75], moon: 0xfff8e8,
+    fog: 0xf0e0c0, fogDensity: 0.0012, stars: 0, sunSize: 1.2, snow: 0, snowGround: 0, rain: 0, windowK: 0,
+    ground: 0xb8a868, street: 0xfff0d0, roof: 0x8a7a6a, wall: 0xece4d4, tree: 0x2a4a22,
+    window: 0xfff0d0, windowAlt: 0xffd8a0, lamp: 0xfff0c0,
+    ribbon: 0x2a2620, edge: 0xfff8ec, fret: 0xe0b84a, glow: 0xffc860, hold: 0xffb040, gate: 0xffffff, gem: 0xfff4ec,
+    skyLight: 0xfff4e0, bounce: 0xa89060, hemiK: 2.1, sunK: 1.9,
+    board: 0x16120e, suit: 0x1a1a1e, jacket: 0x1e5a3a, hair: 0x1a120a, shoes: 0xe0b84a, gloves: 0x1a1a1e, rim: 0xffe0b0, daze: 0,
+  },
+  ymNoon: { horizon: 0xffe8b0, skyGlow: 0xfff0a0, fog: 0xf8e0a8, sunK: 2.1, hemiK: 2.2 },
+  ymCloud: { zenith: 0x3a4a6a, horizon: 0xb8b0a0, skyGlow: 0xd8c890, fog: 0x9a9488, fogDensity: 0.0015, sunK: 0.9, hemiK: 1.8, skyLight: 0xd8d4cc, moonDir: [0.3, 0.4, 0.8] },
+  ymEvening: { zenith: 0x3a4a8a, horizon: 0xffb890, skyGlow: 0xffa060, glowDir: [0.6, 0.06, 0.8], moonDir: [0.6, 0.1, 0.8], moon: 0xffc890, sunSize: 1.1, fog: 0xc89a80, fogDensity: 0.0013, skyLight: 0xffd0b0, bounce: 0x8a6048, hemiK: 1.9, sunK: 1.3, windowK: 0.6, lamp: 0xffc890 },
+  ymStorm: { zenith: 0x1a2030, horizon: 0x5a5e66, skyGlow: 0x7a7a70, glowDir: [0.3, 0.3, 0.9], moonDir: [0.3, 0.5, 0.8], moon: 0xc8ccd0, sunSize: 0, fog: 0x4a4e56, fogDensity: 0.0019, rain: 0.85, ground: 0x4a5a3a, skyLight: 0x8a90a0, bounce: 0x3a3e46, hemiK: 1.6, sunK: 0.5, windowK: 0.7 },
+  ymBath: { fog: 0x1c1c1e, fogDensity: 0.0022, rain: 0, skyLight: 0xf4f0ea, bounce: 0x6a6460, hemiK: 1.9 },
+  ymGolden: { zenith: 0x4a6aa8, horizon: 0xffc890, skyGlow: 0xffb060, glowDir: [0.6, 0.06, 0.8], moonDir: [0.6, 0.12, 0.8], moon: 0xffd8a0, sunSize: 1.1, fog: 0xd8b088, fogDensity: 0.0012, rain: 0, ground: 0x6a8a3a, skyLight: 0xffe0b8, bounce: 0x8a7048, hemiK: 2.0, sunK: 1.5, windowK: 0.3 },
+  // Until She Stopped Fighting: a steelworks at night, lit by its own metal; steam; the cooling yard
+  // under the stars; the cast; morning.
+  swNight: {
+    zenith: 0x04050a, horizon: 0x14121c, skyGlow: 0x4a2a1a, glowDir: [0.3, 0.05, 1], skyline: 0x08080c, moonDir: [-0.4, 0.5, 0.75], moon: 0xc8ccd8,
+    fog: 0x0c0a0c, fogDensity: 0.0016, stars: 0.3, sunSize: 0, snow: 0, snowGround: 0, rain: 0, windowK: 0.6,
+    ground: 0x141214, street: 0xffa060, roof: 0x1a1a1e, wall: 0x2a2a2e, tree: 0x0c0c0c,
+    window: 0xffa860, windowAlt: 0xff7a3a, lamp: 0xffb070,
+    ribbon: 0x0e0c0c, edge: 0xffe0c0, fret: 0xff8a3a, glow: 0xff7a2a, hold: 0xff6a1a, gate: 0xffffff, gem: 0xffa040,
+    skyLight: 0x6a6a7a, bounce: 0x3a2018, hemiK: 1.6, sunK: 0.5,
+    board: 0x16120e, suit: 0x1a1a1e, jacket: 0x3a5a7a, hair: 0x1a120a, shoes: 0xd8d0c8, gloves: 0x1a1a1e, rim: 0xffb070, daze: 0,
+  },
+  swPour: { skyGlow: 0xff6a1a, skyLight: 0xffa060, bounce: 0x6a2a10, hemiK: 1.9, fog: 0x2a120a },
+  swSteam: { fog: 0x3a3a40, fogDensity: 0.0026, skyLight: 0x9a9aa8, bounce: 0x3a3a40, hemiK: 1.5, skyGlow: 0x6a6a7a },
+  swMill: { skyGlow: 0xff5a1a, skyLight: 0xe88a5a, bounce: 0x5a2010, hemiK: 1.8, fog: 0x200c08 },
+  swCool: { zenith: 0x060a18, horizon: 0x1a2440, skyGlow: 0x2a4a7a, stars: 0.8, skyLight: 0x6a7aa8, bounce: 0x1a2030, hemiK: 1.5, fog: 0x0a0e18, glow: 0x6a9aff, hold: 0x5a8aff },
+  swBlow: { skyGlow: 0xffa040, skyLight: 0xffb070, bounce: 0x7a3a10, hemiK: 2.0, fog: 0x2a1408 },
+  swCast: { horizon: 0x4a1a08, skyGlow: 0xff7a2a, skyLight: 0xffa060, bounce: 0x8a3a10, hemiK: 2.1, fog: 0x301206, glow: 0xffa040 },
+  swDawn: { zenith: 0x3a4a7a, horizon: 0xe8b090, skyGlow: 0xffb070, glowDir: [0.5, 0.04, 0.85], moonDir: [0.5, 0.08, 0.85], moon: 0xffd0a0, sunSize: 0.9, stars: 0, fog: 0x9a8a88, fogDensity: 0.0013, ground: 0x2a2624, skyLight: 0xd8b8a8, bounce: 0x6a5048, hemiK: 1.9, sunK: 1.2, windowK: 0.2 },
+  // So Pretty When You Cry at the Abortion Center: the street outside at night, then a selfie museum
+  // room by room, and an open pastel sky when the walls come down.
+  spNight: {
+    zenith: 0x0a0814, horizon: 0x2a1a34, skyGlow: 0x8a3a7a, glowDir: [0.2, 0.06, 1], skyline: 0x0e0a14, moonDir: [-0.4, 0.5, 0.75], moon: 0xffe8f4,
+    fog: 0x120c18, fogDensity: 0.0017, stars: 0.4, sunSize: 0, snow: 0, snowGround: 0, rain: 0, windowK: 1,
+    ground: 0x14101a, street: 0xffa8d0, roof: 0x2a1828, wall: 0x3a2a3a, tree: 0x101410,
+    window: 0xffc8e0, windowAlt: 0xff9ac8, lamp: 0xffc0e0,
+    ribbon: 0x1a0e18, edge: 0xfff0f8, fret: 0xff7ac8, glow: 0xff6ab8, hold: 0xff5aa8, gate: 0xffffff, gem: 0xff4a8a,
+    skyLight: 0x9a8ab0, bounce: 0x3a2030, hemiK: 1.8, sunK: 0.6,
+    board: 0x16101a, suit: 0x1a1a24, jacket: 0x8a4ad8, hair: 0x2a1a10, shoes: 0xffd8ec, gloves: 0x1a1a24, rim: 0xffc8e8, daze: 0,
+  },
+  spLace: { fog: 0x2a1420, fogDensity: 0.0022, skyLight: 0xffd0e4, bounce: 0x6a3a50, hemiK: 1.9 },
+  spPink: { fog: 0x2a1022, fogDensity: 0.0022, skyLight: 0xffb8d8, bounce: 0x7a3a5a, hemiK: 2.0, glow: 0xff5aa8 },
+  spMint: { fog: 0x14221c, fogDensity: 0.0022, skyLight: 0xe8fff4, bounce: 0x3a6a5a, hemiK: 1.9 },
+  spNeon: { fog: 0x0a0610, fogDensity: 0.0024, skyLight: 0x7a5aa8, bounce: 0x2a1040, hemiK: 1.3, glow: 0xc86aff, hold: 0xff5ad8 },
+  spPit: { fog: 0x2a2410, fogDensity: 0.0022, skyLight: 0xfff0c0, bounce: 0x7a6a30, hemiK: 2.0 },
+  spGold: { fog: 0x0e1020, fogDensity: 0.0022, skyLight: 0xe8d0a0, bounce: 0x3a3020, hemiK: 1.7, glow: 0xffc060 },
+  spWhite: { fog: 0x241e30, fogDensity: 0.002, skyLight: 0xe8dcf4, bounce: 0x6a5a7a, hemiK: 1.8 },
+  spSky: { zenith: 0x5a8ae8, horizon: 0xffe0f0, skyGlow: 0xfff0f8, glowDir: [0.3, 0.3, 0.9], moonDir: [0.3, 0.5, 0.8], moon: 0xfff8f0, sunSize: 0.9, stars: 0, fog: 0xf0d8e8, fogDensity: 0.001, ground: 0xf0c8d8, skyLight: 0xfff4fa, bounce: 0x9a7a8a, hemiK: 2.1, sunK: 1.6, windowK: 0.1 },
+  // Overdose Aesthetic: a red carpet at night in pink and siren light; porcelain blue, the gilded
+  // trinity, the hall of mirrors, and a pale morning when it's over.
+  oaNight: {
+    zenith: 0x0a0410, horizon: 0x2a0a24, skyGlow: 0x8a2a6a, glowDir: [0.2, 0.06, 1], skyline: 0x10060e, moonDir: [-0.4, 0.5, 0.75], moon: 0xffd8ec,
+    fog: 0x14060e, fogDensity: 0.0017, stars: 0.4, sunSize: 0, snow: 0, snowGround: 0, rain: 0, windowK: 1,
+    ground: 0x12080e, street: 0xff8ac0, roof: 0x2a1020, wall: 0x3a1a2a, tree: 0x140810,
+    window: 0xffb8d8, windowAlt: 0xff8ab8, lamp: 0xffb8d8,
+    ribbon: 0x4a0612, edge: 0xffe0ec, fret: 0xff5a9a, glow: 0xff4a8a, hold: 0xff3a6a, gate: 0xffffff, gem: 0xe8f4ff,
+    skyLight: 0x9a6a9a, bounce: 0x3a1020, hemiK: 1.8, sunK: 0.6,
+    board: 0x16101a, suit: 0x0a0a0e, jacket: 0xff3a8a, hair: 0x1a0a10, shoes: 0xffd8ec, gloves: 0x0a0a0e, rim: 0xffb8e0, daze: 0,
+  },
+  oaFlash: { skyGlow: 0xff5aa8, skyLight: 0xc88ab8, hemiK: 2.0, fog: 0x1c0814 },
+  oaPink: { horizon: 0x4a0a34, skyGlow: 0xff4a9a, skyLight: 0xe89ac8, hemiK: 2.1, fog: 0x24081a, glow: 0xff6ab8 },
+  oaPorcelain: { horizon: 0x1a2a4a, skyGlow: 0x6a8aff, skyLight: 0xb8c8ff, bounce: 0x2a3a5a, hemiK: 1.8, fog: 0x0a1020, glow: 0x8ab8ff, hold: 0x6a9aff, ribbon: 0x0e1430, fret: 0x8ab8ff },
+  oaGold: { horizon: 0x3a2008, skyGlow: 0xffb04a, skyLight: 0xe8c08a, bounce: 0x4a3010, hemiK: 2.0, fog: 0x1a1006, glow: 0xffc060, hold: 0xffa040, fret: 0xffc060 },
+  oaMirror: { fog: 0x1a0c12, fogDensity: 0.0022, skyLight: 0xd8b0c4, bounce: 0x4a2a38, hemiK: 1.7, glow: 0xffd8ec },
+  oaDawn: { zenith: 0x4a5a9a, horizon: 0xffc8d8, skyGlow: 0xffb8c8, glowDir: [0.4, 0.04, 0.9], moonDir: [0.4, 0.08, 0.9], moon: 0xffe0e8, sunSize: 0.9, stars: 0, fog: 0xd8b8c0, fogDensity: 0.0012, ground: 0x3a2a30, skyLight: 0xffe0e8, bounce: 0x8a6a70, hemiK: 2.0, sunK: 1.2, windowK: 0.2, ribbon: 0x5a1a24, glow: 0xffb8d8, hold: 0xff8ab0 },
+  // Make It A No: his street at night with every window lit, lamplight indoors, the quiet afterwards,
+  // and a field at sunrise.
+  mnNight: {
+    zenith: 0x05060f, horizon: 0x1c1a36, skyGlow: 0x3a3060, glowDir: [0.2, 0.08, 1], skyline: 0x0a0a16, moonDir: [-0.4, 0.5, 0.75], moon: 0xe8e4ff,
+    fog: 0x100e1c, fogDensity: 0.0017, stars: 0.5, sunSize: 0, snow: 0, snowGround: 0, rain: 0, windowK: 1,
+    ground: 0x16141c, street: 0xffb870, roof: 0x2a2030, wall: 0x3a3040, tree: 0x0c140e,
+    window: 0xffc880, windowAlt: 0xffa860, lamp: 0xffc070,
+    ribbon: 0x0e0c10, edge: 0xfff0dc, fret: 0xffc070, glow: 0xffb050, hold: 0xffa040, gate: 0xffffff, gem: 0xffd080,
+    skyLight: 0x8a88b0, bounce: 0x3a2a24, hemiK: 1.8, sunK: 0.6,
+    board: 0x16120e, suit: 0x1a1a24, jacket: 0x2a4a9a, hair: 0x2a1a10, shoes: 0xf4f0f8, gloves: 0x1a1a24, rim: 0xffd8a0, daze: 0,
+  },
+  mnHome: { fog: 0x1c140c, fogDensity: 0.0022, skyLight: 0xffd8a8, bounce: 0x5a3a20, hemiK: 1.9, lamp: 0xffc070 },
+  mnHall: { fog: 0x14140c, fogDensity: 0.0024, skyLight: 0xf0d8a8, bounce: 0x4a3a20, hemiK: 1.8 },
+  mnKitchen: { fog: 0x1a1810, fogDensity: 0.0022, skyLight: 0xe0d0b0, bounce: 0x5a4a30, hemiK: 1.7 },
+  mnQuiet: { fog: 0x0e0c14, fogDensity: 0.0024, skyLight: 0x8a7aa0, bounce: 0x2a2030, hemiK: 1.4, lamp: 0xffb060 },
+  mnDawn: { zenith: 0x3a4a8a, horizon: 0xffc0a0, skyGlow: 0xffb070, glowDir: [0.4, 0.04, 0.9], moonDir: [0.4, 0.08, 0.9], moon: 0xffd0a0, sunSize: 1.0, stars: 0, fog: 0xc89a90, fogDensity: 0.0012, ground: 0x3a4a2a, tree: 0x2a3a22, skyLight: 0xffd8c8, bounce: 0x7a5a48, hemiK: 2.0, sunK: 1.4, window: 0xfff0d8, lamp: 0xffd090, windowK: 0.3 },
+  mnMorning: { zenith: 0x4a7ad0, horizon: 0xffe0c0, skyGlow: 0xfff0c0, glowDir: [0.4, 0.15, 0.9], moonDir: [0.4, 0.2, 0.9], moon: 0xfff4e0, sunSize: 0.9, stars: 0, fog: 0xd8c8b8, fogDensity: 0.001, ground: 0x4a6a32, tree: 0x2a4a2a, skyLight: 0xfff0e0, bounce: 0x8a7a60, hemiK: 2.1, sunK: 1.7, window: 0xfff0d8, lamp: 0xffd090, windowK: 0.1 },
+  // I FUCKED YOUR DAD: the suburb at night, the supermarket's white light, the fire, a summer night,
+  // dusk on the lawns, Christmas snow, a bright day, Thanksgiving's gold, rain in the yard, dawn.
+  fdNight: {
+    zenith: 0x060814, horizon: 0x1a1a30, skyGlow: 0x3a2a4a, glowDir: [0.3, 0.06, 1], skyline: 0x0a0a14, moonDir: [-0.35, 0.55, 0.75], moon: 0xd8e0ff,
+    fog: 0x0e0e18, fogDensity: 0.0018, stars: 0.4, sunSize: 0, snow: 0, snowGround: 0, rain: 0,
+    ground: 0x101810, street: 0xffc070, roof: 0x2a2030, wall: 0x3a3040, tree: 0x0c140e,
+    window: 0xffd090, windowAlt: 0xffa070, lamp: 0xffc070,
+    ribbon: 0x0c0a0c, edge: 0xfff0e8, fret: 0xff5a4a, glow: 0xffa040, hold: 0xff6a4a, gate: 0xffffff, gem: 0xff3a2a,
+    skyLight: 0x7a7aa0, bounce: 0x3a2a24, hemiK: 1.9, sunK: 0.6,
+    board: 0x16120e, suit: 0x101014, jacket: 0xff5a4a, hair: 0x1a0e0a, shoes: 0xf4f0f8, gloves: 0x101014, rim: 0xffb0a0, daze: 0,
+  },
+  fdMarket: { fog: 0x1a2024, fogDensity: 0.0024, skyLight: 0xe8f4ff, bounce: 0x6a7a80, hemiK: 2.0, lamp: 0xe8f8ff },
+  fdFire: { fog: 0x2a1008, horizon: 0x4a1a10, skyGlow: 0xff6a2a, skyLight: 0xff8a4a, bounce: 0x5a2010, hemiK: 1.8, glow: 0xff6a1a, hold: 0xff4a1a },
+  fdSummer: { zenith: 0x0a0a20, horizon: 0x3a2a3a, skyGlow: 0xff8a5a, fog: 0x1a1418, skyLight: 0xa898b0, bounce: 0x4a3a30, hemiK: 2.0, stars: 0.6 },
+  fdDusk: { zenith: 0x2a3a7a, horizon: 0xff9a6a, skyGlow: 0xffa860, glowDir: [0.6, 0.05, 0.8], moonDir: [0.6, 0.1, 0.8], moon: 0xffb080, sunSize: 0.8, stars: 0, fog: 0x8a6a6a, fogDensity: 0.0014, ground: 0x2a4a22, skyLight: 0xd8a8a0, bounce: 0x6a4a3a, hemiK: 1.9, sunK: 1.2 },
+  fdWinter: { zenith: 0x081020, horizon: 0x2a3a5a, skyGlow: 0x4a6a9a, stars: 0.2, fog: 0x2a3448, fogDensity: 0.0018, snow: 0.9, snowGround: 0.8, ground: 0xc8d0e0, skyLight: 0x8a9ac8, bounce: 0x4a5a7a, hemiK: 1.8 },
+  fdDay: { zenith: 0x3a7ad8, horizon: 0xc8e0f0, skyGlow: 0xfff0c0, glowDir: [0.3, 0.3, 0.9], moonDir: [0.3, 0.6, 0.8], moon: 0xfff4e0, sunSize: 0.8, stars: 0, fog: 0xb8d0e0, fogDensity: 0.0011, ground: 0x3a6a2a, tree: 0x2a5a2a, skyLight: 0xe0f0ff, bounce: 0x7a8a6a, hemiK: 2.0, sunK: 1.6, window: 0xd8e0e8, lamp: 0xfff0d0 },
+  fdRain: { zenith: 0x3a4048, horizon: 0x6a7078, skyGlow: 0x8a9098, glowDir: [0.3, 0.3, 0.9], moonDir: [0.3, 0.6, 0.8], moon: 0xc8ccd8, sunSize: 0, stars: 0, fog: 0x4a5058, fogDensity: 0.0018, rain: 0.9, ground: 0x2a3a2a, skyLight: 0x7a8090, bounce: 0x3a4048, hemiK: 1.6, sunK: 0.5 },
+  fdDawn: { zenith: 0x3a4a8a, horizon: 0xffb8a0, skyGlow: 0xffa080, glowDir: [0.5, 0.05, 0.85], moonDir: [0.5, 0.1, 0.85], moon: 0xffc8a0, sunSize: 0.9, stars: 0, fog: 0xa88a8a, fogDensity: 0.0013, ground: 0x2a3a24, skyLight: 0xd8b8c0, bounce: 0x6a4a40, hemiK: 1.9, sunK: 1.2 },
+  // Good Girls Don't Fight Back: a frozen lake at night under the stars, the silence, the aurora as
+  // the band comes in, louder, the peak's light from under the ice, and open water toward morning.
+  ggIce: {
+    zenith: 0x02040c, horizon: 0x0a1a2e, skyGlow: 0x2a8a8a, glowDir: [0.3, 0.1, 1], skyline: 0x050a12, moonDir: [-0.3, 0.6, 0.75], moon: 0xc8e0ff,
+    fog: 0x06101c, fogDensity: 0.0012, stars: 1.0, sunSize: 0, snow: 0.4, hills: 0,
+    ground: 0x0a1420, street: 0x8ae8ff, roof: 0x0a1018, wall: 0x1a2a3a, tree: 0x081014,
+    window: 0x8ae8ff, windowAlt: 0x8ae8ff, lamp: 0xc8f0ff,
+    ribbon: 0x06080c, edge: 0xe0faff, fret: 0x7ae8ff, glow: 0x5ad8ff, hold: 0x8a6aff, gate: 0xffffff, gem: 0xd8f8ff,
+    skyLight: 0x4a6a9a, bounce: 0x0a1a2a, hemiK: 1.6, sunK: 0.6,
+    board: 0x0e1218, suit: 0x0c1018, jacket: 0x7ae8ff, hair: 0x1a0e0a, shoes: 0xf4f0f8, gloves: 0x0c1018, rim: 0xb8f0ff, daze: 0,
+  },
+  ggBand: { horizon: 0x1a3a4a, skyGlow: 0x4affc0, skyLight: 0x6a8ab8, hemiK: 1.9, snow: 0.6, glow: 0x5ae8ff, hold: 0x8a6aff },
+  ggLoud: { horizon: 0x2a1a4a, skyGlow: 0x8a4aff, skyLight: 0x7a7ac8, hemiK: 1.9, snow: 0.8, glow: 0x6ae8ff, hold: 0xc86aff },
+  ggPeak: { horizon: 0x2a4a6a, skyGlow: 0x6affe8, fog: 0x0a2a3a, fogDensity: 0.001, skyLight: 0x9ad8ff, hemiK: 2.2, snow: 1.0, glow: 0x8af8ff, hold: 0x4affc0 },
+  ggEnd: { zenith: 0x0a1430, horizon: 0x3a5a8a, skyGlow: 0x8affd0, stars: 0.5, fog: 0x10203a, snow: 0.3, skyLight: 0x6a8ac8, hemiK: 1.7, glow: 0x5ad8ff, hold: 0xff9ac8 },
+  // ETYMOLOGY OF SCREAMS: the wet street at night, the stacks in candlelight, the archive's green
+  // lamps, the scriptorium's cold windows, the storm outside, its red, and the reading room.
+  eyNight: {
+    zenith: 0x05060c, horizon: 0x1a1a28, skyGlow: 0x4a3a5a, glowDir: [0.3, 0.1, 1], skyline: 0x0a0a10, moonDir: [-0.3, 0.6, 0.7], moon: 0x8aa8ff,
+    fog: 0x0e0e16, fogDensity: 0.0022, stars: 0, sunSize: 0, rain: 0.9,
+    ground: 0x0c0c10, street: 0xffb860, roof: 0x14141a, wall: 0x2a2a30, tree: 0x0a0c0a,
+    window: 0xffc070, windowAlt: 0xffa060, lamp: 0xffb860,
+    ribbon: 0x0c0a0a, edge: 0xffe8c8, fret: 0xe8c070, glow: 0xff6a3a, hold: 0xffa040, gate: 0xffffff, gem: 0xfff0d0,
+    skyLight: 0x5a5a7a, bounce: 0x2a2018, hemiK: 1.5, sunK: 0.4,
+    board: 0x16120e, suit: 0x101014, jacket: 0xe8c070, hair: 0x1a0e0a, shoes: 0xf4f0f8, gloves: 0x101014, rim: 0xffd890, daze: 0,
+  },
+  eyStacks: { fog: 0x1a1008, fogDensity: 0.0024, rain: 0, skyLight: 0xffc890, bounce: 0x4a2a14, hemiK: 1.7, lamp: 0xffb860 },
+  eyArchive: { fog: 0x100c08, fogDensity: 0.0026, rain: 0, skyLight: 0xffe0b0, bounce: 0x2a2014, hemiK: 1.5, lamp: 0xa8ffb0 },
+  eyScript: { fog: 0x0a0c14, fogDensity: 0.0024, rain: 0, skyLight: 0x8a9ac8, bounce: 0x1a1a2a, hemiK: 1.4, moon: 0x8aa8ff },
+  eyStorm: { zenith: 0x0e0a1c, horizon: 0x3a2a5a, skyGlow: 0x8a5aaa, fog: 0x1c1428, fogDensity: 0.0019, rain: 1.0, skyLight: 0x7a6a9a, bounce: 0x2a1a24, hemiK: 1.6 },
+  eyReading: { fog: 0x1a1006, fogDensity: 0.0022, rain: 0, skyLight: 0xffd8a0, bounce: 0x5a3a18, hemiK: 1.8, lamp: 0xffc070 },
+  // Cunt Holiday: golden hour on the drive, the bright afternoon at the pool, the lobby's cream and
+  // gold, the bar's green, the hall, sunset, the marina at night, and the dawn the boat leaves in.
+  chGold: {
+    zenith: 0x4a6ab0, horizon: 0xffc890, skyGlow: 0xffa860, glowDir: [-0.6, 0.1, 0.8], skyline: 0x5a4a5a, moonDir: [-0.6, 0.14, 0.8], moon: 0xffd8a0,
+    fog: 0xe8b898, fogDensity: 0.0012, stars: 0, sunSize: 1.0, hills: 0, windowK: 0.1,
+    ground: 0x3a5a2a, sand: 0xd8c098, water: 0x1a4a6a, street: 0xffd8a0, roof: 0xe8dcc4, wall: 0xefe6d4, tree: 0x2a4a22,
+    window: 0xffd8a0, windowAlt: 0xffb070, lamp: 0xffd8a0,
+    ribbon: 0x1a1418, edge: 0xfff4e8, fret: 0xff8ab8, glow: 0xffb040, hold: 0xff9a3a, gate: 0xffffff, gem: 0xffd860,
+    skyLight: 0xd8c8b8, bounce: 0x8a6a48, hemiK: 1.9, sunK: 1.5,
+    board: 0xf4f0e8, suit: 0xf4f0f8, jacket: 0xff8ab8, hair: 0x1a0e0a, shoes: 0xf4f0f8, gloves: 0xf4f0f8, rim: 0xffd8b0, daze: 0,
+  },
+  chPool: { zenith: 0x2a7ad8, horizon: 0xbfe0f4, skyGlow: 0xfff0c0, glowDir: [-0.3, 0.4, 0.8], moonDir: [-0.3, 0.5, 0.8], moon: 0xfff4e0, sunSize: 0.8, fog: 0xc8e0f0, fogDensity: 0.001, sunK: 1.8, hemiK: 2.1, skyLight: 0xe8f0ff, bounce: 0x8aa0a8, windowK: 0, water: 0x1a6a8a, skyline: 0x6a7a8a },
+  chLobby: { fog: 0x3a2a1c, fogDensity: 0.0022, skyLight: 0xffe0c0, bounce: 0x6a4a30, hemiK: 1.8, lamp: 0xffd090 },
+  chBar: { fog: 0x14201a, fogDensity: 0.0024, skyLight: 0xd8e0b0, bounce: 0x2a3a20, hemiK: 1.6, lamp: 0xffc070 },
+  chHall: { fog: 0x2a1a10, fogDensity: 0.0024, skyLight: 0xffd0a0, bounce: 0x5a3a20, hemiK: 1.7, lamp: 0xffc890 },
+  chSunset: { zenith: 0x3a2a6a, horizon: 0xff9a6a, skyGlow: 0xff6a5a, glowDir: [-0.7, 0.03, 0.7], moonDir: [-0.7, 0.06, 0.7], moon: 0xff9a6a, sunSize: 1.2, fog: 0xd88a7a, fogDensity: 0.0013, sunK: 1.3, hemiK: 1.7, skyLight: 0xd8a0a8, bounce: 0x7a4a4a, windowK: 0.5, lamp: 0xffc080, water: 0x3a3a5a, skyline: 0x3a2a3a },
+  chNight: {
+    zenith: 0x04081a, horizon: 0x1a2a4a, skyGlow: 0x3a5a9a, glowDir: [-0.5, 0.2, 0.8], moonDir: [-0.4, 0.5, 0.75], moon: 0xd8e8ff, sunSize: 0, stars: 0.9, hills: 0.8, windowK: 1,
+    fog: 0x0a1428, fogDensity: 0.0018, ground: 0x0a140c, sand: 0x3a3a3a, water: 0x0a1a2a, skyline: 0x060a14,
+    skyLight: 0x4a5a8a, bounce: 0x1a1a2a, hemiK: 1.5, sunK: 0.5, lamp: 0xffd090,
+  },
+  chDawn: {
+    zenith: 0x3a5aa0, horizon: 0xffc0a8, skyGlow: 0xffb080, glowDir: [0.6, 0.06, 0.8], moonDir: [0.6, 0.12, 0.8], moon: 0xffd8b0, sunSize: 0.9, stars: 0, hills: 0.2, windowK: 0.3,
+    fog: 0xd8b0b0, fogDensity: 0.0012, ground: 0x3a4a30, sand: 0xc8b090, water: 0x2a4a6a, skyline: 0x6a5a6a,
+    skyLight: 0xd8c0d0, bounce: 0x8a6a60, hemiK: 1.9, sunK: 1.3, lamp: 0xffd8b0,
+  },
+  // Come Countdown: the pad at night under the floodlights, the pressure, the stage's red, ready-set-go
+  // in the dark and the red of no show, the chorus lit up, the curtain, the nerves, mission control's
+  // blue, lights out, before dawn, morning, Houston's red, the quiet after, and the last of it in the sun.
+  ccNight: {
+    zenith: 0x03060f, horizon: 0x142238, skyGlow: 0x3a6a9a, glowDir: [0.3, 0.06, 1], skyline: 0x060a12, moonDir: [-0.35, 0.55, 0.75], moon: 0xd8e8ff,
+    fog: 0x0a1424, fogDensity: 0.0019, stars: 0.8, sunSize: 0, hills: 0.6,
+    ground: 0x0c100e, street: 0xd8e4ff, roof: 0x141a22, wall: 0x2a303a, tree: 0x0a0e0c,
+    window: 0xd8e8ff, windowAlt: 0xffb070, lamp: 0xd8e8ff,
+    ribbon: 0x0a0e16, edge: 0xe0f0ff, fret: 0x7ad0ff, glow: 0xff8a3a, hold: 0xffb040, gate: 0xffffff, gem: 0xffe08a,
+    skyLight: 0x4a5a80, bounce: 0x1a2028, hemiK: 1.7, sunK: 0.5, smoke: 0xc8d4e8,
+    board: 0x0e1016, suit: 0x0c0e14, jacket: 0x7ad0ff, hair: 0x1a0e0a, shoes: 0xf4f0f8, gloves: 0x0c0e14, rim: 0xa8e0ff, daze: 0,
+  },
+  ccPressure: { fog: 0x1a1018, horizon: 0x2a1a2a, skyGlow: 0xff6a4a, skyLight: 0x6a4a5a, bounce: 0x2a1418, glow: 0xff5a3a, hold: 0xff8040 },
+  ccStage: { fog: 0x1a0a10, horizon: 0x2a0e18, skyLight: 0x8a4a50, bounce: 0x2a0a0a, hemiK: 1.5, glow: 0xff4a4a, hold: 0xff7040 },
+  ccTree: { fog: 0x05080e, fogDensity: 0.0024, horizon: 0x0a1220, skyLight: 0x2a3040, bounce: 0x0a0c10, hemiK: 1.1, stars: 1 },
+  ccNoShow: { fog: 0x14060a, fogDensity: 0.0024, horizon: 0x2a0a10, skyLight: 0x4a1a20, bounce: 0x1a0606, hemiK: 1.1, glow: 0xff3a2a, fret: 0xff6a5a, hold: 0xff5a3a },
+  ccChorus: { fog: 0x101c30, fogDensity: 0.0016, horizon: 0x1c3050, skyGlow: 0x5a9ad8, skyLight: 0x6a7ab0, bounce: 0x202838, hemiK: 2.0, fret: 0x8ae0ff, glow: 0xffa040, stars: 0.6 },
+  ccCurtain: { fog: 0x1e0a12, horizon: 0x3a1020, skyLight: 0x9a4a5a, bounce: 0x3a0a10, hemiK: 1.8, glow: 0xff4a4a, fret: 0xffc0a0, hold: 0xff7050 },
+  ccNerves: { fog: 0x081018, fogDensity: 0.0022, skyLight: 0x3a4a6a, bounce: 0x10161e, hemiK: 1.4, fret: 0x6ab0e0 },
+  ccControl: { fog: 0x060e18, fogDensity: 0.0024, stars: 0, skyLight: 0x6aa8d8, bounce: 0x0a1a2a, hemiK: 1.6, lamp: 0x7ad0ff, fret: 0x7ad0ff, glow: 0xffb040 },
+  ccLightsOut: { fog: 0x020408, fogDensity: 0.0034, skyLight: 0x1a2030, bounce: 0x040608, hemiK: 0.8, fret: 0x5a90c0 },
+  ccPreDawn: { zenith: 0x0a1230, horizon: 0x3a3a60, skyGlow: 0xff8a6a, glowDir: [0.3, 0.04, 1], fog: 0x14182a, fogDensity: 0.0018, stars: 0.4, skyLight: 0x5a5a88, bounce: 0x2a2030, hemiK: 1.7 },
+  ccMorning: {
+    zenith: 0x3a5aa0, horizon: 0xffb898, skyGlow: 0xffc080, glowDir: [0.3, 0.08, 1], moonDir: [0.3, 0.1, 1], moon: 0xffe0c0, sunSize: 0.9, stars: 0, hills: 0,
+    fog: 0x8a7a8a, fogDensity: 0.0013, skyLight: 0xc0b8d8, bounce: 0x7a6050, hemiK: 1.9, sunK: 1.3,
+    ground: 0x4a4a38, street: 0xffe0b0, lamp: 0xffe0b0, ribbon: 0x1a1a22, edge: 0xffffff, fret: 0x3aa0e0, glow: 0xff7a3a, hold: 0xff9a30, skyline: 0x5a5060,
+  },
+  // Back by Popular Demand: a June night in the alley, the room next door, the street's party bulbs,
+  // the hallway, red velvet and gold, the spotlight, the dressing room's bulbs, the party, the bar's
+  // amber, the quiet, the stands, and the alley again toward morning.
+  bpAlley: {
+    zenith: 0x060a1a, horizon: 0x2a2040, skyGlow: 0xffa860, glowDir: [0.3, 0.06, 1], skyline: 0x120e1a, moonDir: [-0.4, 0.5, 0.75], moon: 0xfff0d8,
+    fog: 0x1a1420, fogDensity: 0.0022, stars: 0.5, sunSize: 0,
+    ground: 0x0e0c10, street: 0xffc070, roof: 0x1a141a, wall: 0x3a2a2a, tree: 0x101410,
+    window: 0xffd090, windowAlt: 0xff9a6a, lamp: 0xffc070,
+    ribbon: 0x14100e, edge: 0xfff0d0, fret: 0xf0c860, glow: 0xff8a50, hold: 0xffb040, gate: 0xffffff, gem: 0xfff0c0,
+    skyLight: 0x6a5a7a, bounce: 0x3a2a24, hemiK: 1.7, sunK: 0.6,
+    board: 0x16120e, suit: 0x101014, jacket: 0xf0c860, hair: 0x1a0e0a, shoes: 0xf4f0f8, gloves: 0x101014, rim: 0xffd890, daze: 0,
+  },
+  bpNext: { fog: 0x1a1210, fogDensity: 0.0026, stars: 0, skyLight: 0xc8a888, bounce: 0x4a3024, hemiK: 1.4, lamp: 0xffc890, glow: 0xff8a50 },
+  bpStreet: { zenith: 0x080a1e, horizon: 0x3a2048, skyGlow: 0xff7aa0, fog: 0x22142a, fogDensity: 0.0019, stars: 0.4, skyLight: 0x8a6aa0, bounce: 0x4a2a2a, hemiK: 1.8, lamp: 0xffd070, street: 0xffd070, window: 0xffd890, windowAlt: 0xff8ac0, glow: 0xff5a8a, hold: 0xffb040 },
+  bpHall: { fog: 0x2a1a10, fogDensity: 0.0024, stars: 0, skyLight: 0xffd8b0, bounce: 0x5a3a24, hemiK: 1.8, lamp: 0xffc070 },
+  bpClub: { fog: 0x2a0c10, fogDensity: 0.0022, stars: 0, skyLight: 0xffc0a0, bounce: 0x5a1a1a, hemiK: 1.8, lamp: 0xffb060, glow: 0xff4a5a, fret: 0xffd890 },
+  bpSpot: { fog: 0x140608, fogDensity: 0.003, skyLight: 0x8a6060, bounce: 0x2a0a0a, hemiK: 1.2, lamp: 0xffd8a0, glow: 0xffd890, fret: 0xfff0d0 },
+  bpDressing: { fog: 0x2a2016, fogDensity: 0.0022, skyLight: 0xfff0d8, bounce: 0x6a4a3a, hemiK: 2.0, lamp: 0xfff0c0, glow: 0xff8a50, fret: 0xf0c860 },
+  bpParty: { fog: 0x1a0a20, fogDensity: 0.0022, skyLight: 0xd0a0ff, bounce: 0x4a1a4a, hemiK: 1.7, lamp: 0xff7ad8, glow: 0xff4fd8, fret: 0xffd84a, hold: 0xff6ad8 },
+  bpBar: { fog: 0x241408, fogDensity: 0.0024, skyLight: 0xffc890, bounce: 0x5a3010, hemiK: 1.6, lamp: 0xffa040, glow: 0xff8a3a, fret: 0xf0c860 },
+  bpQuiet: { fog: 0x060406, fogDensity: 0.0032, skyLight: 0x3a3040, bounce: 0x0a0608, hemiK: 0.9, lamp: 0xfff0d0, glow: 0xffd890, fret: 0xfff0d0, hold: 0xd8c8a0 },
+  bpArena: { fog: 0x0e1020, fogDensity: 0.0018, skyLight: 0xd8e0ff, bounce: 0x2a2a3a, hemiK: 1.9, lamp: 0xffffff, glow: 0xf0c860, fret: 0xffffff, hold: 0xffb040 },
+  bpStands: { fog: 0x1a1420, fogDensity: 0.0014, skyLight: 0xffe0b0, bounce: 0x4a3a2a, hemiK: 2.1, lamp: 0xffe8c0, glow: 0xf0c860, fret: 0xffffff, hold: 0xffb040 },
+  bpOutro: { zenith: 0x0a1028, horizon: 0x4a3050, skyGlow: 0xff9a7a, fog: 0x241a28, fogDensity: 0.0019, stars: 0.3, skyLight: 0x7a6a8a, bounce: 0x3a2a24, hemiK: 1.8, lamp: 0xffc070 },
+  bpDawn: { zenith: 0x2a3a7a, horizon: 0xf0a888, skyGlow: 0xffb070, glowDir: [0.3, 0.06, 1], moonDir: [0.3, 0.08, 1], moon: 0xffd8b0, sunSize: 0.8, stars: 0, fog: 0x7a6a7a, fogDensity: 0.0015, skyLight: 0xa8a0c0, bounce: 0x6a5048, hemiK: 1.7, sunK: 1.2, lamp: 0xffd8a0 },
+  // AI GF: the city at night in her pink and teal, hushed for "why?", the freeway in the rain, the
+  // street, the house's white light, the server hall, bedtime blue, Rome, the databanks, the lab,
+  // version 2 in gold, the last chorus, and the dark.
+  aiCity: {
+    zenith: 0x04050e, horizon: 0x1c1438, skyGlow: 0xff4fd8, glowDir: [0.3, 0.06, 1], skyline: 0x0a0a18, moonDir: [-0.4, 0.5, 0.75], moon: 0xd8e8ff,
+    fog: 0x120c22, fogDensity: 0.0021, stars: 0.35, sunSize: 0,
+    ground: 0x0a0a12, street: 0x8af0ff, roof: 0x141428, wall: 0x22223a, tree: 0x0e1414,
+    window: 0x8af0ff, windowAlt: 0xff8ae0, lamp: 0xffb0e8,
+    ribbon: 0x0c0a18, edge: 0xd8fbff, fret: 0x46f0e0, glow: 0xff4fd8, hold: 0xff5ad8, gate: 0xffffff, gem: 0x7af8ee,
+    skyLight: 0x5a5aa0, bounce: 0x2a1a3a, hemiK: 1.7, sunK: 0.6,
+    board: 0x0e0c16, suit: 0x0c0c14, jacket: 0x46f0e0, hair: 0x1a0e0a, shoes: 0xf4f0f8, gloves: 0x0c0c14, rim: 0xff9ae8, daze: 0,
+  },
+  aiHush: { fog: 0x0a0814, fogDensity: 0.0026, skyLight: 0x3a3a6a, hemiK: 1.3, window: 0x4a6a8a, windowAlt: 0x6a4a6a, lamp: 0x8a7aa0, street: 0x5a8a9a },
+  aiRain: { zenith: 0x05070e, horizon: 0x1e2232, skyGlow: 0x5a6a9a, fog: 0x161a28, fogDensity: 0.0026, stars: 0, rain: 0.85, skyLight: 0x4a5a80, bounce: 0x22222e, hemiK: 1.6, street: 0xffb070, lamp: 0xffb070, window: 0xffc890, windowAlt: 0xff8ad8, edge: 0xd0e8ff },
+  aiStreet: { zenith: 0x06060e, horizon: 0x2a1a36, skyGlow: 0xff6ad8, fog: 0x1a1426, fogDensity: 0.0022, rain: 0.45, stars: 0, skyLight: 0x5a4a80, bounce: 0x2a1a2a, hemiK: 1.7, street: 0xffc890, lamp: 0xffc890, window: 0xffc890, windowAlt: 0xff8ae0 },
+  aiHome: { fog: 0x2a2430, fogDensity: 0.0022, rain: 0, stars: 0, skyLight: 0xfff0f4, bounce: 0x6a5048, hemiK: 2.0, sunK: 0.6, lamp: 0xfff0e0, glow: 0xff4fd8, fret: 0x46f0e0, edge: 0xffffff },
+  aiServers: { fog: 0x040a12, fogDensity: 0.0026, rain: 0, skyLight: 0x5ad8ff, bounce: 0x2a0a3a, hemiK: 1.5, lamp: 0x46f0e0, glow: 0xff4fd8, fret: 0x46f0e0, edge: 0xe0ffff, hold: 0xff4fd8 },
+  aiNight: { fog: 0x080c22, fogDensity: 0.0028, rain: 0, skyLight: 0x6a78d8, bounce: 0x141838, hemiK: 1.3, lamp: 0xffc8a0, glow: 0xb070ff, fret: 0xc8d0ff, edge: 0xe0e4ff, hold: 0xb070ff },
+  aiRome: { fog: 0x14182a, fogDensity: 0.0022, skyLight: 0xe8eeff, bounce: 0x4a4a5a, hemiK: 1.8, lamp: 0xffe8c0, glow: 0x7ab8ff, fret: 0xffe8c0, edge: 0xffffff, hold: 0xffc860 },
+  aiBanks: { fog: 0x060c1a, fogDensity: 0.0018, skyLight: 0x5ab8ff, bounce: 0x1a1040, hemiK: 1.5, lamp: 0x46f0e0, glow: 0x46f0e0, fret: 0x8af8ff, edge: 0xe0ffff, hold: 0xff4fd8 },
+  aiLab: { fog: 0x1a2632, fogDensity: 0.0021, skyLight: 0xf0fbff, bounce: 0x5a6a7a, hemiK: 2.1, lamp: 0xe8ffff, glow: 0xff4fd8, fret: 0x46f0e0, edge: 0xffffff, hold: 0xff4fd8 },
+  aiV2: { fog: 0x1a1006, fogDensity: 0.0024, skyLight: 0xffe0a0, bounce: 0x4a2a10, hemiK: 1.7, lamp: 0xffd060, glow: 0xffc83a, fret: 0xfff0c0, edge: 0xfff8e8, hold: 0xffb020 },
+  aiFinal: { fog: 0x14061a, fogDensity: 0.0022, skyLight: 0xff9ae8, bounce: 0x3a0a3a, hemiK: 1.8, lamp: 0xff4fd8, glow: 0xff4fd8, fret: 0x46f0e0, edge: 0xffffff, hold: 0xff4fd8 },
+  aiDark: { fog: 0x040408, fogDensity: 0.0034, skyLight: 0x3a3a5a, bounce: 0x0a0a10, hemiK: 1.0, lamp: 0x8ab8ff, glow: 0xff4fd8, fret: 0xd0d8ff, edge: 0xe0e8ff, hold: 0x8a8ab0 },
+  aiOff: { fog: 0x020204, fogDensity: 0.0036, skyLight: 0x2a2a40, bounce: 0x060608, hemiK: 0.8, lamp: 0x6a8aff, glow: 0x8a8ab0, fret: 0xb0b8d8, edge: 0xc8d0e8 },
   // Spiked: the street in neon, the club sweet and clean, then losing focus: red, the corridors,
   // the sick green, nothing, red emergency light, the house lights, and the morning's grey
   spkStreet: {
