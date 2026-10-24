@@ -1,15 +1,24 @@
-// Heart of the Party. A heart hangs over the city where the moon would be and
-// beats as hard as you keep the beat. Garlands over the street, confetti in the
-// choruses, an ambulance in the second verse, the route 19 bus in the bridge,
-// rib arches over the last chorus, and at the end the stage under the heart.
+// Heart of the Party. One night out, for the both of them: the street of clubs, the square in
+// every chorus, nine years ago past midnight in the second verse, his mother's street on a Sunday,
+// the city gone quiet while the kick drum talks, and at the end of the runway, the stage. A heart
+// hangs over the city where the moon would be and beats as hard as you keep the beat; at the end
+// it comes down over the stage, where his drums play on their own.
+// (The place itself is hpt-world.js and its set-pieces hpt-pieces*.js; it's all driven from the
+// finale below, which main.js builds and updates every frame. Confetti and Vehicles here are
+// shared by many songs.)
 
 import * as THREE from 'three';
 import { extend, glowAt, poolAt, col, local } from './scenery.js';
 import { buildAmbulance, buildBus, buildSedan, buildPolice, buildHearse } from './vehicles.js';
+import { PartyWorld } from './hpt-world.js';
+import { fogged, merge, paint, rgb, box, cyl, sph, seeded, HFOG } from './hpt-sets.js';
+import { heartGeo } from './hpt-pieces.js';
+import { prepare, groundAt } from './trail.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const pick = (R, arr) => arr[Math.floor(R() * arr.length)];
+const TAU = Math.PI * 2;
 
 // ---------- the heart itself: the classic curve, extruded and rounded ----------
 function heartGeometry() {
@@ -27,127 +36,206 @@ function heartGeometry() {
   return g;
 }
 
-// ---------- the stage at the end ----------
+// ---------- the stage at the end of the runway ----------
+// local frame: x across, +z toward her (the audience), y up from the ground; z 0 is the deck's
+// front edge, which her road runs onto at deck height. dh: the deck's height.
+const withUv = (g) => { if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); return g; };
+function stageGeometry(dh) {
+  const parts = [], black = rgb(0x111016), steel = rgb(0x9a9aa6), dark = rgb(0x1a1820), gold = rgb(0xf0c060);
+  // the deck, its lit edge, the skirt
+  parts.push(paint(box(64, dh, 30, 0, dh / 2, -15), black));
+  parts.push(paint(box(64.4, 0.25, 0.4, 0, dh - 0.1, 0.1), gold), paint(box(64.4, 0.18, 0.3, 0, 0.4, 0.15), rgb(0xff2a50)));
+  for (let k = 0; k < 16; k++) parts.push(paint(box(0.2, dh - 0.6, 0.12, -30 + k * 4, dh / 2, 0.06), rgb(0x24202a)));
+  // the riser for the drums, with steps
+  parts.push(paint(box(16, 2.2, 11, 0, dh + 1.1, -17), dark), paint(box(16.2, 0.18, 0.2, 0, dh + 2.15, -11.4), gold));
+  for (let k = 0; k < 3; k++) parts.push(paint(box(4, 0.73 * (k + 1), 1.2, 9.6, dh + 0.37 * (k + 1), -12 - k * 1.2), dark));
+  // the screen's frame (the screen itself is its own mesh), and the black behind the stage
+  parts.push(paint(box(52, 31, 1.2, 0, dh + 16, -27.4), black));
+  // the towers and the roof truss: two legs each side, a box truss across the top
+  const truss = (x0, y0, z0, x1, y1, z1, r = 0.22) => { const a = new THREE.Vector3(x0, y0, z0), b = new THREE.Vector3(x1, y1, z1), d = b.clone().sub(a), L = d.length(); const g = new THREE.CylinderGeometry(r, r, L, 6); g.translate(0, L / 2, 0); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate(a.x, a.y, a.z); parts.push(paint(g, steel)); };
+  const H = dh + 36;
+  for (const sx of [-1, 1]) for (const z of [-4, -26]) {
+    for (const dx of [-0.9, 0.9]) for (const dz of [-0.9, 0.9]) truss(sx * 31 + dx, 0, z + dz, sx * 31 + dx, H, z + dz);
+    for (let y = 2; y < H; y += 3) { truss(sx * 31 - 0.9, y, z - 0.9, sx * 31 + 0.9, y + 3, z + 0.9, 0.08); truss(sx * 31 + 0.9, y, z - 0.9, sx * 31 - 0.9, y + 3, z + 0.9, 0.08); }
+  }
+  for (const z of [-4, -26]) for (const dy of [-0.9, 0.9]) for (const dz of [-0.9, 0.9]) truss(-31, H + dy, z + dz, 31, H + dy, z + dz);
+  for (const x of [-31, 31]) for (const dy of [-0.9, 0.9]) truss(x, H + dy, -4, x, H + dy, -26);
+  for (let x = -30; x < 30; x += 3) { truss(x, H - 0.9, -4.9, x + 3, H + 0.9, -4.9, 0.08); truss(x, H - 0.9, -25.1, x + 3, H + 0.9, -25.1, 0.08); }
+  // the lamps hanging off the front of the roof (their light is a glow)
+  for (let k = 0; k < 14; k++) parts.push(paint(cyl(0.5, 0.7, 1.4, 10, -26 + k * 4, H - 1.8, -4), rgb(0x2a2a30)));
+  // the PA: a line array hung each side, curving in at the bottom; subs on the ground in front
+  for (const sx of [-1, 1]) {
+    for (let k = 0; k < 11; k++) { const g = box(5.2, 1.5, 3.4, 0, 0, 0); g.rotateX(-0.03 * k * k * 0.12); g.translate(sx * 37, H - 4 - k * 1.55, -1.5 + 0.02 * k * k); parts.push(paint(g, black)); parts.push(paint(box(4.8, 1.1, 0.08, sx * 37, H - 4 - k * 1.55, 0.25 + 0.02 * k * k), dark)); }
+    truss(sx * 37, H - 2.6, -1.5, sx * 37, H + 0.9, -4, 0.12);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) { parts.push(paint(box(3.8, 2.6, 3.4, sx * (19 + c * 4), 1.3 + r * 2.6, 4), black)); parts.push(paint(cyl(1.0, 1.0, 0.1, 16, 0, 0, 0).rotateX(Math.PI / 2).translate(sx * (19 + c * 4), 1.3 + r * 2.6, 5.72), dark)); }
+  }
+  // the backline: amp stacks either side of the riser
+  for (const sx of [-1, 1]) for (const k of [0, 1]) { const x = sx * (13 + k * 4.4); parts.push(paint(box(4, 2.6, 2.2, x, dh + 1.3, -21), black), paint(box(4, 2.6, 2.2, x, dh + 3.9, -21), black)); parts.push(paint(box(3.6, 2.2, 0.1, x, dh + 1.3, -19.88), rgb(0x3a3640)), paint(box(3.6, 2.2, 0.1, x, dh + 3.9, -19.88), rgb(0x3a3640))); parts.push(paint(box(4, 0.4, 0.12, x, dh + 5.0, -19.86), gold)); }
+  // three mics at the front, and the wedges
+  for (const x of [-12, 0, 12]) { parts.push(paint(cyl(0.9, 0.9, 0.12, 12, x, dh + 0.06, -3.5), steel), paint(cyl(0.07, 0.07, 3.6, 6, x, dh + 1.8, -3.5), steel), paint(sph(0.24, 1, 1.4, 1, x, dh + 3.75, -3.4, 8, 6), rgb(0x2a2a30))); }
+  for (const x of [-16, -6, 6, 16]) { const w = box(3, 1.2, 1.8, 0, 0, 0); w.rotateX(-0.5); w.translate(x, dh + 0.6, -1.4); parts.push(paint(w, black)); }
+  // the barrier in front, and cables
+  for (let x = -30; x <= 30; x += 2.4) parts.push(paint(box(2.2, 1.3, 0.25, x, 0.65, 9), steel));
+  return merge(parts.map(withUv));
+}
+// his drums, on the riser, nobody at them: the kick's head to +z with a red heart on it
+// (built round the riser's top, the kit's own origin; the stage places and scales it)
+function drumsGeometry() {
+  const parts = [], shell = rgb(0xb80a20), chrome = rgb(0xdcdfe6), headW = rgb(0xf4f0f0), brass = rgb(0xe0b040);
+  const y0 = 0, z0 = 0;
+  const kick = new THREE.CylinderGeometry(1.7, 1.7, 1.5, 32); kick.rotateX(Math.PI / 2); kick.translate(0, y0 + 1.75, z0); parts.push(paint(kick, shell));
+  for (const z of [-0.78, 0.78]) parts.push(paint(new THREE.TorusGeometry(1.72, 0.09, 6, 32).translate(0, y0 + 1.75, z0 + z), chrome));
+  parts.push(paint(new THREE.CircleGeometry(1.62, 32).translate(0, y0 + 1.75, z0 + 0.77), headW));
+  const h = heartGeo(0.95, 0.06, 0.02); h.translate(0, y0 + 1.55, z0 + 0.82); parts.push(paint(h, rgb(0xe8203a)));
+  const tom = (x, y, z, r, d) => { const g = new THREE.CylinderGeometry(r, r, d, 24); g.rotateX(0.35); g.translate(x, y, z); parts.push(paint(g, shell)); parts.push(paint(new THREE.CylinderGeometry(r * 0.96, r * 0.96, 0.02, 24).rotateX(0.35).translate(x, y + d / 2 * Math.cos(0.35), z + d / 2 * Math.sin(0.35)), headW)); };
+  tom(-0.85, y0 + 3.75, z0 - 0.2, 0.62, 0.55); tom(0.85, y0 + 3.75, z0 - 0.2, 0.68, 0.6);
+  tom(2.6, y0 + 1.7, z0 + 0.4, 0.95, 1.1); tom(-2.4, y0 + 2.1, z0 + 0.6, 0.7, 0.42);
+  for (const [x, z, hh, r] of [[-3.4, z0 + 0.4, 3.3, 0.85], [3.6, z0 - 0.8, 4.7, 1.1], [-2.8, z0 - 1.2, 4.9, 1.0]]) { parts.push(paint(cyl(0.05, 0.05, hh, 5, x, y0 + hh / 2, z), chrome), paint(cyl(r, r * 0.95, 0.05, 20, x, y0 + hh, z), brass)); }
+  parts.push(paint(cyl(0.55, 0.55, 0.12, 12, 0, y0 + 1.35, z0 - 2.4), rgb(0x1a1a1e)), paint(cyl(0.06, 0.06, 1.3, 5, 0, y0 + 0.65, z0 - 2.4), chrome));
+  return merge(parts.map(withUv));
+}
+// the beater, from its pivot up (it hits the back of the kick)
+const beaterGeometry = () => merge([paint(cyl(0.05, 0.05, 1.2, 6, 0, 0.6, 0), rgb(0xdcdfe6)), paint(sph(0.16, 1, 1, 1.2, 0, 1.25, 0, 8, 6), rgb(0xf0ece4))].map(withUv));
+
+// the screen behind the band: a heart that beats and a trace that writes every beat down
+const SCREEN_VS = `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+const SCREEN_FS = /* glsl */`
+  uniform float uBeat, uBeatPos, uK, uHptFogD; uniform vec3 uCol, uLine, uHptFog;
+  varying vec2 vUv; varying vec3 vW;
+  float dot2(vec2 v){ return dot(v, v); }
+  float sdHeart(vec2 p){ p.x = abs(p.x); if (p.y + p.x > 1.0) return sqrt(dot2(p - vec2(0.25, 0.75))) - 0.35355; return sqrt(min(dot2(p - vec2(0.0, 1.0)), dot2(p - 0.5 * max(p.x + p.y, 0.0)))) * sign(p.x - p.y); }
+  float ecg(float ph){ float d = ph - 0.12; return 0.1 * exp(-dot2(vec2((d + 0.1) / 0.03, 0.0))) - 0.15 * exp(-dot2(vec2((d + 0.025) / 0.01, 0.0))) + exp(-dot2(vec2(d / 0.012, 0.0))) - 0.3 * exp(-dot2(vec2((d - 0.025) / 0.01, 0.0))) + 0.2 * exp(-dot2(vec2((d - 0.2) / 0.05, 0.0))); }
+  void main(){
+    vec2 px = vUv * vec2(150.0, 82.0); vec2 f = fract(px);
+    float led = smoothstep(0.5, 0.3, length(f - 0.5));
+    vec2 q = (vUv - vec2(0.5, 0.36)) * vec2(1.82, 1.0) / (0.4 * (1.0 + 0.07 * uBeat));
+    float sd = sdHeart(q);
+    vec3 c = uCol * ((1.0 - step(0.0, sd)) * (0.35 + 1.1 * uBeat) + exp(-abs(sd) * 22.0) * (0.6 + 1.2 * uBeat));
+    // the trace, sweeping left to right a bar at a time, a spike where each beat fell
+    float head = fract(uBeatPos / 4.0), age = fract(head - vUv.x);
+    float y = 0.14 + 0.09 * ecg(fract(uBeatPos - age * 4.0));
+    float line = exp(-abs(vUv.y - y) * 260.0) * (1.0 - smoothstep(0.7, 0.98, age)) * (0.4 + 0.6 * exp(-age * 3.0));
+    c += uLine * line * 2.2 + uLine * exp(-dot2((vUv - vec2(head, y)) * vec2(60.0, 120.0))) * 3.0;
+    c = c * led * uK + vec3(0.01, 0.006, 0.012);
+    float d = length(cameraPosition - vW); float fg = 1.0 - exp(-pow(d * uHptFogD * 0.7, 1.5));
+    gl_FragColor = vec4(mix(c, uHptFog, clamp(fg, 0.0, 1.0)), 1.0);
+  }`;
+// a beam of light out of a moving head on the roof (from its lamp up its length)
+const BEAM_VS = `varying float vH; varying vec3 vN; varying vec3 vV; varying vec3 vA; void main(){ vH = position.y / 160.0; vec4 w = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); vA = normalize(mat3(modelMatrix) * vec3(0.0, 1.0, 0.0)); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const BEAM_FS = `uniform vec3 uColor; uniform float uK; varying float vH; varying vec3 vN; varying vec3 vV; varying vec3 vA;
+  void main(){ float e = pow(abs(dot(normalize(vN), normalize(vV))), 2.0); float end = 1.0 - smoothstep(0.55, 0.92, abs(dot(normalize(vA), normalize(vV))));
+    float a = pow(max(1.0 - vH, 0.0), 1.5) * smoothstep(0.0, 0.04, vH) * e * uK * end; a = (a == a) ? clamp(a, 0.0, 3.0) : 0.0; gl_FragColor = vec4(uColor * a * 0.6, 1.0); }`;
+
 export class HeartStage {
   constructor(scene, course, P, cfg, scenery) {
     this.course = course; this.cfg = cfg; this.S = scenery; this.P = P;
     this.t = cfg.t; this.x = cfg.x ?? 0;
+    // the whole night out is driven from here: main.js builds and updates the finale every frame
+    this.world = new PartyWorld(scene, { course, plan: scenery ? scenery.plan : {}, P, town: scenery });
+    prepare(course, scenery ? scenery.plan : {});
     this.group = new THREE.Group(); scene.add(this.group);
     this.body = new THREE.Group(); this.group.add(this.body);
-    this.size = cfg.size ?? 2.0;
-    this.y = cfg.y ?? 62;
-    this.mat = new THREE.MeshPhysicalMaterial({
-      color: 0x6a0820, roughness: 0.32, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.1,
-      emissive: new THREE.Color(P.heart ?? 0xff2a50), emissiveIntensity: 0.4,
-    });
+    // the deck comes up to her road's height where it runs onto it
+    this.gy0 = groundAt(course, this.t, this.x);
+    const dh = this.dh = Math.max(2.5, course.sample(this.t).y - this.gy0 + 0.1);
+    const sm = (key, opts) => fogged(new THREE.MeshStandardMaterial({ vertexColors: true, ...opts.o }), key, null, opts.lit);
+    this.stageMat = sm('StageM', { o: { roughness: 0.45, metalness: 0.45 }, lit: 0.32 });
+    this.body.add(new THREE.Mesh(stageGeometry(dh), this.stageMat));
+    this.drumMat = sm('DrumsM', { o: { roughness: 0.3, metalness: 0.4 }, lit: 0.45 });
+    this.drums = new THREE.Mesh(drumsGeometry(), this.drumMat); this.drums.position.set(0, dh + 2.2, -15.5); this.drums.scale.setScalar(cfg.drums ?? 1.7); this.body.add(this.drums);
+    this.beater = new THREE.Mesh(beaterGeometry(), this.drumMat); this.beater.position.set(0, 0.1, -1.3); this.drums.add(this.beater);
+    // the screen
+    this.screenMat = new THREE.ShaderMaterial({ uniforms: { uBeat: { value: 0 }, uBeatPos: { value: 0 }, uK: { value: 0.6 }, uCol: { value: new THREE.Color(P.heart ?? 0xff2a50) }, uLine: { value: new THREE.Color(0x7affc8) }, ...HFOG }, vertexShader: SCREEN_VS, fragmentShader: SCREEN_FS });
+    const sg = new THREE.PlaneGeometry(48, 27); sg.translate(0, dh + 16, -26.75);
+    this.body.add(new THREE.Mesh(sg, this.screenMat));
+    // the heart over it all, its zipper down the front
+    this.size = cfg.size ?? 0.95;
+    this.y = dh + (cfg.heartY ?? 58);
+    this.mat = new THREE.MeshPhysicalMaterial({ color: 0x6a0820, roughness: 0.32, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.1, emissive: new THREE.Color(P.heart ?? 0xff2a50), emissiveIntensity: 0.4 });
     this.heart = new THREE.Mesh(heartGeometry(), this.mat);
-    this.pivot = new THREE.Group(); this.pivot.position.y = this.y; this.pivot.add(this.heart);
+    this.pivot = new THREE.Group(); this.pivot.position.set(0, this.y, -14); this.pivot.add(this.heart);
     this.body.add(this.pivot);
-    // the zipper down the front and back: teeth, and the pull at the top
     const teethG = new THREE.BoxGeometry(1.1, 0.42, 0.5);
     this.zipMat = new THREE.MeshStandardMaterial({ color: 0xffd9a0, metalness: 0.9, roughness: 0.25, emissive: new THREE.Color(0xffc070), emissiveIntensity: 0.3 });
-    const nT = 46, teeth = new THREE.InstancedMesh(teethG, this.zipMat, nT * 2);
-    const m = new THREE.Matrix4();
-    for (let side = 0; side < 2; side++) for (let i = 0; i < nT; i++) {
-      const y = 6.8 - i * 0.44, x = (i % 2 ? 0.42 : -0.42);
-      const z = side ? -8.15 : 8.15;
-      m.makeTranslation(x, y, z);
-      teeth.setMatrixAt(side * nT + i, m);
-    }
+    const nT = 46, teeth = new THREE.InstancedMesh(teethG, this.zipMat, nT * 2), m = new THREE.Matrix4();
+    for (let side = 0; side < 2; side++) for (let i = 0; i < nT; i++) { m.makeTranslation(i % 2 ? 0.42 : -0.42, 6.8 - i * 0.44, side ? -8.15 : 8.15); teeth.setMatrixAt(side * nT + i, m); }
     this.pivot.add(teeth);
-    const pull = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.2, 0.5), this.zipMat);
-    pull.position.set(0.2, 5.4, 8.5); pull.rotation.z = 0.25;
-    this.pivot.add(pull);
-    this.heart.scale.setScalar(1); this.pivot.scale.setScalar(this.size);
-
-    // the stage: a round floor that lights from the rim in
-    this.stageMat = new THREE.MeshStandardMaterial({ color: 0x1a1218, roughness: 0.4, metalness: 0.3, emissive: new THREE.Color(P.glow), emissiveIntensity: 0.05 });
-    const stage = new THREE.Mesh(new THREE.CylinderGeometry(46, 48, 2.4, 64), this.stageMat);
-    stage.position.y = 1.2; this.body.add(stage);
-    this.rimMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(P.edge) });
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(47.2, 0.35, 6, 96), this.rimMat);
-    rim.rotation.x = Math.PI / 2; rim.position.y = 2.45; this.body.add(rim);
-
-    // searchlights from the rim, sweeping
+    const pull = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.2, 0.5), this.zipMat); pull.position.set(0.2, 5.4, 8.5); pull.rotation.z = 0.25; this.pivot.add(pull);
+    this.pivot.scale.setScalar(this.size);
+    // moving heads on the roof: beams that sweep the sky over the crowd
     this.beams = [];
-    const bg = new THREE.CylinderGeometry(13, 0.9, 640, 18, 1, true); bg.translate(0, 320, 0);
-    const beamCols = [0xff4f8a, 0xffd27a, 0xff2a50, 0xffb3c8];
-    for (let k = 0; k < 8; k++) {
-      const mm = new THREE.ShaderMaterial({
-        uniforms: { uColor: { value: new THREE.Color(beamCols[k % 4]) }, uK: { value: 0 } },
-        vertexShader: `varying float vH; varying vec3 vN; varying vec3 vV; varying float vD; void main(){ vH = position.y / 640.0; vec4 w = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); vD = length(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
-        fragmentShader: `uniform vec3 uColor; uniform float uK; varying float vH; varying vec3 vN; varying vec3 vV; varying float vD; void main(){ float e = pow(abs(dot(normalize(vN), normalize(vV))), 1.6); float a = (1.0 - vH) * (1.0 - vH) * e * uK * smoothstep(20.0, 140.0, vD); gl_FragColor = vec4(uColor * a * 0.5, 1.0); }`,
-        blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide,
-      });
+    const bg = new THREE.CylinderGeometry(7, 0.5, 160, 16, 1, true); bg.translate(0, 80, 0);
+    const beamCols = [0xff4f8a, 0xffd27a, 0xff2a50, 0xffb3c8, 0x8affd8, 0xffe8c0];
+    for (let k = 0; k < 10; k++) {
+      const mm = new THREE.ShaderMaterial({ uniforms: { uColor: { value: new THREE.Color(beamCols[k % beamCols.length]) }, uK: { value: 0 } }, vertexShader: BEAM_VS, fragmentShader: BEAM_FS, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide });
       const beam = new THREE.Mesh(bg, mm); beam.frustumCulled = false;
-      const a = k / 8 * Math.PI * 2 + 0.2;
-      beam.position.set(Math.cos(a) * 44, 2.5, Math.sin(a) * 44);
+      beam.position.set(-27 + k * 6, dh + 34.2, -4);
       this.body.add(beam);
-      this.beams.push({ beam, m: mm, phase: k * 0.9, a });
-    }
-    // the crowd is phone lights: a few hundred, swaying
-    this.crowd = [];
-    let seed = 7;
-    const R = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    for (let i = 0; i < 700; i++) {
-      const a = R() * Math.PI * 2, r = 51 + Math.pow(R(), 1.6) * 60;
-      this.crowd.push({ a, r, h: 1.5 + R() * 0.8, ph: R() * 6.28, c: R() < 0.75 ? [0.85, 0.92, 1] : col([0xff4f8a, 0xffd27a, 0xff2a50][Math.floor(R() * 3)]) });
+      this.beams.push({ beam, m: mm, phase: k * 0.9, k });
     }
     this.lit = 0; this.earned = 0; this.fired = false; this.beat = 0;
     this.body.visible = false;
-    this._p = new THREE.Vector3(); this._v = new THREE.Vector3();
+    this._p = new THREE.Vector3(); this._v = new THREE.Vector3(); this._w = new THREE.Vector3(); this._e = new THREE.Euler();
   }
 
   fire(earned) { this.fired = true; this.earned = earned; }
 
+  // a point in the stage's own frame, in the world
+  _at(x, y, z, out) { out.set(x, y, z); return out.applyMatrix4(this.group.matrixWorld); }
+
   update(track, rider, songT, dt, fireworks) {
+    if (this.world) {
+      this.world.frame(track, rider, songT, dt, this.camPos, this.beat, this.S ? this.S.P : this.P);
+      if (this.S) this.world.draw(this.S, track, rider);
+    }
     const p = track.ground(this.t, this.x, this._p);
+    p.y = this.gy0;
     this.group.position.copy(p);
-    this.group.rotation.y = this.course.sample(this.t).yaw;
-    // only once the far road is laid out this far; before that the heart lives in the sky
-    this.near = smooth(this.t - 46, this.t - 34, rider.t);
-    this.body.visible = this.near > 0.001;
+    this.group.rotation.y = this.course.sample(this.t).yaw + Math.PI;
+    // the stage is there once the road is laid out that far; the heart in the sky comes down to it
+    // over the last chorus's end (heartFrame in main.js fades the sky one by this)
+    this.near = smooth(this.t - 17, this.t - 9, rider.t);
+    this.body.visible = rider.t > this.t - 34;
     if (!this.body.visible) return;
-    this.lit += ((this.fired ? 1 : 0.35) - this.lit) * Math.min(1, dt * 1.2);
-    const b = this.beat;
-    const s = this.size * (1 + 0.06 * b);
-    this.pivot.scale.setScalar(s);
-    // it turns to face whoever is looking at it, swaying a little
+    this.group.updateMatrixWorld(true);
+    this.lit += ((this.fired ? 1 : 0.4) - this.lit) * Math.min(1, dt * 1.2);
+    const b = this.beat, c = this.course, bp = c.beatAt(songT), bf = bp - Math.floor(bp);
+    this.pivot.scale.setScalar(this.size * (1 + 0.06 * b));
+    // it turns to whoever is looking, swaying a little
     const cam = this.camPos;
     const face = cam ? Math.atan2(cam.x - p.x, cam.z - p.z) - this.group.rotation.y : 0;
-    this.pivot.rotation.y = face + Math.sin(songT * 0.25) * 0.15;
-    this.mat.emissiveIntensity = (0.55 + 1.9 * b) * (0.45 + 0.55 * this.lit);
+    this.pivot.rotation.y = face + Math.sin(songT * 0.25) * 0.12;
+    this.mat.emissiveIntensity = (0.55 + 1.9 * b) * (0.5 + 0.5 * this.lit) * (0.25 + 0.75 * this.near);
     this.zipMat.emissiveIntensity = 0.2 + 0.9 * b * this.lit;
-    this.stageMat.emissiveIntensity = 0.04 + 0.3 * b * this.lit;
+    // his drums play on their own: the beater into the kick with the heart (after the song, with it)
+    const hit = Math.max(b, Math.exp(-bf * 7) * (songT < c.duration ? 0.8 : 0));
+    this.beater.rotation.x = -0.4 + 0.85 * Math.max(hit, 0);
+    const su = this.screenMat.uniforms; su.uBeat.value = b; su.uBeatPos.value = songT < c.duration ? bp : bp; su.uK.value = 0.35 + 0.65 * this.lit; su.uCol.value.set(this.P.heart ?? 0xff2a50);
     for (const L of this.beams) {
-      L.beam.rotation.set(Math.sin(songT * 0.5 + L.phase) * 0.42, 0, Math.cos(songT * 0.37 + L.phase * 1.3) * 0.42 - 0.12 * Math.sign(Math.cos(L.a)));
-      L.m.uniforms.uK.value = this.lit * this.near * (0.55 + 0.45 * b);
+      L.beam.rotation.set(-0.35 + Math.sin(songT * 0.55 + L.phase) * 0.45, 0, Math.cos(songT * 0.41 + L.phase * 1.3) * 0.55 + (L.k - 4.5) * 0.06);
+      L.m.uniforms.uK.value = (0.35 + 0.65 * this.lit) * (0.55 + 0.45 * b);
     }
     const S = this.S; if (!S) return;
-    const yaw = this.group.rotation.y, cy = Math.cos(yaw), sy = Math.sin(yaw);
-    // heart light on the ground and a halo
-    S.pool(p.x, 2.5, p.z, 120, col(this.P.heart ?? this.P.glow), (0.15 + 0.6 * b) * this.lit);
-    const hy = this.y;
-    S.glow(p.x, hy, p.z, 95 * (1 + 0.06 * b), col(this.P.heart ?? this.P.glow), (0.12 + 0.5 * b) * this.lit * this.near);
-    // phone lights
-    const crowdK = smooth(0, 1, this.lit) * this.near;
-    if (crowdK > 0.01) {
-      const bp = this.course.beatAt(songT);
-      for (const c of this.crowd) {
-        const sway = Math.sin(bp * Math.PI + c.ph) * 0.4;
-        const lx = Math.cos(c.a) * c.r, lz = Math.sin(c.a) * c.r;
-        const wx = p.x + lx * cy + lz * sy, wz = p.z - lx * sy + lz * cy;
-        glowAt(S, wx + sway * cy, c.h + 0.15 * Math.sin(bp * Math.PI * 2 + c.ph), wz - sway * sy, 1.7, c.c, (0.6 + 0.7 * b) * crowdK);
-      }
-    }
-    // fireworks over the field from the moment it lights
+    const w = this._w, heartC = col(this.P.heart ?? this.P.glow), dh = this.dh;
+    // the lamps on the roof, changing colour every bar, brighter on the beat
+    const bar = Math.floor(bp / 4), pal = [heartC, col(this.P.edge), [1, 0.85, 0.6], col(this.P.windowAlt), [0.55, 1, 0.85]];
+    for (let k = 0; k < 14; k++) { this._at(-26 + k * 4, dh + 32.6, -4, w); glowAt(S, w.x, w.y, w.z, 3.2, pal[(k + bar) % 5], (0.8 + 1.6 * Math.exp(-bf * 4)) * (0.5 + 0.5 * this.lit)); }
+    // light on the deck and the riser, a halo round the screen
+    this._at(0, dh + 0.3, -12, w); poolAt(S, w.x, w.y, w.z, 46, [1, 0.8, 0.7], 0.7 * this.lit + 0.2);
+    this._at(0, dh + 2.4, -16, w); poolAt(S, w.x, w.y, w.z, 14, [1, 0.92, 0.85], 0.9 + 0.8 * hit);
+    this._at(0, dh + 16, -25, w); glowAt(S, w.x, w.y, w.z, 70, heartC, (0.08 + 0.25 * b) * this.lit);
+    // the heart's glow over the field, and its light on the crowd
+    this._at(0, this.y, -14, w); glowAt(S, w.x, w.y, w.z, 70 * (1 + 0.06 * b), heartC, (0.14 + 0.5 * b) * (0.4 + 0.6 * this.lit) * this.near);
+    this._at(0, 0.3, 40, w); poolAt(S, w.x, this.gy0 + 0.3, w.z, 110, heartC, (0.12 + 0.45 * b) * this.lit);
+    // sparks off the front of the deck on the beat once it's lit
+    if (this.fired && bf < 0.35) for (const x of [-24, -16, -8, 8, 16, 24]) for (let j = 0; j < 4; j++) { const u = bf / 0.35; this._at(x + Math.sin(j * 2.1 + bp) * 0.4, dh + 0.5 + u * (5 + j * 1.6), 0.4, w); glowAt(S, w.x, w.y, w.z, 0.9, [1, 0.8, 0.45], 2.2 * (1 - u) * this.lit); }
+    // fireworks behind the stage from the moment it lights
     if (this.fired && fireworks && this.earned > 0.05) {
       this.fwNext = (this.fwNext ?? 0) - dt;
       if (this.fwNext <= 0) {
-        this.fwNext = 0.3 + Math.random() * 0.35 + (1 - this.earned) * 0.9;
-        const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 90;
-        const from = this._v.set(p.x + Math.cos(a) * r, 0, p.z + Math.sin(a) * r).clone();
-        const to = from.clone(); to.y = 70 + Math.random() * 70;
+        this.fwNext = 0.35 + Math.random() * 0.4 + (1 - this.earned) * 0.8;
+        const from = this._at((Math.random() - 0.5) * 140, 0, -40 - Math.random() * 90, this._v).clone();
+        const to = from.clone(); to.y += 55 + Math.random() * 55;
         fireworks.launch(from, to, 0.9 + 0.7 * this.earned);
       }
     }

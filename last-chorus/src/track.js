@@ -165,6 +165,7 @@ export class Track {
     g.setAttribute('aMisc', new THREE.BufferAttribute(misc, 4).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('aDist', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('aHold', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
     this.geo = g;
     this.mat = new THREE.ShaderMaterial({
       uniforms: {
@@ -174,6 +175,7 @@ export class Track {
         uSky: { value: new THREE.Color(palette.horizon) }, uFogColor: { value: new THREE.Color(palette.fog) },
         uFogDensity: { value: palette.fogDensity }, uCam: { value: new THREE.Vector3() }, uPulse: { value: 0 }, uStyle: { value: palette.ribbonStyle ?? 0 },
         uHoldCol: { value: new THREE.Color(palette.hold ?? palette.glow) }, uGateCol: { value: new THREE.Color(palette.gate ?? palette.edge).lerp(new THREE.Color(1, 1, 1), palette.gate ? 0 : 0.55) }, uPress: { value: 0 }, uHit: { value: 0 }, uHitCol: { value: new THREE.Color(1, 0.85, 0.4) }, uDapple: { value: palette.dapple ?? 0 }, uShade: { value: palette.shade ?? 0 }, uSun: { value: new THREE.Color(palette.moon ?? 0xffffff) }, uSunDir: { value: new THREE.Vector3(...(palette.moonDir || [0, 1, 0])).normalize() },
+        uStartT: { value: 0 }, uFinishT: { value: this.c.duration },
       },
       vertexShader: RIBBON_VS, fragmentShader: RIBBON_FS,
       side: THREE.DoubleSide, transparent: false,
@@ -208,7 +210,7 @@ export class Track {
     const N = this.N, M = ACROSS, c = this.c;
     const pos = this.geo.attributes.position.array, nor = this.geo.attributes.normal.array;
     const tim = this.geo.attributes.aTime.array, side = this.geo.attributes.aSide.array, misc = this.geo.attributes.aMisc.array;
-    const hold = this.geo.attributes.aHold.array;
+    const hold = this.geo.attributes.aHold.array, gapA = this.geo.attributes.aGap.array;
     const sp = this.skirtGeo.attributes.position.array, sa = this.skirtGeo.attributes.aFade.array;
     const s = this.s;
     // distance along the ribbon, fixed to the world (anchored to how far you've ridden)
@@ -251,6 +253,7 @@ export class Track {
         misc[o * 4] = beatPos; misc[o * 4 + 1] = slope; misc[o * 4 + 2] = lit; misc[o * 4 + 3] = vd;
         dist[o] = cum[i] + base;
         hold[o] = s.hold;
+        gapA[o] = s.gap;
       }
       // skirts hang from both edges
       for (let e = 0; e < 2; e++) {
@@ -260,32 +263,34 @@ export class Track {
         sp[o * 3] = bx; sp[o * 3 + 1] = by; sp[o * 3 + 2] = bz;
         sp[(o + 1) * 3] = bx; sp[(o + 1) * 3 + 1] = by - 3.2; sp[(o + 1) * 3 + 2] = bz;
         const fade = smooth(-BACK, -BACK + 1, tk - this.tNow) * (1 - smooth(AHEAD - 3, AHEAD, tk - this.tNow));
-        sa[o] = 0.16 * fade; sa[o + 1] = 0;
+        sa[o] = s.gap ? 0 : 0.16 * fade; sa[o + 1] = 0;
       }
     }
-    for (const a of ['position', 'normal', 'aTime', 'aSide', 'aMisc', 'aDist', 'aHold']) this.geo.attributes[a].needsUpdate = true;
+    for (const a of ['position', 'normal', 'aTime', 'aSide', 'aMisc', 'aDist', 'aHold', 'aGap']) this.geo.attributes[a].needsUpdate = true;
     this.skirtGeo.attributes.position.needsUpdate = true; this.skirtGeo.attributes.aFade.needsUpdate = true;
     this.mat.uniforms.uSong.value = this.tNow;
   }
 }
 
 const RIBBON_VS = /* glsl */`
-attribute float aTime; attribute float aSide; attribute vec4 aMisc; attribute float aDist; attribute float aHold;
-varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold;
+attribute float aTime; attribute float aSide; attribute vec4 aMisc; attribute float aDist; attribute float aHold; attribute float aGap;
+varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold; varying float vGap;
 void main(){
-  vTime = aTime; vSide = aSide; vMisc = aMisc; vN = normal; vDist = aDist; vHold = aHold;
+  vTime = aTime; vSide = aSide; vMisc = aMisc; vN = normal; vDist = aDist; vHold = aHold; vGap = aGap;
   vec4 w = modelMatrix * vec4(position, 1.0);
   vWorld = w.xyz;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 
 const RIBBON_FS = /* glsl */`
-uniform float uTime, uSong, uFlow, uBeatPhase, uFogDensity, uPulse, uStyle, uPress, uHit, uDapple, uShade;
+uniform float uTime, uSong, uFlow, uBeatPhase, uFogDensity, uPulse, uStyle, uPress, uHit, uDapple, uShade, uStartT, uFinishT;
 uniform vec3 uBase, uEdge, uFret, uGlow, uSky, uFogColor, uCam, uHoldCol, uGateCol, uHitCol, uSun, uSunDir;
-varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold;
+varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold; varying float vGap;
 float aaLine(float d, float w){ float fw = fwidth(d); return 1.0 - smoothstep(w - fw, w + fw, abs(d)); }
 float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main(){
+  // a gap: the road just isn't there (its broken ends glow)
+  if (vGap > 0.5) discard;
   float beat = vMisc.x, slope = vMisc.y, lit = vMisc.z, vd = vMisc.w;
   float ahead = vTime - uSong;
   vec3 V = normalize(uCam - vWorld);
@@ -369,6 +374,16 @@ void main(){
   }
   // what you rode well stays warm behind you
   col += uGlow * passed * max(lit, 0.0) * 0.06 * (1.0 - edge);
+  // the broken edge of a gap burns
+  col += uEdge * smoothstep(0.02, 0.45, vGap) * 3.0;
+  // the start line, and the chequered finish
+  float ds = vTime - uStartT;
+  col += vec3(1.0) * aaLine(ds, 0.012) * 1.6 * (1.0 - across * 0.3);
+  float df = vTime - uFinishT;
+  if (abs(df) < 0.07) {
+    float ch = mod(floor((vSide + 1.0) * 5.0) + floor(vDist / 0.95), 2.0);
+    col = mix(col, mix(vec3(0.02), vec3(1.1), ch), 0.85 * (1.0 - edge));
+  }
   // fog
   float d = length(uCam - vWorld);
   float fog = 1.0 - exp(-pow(d * uFogDensity, 1.6));

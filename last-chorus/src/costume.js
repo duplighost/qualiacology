@@ -5,6 +5,7 @@
 // the front, the register at 29.99 and the receipt: dignity, peace of mind. Happy Halloween.
 
 import * as THREE from 'three';
+import { AA_GLSL } from './aa.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, col, glowAt, poolAt, local } from './scenery.js';
 import { tintMaterial } from './props.js';
@@ -355,6 +356,7 @@ function shopMaterial() {
       float n2(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f); return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
       vec3 hue(float t){ return 0.5 + 0.5 * cos(6.2832 * (t + vec3(0.0, 0.33, 0.67))); }
+      ${AA_GLSL}
       void main(){
         int part = int(vPart + 0.5);
         float x = vC.x, h = vC.y, along = vC.z;
@@ -421,7 +423,7 @@ function shopMaterial() {
           if (part == 0) { col = vec3(0.36, 0.34, 0.32) * (0.8 + 0.3 * n2(vec2(x, along) * 0.3)); }
           else if (part == 3) { col = vec3(0.6, 0.6, 0.58); col = mix(col, vec3(1.6), step(abs(abs(x) - 12.0), 1.0) * step(abs(dl), 6.0)); }
           else {
-            col = mix(vec3(0.95, 0.82, 0.1), vec3(0.85, 0.08, 0.06), step(0.5, fract((wa - h) / 14.0)));
+            col = mix(vec3(0.95, 0.82, 0.1), vec3(0.85, 0.08, 0.06), aaSq((wa - h) / 14.0));
             // red tags everywhere
             vec2 tq = vec2(wa / 9.0, h / 7.0), tf = fract(tq) - 0.5;
             float tagk = step(0.6, h2(floor(tq))) * step(abs(tf.x), 0.28) * step(abs(tf.y), 0.18);

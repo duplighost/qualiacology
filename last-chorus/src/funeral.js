@@ -8,6 +8,7 @@
 // and the same chapel in white for the wedding, the urn on the altar.
 
 import * as THREE from 'three';
+import { AA_GLSL } from './aa.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, col, glowAt, poolAt, local, PARTS } from './scenery.js';
 import { prepare, floorAt, groundAt, Terrain } from './trail.js';
@@ -742,6 +743,7 @@ function funeralMaterial() {
         if (st < 3.5) return vec2(22.0, 11.0);
         return vec2(0.0);
       }
+      ${AA_GLSL}
       void main(){
         int part = int(vPart + 0.5);
         float x = vC.x, h = vC.y, along = vC.z;
@@ -789,7 +791,7 @@ function funeralMaterial() {
           float shut = (step(box2(wc - vec2(5.6, 0.0), vec2(1.7, 8.5)), 0.0) + step(box2(wc + vec2(5.6, 0.0), vec2(1.7, 8.5)), 0.0)) * step(16.0, abs(x) - 4.0 * (1.0 - fl));
           vec3 lit = uWarm * (1.0 + 0.3 * h2(vec2(floor((x + 11.0) / 22.0), fl))) * 1.15;
           lit = mix(lit, vec3(0.05), step(abs(wc.x), 0.25) + step(abs(wc.y), 0.25));
-          col = mix(col, vec3(0.1, 0.22, 0.16) * (0.8 + 0.2 * step(0.5, fract(wc.y * 0.9))), clamp(shut, 0.0, 1.0));
+          col = mix(col, vec3(0.1, 0.22, 0.16) * (0.8 + 0.2 * aaSq(wc.y * 0.9)), clamp(shut, 0.0, 1.0));
           col = mix(col, lit, win);
           col = mix(col, vec3(0.7, 0.68, 0.64), step(abs(h - 33.0), 0.8) + step(abs(h - 3.0), 1.4));
           col *= uLight * 0.8;
@@ -800,7 +802,7 @@ function funeralMaterial() {
             col = white ? vec3(0.62, 0.54, 0.46) * (0.9 + 0.1 * n2(vec2(x, along) * 0.2)) : vec3(0.15, 0.06, 0.11) * (0.85 + 0.25 * n2(vec2(x, along) * 0.5));
             float run = step(abs(x), 12.0);
             vec3 rn = white ? vec3(0.97, 0.95, 0.92) : vec3(0.34, 0.04, 0.08) * (0.85 + 0.2 * n2(vec2(x, along) * 0.6));
-            float bdr = step(10.2, abs(x)) * (0.55 + 0.45 * step(0.5, fract(along * 0.45 + abs(x) * 0.3)));
+            float bdr = step(10.2, abs(x)) * (0.55 + 0.45 * aaSq(along * 0.45 + abs(x) * 0.3));
             rn = mix(rn, white ? vec3(0.9, 0.82, 0.62) : vec3(0.22, 0.03, 0.05), bdr * 0.8);
             col = mix(col, rn, run);
             if (white) { vec2 pq = vec2(x, along) * 0.6; float pet = step(0.84, h2(floor(pq))) * smoothstep(0.42, 0.18, length(fract(pq) - 0.5)); col = mix(col, vec3(0.96, 0.6, 0.66), pet * 0.85); }
@@ -812,14 +814,14 @@ function funeralMaterial() {
             col = vec3(0.72, 0.74, 0.74) * (0.92 + 0.08 * h2(floor(tq)));
             col *= 0.7 + 0.3 * smoothstep(0.0, 0.04, min(min(tf.x, 1.0 - tf.x), min(tf.y, 1.0 - tf.y)));
             vec2 dq = vec2(abs(x) - 15.0, mod(along, 20.0) - 10.0);
-            col = mix(col, vec3(0.2, 0.22, 0.24) * (0.6 + 0.4 * step(0.5, fract(dq.y * 2.0))), step(box2(dq, vec2(1.4, 1.4)), 0.0));
+            col = mix(col, vec3(0.2, 0.22, 0.24) * (0.6 + 0.4 * aaSq(dq.y * 2.0)), step(box2(dq, vec2(1.4, 1.4)), 0.0));
           } else if (st < 3.5) {
             float id = floor(x / 2.2);
             col = vec3(0.16, 0.09, 0.05) * (0.8 + 0.3 * h2(vec2(id, 1.0)));
             col = mix(col, vec3(0.3, 0.06, 0.08) * (0.85 + 0.2 * n2(vec2(x, along) * 0.6)), step(abs(x), 8.0));
           } else {
             vec2 dq = vec2(x + along, along - x) / 9.0;
-            float dark = step(0.5, mod(floor(dq.x) + floor(dq.y), 2.0));
+            float dark = aaChk(dq);
             col = mix(vec3(0.82, 0.78, 0.7), vec3(0.08, 0.07, 0.08), dark);
             col = mix(col, dark > 0.5 ? vec3(0.24, 0.22, 0.24) : vec3(0.6, 0.56, 0.5), smoothstep(0.03, 0.0, abs(n2(vec2(x, along) * 0.07 + n2(vec2(x, along) * 0.3)) - 0.5)) * 0.5);
           }
@@ -881,7 +883,7 @@ function funeralMaterial() {
               vec2 pq = vec2(mod(wa, 7.0) - 3.5, h - 4.6);
               col = low * (1.0 - 0.18 * (step(box2(pq, vec2(2.8, 3.2)), 0.0) - step(box2(pq, vec2(2.55, 2.95)), 0.0)));
             } else {
-              col = high * (0.94 + 0.06 * step(0.5, fract(wa / 1.4)));
+              col = high * (0.94 + 0.06 * aaSq(wa / 1.4));
               col = mix(col, high * 1.12, floral(vec2(wa, h)) * (st < 1.5 ? 0.35 : 0.15));
             }
             col = mix(col, vec3(0.86, 0.82, 0.72), step(abs(h - 9.3), 0.35));

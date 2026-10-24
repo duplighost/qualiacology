@@ -22,7 +22,7 @@
 <meta name="twitter:description" content="LAST CHORUS is a hoverboard ride over twenty-seven of my songs. The ground is the song: hold to press down into each dip and let go up the other side, and the hills are the bars, so riding well is riding in time. Keyboard or mouse.">
 <meta name="twitter:image" content="https://qualiacology.com/assets/games/last-chorus-card-v20261023.jpg">
 <style>
-.home-link{position:fixed;left:12px;top:12px;z-index:200;color:rgba(255,200,224,.8);text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(10,4,20,.5);border:1px solid rgba(255,90,140,.35);cursor:pointer;transition:opacity .4s}
+.home-link{position:fixed;right:12px;top:12px;z-index:200;color:rgba(255,200,224,.8);text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(10,4,20,.5);border:1px solid rgba(255,90,140,.35);cursor:pointer;transition:opacity .4s}
 .home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(255,90,140,.8);outline:0}
 .riding .home-link{opacity:0;pointer-events:none}
 </style>
@@ -38,8 +38,11 @@
   <div id="songbar"><canvas id="shape"></canvas></div>
   <div id="title"><div class="name">LAST CHORUS</div><div class="pick"><span class="num"></span><span class="song"></span></div><div class="best"></div><div class="hint">hold <b>space</b> or <b>click</b> down the glow &nbsp;&middot;&nbsp; let go on the line</div><div class="back"><b>esc</b> all songs</div></div>
   <div id="speed"></div>
+  <div id="score"><span class="x"></span><span class="n">0</span></div>
+  <div id="pops"></div>
   <div id="judge"><div class="word"></div><div class="streak"></div></div>
   <div id="gems"><span class="icon">&#9670;</span><span class="n">0</span></div>
+  <div id="count"></div>
   <div id="results"></div>
   <div id="loading"></div>
 </div>
@@ -49,9 +52,11 @@
     <div class="shade"></div>
     <div class="panel">
       <div class="game">LAST CHORUS</div>
+      <div class="me"></div>
       <ol class="list"></ol>
-      <div class="foot"><b>&uarr; &darr;</b>&nbsp; pick &nbsp;&nbsp;<b>enter</b> or <b>click</b>&nbsp; ride</div>
+      <div class="foot"><b>&uarr; &darr;</b>&nbsp; pick &nbsp;&nbsp;<b>enter</b> or <b>click</b>&nbsp; ride &nbsp;&nbsp;<b>B</b>&nbsp; boards</div>
     </div>
+    <div class="locker"></div>
   </div>
   <div id="load"><div class="img"></div><div class="shade"></div><div class="box"><div class="name"></div><div class="bar"><i></i></div></div></div>
   <div id="end"></div>

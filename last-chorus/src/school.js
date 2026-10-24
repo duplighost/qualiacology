@@ -6,6 +6,7 @@
 // lot at six, and the stadium's lights coming on for homecoming.
 
 import * as THREE from 'three';
+import { AA_GLSL } from './aa.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, col, glowAt, poolAt, local, PARTS } from './scenery.js';
 import { prepare, floorAt, groundAt, Terrain } from './trail.js';
@@ -431,6 +432,7 @@ function schoolMaterial() {
       float n2(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f); return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
       float box2(vec2 p, vec2 b){ vec2 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
+      ${AA_GLSL}
       void main(){
         int part = int(vPart + 0.5);
         float x = vC.x, h = vC.y, along = vC.z;
@@ -493,8 +495,8 @@ function schoolMaterial() {
               col = uLocker * (0.85 + 0.12 * h2(vec2(id, 1.0)));
               col *= 0.6 + 0.4 * smoothstep(0.0, 0.03, min(lx, 1.0 - lx));
               // the vents, the handle, the number plate
-              float vent = step(abs(h - 18.4), 1.0) * step(0.5, fract(h * 2.5)) * step(0.2, lx) * step(lx, 0.8);
-              float vent2 = step(abs(h - 3.6), 0.8) * step(0.5, fract(h * 2.5)) * step(0.2, lx) * step(lx, 0.8);
+              float vent = step(abs(h - 18.4), 1.0) * aaSq(h * 2.5) * step(0.2, lx) * step(lx, 0.8);
+              float vent2 = step(abs(h - 3.6), 0.8) * aaSq(h * 2.5) * step(0.2, lx) * step(lx, 0.8);
               col *= 1.0 - 0.45 * (vent + vent2);
               col = mix(col, vec3(0.7, 0.72, 0.76), step(abs(lx - 0.86), 0.035) * step(abs(h - 11.0), 1.4));
               col = mix(col, vec3(0.85, 0.8, 0.5), step(abs(lx - 0.5), 0.08) * step(abs(h - 15.6), 0.3));
@@ -511,7 +513,7 @@ function schoolMaterial() {
               float wx = mod(wa, 24.0) - 12.0;
               if (abs(wx) < 10.0 && h > 7.0 && h < 25.0) {
                 vec3 sky = mix(uSkyLow, uSkyTop, (h - 7.0) / 18.0) * 1.3;
-                float ph = step(0.5, fract(uTime * 2.2 + floor(wa / 24.0) * 0.37));
+                float ph = aaSq(uTime * 2.2 + floor(wa / 24.0) * 0.37);
                 // the police lights down in the lot, their glow coming up into the sky
                 vec3 pol = mix(vec3(1.0, 0.1, 0.12), vec3(0.2, 0.35, 1.0), ph);
                 sky = mix(sky, sky * 0.45 + pol * (0.35 + 1.5 * smoothstep(20.0, 7.0, h)), uPolice);
@@ -548,7 +550,7 @@ function schoolMaterial() {
         }
         col *= part == 7 ? vec3(1.0) : uLight;
         // the police lights coming in through the classroom windows, red then blue on everything
-        if (st > 0.5 && st < 1.5 && part != 7) col += mix(vec3(1.0, 0.1, 0.12), vec3(0.2, 0.35, 1.0), step(0.5, fract(uTime * 2.2))) * uPolice * (side > 0.0 && onWall ? 0.12 : 0.07);
+        if (st > 0.5 && st < 1.5 && part != 7) col += mix(vec3(1.0, 0.1, 0.12), vec3(0.2, 0.35, 1.0), aaSq(uTime * 2.2)) * uPolice * (side > 0.0 && onWall ? 0.12 : 0.07);
         // the alarm: the whole place in pulses of red
         float pulse = 0.5 + 0.5 * sin(uTime * 9.0);
         col = mix(col, col * vec3(1.0, 0.25, 0.25) + vec3(0.35, 0.0, 0.0) * pulse, uAlarm * (part == 7 ? 0.0 : 1.0));

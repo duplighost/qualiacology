@@ -33,10 +33,15 @@ class Layer {
     if (vals) for (const k in vals) { const A = this.attrs[k]; if (A) { const v = vals[k]; if (A.size === 1) A.a.array[this.n] = v; else A.a.array.set(v, this.n * A.size); } }
     return this.n++;
   }
+  // send only the part of each buffer in use this frame (the whole of it every frame cost
+  // megabytes of uploads), and nothing at all for a layer with nothing in it
   end() {
-    this.mesh.count = this.n;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    for (const k in this.attrs) this.attrs[k].a.needsUpdate = true;
+    const n = this.n;
+    this.mesh.count = n;
+    if (n === 0) return;
+    const im = this.mesh.instanceMatrix;
+    im.clearUpdateRanges(); im.addUpdateRange(0, n * 16); im.needsUpdate = true;
+    for (const k in this.attrs) { const A = this.attrs[k]; A.a.clearUpdateRanges(); A.a.addUpdateRange(0, n * A.size); A.a.needsUpdate = true; }
   }
 }
 
@@ -112,7 +117,9 @@ export class Scenery {
     // layers are made the first time a part asks for one, so a song only builds what it uses
     this._layers = {};
     const defs = LAYER_DEFS;
-    this.layers = new Proxy(this._layers, { get: (o, k) => { if (o[k] || typeof k !== 'string') return o[k]; const d = defs[k]; if (!d) return undefined; const [geo, mat, max, attrs] = d(this.mats); return (o[k] = new Layer(scene, geo, mat, max, attrs)); } });
+    // (onLate, set once the ride is loaded: a layer first wanted mid-ride compiles in the background)
+    this.onLate = null;
+    this.layers = new Proxy(this._layers, { get: (o, k) => { if (o[k] || typeof k !== 'string') return o[k]; const d = defs[k]; if (!d) return undefined; const [geo, mat, max, attrs] = d(this.mats); const L = (o[k] = new Layer(scene, geo, mat, max, attrs)); if (this.onLate) this.onLate(L.mesh); return L; } });
     this.items = [];
     this.traffic = [];
     this.roads = [];
@@ -125,6 +132,10 @@ export class Scenery {
     this.roadMeshes = this.roads.map((r) => new Road(scene, course, r, P));
     const seen = new Set();
     for (const it of this.items) { if (seen.has(it.parts)) continue; seen.add(it.parts); try { PARTS[it.parts](this, { ...it, wakeNow: 0 }, new THREE.Vector3(0, -500, 0), new THREE.Quaternion(), 0); } catch (e) { console.warn('part', it.parts, e); } }
+    // and every other item once, quietly: some use more layers than the first of their kind (a
+    // hat, a stone's variant), and a layer first used mid-ride compiled mid-ride and stalled it
+    const p0 = new THREE.Vector3(), q0 = new THREE.Quaternion();
+    for (const it of this.items) { p0.set(0, -500, 0); q0.identity(); try { PARTS[it.parts](this, { ...it, wakeNow: 0 }, p0, q0, 0); } catch (e) { /* the first of its kind has said */ } }
     for (const k of ['glow', 'pool', 'car']) void this.layers[k];
     for (const k in this._layers) { this._layers[k].begin(); this._layers[k].end(); }
   }
@@ -178,7 +189,7 @@ export class Scenery {
       const tgt = Math.max(it.passed ? it.target : (it.wake0 ?? 0), this.wakeAll, it.keepLit ? 1 : 0);
       it.wakeNow = (it.wakeNow ?? it.wake0 ?? 0) + (tgt - (it.wakeNow ?? it.wake0 ?? 0)) * Math.min(1, dt * (1.2 + (it.seed ?? 0.5) * 2.5));
       track.ground(it.t, it.x, p);
-      const yaw = this.course.sample(it.t).yaw + (it.rot || 0);
+      const yaw = this.course.sample(it.t, this._smp || (this._smp = {})).yaw + (it.rot || 0);
       p.y = it.h || 0;
       e.set(0, yaw, 0); q.setFromEuler(e);
       PARTS[it.parts](this, it, p, q, yaw);
@@ -191,16 +202,18 @@ export class Scenery {
       if (tau < t - 3 || tau > t + 34 || tau < car.from || tau > car.to) continue;
       track.ground(tau, car.x, p);
       if (car.road.follow && this.floorFn) p.y = this.floorFn(tau, car.x);
-      const yaw = this.course.sample(tau).yaw + (car.dir > 0 ? 0 : Math.PI);
+      const yaw = this.course.sample(tau, this._smp || (this._smp = {})).yaw + (car.dir > 0 ? 0 : Math.PI);
       e.set(0, yaw, 0); q.setFromEuler(e);
       s.setScalar(1);
       m.compose(p, q, s);
       Ls.car.add(m, { aTint: car.police ? [0.95, 0.95, 1] : car.tint });
-      // lights: head white-gold in front, tail red behind
+      // lights: head white-gold in front, tail red behind. The glows face the camera, so a car
+      // going her way shows its tails, not a pair of floodlights; one coming at her, its heads
       const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = -Math.cos(yaw), rz = Math.sin(yaw);
+      const away = car.dir > 0 ? 1 : 0;
       for (const side of [-0.65, 0.65]) {
-        glowAt(this, p.x + fx * 2.3 + rx * side, p.y + 0.62, p.z + fz * 2.3 + rz * side, 1.6, [1.0, 0.92, 0.75], 1.4);
-        glowAt(this, p.x - fx * 2.3 + rx * side, p.y + 0.66, p.z - fz * 2.3 + rz * side, 1.25, [1.0, 0.08, 0.1], 1.2);
+        glowAt(this, p.x + fx * 2.3 + rx * side, p.y + 0.62, p.z + fz * 2.3 + rz * side, 1.6, [1.0, 0.92, 0.75], away ? 0.12 : 1.3);
+        glowAt(this, p.x - fx * 2.3 + rx * side, p.y + 0.66, p.z - fz * 2.3 + rz * side, 1.25, [1.0, 0.08, 0.1], away ? 1.3 : 0.2);
       }
       if (car.police) {
         glowAt(this, p.x + rx * 0.4, p.y + 1.55, p.z + rz * 0.4, 2.2, [1, 0.05, 0.08], 2.4, 2);
@@ -287,7 +300,7 @@ export const PARTS = {
     S._o.copy(p); S._o.y = p.y + 64 * sy;
     m.compose(S._o, q, S._s.set(it.s, it.s, it.s));
     S.layers.towerTop.add(m, { aTint: [it.tint[0] * 0.5, it.tint[1] * 0.5, it.tint[2] * 0.55] });
-    glowAt(S, p.x, 64 * sy + 23 * it.s, p.z, 3.4, [1, 0.08, 0.08], 1.7, 1);
+    glowAt(S, p.x, p.y + 64 * sy + 23 * it.s, p.z, 3.4, [1, 0.08, 0.08], 1.7, 1);   // (from the tower's own foot: on raised ground it sat below the mast)
   },
   shop(S, it, p, q, yaw) {
     const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.shop.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
@@ -504,23 +517,30 @@ class Road {
   }
   update(track, rider) {
     const t0 = rider.t - 3, t1 = rider.t + 36, N = this.N, r = this.r;
+    // a road nowhere near her isn't built at all this frame (a song with five roads paid for all five)
+    const on = t1 >= (r.from ?? -1e9) && t0 <= (r.to ?? 1e9);
+    this.mesh.visible = on;
+    if (!on) return;
     const iR = Math.round((rider.t - t0) / (t1 - t0) * (N - 1));
     const w = this.total;
     const cum = this._cum || (this._cum = new Float32Array(N));
-    let last = null;
+    const smp = this._smp || (this._smp = {});
+    let lx = 0, lz = 0;
     for (let i = 0; i < N; i++) {
       const t = t0 + (t1 - t0) * (i / (N - 1));
       const visible = t >= (r.from ?? -1e9) && t <= (r.to ?? 1e9);
+      // (track.ground(t, x) is the row's centre slid x along its right: once per row, not per point)
+      track.ground(t, 0, this._p);
+      const yaw = this.course.sample(t, smp).yaw, rx = -Math.cos(yaw), rz = Math.sin(yaw);
       for (let j = 0; j <= 2; j++) {
         const x = r.x + (j - 1) * w * 0.5;
-        track.ground(t, x, this._p);
         const o = (i * 3 + j) * 3;
-        this.pos[o] = this._p.x; this.pos[o + 1] = visible ? (r.follow && this.floorFn ? this.floorFn(t, x) + 0.05 : (r.y ?? 0.04)) : -60; this.pos[o + 2] = this._p.z;
+        this.pos[o] = this._p.x + rx * x; this.pos[o + 1] = visible ? (r.follow && this.floorFn ? this.floorFn(t, x) + 0.05 : (r.y ?? 0.04)) : -60; this.pos[o + 2] = this._p.z + rz * x;
         this.uv[(i * 3 + j) * 2] = j / 2;
       }
       const cx = this.pos[(i * 3 + 1) * 3], cz = this.pos[(i * 3 + 1) * 3 + 2];
-      cum[i] = last ? cum[i - 1] + Math.hypot(cx - last[0], cz - last[1]) : 0;
-      last = [cx, cz];
+      cum[i] = i ? cum[i - 1] + Math.hypot(cx - lx, cz - lz) : 0;
+      lx = cx; lz = cz;
     }
     const base = rider.stats.dist - cum[iR];
     for (let i = 0; i < N; i++) for (let j = 0; j <= 2; j++) this.uv[(i * 3 + j) * 2 + 1] = cum[i] + base;

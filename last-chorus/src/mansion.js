@@ -1,88 +1,29 @@
-// Rent Free. The house he keeps in his head, and she lives in it: in through the front
-// door ("honey, I'm home"), a gallery with a vaulted ceiling and a spine along the top of
-// it, her portrait where his peace of mind used to hang, and his self-esteem, and Jesus.
-// Every room hers. Furniture under dust sheets, the doors that knock, the stairs to check
-// under, the bed at 3 a.m., the crawl space and the attic, the blueprint he drew to keep her
-// out, mold behind the walls, her fingerprints, the one light he leaves on, the locks he
-// never changed. Sweet dreams, landlord. This is home.
+// Rent Free. The house he keeps in his head, and she lives in it: up the path to the front
+// door ("honey, I'm home"), her in every window; a gallery with a vaulted ceiling folded like
+// a brain and a spine along the top of it lighting up on the beat; her portrait where his peace
+// of mind used to hang, and his self-esteem, and Jesus. Every room hers. Furniture under dust
+// sheets that come off and waltz as ghosts in every chorus; the hall of doors that knock; the
+// stairs to check under; his bed at 3 a.m.; the crawl space and the attic; the blueprint he drew
+// to keep her out; mold behind the walls, her fingerprints, her shadow keeping up with you; the
+// one light he leaves on; the locks he never changed. Sweet dreams, landlord: his bed at the end.
+// The set-pieces are in rnt-sets.js and rnt-geo.js (every name there starts with rnt).
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, col, glowAt, poolAt, local } from './scenery.js';
 import { prepare, floorAt } from './trail.js';
 import { Room, capQuad, paint, rgb, seeded, box, litTint } from './summer.js';
+// her portraits are drawn in rnt-geo.js; the set-pieces (all named rnt...) register themselves in rnt-sets.js
+import { portraitTexture, RU, litVC, cellMat, bedGeo, petalsGeo, standLampGeo, shadeGeo, windowGeo, moonGlassGeo, candelabraGeo, chairGeo } from './rnt-geo.js';
+import { sheetState } from './rnt-sets.js';
+import { AA_GLSL } from './aa.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const ni = (g) => (g.index ? g.toNonIndexed() : g);
 const merge = (gs) => mergeGeometries(gs.map(ni), false);
 const SIDE = (x) => (x > 0 ? Math.PI / 2 : -Math.PI / 2);
 const onFloor = (S, it) => { prepare(S.course, S.plan); it.h = floorAt(S.course, it.t); return it; };
-
-// ---------- her portraits: one woman, four sittings ----------
-// a stylised oil portrait, head and shoulders, looking straight out at you
-function portraitTexture() {
-  const W = 512, H = 640, c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2;
-  const g = c.getContext('2d');
-  const sittings = [
-    { bg: ['#3a5a5a', '#0e1a1c'], dress: '#1a0e14', tilt: -0.06, light: 0.0 },
-    { bg: ['#6a1a2a', '#1a060a'], dress: '#0e0e16', tilt: 0.08, light: 0.15 },
-    { bg: ['#7a6030', '#1e1408'], dress: '#3a0a14', tilt: -0.12, light: -0.1 },
-    { bg: ['#2a2a4a', '#08080e'], dress: '#2a2a2e', tilt: 0.04, light: 0.05 },
-  ];
-  sittings.forEach((s, k) => {
-    const ox = (k % 2) * W, oy = Math.floor(k / 2) * H;
-    g.save(); g.translate(ox, oy);
-    g.beginPath(); g.rect(0, 0, W, H); g.clip();
-    const bg = g.createRadialGradient(W * 0.45, H * 0.32, 20, W * 0.5, H * 0.45, H * 0.75);
-    bg.addColorStop(0, s.bg[0]); bg.addColorStop(1, s.bg[1]);
-    g.fillStyle = bg; g.fillRect(0, 0, W, H);
-    g.translate(W / 2, H * 0.44); g.rotate(s.tilt);
-    // the hair behind, long and dark, falling past the shoulders
-    g.fillStyle = '#1a0c08';
-    g.beginPath(); g.moveTo(-120, -90); g.bezierCurveTo(-170, 60, -150, 210, -110, 300); g.lineTo(110, 300); g.bezierCurveTo(150, 210, 170, 60, 120, -90);
-    g.bezierCurveTo(100, -190, -100, -190, -120, -90); g.fill();
-    // shoulders and the dress
-    g.fillStyle = s.dress;
-    g.beginPath(); g.moveTo(-230, 360); g.bezierCurveTo(-200, 220, -110, 190, -60, 175); g.lineTo(60, 175); g.bezierCurveTo(110, 190, 200, 220, 230, 360); g.fill();
-    // neck and face
-    const skin = g.createLinearGradient(-80, -100, 90, 120); skin.addColorStop(0, '#f2cdb0'); skin.addColorStop(1, '#b8846a');
-    g.fillStyle = skin;
-    g.beginPath(); g.moveTo(-42, 70); g.lineTo(-48, 190); g.quadraticCurveTo(0, 215, 48, 190); g.lineTo(42, 70); g.fill();
-    g.beginPath(); g.ellipse(0, -20, 78, 104, 0, 0, Math.PI * 2); g.fill();
-    // the hair in front: a heavy fringe swept to one side, waves either side of the face
-    g.fillStyle = '#24120c';
-    g.beginPath(); g.moveTo(-86, -40); g.bezierCurveTo(-90, -140, 40, -170, 92, -70); g.bezierCurveTo(60, -110, -20, -105, -40, -60); g.bezierCurveTo(-60, -20, -70, 40, -96, 80); g.fill();
-    g.beginPath(); g.moveTo(84, -50); g.bezierCurveTo(110, 30, 96, 120, 120, 200); g.bezierCurveTo(140, 110, 130, 0, 84, -50); g.fill();
-    g.strokeStyle = 'rgba(120, 70, 40, 0.5)'; g.lineWidth = 3;
-    for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(-70 + i * 8, -110 + i * 3); g.bezierCurveTo(-20 + i * 10, -140, 40, -130, 80, -60 + i * 6); g.stroke(); }
-    // eyes, looking at you; brows; the mouth, red
-    for (const sx of [-1, 1]) {
-      g.fillStyle = '#f4ece4'; g.beginPath(); g.ellipse(sx * 30, -24, 15, 7, 0, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#2a1a10'; g.beginPath(); g.arc(sx * 30 + 1, -24, 6, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(sx * 30 + 3, -26, 1.6, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = '#3a1a10'; g.lineWidth = 3; g.beginPath(); g.ellipse(sx * 30, -24, 16, 8, 0, Math.PI, Math.PI * 2); g.stroke();
-      g.lineWidth = 4; g.beginPath(); g.moveTo(sx * 14, -42); g.quadraticCurveTo(sx * 30, -50, sx * 46, -42); g.stroke();
-    }
-    g.strokeStyle = 'rgba(120, 70, 50, 0.6)'; g.lineWidth = 3; g.beginPath(); g.moveTo(4, -20); g.quadraticCurveTo(10, 10, 0, 22); g.stroke();
-    g.fillStyle = '#a8202e'; g.beginPath(); g.moveTo(-24, 46); g.quadraticCurveTo(0, 36, 24, 46); g.quadraticCurveTo(0, 62, -24, 46); g.fill();
-    g.fillStyle = 'rgba(255, 140, 130, 0.18)'; for (const sx of [-1, 1]) { g.beginPath(); g.arc(sx * 44, 14, 20, 0, Math.PI * 2); g.fill(); }
-    // pearls
-    g.fillStyle = '#f4f0e8'; for (let i = -6; i <= 6; i++) { g.beginPath(); g.arc(i * 9, 196 + Math.abs(i) * Math.abs(i) * -0.9 + 10, 5, 0, Math.PI * 2); g.fill(); }
-    g.restore();
-    // the light from one side, the varnish, the dark at the edges, the cracks of age
-    g.save(); g.translate(ox, oy);
-    const lt = g.createLinearGradient(0, 0, W, 0); lt.addColorStop(0, `rgba(255, 220, 160, ${0.12 + s.light})`); lt.addColorStop(1, 'rgba(0, 0, 0, 0.18)');
-    g.fillStyle = lt; g.fillRect(0, 0, W, H);
-    const vg = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.72); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(10, 5, 0, 0.55)');
-    g.fillStyle = vg; g.fillRect(0, 0, W, H);
-    g.strokeStyle = 'rgba(30, 20, 10, 0.18)'; g.lineWidth = 1;
-    const R = seeded(77 + k);
-    for (let i = 0; i < 70; i++) { let x = R() * W, y = R() * H; g.beginPath(); g.moveTo(x, y); for (let j = 0; j < 5; j++) { x += (R() - 0.5) * 40; y += (R() - 0.5) * 40; g.lineTo(x, y); } g.stroke(); }
-    g.restore();
-  });
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-  return t;
-}
 
 const MG = {
   canvas(k) {
@@ -293,7 +234,7 @@ extend({
     wine: (M) => [MG.wine(), VC(M, 'glassM', { roughness: 0.12, metalness: 0.2, transparent: true, opacity: 0.88 }), 3, {}],
     crates: (M) => [MG.crates(), VC(M, 'paperM', { roughness: 0.85, metalness: 0 }), 40, {}],
     sideLamp: (M) => [MG.lamp(), VC(M, 'woodM', { roughness: 0.6, metalness: 0.05 }), 4, {}],
-    lampShade: (M) => [MG.lampShade(), M.shadeM || (M.shadeM = new THREE.MeshStandardMaterial({ color: 0xf4e0c0, roughness: 0.9, side: THREE.DoubleSide, emissive: 0xffb060, emissiveIntensity: 1.1 })), 4, {}],
+    rntLampShade: (M) => [MG.lampShade(), M.shadeM || (M.shadeM = new THREE.MeshStandardMaterial({ color: 0xf4e0c0, roughness: 0.9, side: THREE.DoubleSide, emissive: 0xffb060, emissiveIntensity: 1.1 })), 4, {}],
     locks: (M) => [MG.locks(), VC(M, 'brassM', { roughness: 0.3, metalness: 0.7, emissive: 0x1a1208 }), 12, {}],
   },
   parts: {
@@ -307,7 +248,14 @@ extend({
       if (it.idx !== undefined) S.layers.plaque.add(m, { aIdx: it.idx, aWake: [0.7, 0] });
       if (it.hang) S.layers.hangWire.add(m, { aTint: [0.25, 0.2, 0.14] });
       const w = local(p, yaw, 0, 28.0 * s, 1.6 * s, S._o);
-      glowAt(S, w.x, w.y, w.z, 5 * s, [1, 0.85, 0.6], 0.55);
+      glowAt(S, w.x, w.y, w.z, 5 * s, [1, 0.85, 0.6], 0.55, S.beatLamps ? 4 : 0);
+      // in the dark rooms her eyes catch what light there is, and follow you
+      const T = S.tNow ?? -1e9;
+      for (const [a, b] of S.plan.rntEyes || []) {
+        if (T < a || T > b) continue;
+        const k = smooth(a, a + 1, T) * (1 - smooth(b - 1, b, T)) * (0.75 + 0.5 * (S.beat || 0));
+        for (const sx of [-1, 1]) { const e = local(p, yaw, sx * 0.7 * s, 20.0 * s, 0.6 * s, S._o); glowAt(S, e.x, e.y, e.z, 1.1 * s, [1, 0.55, 0.35], 1.4 * k); }
+      }
     },
     ghost(S, it, p, q) { const m = S._m, s = it.s ?? 1; m.compose(p, q, S._s.set(s, s, s)); S.layers[it.sofa ? 'ghostSofa' : 'ghostChair'].add(m); },
     stairs(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.stairs.add(m); },
@@ -321,7 +269,7 @@ extend({
     crates(S, it, p, q) { const m = S._m, s = it.s ?? 1; m.compose(p, q, S._s.set(s, s, s)); S.layers.crates.add(m); },
     // the light left on
     sideLamp(S, it, p, q) {
-      const m = S._m, s = it.s ?? 1; m.compose(p, q, S._s.set(s, s, s)); S.layers.sideLamp.add(m); S.layers.lampShade.add(m);
+      const m = S._m, s = it.s ?? 1; m.compose(p, q, S._s.set(s, s, s)); S.layers.sideLamp.add(m); S.layers.rntLampShade.add(m);
       glowAt(S, p.x, p.y + 18 * s, p.z, 22 * s, [1, 0.72, 0.38], 0.9);
       poolAt(S, p.x, p.y + 0.1, p.z, 70 * s, [1, 0.7, 0.36], 0.8);
     },
@@ -382,11 +330,11 @@ const flatRing = (W = 46, H = 40) => [[-W, H, 1, 1], [-W, 0, 1, 1], [-W, 0, 1, 0
 const atticRing = (W = 36, h0 = 8, H = 32) => [[-W, h0, 1, 1], [-W, 0, 1, 1], [-W, 0, 1, 0], [-W * 0.5, 0, 1, 0], [0, 0, 1, 0], [W * 0.5, 0, 1, 0], [W, 0, 1, 0], [W, 0, 1, 2], [W, h0, 1, 2], [W, h0, 1, 3], [W * 0.5, (h0 + H) / 2, 1, 3], [0, H, 1, 3], [-W * 0.5, (h0 + H) / 2, 1, 3], [-W, h0, 1, 3]];
 const HOUSE = {
   rings: { vault: vaultRing, flat: flatRing, crawl: flatRing, attic: atticRing },
-  ringOf: (s) => ({ gallery: 'vault', ballroom: 'vault', dark: 'vault', mold: 'vault', bedroom: 'flat', foyer: 'flat', blueprint: 'flat', crawl: 'crawl', attic: 'attic' }[s]),
-  styles: { gallery: 0, ballroom: 1, bedroom: 2, crawl: 3, attic: 4, blueprint: 5, foyer: 6, dark: 7, mold: 8 },
-  dims: { gallery: [40, 30, 14], ballroom: [70, 40, 24], dark: [40, 30, 14], mold: [40, 30, 14], bedroom: [50, 44], foyer: [46, 40], blueprint: [46, 40], crawl: [30, 15], attic: [36, 8, 32] },
+  ringOf: (s) => ({ gallery: 'vault', ballroom: 'vault', dark: 'vault', mold: 'vault', bedroom: 'flat', foyer: 'flat', blueprint: 'flat', crawl: 'crawl', attic: 'attic', doors: 'flat' }[s]),
+  styles: { gallery: 0, ballroom: 1, bedroom: 2, crawl: 3, attic: 4, blueprint: 5, foyer: 6, dark: 7, mold: 8, doors: 9 },
+  dims: { gallery: [40, 30, 14], ballroom: [70, 40, 24], dark: [40, 30, 14], mold: [40, 30, 14], bedroom: [50, 44], foyer: [46, 40], blueprint: [46, 40], crawl: [30, 15], attic: [36, 8, 32], doors: [30, 34] },
   // chandeliers: every 48 m in the gallery, 64 in the big rooms, a bare bulb every 30 in the crawl space
-  lights: (id) => ({ 0: [48, 24], 1: [64, 32], 2: [64, 32], 3: [30, 15], 6: [64, 32], 7: [96, 48], 8: [48, 24] }[id] || null),
+  lights: (id) => ({ 0: [48, 24], 1: [64, 32], 2: [64, 32], 3: [30, 15], 6: [64, 32], 7: [96, 48], 8: [48, 24], 9: [36, 18] }[id] || null),
 };
 
 function houseMaterial() {
@@ -395,15 +343,33 @@ function houseMaterial() {
       uStyle: { value: 0 }, uTime: { value: 0 }, uFogDensity: { value: 0.003 }, uFog: { value: new THREE.Color() }, uCam: { value: new THREE.Vector3() },
       uWarm: { value: new THREE.Color(0xffc070) }, uLight: { value: new THREE.Color(1, 1, 1) }, uSkyTop: { value: new THREE.Color(0x0a0414) }, uSkyLow: { value: new THREE.Color(0x2a1030) },
       uMold: { value: new THREE.Vector2(-1e5, 0) }, uPrints: { value: new THREE.Vector2(-1e5, 0) },
+      // the song in the walls: the beat, where on the beat, the chorus lift, song time
+      uBeat: { value: 0 }, uBeatPos: { value: 0 }, uLift: { value: 0 }, uSong: { value: 0 }, uDist: { value: 0 },
+      uKnock: { value: new THREE.Vector2(-1e5, 0) }, uMood: { value: new THREE.Vector2(-1e5, -1e5) }, uShadow: { value: new THREE.Vector2(-1e5, -1e5) }, uHole: { value: new THREE.Vector2(-1e5, -1e5) },
     },
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: /* glsl */`
-      uniform float uStyle, uTime, uFogDensity;
+      uniform float uStyle, uTime, uFogDensity, uBeat, uBeatPos, uLift, uSong, uDist;
       uniform vec3 uFog, uCam, uWarm, uLight, uSkyTop, uSkyLow;
-      uniform vec2 uMold, uPrints;
+      uniform vec2 uMold, uPrints, uKnock, uMood, uShadow, uHole;
+      ${AA_GLSL}
+      // her, as a shape (u across, v up from her feet, about 2.3 tall): long hair, a neck, shoulders,
+      // a waist, arms down her sides, a dress flaring to the knee, her legs
+      float herShape(vec2 q){
+        float x = abs(q.x), y = q.y;
+        float head = step(length((q - vec2(0.0, 2.1)) * vec2(1.0, 0.8)), 0.16);
+        float hair = step(length((q - vec2(0.0, 1.98)) * vec2(1.0, 0.58)), 0.21) * step(1.72, y);
+        float neck = step(x, 0.055) * step(1.8, y) * step(y, 2.0);
+        float sh = mix(0.13, 0.27, smoothstep(1.28, 1.74, y));
+        float torso = step(x, sh) * step(1.22, y) * step(y, 1.82 - 0.25 * smoothstep(0.18, 0.28, x));
+        float arm = step(abs(x - (0.29 - (1.74 - y) * 0.06)), 0.045) * step(1.12, y) * step(y, 1.76);
+        float skirt = step(x, mix(0.44, 0.13, smoothstep(0.38, 1.26, y))) * step(0.36, y) * step(y, 1.27);
+        float legs = step(abs(x - 0.08), 0.035) * step(0.0, y) * step(y, 0.4);
+        return clamp(head + hair + neck + torso + arm + skirt + legs, 0.0, 1.0);
+      }
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float n2(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f); return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
@@ -420,6 +386,7 @@ function houseMaterial() {
         return clamp(m + stem + leaf, 0.0, 1.0);
       }
       vec2 fixture(float st){
+        if (st > 8.5) return vec2(36.0, 18.0);
         if (st < 0.5 || st > 7.5) return vec2(48.0, 24.0);
         if (st < 2.5 || st > 5.5 && st < 6.5) return vec2(64.0, 32.0);
         if (st < 3.5) return vec2(30.0, 15.0);
@@ -442,10 +409,18 @@ function houseMaterial() {
           // the front of the house: dressed stone, tall windows lit from inside
           vec2 b = vec2(x / 3.2 + mod(floor(h / 1.6), 2.0) * 0.5, h / 1.6);
           col = vec3(0.32, 0.29, 0.3) * (0.8 + 0.3 * h2(floor(b))) * (0.8 + 0.2 * step(0.04, fract(b.x)) * step(0.06, fract(b.y)));
-          vec2 wc = vec2(mod(x, 16.0) - 8.0, h - 16.0);
+          // two floors of tall windows, lit, and her standing in some of them, looking out at you
+          float fl = h < 30.0 ? 0.0 : 1.0;
+          vec2 wc = vec2(mod(x, 16.0) - 8.0, h - (fl > 0.5 ? 40.0 : 16.0));
           float win = step(box2(wc, vec2(3.0, 7.5)), 0.0) + step(length(wc - vec2(0.0, 7.5)), 3.0) * step(7.5, wc.y);
-          col = mix(col, uWarm * (0.9 + 0.4 * h2(vec2(floor(x / 16.0), 2.0))), clamp(win, 0.0, 1.0) * step(4.0, abs(x) - 12.0));
+          win = clamp(win, 0.0, 1.0) * step(4.0, abs(x) - 12.0) * step(h, 52.0);
+          vec2 wid = vec2(floor(x / 16.0), fl);
+          vec3 lit = uWarm * (0.9 + 0.4 * h2(wid + 2.0)) * (1.0 + 0.35 * uBeat);
+          float her = step(0.45, h2(wid + 9.0)) * herShape((wc - vec2(0.0, -7.4)) / 4.4);
+          lit = mix(lit, vec3(0.16, 0.03, 0.08), her * 0.85);
+          col = mix(col, lit, win);
           col *= uLight * 0.7;
+          col += uWarm * win * 0.25;
         } else if (st > 4.5 && st < 5.5) {
           // the blueprint: everything drawn in white on blue, the walls, the floor, the doors
           col = vec3(0.07, 0.18, 0.46);
@@ -469,12 +444,12 @@ function houseMaterial() {
         } else {
           if (part == 0) {
             if (st > 0.5 && st < 1.5 || st > 5.5 && st < 6.5) {
-              // marble in big squares, black and cream, polished
+              // marble in big squares, black and cream, polished (filtered: finer than a pixel it settles to grey)
               vec2 tq = vec2(x, along) / 7.0;
-              float dark = step(0.5, mod(floor(tq.x) + floor(tq.y), 2.0));
+              float dark = aaChk(tq);
               float vein = smoothstep(0.03, 0.0, abs(n2(vec2(x, along) * 0.08 + n2(vec2(x, along) * 0.3)) - 0.5));
               col = mix(vec3(0.72, 0.66, 0.58), vec3(0.06, 0.05, 0.06), dark);
-              col = mix(col, dark > 0.5 ? vec3(0.2, 0.18, 0.2) : vec3(0.5, 0.46, 0.44), vein * 0.6);
+              col = mix(col, mix(vec3(0.5, 0.46, 0.44), vec3(0.2, 0.18, 0.2), dark), vein * 0.6);
               col += uWarm * 0.12 * exp(-dl * dl / 300.0) * (1.0 - dark * 0.5);
             } else if (st > 1.5 && st < 2.5) {
               col = vec3(0.26, 0.06, 0.08) * (0.85 + 0.25 * n2(vec2(x, along) * 0.4));
@@ -497,6 +472,15 @@ function houseMaterial() {
               col = mix(col, rug, run);
             }
             col *= lightK;
+            // where the floor gave way under the road: a hole, the boards broken round it
+            float hk = smoothstep(uHole.x - 0.03, uHole.x + 0.03, vT + 0.06 * (n2(vec2(x * 0.35, 1.0)) - 0.5)) * (1.0 - smoothstep(uHole.y - 0.03, uHole.y + 0.03, vT - 0.06 * (n2(vec2(x * 0.35, 7.0)) - 0.5)));
+            if (hk > 0.001) {
+              float hw = 14.0 + 4.0 * n2(vec2(along * 0.15, 3.0));
+              float hole = hk * step(abs(x), hw);
+              float edge = hk * step(abs(x), hw + 2.2) * (1.0 - hole) * step(0.35, h2(vec2(floor(x / 1.1), floor(along / 6.0))));
+              col = mix(col, vec3(0.42, 0.27, 0.15) * (0.6 + 0.6 * lightK), edge);
+              col = mix(col, vec3(0.008, 0.005, 0.01) + vec3(0.25, 0.05, 0.08) * exp(-abs(x) * 0.12) * 0.25, hole);
+            }
           } else if (part == 3) {
             if (st < 1.5 || st > 6.5) {
               // the vault, and along the top of it a spine: a vertebra every few metres, ribs down to the walls
@@ -508,7 +492,19 @@ function houseMaterial() {
               float spine = clamp(body + wing + knob, 0.0, 1.0);
               col = st > 0.5 && st < 1.5 ? vec3(0.42, 0.34, 0.26) : vec3(0.2, 0.08, 0.12);
               col *= 0.8 + 0.2 * n2(vec2(x, along) * 0.1);
+              // "vaulted ceilings in your brain": the gallery's plaster between the ribs is folded like one
+              if (st < 0.5) {
+                vec2 bq = vec2(x * 0.2, along * 0.13);
+                float gy = n2(bq) * 0.62 + n2(bq * 2.3 + 7.0) * 0.38;
+                float fold = smoothstep(0.55, 0.85, abs(fract(gy * 6.0) - 0.5) * 2.0);
+                col = mix(col * vec3(1.12, 0.94, 0.96), col * vec3(0.55, 0.42, 0.46), fold * (1.0 - max(rib, spine)) * 0.85);
+              }
               col = mix(col, vec3(0.86, 0.8, 0.66) * (0.8 + 0.25 * smoothstep(0.0, 1.0, 1.0 - length(vq * vec2(0.42, 0.62)))), max(rib * 0.85, spine));
+              // the spine lights up on the beat: a band of light coming down it at you, every beat
+              float bf = fract(uBeatPos);
+              float band = exp(-pow((vT - (uSong + 1.5 * (1.0 - bf) + 0.15)) * 4.5, 2.0));
+              col += uWarm * spine * (0.18 * uBeat + 1.1 * band) * (0.45 + 0.9 * uLift);
+              col += uWarm * rib * band * 0.25 * (0.4 + uLift);
             } else if (st > 2.5 && st < 3.5) {
               // joists, the boards above them, a pipe
               float jo = step(abs(mod(along, 3.2) - 1.6), 0.55);
@@ -538,6 +534,34 @@ function houseMaterial() {
               col = vec3(0.7, 0.62, 0.5);
               col = mix(col, vec3(0.08, 0.07, 0.1) + uWarm * 0.12 * (0.5 + 0.5 * sin(wa * 0.3 + h * 0.2)), step(abs(pa), 4.6) * step(4.0, h) * step(h, 32.0));
               col = mix(col, vec3(0.8, 0.6, 0.28), step(abs(abs(pa) - 6.8), 0.7));
+              // in a chorus the mirrors catch the light on the beat
+              col += uWarm * step(abs(pa), 4.6) * step(4.0, h) * step(h, 32.0) * (0.06 + 0.3 * uBeat * uLift);
+            } else if (st > 8.5) {
+              // the hall of doors: knock, knock. Green panelling, a door every fifteen metres either
+              // side, a little window in each with her in it, light under every one
+              float kk = uKnock.y * exp(-max(uSong - uKnock.x, 0.0) * 5.0) * step(uKnock.x, uSong + 0.02);
+              col = vec3(0.12, 0.2, 0.17) * (0.85 + 0.15 * step(0.06, abs(fract(wa / 5.0) - 0.5)));
+              col = mix(col, vec3(0.5, 0.44, 0.34) * (0.9 + 0.1 * n2(vec2(wa, h) * 0.1)), step(14.0, h));
+              col = mix(col, vec3(0.32, 0.2, 0.1), step(abs(h - 14.0), 0.4));
+              float dx = mod(wa, 15.0) - 7.5, did = floor(wa / 15.0);
+              float jit = sin(uTime * 70.0 + did * 3.0) * 0.35 * kk;
+              float hh = h + jit;
+              if (abs(dx) < 5.6 && hh < 25.0 && part != 6) {
+                float frame = 1.0 - step(abs(dx), 4.6) * step(hh, 24.0);
+                vec3 wood = vec3(0.22, 0.1, 0.05) * (0.8 + 0.25 * n2(vec2(dx * 0.4, hh * 3.0)));
+                vec2 pq = vec2(abs(dx) - 2.2, mod(hh, 11.0) - 5.5);
+                wood *= 1.0 - 0.28 * step(box2(pq, vec2(1.5, 4.0)), 0.0) * (1.0 - step(box2(pq, vec2(1.25, 3.75)), 0.0));
+                col = mix(wood, vec3(0.62, 0.5, 0.32), frame);
+                // the window in it, lit, her in it; the knob; the light under it, brighter on a knock
+                vec2 wq = vec2(dx, hh - 17.5);
+                float wn = step(box2(wq, vec2(1.9, 2.6)), 0.0);
+                vec3 inside = uWarm * (0.9 + 0.8 * kk);
+                inside = mix(inside, vec3(0.1, 0.02, 0.05), herShape(vec2(wq.x / 1.5, (wq.y + 2.6) / 1.5)) * step(0.35, h2(vec2(did, side))));
+                col = mix(col, inside, wn);
+                col = mix(col, vec3(0.95, 0.75, 0.32) * 1.4, step(length(vec2(dx - 3.4 * side, hh - 11.0)), 0.45));
+                col += uWarm * (1.2 + 3.0 * kk) * smoothstep(1.4, 0.0, hh) * step(abs(dx), 4.6);
+              }
+              col += uWarm * kk * 0.12;
             } else {
               vec3 base = st > 1.5 && st < 2.5 ? vec3(0.32, 0.1, 0.14) : (st > 5.5 && st < 6.5 ? vec3(0.62, 0.56, 0.46) : vec3(0.3, 0.05, 0.09));
               col = mix(base, base * 1.55 + vec3(0.04, 0.02, 0.0), damask(vec2(wa, h)) * 0.6);
@@ -549,9 +573,38 @@ function houseMaterial() {
               col = mix(col, vec3(0.75, 0.56, 0.28), step(abs(h - 9.2), 0.3));
             }
             // crown moulding where the wall meets the ceiling
-            float top = st > 2.5 && st < 3.5 ? 15.0 : (st > 3.5 && st < 4.5 ? 8.0 : (st > 0.5 && st < 1.5 ? 40.0 : (st > 1.5 && st < 2.5 ? 44.0 : (st > 5.5 && st < 6.5 ? 40.0 : 30.0))));
+            float top = st > 8.5 ? 34.0 : (st > 2.5 && st < 3.5 ? 15.0 : (st > 3.5 && st < 4.5 ? 8.0 : (st > 0.5 && st < 1.5 ? 40.0 : (st > 1.5 && st < 2.5 ? 44.0 : (st > 5.5 && st < 6.5 ? 40.0 : 30.0)))));
             col = mix(col, vec3(0.86, 0.78, 0.6), step(top - 1.6, h) * step(st, 2.5) + step(top - 1.6, h) * step(5.5, st));
             col *= lightK;
+            // "my moods in every door": doors in the gallery walls, ajar, each a different colour, on the beat
+            float mo = smoothstep(uMood.x - 0.3, uMood.x + 0.5, vT) * (1.0 - smoothstep(uMood.y - 0.5, uMood.y + 0.3, vT)) * step(st, 0.5) * (part == 6 ? 0.0 : 1.0);
+            if (mo > 0.001) {
+              float dx = mod(wa, 30.0) - 15.0, did = floor(wa / 30.0);
+              if (abs(dx) < 6.4 && h < 25.0) {
+                float k = h2(vec2(did, side * 3.0));
+                vec3 mood = k < 0.2 ? vec3(1.0, 0.25, 0.4) : (k < 0.4 ? vec3(0.55, 0.3, 1.0) : (k < 0.6 ? vec3(0.25, 0.55, 1.0) : (k < 0.8 ? vec3(1.0, 0.62, 0.2) : vec3(0.3, 0.95, 0.6))));
+                float frame = 1.0 - step(abs(dx), 5.4) * step(h, 24.0);
+                float gap = step(abs(dx - 4.2 * side), 1.5) * step(h, 24.0);
+                vec3 door = vec3(0.16, 0.07, 0.04) * lightK * (0.85 + 0.25 * n2(vec2(dx * 0.4, h * 3.0)));
+                vec3 lightC = mood * (2.6 + 3.4 * uBeat);
+                vec3 d = mix(door, vec3(0.62, 0.48, 0.26) * lightK, frame);
+                d = mix(d, lightC, gap);
+                d += mood * (0.9 + 1.4 * uBeat) * smoothstep(2.5, 0.0, h) * step(abs(dx), 5.4);
+                // the glow of it on the door itself
+                d += mood * 0.35 * (0.5 + uBeat) * exp(-abs(dx - 4.2 * side) * 0.6) * step(abs(dx), 5.4) * step(h, 24.0);
+                col = mix(col, d, mo);
+              }
+            }
+            // "never truly alone": her shadow on the wall, keeping up with you
+            float sk = smoothstep(uShadow.x - 0.6, uShadow.x + 0.6, vT) * (1.0 - smoothstep(uShadow.y - 0.6, uShadow.y + 0.4, vT)) * (part == 6 ? 0.0 : 1.0);
+            if (sk > 0.001) {
+              float u = (wa - (uDist + 64.0 + (side > 0.0 ? 13.0 : 0.0) + 4.0 * sin(uTime * 0.7))) / 14.0;
+              vec2 sq = vec2(u, (h - 4.0) / 14.0);
+              float sh = herShape(sq);
+              float rim = clamp(herShape(sq * 0.97 + vec2(0.0, 0.03)) + herShape(sq * 1.03 - vec2(0.0, 0.03)) - 2.0 * sh, 0.0, 1.0);
+              col = mix(col, col * 0.08, sh * sk * 0.92);
+              col += vec3(0.6, 0.3, 0.9) * rim * sk * 0.5;
+            }
             // mould behind the walls of memory: black-green, from the floor and the corners, spreading
             float mk = uMold.y * smoothstep(uMold.x - 1.0, uMold.x + 7.0, vT) * step(7.5, st) * 1.25;
             if (mk > 0.001) {
@@ -587,26 +640,78 @@ function houseMaterial() {
   });
 }
 
-// ---------- the end: the bed, and her over it ----------
+// ---------- the end: his bed. Him asleep under the duvet and her ghost tucked in on her pillow,
+// her portrait over them with HOME under it, SWEET DREAMS, LANDLORD hung on the canopy, the lamps
+// left on, candles, the moon in the windows, rose petals, and a ring of keys round her picture ----------
 export class PortraitFinale {
   constructor(scene, course, P, cfg, scenery) {
     this.course = course; this.cfg = cfg; this.S = scenery; this.P = P;
-    this.t = cfg.t; this.x = cfg.x ?? -20;
+    this.t = cfg.t; this.x = cfg.x ?? -30;
     prepare(course, scenery.plan);
-    this.group = new THREE.Group(); scene.add(this.group);
+    const g = this.group = new THREE.Group(); scene.add(g);
+    const add = (geo, mat, x = 0, y = 0, z = 0, s = 1, ry = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.setScalar(s); m.rotation.y = ry; g.add(m); return m; };
+    const wood = litVC(0.24, { roughness: 0.6, metalness: 0.08 }), soft = litVC(0.3, { roughness: 0.85, metalness: 0 });
+    add(bedGeo(), soft, 0, 0, 0);
+    add(petalsGeo(110, 12, 5), litVC(0.45, { roughness: 0.7 }), 0, 10.6, 4);
+    add(petalsGeo(140, 30, 9), litVC(0.45, { roughness: 0.7 }), 0, 0.15, 30);
+    for (const sx of [-1, 1]) {
+      add(standLampGeo(), wood, sx * 20.5, 0, -15);
+      add(shadeGeo(), new THREE.MeshStandardMaterial({ color: 0xf4e0c0, roughness: 0.9, side: THREE.DoubleSide, emissive: 0xffb060, emissiveIntensity: 1.3 }), sx * 20.5, 0, -15);
+      add(candelabraGeo(), litVC(0.25, { roughness: 0.5, metalness: 0.4 }), sx * 19, 0, 23, 1.1);
+    }
+    // an armchair turned to the bed
+    add(chairGeo(), litVC(0.24, { roughness: 0.85 }), -25, 0, 17, 0.85, 0.9);
+    // what it draws through the scenery's layers: made now, so nothing compiles at the end
+    for (const k of ['canvas1', 'gilt', 'plaque', 'rntKey', 'rntSampler', 'rntSamplerFrame', 'chandelier', 'glow', 'pool']) void scenery.layers[k];
     this.lit = 0.6; this.fired = false; this.earned = 0;
-    this._p = new THREE.Vector3();
+    this._p = new THREE.Vector3(); this._w = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._e = new THREE.Euler(); this._s = new THREE.Vector3();
   }
   fire(earned) { this.fired = true; this.earned = earned; }
   update(track, rider, songT, dt) {
-    const fy = floorAt(this.course, this.t);
+    const c = this.course, fy = floorAt(c, this.t), g = this.group;
     track.ground(this.t, this.x, this._p);
-    this.group.position.set(this._p.x, fy, this._p.z);
-    this.group.rotation.set(0, this.course.sample(this.t).yaw, 0);
-    this.lit += ((this.fired ? 1.3 : 0.7) - this.lit) * Math.min(1, dt);
-    const S = this.S; if (!S || this.t - rider.t > 46) return;
-    const g = this.group.position;
-    S.glow(g.x, g.y + 30, g.z, 40, [1, 0.8, 0.5], 0.35 * this.lit);
+    g.position.set(this._p.x, fy, this._p.z);
+    // it faces back down the room, the way she comes in (and the way the end shot looks at it)
+    g.rotation.set(0, c.sample(this.t).yaw + Math.PI + (this.cfg.turn ?? 0), 0);
+    this.lit += ((this.fired ? 1.25 : 0.75) - this.lit) * Math.min(1, dt);
+    const S = this.S; if (!S || this.t - rider.t > 40) return;
+    g.updateMatrixWorld(true);
+    const W = (x, y, z) => this._w.set(x, y, z).applyMatrix4(g.matrixWorld);
+    const m = this._m, gq = g.quaternion, k = this.lit, T = songT;
+    // her portrait hung in the canopy over the foot of the bed, looking at you; HOME on the headboard
+    const base = W(0, 13.1, 19.1).clone();
+    m.compose(base, gq, this._s.set(0.75, 0.75, 0.75));
+    S.layers.canvas1.add(m); S.layers.gilt.add(m, { aTint: [1, 0.78, 0.38] });
+    W(0, 33.2, 20.6); S.glow(this._w.x, this._w.y, this._w.z, 8, [1, 0.86, 0.6], 0.9 * k);
+    if (S.atlas.index.HOME !== undefined) { W(0, 7.9, -18.26); m.compose(this._w, gq, this._s.set(1.2, 1.2, 1.2)); S.layers.plaque.add(m, { aIdx: S.atlas.index.HOME, aWake: [1, 0] }); }
+    // the ring of keys round her picture: every copy
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      if (27 + Math.sin(a) * 9.2 > 32.6) continue;
+      const kp = W(Math.cos(a) * 8.4, 27 + Math.sin(a) * 9.2, 19.5);
+      this._e.set(0, 0, a - Math.PI / 2 + Math.sin(T * 1.6 + i) * 0.08); this._q.setFromEuler(this._e).premultiply(gq);
+      m.compose(kp, this._q, this._s.set(0.75, 0.75, 0.75)); S.layers.rntKey.add(m, { aTint: [1, 0.86, 0.52], aGlint: (i % 5) / 5 });
+    }
+    // SWEET DREAMS, LANDLORD, stood on top of the canopy like a crest
+    const cells = S.plan.rntFinaleBoard;
+    if (cells !== undefined) {
+      W(0, 39.6, 18.9); m.compose(this._w, gq, this._s.set(0.95, 0.95, 0.95));
+      S.layers.rntSampler.add(m, { aCell: [cells % 2, Math.floor(cells / 2)] }); S.layers.rntSamplerFrame.add(m);
+      W(0, 44.4, 20.8); S.glow(this._w.x, this._w.y, this._w.z, 9, [1, 0.9, 0.7], 0.6 * k);
+    }
+    // the lamps he leaves on, the candles, the moon in the windows, the chandelier over them
+    for (const sx of [-1, 1]) {
+      W(sx * 21.5, 18.4, -15); S.glow(this._w.x, this._w.y, this._w.z, 16, [1, 0.72, 0.38], 1.0 * k); S.pool(this._w.x, fy + 0.1, this._w.z, 50, [1, 0.7, 0.36], 0.7 * k);
+      const fl = 0.85 + 0.15 * Math.sin(T * 12 + sx * 3);
+      for (let j = -2; j <= 2; j++) { W(sx * 26 + j * 1.98, 20.5 + (j % 2) * 0.66, 9); S.glow(this._w.x, this._w.y, this._w.z, 2.6, [1, 0.72, 0.36], 1.4 * fl * k); }
+      W(sx * 26, 20, 9); S.pool(this._w.x, fy + 0.1, this._w.z, 30, [1, 0.62, 0.3], 0.55 * k);
+      W(sx * 38, 20, -18.6); S.glow(this._w.x, this._w.y, this._w.z, 22, [0.55, 0.65, 1], 0.4);
+    }
+    W(0, 30, 2); m.compose(this._w, gq, this._s.set(1.2, 1.2, 1.2)); S.layers.chandelier.add(m);
+    S.glow(this._w.x, this._w.y, this._w.z, 30, [1, 0.8, 0.5], 0.75 * k, S.beatLamps ? 4 : 0);
+    // her, tucked in: a little light of her own; and the whole bed warm
+    W(7, 13, -12); S.glow(this._w.x, this._w.y, this._w.z, 8, [0.75, 0.82, 1], 0.5 + 0.2 * Math.sin(T * 1.3));
+    W(0, 12, 0); S.glow(this._w.x, this._w.y, this._w.z, 60, [1, 0.75, 0.55], 0.22 * k); S.pool(this._w.x, fy + 0.1, this._w.z, 110, [1, 0.72, 0.5], 0.45 * k);
   }
 }
 
@@ -617,9 +722,17 @@ export class HouseWorld {
     prepare(S.course, S.plan);
     this.mat = houseMaterial();
     this.rooms = (S.plan.rooms || []).map((sp) => new Room(scene, S.course, sp, this.mat, HOUSE));
+    // what's drawn here, or only in a chorus: made now so it's compiled while loading
+    if (S.town) for (const k of ['chandelier', 'rntChain', 'rntGhost', 'rntChair', 'rntSofa', 'rntClock', 'ghostChair', 'ghostSofa', 'glow', 'pool']) void S.town.layers[k];
+    // the floor gives way under the road where a gap is (roomEvents.hole: the gap's lip)
+    const ev = S.plan.roomEvents || {};
+    const gap = ev.hole !== undefined ? S.course.gaps.find((g) => Math.abs(g.lip - ev.hole) < 0.6) : null;
+    this.hole = gap ? [gap.from - 0.15, gap.to + 0.25] : [-1e5, -1e5];
+    this._knocks = null;
+    this._m = new THREE.Matrix4(); this._g = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._f = new THREE.Vector3(); this._s = new THREE.Vector3(); this._o = new THREE.Vector3(); this._u = new THREE.Vector3();
   }
   update(S, dt, camera, time) {
-    const u = this.mat.uniforms, P = S.P;
+    const u = this.mat.uniforms, P = S.P, t = S.rider.t;
     u.uTime.value = time; u.uCam.value.copy(camera.position);
     u.uFog.value.set(P.fog); u.uFogDensity.value = P.fogDensity;
     u.uWarm.value.set(P.lamp ?? 0xffc070);
@@ -628,23 +741,48 @@ export class HouseWorld {
     const ev = S.plan.roomEvents || {};
     u.uMold.value.set(ev.mold ?? -1e5, ev.mold !== undefined ? 1 : 0);
     u.uPrints.value.set(ev.prints ?? -1e5, ev.prints !== undefined ? 1 : 0);
-    for (const r of this.rooms) r.update(S.track, S.rider, S.rider.t);
+    // the song in the walls
+    const beat = S.town ? S.town.beat : 0, lift = S.lift ? S.lift.k : 0;
+    u.uBeat.value = beat; u.uBeatPos.value = S.course.beatAt(t); u.uLift.value = lift; u.uSong.value = t; u.uDist.value = S.rider.stats.dist;
+    RU.time.value = time; RU.beat.value = beat; RU.lift.value = lift; RU.song.value = t;
+    // the last knock (the doors in the hall flare and shake)
+    if (!this._knocks) this._knocks = (S.entry.moments || []).filter((m) => m.kind === 'knock').map((m) => m.t).sort((a, b) => a - b);
+    let kt = -1e5; for (const k of this._knocks) if (k <= t + 0.01) kt = k;
+    u.uKnock.value.set(kt, 1);
+    u.uMood.value.set(...(ev.mood || [-1e5, -1e5]));
+    u.uShadow.value.set(...(ev.shadow || [-1e5, -1e5]));
+    u.uHole.value.set(this.hole[0], this.hole[1]);
+    for (const r of this.rooms) r.update(S.track, S.rider, t);
   }
-  // the chandeliers (and the crawl space's bare bulbs) where the lights hang
+  // the chandeliers, swinging on their chains (wider in a chorus), and the crawl space's bare bulbs
   draw(T) {
-    const lamp = col(this.S.P.lamp ?? 0xffc070), m = this._m || (this._m = new THREE.Matrix4()), g = this._g || (this._g = new THREE.Vector3());
+    const S = this.S, lamp = col(S.P.lamp ?? 0xffc070), m = this._m, g = this._g, c = S.course;
+    const tNow = T.tNow ?? 0, bp = c.beatAt(tNow), st = sheetState(T);
+    const A = 0.025 + 0.11 * st.dance + 0.05 * st.high;
     for (const r of this.rooms) {
       if (!r.mesh.visible) continue;
       const crawl = r.style === 3;
       const top = Math.max(...r.ring.map((p) => p[1]));
       for (const f of r.fixtures) {
-        this.S.track.ground(f.t, 0, g);
-        const fy = floorAt(this.S.course, f.t);
-        if (crawl) { T.glow(g.x, fy + top - 1.2, g.z, 7, [1, 0.8, 0.5], 1.0); T.pool(g.x, fy + 0.08, g.z, 30, [1, 0.75, 0.45], 0.5); continue; }
-        const y = fy + top - (r.style === 1 ? 16 : 12);
-        m.makeTranslation(g.x, y, g.z); T.layers.chandelier.add(m);
-        T.glow(g.x, y, g.z, r.style === 1 ? 30 : 22, lamp, 0.85);
-        T.pool(g.x, fy + 0.08, g.z, r.style === 1 ? 90 : 60, lamp, 0.4);
+        S.track.ground(f.t, 0, g);
+        const fy = floorAt(c, f.t);
+        if (crawl) { const sw = Math.sin(tNow * 2.1 + f.t) * 1.2; T.glow(g.x + sw * 0.3, fy + top - 1.6, g.z, 7, [1, 0.8, 0.5], 1.0); T.pool(g.x, fy + 0.08, g.z, 30, [1, 0.75, 0.45], 0.5); continue; }
+        const L = r.style === 1 ? 16 : 12;
+        const yaw = c.sample(f.t).yaw, ph = f.along * 0.07;
+        const a = A * Math.sin(Math.PI * bp / 2 + ph), b = A * 0.5 * Math.sin(Math.PI * bp / 4 + ph * 1.3);
+        this._f.set(Math.sin(yaw), 0, Math.cos(yaw));
+        this._q.setFromAxisAngle(this._f, a);
+        this._u.set(-Math.cos(yaw), 0, Math.sin(yaw)); const qb = (this._qb || (this._qb = new THREE.Quaternion())).setFromAxisAngle(this._u, b); this._q.multiply(qb);
+        const pivot = this._o.set(g.x, fy + top, g.z);
+        const off = this._s.set(0, -L, 0).applyQuaternion(this._q);
+        const cx = pivot.x + off.x, cy = pivot.y + off.y, cz = pivot.z + off.z;
+        g.set(cx, cy, cz);
+        m.compose(g, this._q, (this._one || (this._one = new THREE.Vector3(1, 1, 1)))); T.layers.chandelier.add(m);
+        // the chain up to the ceiling
+        const tp = (this._tp || (this._tp = new THREE.Vector3())).set(0, 8, 0).applyQuaternion(this._q).add(g);
+        m.compose(tp, this._q, (this._cs || (this._cs = new THREE.Vector3())).set(1, Math.max(0.5, L - 8), 1)); T.layers.rntChain.add(m);
+        T.glow(cx, cy, cz, r.style === 1 ? 30 : 22, lamp, 0.85 + 0.25 * st.dance, T.beatLamps ? 4 : 0);
+        T.pool(cx, fy + 0.08, cz, r.style === 1 ? 90 : 60, lamp, 0.4);
       }
     }
   }

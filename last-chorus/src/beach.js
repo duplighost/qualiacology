@@ -5,6 +5,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, col, PASTEL, glowAt, poolAt, local } from './scenery.js';
+import { prepare, groundAt } from './trail.js';
+import { SummerPieces } from './sp-pieces.js';
 
 const merge = (gs) => mergeGeometries(gs.map((g) => (g.index ? g.toNonIndexed() : g)), false);
 const pick = (R, arr) => arr[Math.floor(R() * arr.length)];
@@ -108,15 +110,15 @@ extend({
     bwLamp(S, it, p, q, yaw) {
       const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.bwLamp.add(m, { aTint: [0.2, 0.2, 0.24] });
       const lit = (0.4 + 1.1 * it.wakeNow) * (it.dark ? 0.15 : 1);
-      glowAt(S, p.x, 4.45, p.z, 2.4, col(S.P.lamp), lit, S.beatLamps ? 4 : 0);
-      poolAt(S, p.x, 0.07, p.z, 9, col(S.P.lamp), lit * 0.7);
+      glowAt(S, p.x, p.y + 4.45, p.z, 2.4, col(S.P.lamp), lit, S.beatLamps ? 4 : 0);
+      poolAt(S, p.x, p.y + 0.07, p.z, 9, col(S.P.lamp), lit * 0.7);
       // string lights sagging to the next lamp
       if (it.next && S.track) {
         const n = S._n || (S._n = new THREE.Vector3());
         S.track.ground(it.next.t, it.next.x, n);
         for (let k = 1; k < 6; k++) {
           const f = k / 6, sag = Math.sin(f * Math.PI) * 0.9;
-          glowAt(S, p.x + (n.x - p.x) * f, 4.2 - sag, p.z + (n.z - p.z) * f, 0.55, col(k % 2 ? S.P.fret : S.P.lamp), lit * 1.3, S.beatLamps ? 4 : 0);
+          glowAt(S, p.x + (n.x - p.x) * f, p.y + 4.2 - sag, p.z + (n.z - p.z) * f, 0.55, col(k % 2 ? S.P.fret : S.P.lamp), lit * 1.3, S.beatLamps ? 4 : 0);
         }
       }
     },
@@ -199,7 +201,9 @@ export class Land {
     const N = 160;
     this.N = N;
     const g = new THREE.BufferGeometry();
-    this.cols = [this.x0 - 6, this.x0, this.x0 + 10, -12, -9, 9, 14, this.x1];   // foam / wet sand / sand / boardwalk / sand / town
+    // foam / wet sand / sand up the dune / boardwalk / town (the dune's extra columns only matter on a bluff)
+    this.cols = [this.x0 - 6, this.x0, this.x0 + 10, this.x0 + 24, -40, -30, -22, -16, -12, -9, 9, 14, 30, 60, this.x1];
+    this.floorFn = null;
     const M = this.cols.length;
     this.M = M;
     this.pos = new Float32Array(N * M * 3); this.uvs = new Float32Array(N * M * 2);
@@ -261,10 +265,10 @@ export class Land {
       for (let j = 0; j < M; j++) {
         track.ground(t, this.cols[j], this._p);
         const o = (i * M + j) * 3;
-        this.pos[o] = this._p.x; this.pos[o + 1] = j === 0 ? -0.35 : 0.02; this.pos[o + 2] = this._p.z;
+        this.pos[o] = this._p.x; this.pos[o + 1] = j === 0 ? -0.35 : (this.floorFn ? this.floorFn(t, this.cols[j]) : 0.02); this.pos[o + 2] = this._p.z;
         this.uvs[(i * M + j) * 2] = this.cols[j];
       }
-      const cx = this.pos[(i * M + 4) * 3], cz = this.pos[(i * M + 4) * 3 + 2];
+      const cx = this.pos[(i * M + 9) * 3], cz = this.pos[(i * M + 9) * 3 + 2];
       cum[i] = last ? cum[i - 1] + Math.hypot(cx - last[0], cz - last[1]) : 0;
       last = [cx, cz];
     }
@@ -315,6 +319,7 @@ export class FerrisWheel {
     this.group = new THREE.Group(); scene.add(this.group);
     this.R = 26; this.spokes = 18;
     const steel = new THREE.MeshStandardMaterial({ color: 0xe8e2f0, roughness: 0.4, metalness: 0.6 });
+    this.steel = steel;   // lit by its own bulbs once it's on (emissive only: no recompile)
     const rim = new THREE.Mesh(new THREE.TorusGeometry(this.R, 0.35, 6, 72), steel);
     const rim2 = rim.clone(); rim.position.z = 1.4; rim2.position.z = -1.4;
     this.wheel = new THREE.Group(); this.wheel.add(rim, rim2);
@@ -356,8 +361,12 @@ export class FerrisWheel {
     const wp = new THREE.Vector3();
     for (let k = 0; k < this.spokes; k++) {
       const a = k / this.spokes * Math.PI * 2 + this.rot;
-      this.gondolas[k].position.set(Math.cos(a) * this.R, this.R + 6 + Math.sin(a) * this.R - 1.6, 0);
+      const g = this.gondolas[k];
+      g.position.set(Math.cos(a) * this.R, this.R + 6 + Math.sin(a) * this.R - 1.6, 0);
+      // the cabins are lamps too: a warm light inside each, brighter once it's all on
+      g.material.emissive.copy(g.material.color).multiplyScalar(0.12 + 0.55 * this.lit);
     }
+    this.steel.emissive.setRGB(0.32, 0.22, 0.26).multiplyScalar(0.15 + 0.6 * this.lit);
     // lights: bulbs round the rim and along the spokes, chasing on the beat
     const S = this.S; if (!S) return;
     this.group.updateMatrixWorld(true);
@@ -365,11 +374,13 @@ export class FerrisWheel {
     if (!near) return;
     const chase = Math.floor(songT * 4);
     const cols = [col(this.P.fret), col(this.P.lamp), [1, 0.95, 0.85]];
-    for (let k = 0; k < 72; k++) {
-      const a = k / 72 * Math.PI * 2 + this.rot;
-      wp.set(Math.cos(a) * this.R, this.R + 6 + Math.sin(a) * this.R, 1.6).applyMatrix4(this.group.matrixWorld);
+    for (let k = 0; k < 96; k++) {
+      const a = k / 96 * Math.PI * 2 + this.rot;
       const on = this.fired ? ((k + chase) % 3 === 0 ? 1 : 0.55) : 0.25;
-      S.glow(wp.x, wp.y, wp.z, 1.6, cols[k % 3], on * (0.5 + 2.0 * this.lit * (0.5 + 0.5 * this.earned)));
+      for (const z of [1.6, -1.6]) {
+        wp.set(Math.cos(a) * this.R, this.R + 6 + Math.sin(a) * this.R, z).applyMatrix4(this.group.matrixWorld);
+        S.glow(wp.x, wp.y, wp.z, 2.1, cols[k % 3], on * (0.6 + 2.2 * this.lit * (0.5 + 0.5 * this.earned)));
+      }
     }
     for (let k = 0; k < this.spokes; k++) for (let r = 1; r < 5; r++) {
       const a = k / this.spokes * Math.PI * 2 + this.rot, rr = this.R * r / 5;
@@ -380,4 +391,36 @@ export class FerrisWheel {
     S.glow(wp.x, wp.y, wp.z, 9, col(this.P.fret), 0.6 + 1.6 * this.lit);
     S.pool(p.x, 2.6, p.z, 60, col(this.P.lamp), 0.3 + 0.7 * this.lit);
   }
+}
+
+// Summer People's ground: the boardwalk runs along the top of a bluff over the beach, the town
+// on the bluff behind it, and the bluff rises and falls with the ride, so the town is round her
+// rather than far down below. Off the boardwalk the dune falls away to the flat wet sand, the
+// railway and the water stay at sea level.
+export class BeachWorld {
+  constructor(scene, S) {
+    this.S = S;
+    const c = S.course, plan = S.plan || {};
+    prepare(c, plan);
+    const shore = (S.entry && S.entry.land && S.entry.land.shore) ?? -78;
+    const foot = shore + 28, top = -12;        // the dune: from its foot on the flat sand to the boardwalk's edge
+    this.floor = (t, x) => {
+      const g = groundAt(c, t, Math.max(x, top));
+      if (x >= top) return g;
+      if (x <= foot) return 0.02;
+      const u = (x - foot) / (top - foot);
+      return 0.02 + (g - 0.02) * Math.pow(u, 1.6);
+    };
+    if (S.town) {
+      S.town.floorFn = this.floor;
+      for (const it of S.town.items) if (!it.abs) it.h = (it.h || 0) + this.floor(it.t, it.x);
+    }
+    this.pieces = new SummerPieces(S);
+    // layers first used mid-ride, made now so the loading card compiles them (no stall when they come)
+    if (S.town) for (const k of ['trainCar', 'sumKite', 'sumBall', 'sumRing', 'sumPly']) void S.town.layers[k];
+  }
+  update(S) {
+    if (S.land && !S.land.floorFn) S.land.floorFn = this.floor;
+  }
+  draw(T) { this.pieces.draw(T); }
 }

@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { lipsGeometry, shellGeometry, candyGeometry, perfumeGeometry, donutGeometry, cuffsGeometry, coffeeGeometry, crownGeometry, popsicleGeometry, drinkGeometry, pinGeometry, realHeartGeometry } from './pickups.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -203,109 +204,63 @@ export function appleGeometry() {
   return g;
 }
 
-// diamonds to steer through, each one a note of a melody. Collected ones fly into the
-// board; missed ones go grey and drop away, so you always know which it was.
+// How each kind of pickup is made, lit and moved. move(e, time, i, faceYaw) sets the Euler e.
+// lit: how bright one still to come is; s: its size; near: how it shrinks right in front of the lens.
+const std = (o) => ({ rough: 0.3, metal: 0.2, emissive: 0x2a2018, ...o });
+const turn = (ax, ry, az, sx = 1.4, sz = 1.2) => (e, time, i) => e.set(Math.sin(time * sx + i) * ax, time * ry + i * 1.3, Math.sin(time * sz + i) * az);
+const PICKUP = {
+  diamond: { basic: true, s: 1, near: 'diamond', move: (e, time, i) => e.set(0, time * 2.5 + i, 0) },
+  duck: { geo: duckGeometry, color: 0xffd23a, mat: std({ rough: 0.32, metal: 0, emissive: 0x3a2a00 }), s: 1.25, lit: 1.15, near: 'big', face: true, move: (e, time, i, yaw) => e.set(Math.sin(time * 3.1 + i) * 0.12, yaw + Math.sin(time * 1.7 + i * 2.3) * 0.35, Math.sin(time * 2.3 + i) * 0.15) },
+  key: { geo: keyGeometry, color: 0xffc860, mat: std({ rough: 0.28, metal: 0.65, emissive: 0x4a3008 }), s: 1.55, lit: 1.25, move: (e, time, i) => e.set(Math.sin(time * 1.9 + i) * 0.15, time * 2.2 + i * 1.7, Math.sin(time * 2.6 + i) * 0.12) },
+  lily: { geo: lilyGeometry, color: 0xfff2f6, mat: std({ rough: 0.45, metal: 0, emissive: 0x3a3436 }), s: 1.05, lit: 1.15, face: true, move: (e, time, i, yaw) => e.set(Math.sin(time * 2.1 + i) * 0.2 - 0.25, yaw + Math.sin(time * 1.3 + i * 2.3) * 0.4, time * 0.8 + i) },
+  corn: { geo: cornGeometry, color: 0xffb060, mat: std({ rough: 0.35, metal: 0, emissive: 0x3a2008 }), s: 1.5, move: turn(0.25, 2.0, 0.2, 2.4, 1.7) },
+  chip: { geo: chipGeometry, color: 0x46f0e0, mat: std({ rough: 0.3, metal: 0.4, emissive: 0x0a2a28, glowGreen: true }), s: 1.45, lit: 1.15, move: turn(0.35, 2.4, 0.25, 2.2, 1.6) },
+  pick: { geo: pickGeometry, color: 0xfff0c0, mat: std({ rough: 0.25, metal: 0.3, emissive: 0x3a2a10 }), s: 1.6, move: turn(0.3, 2.6, 0.3, 2.0, 1.4) },
+  star: { geo: starGeometry, color: 0xffe08a, mat: std({ rough: 0.22, metal: 0.35, emissive: 0x3a2a0a }), s: 1.6, move: turn(0.25, 2.8, 0.2, 1.8, 1.3) },
+  coin: { geo: coinGeometry, color: 0xffd860, mat: std({ rough: 0.2, metal: 0.55, emissive: 0x3a2808 }), s: 1.6, move: (e, time, i) => e.set(Math.sin(time * 1.6 + i) * 0.15, time * 3.4 + i * 1.3, 0) },
+  quill: { geo: quillGeometry, color: 0xfff0d0, mat: std({ rough: 0.5, metal: 0.1, emissive: 0x3a3020, side: THREE.DoubleSide }), s: 2.0, move: turn(0.2, 1.8, 0.15, 1.5, 1.1) },
+  flake: { geo: flakeGeometry, color: 0xd8f8ff, mat: std({ rough: 0.15, metal: 0.2, emissive: 0x2a4a5a }), s: 1.7, lit: 1.25, move: (e, time, i) => e.set(Math.sin(time * 1.4 + i) * 0.4, time * 2.2 + i * 1.3, time * 0.8 + i) },
+  apple: { geo: appleGeometry, color: 0xff3a2a, mat: std({ rough: 0.25, metal: 0.05, emissive: 0x3a0808 }), s: 1.15, move: turn(0.2, 2.0, 0.2, 1.3, 1.1) },
+  bulb: { geo: bulbGeometry, color: 0xffd080, mat: std({ rough: 0.2, metal: 0.1, emissive: 0xffffff, emissiveK: 1.1, glowColour: true }), s: 1.4, lit: 1.15, move: turn(0.25, 1.2, 0.2, 1.6, 1.2) },
+  like: { geo: likeGeometry, color: 0xff4a8a, mat: std({ rough: 0.2, metal: 0.1, emissive: 0xff2a6a, emissiveK: 0.6 }), s: 1.9, lit: 1.15, beat: 0.12, move: (e, time, i) => e.set(Math.sin(time * 1.4 + i) * 0.15, Math.sin(time * 1.1 + i * 1.3) * 0.9, Math.sin(time * 1.2 + i) * 0.1) },
+  ember: { geo: emberGeometry, color: 0xffa040, mat: std({ rough: 0.6, metal: 0.1, emissive: 0xff5a10, emissiveK: 1.2, flat: true }), s: 1.7, lit: 1.0, flicker: true, move: (e, time, i) => e.set(time * 1.7 + i, time * 2.3 + i * 1.3, time * 1.1) },
+  pearl: { geo: pearlGeometry, color: 0xfff4ec, mat: std({ rough: 0.12, metal: 0.3, emissive: 0xfff0e4, emissiveK: 0.22, colour: 0xf4ece4 }), s: 1.2, lit: 1.0, move: (e, time, i) => e.set(time * 0.9 + i, time * 1.4 + i * 1.3, 0) },
+  // the new ones
+  lips: { geo: lipsGeometry, color: 0xff3a5a, mat: std({ rough: 0.14, metal: 0.25, emissive: 0x5a0410 }), s: 1.15, lit: 1.2, beat: 0.1, face: true, move: (e, time, i, yaw) => e.set(Math.sin(time * 1.5 + i) * 0.15, yaw + Math.sin(time * 1.2 + i * 1.7) * 0.6, Math.sin(time * 1.1 + i) * 0.12) },
+  shell: { geo: shellGeometry, color: 0xffc8a8, mat: std({ rough: 0.3, metal: 0.25, emissive: 0x4a2a20 }), s: 1.5, lit: 1.2, face: true, move: (e, time, i, yaw) => e.set(-0.2 + Math.sin(time * 1.3 + i) * 0.15, yaw + Math.sin(time * 0.9 + i * 1.9) * 0.7, Math.sin(time * 1.6 + i) * 0.2) },
+  candy: { geo: candyGeometry, color: 0xff5aa0, mat: std({ rough: 0.18, metal: 0.15, emissive: 0x4a0a28 }), s: 1.35, lit: 1.2, move: (e, time, i) => e.set(Math.sin(time * 1.2 + i) * 0.3, time * 1.6 + i, time * 2.6 + i * 0.7) },
+  perfume: { geo: perfumeGeometry, color: 0xff9ad0, mat: std({ rough: 0.08, metal: 0.35, emissive: 0x5a1838 }), s: 1.35, lit: 1.25, move: turn(0.18, 1.9, 0.18, 1.5, 1.1) },
+  donut: { geo: donutGeometry, color: 0xff8ac0, mat: std({ rough: 0.4, metal: 0.05, emissive: 0x3a1420 }), s: 1.35, lit: 1.2, face: true, move: (e, time, i, yaw) => e.set(Math.sin(time * 1.4 + i) * 0.2, yaw + time * 1.4 + i, Math.sin(time * 1.1 + i) * 0.15) },
+  cuffs: { geo: cuffsGeometry, color: 0xffd060, mat: std({ rough: 0.18, metal: 0.75, emissive: 0x4a3008 }), s: 1.5, lit: 1.3, move: (e, time, i) => e.set(Math.sin(time * 1.8 + i) * 0.35, time * 2.0 + i * 1.3, Math.sin(time * 2.4 + i) * 0.25) },
+  coffee: { geo: coffeeGeometry, color: 0xfff2e0, mat: std({ rough: 0.45, metal: 0.05, emissive: 0x2a2420 }), s: 1.25, lit: 1.2, move: turn(0.15, 1.6, 0.15, 1.3, 1.0) },
+  crown: { geo: crownGeometry, color: 0xffd860, mat: std({ rough: 0.2, metal: 0.7, emissive: 0x4a3410 }), s: 1.4, lit: 1.3, move: (e, time, i) => e.set(0.35 + Math.sin(time * 1.5 + i) * 0.15, time * 1.8 + i * 1.3, Math.sin(time * 1.2 + i) * 0.15) },
+  popsicle: { geo: popsicleGeometry, color: 0xff7a8a, mat: std({ rough: 0.25, metal: 0.05, emissive: 0x3a1418 }), s: 1.25, lit: 1.25, move: turn(0.25, 1.8, 0.3, 1.7, 1.3) },
+  drink: { geo: drinkGeometry, color: 0x60ffe0, mat: std({ rough: 0.08, metal: 0.3, emissive: 0x0a4a40, emissiveK: 1.3 }), s: 1.4, lit: 1.2, beat: 0.08, move: turn(0.12, 1.6, 0.12, 1.4, 1.1) },
+  pin: { geo: pinGeometry, color: 0xff3040, mat: std({ rough: 0.2, metal: 0.2, emissive: 0x5a0810 }), s: 1.45, lit: 1.25, bob: 0.25, move: (e, time, i) => e.set(0, time * 2.2 + i * 1.3, 0) },
+  heart: { geo: realHeartGeometry, color: 0xff2a40, mat: std({ rough: 0.22, metal: 0.15, emissive: 0x6a0812 }), s: 1.45, lit: 1.25, beat: 0.22, move: (e, time, i) => e.set(Math.sin(time * 1.2 + i) * 0.2, time * 1.3 + i * 1.3, Math.sin(time * 1.4 + i) * 0.15) },
+};
+export const PICKUP_KINDS = Object.keys(PICKUP);
+
+// Pickups to steer through, each one a note of a melody. Collected ones fly into the board;
+// missed ones go grey and drop away, so you always know which it was.
 export class Notes {
   constructor(scene, course, P, kind) {
     this.course = course;
-    this.duck = kind === 'duck';
-    this.key = kind === 'key';
-    this.lily = kind === 'lily';
-    this.corn = kind === 'corn';
-    this.chip = kind === 'chip';
-    this.pick = kind === 'pick';
-    this.star = kind === 'star';
-    this.coin = kind === 'coin';
-    this.quill = kind === 'quill';
-    this.flake = kind === 'flake';
-    this.apple = kind === 'apple';
-    this.bulb = kind === 'bulb';
-    this.like = kind === 'like';
-    this.ember = kind === 'ember';
-    this.pearl = kind === 'pearl';
+    this.kind = PICKUP[kind] ? kind : 'diamond';
+    const K = this.K = PICKUP[this.kind];
     let g;
-    if (this.pearl) {
-      // Your Wife, My Number: loose pearls
-      g = pearlGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xfff4ec);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xf4ece4, vertexColors: true, roughness: 0.12, metalness: 0.3, emissive: 0xfff0e4, emissiveIntensity: 0.22 });
-    } else if (this.ember) {
-      // Until She Stopped Fighting: embers, red hot
-      g = emberGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xffa040);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.6, metalness: 0.1, emissive: 0xff5a10, emissiveIntensity: 1.2, flatShading: true });
-    } else if (this.like) {
-      // So Pretty When You Cry: likes, hearts that glow
-      g = likeGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xff4a8a);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.2, metalness: 0.1, emissive: 0xff2a6a, emissiveIntensity: 0.6 });
-    } else if (this.bulb) {
-      // Make It A No: light bulbs, left on
-      g = bulbGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xffd080);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.2, metalness: 0.1, emissive: 0xffffff, emissiveIntensity: 1.1 });
-      this.mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor.rgb * vColor.rgb;'); };
-    } else if (this.apple) {
-      // I FUCKED YOUR DAD: apples, off the tree
-      g = appleGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xff3a2a);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.25, metalness: 0.05, emissive: new THREE.Color(0x3a0808), emissiveIntensity: 1 });
-    } else if (this.flake) {
-      // Good Girls Don't Fight Back: snowflakes
-      g = flakeGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xd8f8ff);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.15, metalness: 0.2, emissive: new THREE.Color(0x2a4a5a), emissiveIntensity: 1 });
-    } else if (this.quill) {
-      // ETYMOLOGY OF SCREAMS: quills, for the writing
-      g = quillGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xfff0d0);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.5, metalness: 0.1, emissive: new THREE.Color(0x3a3020), emissiveIntensity: 1, side: THREE.DoubleSide });
-    } else if (this.coin) {
-      // Cunt Holiday: gold coins, all of it charged to him
-      g = coinGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xffd860);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.2, metalness: 0.55, emissive: new THREE.Color(0x3a2808), emissiveIntensity: 1 });
-    } else if (this.star) {
-      // Come Countdown: gold stars, the kind you get for trying
-      g = starGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xffe08a);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.22, metalness: 0.35, emissive: new THREE.Color(0x3a2a0a), emissiveIntensity: 1 });
-    } else if (this.pick) {
-      // Back by Popular Demand: guitar picks
-      g = pickGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xfff0c0);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.25, metalness: 0.3, emissive: new THREE.Color(0x3a2a10), emissiveIntensity: 1 });
-    } else if (this.chip) {
-      // AI GF: her chips
-      g = chipGeometry();
-      this.color = new THREE.Color(P.gem ?? 0x46f0e0);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.3, metalness: 0.4, emissive: new THREE.Color(0x0a2a28), emissiveIntensity: 1 });
-      this.mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * step(0.9, vColor.g) * 1.4;'); };
-    } else if (this.corn) {
-      // Sexy Trauma Costume: candy corn from the bowl by the till
-      g = cornGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xffb060);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.35, metalness: 0.0, emissive: new THREE.Color(0x3a2008), emissiveIntensity: 1 });
-    } else if (this.lily) {
-      // Makeup Sex at Your Funeral: lilies from the casket
-      g = lilyGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xfff2f6);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.45, metalness: 0.0, emissive: new THREE.Color(0x3a3436), emissiveIntensity: 1 });
-    } else if (this.key) {
-      // Rent Free: the keys he gave her without knowing it
-      g = keyGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xffc860);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.28, metalness: 0.65, emissive: new THREE.Color(0x4a3008), emissiveIntensity: 1 });
-    } else if (this.duck) {
-      // A Million Ducks: what you pick up are the ducks from the claw machine
-      g = duckGeometry();
-      this.color = new THREE.Color(P.gem ?? 0xffd23a);
-      this.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.32, metalness: 0.0, emissive: new THREE.Color(0x3a2a00), emissiveIntensity: 1 });
-    } else {
+    if (K.basic) {
       g = new THREE.OctahedronGeometry(0.5, 0);
       g.scale(0.8, 1.25, 0.8);
       this.color = new THREE.Color(P.gem ?? P.glow).lerp(new THREE.Color(P.fret), 0.3);
       this.mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    } else {
+      g = K.geo();
+      this.color = new THREE.Color(P.gem ?? K.color);
+      const m = K.mat;
+      this.mat = new THREE.MeshStandardMaterial({ color: m.colour ?? 0xffffff, vertexColors: true, roughness: m.rough, metalness: m.metal, emissive: new THREE.Color(m.emissive), emissiveIntensity: m.emissiveK ?? 1, flatShading: !!m.flat, side: m.side ?? THREE.FrontSide });
+      if (m.glowGreen) this.mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * step(0.9, vColor.g) * 1.4;'); };
+      if (m.glowColour) this.mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor.rgb * vColor.rgb;'); };
     }
     this.mesh = new THREE.InstancedMesh(g, this.mat, 256);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -313,7 +268,7 @@ export class Notes {
     this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false; this.mesh.count = 0;
     scene.add(this.mesh);
-    // a soft halo per diamond, and a ring of light on the ribbon under it so you can read where it is across
+    // a soft halo per pickup, and a ring of light on the ribbon under it so you can read where it is across
     this.haloMat = new THREE.ShaderMaterial({
       vertexShader: `attribute vec3 aCol; varying vec3 vC; varying vec2 vUv; void main(){ vUv = uv; vC = aCol; vec4 c = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0); float s = length(instanceMatrix[0].xyz); c.xy += position.xy * s; gl_Position = projectionMatrix * c; }`,
       fragmentShader: `varying vec3 vC; varying vec2 vUv; void main(){ float d = length(vUv - 0.5) * 2.0; gl_FragColor = vec4(vC * (exp(-d * d * 5.0) * 0.8 + exp(-d * d * 40.0) * 0.6), 1.0); }`,
@@ -339,9 +294,10 @@ export class Notes {
     this.lo = 0;
   }
 
-  update(track, rider, time, board, cam) {
-    const notes = this.course.notes, t = rider.t;
+  update(track, rider, time, board, cam, beat = 0) {
+    const notes = this.course.notes, t = rider.t, K = this.K;
     while (this.lo < notes.length && notes[this.lo].t < t - 1.5) this.lo++;
+    if (this.lo > 0 && notes[this.lo - 1] && notes[this.lo - 1].t > t) this.lo = 0;
     let k = 0;
     const m = this._m, p = this._p, q = this._q, s = this._s, col = this._c;
     if (board) board.getWorldPosition(this._b);
@@ -351,13 +307,12 @@ export class Notes {
       let scale = n.bar ? 1.2 : 0.95, bright = 2.4;
       col.copy(this.color);
       const ahead = n.t - t;
-      track.at(n.t, n.x, 1.2 + 0.12 * Math.sin(time * 4 + i), p);
+      track.at(n.t, n.x, 1.2 + 0.12 * Math.sin(time * 4 + i) + (K.bob ? K.bob * Math.abs(Math.sin(time * 3 + i)) : 0), p);
       if (n.got) {
-        if (n.gotT === undefined) n.gotT = t;
         // flies into the board and is gone
-        const age = t - n.gotT;
+        const age = t - (n.gotT ?? t);
         if (age > 0.16) continue;
-        const f = age / 0.16;
+        const f = Math.max(0, age) / 0.16;
         p.lerp(this._b, f * f);
         scale *= 1.3 - f;
         bright = 4;
@@ -377,138 +332,22 @@ export class Notes {
       // right in front of the lens they'd fill the screen: fade the ones about to pass under the camera
       if (cam && !n.got) {
         const d = p.distanceTo(cam.position);
-        const k = clamp((d - 2.5) / 6, 0, 1);
-        bright *= 0.25 + 0.75 * k; scale *= this.duck ? k * (2 - k) : this.lily || this.corn || this.chip || this.pick || this.star || this.coin || this.quill || this.flake || this.apple || this.bulb || this.like || this.ember || this.pearl ? k * k : 0.55 + 0.45 * k;   // a duck is big: gone before the lens
+        const kk = clamp((d - 2.5) / 6, 0, 1);
+        bright *= 0.25 + 0.75 * kk;
+        scale *= K.near === 'big' ? kk * (2 - kk) : K.near === 'diamond' ? 0.55 + 0.45 * kk : kk * kk;
       }
-      if (this.key) {
-        // keys hang bow up and turn, catching the light
-        this._e.set(Math.sin(time * 1.9 + i) * 0.15, time * 2.2 + i * 1.7, Math.sin(time * 2.6 + i) * 0.12); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.55);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.4 : (ahead < -0.02 ? 0.45 : 1.25);
-        this.mesh.instanceColor.setXYZ(k, db, db, db * (ahead < -0.02 && !n.got ? 1.1 : 1));
-      } else if (this.pearl) {
-        // a pearl rolling in the air, catching the light
-        this._e.set(time * 0.9 + i, time * 1.4 + i * 1.3, 0); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.2);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 1.8 : (ahead < -0.02 ? 0.35 : 1.0);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.ember) {
-        // an ember tumbling, flaring as it turns
-        this._e.set(time * 1.7 + i, time * 2.3 + i * 1.3, time * 1.1); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.7);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.2 : (ahead < -0.02 ? 0.35 : 1.0 + 0.3 * Math.sin(time * 9 + i));
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.like) {
-        // a like turning to face you, pulsing on the beat
-        this._e.set(Math.sin(time * 1.4 + i) * 0.15, Math.sin(time * 1.1 + i * 1.3) * 0.9, Math.sin(time * 1.2 + i) * 0.1); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.9);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.35 : 1.15);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.bulb) {
-        // a bulb turning slowly, glass up, swaying as if on its cord
-        this._e.set(Math.sin(time * 1.6 + i) * 0.25, time * 1.2 + i * 1.3, Math.sin(time * 1.2 + i) * 0.2); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.4);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.35 : 1.15);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.apple) {
-        // an apple turning slowly, stalk up
-        this._e.set(Math.sin(time * 1.3 + i) * 0.2, time * 2.0 + i * 1.3, Math.sin(time * 1.1 + i) * 0.2); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.15);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.2);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.flake) {
-        // a snowflake turning face-on, glinting as it comes round
-        this._e.set(Math.sin(time * 1.4 + i) * 0.4, time * 2.2 + i * 1.3, time * 0.8 + i); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.7);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.2 : (ahead < -0.02 ? 0.4 : 1.25);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.quill) {
-        // a quill turning slowly in the air, nib down
-        this._e.set(Math.sin(time * 1.5 + i) * 0.2, time * 1.8 + i * 1.3, Math.sin(time * 1.1 + i) * 0.15); q.setFromEuler(this._e);
-        s.setScalar(scale * 2.0);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.2);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.coin) {
-        // a coin spinning on its edge, flashing as it comes round
-        this._e.set(Math.sin(time * 1.6 + i) * 0.15, time * 3.4 + i * 1.3, 0); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.6);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.2);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.star) {
-        // a star turning in the air, flashing gold as it comes round
-        this._e.set(Math.sin(time * 1.8 + i) * 0.25, time * 2.8 + i * 1.3, Math.sin(time * 1.3 + i) * 0.2); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.6);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.2);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.pick) {
-        // a pick turning in the air, flashing gold as it comes round
-        this._e.set(Math.sin(time * 2.0 + i) * 0.3, time * 2.6 + i * 1.3, Math.sin(time * 1.4 + i) * 0.3); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.6);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.2);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.chip) {
-        // a chip turning in the air, catching the light on its legs
-        this._e.set(Math.sin(time * 2.2 + i) * 0.35, time * 2.4 + i * 1.3, Math.sin(time * 1.6 + i) * 0.25); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.45);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.15);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.corn) {
-        // candy corn turning in the air, tip up, catching the light
-        this._e.set(Math.sin(time * 2.4 + i) * 0.25, time * 2.0 + i * 1.3, Math.sin(time * 1.7 + i) * 0.2); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.5);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.2);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.lily) {
-        // lilies face you coming, nodding and turning a little on their stems
-        const yaw = this.course.sample(n.t).yaw + Math.PI;
-        this._e.set(Math.sin(time * 2.1 + i) * 0.2 - 0.25, yaw + Math.sin(time * 1.3 + i * 2.3) * 0.4, time * 0.8 + i); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.05);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : 1.15);
-        this.mesh.instanceColor.setXYZ(k, db, db, db);
-      } else if (this.duck) {
-        // ducks face you coming, bobbing as if on water; bigger than a diamond, lit not glowing
-        const yaw = this.course.sample(n.t).yaw + Math.PI;
-        this._e.set(Math.sin(time * 3.1 + i) * 0.12, yaw + Math.sin(time * 1.7 + i * 2.3) * 0.35, Math.sin(time * 2.3 + i) * 0.15); q.setFromEuler(this._e);
-        s.setScalar(scale * 1.25);
-        m.compose(p, q, s);
-        this.mesh.setMatrixAt(k, m);
-        const db = n.got ? 2.2 : (ahead < -0.02 ? 0.45 : 1.15);
-        const dc = ahead < -0.02 && !n.got ? 0.45 : 1;
-        this.mesh.instanceColor.setXYZ(k, db * (dc + (1 - dc) * 0.6), db * (dc + (1 - dc) * 0.6), db * (dc + (1 - dc) * 0.7));
-      } else {
-      this._e.set(0, time * 2.5 + i, 0); q.setFromEuler(this._e);
-      s.setScalar(scale);
+      // some of them beat with the song
+      if (K.beat && !n.got && ahead > -0.02) scale *= 1 + K.beat * beat;
+      const yaw = K.face ? this.course.sample(n.t).yaw + Math.PI : 0;
+      K.move(this._e, time, i, yaw);
+      q.setFromEuler(this._e);
+      s.setScalar(scale * K.s);
       m.compose(p, q, s);
       this.mesh.setMatrixAt(k, m);
-      this.mesh.instanceColor.setXYZ(k, col.r * bright, col.g * bright, col.b * bright);
+      if (K.basic) this.mesh.instanceColor.setXYZ(k, col.r * bright, col.g * bright, col.b * bright);
+      else {
+        const db = n.got ? 2.0 : (ahead < -0.02 ? 0.4 : (K.lit ?? 1.2) * (K.flicker ? 1 + 0.3 * Math.sin(time * 9 + i) : 1));
+        this.mesh.instanceColor.setXYZ(k, db, db, db);
       }
       s.setScalar(scale * 3.4);
       m.compose(p, q.identity(), s);
@@ -529,16 +368,34 @@ export class Notes {
   }
 }
 
-// shockwaves round the board when you hit a pump: they travel with you, opening out to the rails
+// shockwaves round the board when you hit a pump: they travel with you, opening out to the rails.
+// The road under them curves (up out of a dip, up at the lipped edges), so a flat disc sank into
+// it and only half of each ring showed: the ring bends to the road's surface instead, all the way round.
+const RING_VS = /* glsl */`
+  uniform vec3 uC, uF, uR, uU; uniform float uK, uX0, uHW, uG;
+  varying vec2 vUv;
+  float lip(float x){ float u = clamp(abs(x) / uHW, 0.0, 1.0); return 0.55 * pow(u, 6.0); }
+  void main(){
+    vUv = uv;
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    vec3 o = w.xyz - uC;
+    float d = dot(o, uF), x = dot(o, uR);
+    w.xyz += uU * ((uK * d * d + lip(uX0 + x) - lip(uX0)) * uG + 0.05);
+    gl_Position = projectionMatrix * viewMatrix * w;
+  }`;
 export class Rings {
   constructor(scene, n = 10) {
     this.items = [];
-    const g = new THREE.PlaneGeometry(2, 2); g.rotateX(-Math.PI / 2);
+    const g = new THREE.PlaneGeometry(2, 2, 24, 24); g.rotateX(-Math.PI / 2);
+    this.u = {   // where the road is under her this frame, shared by every ring
+      uC: { value: new THREE.Vector3() }, uF: { value: new THREE.Vector3() }, uR: { value: new THREE.Vector3() }, uU: { value: new THREE.Vector3(0, 1, 0) },
+      uK: { value: 0 }, uX0: { value: 0 }, uHW: { value: 8 }, uG: { value: 1 },
+    };
     for (let i = 0; i < n; i++) {
       const mat = new THREE.ShaderMaterial({
-        uniforms: { uCol: { value: new THREE.Color() }, uA: { value: 0 }, uW: { value: 0.08 } },
-        vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-        fragmentShader: `uniform vec3 uCol; uniform float uA, uW; varying vec2 vUv; void main(){ float d = length(vUv - 0.5) * 2.0; float ring = exp(-pow((d - 0.9) / uW, 2.0)); float fill = smoothstep(0.35, 0.9, d) * 0.06; float rear = 0.35 + 0.65 * smoothstep(0.12, 0.55, vUv.y); gl_FragColor = vec4(uCol * (ring * 1.9 + fill) * uA * rear * (1.0 - smoothstep(0.97, 1.0, d)), 1.0); }`,
+        uniforms: { ...this.u, uCol: { value: new THREE.Color() }, uA: { value: 0 }, uW: { value: 0.08 } },
+        vertexShader: RING_VS,
+        fragmentShader: `uniform vec3 uCol; uniform float uA, uW; varying vec2 vUv; void main(){ float d = length(vUv - 0.5) * 2.0; float ring = exp(-pow((d - 0.9) / uW, 2.0)); float fill = smoothstep(0.35, 0.9, d) * 0.06; gl_FragColor = vec4(uCol * (ring * 1.9 + fill) * uA * (1.0 - smoothstep(0.97, 1.0, d)), 1.0); }`,
         blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
       });
       const mesh = new THREE.Mesh(g, mat); mesh.visible = false; mesh.frustumCulled = false; mesh.renderOrder = 5;
@@ -562,13 +419,25 @@ export class Rings {
       if (!it.mesh.visible) continue;
       if (!placed) {
         // on the ribbon under the board, tilted with it
-        track.at(t, rider.x, Math.max(0.08, rider.y - rider.course.sample(t).y + 0.08), this._p);
+        const c = rider.course, s = c.sample(t), above = rider.y - s.y;
+        track.at(t, rider.x, Math.max(0.08, above + 0.08), this._p);
         const fwd = track.dirAt(t, this._f);
-        const right = this._r.set(-fwd.z, 0, fwd.x).normalize().applyAxisAngle(fwd, track.bankAt(t));
+        // (the ribbon raises its right edge for a positive bank; turning the right vector about
+        // the forward axis by +bank lowers it, so it's -bank: the other way round, half of every
+        // ring in a turn went under the road)
+        const right = this._r.set(-fwd.z, 0, fwd.x).normalize().applyAxisAngle(fwd, -track.bankAt(t));
         const up = this._u.crossVectors(right, fwd).normalize();
         if (up.y < 0) up.negate();
         const z = this._z.crossVectors(right, up).normalize();
         this._m.makeBasis(right, up, z);
+        // how the road bends away from that flat plane: along it (its curvature, per metre
+        // squared) and across it (the lipped edges); in the air the ring stays flat under her
+        const v = Math.max(8, track.speedAt(t));
+        const k = 0.5 * (s.ay || 0) / (v * v);
+        const U = this.u;
+        U.uC.value.copy(this._p); U.uF.value.copy(fwd); U.uR.value.copy(right); U.uU.value.copy(up);
+        U.uK.value = k; U.uX0.value = rider.x; U.uHW.value = Math.max(1, s.width);
+        U.uG.value = Math.max(0, Math.min(1, 1 - (above - 0.6) / 1.2));
         placed = true;
       }
       it.mesh.position.copy(this._p);

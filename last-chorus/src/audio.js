@@ -60,29 +60,52 @@ export class Sound {
 
   resume() { if (this.ctx.state !== 'running') return this.ctx.resume(); return Promise.resolve(); }
 
-  play(buffer, offset = 0) {
+  // play the song from offset seconds in. A negative offset starts it that far in the
+  // future (a count-in): the clock runs from the offset and the music comes in at 0.
+  play(buffer, offset = 0, fadeIn = 0) {
     this.stop();
     const c = this.ctx;
     const src = c.createBufferSource();
     src.buffer = buffer;
     src.connect(this.songIn);
     const when = c.currentTime + 0.06;
-    src.start(when, Math.max(0, offset));
+    if (offset >= 0) src.start(when, offset);
+    else src.start(when - offset, 0);
     this.t0 = when - offset;
     this.src = src; this.buffer = buffer;
-    this._clockT = null;
-    this.songGain.gain.cancelScheduledValues(c.currentTime);
-    this.songGain.gain.setValueAtTime(1, c.currentTime);
+    this._clockT = null; this._frozen = null;
+    const g = this.songGain.gain;
+    g.cancelScheduledValues(c.currentTime);
+    if (fadeIn > 0) { g.setValueAtTime(0.0001, c.currentTime); g.exponentialRampToValueAtTime(1, when + fadeIn); }
+    else g.setValueAtTime(1, c.currentTime);
   }
 
   stop() {
     if (this.src) { try { this.src.stop(); } catch (e) { /* already stopped */ } this.src.disconnect(); this.src = null; }
   }
 
+  // pause: remember where the song is, stop it and put the whole context to sleep
+  pause(songT) {
+    this._frozen = songT;
+    this.stop();
+    try { this.ctx.suspend(); } catch (e) { /* fine */ }
+  }
+  // wake the context, waiting for it to really run (or giving up after a while)
+  async wake(timeout = 2000) {
+    const c = this.ctx;
+    if (c.state === 'running') return true;
+    try { await Promise.race([c.resume(), new Promise((r) => setTimeout(r, timeout))]); } catch (e) { /* tried */ }
+    return c.state === 'running';
+  }
+  get running() { return this.ctx.state === 'running'; }
+
   // The time in the song that is coming out of the speakers right now.
   // Smoothed so frames advance evenly, but never allowed to drift from the audio.
+  // While the song is stopped or the context isn't running it stands still.
   time() {
     const c = this.ctx;
+    if (this._frozen != null) return this._frozen;
+    if (c.state !== 'running') return this._clockT ?? (c.currentTime - this.t0);
     let t;
     const ts = c.getOutputTimestamp ? c.getOutputTimestamp() : null;
     if (ts && ts.performanceTime > 0 && ts.contextTime > 0) {
@@ -90,9 +113,12 @@ export class Sound {
     } else {
       t = c.currentTime - (c.outputLatency || c.baseLatency || 0) - this.t0;
     }
+    // an output stamp from before a pause can run far ahead: never trust one past what the context has actually played
+    const played = c.currentTime - this.t0;
+    if (t > played + 0.05) t = played;
     const now = performance.now();
     if (this._clockT == null) { this._clockT = t; this._clockP = now; return t; }
-    const pred = this._clockT + (now - this._clockP) / 1000;
+    const pred = this._clockT + Math.min(0.1, (now - this._clockP) / 1000);
     const err = t - pred;
     this._clockT = Math.abs(err) > 0.06 ? t : pred + err * 0.08;
     this._clockP = now;
@@ -300,6 +326,22 @@ export class Sound {
     s.g.gain.setTargetAtTime(on ? 0.012 + 0.03 * progress : 0, now, on ? 0.06 : 0.03);
   }
 
+  // on a rail: a low metal hiss under the music while she's on it
+  grind(on) {
+    const c = this.ctx, now = c.currentTime;
+    if (!this._grind) {
+      const n = c.createBufferSource(); n.buffer = this._noise; n.loop = true;
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3.5; bp.frequency.value = 2600;
+      const bp2 = c.createBiquadFilter(); bp2.type = 'peaking'; bp2.frequency.value = 5200; bp2.gain.value = 5; bp2.Q.value = 6;
+      const g = c.createGain(); g.gain.value = 0;
+      n.connect(bp).connect(bp2).connect(g).connect(this.sfx); n.start();
+      this._grind = { g, bp };
+    }
+    const s = this._grind;
+    s.g.gain.setTargetAtTime(on ? 0.035 : 0, now, on ? 0.02 : 0.06);
+    s.bp.frequency.setTargetAtTime(on ? 2900 : 2200, now, 0.2);
+  }
+
   // the stop at the end: a soft hiss of spray off the edge, falling with her speed
   skid(level = 0) {
     const c = this.ctx, now = c.currentTime;
@@ -410,6 +452,44 @@ export class Sound {
     [[1, 1], [2.76, 0.45], [5.4, 0.2], [8.93, 0.08]].forEach(([m, k]) => { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 1180 * m; const g = c.createGain(); g.gain.value = k; o.connect(g).connect(vca); o.start(t); o.stop(t + dur + 0.5); });
     vca.connect(out).connect(this.sfx); lfo.start(t); lfo.stop(t + dur + 0.5);
   }
+  // the screens' own sounds, quiet and woody, in D major pentatonic (no song is playing):
+  // move ticks walk up the scale with the list, pick is a small rising fifth, open/close a
+  // breath of air, unlock a little run up, no a muted double knock
+  ui(kind, i = 0) {
+    const c = this.ctx;
+    if (c.state !== 'running') { c.resume(); return; }
+    const t = c.currentTime;
+    if (kind === 'move') { if (t - (this._uiT || 0) < 0.035) return; this._uiT = t; }
+    const pent = [0, 2, 4, 7, 9];
+    const hz = (deg, oct) => 293.66 * Math.pow(2, (pent[((deg % 5) + 5) % 5] + 12 * (Math.floor(deg / 5) + oct)) / 12);
+    const tone = (f, at, peak, dec, type = 'sine') => {
+      const o = c.createOscillator(); o.type = type; o.frequency.value = f;
+      const g = c.createGain(); this._env(g, t + at, 0.003, peak, dec);
+      o.connect(g).connect(this.sfx); o.start(t + at); o.stop(t + at + dec + 0.05);
+    };
+    const air = (from, to, peak, dur) => {
+      const n = c.createBufferSource(); n.buffer = this._noise;
+      const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.9;
+      f.frequency.setValueAtTime(from, t); f.frequency.exponentialRampToValueAtTime(to, t + dur);
+      const g = c.createGain(); this._env(g, t, dur * 0.4, peak, dur * 0.6);
+      n.connect(f).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + dur + 0.05);
+    };
+    if (kind === 'move') {
+      tone(hz(i % 10, 1), 0, 0.045, 0.07);
+      tone(hz(i % 10, 2), 0, 0.012, 0.03, 'triangle');
+    } else if (kind === 'pick') {
+      tone(hz(0, 1), 0, 0.07, 0.35); tone(hz(3, 1), 0.07, 0.08, 0.6); tone(hz(3, 2), 0.07, 0.016, 0.3, 'triangle');
+    } else if (kind === 'open') {
+      air(600, 2400, 0.1, 0.28); tone(hz(0, 0), 0.02, 0.05, 0.35);
+    } else if (kind === 'close') {
+      air(2200, 500, 0.08, 0.24); tone(hz(-2, 0), 0.02, 0.045, 0.3);
+    } else if (kind === 'unlock') {
+      [0, 2, 4, 5, 7].forEach((d, k) => tone(hz(d, 1), k * 0.06, 0.06, 0.5));
+      tone(hz(7, 2), 0.3, 0.022, 0.9, 'triangle');
+    } else if (kind === 'no') {
+      tone(150, 0, 0.06, 0.06); tone(130, 0.09, 0.05, 0.07);
+    }
+  }
   // a bubble of gum going: a soft pop
   pop(level = 0.5) {
     const c = this.ctx, t = c.currentTime;
@@ -420,6 +500,31 @@ export class Sound {
     const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(420, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.08);
     const g2 = c.createGain(); this._env(g2, t, 0.002, 0.3 * level, 0.1);
     o.connect(g2).connect(this.sfx); o.start(t); o.stop(t + 0.15);
+  }
+  // a car meeting a car down the street: a short crunch of metal and a low knock, no louder than a snare
+  impact(level = 0.6) {
+    const c = this.ctx, t = c.currentTime;
+    const n = c.createBufferSource(); n.buffer = this._noise;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.8; bp.frequency.setValueAtTime(2600, t); bp.frequency.exponentialRampToValueAtTime(320, t + 0.32);
+    const g = c.createGain(); this._env(g, t, 0.003, 0.16 * level, 0.36);
+    n.connect(bp).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 0.45);
+    const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(105, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.22);
+    const g2 = c.createGain(); this._env(g2, t, 0.004, 0.24 * level, 0.28);
+    o.connect(g2).connect(this.sfx); o.start(t); o.stop(t + 0.36);
+  }
+  // a shop window going: a bright crack, then the pieces, each a little ping on the song's key
+  glass(level = 0.6) {
+    const c = this.ctx, t = c.currentTime;
+    const n = c.createBufferSource(); n.buffer = this._noise;
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3200;
+    const g = c.createGain(); this._env(g, t, 0.001, 0.12 * level, 0.18);
+    n.connect(hp).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 0.25);
+    for (let i = 0; i < 7; i++) {
+      const dt = 0.04 + i * 0.045 + Math.random() * 0.03;
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = this.note([0, 4, 7, 9, 12, 14, 16][i % 7], 3);
+      const gg = c.createGain(); this._env(gg, t + dt, 0.002, 0.018 * level, 0.22);
+      o.connect(gg).connect(this.sfx); o.start(t + dt); o.stop(t + dt + 0.3);
+    }
   }
   // a knock you feel more than hear
   thud(level = 1) {

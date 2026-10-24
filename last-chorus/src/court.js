@@ -6,10 +6,14 @@
 // scales going pretty, guilty, pretty, guilty; "case closed", and the lipstick standing at the end.
 
 import * as THREE from 'three';
+import { AA_GLSL } from './aa.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, col, glowAt, poolAt, local } from './scenery.js';
 import { prepare, floorAt, groundAt } from './trail.js';
 import { Room, paint, rgb, seeded, box } from './summer.js';
+import { PpgPaper, PpgPages } from './ppg-paper.js';
+import { PpgBoards, PpgPress } from './ppg-sets.js';
+import { PpgOutside } from './ppg-finale.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -279,7 +283,11 @@ extend({
       const glass = S.layers.vanityGlass;
       p.y = (S.floorFn ? S.floorFn(it.t, it.x) : 0) + (it.y ?? 18);
       const m = S._m, s = it.s ?? 1; m.compose(p, q, S._s.set(s, s, s)); S.layers.vanityFrame.add(m); glass.add(m);
-      for (let k = 0; k < 14; k++) { const a = k / 14; let x, y; if (k < 4) { x = -10.6; y = -12 + k * 8; } else if (k < 7) { x = -6 + (k - 4) * 6; y = 14.6; } else if (k < 11) { x = 10.6; y = 12 - (k - 7) * 8; } else { x = 6 - (k - 11) * 6; y = -14.6; } const w = local(p, yaw, x * s, y * s, 1 * s, S._o); glowAt(S, w.x, w.y, w.z, 1.8 * s, [1, 0.92, 0.75], 1.2); }
+      // the bulbs: a pop on each "pretty", and in a final they chase round the frame on the beat
+      const T = S.tNow ?? 0; let pop = 0;
+      for (const tp of S.plan.ppgPretty || []) { const d = T - tp; if (d >= 0 && d < 0.32) pop = Math.max(pop, 1 - d / 0.32); }
+      const sec = S.course.sectionAt(T), chase = sec.kind === 'final' || sec.kind === 'chorus', step = Math.floor(S.course.beatAt(T) * 2);
+      for (let k = 0; k < 14; k++) { let x, y; if (k < 4) { x = -10.6; y = -12 + k * 8; } else if (k < 7) { x = -6 + (k - 4) * 6; y = 14.6; } else if (k < 11) { x = 10.6; y = 12 - (k - 7) * 8; } else { x = 6 - (k - 11) * 6; y = -14.6; } const w = local(p, yaw, x * s, y * s, 1 * s, S._o); glowAt(S, w.x, w.y, w.z, (1.8 + 1.6 * pop) * s, [1, 0.92, 0.75], 1.2 + 2.6 * pop * pop + (chase && (k + step) % 4 === 0 ? 1.5 : 0)); }
     },
     // her lawyer: the big mirror hung across the room, bulbs all round it
     lawyer(S, it, p) {
@@ -415,14 +423,14 @@ function courtMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
       uStyle: { value: 0 }, uTime: { value: 0 }, uBeat: { value: 0 }, uFogDensity: { value: 0.003 }, uFog: { value: new THREE.Color() }, uCam: { value: new THREE.Vector3() },
-      uWarm: { value: new THREE.Color(0xffd8a0) }, uLight: { value: new THREE.Color(1, 1, 1) }, uSkyTop: { value: new THREE.Color() }, uSkyLow: { value: new THREE.Color() }, uRed: { value: 0 }, uCold: { value: 0 },
+      uWarm: { value: new THREE.Color(0xffd8a0) }, uLight: { value: new THREE.Color(1, 1, 1) }, uSkyTop: { value: new THREE.Color() }, uSkyLow: { value: new THREE.Color() }, uRed: { value: 0 }, uCold: { value: 0 }, uGlitch: { value: 0 }, uPulse: { value: 0 },
     },
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: /* glsl */`
-      uniform float uStyle, uTime, uBeat, uFogDensity, uRed, uCold;
+      uniform float uStyle, uTime, uBeat, uFogDensity, uRed, uCold, uGlitch, uPulse;
       uniform vec3 uFog, uCam, uWarm, uLight, uSkyTop, uSkyLow;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -430,6 +438,7 @@ function courtMaterial() {
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
       // marble: white, grey veins running through it
       vec3 marble(vec2 q, vec3 base){ float v = n2(q * 0.08) * 0.6 + n2(q * 0.21) * 0.3 + n2(q * 0.6) * 0.1; float vein = smoothstep(0.035, 0.0, abs(fract(v * 4.0 + q.x * 0.01) - 0.5) - 0.44); return base * (0.92 + 0.08 * n2(q * 0.4)) - vec3(0.22) * vein; }
+      ${AA_GLSL}
       void main(){
         int part = int(vPart + 0.5);
         float x = vC.x, h = vC.y, along = vC.z;
@@ -437,6 +446,9 @@ function courtMaterial() {
         float st = uStyle;
         float wa = part == 6 ? x * 1.3 + 9.0 : (side > 0.0 ? along + 11.0 : along);
         bool onWall = part == 1 || part == 2 || part == 6;
+        // "I'm the glitch in your game": bands of the wall jump sideways, a few frames at a time
+        float gb = floor(h * 0.22), gf = floor(uTime * 18.0), gr = h2(vec2(gb, gf));
+        if (uGlitch > 0.001 && onWall) wa += step(1.0 - 0.5 * uGlitch, gr) * (h2(vec2(gb + 7.0, gf)) - 0.5) * 70.0;
         vec2 fx = st < 0.5 ? vec2(28.0, 14.0) : st < 1.5 ? vec2(30.0, 15.0) : st < 2.5 ? vec2(18.0, 9.0) : st < 3.5 ? vec2(16.0, 8.0) : vec2(26.0, 13.0);
         float dl = mod(along - fx.y + fx.x * 0.5, fx.x) - fx.x * 0.5;
         float lightK = 0.62 + 0.45 * exp(-dl * dl / (fx.x * fx.x * 0.12));
@@ -444,7 +456,7 @@ function courtMaterial() {
         if (part == 8) { col = st < 0.5 ? vec3(0.32, 0.18, 0.09) : vec3(0.85, 0.7, 0.4); }
         else if (st < 0.5) {
           // the courtroom: walnut panels to the rail, cream plaster with tall windows, a coffered ceiling, red carpet
-          if (part == 0) { vec2 q = vec2(x, along) / 3.0; col = vec3(0.42, 0.06, 0.08) * (0.85 + 0.15 * step(0.5, fract(q.x + q.y)) * step(0.5, fract(q.x - q.y + 0.5))); col = mix(col, vec3(0.75, 0.6, 0.3), step(abs(abs(x) - 9.0), 0.4)); }
+          if (part == 0) { vec2 q = vec2(x, along) / 3.0; col = vec3(0.42, 0.06, 0.08) * (0.85 + 0.15 * aaSq(q.x + q.y) * aaSq(q.x - q.y + 0.5)); col = mix(col, vec3(0.75, 0.6, 0.3), step(abs(abs(x) - 9.0), 0.4)); }
           else if (part == 3) { vec2 q = fract(vec2(x, along) / 10.0); col = mix(vec3(0.9, 0.86, 0.76), vec3(0.62, 0.56, 0.44), 1.0 - edge(q, 0.12)); col = mix(col, vec3(0.8, 0.66, 0.36), step(abs(edge(q, 0.12) - 0.5), 0.04)); }
           else if (h < 14.0) {
             float px = fract(wa / 7.0), py = fract(h / 7.0);
@@ -455,12 +467,12 @@ function courtMaterial() {
             col = vec3(0.86, 0.8, 0.68) * (0.92 + 0.08 * n2(vec2(wa, h) * 0.1));
             float wx = mod(wa, 22.0) - 11.0;
             float arch = h > 34.0 ? length(vec2(wx, h - 34.0)) - 6.0 : abs(wx) - 6.0;
-            if (part != 6 && h > 18.0 && h < 41.0) { col = mix(col, vec3(0.75, 0.62, 0.36), step(arch, 0.8)); col = mix(col, mix(uSkyLow, uSkyTop, (h - 18.0) / 23.0) * (0.75 + 0.25 * step(0.5, fract(h * 0.6))), step(arch, 0.0)); }
+            if (part != 6 && h > 18.0 && h < 41.0) { col = mix(col, vec3(0.75, 0.62, 0.36), step(arch, 0.8)); col = mix(col, mix(uSkyLow, uSkyTop, (h - 18.0) / 23.0) * (0.75 + 0.25 * aaSq(h * 0.6)), step(arch, 0.0)); }
             col = mix(col, vec3(0.7, 0.58, 0.34), step(abs(h - 44.0), 1.0));
           }
         } else if (st < 1.5) {
           // the marble hall: white marble, pilasters, a gold frieze; the floor in black and white squares
-          if (part == 0) { vec2 q = vec2(x, along) / 8.0; float c = mod(floor(q.x) + floor(q.y), 2.0); col = mix(marble(vec2(x, along), vec3(0.92, 0.9, 0.86)), marble(vec2(x, along) + 40.0, vec3(0.16, 0.15, 0.16)), c) * (0.8 + 0.2 * edge(fract(q), 0.02)); }
+          if (part == 0) { vec2 q = vec2(x, along) / 8.0; float c = aaChk(q); col = mix(marble(vec2(x, along), vec3(0.92, 0.9, 0.86)), marble(vec2(x, along) + 40.0, vec3(0.16, 0.15, 0.16)), c) * (0.8 + 0.2 * edge(fract(q), 0.02)); }
           else if (part == 3) { vec2 q = fract(vec2(x, along) / 12.0); col = mix(vec3(0.95, 0.92, 0.85), vec3(0.85, 0.68, 0.32), 1.0 - edge(q, 0.1)); }
           else {
             col = marble(vec2(wa, h), vec3(0.93, 0.91, 0.87));
@@ -511,7 +523,9 @@ function courtMaterial() {
             if (part == 6) col = marble(vec2(wa, h), vec3(0.95, 0.8, 0.82));
           }
         }
-        col *= lightK * uLight;
+        // in a chorus the whole room breathes with the beat
+        col *= lightK * uLight * (1.0 + 0.24 * uPulse);
+        if (uGlitch > 0.001 && onWall) { float g2 = h2(vec2(gb + 3.0, gf + 11.0)); if (g2 < 0.3 * uGlitch) col = vec3(col.b, col.r * 0.6, col.g) * 1.7; else if (g2 > 1.0 - 0.12 * uGlitch) col *= 0.12; }
         // red-handed: the hall going red
         col = mix(col, col * vec3(1.15, 0.45, 0.45), uRed * 0.6);
         // "let the cold bite deep": frost creeping in
@@ -524,32 +538,8 @@ function courtMaterial() {
   });
 }
 
-// ---------- the end: the lipstick, standing, uncapped ----------
-export class LipstickFinale {
-  constructor(scene, course, P, cfg, scenery) {
-    this.course = course; this.cfg = cfg; this.S = scenery; this.P = P;
-    this.t = cfg.t; this.x = cfg.x ?? -24;
-    prepare(course, scenery.plan);
-    this.group = new THREE.Group(); scene.add(this.group);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, metalness: 0.3, emissive: 0xffffff, emissiveIntensity: 0.4 }); mat.onBeforeCompile = selfLit(1);
-    this.ped = new THREE.Mesh(CT.pedestal(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.05, emissive: 0x2a2826 }));
-    this.ped.scale.setScalar(1.1); this.group.add(this.ped);
-    this.lip = new THREE.Mesh(CT.lipstick(), mat); this.lip.position.y = 16.5; this.lip.scale.setScalar(1.6); this.group.add(this.lip);
-    this.lit = 0.5; this.fired = false; this._p = new THREE.Vector3();
-  }
-  fire() { this.fired = true; }
-  update(track, rider, songT, dt) {
-    track.ground(this.t, this.x, this._p); this._p.y = groundAt(this.course, this.t, this.x);
-    this.group.position.copy(this._p);
-    this.group.rotation.set(0, this.course.sample(this.t).yaw + (this.x > 0 ? Math.PI / 2 : -Math.PI / 2), 0);
-    this.lip.rotation.y = 0.6 + Math.sin(songT * 0.4) * 0.15;
-    this.lit += ((this.fired ? 1.2 : 0.6) - this.lit) * Math.min(1, dt * 2);
-    const S = this.S; if (!S || this.t - rider.t > 46) return;
-    const p = this._p;
-    S.glow(p.x, p.y + 36, p.z, 22, [1, 0.35, 0.4], 0.4 * this.lit);
-    S.pool(p.x, p.y + 0.1, p.z, 50, [1, 0.85, 0.75], 0.5 * this.lit);
-  }
-}
+// ---------- the end: out the front doors into the press, her monument in the square (ppg-finale.js) ----------
+export { PpgMonument as LipstickFinale } from './ppg-finale.js';
 
 // ---------- the courthouse, per frame ----------
 export class CourtWorld {
@@ -560,8 +550,19 @@ export class CourtWorld {
     this.rooms = (S.plan.rooms || []).map((sp) => new Room(scene, S.course, sp, this.mat, COURT));
     const c = S.course;
     if (S.town) { S.town.floorFn = (t, x) => groundAt(c, t, x); for (const r of S.town.roadMeshes) r.floorFn = S.town.floorFn; }
+    // the front page over the courtroom doors, and the pages the press leaves after it
+    const np = S.plan.ppgPaper;
+    if (np) { this.paper = new PpgPaper(scene, S, np); if (np.pages) this.pages = new PpgPages(scene, S, { text: np.text, deck: np.deck, windows: np.pages }); }
+    if (S.plan.ppgBoards) this.boards = new PpgBoards(scene, S, S.plan.ppgBoards);
+    this.press = new PpgPress(scene, S, S.plan.ppgPress || {});
+    if (S.plan.ppgOutside) this.outside = new PpgOutside(scene, S, S.plan.ppgOutside);
   }
   update(S, dt, camera, time) {
+    if (this.paper) this.paper.update(S, dt, camera, time);
+    if (this.pages) this.pages.update(S);
+    if (this.boards) this.boards.update(S);
+    this.press.update(S);
+    if (this.outside) this.outside.update(S, dt, camera);
     const u = this.mat.uniforms, P = S.P, t = S.rider.t, ev = S.plan.roomEvents || {};
     u.uTime.value = time; u.uCam.value.copy(camera.position); u.uBeat.value = S.town.beat || 0;
     u.uFog.value.set(P.fog); u.uFogDensity.value = P.fogDensity;
@@ -570,11 +571,14 @@ export class CourtWorld {
     u.uSkyTop.value.set(P.zenith); u.uSkyLow.value.set(P.horizon);
     const one = (w) => smooth(w[0] - (w[2] ?? 0.1), w[0], t) * (1 - smooth(w[1], w[1] + (w[3] ?? 0.5), t));
     const win = (w) => (!w ? 0 : Array.isArray(w[0]) ? Math.max(...w.map(one)) : one(w));
-    u.uRed.value = win(ev.red); u.uCold.value = win(ev.cold);
+    u.uRed.value = win(ev.red); u.uCold.value = win(ev.cold); u.uGlitch.value = win(ev.glitch);
+    u.uPulse.value = (S.lift ? S.lift.k : 0) * (S.town.beat || 0);
     for (const r of this.rooms) r.update(S.track, S.rider, t);
   }
   // what hangs in each room: globes in the courtroom, chandeliers in the halls, tubes, cages
   draw(T) {
+    // the press: flashbulbs down the gallery in every chorus
+    this.press.draw(T);
     const g = this._g || (this._g = new THREE.Vector3()), lamp = col(this.S.P.lamp ?? 0xffd8a0);
     for (const r of this.rooms) {
       if (!r.mesh.visible) continue;

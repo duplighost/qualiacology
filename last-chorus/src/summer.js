@@ -7,10 +7,14 @@
 // light, her door, and the last chorus in her apartment while the walls fall through.
 
 import * as THREE from 'three';
+import { AA_GLSL } from './aa.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, col, glowAt, poolAt, local, PARTS } from './scenery.js';
 import { tintMaterial } from './props.js';
 import { prepare, floorAt } from './trail.js';
+// the song's own place since its October pass (yas-*.js; none of them import this file)
+import { YasWorld } from './yas-world.js';
+import { YasRoof } from './yas-finale.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -391,6 +395,7 @@ function roomMaterial() {
         col = mix(col, vec3(0.02), step(abs(fract(u * 3.0) - 0.5), 0.012) * step(v, hb) * 0.8);
         return col;
       }
+      ${AA_GLSL}
       void main(){
         int part = int(vPart + 0.5);
         float x = vC.x, h = vC.y, along = vC.z;
@@ -416,7 +421,7 @@ function roomMaterial() {
             if (uStyle > 2.5) {
               // the kitchen: big black and white tiles, not very clean
               vec2 tq = vec2(x, along) / 3.4;
-              col = mix(vec3(0.62, 0.6, 0.55), vec3(0.06, 0.06, 0.07), step(0.5, mod(floor(tq.x) + floor(tq.y), 2.0)));
+              col = mix(vec3(0.62, 0.6, 0.55), vec3(0.06, 0.06, 0.07), aaChk(tq));
               col *= 0.82 + 0.18 * n2(vec2(x, along) * 0.15);
               col *= 0.75 + 0.25 * smoothstep(0.0, 0.04, min(fract(tq.x), fract(tq.y)));
             } else if (uStyle < 0.5) {
@@ -473,7 +478,7 @@ function roomMaterial() {
               vec2 fp = vec2(wx, h - 11.6);
               float fanBox = step(box2(fp, vec2(3.4, 3.4)), 0.0) * fanW;
               float fr = length(fp);
-              float grille = step(fr, 3.0) * (0.5 + 0.5 * step(0.5, fract(fr * 1.6)));
+              float grille = step(fr, 3.0) * (0.5 + 0.5 * aaSq(fr * 1.6));
               city = mix(city, vec3(0.08, 0.08, 0.1) * (1.0 - 0.6 * grille) + vec3(0.5) * step(3.0, fr) * 0.2, fanBox);
               float mull = step(abs(wx), 0.25) + step(abs(h - 19.0), 0.25);
               col = mix(vec3(0.85, 0.82, 0.76) * uLight * lightK, city, inner * (1.0 - clamp(mull, 0.0, 1.0)));
@@ -519,7 +524,7 @@ function roomMaterial() {
           float lightK = 0.28 + 0.9 * exp(-fa * fa / 70.0) * lk;
           if (part == 0) {
             vec2 tq = fract(vec2(x, along) / 1.3);
-            col = mix(vec3(0.5, 0.48, 0.44), vec3(0.08, 0.08, 0.08), step(0.5, mod(floor(x / 1.3) + floor(along / 1.3), 2.0)));
+            col = mix(vec3(0.5, 0.48, 0.44), vec3(0.08, 0.08, 0.08), aaChk(vec2(x / 1.3, along / 1.3)));
             col *= 0.8 + 0.2 * n2(vec2(x, along) * 0.3);
             float run = step(abs(x), 8.2);
             col = mix(col, vec3(0.3, 0.05, 0.06) * (0.8 + 0.25 * n2(vec2(x, along) * 0.5)), run);
@@ -703,101 +708,11 @@ export class Room {
   }
 }
 
-// ---------- the end: her lamp, and fireworks over the city with the walls gone ----------
-export class LampFinale {
-  constructor(scene, course, P, cfg, scenery) {
-    this.course = course; this.cfg = cfg; this.S = scenery; this.P = P;
-    this.t = cfg.t; this.x = cfg.x ?? -16;
-    prepare(course, scenery.plan);
-    this.group = new THREE.Group(); scene.add(this.group);
-    const baseM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.3 });
-    this.group.add(new THREE.Mesh(AG.lampBase(), baseM));
-    this.shadeM = new THREE.MeshStandardMaterial({ color: 0xf4e0c0, roughness: 0.9, side: THREE.DoubleSide, emissive: new THREE.Color(0xffb060), emissiveIntensity: 0.9 });
-    this.group.add(new THREE.Mesh(AG.lampShade(), this.shadeM));
-    this.lit = 0.6; this.fired = false; this.earned = 0; this.next = 0;
-    this._p = new THREE.Vector3();
-  }
-  fire(earned) { this.fired = true; this.earned = earned; }
-  update(track, rider, songT, dt, fireworks) {
-    const fy = floorAt(this.course, this.t);
-    track.ground(this.t, this.x, this._p);
-    this.group.position.set(this._p.x, fy, this._p.z);
-    this.group.rotation.set(0, this.course.sample(this.t).yaw, 0);
-    this.lit += ((this.fired ? 1.4 : 0.8) - this.lit) * Math.min(1, dt);
-    this.shadeM.emissiveIntensity = 0.7 * this.lit;
-    const S = this.S;
-    if (S && this.t - rider.t < 46) {
-      const g = this.group.position;
-      S.glow(g.x, g.y + 22.5, g.z, 26, col(this.P.lamp ?? 0xffc070), 0.5 * this.lit);
-      S.pool(g.x, g.y + 0.1, g.z, 60, col(this.P.lamp ?? 0xffc070), 0.5 * this.lit);
-    }
-    // the city's fireworks, all around, once the walls are down
-    if (this.fired && fireworks) {
-      this.next -= dt;
-      if (this.next <= 0) {
-        this.next = 0.35 + Math.random() * 0.7 * (1.2 - 0.5 * this.earned);
-        const tt = rider.t + 1.6 + Math.random() * 4.5, side = Math.random() < 0.5 ? -1 : 1;
-        const from = track.ground(tt, side * (45 + Math.random() * 110), new THREE.Vector3());
-        const to = from.clone(); to.y = 55 + Math.random() * 60;
-        fireworks.launch(from, to, 0.8 + 0.6 * this.earned);
-      }
-    }
-  }
-}
-
-// ---------- the place, per frame ----------
-export class SummerWorld {
-  constructor(scene, S) {
-    this.S = S;
-    prepare(S.course, S.plan);
-    this.mat = roomMaterial();
-    this.rooms = (S.plan.rooms || []).map((sp) => new Room(scene, S.course, sp, this.mat));
-    this.flicker = 1;
-  }
-  update(S, dt, camera, time) {
-    const u = this.mat.uniforms, P = S.P, t = S.rider.t;
-    u.uTime.value = time; u.uCam.value.copy(camera.position);
-    u.uFog.value.set(P.fog); u.uFogDensity.value = P.fogDensity;
-    u.uWarm.value.set(P.lamp ?? 0xffc070);
-    u.uLight.value.set(P.skyLight ?? 0xffffff).multiplyScalar((P.hemiK ?? 1.5) / 1.6);
-    u.uSkyTop.value.set(P.zenith); u.uSkyLow.value.set(P.horizon); u.uCity.value.set(P.wall ?? 0x3a2a30);
-    const ev = S.plan.roomEvents || {};
-    u.uWar.value.set(ev.war ?? -1e5, ev.war !== undefined ? 1 : 0);
-    u.uFight.value.set(ev.fight ?? -1e5, ev.fight !== undefined ? 1 : 0);
-    // the busted light: mostly on, then not, then a stutter
-    if (ev.bust !== undefined) {
-      const near = Math.abs(t - ev.bust) < 6;
-      const r = Math.sin(time * 37.0) * Math.sin(time * 11.3 + 1.7), hold = Math.sin(time * 1.9) > 0.55;
-      const target = near ? (hold ? 0.05 : (r > 0.15 ? 1 : 0.12)) : 1;
-      this.flicker += (target - this.flicker) * Math.min(1, dt * 30);
-    }
-    u.uFlicker.value = this.flicker;
-    let bustAlong = -1e5;
-    for (const r of this.rooms) {
-      r.update(S.track, S.rider, t);
-      if (ev.bust !== undefined && r.style === 2 && r.mesh.visible) { const A = r.tToAlong(ev.bust); if (A !== null) bustAlong = Math.round(A / 24) * 24; }
-    }
-    if (bustAlong > -1e4) this._bustAlong = bustAlong;
-    u.uBust.value = this._bustAlong ?? -1e5;
-  }
-  // the lights that hang in the rooms
-  draw(T, rider, songT) {
-    const lamp = col(this.S.P.lamp ?? 0xffc070), cool = [1, 0.95, 0.82];
-    for (const r of this.rooms) {
-      if (!r.mesh.visible) continue;
-      for (const f of r.fixtures) {
-        const g = this.S.track.ground(f.t, 0, this._g || (this._g = new THREE.Vector3()));
-        const fy = floorAt(this.S.course, f.t);
-        if (r.style === 2) {
-          const busted = this._bustAlong !== undefined && Math.abs(f.along - this._bustAlong) < 12;
-          const k = busted ? this.flicker : 1;
-          T.glow(g.x, fy + r.H - 0.8, g.z, 9, cool, 0.9 * k);
-          T.pool(g.x, fy + 0.08, g.z, 26, cool, 0.35 * k);
-        } else {
-          T.glow(g.x, fy + r.H - 1.2, g.z, 16, lamp, 0.9);
-          T.pool(g.x, fy + 0.08, g.z, 70, lamp, 0.35);
-        }
-      }
-    }
-  }
+// ---------- the end and the place (Your Apartment Smells Like Summer only) ----------
+// Since its October pass the song's place lives in yas-world.js (rooms painted by yas-room.js,
+// the block in yas-street.js, its things in yas-sets.js) and its end in yas-finale.js (tar beach
+// on her roof). Room above is shared by many songs and is untouched; it's handed in from here.
+export class LampFinale extends YasRoof {}
+export class SummerWorld extends YasWorld {
+  constructor(scene, S) { super(scene, S, Room); }
 }
