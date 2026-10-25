@@ -184,10 +184,9 @@ export class EstateWorld {
     T.update(S.track, S.rider, P, camera, 0);
     T.mat.uniforms.uWood.value = 0; T.mat.uniforms.uDry.value = k.ywnDry;
     // under the bathroom the lawn goes down out of the way of its floor
-    const t0 = t - 4, t1 = t + 46;
     let sunk = false;
     for (let i = 0; i < T.N; i++) {
-      const tt = t0 + (t1 - t0) * (i / (T.N - 1));
+      const tt = T.rowT0 + i * T.rowDT;
       if (!this.spans.some(([a, b]) => tt > a + 0.25 && tt < b - 0.25)) continue;
       for (let j = 0; j < T.M; j++) T.pos[(i * T.M + j) * 3 + 1] -= 9;
       sunk = true;

@@ -516,18 +516,20 @@ class Road {
     this._p = new THREE.Vector3();
   }
   update(track, rider) {
-    const t0 = rider.t - 3, t1 = rider.t + 36, N = this.N, r = this.r;
+    // rows at fixed song times (not sliding with her), so a road that follows the ground keeps to
+    // the same points of it and doesn't dip in and out of the hillside beside it from frame to frame
+    const N = this.N, r = this.r, DT = 39 / (N - 1);
+    const k0 = Math.floor((rider.t - 3) / DT), t0 = k0 * DT, t1 = t0 + (N - 1) * DT;
     // a road nowhere near her isn't built at all this frame (a song with five roads paid for all five)
     const on = t1 >= (r.from ?? -1e9) && t0 <= (r.to ?? 1e9);
     this.mesh.visible = on;
     if (!on) return;
-    const iR = Math.round((rider.t - t0) / (t1 - t0) * (N - 1));
     const w = this.total;
     const cum = this._cum || (this._cum = new Float32Array(N));
     const smp = this._smp || (this._smp = {});
     let lx = 0, lz = 0;
     for (let i = 0; i < N; i++) {
-      const t = t0 + (t1 - t0) * (i / (N - 1));
+      const t = t0 + i * DT;
       const visible = t >= (r.from ?? -1e9) && t <= (r.to ?? 1e9);
       // (track.ground(t, x) is the row's centre slid x along its right: once per row, not per point)
       track.ground(t, 0, this._p);
@@ -542,7 +544,8 @@ class Road {
       cum[i] = i ? cum[i - 1] + Math.hypot(cx - lx, cz - lz) : 0;
       lx = cx; lz = cz;
     }
-    const base = rider.stats.dist - cum[iR];
+    const fr = Math.max(0, Math.min(N - 1.001, (rider.t - t0) / DT)), ir = Math.floor(fr);
+    const base = rider.stats.dist - (cum[ir] + (cum[ir + 1] - cum[ir]) * (fr - ir));
     for (let i = 0; i < N; i++) for (let j = 0; j <= 2; j++) this.uv[(i * 3 + j) * 2 + 1] = cum[i] + base;
     this.geo.attributes.position.needsUpdate = true; this.geo.attributes.uv.needsUpdate = true;
   }

@@ -647,8 +647,14 @@ export class Room {
     const N = this.N, M = this.M, ring = this.ring, W = this.W, H = this.H;
     const cum = this._cum || (this._cum = new Float32Array(N));
     const ts = this._ts || (this._ts = new Float32Array(N));
-    // a short room needs fewer rows than a long one
-    const rows = Math.max(8, Math.min(N, Math.ceil((tb - ta) * 7) + 2));
+    // rows at fixed song times (every DT, the room's two ends included), so its floor and walls keep
+    // to the same points as she rides through instead of being re-cut every frame (they swam and
+    // flickered); a short room gets them closer together than a long one
+    const DT = this._dt || (this._dt = Math.max(1 / 7, Math.min(50, sp.to - sp.from) / (N - 3)));
+    let rows = 0;
+    ts[rows++] = ta;
+    for (let k = Math.floor(ta / DT) + 1; k * DT < tb - 1e-4 && rows < N - 1; k++) if (k * DT > ta + 1e-4) ts[rows++] = k * DT;
+    ts[rows++] = tb;
     this._rows = rows;
     // the walls coming down: outward, flat, then gone; the ceiling lifted away
     const fk = sp.fallAt !== undefined ? clamp((songT - sp.fallAt) / (sp.fallFor ?? 2.2), 0, 1) : 0;
@@ -656,8 +662,7 @@ export class Room {
     const smp = this._smp || (this._smp = {});
     let lx = 0, lz = 0;
     for (let i = 0; i < rows; i++) {
-      const t = ta + (tb - ta) * (i / (rows - 1));
-      ts[i] = t;
+      const t = ts[i];
       const fy = floorAt(c, t);
       // the middle of this row and the way across it: every point of the row is on that line
       track.ground(t, 0, this._p);
@@ -681,8 +686,9 @@ export class Room {
       for (let k = 0; k <= 24; k++) { track.ground(rider.t + (ta - rider.t) * k / 24, 0, this._p); if (k) d += Math.hypot(this._p.x - px, this._p.z - pz); px = this._p.x; pz = this._p.z; }
       base = rider.stats.dist + d;
     } else {
-      const fR = clamp((rider.t - ta) / (tb - ta), 0, 1) * (rows - 1), iR = Math.min(rows - 2, Math.floor(fR));
-      base = rider.stats.dist - (cum[iR] + (cum[iR + 1] - cum[iR]) * (fR - iR));
+      let iR = 0; while (iR < rows - 2 && ts[iR + 1] <= rider.t) iR++;
+      const u = clamp((rider.t - ts[iR]) / Math.max(1e-6, ts[iR + 1] - ts[iR]), 0, 1);
+      base = rider.stats.dist - (cum[iR] + (cum[iR + 1] - cum[iR]) * u);
     }
     this._base = base;
     for (let i = 0; i < rows; i++) for (let j = 0; j < M; j++) this.coord[(i * M + j) * 3 + 2] = cum[i] + base;

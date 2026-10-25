@@ -244,7 +244,7 @@ export function makeGround(scene, P) {
         float street = smoothstep(0.035, 0.0, min(0.5 - f.x, 0.5 - f.y) - 0.0);
         float lamps = 0.0;
         vec2 lp = fract(q / 23.0) - 0.5;
-        lamps = smoothstep(0.08, 0.0, length(lp)) * street;
+        lamps = smoothstep(0.08, 0.0, length(lp)) * street * (1.0 - smoothstep(0.03, 0.07, length(fwidth(q / 23.0))));
         col = mix(col, uStreet * 0.35, street * 0.8);
         col += uStreet * lamps * 3.5;
         col = mix(col, vec3(0.72, 0.77, 0.86) * (0.85 + 0.2 * h2(floor(p / 5.0))), uSnow * 0.7 * (1.0 - street * 0.6));
@@ -253,6 +253,9 @@ export function makeGround(scene, P) {
         col = mix(col, uFog, clamp(fog, 0.0, 1.0));
         gl_FragColor = vec4(col, 1.0);
       }`,
+    // (pushed back in depth: a room's floor, a road or a lawn lying at the same height fought it,
+    // the two taking turns frame by frame, a flicker beside the road in many songs)
+    polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 8,
   });
   const ground = new THREE.Mesh(g, m);
   ground.frustumCulled = false;

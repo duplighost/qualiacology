@@ -28,7 +28,8 @@ const IMPACT = 3.0;            // extra speed^2 lost per (excess m/s)^2
 const CRASH = 15;              // square-on m/s that throws you off the board
 const RAIL_SNAP = 1.0;         // metres either side of a rail that it takes you
 const RAIL_LEAVE = 2.4;        // steer this far off it and you hop off
-const RAIL_POP = 4.6;          // m/s up off the end of a rail
+const RAIL_POP = 4.6;          // m/s up off a rail you steer off
+const RAIL_POP_END = 8.2;      // ... and off its end, on the beat: enough air for a trick
 // letting go at the bottom of a dip, seconds either side of it (the bottom is on the beat)
 export const WIN_PERFECT = 0.085;
 export const WIN_GOOD = 0.16;
@@ -64,7 +65,7 @@ export class Rider {
       judged: 0, hits: 0, perfects: 0, goods: 0, bestStreak: 0, tricks: 0, grinds: 0, gaps: 0 };
     this.streak = 0; this.pend = null;
     this.trick = null; this.trickN = 0;
-    this.rail = null; this.railBeat = -1; this.railK = 0;
+    this.rail = null; this.railBeat = -1; this.railK = 0; this.railTricks = 0;
     this.gapOn = null;
     this._noteIdx = 0;
     while (this._noteIdx < this.course.notes.length && this.course.notes[this._noteIdx].t < t) this._noteIdx++;
@@ -105,7 +106,13 @@ export class Rider {
     this.air = 0; this.airMax = 0;
     this.vy = vy;
     let trick = null;
-    if (this.streak >= 3 && !this.stopping && this.wipe <= 0) {
+    if (why === 'pop' && !this.stopping && this.wipe <= 0) {
+      // popped off the end of a rail: always something, bigger on a run
+      const T = this.airTimeAhead();
+      this.trickN++;
+      const kind = this.streak >= 8 ? (this.trickN % 2 ? 'flip' : 'roll') : 'spin';
+      trick = { kind, turns: kind === 'spin' && T > 0.9 ? 2 : 1, combo: false, dur: Math.max(0.32, T * 0.8) };
+    } else if (this.streak >= 3 && !this.stopping && this.wipe <= 0) {
       const T = this.airTimeAhead();
       if (T > 0.5) {
         const big = this.streak >= 16;
@@ -157,7 +164,8 @@ export class Rider {
     if (this.grounded) {
       const lip = c.lipBetween(this.t, this.t + dt);
       const kHold = this.press ? K_PRESS : 1;
-      if (lip || gap || s.ay < -kHold * G - 0.12) {
+      // (a rail holds you through a sharp crest: you grind over it, you don't fly off it)
+      if (lip || gap || (!this.rail && s.ay < -kHold * G - 0.12)) {
         // the ground falls away faster than you can follow it: you're flying.
         // (a launch's surface falls just faster than gravity, so letting go at the
         // lip flies you; holding keeps you on it, pumping the drop)
@@ -266,15 +274,35 @@ export class Rider {
     }
   }
 
-  // off the end of the rail (on the beat: a pop), or steered off it (a hop)
+  // off the end of the rail (on the beat: a pop, high enough for a trick), or steered off it (a hop)
   _railOff(end, s) {
     const r = this.rail; this.rail = null;
     this.stats.grinds++;
     this._emit({ type: 'grindEnd', t: this.t, rail: r, onBeat: end });
     if (s && this.grounded) {
       this.y = s.y;
-      this._takeoff(s.vy + (end ? RAIL_POP : RAIL_POP * 0.6), 'rail');
+      this._takeoff(end ? this._popVy(s) : Math.max(0, s.vy) + RAIL_POP * 0.6, end ? 'pop' : 'rail');
     }
+  }
+  // the pop off a rail's end is aimed: over the next crest, down onto the slope after it a third of
+  // the way down, so the trick lands clean and she's straight into the next pump. (A rail ends on a
+  // beat, usually at the bottom of a dip: a fixed pop came down on the rise and bailed.)
+  _popVy(s) {
+    const c = this.course, t = this.t;
+    let crest = null;
+    for (const ct of c.crests) if (ct > t + 0.15) { crest = ct; break; }
+    if (crest !== null) {
+      let val = null;
+      for (const vt of c.valleys) if (vt > crest + 0.05) { val = vt; break; }
+      if (val !== null) {
+        const tL = crest + 0.33 * (val - crest), T = tL - t;
+        if (T > 0.45 && T < 1.7 && !c.gapAt(tL)) {
+          const vy = (c.sample(tL, this.s2).y - this.y) / T + 0.5 * G * T;
+          if (vy > 5 && vy < 16) return vy;
+        }
+      }
+    }
+    return Math.max(0, s.vy) + RAIL_POP_END;
   }
 
   _valley() {
@@ -308,6 +336,8 @@ export class Rider {
       this.streak++; st.hits++; st.judged++;
       if (grade === 'perfect') st.perfects++; else st.goods++;
       st.bestStreak = Math.max(st.bestStreak, this.streak);
+      // on a rail, letting go on the beat flicks the board round under her on it
+      if (this.rail) { this.railTricks = (this.railTricks || 0) + 1; this._emit({ type: 'railTrick', t: this.t, grade, kind: this.railTricks % 2 ? 'kickflip' : 'shuvit' }); }
       // a clean hit kicks you on a little
       if (this.grounded) {
         const v = this.v, k = Math.max(0, 1 - v / 95);

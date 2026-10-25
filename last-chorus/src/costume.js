@@ -405,8 +405,11 @@ function shopMaterial() {
           else if (part == 3) { col += vec3(0.6, 0.25, 1.0) * step(abs(mod(x, 18.0) - 9.0), 0.5) * 1.4; }
           else {
             // fishnet: a diamond net glowing hot pink
+            // (thicker by the pixel it's drawn in, and settling to an even glow where the net gets fine
+            // on screen: thinner than a pixel it sparkled and crawled along the walls)
             vec2 dq = vec2(wa + h, wa - h) / 3.2; vec2 df = abs(fract(dq) - 0.5);
-            float net = smoothstep(0.08, 0.0, min(df.x, df.y)) * smoothstep(4.0, 10.0, h) * (1.0 - smoothstep(26.0, 34.0, h));
+            vec2 dfw = fwidth(dq); float fwq = max(dfw.x, dfw.y);
+            float net = mix(smoothstep(0.08 + fwq, 0.0, min(df.x, df.y)), 0.16, smoothstep(0.05, 0.18, fwq)) * smoothstep(4.0, 10.0, h) * (1.0 - smoothstep(26.0, 34.0, h));
             col += vec3(1.0, 0.2, 0.75) * net * 0.9;
             // cobwebs in the upper corners: spokes and rings, white-violet
             vec2 wc = vec2(mod(wa, 40.0), 62.0 - h); float r = length(wc), a = atan(wc.y, wc.x);

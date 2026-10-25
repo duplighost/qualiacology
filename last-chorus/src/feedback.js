@@ -310,11 +310,13 @@ export class Notes {
       track.at(n.t, n.x, 1.2 + 0.12 * Math.sin(time * 4 + i) + (K.bob ? K.bob * Math.abs(Math.sin(time * 3 + i)) : 0), p);
       if (n.got) {
         // flies into the board and is gone
+        // (shrinking all the way: one that swelled as it went in stood between the camera and her,
+        // and on a rail, where there's one a beat, she was hidden behind them)
         const age = t - (n.gotT ?? t);
-        if (age > 0.16) continue;
-        const f = Math.max(0, age) / 0.16;
-        p.lerp(this._b, f * f);
-        scale *= 1.3 - f;
+        if (age > 0.13) continue;
+        const f = Math.max(0, age) / 0.13;
+        p.lerp(this._b, f * (2 - f));
+        scale *= (1 - f) * (1 - f) * 0.9;
         bright = 4;
         col.lerp(this._w, 0.5);
       } else if (ahead < -0.02) {

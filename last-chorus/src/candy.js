@@ -503,14 +503,14 @@ function candyMaterial() {
     uniforms: {
       uStyle: { value: 0 }, uTime: { value: 0 }, uBeat: { value: 0 }, uFogDensity: { value: 0.003 }, uFog: { value: new THREE.Color() }, uCam: { value: new THREE.Vector3() },
       uWarm: { value: new THREE.Color(0xffb0d8) }, uLight: { value: new THREE.Color(1, 1, 1) }, uSkyTop: { value: new THREE.Color() }, uSkyLow: { value: new THREE.Color() }, uDark: { value: 0 },
-      uPulse: { value: 0 },
+      uPulse: { value: 0 }, uMove: { value: 0 },
     },
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: /* glsl */`
-      uniform float uStyle, uTime, uBeat, uFogDensity, uDark, uPulse;
+      uniform float uStyle, uTime, uBeat, uFogDensity, uDark, uPulse, uMove;
       uniform vec3 uFog, uCam, uWarm, uLight, uSkyTop, uSkyLow;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -596,7 +596,7 @@ function candyMaterial() {
           }
         } else if (st < 3.5) {
           // the showroom: candy-stripe paper, a mint dado, shelves of jars; black and white floor
-          if (part == 0) { vec2 tq = vec2(x, along) / 4.0; col = mix(vec3(0.92, 0.9, 0.88), vec3(0.08), aaChk(tq)) * (0.8 + 0.2 * edge(fract(tq), 0.04)); }
+          if (part == 0) { vec2 tq = vec2(x, along) / 4.0; col = mix(vec3(0.92, 0.9, 0.88), vec3(0.08), aaChkM(tq, vec2(0.0, uMove / 4.0))) * (0.8 + 0.2 * edge(fract(tq), 0.04)); }
           else if (part == 3) { col = vec3(0.95, 0.72, 0.84) * 0.75; }
           else {
             col = mix(vec3(0.98, 0.78, 0.88), vec3(1.0, 0.95, 0.97), aaSq(wa / 2.0));
@@ -616,10 +616,10 @@ function candyMaterial() {
         } else if (st < 4.5) {
           // the sugar room: white tile with pink grout, a mint dado, a candy-stripe frieze, round
           // windows on the night up top; a big pink and white checker underfoot; skylights
-          if (part == 0) { vec2 tq = vec2(x, along) / 6.0; col = mix(vec3(0.96, 0.93, 0.95), vec3(0.95, 0.5, 0.7), aaChk(tq)); col *= 0.92 + 0.08 * n2(vec2(x, along) * 0.2); }
+          if (part == 0) { vec2 tq = vec2(x, along) / 6.0; col = mix(vec3(0.96, 0.93, 0.95), vec3(0.95, 0.5, 0.7), aaChkM(tq, vec2(0.0, uMove / 6.0))); col *= 0.92 + 0.08 * n2(vec2(x, along) * 0.2); }
           else if (part == 3) { float sf = fract(along / 14.0); col = mix(vec3(0.9, 0.88, 0.92), mix(uSkyLow, uSkyTop, 0.5), step(abs(sf - 0.5), 0.18) * step(abs(x), 30.0)); }
           else if (h < 7.0) { col = vec3(0.55, 0.88, 0.78) * (0.9 + 0.1 * step(0.5, fract(wa / 3.0))); col = mix(col, vec3(0.98), step(6.6, h)); }
-          else if (h < 26.0) { vec2 tq = vec2(wa / 2.4, h / 2.4); col = mix(vec3(0.97, 0.95, 0.96), vec3(0.98, 0.5, 0.72), aaChk(tq)); col = mix(col, vec3(0.85, 0.82, 0.86), grout(tq, 0.04)); }
+          else if (h < 26.0) { vec2 tq = vec2(wa / 2.4, h / 2.4); col = mix(vec3(0.97, 0.95, 0.96), vec3(0.98, 0.5, 0.72), aaChkM(tq, vec2(uMove / 2.4, 0.0))); col = mix(col, vec3(0.85, 0.82, 0.86), grout(tq, 0.04)); }
           else if (h < 29.0) { col = mix(vec3(0.95, 0.12, 0.3), vec3(0.98, 0.96, 0.96), aaSq((wa + h) / 2.5)); }
           else {
             col = vec3(0.86, 0.8, 0.95);
@@ -713,6 +713,7 @@ export class CandyWorld {
     this.rush.update(S, dt, camera, time);
     const u = this.mat.uniforms, P = S.P, t = S.rider.t, ev = S.plan.roomEvents || {};
     u.uTime.value = time; u.uCam.value.copy(camera.position); u.uBeat.value = S.town.beat || 0;
+    u.uMove.value = S.rider.v * Math.min(dt, 1 / 30);     // metres she goes in a frame
     u.uFog.value.set(P.fog); u.uFogDensity.value = P.fogDensity;
     u.uWarm.value.set(P.window ?? 0xffb0d8);
     u.uLight.value.set(P.skyLight ?? 0xffffff).multiplyScalar((P.hemiK ?? 1.5) / 1.6);

@@ -26,9 +26,13 @@ export class Track {
     this.t0w = 0; this.tNow = 0;
     this.frozen = new Map();     // render sample index -> [x, z] once ridden
     this.lit = new Map();        // render sample index -> flow when you passed (for the glow you leave)
+    this.held = new Map();       // render sample index -> 1 if she was holding down as she passed it, else 0
     this.s = {};
     this._buildMesh(scene, palette);
   }
+
+  // a new run from the start line: forget what was ridden
+  restart() { this.frozen.clear(); this.lit.clear(); this.held.clear(); this._lastK = undefined; }
 
   // where the rider is; called after physics each frame
   update(rider) {
@@ -48,10 +52,11 @@ export class Track {
         const yaw = c.sample(tk, this.s).yaw;
         this.frozen.set(k, [rider.xz.x - Math.sin(yaw) * back, rider.xz.z - Math.cos(yaw) * back]);
         this.lit.set(k, rider.flow);
+        this.held.set(k, rider.press && !rider.stopping ? 1 : 0);
       }
       this._lastK = kr;
       // forget far past
-      for (const key of this.frozen.keys()) { if (key < k0 - 4) { this.frozen.delete(key); this.lit.delete(key); } else break; }
+      for (const key of this.frozen.keys()) { if (key < k0 - 4) { this.frozen.delete(key); this.lit.delete(key); this.held.delete(key); } else break; }
     }
     // integrate ahead from the rider
     const v0 = rider.stopping ? rider.stopV0 : rider.v, va = rider.stopping ? rider.stopV0 : Math.max(rider.vAvg, 18);
@@ -166,7 +171,12 @@ export class Track {
     g.setAttribute('aDist', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('aHold', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
+    // beats to the nearest start of a hold zone, and whether she held through this bit (-1 not ridden yet)
+    g.setAttribute('aZone', new THREE.BufferAttribute(new Float32Array(N * (M + 1) * 2), 2).setUsage(THREE.DynamicDrawUsage));
     this.geo = g;
+    // the hold zones' colour, pushed to read as a colour of its own against the road
+    const hc = new THREE.Color(palette.hold ?? palette.glow), hsl = {};
+    hc.getHSL(hsl); hc.setHSL(hsl.h, Math.max(hsl.s, 0.72), Math.min(0.62, Math.max(hsl.l, 0.5)));
     this.mat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 }, uSong: { value: 0 }, uFlow: { value: 0.3 }, uBeatPhase: { value: 0 },
@@ -174,7 +184,7 @@ export class Track {
         uFret: { value: new THREE.Color(palette.fret) }, uGlow: { value: new THREE.Color(palette.glow) },
         uSky: { value: new THREE.Color(palette.horizon) }, uFogColor: { value: new THREE.Color(palette.fog) },
         uFogDensity: { value: palette.fogDensity }, uCam: { value: new THREE.Vector3() }, uPulse: { value: 0 }, uStyle: { value: palette.ribbonStyle ?? 0 },
-        uHoldCol: { value: new THREE.Color(palette.hold ?? palette.glow) }, uGateCol: { value: new THREE.Color(palette.gate ?? palette.edge).lerp(new THREE.Color(1, 1, 1), palette.gate ? 0 : 0.55) }, uPress: { value: 0 }, uHit: { value: 0 }, uHitCol: { value: new THREE.Color(1, 0.85, 0.4) }, uDapple: { value: palette.dapple ?? 0 }, uShade: { value: palette.shade ?? 0 }, uSun: { value: new THREE.Color(palette.moon ?? 0xffffff) }, uSunDir: { value: new THREE.Vector3(...(palette.moonDir || [0, 1, 0])).normalize() },
+        uHoldCol: { value: hc }, uWin: { value: 0.17 }, uGateCol: { value: new THREE.Color(palette.gate ?? palette.edge).lerp(new THREE.Color(1, 1, 1), palette.gate ? 0 : 0.55) }, uPress: { value: 0 }, uHit: { value: 0 }, uHitCol: { value: new THREE.Color(1, 0.85, 0.4) }, uDapple: { value: palette.dapple ?? 0 }, uShade: { value: palette.shade ?? 0 }, uSun: { value: new THREE.Color(palette.moon ?? 0xffffff) }, uSunDir: { value: new THREE.Vector3(...(palette.moonDir || [0, 1, 0])).normalize() },
         uStartT: { value: 0 }, uFinishT: { value: this.c.duration },
       },
       vertexShader: RIBBON_VS, fragmentShader: RIBBON_FS,
@@ -210,7 +220,8 @@ export class Track {
     const N = this.N, M = ACROSS, c = this.c;
     const pos = this.geo.attributes.position.array, nor = this.geo.attributes.normal.array;
     const tim = this.geo.attributes.aTime.array, side = this.geo.attributes.aSide.array, misc = this.geo.attributes.aMisc.array;
-    const hold = this.geo.attributes.aHold.array, gapA = this.geo.attributes.aGap.array;
+    const hold = this.geo.attributes.aHold.array, gapA = this.geo.attributes.aGap.array, zone = this.geo.attributes.aZone.array;
+    const spb = 60 / c.chart.bpm;
     const sp = this.skirtGeo.attributes.position.array, sa = this.skirtGeo.attributes.aFade.array;
     const s = this.s;
     // distance along the ribbon, fixed to the world (anchored to how far you've ridden)
@@ -240,7 +251,9 @@ export class Track {
       if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
       const beatPos = c.beatAt(tk);
       const lit = this.lit.has(k) ? this.lit.get(k) : -1;
-      const vd = c.valleyDist(tk) / (60 / c.chart.bpm);   // in beats
+      const vd = c.valleyDist(tk) / spb;   // in beats
+      const cd = c.crestDist(tk) / spb;
+      const hd = this.held.has(k) ? this.held.get(k) : -1;
       for (let j = 0; j <= M; j++) {
         const u = j / M * 2 - 1;
         // a shallow trough: edges curl up a little so it reads as a track
@@ -254,6 +267,7 @@ export class Track {
         dist[o] = cum[i] + base;
         hold[o] = s.hold;
         gapA[o] = s.gap;
+        zone[o * 2] = cd; zone[o * 2 + 1] = hd;
       }
       // skirts hang from both edges
       for (let e = 0; e < 2; e++) {
@@ -266,26 +280,28 @@ export class Track {
         sa[o] = s.gap ? 0 : 0.16 * fade; sa[o + 1] = 0;
       }
     }
-    for (const a of ['position', 'normal', 'aTime', 'aSide', 'aMisc', 'aDist', 'aHold', 'aGap']) this.geo.attributes[a].needsUpdate = true;
+    for (const a of ['position', 'normal', 'aTime', 'aSide', 'aMisc', 'aDist', 'aHold', 'aGap', 'aZone']) this.geo.attributes[a].needsUpdate = true;
+    // the let-go window (a perfect release) either side of the gate, in beats
+    this.mat.uniforms.uWin.value = 0.085 / spb;
     this.skirtGeo.attributes.position.needsUpdate = true; this.skirtGeo.attributes.aFade.needsUpdate = true;
     this.mat.uniforms.uSong.value = this.tNow;
   }
 }
 
 const RIBBON_VS = /* glsl */`
-attribute float aTime; attribute float aSide; attribute vec4 aMisc; attribute float aDist; attribute float aHold; attribute float aGap;
-varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold; varying float vGap;
+attribute float aTime; attribute float aSide; attribute vec4 aMisc; attribute float aDist; attribute float aHold; attribute float aGap; attribute vec2 aZone;
+varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold; varying float vGap; varying vec2 vZone;
 void main(){
-  vTime = aTime; vSide = aSide; vMisc = aMisc; vN = normal; vDist = aDist; vHold = aHold; vGap = aGap;
+  vTime = aTime; vSide = aSide; vMisc = aMisc; vN = normal; vDist = aDist; vHold = aHold; vGap = aGap; vZone = aZone;
   vec4 w = modelMatrix * vec4(position, 1.0);
   vWorld = w.xyz;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 
 const RIBBON_FS = /* glsl */`
-uniform float uTime, uSong, uFlow, uBeatPhase, uFogDensity, uPulse, uStyle, uPress, uHit, uDapple, uShade, uStartT, uFinishT;
+uniform float uTime, uSong, uFlow, uBeatPhase, uFogDensity, uPulse, uStyle, uPress, uHit, uDapple, uShade, uStartT, uFinishT, uWin;
 uniform vec3 uBase, uEdge, uFret, uGlow, uSky, uFogColor, uCam, uHoldCol, uGateCol, uHitCol, uSun, uSunDir;
-varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold; varying float vGap;
+varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold; varying float vGap; varying vec2 vZone;
 float aaLine(float d, float w){ float fw = fwidth(d); return 1.0 - smoothstep(w - fw, w + fw, abs(d)); }
 float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main(){
@@ -294,6 +310,9 @@ void main(){
   float beat = vMisc.x, slope = vMisc.y, lit = vMisc.z, vd = vMisc.w;
   float ahead = vTime - uSong;
   vec3 V = normalize(uCam - vWorld);
+  // the last few metres in front of the camera: thin bright things there cross the bottom of the
+  // screen in a frame or two (a phone held upright sees right down to them) and strobe, so they fade
+  float camNear = smoothstep(2.2, 5.2, length(uCam - vWorld));
   vec3 N = normalize(vN);
   float fres = pow(1.0 - max(dot(N, V), 0.0), 5.0);
   float across = abs(vSide);
@@ -324,38 +343,54 @@ void main(){
   vec2 gc = floor(gp), gf = fract(gp) - 0.5;
   float gfw = length(fwidth(gp));
   float gl = step(0.93, h2(gc)) * smoothstep(0.22, 0.0, length(gf)) * (0.5 + 0.5 * sin(uTime * 7.0 + h2(gc + 7.0) * 40.0));
-  col += uFret * gl * 0.9 * (1.0 - across) * (1.0 - smoothstep(0.15, 0.6, gfw));
-  // HOLD ZONES: every run downhill glows, brighter the closer it gets to the bottom.
-  // Hold through the glow; let go at the gate at its end (on the beat).
+  col += uFret * gl * 0.9 * (1.0 - across) * (1.0 - smoothstep(0.15, 0.6, gfw)) * camNear;
+  // HOLD ZONES, each run downhill from the crest to the bottom of the dip: the road goes the
+  // song's hold colour, building toward the bottom, chevrons pointing down it; a bright bar of it
+  // across where it starts (press), the gate where it ends (let go, on the beat). Ridden, a
+  // stretch you held through burns on behind you and one you didn't goes dark.
   float hz = smoothstep(-0.56, -0.44, vHold);
   float hp = clamp(vHold, 0.0, 1.0);
-  float seen = smoothstep(-0.3, 0.05, ahead) * (1.0 - smoothstep(5.5, 9.0, ahead));
-  float chev = fract(vDist / 2.0 - abs(vSide) * 0.8);
-  float chevron = smoothstep(0.0, 0.06, chev) * (1.0 - smoothstep(0.35, 0.45, chev));
-  float atHer = exp(-abs(ahead) * 4.0);
-  // strongest a little way ahead where you read what's coming; softer right under the camera
-  float nearCam = smoothstep(0.02, 0.6, ahead);
-  float fill = (0.2 + 0.56 * hp * hp) * (0.68 + 0.32 * chevron);
-  float inner = 1.0 - smoothstep(0.86, 0.97, across);
-  col += uHoldCol * hz * fill * seen * inner * (0.22 + 0.78 * nearCam) * 1.1;
-  // while you hold, the strip lights up round the board
-  col += uHoldCol * hz * uPress * atHer * inner * (0.25 + 0.35 * hp);
+  float cdz = vZone.x, heldS = max(vZone.y, 0.0), rode = step(-0.5, vZone.y);
+  float seen = smoothstep(-2.4, -0.05, ahead) * (1.0 - smoothstep(6.5, 10.0, ahead));
+  float lane = 1.0 - smoothstep(0.84, 0.88, across);
+  float laneEdge = aaLine(across - 0.865, 0.014);
+  float chev = fract(vDist / 2.2 - across * 0.85);
+  float chevron = smoothstep(0.0, 0.05, chev) * (1.0 - smoothstep(0.2, 0.28, chev));
+  float atHer = exp(-abs(ahead) * 5.0);
+  // (softer right under the camera, so it never floods the bottom of the screen)
+  float nearCam = smoothstep(0.0, 0.45, ahead);
+  // (the chevrons and the start's bar are only drawn ahead of her, and fade before they reach the
+  // camera: thin bright stripes sweeping under it strobed, a flash across the bottom of the screen)
+  float chevK = smoothstep(0.08, 0.6, ahead) * camNear;
+  float fillA = (0.2 + 0.36 * hp * hp + 0.2 * chevron * chevK) * (0.35 + 0.65 * nearCam);
+  float fillR = mix(0.015, 0.42 + 0.3 * hp, heldS);
+  float fill = mix(fillA, fillR, rode);
+  col = mix(col, col * 0.5, hz * lane * seen * 0.7);
+  col += uHoldCol * hz * lane * seen * fill;
+  col += uHoldCol * hz * laneEdge * seen * (1.5 + 1.5 * hp) * mix(0.45 + 0.55 * nearCam, 0.1 + 0.4 * heldS, rode);
+  // while you hold, it lights up round the board
+  col += mix(uHoldCol, vec3(1.0), 0.2) * hz * uPress * exp(-abs(ahead) * 9.0) * lane * (0.3 + 0.4 * hp) * (1.0 - across * 0.6);
+  // the start: a bright bar across where the zone begins, a short glow leading up to it
+  float sbar = aaLine(cdz, 0.035) * (1.0 - rode) * smoothstep(0.02, 0.3, ahead);
+  float lead = exp(-max(-cdz, 0.0) * 9.0) * step(cdz, 0.0) * (1.0 - hz) * (1.0 - rode);
+  col += uHoldCol * (sbar * 2.6 + lead * 0.22) * lane * seen * (0.5 + 0.5 * nearCam) * camNear;
   // every beat a hairline across
   float fb = fract(beat + 0.5) - 0.5;
   float approach = exp(-max(ahead, 0.0) * 0.45);
-  col += uFret * aaLine(fb, 0.012) * (0.05 + 0.2 * approach) * (1.0 - across * 0.6) * smoothstep(0.02, 0.3, ahead);
-  // THE GATE at the bottom of each dip: let go here. A bright bar with a soft band, pulsing on the beat as it nears
-  // a crisp bar a little over a metre deep at riding speed, with a short soft edge
-  float vb = aaLine(vd, 0.018);
-  float band = exp(-abs(vd) * 40.0);
-  float passed = smoothstep(0.15, -0.1, ahead);
+  col += uFret * aaLine(fb, 0.012) * (0.05 + 0.2 * approach) * (1.0 - across * 0.6) * smoothstep(0.02, 0.3, ahead) * camNear;
+  // THE GATE at the bottom of each dip: let go here. A bright bar with a soft band, pulsing on the
+  // beat as it nears, and either side of it, faintly, the window a perfect release falls in
+  float vb = aaLine(vd, 0.03);
+  float band = exp(-abs(vd) * 30.0);
+  float win = 1.0 - smoothstep(uWin * 0.85, uWin * 1.08, abs(vd));
+  float passed = smoothstep(0.1, -0.05, ahead);
   float coming = (0.6 + 1.5 * approach) * (1.0 - passed) * (0.85 + 0.3 * uPulse) * (0.3 + 0.7 * smoothstep(0.02, 0.45, ahead));
-  col += uGateCol * (vb * 2.0 + band * 0.28) * coming;
+  col += uGateCol * (vb * 2.4 + band * 0.3 + win * 0.1 * lane) * coming * camNear;
   // what you cleared stays lit behind you; the one you just hit flares. Both fade out before
   // they reach the camera, so a hit never washes over the screen
-  float behind = smoothstep(-0.1, -0.02, ahead);
-  col += uGateCol * vb * passed * max(lit, 0.0) * 0.6 * behind;
-  col += uHitCol * vb * uHit * 1.2 * behind;
+  float behind = smoothstep(-0.045, -0.01, ahead);
+  col += uGateCol * vb * passed * max(lit, 0.0) * 0.6 * behind * camNear;
+  col += uHitCol * vb * uHit * 1.2 * behind * camNear;
   // lanes: two faint lines for speed
   col += uFret * aaLine(across - 0.36, 0.008) * 0.08;
   // rails

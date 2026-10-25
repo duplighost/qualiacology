@@ -38,6 +38,10 @@ export class RiderView {
     // ----- board -----
     this.board = new THREE.Group();
     this.root.add(this.board);
+    // the deck on its own, so it can flip and spin under her feet on a rail (a board you unlock goes in here too)
+    this.deck = new THREE.Group();
+    this.deck.position.y = 0.17;
+    this.board.add(this.deck);
     const shape = new THREE.Shape();
     const L = 0.8, W = 0.24, r = 0.21;
     shape.moveTo(-L + r, -W); shape.lineTo(L - r, -W); shape.quadraticCurveTo(L, -W, L, -W + r); shape.lineTo(L, W - r);
@@ -48,15 +52,15 @@ export class RiderView {
     this.boardMat = new THREE.MeshStandardMaterial({ color: P.board, roughness: 0.42, metalness: 0.35 });
     rim(this.boardMat, P.edge, 1.0);
     const deck = new THREE.Mesh(bg, this.boardMat);
-    deck.position.y = 0.16;
-    this.board.add(deck);
+    deck.position.y = 0.16 - 0.17;
+    this.deck.add(deck);
     // glowing underside strip and a stripe on the deck
     const ug = new THREE.PlaneGeometry(0.34, 1.42); ug.rotateX(Math.PI / 2);
     this.underMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(P.edge).multiplyScalar(3.5) });
-    const under = new THREE.Mesh(ug, this.underMat); under.position.y = 0.135; this.board.add(under);
+    const under = new THREE.Mesh(ug, this.underMat); under.position.y = 0.135 - 0.17; this.deck.add(under);
     const sg = new THREE.PlaneGeometry(0.05, 1.3); sg.rotateX(-Math.PI / 2);
     this.stripeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(P.fret).multiplyScalar(2.2) });
-    const stripe = new THREE.Mesh(sg, this.stripeMat); stripe.position.y = 0.232; this.board.add(stripe);
+    const stripe = new THREE.Mesh(sg, this.stripeMat); stripe.position.y = 0.232 - 0.17; this.deck.add(stripe);
     // hover glow on the ribbon under the board
     const pg = new THREE.PlaneGeometry(1.9, 2.6); pg.rotateX(-Math.PI / 2);
     this.poolMat = new THREE.ShaderMaterial({
@@ -78,7 +82,8 @@ export class RiderView {
     this.char.position.y = 0.205;
     this.board.add(this.char);
     this.pose = { crouch: 0.3, lean: 0, air: 0, wipe: 0, spin: 0, look: 0, hands: 0, grab: 0, cheer: 0 };
-    this.cheering = false; this.cheerT = 0;
+    this.cheering = false; this.cheerT = 0; this.tempo = 2;   // beats a second, for the cheer (main.js sets the song's)
+    this.clock = 0;
     this.trick = null;   // { kind, t, dur, turns }
     this._tq = new THREE.Quaternion(); this._te = new THREE.Euler(0, 0, 0, 'YXZ'); this._tc = new THREE.Vector3(); this._tp = new THREE.Vector3();
     this.mats = [];
@@ -220,9 +225,13 @@ export class RiderView {
     // stopped and cheering: the board comes back level under her
     p.edge = (p.edge ?? 0) + ((rider.stopping && !this.cheering ? 0.2 + 0.55 * Math.sqrt(braking) : 0) - (p.edge ?? 0)) * Math.min(1, dt * (this.cheering ? 4 : 7));
 
+    // stopped, the board hovers: a slow bob and a little roll, never quite still
+    this.clock += dt;
+    p.rest = (p.rest ?? 0) + (((rider.stopping && rider.stopVel < 1) || this.titleK > 0.5 ? 1 : 0) - (p.rest ?? 0)) * Math.min(1, dt * 2.5);
+    pos.y += p.rest * (0.045 * Math.sin(this.clock * 2.1) + 0.015 * Math.sin(this.clock * 3.7 + 1)) + (p.hop || 0);
     this.root.position.copy(pos);
     this.root.rotation.order = 'YXZ';
-    this.root.rotation.set(-pitch, yaw, -bank * 0.85 + p.lean * 0.42);
+    this.root.rotation.set(-pitch + p.rest * 0.025 * Math.sin(this.clock * 1.6), yaw, -bank * 0.85 + p.lean * 0.42 + p.rest * 0.03 * Math.sin(this.clock * 1.3 + 0.5));
     // tricks turn the whole board (she's strapped to it): about her middle for flips and rolls
     let ang = 0, ang2 = 0;
     const tr = this.trick;
@@ -261,6 +270,7 @@ export class RiderView {
       this.board.position.copy(this._tc).sub(this._tp);
     } else this.board.position.set(0, 0, 0);
 
+    this._railTrickFrame(dt);
     if (this.skater) this.skater.update(p, rider, dt, this.titleK);
     else if (this.attached) this._pose(p, rider, dt);
 
@@ -276,11 +286,26 @@ export class RiderView {
 
   // a trick for this flight; dur is how long she'll be up
   startTrick(kind, dur, turns = 1, combo = false) { this.trick = { kind, f: 0, dur: Math.max(0.32, dur), turns, combo }; }
+  // on a rail: she hops and the deck goes round under her feet (a kickflip, or a shove-it), back down on the rail
+  railTrick(kind) { this.rt = { kind, f: 0 }; }
+  _railTrickFrame(dt) {
+    const rt = this.rt;
+    if (!rt) return;
+    rt.f = Math.min(1, rt.f + dt / 0.36);
+    const f = rt.f, e = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+    const hop = Math.sin(Math.PI * f) * 0.42;
+    this.deck.rotation.set(0, rt.kind === 'shuvit' ? e * Math.PI * 2 : 0, rt.kind === 'kickflip' ? e * Math.PI * 2 : 0);
+    this.char.position.y = 0.205 + hop;
+    this.deck.position.y = 0.17 + hop * 0.35;
+    if (f >= 1) { this.rt = null; this.deck.rotation.set(0, 0, 0); this.char.position.y = 0.205; this.deck.position.y = 0.17; }
+  }
 
   _pose(p, rider, dt) {
     for (const [n, r] of Object.entries(this.rest)) { this.bones[n].quaternion.copy(r.q); this.bones[n].position.copy(r.p); }
     const st = (p.stop ?? 0) * (p.stop ?? 0) * (3 - 2 * (p.stop ?? 0)), sk = st * clamp(((p.edge ?? 0) - 0.2) / 0.55, 0, 1);
-    const c = clamp(p.crouch * (1 - st) + (0.58 + 0.55 * sk) * st, 0, 1.15), air = p.air;
+    let c = clamp(p.crouch * (1 - st) + (0.58 + 0.55 * sk) * st, 0, 1.15);
+    if (p.cheer > 0.001) c = this._cheerCrouch(c, p.cheer, this.cheerT);
+    const air = p.air;
     const flex = 0.22 + 0.42 * c + 0.5 * air + 0.55 * p.grab;   // hip/knee bend, radians (tucked up in a grab)
     const spread = 0.17 + 0.03 * c;                         // feet apart along the board
     // drop the hips so the feet stay on the deck
@@ -322,29 +347,49 @@ export class RiderView {
     if (p.cheer > 0.001) this._cheer(p.cheer, this.cheerT);
   }
 
-  // the cheer, laid over the stop's pose: a fist pumped over her head three times on a bouncy
-  // count, then both arms up, swaying. w blends it in; T is how long she's been at it.
+  // The cheer, on the song's own beat (tempo): she stands up out of the stop, punches a fist up on
+  // four beats with her knees dipping into each one, then both arms up, rocking side to side with
+  // the bounce still in her knees and her hips, the board hovering under her. Nothing holds still.
+  _cheerPhase(T) {
+    const f = this.tempo || 2, ph = T * f;                     // beats since she started
+    const dip = Math.pow(0.5 + 0.5 * Math.cos(2 * Math.PI * ph), 2);   // 1 on each beat
+    const both = Math.min(1, Math.max(0, (ph - 4.3) / 0.8)), bb = both * both * (3 - 2 * both);
+    return { ph, dip, bb, sway: Math.sin(Math.PI * ph) };     // (sway: one way and back over two beats)
+  }
+  _cheerCrouch(c, w, T) {
+    const ww = w * w * (3 - 2 * w), { dip, bb } = this._cheerPhase(T);
+    const rise = Math.min(1, T / 0.45);
+    // up out of the crouch, a dip into every beat (softer once both arms are up)
+    const target = 0.34 + (0.2 - 0.08 * bb) * dip * rise;
+    return c + (target - c) * ww;
+  }
   _cheer(w, T) {
     // (these bones raise an arm about X: + for her left, - for her right; found by eye in work/posetest.html)
     const ww = w * w * (3 - 2 * w);
-    const rate = 2.2, pumping = T < 1.65;
-    // the pump: up straight on each count, down to a fist by her head between
-    const up = pumping ? 0.5 + 0.5 * Math.cos(2 * Math.PI * rate * T) : 1;
-    const both = Math.min(1, Math.max(0, (T - 1.7) / 0.4)), bb = both * both * (3 - 2 * both);
-    const sway = Math.sin(T * 3.0);
-    // stand tall, chest up, chin up, a bounce in the knees with each pump
-    this._rot('spine_01', X, -0.16 * ww);
-    this._rot('spine_02', X, -0.08 * ww);
-    this._rot('Head', X, -0.28 * ww);
-    this._move('pelvis', new THREE.Vector3(0, (0.04 * up - 0.02) * ww, 0));
-    // her left arm: straight up on the count, a fist by her head between
-    this._rot('upperarm_l', X, (1.2 + 0.32 * up) * ww);
-    this._rot('lowerarm_l', Y, (1.25 * (1 - up)) * ww);
+    const { ph, dip, bb, sway } = this._cheerPhase(T);
+    const pumping = 1 - bb;
+    // the pump: straight up on the beat, a fist by her head between
+    const up = dip;
+    // stand tall, chest up, chin up; leaning back into each pump, nodding with it
+    this._rot('spine_01', X, (-0.14 - 0.06 * up * pumping) * ww);
+    this._rot('spine_02', X, -0.06 * ww);
+    this._rot('Head', X, (-0.22 + 0.16 * dip) * ww);
+    // hips and shoulders going with the rock
+    this._rot('pelvis', Z, 0.07 * sway * ww);
+    this._rot('spine_02', Z, -0.05 * sway * ww);
+    this._rot('spine_03', Z, (0.08 * sway * bb) * ww);
+    this._rot('spine_02', Y, 0.08 * Math.sin(Math.PI * ph * 0.5) * ww);
+    this._rot('Head', Z, -0.08 * sway * ww);
+    // her left arm: punching up on each beat, then up with the other
+    const lUp = up * pumping + bb;
+    this._rot('upperarm_l', X, (1.15 + 0.4 * lUp) * ww);
+    this._rot('lowerarm_l', Y, (1.3 * (1 - lUp)) * ww);
     this._rot('hand_l', Y, 0.5 * ww);
-    // her right arm: out to the side, a fist, then up too, the two of them swaying
-    this._rot('upperarm_r', X, (-0.6 - 2.1 * bb) * ww);
-    this._rot('lowerarm_r', Y, (-0.45 + 0.3 * bb) * ww);
-    this._rot('spine_03', Z, 0.07 * sway * bb * ww);
+    // her right arm: out to the side for balance, swinging a little, then up too; the two of them rocking
+    this._rot('upperarm_r', X, (-0.55 - 0.12 * dip * pumping - 2.05 * bb) * ww);
+    this._rot('lowerarm_r', Y, (-0.5 + 0.35 * bb) * ww);
+    this._rot('upperarm_l', Z, -0.12 * sway * bb * ww);
+    this._rot('upperarm_r', Z, -0.12 * sway * bb * ww);
   }
 
 }

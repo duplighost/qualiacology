@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { extend, glowAt, poolAt, local, col } from './scenery.js';
 import { buildingMaterial, GEO } from './props.js';
-import { prepare, groundAt, Terrain } from './trail.js';
+import { prepare, groundAt, Terrain, alongAt } from './trail.js';
 import { seeded } from './summer.js';
 import { G, T as TOWN, M as MEM, FLAMES, furnace, furnaceGlow, merge } from './usf-geo.js';
 
@@ -264,7 +264,7 @@ class UsfTerrain extends Terrain {
       cum[i] = i ? cum[i - 1] + Math.hypot(this._c.x - lx, this._c.z - lz) : 0;
       lx = this._c.x; lz = this._c.z;
     }
-    const iR = clamp(Math.round((rider.t - t0) / YD), 0, N - 1), base = rider.stats.dist - cum[iR];
+    const base = rider.stats.dist - alongAt(cum, (rider.t - t0) / YD);
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) this.uvs[(i * M + j) * 2 + 1] = cum[i] + base;
     const a = this._a, b = this._b;
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {

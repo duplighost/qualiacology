@@ -97,8 +97,11 @@ export class ChaseCam {
     this.cam.fov = ride * (1 - titleK) + 46 * titleK;
     if (orbit && orbit.k > 0) this.cam.fov = this.cam.fov + ((orbit.fov ?? 42) - this.cam.fov) * orbit.k;
     // the end card is a sheet up the bottom of a tall screen: the end shot lifts clear of it
-    if (tall && orbit && orbit.k > 0) this.cam.setViewOffset(1, 1, 0, 0.3 * orbit.k, 1, 1);
-    else if (this.cam.view && this.cam.view.enabled) this.cam.clearViewOffset();
+    // (setViewOffset sets the camera's aspect to fullWidth / fullHeight, here 1: on a phone upright the
+    // end shot came out squashed flat, and stayed squashed into the next ride. Keep the real one.)
+    const lift = orbit ? (orbit.lift ?? orbit.k) : 0;
+    if (tall && lift > 0) { this.cam.setViewOffset(1, 1, 0, 0.3 * lift, 1, 1); this.cam.aspect = a; }
+    else if (this.cam.view && this.cam.view.enabled) { this.cam.clearViewOffset(); this.cam.aspect = a; }
     this.cam.updateProjectionMatrix();
     this.dip *= Math.exp(-dt * 6);
     this.kick *= Math.exp(-dt * 3);

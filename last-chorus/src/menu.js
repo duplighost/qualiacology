@@ -1,157 +1,314 @@
-// The screens around the rides: the album (pick a song), the loading card, pause,
-// and the end of a song. Plain DOM over the canvas; keys and mouse both work.
-// While one of these is up it owns the keys: arrows move, Enter or Space picks.
+// The screens around the rides: the title, the album (pick a song, a rider and a board), the
+// loading card, pause, and the end of a song. Plain DOM over the canvas; keys, mouse and thumbs.
+// While one of these is up it owns the keys.
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const COLLECT = { duck: 'DUCKS', key: 'KEYS', lily: 'LILIES', corn: 'CANDY CORN', chip: 'CHIPS', pick: 'PICKS', star: 'STARS', coin: 'COINS', quill: 'QUILLS', flake: 'SNOWFLAKES', apple: 'APPLES', bulb: 'LIGHTS', like: 'LIKES', ember: 'EMBERS', pearl: 'PEARLS', lips: 'KISSES', shell: 'SHELLS', candy: 'CANDIES', perfume: 'PERFUMES', donut: 'DONUTS', cuffs: 'CUFFS', coffee: 'COFFEES', crown: 'CROWNS', popsicle: 'ICE POPS', drink: 'DRINKS', pin: 'PINS', heart: 'HEARTS' };
 export const collectName = (k) => COLLECT[k] || 'DIAMONDS';
+// the course's parts, coloured as the ride's own songbar has them
+const KIND_COLOR = ['#8a7aa8', '#b78bd6', '#ff9ec9', '#ff5fa2', '#ff7fbf', '#7fd8ff', '#ffffff', '#ff3d8b', '#8a7aa8', '#5cffa8'];
+const LOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="5" y="10" width="14" height="11" rx="2.5" fill="currentColor"/></svg>';
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 export class Screens {
   constructor() {
     this.root = $('#screens');
+    this.intro = $('#intro'); this.film = $('#intro .film');
     this.menu = $('#menu'); this.list = $('#menu .list'); this.bgA = $('#menu .bg .a'); this.bgB = $('#menu .bg .b');
+    this.picA = $('#menu .detail .pic .a'); this.picB = $('#menu .detail .pic .b'); this.picNum = $('#menu .detail .pic .num');
+    this.dName = $('#menu .detail .name'); this.dFacts = $('#menu .detail .facts'); this.prof = $('#menu .detail .profile');
+    this.rideBtn = $('#menu .ride'); this.rideWhat = $('#menu .ride .what'); this.gear = $('#menu .gear');
     this.load = $('#load'); this.loadBar = $('#load .bar i'); this.loadName = $('#load .name'); this.loadImg = $('#load .img');
     this.end = $('#end'); this.pause = $('#pause');
     this.meEl = $('#menu .me'); this.locker = $('#menu .locker'); this.lockerOn = false;
-    this.active = null;       // 'menu' | 'end' | 'pause' | null
+    this.active = null;       // 'intro' | 'menu' | 'end' | 'pause' | null
     this.sel = 0; this.items = []; this.buttons = []; this.btn = 0;
-    this._bgFront = this.bgA;
-    this.sfx = null;          // (kind, i) => a sound for the screens: move, pick, open, close, unlock, no
-    window.addEventListener('mousemove', () => { this.mouse = true; });
+    this._bgFront = this.bgA; this._picFront = this.picA;
+    this.sfx = null;          // (kind, i) => a sound for the screens: move, pick, open, close, unlock, no, start, ride, gear
+    this.hooks = {};          // preview(i), stopPreview()
+    this.profiles = null;
+    fetch('data/profiles.json').then((r) => r.json()).then((p) => { this.profiles = p; if (this.active === 'menu') this._detail(); }).catch(() => { /* drawn without it */ });
     // a click (or tap) anywhere outside the locker closes it
-    this.menu.addEventListener('click', (e) => { if (this.lockerOn && !this.locker.contains(e.target)) this.closeLocker(); });
+    this.menu.addEventListener('click', (e) => { if (this.lockerOn && !this.locker.contains(e.target) && !e.target.closest('.gear')) this.closeLocker(); });
+    this.rideBtn.addEventListener('click', (e) => { e.stopPropagation(); this._choose(); });
+    window.addEventListener('resize', () => { if (this.active === 'menu') this._drawProfile(); if (this.active === 'intro') this._film(); });
   }
   _sfx(kind, i) { if (this.sfx) this.sfx(kind, i); }
 
+  // ---------- the title ----------
+  // The game's film behind the name (assets/intro: the wide one, or the tall one on a phone held
+  // upright); any key, click or tap goes on to the songs.
+  showIntro(onStart) {
+    this.active = 'intro'; this.onStart = onStart;
+    this._film();
+    this.intro.classList.add('on'); this.root.classList.add('on');
+    // (on the click, the last of a tap's events: on the lift the songs came up under the finger and
+    // the tap's click landed on them, RIDE among them)
+    this.intro.onclick = () => { if (this.active === 'intro') this._introGo(); };
+  }
+  _film() {
+    const tall = window.innerHeight > window.innerWidth;
+    const want = tall ? 'tall' : 'wide';
+    if (this.film.dataset.shape === want) return;
+    this.film.dataset.shape = want;
+    this.film.poster = `assets/intro/poster-${want}.jpg`;
+    this.film.src = `assets/intro/intro-${want}.mp4`;
+    const r = this.film.play(); if (r && r.catch) r.catch(() => { /* the poster stands in */ });
+  }
+  _introGo() {
+    this.active = null;
+    this.intro.classList.add('going');
+    // and nothing on the songs answers a finger for a moment, whatever's still in flight
+    this.menu.classList.add('arriving');
+    setTimeout(() => this.menu.classList.remove('arriving'), 450);
+    this._sfx('start');
+    const done = this.onStart; this.onStart = null;
+    setTimeout(() => { this.intro.classList.remove('on', 'going'); this.film.pause(); this._rootOff(); }, 700);
+    if (done) done();
+  }
+
   // ---------- the album ----------
-  showMenu(songs, selected, onChoose, me) {
-    this.active = 'menu'; this.onChoose = onChoose; this.songs = songs; this.me = me || null;
+  showMenu(songs, selected, onChoose, me, hooks = {}) {
+    this.active = 'menu'; this.onChoose = onChoose; this.songs = songs; this.me = me || null; this.hooks = hooks;
     this._renderMe();
+    this._renderGear();
     this.closeLocker(true);
     this.list.innerHTML = songs.map((s, i) => `
-      <li data-i="${i}" style="--accent:${s.accent}"${s.title.length > 34 ? ' class="long"' : ''}>
+      <li data-i="${i}" style="--accent:${s.accent}"${s.title.length > 30 ? ' class="long"' : ''}>
         <span class="num">${String(i + 1).padStart(2, '0')}</span>
         <span class="title">${esc(s.title)}</span>
-        <span class="best">${s.best ? s.best.toLocaleString('en-US') : ''}</span>
-        <span class="pct${s.grade ? ' g' + s.grade : ''}">${s.grade || ''}</span>
+        <span class="grade${s.grade ? ' g' + s.grade : ''}">${s.grade || ''}</span>
       </li>`).join('');
     this.items = [...this.list.querySelectorAll('li')];
     // fade the edge the list goes on past
-    if (!this._edges) { this._edges = () => { const L = this.list; L.classList.toggle('more-up', L.scrollTop > 2); L.classList.toggle('more-down', L.scrollTop + L.clientHeight < L.scrollHeight - 2); }; this.list.addEventListener('scroll', this._edges); window.addEventListener('resize', this._edges); }
+    if (!this._edges) {
+      this._edges = () => { const L = this.list; L.classList.toggle('more-up', L.scrollTop > 2); L.classList.toggle('more-down', L.scrollTop + L.clientHeight < L.scrollHeight - 2); };
+      // and a soft click for each song that goes by under a finger or the wheel
+      this._rowAt = 0;
+      this.list.addEventListener('scroll', () => {
+        this._edges();
+        const li = this.items[0]; if (!li) return;
+        const r = Math.round(this.list.scrollTop / Math.max(20, li.offsetHeight));
+        if (r !== this._rowAt) { this._rowAt = r; if (performance.now() - (this._selAt || 0) > 400) this._sfx('tick', r); }
+      }, { passive: true });
+      window.addEventListener('resize', this._edges);
+    }
     this.items.forEach((li) => {
-      li.addEventListener('mouseenter', () => this._select(+li.dataset.i));
-      li.addEventListener('click', (e) => { e.stopPropagation(); this._select(+li.dataset.i); this._choose(); });
+      li.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const i = +li.dataset.i;
+        // a song you're already on: ride it; another: go to it (and hear it)
+        if (i === this.sel && li.classList.contains('sel')) this._choose();
+        else this._select(i);
+      });
     });
-    this._select(Math.max(0, Math.min(songs.length - 1, selected)), true);
     this.menu.classList.add('on');
     this.root.classList.add('on');
+    this._select(Math.max(0, Math.min(songs.length - 1, selected)), true);
   }
   _select(i, instant = false) {
     if (i === this.sel && !instant && this.items[i]?.classList.contains('sel')) return;
     if (!instant) this._sfx('move', i);
+    this._selAt = performance.now();   // (the list scrolling to keep it in view isn't a finger: no clicks for it)
     this.sel = i;
     this.items.forEach((li, k) => li.classList.toggle('sel', k === i));
-    if (instant) this._reveal();
-    const src = this.songs[i].image;
-    // crossfade the picture behind the list
-    const back = this._bgFront === this.bgA ? this.bgB : this.bgA;
-    if (this._bgFront.dataset.src !== src) {
+    this._reveal(instant);
+    const s = this.songs[i];
+    // crossfade the picture behind everything, and the one in the panel
+    const swap = (front, a, b, src) => {
+      if (front.dataset.src === src) return front;
+      const back = front === a ? b : a;
       back.src = src; back.dataset.src = src;
-      back.classList.add('show'); this._bgFront.classList.remove('show');
-      this._bgFront = back;
-    }
-    this.menu.style.setProperty('--accent', this.songs[i].accent);
+      back.classList.add('show'); front.classList.remove('show');
+      return back;
+    };
+    this._bgFront = swap(this._bgFront, this.bgA, this.bgB, s.image);
+    this._picFront = swap(this._picFront, this.picA, this.picB, s.image);
+    this.menu.style.setProperty('--accent', s.accent);
+    this._detail();
+    // hear it, once you've stopped on it a moment
+    clearTimeout(this._pvT);
+    this._pvT = setTimeout(() => { if (this.active === 'menu' && this.sel === i && this.hooks.preview) this.hooks.preview(i); }, instant ? 150 : 380);
   }
-  // on a short window the list scrolls: keep the pick in view
-  _reveal() { const li = this.items[this.sel]; if (li) li.scrollIntoView({ block: 'nearest' }); this._edges && this._edges(); }
+  _detail() {
+    const s = this.songs && this.songs[this.sel];
+    if (!s) return;
+    const pr = this.profiles && this.profiles[s.id];
+    this.picNum.textContent = String(this.sel + 1).padStart(2, '0');
+    this.dName.textContent = s.title;
+    this.dName.classList.toggle('long', s.title.length > 26);
+    this.rideWhat.textContent = s.title;
+    const facts = [];
+    if (pr) facts.push(mmss(pr.dur), pr.bpm + ' BPM');
+    if (pr && pr.rails.length) facts.push(pr.rails.length + (pr.rails.length > 1 ? ' RAILS' : ' RAIL'));
+    if (pr && pr.gaps.length) facts.push(pr.gaps.length + (pr.gaps.length > 1 ? ' GAPS' : ' GAP'));
+    this.dFacts.innerHTML = `<span class="f">${facts.join('<i>&middot;</i>')}</span>`
+      + `<span class="b">${s.best ? 'BEST <b>' + s.best.toLocaleString('en-US') + '</b>' : 'NOT RIDDEN YET'}</span>`
+      + (s.grade ? `<span class="g g${s.grade}">${s.grade}</span>` : '');
+    this._drawProfile();
+  }
+  // the course: its hills over the song, each part in its colour, the rails and the gaps marked
+  _drawProfile() {
+    const cv = this.prof, s = this.songs && this.songs[this.sel];
+    if (!cv || !s) return;
+    const pr = this.profiles && this.profiles[s.id];
+    const W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+    if (!pr) return;
+    const y = pr.y, n = y.length;
+    let lo = Infinity, hi = -Infinity; for (const v of y) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    const top = 9, base = H - 2, sy = (v) => base - (v - lo) / Math.max(1, hi - lo) * (base - top);
+    const sx = (i) => (i / (n - 1)) * W;
+    // the ground under it, the song's colour, fading down
+    const grad = g.createLinearGradient(0, top, 0, H);
+    grad.addColorStop(0, s.accent + '55'); grad.addColorStop(1, s.accent + '00');
+    g.beginPath(); g.moveTo(0, H);
+    for (let i = 0; i < n; i++) g.lineTo(sx(i), sy(y[i]));
+    g.lineTo(W, H); g.closePath(); g.fillStyle = grad; g.fill();
+    // the line itself, each part in its colour
+    g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round';
+    for (let i = 1; i < n; i++) {
+      g.strokeStyle = KIND_COLOR[pr.k[i]] || '#ffffff';
+      g.beginPath(); g.moveTo(sx(i - 1), sy(y[i - 1])); g.lineTo(sx(i), sy(y[i])); g.stroke();
+    }
+    // rails: a bright bar over the stretch; gaps: the line broken
+    const at = (f) => sy(y[Math.min(n - 1, Math.round(f * (n - 1)))]);
+    g.fillStyle = '#ffffff';
+    for (const [a, b] of pr.rails) { const x0 = a * W, x1 = Math.max(x0 + 3, b * W); g.fillRect(x0, at(a) - 7, x1 - x0, 2.5); }
+    for (const [a, b] of pr.gaps) g.clearRect(a * W, 0, Math.max(3, (b - a) * W), H);
+  }
+  // keep the pick in view
+  _reveal(instant) { const li = this.items[this.sel]; if (li) li.scrollIntoView({ block: 'nearest', behavior: instant ? 'auto' : 'smooth' }); if (this._edges) setTimeout(this._edges, 260); }
   _choose() {
     if (this.active !== 'menu') return;
     const i = this.sel;
+    clearTimeout(this._pvT);
+    if (this.hooks.stopPreview) this.hooks.stopPreview();
+    this._sfx('ride');
     this.hideMenu();
-    this.onChoose && this.onChoose(i);
-    this._sfx('pick');
+    if (this.onChoose) this.onChoose(i);
   }
-  hideMenu() { this.menu.classList.remove('on'); this.closeLocker(true); if (this.active === 'menu') this.active = null; this._rootOff(); }
+  hideMenu() { this.menu.classList.remove('on'); this.closeLocker(true); if (this.active === 'menu') this.active = null; clearTimeout(this._pvT); this._rootOff(); }
 
-  // ---------- you: level, the bar to the next, who and what you ride, and the locker ----------
+  // ---------- you: your level and how far to the next, who you ride and what on ----------
   _renderMe() {
     const me = this.me && this.me.get();
     if (!me || !this.meEl) { if (this.meEl) this.meEl.innerHTML = ''; return; }
-    const board = me.boards.find((b) => b.id === me.board) || me.boards[0];
-    const rider = me.riders.find((r) => r.id === me.rider) || me.riders[0];
-    this.meEl.innerHTML = `<span class="lv">LEVEL <b>${me.level}</b></span><span class="xp"><i style="width:${(100 * me.xpFrac).toFixed(1)}%"></i></span>`
-      + `<button class="bd${me.picks ? ' hot' : ''}">${me.picks ? `<span class="pk">${me.picks} TO PICK</span>` : ''}<b>${esc(rider.name)}</b><span class="on">ON</span><b>${esc(board.name)}</b><span class="k">B</span></button>`;
-    this.meEl.querySelector('.bd').addEventListener('click', (e) => { e.stopPropagation(); this.openLocker(); });
+    this.meEl.innerHTML = `<span class="lv">LEVEL <b>${me.level}</b></span>`
+      + `<span class="xp"><i style="width:${(100 * me.xpFrac).toFixed(1)}%"></i></span>`
+      + `<span class="xpn">${Math.round(me.xp).toLocaleString('en-US')} / ${me.need.toLocaleString('en-US')}</span>`
+      + (me.picks ? `<button class="pk">${me.picks} TO PICK</button>` : '');
+    const pk = this.meEl.querySelector('.pk');
+    if (pk) pk.addEventListener('click', (e) => { e.stopPropagation(); this.openLocker(); });
   }
-  // riders first (one row), then the boards (rows of three)
-  _lockerItems(me) { return [...me.riders, ...me.boards]; }
-  openLocker() {
+  // a rider or a board as a card: its picture, its name, and a lock (or PICK, with a pick to spend)
+  _card(it, cur, picks, i) {
+    const state = it.owned ? (cur ? 'cur' : '') : (picks ? 'pick' : 'shut');
+    return `<button class="card ${it.kind} ${state}" data-kind="${it.kind}" data-id="${esc(it.id)}"${i !== undefined ? ` data-i="${i}"` : ''} style="--bc:${it.color}" title="${esc(it.name)}">
+        <span class="pic"${it.image ? ` style="background-image:url(${it.image})"` : ''}></span>
+        <span class="nm">${esc(it.name)}</span>
+        ${it.owned ? '' : `<span class="lk">${picks ? 'PICK' : LOCK}</span>`}
+      </button>`;
+  }
+  // on a wide screen the riders and the boards are right there; on a phone, two buttons that
+  // open them
+  _renderGear() {
+    const me = this.me && this.me.get();
+    if (!me || !this.gear) { if (this.gear) this.gear.innerHTML = ''; return; }
+    const rider = me.riders.find((r) => r.id === me.rider) || me.riders[0];
+    const board = me.boards.find((b) => b.id === me.board) || me.boards[0];
+    const strip = (kind, list, cur) => `<div class="row ${kind}"><div class="lbl">${kind === 'rider' ? 'RIDER' : 'BOARD'}<span class="nm">${esc(cur.name)}</span></div><div class="strip">${list.map((it) => this._card(it, it.id === cur.id, me.picks)).join('')}</div></div>`;
+    const btn = (kind, cur) => `<button class="pickbtn ${kind}" data-kind="${kind}"><span class="pic"${cur.image ? ` style="background-image:url(${cur.image})"` : ''}></span><span class="t"><span class="l">${kind === 'rider' ? 'RIDER' : 'BOARD'}</span><span class="n">${esc(cur.name)}</span></span>${me.picks ? '<span class="hot"></span>' : ''}</button>`;
+    this.gear.innerHTML = `<div class="strips">${strip('rider', me.riders, rider)}${strip('board', me.boards, board)}</div>`
+      + `<div class="btns">${btn('rider', rider)}${btn('board', board)}</div>`;
+    this.gear.querySelectorAll('.strips .card').forEach((el) => el.addEventListener('click', (e) => { e.stopPropagation(); this._gearPick(el.dataset.kind, el.dataset.id, el); }));
+    this.gear.querySelectorAll('.pickbtn').forEach((el) => el.addEventListener('click', (e) => { e.stopPropagation(); this.openLocker(el.dataset.kind); }));
+  }
+  // choose a rider or board you have; spend a pick on one you don't; or no
+  _gearPick(kind, id, el) {
+    const ok = this.me.pick(kind, id);
+    if (ok === 'unlocked') { this._sfx('unlock'); this._afterGear(kind, id, 'won'); }
+    else if (ok === 'chosen') { this._sfx('gear', id.length); this._afterGear(kind, id, 'took'); }
+    else { if (el) { el.classList.remove('no'); void el.offsetWidth; el.classList.add('no'); } this._sfx('no'); }
+  }
+  _afterGear(kind, id, fx) {
+    this._renderMe(); this._renderGear();
+    if (this.lockerOn) this._renderLocker();
+    for (const el of this.menu.querySelectorAll(`.card[data-kind="${kind}"][data-id="${CSS.escape(id)}"]`)) el.classList.add(fx);
+  }
+  // the keys: left and right for the rider, B for the board (each through the ones you have)
+  _cycle(kind, dir) {
+    const me = this.me && this.me.get();
+    if (!me) return;
+    const list = (kind === 'rider' ? me.riders : me.boards).filter((x) => x.owned);
+    if (list.length < 2) { this.openLocker(kind); return; }
+    const cur = kind === 'rider' ? me.rider : me.board;
+    const k = Math.max(0, list.findIndex((x) => x.id === cur));
+    this._gearPick(kind, list[(k + dir + list.length) % list.length].id);
+  }
+
+  // the locker: every rider and board in a grid, over the album (on a phone, all of the screen)
+  openLocker(focus = 'rider') {
     if (!this.me || this.lockerOn) return;
     this.lockerOn = true;
     const me = this.me.get();
-    this.lsel = Math.max(0, me.riders.findIndex((r) => r.id === me.rider));
+    this.lsel = focus === 'board' ? me.riders.length + Math.max(0, me.boards.findIndex((b) => b.id === me.board)) : Math.max(0, me.riders.findIndex((r) => r.id === me.rider));
     this._renderLocker();
     this.locker.classList.add('on'); this.menu.classList.add('locked');
+    if (focus === 'board') { const b = this.locker.querySelector('.lhead.sub'); if (b) b.scrollIntoView({ block: 'start' }); }
     this._sfx('open');
   }
   closeLocker(quiet) {
     if (!this.locker) return;
     if (!quiet && this.lockerOn) this._sfx('close');
     this.lockerOn = false; this.locker.classList.remove('on'); this.menu.classList.remove('locked');
-    if (!quiet) this._renderMe();
+    if (!quiet) { this._renderMe(); this._renderGear(); }
   }
+  _lockerItems(me) { return [...me.riders, ...me.boards]; }
   _renderLocker() {
     const me = this.me.get();
     const nR = me.riders.length;
-    const card = (it, i) => {
-      const cur = it.kind === 'rider' ? it.id === me.rider : it.id === me.board;
-      const line = it.owned ? (cur ? 'RIDING' : (it.trail ? esc(it.trail) : '&nbsp;')) : (me.picks ? 'PICK' : 'LOCKED');
-      return `<div class="bcard ${it.kind}${it.owned ? '' : ' shut'}${cur ? ' cur' : ''}${i === this.lsel ? ' foc' : ''}" data-i="${i}" style="--bc:${it.color}">
-          <div class="pic"${it.image ? ` style="background-image:url(${it.image})"` : ''}></div>
-          <div class="nm">${esc(it.name)}</div>
-          <div class="tr">${line}</div>
-        </div>`;
-    };
-    this.locker.innerHTML = `<div class="lhead"><span>RIDERS</span><span class="lp">${me.picks ? me.picks + ' TO PICK' : 'LEVEL UP TO PICK ANOTHER'}</span></div>
-      <div class="grid riders">${me.riders.map((r, i) => card(r, i)).join('')}</div>
+    this.locker.innerHTML = `<div class="lhead"><span>RIDERS</span><span class="lp">${me.picks ? me.picks + ' TO PICK' : 'ONE MORE EACH LEVEL'}</span><button class="x" aria-label="close">&times;</button></div>
+      <div class="grid riders">${me.riders.map((r, i) => this._card(r, r.id === me.rider, me.picks, i)).join('')}</div>
       <div class="lhead sub"><span>BOARDS</span></div>
-      <div class="grid">${me.boards.map((b, i) => card(b, nR + i)).join('')}</div>
-      <div class="foot"><span class="kb"><b>&larr; &rarr; &uarr; &darr;</b>&nbsp; look &nbsp;&nbsp;<b>enter</b>&nbsp; ride it &nbsp;&nbsp;<b>esc</b>&nbsp; songs</span><span class="tp">tap one to ride it &nbsp;&middot;&nbsp; tap outside for the songs</span></div>`;
-    this.locker.querySelectorAll('.bcard').forEach((el) => {
+      <div class="grid boards">${me.boards.map((b, i) => this._card(b, b.id === me.board, me.picks, nR + i)).join('')}</div>
+      <div class="foot"><span class="kb"><b>&larr; &rarr; &uarr; &darr;</b>&nbsp; look &nbsp;&middot;&nbsp; <b>enter</b>&nbsp; ride it &nbsp;&middot;&nbsp; <b>esc</b>&nbsp; songs</span><span class="tp">tap one to ride it &nbsp;&middot;&nbsp; tap outside for the songs</span></div>`;
+    this.locker.querySelector('.x').addEventListener('click', (e) => { e.stopPropagation(); this.closeLocker(); });
+    this.locker.querySelectorAll('.card').forEach((el) => {
       el.addEventListener('mouseenter', () => { if (this.lsel !== +el.dataset.i) this._sfx('move', +el.dataset.i); this.lsel = +el.dataset.i; this._lockerFocus(); });
       el.addEventListener('click', (e) => { e.stopPropagation(); this.lsel = +el.dataset.i; this._lockerPick(); });
     });
+    this._lockerFocus();
   }
-  _lockerFocus() { this.locker.querySelectorAll('.bcard').forEach((el) => el.classList.toggle('foc', +el.dataset.i === this.lsel)); }
-  // arrows: along a row, and between the riders' row and the boards' rows of three
+  _lockerFocus() { this.locker.querySelectorAll('.card').forEach((el) => el.classList.toggle('foc', +el.dataset.i === this.lsel)); }
+  // arrows: along a row, and between the riders and the boards
   _lockerMove(k) {
     const me = this.me.get(), nR = me.riders.length, nB = me.boards.length, n = nR + nB, i = this.lsel;
+    const cols = window.innerWidth < 700 && window.innerHeight > window.innerWidth ? 3 : 5;
     if (k === 'right') this.lsel = (i + 1) % n;
     else if (k === 'left') this.lsel = (i - 1 + n) % n;
-    else if (k === 'down') {
-      if (i < nR) this.lsel = nR + Math.min(2, Math.floor(i * 3 / nR));
-      else this.lsel = Math.min(n - 1, i + 3);
-    } else if (k === 'up') {
-      if (i >= nR + 3) this.lsel = i - 3;
-      else if (i >= nR) this.lsel = Math.min(nR - 1, Math.round((i - nR) * (nR - 1) / 2));
-    }
+    else if (k === 'down') this.lsel = i < nR ? Math.min(n - 1, nR + Math.min(nB - 1, i)) : Math.min(n - 1, i + cols);
+    else if (k === 'up') this.lsel = i >= nR + cols ? i - cols : (i >= nR ? Math.min(nR - 1, i - nR) : i);
     if (this.lsel !== i) this._sfx('move', this.lsel);
     this._lockerFocus();
+    const el = this.locker.querySelector(`.card[data-i="${this.lsel}"]`); if (el) el.scrollIntoView({ block: 'nearest' });
   }
   _lockerPick() {
     const me = this.me.get(), it = this._lockerItems(me)[this.lsel];
     if (!it) return;
-    const ok = this.me.pick(it.kind, it.id);
-    const el = () => this.locker.querySelector(`.bcard[data-i="${this.lsel}"]`);
-    if (ok === 'unlocked') { this._renderLocker(); const e = el(); if (e) e.classList.add('won'); this._sfx('unlock'); }
-    else if (ok) { this._renderLocker(); this._sfx('pick'); }
-    else { const e = el(); if (e) { e.classList.remove('no'); void e.offsetWidth; e.classList.add('no'); } this._sfx('no'); }
+    this._gearPick(it.kind, it.id, this.locker.querySelector(`.card[data-i="${this.lsel}"]`));
   }
 
   // ---------- loading ----------
   showLoading(song) {
-    this.loadName.textContent = song.title;
+    this.loadName.innerHTML = (song.num ? `<span class="n">${String(song.num).padStart(2, '0')}</span>` : '') + esc(song.title);
+    this.load.style.setProperty('--accent', song.accent || '#fff');
     this.loadImg.style.backgroundImage = `url(${song.image})`;
     this.loadBar.style.width = '0%';
     this.load.classList.add('on'); this.root.classList.add('on');
@@ -257,12 +414,17 @@ export class Screens {
   _focus(i, quiet) { if (!quiet && i !== this.btn) this._sfx('move', i + 2); this.btn = i; (this.btnEls || []).forEach((b, k) => b.classList.toggle('focus', k === i)); }
   _press(i) { const b = this.buttons[i]; if (b && b.go) { this._sfx('pick'); b.go(); } }
 
-  _rootOff() { if (!this.menu.classList.contains('on') && !this.load.classList.contains('on') && !this.end.classList.contains('on') && !this.pause.classList.contains('on')) this.root.classList.remove('on'); }
+  _rootOff() { if (!this.intro.classList.contains('on') && !this.menu.classList.contains('on') && !this.load.classList.contains('on') && !this.end.classList.contains('on') && !this.pause.classList.contains('on')) this.root.classList.remove('on'); }
 
   // keys while a screen is up; returns true if it used the key
   key(e) {
     if (!this.active) return false;
     const k = e.code;
+    // the title: any key but the ones that belong to the browser
+    if (this.active === 'intro') {
+      if (!(e.metaKey || e.ctrlKey || e.altKey || k === 'Tab' || /^F\d/.test(k))) this._introGo();
+      return true;
+    }
     if (this.active === 'menu' && this.lockerOn) {
       if (k === 'Escape' || k === 'KeyB') { this.closeLocker(); return true; }
       if (k === 'ArrowRight' || k === 'KeyD') this._lockerMove('right');
@@ -273,9 +435,12 @@ export class Screens {
       return true;
     }
     if (this.active === 'menu') {
-      if (k === 'KeyB') { this.openLocker(); return true; }
-      if (k === 'ArrowDown' || k === 'KeyS') { this._select((this.sel + 1) % this.items.length); this._reveal(); return true; }
-      if (k === 'ArrowUp' || k === 'KeyW') { this._select((this.sel - 1 + this.items.length) % this.items.length); this._reveal(); return true; }
+      if (k === 'KeyB') { if (e.shiftKey) this.openLocker('board'); else this._cycle('board', 1); return true; }
+      if (k === 'ArrowRight' || k === 'KeyD') { this._cycle('rider', 1); return true; }
+      if (k === 'ArrowLeft' || k === 'KeyA') { this._cycle('rider', -1); return true; }
+      if (k === 'KeyL') { this.openLocker(); return true; }
+      if (k === 'ArrowDown' || k === 'KeyS') { this._select((this.sel + 1) % this.items.length); return true; }
+      if (k === 'ArrowUp' || k === 'KeyW') { this._select((this.sel - 1 + this.items.length) % this.items.length); return true; }
       if (k === 'Enter' || k === 'Space') { this._choose(); return true; }
       return true;
     }

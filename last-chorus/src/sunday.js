@@ -1089,12 +1089,12 @@ export class SundayWorld {
   }
   // past the town line the hill falls away on the right, down to the valley the town's in
   carve(S) {
-    const T = this.terrain, c = S.course, rt = S.rider.t, t0 = rt - 4, t1 = rt + 46;
+    const T = this.terrain, c = S.course, rt = S.rider.t, t1 = rt + 46;
     if (t1 < 192) return;
     const P3 = T.pos, N = T.N, M = T.M;
     let first = -1;
     for (let i = 0; i < N; i++) {
-      const t = t0 + (t1 - t0) * (i / (N - 1)), k = smooth(192.5, 199.5, t);
+      const t = T.rowT0 + i * T.rowDT, k = smooth(192.5, 199.5, t);
       if (k <= 0) continue;
       if (first < 0) first = i;
       const base = groundAt(c, t, 0);

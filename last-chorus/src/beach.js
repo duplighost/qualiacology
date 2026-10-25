@@ -256,12 +256,13 @@ export class Land {
     this._p = new THREE.Vector3();
   }
   update(track, rider, time) {
-    const t0 = rider.t - 4, t1 = rider.t + 44, N = this.N, M = this.M;
+    // rows at fixed song times, so the shore and a floor that rises and falls don't swim
+    const N = this.N, M = this.M, DT = 48 / (N - 1);
+    const t0 = Math.floor((rider.t - 4) / DT) * DT;
     const cum = this._cum || (this._cum = new Float32Array(N));
-    const iR = Math.round((rider.t - t0) / (t1 - t0) * (N - 1));
     let last = null;
     for (let i = 0; i < N; i++) {
-      const t = t0 + (t1 - t0) * (i / (N - 1));
+      const t = t0 + i * DT;
       for (let j = 0; j < M; j++) {
         track.ground(t, this.cols[j], this._p);
         const o = (i * M + j) * 3;
@@ -272,7 +273,8 @@ export class Land {
       cum[i] = last ? cum[i - 1] + Math.hypot(cx - last[0], cz - last[1]) : 0;
       last = [cx, cz];
     }
-    const base = rider.stats.dist - cum[iR];
+    const fr = Math.max(0, Math.min(N - 1.001, (rider.t - t0) / DT)), ir = Math.floor(fr);
+    const base = rider.stats.dist - (cum[ir] + (cum[ir + 1] - cum[ir]) * (fr - ir));
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) this.uvs[(i * M + j) * 2 + 1] = cum[i] + base;
     this.geo.attributes.position.needsUpdate = true; this.geo.attributes.uv.needsUpdate = true;
     this.mat.uniforms.uTime.value = time;

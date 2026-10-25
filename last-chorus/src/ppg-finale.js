@@ -179,9 +179,9 @@ export class PpgOutside {
     this.terrain.mesh.visible = near;
     if (near) {
       const Tr = this.terrain; Tr.update(S.track, S.rider, S.P, camera, 0); Tr.mat.uniforms.uWood.value = 0;
-      const t0 = T - 4, t1 = T + 46; let sunk = false;
+      let sunk = false;
       for (let i = 0; i < Tr.N; i++) {
-        const t = t0 + (t1 - t0) * (i / (Tr.N - 1));
+        const t = Tr.rowT0 + i * Tr.rowDT;
         if (!this.spans.some(([a, b]) => t > a + 0.25 && t < b - 0.25)) continue;
         for (let j = 0; j < Tr.M; j++) Tr.pos[(i * Tr.M + j) * 3 + 1] -= 9;
         sunk = true;
