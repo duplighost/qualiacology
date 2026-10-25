@@ -9,6 +9,8 @@ export class Sound {
   constructor() {
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC({ latencyHint: 'interactive' });
+    // an iPhone's silent switch mutes web audio unless the page says it's playing music
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* fine */ }
     const c = this.ctx;
 
     this.master = c.createGain();
@@ -40,6 +42,24 @@ export class Sound {
     this.src = null; this.t0 = 0; this.buffer = null;
     this.keyRoot = 0; this.keyMinor = false;
     this._clockT = null; this._clockP = 0;
+  }
+
+  // the song file: Opus in Ogg, or AAC where that won't decode (Safari before 18.4 can't, and some
+  // later ones get the length wrong, so a length that doesn't match the beat map counts as a failure)
+  async song(id, duration, onProgress) {
+    const ogg = `assets/music/${id}.ogg`, m4a = `assets/music/${id}.m4a`;
+    const probe = document.createElement('audio');
+    const oggFirst = !!probe.canPlayType('audio/ogg; codecs=opus') || !probe.canPlayType('audio/mp4; codecs="mp4a.40.2"');
+    let err = null;
+    for (const url of oggFirst ? [ogg, m4a] : [m4a, ogg]) {
+      try {
+        const b = await this.decode(url, onProgress);
+        if (!duration || Math.abs(b.duration - duration) < 1.5) return b;
+        err = new Error(`${url}: decoded ${b.duration.toFixed(1)} s, the beat map says ${duration.toFixed(1)} s`);
+      } catch (e) { err = e; }
+      console.warn('song: trying the other file after', err && err.message);
+    }
+    throw err;
   }
 
   async decode(url, onProgress) {

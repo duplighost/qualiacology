@@ -19,6 +19,8 @@ export class Screens {
     this._bgFront = this.bgA;
     this.sfx = null;          // (kind, i) => a sound for the screens: move, pick, open, close, unlock, no
     window.addEventListener('mousemove', () => { this.mouse = true; });
+    // a click (or tap) anywhere outside the locker closes it
+    this.menu.addEventListener('click', (e) => { if (this.lockerOn && !this.locker.contains(e.target)) this.closeLocker(); });
   }
   _sfx(kind, i) { if (this.sfx) this.sfx(kind, i); }
 
@@ -115,7 +117,7 @@ export class Screens {
       <div class="grid riders">${me.riders.map((r, i) => card(r, i)).join('')}</div>
       <div class="lhead sub"><span>BOARDS</span></div>
       <div class="grid">${me.boards.map((b, i) => card(b, nR + i)).join('')}</div>
-      <div class="foot"><b>&larr; &rarr; &uarr; &darr;</b>&nbsp; look &nbsp;&nbsp;<b>enter</b>&nbsp; ride it &nbsp;&nbsp;<b>esc</b>&nbsp; songs</div>`;
+      <div class="foot"><span class="kb"><b>&larr; &rarr; &uarr; &darr;</b>&nbsp; look &nbsp;&nbsp;<b>enter</b>&nbsp; ride it &nbsp;&nbsp;<b>esc</b>&nbsp; songs</span><span class="tp">tap one to ride it &nbsp;&middot;&nbsp; tap outside for the songs</span></div>`;
     this.locker.querySelectorAll('.bcard').forEach((el) => {
       el.addEventListener('mouseenter', () => { if (this.lsel !== +el.dataset.i) this._sfx('move', +el.dataset.i); this.lsel = +el.dataset.i; this._lockerFocus(); });
       el.addEventListener('click', (e) => { e.stopPropagation(); this.lsel = +el.dataset.i; this._lockerPick(); });
