@@ -90,8 +90,15 @@ export class ChaseCam {
     }
     const fovT = 58 + 20 * sp + this.kick * 6 + (rider.grounded ? 0 : 2) + (this.liftFov || 0);
     this.fov += (fovT - this.fov) * Math.min(1, dt * 3);
-    this.cam.fov = this.fov * (1 - titleK) + 46 * titleK;
+    // a tall screen (a phone upright) would show a slot of road: the ride view opens up until at
+    // least 48° fits across, so the road's width and the next hills are in the picture
+    const a = this.cam.aspect, tall = a < 1;
+    const ride = tall ? Math.max(this.fov, 2 * Math.atan(Math.tan(24 * Math.PI / 180) / a) * 180 / Math.PI) : this.fov;
+    this.cam.fov = ride * (1 - titleK) + 46 * titleK;
     if (orbit && orbit.k > 0) this.cam.fov = this.cam.fov + ((orbit.fov ?? 42) - this.cam.fov) * orbit.k;
+    // the end card is a sheet up the bottom of a tall screen: the end shot lifts clear of it
+    if (tall && orbit && orbit.k > 0) this.cam.setViewOffset(1, 1, 0, 0.3 * orbit.k, 1, 1);
+    else if (this.cam.view && this.cam.view.enabled) this.cam.clearViewOffset();
     this.cam.updateProjectionMatrix();
     this.dip *= Math.exp(-dt * 6);
     this.kick *= Math.exp(-dt * 3);

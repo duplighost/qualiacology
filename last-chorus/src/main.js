@@ -64,6 +64,10 @@ const post = new Post(renderer);
 const sound = new Sound();
 const kit = new Kit(sound);
 const input = new Input(canvas);
+// a touchscreen: the words on screen say thumbs instead of keys and a pause button appears;
+// a phone is one from the start, anything else the moment a finger touches it
+if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch');
+input.onTouch = () => document.body.classList.add('touch');
 const hud = new Hud();
 const ui = new Screens();
 ui.sfx = (kind, i) => sound.ui(kind, i);
@@ -81,6 +85,10 @@ const autopilot = { on: params.has('auto') };
 const fixedScale = params.has('scale');
 let renderScale = fixedScale ? clamp(parseFloat(params.get('scale')), 0.4, 2) : (() => { try { return clamp(+localStorage.getItem('lc-scale') || 1, 0.55, 1); } catch (e) { return 1; } })();
 const perf = [];
+// ?fps: a readout for checking a phone: frames a second, the worst frame lately, the render size
+const fpsEl = params.has('fps') ? document.getElementById('hud').appendChild(Object.assign(document.createElement('div'), { id: 'fps' })) : null;
+const fpsLog = { n: 0, t: 0, worst: 0, gpu: '' };
+if (fpsEl) { try { const gl = renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); fpsLog.gpu = x ? String(gl.getParameter(x.UNMASKED_RENDERER_WEBGL)).slice(0, 44) : ''; } catch (e) { /* fine */ } }
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   const scale = renderScale;
@@ -100,7 +108,7 @@ async function loadSong(index, onProgress = () => {}) {
     if (S && S.scene) disposeScene(S.scene);
     S = null;
     onProgress(0.02);
-    const buffer = await sound.decode(`assets/music/${entry.id}.ogg`, (p) => onProgress(0.05 + 0.7 * p));
+    const buffer = await sound.song(entry.id, beats.duration, (p) => onProgress(0.05 + 0.7 * p));
     S = { id: entry.id, index, entry, chart, buffer };
   }
   onProgress(0.8);
@@ -314,6 +322,19 @@ input.onKey = (e) => {
   if (e.code === 'Escape' && state === 'ride') togglePause();
   else if (e.code === 'Escape' && state === 'title') openMenu(S ? S.index : menuSel);
 };
+document.getElementById('pausebtn').addEventListener('click', () => { if (state === 'ride') togglePause(); });
+// the start line's small print: "all songs" takes you back (on a touchscreen, those two words)
+document.querySelector('#title .back').addEventListener('click', (e) => {
+  if (state !== 'title') return;
+  if (document.body.classList.contains('touch') && !e.target.closest('.go')) return;
+  openMenu(S ? S.index : menuSel);
+});
+// a phone browser only lets sound start from a finger lifting: wake the audio on any tap
+window.addEventListener('pointerup', (e) => {
+  if (!paused && sound.ctx.state === 'suspended') sound.resume();
+  // and on a touchscreen the first lift of a thumb on the ride takes the whole screen, where the browser allows it (Android; iPhones don't)
+  if (e.pointerType === 'touch' && state === 'ride' && document.fullscreenEnabled && !document.fullscreenElement && !params.has('nofs')) document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => { /* fine */ });
+}, { passive: true });
 // Pausing stops the song where she is and puts the audio to sleep. Leaving the tab, the
 // window, or the audio going away on its own all pause. Resuming waits for the audio to
 // really run, starts the song again a couple of beats back with sticks on them, and she
@@ -381,6 +402,13 @@ function frame(now) {
   const rawDt = (now - lastFrame) / 1000;
   const dt = Math.min(0.05, rawDt);
   lastFrame = now;
+  if (fpsEl) {
+    fpsLog.n++; fpsLog.t += rawDt; if (rawDt > fpsLog.worst) fpsLog.worst = rawDt;
+    if (fpsLog.t >= 0.5) {
+      fpsEl.textContent = `${Math.round(fpsLog.n / fpsLog.t)} fps · worst ${Math.round(fpsLog.worst * 1000)} ms · ${post.W}×${post.H} ×${renderScale} · dpr ${(window.devicePixelRatio || 1).toFixed(1)}${fpsLog.gpu ? ' · ' + fpsLog.gpu : ''}`;
+      fpsLog.n = 0; fpsLog.t = 0; fpsLog.worst = 0;
+    }
+  }
   if (!fixedScale && state === 'ride' && !paused && document.hasFocus()) {
     perf.push(rawDt);
     if (perf.length >= 240) {
@@ -396,6 +424,7 @@ function frame(now) {
   if (!S || state === 'loading' || state === 'menu') return;
   const { rider, course, track, view, P } = S;
   const time = now / 1000;
+  hud.thumb(state === 'ride' && !paused ? input.thumb : null);
 
   if (state === 'ride' && !paused) {
     const songT = sound.time();
@@ -978,6 +1007,8 @@ function endSong() {
   setTimeout(() => { if (state === 'results') ui.showEnd(data, last ? [menu, again] : [next, again, menu], fx); }, 1400);
 }
 
+// on the site: a service worker (nothing but a registration) so a phone can put the game on its home screen as an app
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { /* fine */ });
 requestAnimationFrame(frame);
 if (params.has('song')) chooseSong(clamp(parseInt(params.get('song'), 10), 0, ALBUM.length - 1));
 else openMenu(0);

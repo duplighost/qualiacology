@@ -43,6 +43,17 @@ export class Hud {
 
   loading(p) { this.load.textContent = p >= 1 ? '' : 'LOADING ' + Math.round(p * 100); }
 
+  // the ring under the steering thumb on a touchscreen: where it landed, and how far it's pushed
+  thumb(f) {
+    const el = this.thumbEl || (this.thumbEl = document.getElementById('thumb'));
+    if (!el) return;
+    if (!f) { if (this._thumbOn) { el.classList.remove('on'); this._thumbOn = false; } return; }
+    const dx = Math.max(-40, Math.min(40, f.x - f.x0));
+    el.style.transform = `translate(${f.x0.toFixed(0)}px, ${f.y0.toFixed(0)}px)`;
+    el.firstElementChild.style.transform = `translate(${dx.toFixed(0)}px, 0)`;
+    if (!this._thumbOn) { el.classList.add('on'); this._thumbOn = true; }
+  }
+
   showTitle(song, info = {}) {
     this.title.classList.remove('off');
     this.title.querySelector('.song').textContent = song.title;
