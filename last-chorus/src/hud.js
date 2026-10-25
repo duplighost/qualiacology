@@ -11,31 +11,56 @@ export class Hud {
     this.jw = $('#judge .word'); this.js = $('#judge .streak'); this.gems = $('#gems'); this.gemN = $('#gems .n'); this.gemIcon = $('#gems .icon');
     this.g = this.shape.getContext('2d');
     this.lit = null;
-    this.scoreEl = $('#score'); this.scoreN = $('#score .n'); this.scoreX = $('#score .x'); this.pops = $('#pops');
-    this.target = 0; this.shown = 0; this.multNow = 1;
+    this.scoreEl = $('#score'); this.scoreN = $('#score .n'); this.pops = $('#pops');
+    this.comboEl = $('#combo'); this.comboM = $('#combo .m'); this.comboMx = $('#combo .mx'); this.comboN = $('#combo .ct b'); this.pips = [...document.querySelectorAll('#combo .pips i')];
+    this.target = 0; this.shown = 0; this.multNow = 1; this.streakNow = -1;
   }
 
-  // the points, top right, rolling up to what you have; the multiplier beside them
-  score(points, mult) {
-    this.target = points;
-    if (mult !== this.multNow) { this.multNow = mult; this.scoreX.textContent = mult > 1 ? '×' + mult : ''; this.scoreEl.classList.toggle('hot', mult >= 4); }
+  // the points, top right, rolling up to what you have
+  score(points) { this.target = points; }
+  // a new multiplier: it slams in
+  mult(m) { this._mult(m, true); }
+  _mult(m, loud) {
+    const up = m > this.multNow;
+    this.multNow = m;
+    this.comboM.textContent = String(m);
+    this.comboEl.classList.toggle('m2', m === 2); this.comboEl.classList.toggle('m3', m === 3); this.comboEl.classList.toggle('m4', m >= 4);
+    if (loud && up) {
+      this.comboMx.getAnimations().forEach((a) => a.cancel());
+      this.comboMx.animate([{ transform: 'scale(2.1)', filter: 'brightness(2.6)' }, { transform: 'scale(.92)', filter: 'brightness(1.4)', offset: 0.45 }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 560, easing: 'cubic-bezier(.2,1.4,.4,1)' });
+    }
   }
-  // a new multiplier: it jumps
-  mult(m) {
-    this.score(this.target, m);
-    this.scoreX.getAnimations().forEach((a) => a.cancel());
-    this.scoreX.animate([{ transform: 'scale(1.9)', filter: 'brightness(2.2)' }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 520, easing: 'cubic-bezier(.2,1.6,.4,1)' });
+  // the run of pumps in time: how many, and the pips to the next multiplier (eight a step)
+  combo(streak, how = '') {
+    if (streak === this.streakNow && !how) return;
+    const was = this.streakNow;
+    this.streakNow = streak;
+    this.comboN.textContent = String(streak);
+    const toNext = streak >= 24 ? 8 : streak % 8;
+    this.pips.forEach((p, i) => p.classList.toggle('on', i < toNext));
+    this.comboEl.classList.toggle('maxed', streak >= 24);
+    this.comboEl.classList.toggle('live', streak > 0);
+    if (how === 'break' && was >= 3) {
+      this.comboEl.getAnimations().forEach((a) => a.cancel());
+      this.comboEl.animate([{ transform: 'translateX(0)', color: '#ff6b7a' }, { transform: 'translateX(-7px)', offset: 0.15 }, { transform: 'translateX(6px)', offset: 0.35 }, { transform: 'translateX(-4px)', offset: 0.55 }, { transform: 'translateX(0)', color: '#ff6b7a', offset: 0.75 }, { transform: 'translateX(0)', color: '#ffffff' }], { duration: 620, easing: 'ease-out' });
+    } else if (how === 'hit' && streak > was) {
+      this.comboN.getAnimations().forEach((a) => a.cancel());
+      this.comboN.animate([{ transform: 'scale(1.45)', filter: 'brightness(1.8)' }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 260, easing: 'ease-out' });
+      const p = this.pips[(streak - 1) % 8];
+      if (p && streak < 25) p.animate([{ transform: 'scaleY(1.9)', filter: 'brightness(2.4)' }, { transform: 'scaleY(1)', filter: 'brightness(1)' }], { duration: 300, easing: 'ease-out' });
+    }
   }
-  // what a trick or a gap was worth, rising off her
-  points(p, obj, camera) {
+  // what a trick or a gap was worth, rising off her, with its name
+  points(p, obj, camera, label = '', small = false) {
     if (!p || !obj) return;
-    const v = this._pv || (this._pv = { x: 0, y: 0, z: 0 });
     const w = obj.getWorldPosition ? obj.getWorldPosition(new (obj.position.constructor)()) : null;
     if (!w) return;
     w.y += 2.9; w.project(camera);
     const el = document.createElement('div');
-    el.className = 'pop'; el.textContent = '+' + p;
-    el.style.left = ((w.x * 0.5 + 0.5) * window.innerWidth).toFixed(0) + 'px';
+    el.className = 'pop' + (small ? ' small' : '');
+    el.innerHTML = (label ? `<span class="nm">${label}</span>` : '') + '<span class="pv">+' + p.toLocaleString('en-US') + '</span>';
+    const W = window.innerWidth, m = Math.min(90, W * 0.24);
+    el.style.left = Math.max(m, Math.min(W - m, (w.x * 0.5 + 0.5) * W)).toFixed(0) + 'px';
     el.style.top = ((-w.y * 0.5 + 0.5) * window.innerHeight - 40).toFixed(0) + 'px';
     this.pops.appendChild(el);
     el.animate([{ opacity: 0, transform: 'translate(-50%, 6px) scale(0.8)' }, { opacity: 1, transform: 'translate(-50%, 0) scale(1.08)', offset: 0.18 }, { opacity: 0, transform: 'translate(-50%, -34px) scale(1)' }], { duration: 1100, easing: 'ease-out' }).onfinish = () => el.remove();
@@ -58,22 +83,23 @@ export class Hud {
     this.title.classList.remove('off');
     this.title.querySelector('.song').textContent = song.title;
     this.title.querySelector('.num').textContent = String((info.index ?? 0) + 1).padStart(2, '0');
-    this.title.querySelector('.best').textContent = info.best ? 'BEST ' + (info.best / 1000).toFixed(2) + ' KM' : '';
-    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on'); this.scoreEl.classList.remove('on');
+    this.title.querySelector('.best').innerHTML = info.best ? 'BEST <b>' + info.best.toLocaleString('en-US') + '</b>' + (info.grade ? ' &nbsp;&middot;&nbsp; <b>' + info.grade + '</b>' : '') : '';
+    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on'); this.scoreEl.classList.remove('on'); this.comboEl.classList.remove('on');
     this.results.classList.remove('on'); this.results.innerHTML = '';
   }
 
   hideAll() {
     this.title.classList.add('off');
-    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on'); this.scoreEl.classList.remove('on');
+    this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on'); this.scoreEl.classList.remove('on'); this.comboEl.classList.remove('on');
     this.results.classList.remove('on'); this.results.innerHTML = '';
   }
 
   start(course) {
     this.title.classList.add('off');
-    this.bar.classList.add('on'); this.speed.classList.add('on'); this.gems.classList.add('on'); this.scoreEl.classList.add('on');
+    this.bar.classList.add('on'); this.speed.classList.add('on'); this.gems.classList.add('on'); this.scoreEl.classList.add('on'); this.comboEl.classList.add('on');
     this.gemN.textContent = '0';
-    this.target = 0; this.shown = 0; this.multNow = 0; this.score(0, 1); this.scoreN.textContent = '0';
+    this.target = 0; this.shown = 0; this.multNow = 0; this._mult(1, false); this.scoreN.textContent = '0';
+    this.streakNow = -1; this.combo(0);
     this.course = course;
     this.lit = new Float32Array(240).fill(-1);
   }
@@ -112,7 +138,8 @@ export class Hud {
       if (this.shown > this.target) this.shown = this.target;
       this.scoreN.textContent = this.shown.toLocaleString('en-US');
     }
-    if (rider.score.mult !== this.multNow) this.score(this.target, rider.score.mult);
+    if (rider.score.mult !== this.multNow) this._mult(rider.score.mult, true);
+    if (rider.streak !== this.streakNow) this.combo(rider.streak, rider.streak > this.streakNow ? 'hit' : 'break');
   }
 
   // back from a pause: the beats left before she moves again
@@ -135,18 +162,14 @@ export class Hud {
     const big = grade === 'perfect';
     w.getAnimations().forEach((a) => a.cancel());
     w.animate([{ opacity: 1, transform: `scale(${big ? 1.35 : 1.15})` }, { opacity: 1, transform: 'scale(1)', offset: 0.18 }, { opacity: 0, transform: 'scale(0.96)' }], { duration: big ? 620 : 480, easing: 'ease-out' });
-    const s = this.js;
-    s.getAnimations().forEach((a) => a.cancel());
-    if (streak >= 2 && (grade === 'perfect' || grade === 'good')) {
-      s.textContent = '×' + streak;
-      s.animate([{ opacity: 0.95, transform: 'translateY(-3px)' }, { opacity: 0.95, transform: 'translateY(0)', offset: 0.25 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' });
-    }
   }
 
   // ndc position of the rider's head: the judgment floats there, smoothed so it doesn't jitter
   placeJudge(x, y) {
     const el = this.jEl || (this.jEl = document.querySelector('#judge'));
-    const px = (x * 0.5 + 0.5) * window.innerWidth, py = (-y * 0.5 + 0.5) * window.innerHeight;
+    // (kept clear of the screen's edges: on a narrow screen the word ran off the side with her)
+    const W = window.innerWidth, m = Math.min(150, W * 0.36);
+    const px = Math.max(m, Math.min(W - m, (x * 0.5 + 0.5) * W)), py = (-y * 0.5 + 0.5) * window.innerHeight;
     this.jx = this.jx === undefined ? px : this.jx + (px - this.jx) * 0.25;
     this.jy = this.jy === undefined ? py : this.jy + (py - this.jy) * 0.25;
     el.style.transform = `translate(${(this.jx - window.innerWidth / 2).toFixed(1)}px, ${Math.max(40, this.jy - 70).toFixed(1)}px)`;

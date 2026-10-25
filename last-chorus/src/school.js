@@ -606,9 +606,8 @@ export class SchoolWorld {
   update(S, dt, camera, time) {
     const T = this.terrain;
     T.update(S.track, S.rider, S.P, camera, 0); T.mat.uniforms.uWood.value = 0;
-    const t0 = S.rider.t - 4, t1 = S.rider.t + 46;
     let sunk = false;
-    for (let i = 0; i < T.N; i++) { const t = t0 + (t1 - t0) * (i / (T.N - 1)); if (!this.spans.some(([a, b]) => t > a + 0.25 && t < b - 0.25)) continue; for (let j = 0; j < T.M; j++) T.pos[(i * T.M + j) * 3 + 1] -= 9; sunk = true; }
+    for (let i = 0; i < T.N; i++) { const t = T.rowT0 + i * T.rowDT; if (!this.spans.some(([a, b]) => t > a + 0.25 && t < b - 0.25)) continue; for (let j = 0; j < T.M; j++) T.pos[(i * T.M + j) * 3 + 1] -= 9; sunk = true; }
     if (sunk) T.geo.attributes.position.needsUpdate = true;
     const u = this.mat.uniforms, P = S.P, t = S.rider.t, ev = S.plan.roomEvents || {};
     u.uTime.value = time; u.uCam.value.copy(camera.position);

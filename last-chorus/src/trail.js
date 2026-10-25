@@ -18,6 +18,13 @@ const pick = (R, arr) => arr[Math.floor(R() * arr.length)];
 const ni = (g) => (g.index ? g.toNonIndexed() : g);
 const merge = (gs) => mergeGeometries(gs.map(ni), false);
 const hash = (x) => { const s = Math.sin(x * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+// the distance along the rows at a fractional row (where she is): the ground's along-the-road
+// coordinate is anchored there, so it stays fixed to the world between rows instead of creeping
+// forward with her and snapping back at each new row (lawn stripes and paths flickered)
+export function alongAt(cum, f) {
+  const n = cum.length, i = clamp(Math.floor(f), 0, n - 2), a = clamp(f - i, 0, 1);
+  return cum[i] + (cum[i + 1] - cum[i]) * a;
+}
 const nz = (x) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hash(i) * (1 - u) + hash(i + 1) * u; };
 
 // ---------- the ground under the trail ----------
@@ -146,31 +153,44 @@ export class Terrain {
     this.mesh = new THREE.Mesh(g, this.mat);
     this.mesh.frustumCulled = false; this.mesh.renderOrder = -3;
     scene.add(this.mesh);
+    // (the street-grid ground plane goes a little lower in a place with a hillside: where the hill
+    // comes down to nothing the two lay at the same height and fought, flickering)
+    scene.userData.hasTerrain = true;
     this._p = new THREE.Vector3(); this._a = new THREE.Vector3(); this._b = new THREE.Vector3();
   }
 
+  // the ground's heights on a row never change: worked out once per row as it comes into view
+  baseRow(k) {
+    const hc = this._hc || (this._hc = new Map());
+    let h = hc.get(k);
+    if (!h) { h = new Float32Array(this.M); const t = k * YD, base = groundBase(this.course, t); for (let j = 0; j < this.M; j++) h[j] = groundSide(this.course, t, this.cols[j], base); hc.set(k, h); }
+    return h;
+  }
   update(track, rider, P, cam, wood) {
-    const t0 = rider.t - 4, t1 = rider.t + 46, N = this.N, M = this.M, c = this.course;
+    // rows locked to song time (not sliding with her): a hillside sampled at new points every
+    // frame swam, its slopes and shading shimmering along both sides of the road
+    const N = this.N, M = this.M, c = this.course;
+    const k0 = Math.floor((rider.t - 4) / YD), t0 = k0 * YD;
+    this.rowT0 = t0; this.rowDT = YD;
+    if (this._hc) for (const k of this._hc.keys()) if (k < k0 - 2) this._hc.delete(k);
     const cum = this._cum || (this._cum = new Float32Array(N));
-    const iR = Math.round((rider.t - t0) / (t1 - t0) * (N - 1));
     let lx = 0, lz = 0;
     const smp = this._smp || (this._smp = {});
     for (let i = 0; i < N; i++) {
-      const t = t0 + (t1 - t0) * (i / (N - 1));
+      const t = t0 + i * YD, hs = this.baseRow(k0 + i);
       // (track.ground(t, x) is the row's centre slid x along its right: once per row, not per point)
       track.ground(t, 0, this._p);
-      const yaw = c.sample(t, smp).yaw, rx = -Math.cos(yaw), rz = Math.sin(yaw), base = groundBase(c, t);
+      const yaw = c.sample(t, smp).yaw, rx = -Math.cos(yaw), rz = Math.sin(yaw);
       for (let j = 0; j < M; j++) {
         const x = this.cols[j];
         const o = (i * M + j) * 3;
-        this.pos[o] = this._p.x + rx * x; this.pos[o + 1] = groundSide(c, t, x, base); this.pos[o + 2] = this._p.z + rz * x;
+        this.pos[o] = this._p.x + rx * x; this.pos[o + 1] = hs[j]; this.pos[o + 2] = this._p.z + rz * x;
         this.uvs[(i * M + j) * 2] = x;
       }
-      const cx = this.pos[(i * M + 14) * 3], cz = this.pos[(i * M + 14) * 3 + 2];
-      cum[i] = i ? cum[i - 1] + Math.hypot(cx - lx, cz - lz) : 0;
-      lx = cx; lz = cz;
+      cum[i] = i ? cum[i - 1] + Math.hypot(this._p.x - lx, this._p.z - lz) : 0;
+      lx = this._p.x; lz = this._p.z;
     }
-    const base = rider.stats.dist - cum[iR];
+    const base = rider.stats.dist - alongAt(cum, (rider.t - t0) / YD);
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) this.uvs[(i * M + j) * 2 + 1] = cum[i] + base;
     // normals from the neighbours
     const P3 = this.pos, a = this._a, b = this._b;
@@ -565,12 +585,19 @@ function yahTerrainMaterial(P) {
         // August grass, green going to straw in patches
         vec3 meadow = mix(uGrass, uGrass * vec3(1.6, 1.3, 0.55), smoothstep(0.42, 0.78, pat) * uDry);
         meadow *= 0.86 + 0.28 * mix(0.5, n2(wp * 0.55), near);
-        // a sprinkle of flowers in it, close up: round heads near, a fleck of colour further off
-        vec2 fc = floor(wp * 1.2);
-        vec2 fo = fract(wp * 1.2) - 0.5 - (vec2(h2(fc + 3.1), h2(fc + 5.7)) - 0.5) * 0.3;
-        float fr = mix(0.2, 0.62, smoothstep(6.0, 30.0, d));
-        float fl = step(0.9, h2(fc)) * (1.0 - smoothstep(fr - 0.07, fr, length(fo))) * near * vZ.y * smoothstep(0.3, 0.6, pat);
+        // a sprinkle of flowers in it: round heads close up. Where a flower would be smaller than a
+        // few pixels (further off, and sooner on a phone) the heads give way to a faint even tint
+        // of their colour: dots below a pixel only sparkle and smear into dashes as you move
+        vec2 fw = wp * 1.2;
+        float px = max(length(dFdx(fw)), length(dFdy(fw)));          // flower cells per pixel
+        float sharp = 1.0 - smoothstep(0.16, 0.34, px);
+        vec2 fc = floor(fw);
+        vec2 fo = fract(fw) - 0.5 - (vec2(h2(fc + 3.1), h2(fc + 5.7)) - 0.5) * 0.3;
+        float fr = mix(0.2, 0.3, smoothstep(6.0, 30.0, d));
+        float fe = max(0.04, px);
+        float fl = step(0.9, h2(fc)) * (1.0 - smoothstep(fr - fe, fr + fe, length(fo))) * sharp * near * vZ.y * smoothstep(0.3, 0.6, pat);
         meadow = mix(meadow, mix(vec3(0.95, 0.62, 0.05), vec3(0.9, 0.9, 0.85), step(0.55, h2(fc + 7.0))), fl * 0.7);
+        meadow = mix(meadow, vec3(0.95, 0.78, 0.4), 0.05 * (1.0 - sharp) * near * vZ.y * smoothstep(0.3, 0.6, pat));
         // the woods' floor: last year's leaves, moss, needles
         float lm = fbm(wp * 0.11);
         vec3 litter = mix(vec3(0.17, 0.115, 0.06), uGrass * vec3(0.62, 0.7, 0.45), smoothstep(0.42, 0.7, lm));
@@ -646,7 +673,7 @@ class YahTerrain extends Terrain {
       cum[i] = i ? cum[i - 1] + Math.hypot(this._c.x - lx, this._c.z - lz) : 0;
       lx = this._c.x; lz = this._c.z;
     }
-    const iR = clamp(Math.round((rider.t - t0) / YD), 0, N - 1), base = rider.stats.dist - cum[iR];
+    const base = rider.stats.dist - alongAt(cum, (rider.t - t0) / YD);
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) this.uvs[(i * M + j) * 2 + 1] = cum[i] + base;
     const a = this._a, b = this._b;
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {

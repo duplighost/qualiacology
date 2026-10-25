@@ -336,7 +336,7 @@ const CLUB = {
 function clubMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
-      uStyle: { value: 0 }, uTime: { value: 0 }, uBeat: { value: 0 }, uFogDensity: { value: 0.003 }, uFog: { value: new THREE.Color() }, uCam: { value: new THREE.Vector3() },
+      uStyle: { value: 0 }, uTime: { value: 0 }, uBeat: { value: 0 }, uFogDensity: { value: 0.003 }, uFog: { value: new THREE.Color() }, uCam: { value: new THREE.Vector3() }, uMove: { value: 0 },
       uWarm: { value: new THREE.Color(0xff4fd8) }, uLight: { value: new THREE.Color(1, 1, 1) }, uA: { value: new THREE.Color(0xff4fd8) }, uB: { value: new THREE.Color(0x40d8ff) },
       uHouse: { value: 0 }, uRed: { value: 0 }, uVoid: { value: 0 }, uFlicker: { value: 1 }, uSkyTop: { value: new THREE.Color() }, uSkyLow: { value: new THREE.Color() },
       uChorus: { value: 0 }, uRingR: { value: 0 }, uRingK: { value: 0 }, uAlong: { value: 0 }, uVu: { value: 0 }, uSpeed: { value: 38 },
@@ -347,7 +347,7 @@ function clubMaterial() {
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: /* glsl */`
-      uniform float uStyle, uTime, uBeat, uFogDensity, uHouse, uRed, uVoid, uFlicker, uChorus, uRingR, uRingK, uAlong, uVu, uSpeed;
+      uniform float uStyle, uTime, uBeat, uFogDensity, uHouse, uRed, uVoid, uFlicker, uChorus, uRingR, uRingK, uAlong, uVu, uSpeed, uMove;
       uniform vec3 uFog, uCam, uWarm, uLight, uA, uB, uSkyTop, uSkyLow;
       uniform vec4 uCrackT, uCrackK, uCrackS;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
@@ -465,7 +465,7 @@ function clubMaterial() {
           if (part == 0) tq = vec2(x, along) / 2.0;
           vec2 tf = fract(tq);
           float fw = max(fwidth(tq.x), fwidth(tq.y));
-          float chk = aaChk(tq);
+          float chk = aaChkM(tq, part == 0 ? vec2(0.0, uMove / 2.0) : vec2(uMove / 1.2, 0.0));
           float gr = mix(0.75 + 0.25 * smoothstep(0.0, 0.08 + fw, min(min(tf.x, 1.0 - tf.x), min(tf.y, 1.0 - tf.y))), 0.9, smoothstep(0.15, 0.5, fw));
           col = mix(vec3(0.85, 0.85, 0.84), vec3(0.05), chk) * gr;
           if (part == 3) col = vec3(0.7, 0.72, 0.72);
@@ -600,6 +600,7 @@ export class ClubWorld {
   update(S, dt, camera, time) {
     const u = this.mat.uniforms, P = S.P, t = S.rider.t, ev = S.plan.roomEvents || {}, sp = S.plan.spd || {}, c = S.course;
     u.uTime.value = time; u.uCam.value.copy(camera.position); u.uBeat.value = S.town.beat || 0;
+    u.uMove.value = S.rider.v * Math.min(dt, 1 / 30);
     u.uFog.value.set(P.fog); u.uFogDensity.value = P.fogDensity;
     u.uWarm.value.set(P.lamp ?? 0xff4fd8); u.uA.value.set(P.glow ?? 0xff4fd8); u.uB.value.set(P.fret ?? 0x40d8ff);
     u.uLight.value.set(P.skyLight ?? 0xffffff).multiplyScalar((P.hemiK ?? 1.5) / 1.6);

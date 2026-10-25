@@ -113,7 +113,9 @@ export class Streaks {
       const o = i * 6;
       this.lp[o] = p[i * 3]; this.lp[o + 1] = p[i * 3 + 1]; this.lp[o + 2] = p[i * 3 + 2];
       this.lp[o + 3] = p[i * 3] - fx * len; this.lp[o + 4] = p[i * 3 + 1] - fy * len; this.lp[o + 5] = p[i * 3 + 2] - fz * len;
-      const near = clamp(1 - along / 120, 0, 1);
+      // brightest in the middle distance, gone before they pass the camera: right beside it a
+      // line streaked across the edge of the screen for a frame and read as a glitch
+      const near = clamp(1 - along / 120, 0, 1) * clamp((along - 2) / 14, 0, 1);
       const a = intensity * near * (0.25 + 0.75 * this.seed[i]);
       this.la[i * 2] = a; this.la[i * 2 + 1] = 0;
     }

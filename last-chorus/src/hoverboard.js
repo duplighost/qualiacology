@@ -23,10 +23,13 @@ export function mountBoard(view, scene, id, opts = {}) {
   model.updateMatrix();
   mid.applyMatrix4(model.matrix);
   model.position.set(-mid.x, contactY - mid.y, -mid.z);
-  // the classic deck's own meshes go; the girl stays
-  const hidden = view.board.children.filter((c) => c.isMesh);
+  // the classic deck's own meshes go; the girl stays. The board goes where the deck was, so it
+  // flips and spins under her on a rail like the classic one
+  const holder = view.deck || view.board;
+  const hidden = holder.children.filter((c) => c.isMesh);
   for (const m of hidden) m.visible = false;
-  view.board.add(model);
+  if (view.deck) model.position.y -= view.deck.position.y;
+  holder.add(model);
   model.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; } });
   const trail = new BoardTrail(scene, model, id, { quality: opts.quality || 'high' });
   const glowMats = [];

@@ -33,6 +33,7 @@
 .riding .home-link{opacity:0;pointer-events:none}
 </style>
 <link rel="stylesheet" href="styles.css">
+
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/jsm/" } }
 </script>
@@ -44,7 +45,8 @@
   <div id="songbar"><canvas id="shape"></canvas></div>
   <div id="title"><div class="name">LAST CHORUS</div><div class="pick"><span class="num"></span><span class="song"></span></div><div class="best"></div><div class="hint"><span class="kb">hold <b>space</b> or <b>click</b> down the glow &nbsp;&middot;&nbsp; let go on the line</span><span class="tp">hold the <b>right half</b> down the glow &nbsp;&middot;&nbsp; let go on the line</span></div><div class="back"><span class="kb"><b>esc</b> all songs</span><span class="tp"><b>left half</b> steers &nbsp;&middot;&nbsp; <span class="go">all songs</span></span></div></div>
   <div id="speed"></div>
-  <div id="score"><span class="x"></span><span class="n">0</span></div>
+  <div id="score"><span class="n">0</span></div>
+  <div id="combo"><div class="mx"><span class="by">&times;</span><span class="m">1</span></div><div class="side"><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="ct"><b>0</b> combo</div></div></div>
   <div id="pops"></div>
   <div id="judge"><div class="word"></div><div class="streak"></div></div>
   <div id="gems"><span class="icon">&#9670;</span><span class="n">0</span></div>
@@ -55,15 +57,28 @@
   <button id="pausebtn" aria-label="pause"><i></i><i></i></button>
 </div>
 <div id="screens">
+  <div id="intro">
+    <video class="film" muted playsinline loop autoplay preload="auto" disablepictureinpicture></video>
+    <div class="shade"></div>
+    <div class="logo"><span class="w">LAST</span><span class="w">CHORUS</span></div>
+    <div class="press"><span class="kb">press any key</span><span class="tp">tap to start</span></div>
+  </div>
   <div id="menu">
     <div class="bg"><img class="a" alt=""><img class="b" alt=""></div>
     <div class="shade"></div>
-    <div class="panel">
-      <div class="game">LAST CHORUS</div>
-      <div class="me"></div>
-      <ol class="list"></ol>
-      <div class="foot"><span class="kb"><b>&uarr; &darr;</b>&nbsp; pick &nbsp;&nbsp;<b>enter</b> or <b>click</b>&nbsp; ride &nbsp;&nbsp;<b>B</b>&nbsp; boards</span><span class="tp">tap a song to ride it</span></div>
-    </div>
+    <header class="top"><div class="brand">LAST CHORUS</div><div class="me"></div></header>
+    <section class="detail">
+      <div class="pic"><img class="a" alt=""><img class="b" alt=""><div class="num"></div></div>
+      <div class="info">
+        <div class="name"></div>
+        <canvas class="profile"></canvas>
+        <div class="facts"></div>
+      </div>
+    </section>
+    <button class="ride"><span class="go">RIDE</span><span class="what"></span><span class="k">enter</span></button>
+    <section class="gear"></section>
+    <ol class="list"></ol>
+    <div class="foot"><span class="kb"><b>&uarr; &darr;</b> songs &nbsp;&middot;&nbsp; <b>enter</b> ride &nbsp;&middot;&nbsp; <b>&larr; &rarr;</b> rider &nbsp;&middot;&nbsp; <b>B</b> board</span><span class="tp">tap a song, then ride</span></div>
     <div class="locker"></div>
   </div>
   <div id="load"><div class="img"></div><div class="shade"></div><div class="box"><div class="name"></div><div class="bar"><i></i></div></div></div>

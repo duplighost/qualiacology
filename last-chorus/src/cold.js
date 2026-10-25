@@ -547,7 +547,7 @@ class Hill {
           vec2 q = mat2(0.96, -0.28, 0.28, 0.96) * p;
           vec2 f = abs(fract(q / 92.0) - 0.5);
           float street = smoothstep(0.035, 0.0, min(0.5 - f.x, 0.5 - f.y));
-          float lamps = smoothstep(0.08, 0.0, length(fract(q / 23.0) - 0.5)) * street;
+          float lamps = smoothstep(0.08, 0.0, length(fract(q / 23.0) - 0.5)) * street * (1.0 - smoothstep(0.03, 0.07, length(fwidth(q / 23.0))));
           col = mix(col, uStreet * 0.35, street * 0.8);
           col += uStreet * lamps * 3.5;
           col = mix(col, vec3(0.72, 0.77, 0.86) * (0.85 + 0.2 * h2(floor(p / 5.0))), uSnow * 0.7 * (1.0 - street * 0.6));
@@ -563,13 +563,14 @@ class Hill {
     this._p = new THREE.Vector3();
   }
   update(track, rider, P) {
-    const t0 = Math.max(this.from, rider.t - 4), t1 = Math.min(this.to, rider.t + 46);
-    const show = t1 > t0 + 0.05; this.mesh.visible = show; if (!show) return;
+    // rows at fixed song times (clamped to the hill's span), so its slopes don't swim
+    const DT = 50 / (this.N - 1), k0 = Math.floor((rider.t - 4) / DT);
+    const show = Math.min(this.to, rider.t + 46) > Math.max(this.from, rider.t - 4) + 0.05; this.mesh.visible = show; if (!show) return;
     const u = this.mat.uniforms; u.uGround.value.set(P.ground); u.uStreet.value.set(P.street); u.uSnow.value = P.snowGround ?? 0;
     const N = this.N, M = HX.length, pos = this.pos, p = this._p, q = this._q || (this._q = new THREE.Vector3());
     const fall = this._fall || (this._fall = HX.map((x) => gy.fall(this.c, x)));
     for (let i = 0; i < N; i++) {
-      const t = t0 + (t1 - t0) * i / (N - 1);
+      const t = Math.min(this.to, Math.max(this.from, (k0 + i) * DT));
       let hw = 0; for (const [a, b, w] of this.roads) if (t >= a - 0.3 && t <= b + 0.3) hw = Math.max(hw, w);
       // the street's middle and which way is across, once a row (a ground lookup is not cheap)
       track.ground(t, 0, p); track.ground(t, 1, q); const rx = q.x - p.x, rz = q.z - p.z, y0 = gy(this.c, t, 0);

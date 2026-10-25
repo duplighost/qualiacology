@@ -15,6 +15,7 @@ export const POINTS = {
   landing: 20, landingQ: 30,       // a clean landing on a downslope (plus up to landingQ for how clean)
   airPerSec: 30,                   // time in the air, paid on a landing that isn't hard
   grind: 25, grindPop: 100,        // every beat on a rail; popping off its end on the beat
+  railTrick: { perfect: 80, good: 35 },   // a pump let go on the beat while grinding: the board flicked round on the rail
   gap: 250,                        // clearing a gap
   trick: { grab: 120, spin: 150, roll: 180, flip: 220 },
 };
@@ -59,6 +60,7 @@ export class Score {
         return this._add('tricks', per * (e.kind === 'spin' ? Math.max(1, e.turns) : 1) * (e.combo ? 1.5 : 1) * size, streak);
       }
       case 'grind': return this._add('rails', POINTS.grind, streak);
+      case 'railTrick': return this._add('rails', POINTS.railTrick[e.grade] ?? 0, streak);
       case 'grindEnd': this.grinds++; return e.onBeat ? this._add('rails', POINTS.grindPop, streak) : 0;
       case 'gap': this.gaps++; return this._add('gaps', POINTS.gap, streak);
     }

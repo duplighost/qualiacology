@@ -69,6 +69,7 @@ export function attachSkater(view, gltf, def, P) {
   const measure = () => { model.updateMatrixWorld(true); inv.copy(model.matrixWorld).invert(); };
   measure();
   for (const f of feet) f.h = footY(f) - target;
+  const baseY = model.position.y;
   const mixer = new THREE.AnimationMixer(model);
   const acts = {};
   for (const [k, names] of Object.entries(CLIPS)) {
@@ -76,11 +77,20 @@ export function attachSkater(view, gltf, def, P) {
     if (!clip) continue;
     const a = mixer.clipAction(clip);
     a.setEffectiveWeight(0); a.play();
-    if (k === 'land') { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
+    if (k === 'land' || k === 'cheer') { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
     acts[k] = a;
   }
   const w = { idle: 1, crouch: 0, up: 0, left: 0, right: 0, air: 0, tuck: 0, land: 0, cheer: 0, select: 0 };
   let blinkT = 2 + Math.random() * 3, landK = 0, wasAir = false;
+  // the end of a song: the celebration once (a real jump, off the board and back), then standing
+  // easy on it, and again every few seconds. Looped back to back with her feet held to the deck,
+  // it read as someone frozen waving.
+  let cheerOn = false, cheerClock = 0, cheerPlaying = false, nextCheer = 0;
+  const startCheer = () => {
+    if (!acts.cheer) return;
+    acts.cheer.reset(); acts.cheer.play(); cheerPlaying = true;
+    nextCheer = cheerClock + acts.cheer.getClip().duration + 1.6 + Math.random() * 1.6;
+  };
   const share = new Map();
   const lids = def.lids ?? 0;
   return {
@@ -102,8 +112,14 @@ export function attachSkater(view, gltf, def, P) {
       ease('right', (1 - air) * Math.max(0, lean), 8);
       ease('air', air * (1 - tuck), 8);
       ease('tuck', air * tuck, 10);
-      ease('select', titleK, 6);
-      ease('cheer', cheer, 6);
+      if (cheer > 0.05) {
+        if (!cheerOn) { cheerOn = true; cheerClock = 0; startCheer(); }
+        cheerClock += dt;
+        if (cheerPlaying && acts.cheer && acts.cheer.time >= acts.cheer.getClip().duration - 0.25) cheerPlaying = false;
+        if (!cheerPlaying && cheerClock >= nextCheer) startCheer();
+      } else { cheerOn = false; cheerPlaying = false; }
+      ease('select', Math.max(titleK, cheer * (cheerPlaying ? 0 : 1)), 5);
+      ease('cheer', cheer * (cheerPlaying ? 1 : 0), 9);
       w.land = landK * (1 - air);
       // the stance gives way to whatever she's doing, so a press is a full tuck, not half of one
       w.idle = Math.max(0, 1 - (w.crouch + w.up + w.left + w.right + w.air + w.tuck + w.land));
@@ -117,12 +133,15 @@ export function attachSkater(view, gltf, def, P) {
       for (const [a, v] of share) { a.setEffectiveWeight(v); sum += v; }
       if (sum < 1e-3 && acts.idle) acts.idle.setEffectiveWeight(1);
       mixer.update(dt);
-      // back on the deck: the lowest foot, less its own height above the sole
+      // back on the deck: the lowest foot, less its own height above the sole (let go for the
+      // celebration's jump, so it really leaves the board)
       if (feet.length) {
+        model.position.y = baseY;
         measure();
         let low = Infinity;
         for (const f of feet) low = Math.min(low, footY(f) - f.h);
-        model.position.y -= low - target;
+        const lock = 1 - 0.92 * Math.min(1, w.cheer * 1.2);
+        model.position.y = baseY - (low - target) * lock;
       }
       // her lids rest a little lower, and she blinks now and then
       if (blink.length) {

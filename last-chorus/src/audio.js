@@ -80,6 +80,70 @@ export class Sound {
 
   resume() { if (this.ctx.state !== 'running') return this.ctx.resume(); return Promise.resolve(); }
 
+  // ---------- the song list's previews ----------
+  // A little of the song you're on, from its first chorus: streamed through an audio element (not
+  // decoded whole), faded in, looped every 24 s; moving on fades it out under the next. Two
+  // elements made once and woken on the first press (a phone only lets one play that a finger
+  // started), taking turns.
+  _pvInit() {
+    if (this._pvEls) return;
+    this._pvEls = [0, 1].map(() => {
+      const el = new Audio(); el.preload = 'auto';
+      let src = null, g = null;
+      try { src = this.ctx.createMediaElementSource(el); g = this.ctx.createGain(); g.gain.value = 0; src.connect(g).connect(this.master); } catch (e) { /* plays straight out instead */ }
+      return { el, g, id: null, at: 0, on: false };
+    });
+    this._pvK = 0;
+    const probe = document.createElement('audio');
+    this._pvExt = probe.canPlayType('audio/ogg; codecs=opus') ? 'ogg' : 'm4a';
+  }
+  // on a finger or a key: wake the preview players (silently)
+  unlockPreviews() {
+    this._pvInit();
+    for (const p of this._pvEls) { if (p.unlocked) continue; p.unlocked = true; const el = p.el; el.muted = true; const r = el.play(); if (r && r.catch) r.then(() => { if (!p.on) el.pause(); el.muted = false; }, () => { el.muted = false; }); else el.muted = false; }
+  }
+  preview(id, at) {
+    this._pvInit();
+    if (this.ctx.state !== 'running') { this.ctx.resume().then(() => { if (this.ctx.state === 'running') this.preview(id, at); }, () => { /* not yet */ }); return; }
+    const cur = this._pvEls[this._pvK];
+    if (cur.on && cur.id === id) return;
+    this.stopPreview(0.45);
+    this._pvK = 1 - this._pvK;
+    const p = this._pvEls[this._pvK], el = p.el, c = this.ctx;
+    p.id = id; p.at = at; p.on = true; p.token = (p.token || 0) + 1;
+    const tok = p.token;
+    const fadeIn = () => { if (p.g) { p.g.gain.cancelScheduledValues(c.currentTime); p.g.gain.setValueAtTime(p.g.gain.value, c.currentTime); p.g.gain.linearRampToValueAtTime(0.7, c.currentTime + 0.9); } else el.volume = 0.7; };
+    el.src = `assets/music/${id}.${this._pvExt}`;
+    const start = () => {
+      if (p.token !== tok || !p.on) return;
+      try { el.currentTime = at; } catch (e) { /* seeks once it can */ }
+      const r = el.play(); if (r && r.catch) r.catch(() => { /* not allowed yet */ });
+      fadeIn();
+    };
+    el.addEventListener('loadedmetadata', start, { once: true });
+    el.load();
+    // round again before it runs too long: down, back to the chorus, up
+    clearInterval(this._pvTimer);
+    this._pvTimer = setInterval(() => {
+      if (!p.on || p.token !== tok) return;
+      if (el.currentTime > at + 24 || el.ended) {
+        if (p.g) { p.g.gain.cancelScheduledValues(c.currentTime); p.g.gain.setValueAtTime(p.g.gain.value, c.currentTime); p.g.gain.linearRampToValueAtTime(0, c.currentTime + 0.5); }
+        setTimeout(() => { if (p.token !== tok || !p.on) return; try { el.currentTime = at; } catch (e) { /* fine */ } fadeIn(); }, 520);
+      }
+    }, 250);
+  }
+  stopPreview(fade = 0.5) {
+    if (!this._pvEls) return;
+    const c = this.ctx;
+    for (const p of this._pvEls) {
+      if (!p.on) continue;
+      p.on = false;
+      const tok = p.token;
+      if (p.g) { p.g.gain.cancelScheduledValues(c.currentTime); p.g.gain.setValueAtTime(p.g.gain.value, c.currentTime); p.g.gain.linearRampToValueAtTime(0, c.currentTime + fade); }
+      setTimeout(() => { if (p.token === tok && !p.on) { p.el.pause(); } }, fade * 1000 + 60);
+    }
+  }
+
   // play the song from offset seconds in. A negative offset starts it that far in the
   // future (a count-in): the clock runs from the offset and the music comes in at 0.
   play(buffer, offset = 0, fadeIn = 0) {
@@ -477,9 +541,14 @@ export class Sound {
   // breath of air, unlock a little run up, no a muted double knock
   ui(kind, i = 0) {
     const c = this.ctx;
-    if (c.state !== 'running') { c.resume(); return; }
+    // (asleep until the first press: wake it and play this once it's up, so that first press is heard)
+    if (c.state !== 'running') {
+      if (!this._uiWaking) { this._uiWaking = true; c.resume().then(() => { this._uiWaking = false; if (c.state === 'running') this.ui(kind, i); }, () => { this._uiWaking = false; }); }
+      return;
+    }
     const t = c.currentTime;
     if (kind === 'move') { if (t - (this._uiT || 0) < 0.035) return; this._uiT = t; }
+    if (kind === 'tick') { if (t - (this._tickT || 0) < 0.03) return; this._tickT = t; }
     const pent = [0, 2, 4, 7, 9];
     const hz = (deg, oct) => 293.66 * Math.pow(2, (pent[((deg % 5) + 5) % 5] + 12 * (Math.floor(deg / 5) + oct)) / 12);
     const tone = (f, at, peak, dec, type = 'sine') => {
@@ -508,6 +577,28 @@ export class Sound {
       tone(hz(7, 2), 0.3, 0.022, 0.9, 'triangle');
     } else if (kind === 'no') {
       tone(150, 0, 0.06, 0.06); tone(130, 0.09, 0.05, 0.07);
+    } else if (kind === 'start') {
+      // in from the title: a rush of air up, a low thump and a chord that opens out
+      air(300, 3200, 0.14, 0.5);
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.25);
+      const g = c.createGain(); this._env(g, t, 0.004, 0.22, 0.32); o.connect(g).connect(this.sfx); o.start(t); o.stop(t + 0.4);
+      [0, 2, 4, 7].forEach((d, k) => tone(hz(d, 1), 0.05 + k * 0.045, 0.05, 0.9));
+      tone(hz(5, 2), 0.25, 0.02, 1.1, 'triangle');
+    } else if (kind === 'ride') {
+      // RIDE: air pulled up hard and two notes going up into it
+      air(500, 4200, 0.12, 0.34);
+      tone(hz(0, 1), 0, 0.06, 0.22); tone(hz(4, 1), 0.08, 0.07, 0.5); tone(hz(4, 2), 0.08, 0.02, 0.4, 'triangle');
+    } else if (kind === 'tick') {
+      // the list going by under a finger or a wheel: a soft click, a little higher further down
+      const n = c.createBufferSource(); n.buffer = this._noise;
+      const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.2; f.frequency.value = 2400 + 60 * (i % 12);
+      const g = c.createGain(); this._env(g, t, 0.001, 0.05, 0.025);
+      n.connect(f).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 0.05);
+      tone(hz(i % 10, 2), 0, 0.008, 0.03, 'triangle');
+    } else if (kind === 'gear') {
+      // a rider or a board picked: a small click and a note
+      air(1800, 2600, 0.05, 0.06);
+      tone(hz(2 + (i % 3), 1), 0.01, 0.05, 0.28); tone(hz(2 + (i % 3), 2), 0.01, 0.012, 0.18, 'triangle');
     }
   }
   // a bubble of gum going: a soft pop

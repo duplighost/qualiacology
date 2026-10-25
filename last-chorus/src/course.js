@@ -431,20 +431,23 @@ export class Course {
   }
 
   // signed seconds to the nearest dip bottom
-  valleyDist(t) {
-    const v = this.valleys;
-    let lo = 0, hi = v.length - 1;
-    if (!v.length) return 99;
-    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (v[m] <= t) lo = m; else hi = m; }
-    const a = t - v[lo], b = t - v[hi];
-    return Math.abs(a) < Math.abs(b) ? a : b;
-  }
+  valleyDist(t) { return nearestDist(this.valleys, t); }
+  // ... and to the nearest start of a hold zone (the crest where pressing begins to pay)
+  crestDist(t) { return nearestDist(this.crests, t); }
 
   sectionAt(t) {
     const s = this.sections;
     for (let i = s.length - 1; i >= 0; i--) if (t >= s[i].ta) return s[i];
     return s[0];
   }
+}
+
+function nearestDist(v, t) {
+  let lo = 0, hi = v.length - 1;
+  if (!v.length) return 99;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (v[m] <= t) lo = m; else hi = m; }
+  const a = t - v[lo], b = t - v[hi];
+  return Math.abs(a) < Math.abs(b) ? a : b;
 }
 
 export function gaussSmooth(src, sigma) {
