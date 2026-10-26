@@ -133,6 +133,20 @@
       "duration": "As long as you like"
     },
     {
+      "slug": "the-way-i-came",
+      "title": "THE WAY I CAME",
+      "descriptor": "A salmon swims home up a river",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/the-way-i-came-card-v20261026.jpg",
+      "alt": "A red salmon swimming up into white water in a rocky gorge, standing waves over a stone ledge ahead and two more salmon leaping at it, low sun through the trees beyond",
+      "summary": "A salmon, from the sea at dawn to the gravel where it was born. The water is simulated: it pours over the weirs, curls behind the rocks and races through the gorge. Rest in the slow water, find a way through the fast, and leap from the white water under each step. The others swim with you. Not all of them make it. Keyboard and mouse.",
+      "metaDescription": "THE WAY I CAME is a browser game about a salmon swimming home up a river, from the sea at dawn to the gravel where it was born. The water is simulated: it pours over weirs, curls behind rocks and races through a gorge. Rest in the slow water, find a way through the fast, and leap. Keyboard and mouse.",
+      "controls": "Desktop only · move the mouse to push the ring: where to swim and how hard, all the way out sprints · hold the mouse button or Space to coil, let go to leap · WASD also steers · Esc pause · M mute · F full screen",
+      "actionLabel": "Swim",
+      "duration": "Forty minutes or so"
+    },
+    {
       "slug": "kickmoon",
       "title": "KICKMOON",
       "descriptor": "First-person moon collectathon",

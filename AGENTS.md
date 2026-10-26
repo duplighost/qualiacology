@@ -72,6 +72,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | collateral | `Projects\collateral` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | last-chorus | `Projects\the music game` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | in-every-direction | `Projects\in-every-direction` | `node tools/build-site-copy.mjs <this repo>` there (it writes the card too); never hand-edit the site copy |
+| the-way-i-came | `Projects\the-way-i-came` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | lead, rally, rocket-shoes, eaten-path, wick, galaxy-sandbox, the-last-room, secondhand-saint | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
 | everything else | this repo | the site copy is the only source |
 
