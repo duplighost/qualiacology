@@ -73,7 +73,8 @@ export class Hud {
     const el = this.thumbEl || (this.thumbEl = document.getElementById('thumb'));
     if (!el) return;
     if (!f) { if (this._thumbOn) { el.classList.remove('on'); this._thumbOn = false; } return; }
-    const dx = Math.max(-40, Math.min(40, f.x - f.x0));
+    // (the knob reaches the ring's edge where the push reaches full lock: 180 px, input.js)
+    const dx = Math.max(-40, Math.min(40, (f.x - f.x0) * (40 / 180)));
     el.style.transform = `translate(${f.x0.toFixed(0)}px, ${f.y0.toFixed(0)}px)`;
     el.firstElementChild.style.transform = `translate(${dx.toFixed(0)}px, 0)`;
     if (!this._thumbOn) { el.classList.add('on'); this._thumbOn = true; }
@@ -102,36 +103,41 @@ export class Hud {
     this.streakNow = -1; this.combo(0);
     this.course = course;
     this.lit = new Float32Array(240).fill(-1);
+    // the bars' heights and parts never change: worked out once a song, drawn again only when one
+    // lights up (it redrew all 240 from the course every frame); the marker is its own element
+    const N = 240; this.barE = new Float32Array(N); this.barK = new Uint8Array(N);
+    for (let i = 0; i < N; i++) { const tt = (i / (N - 1)) * course.duration; this.barE[i] = course.sample(tt).energy; this.barK[i] = course.kind[Math.floor((tt - course.t0) * 120)] || 0; }
+    this._barDirty = true; this._spd = -1;
+    this.markEl = this.markEl || this.bar.querySelector('.mark');
   }
 
   frame(rider, course) {
     if (!this.lit) return;
-    const W = this.shape.clientWidth, H = this.shape.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
-    if (this.shape.width !== W * dpr) { this.shape.width = W * dpr; this.shape.height = H * dpr; }
-    const g = this.g, N = this.lit.length, dur = course.duration;
+    if (this._wh === undefined || (this._whT = (this._whT || 0) + 1) % 30 === 0) { this._wh = [this.shape.clientWidth, this.shape.clientHeight]; }
+    const [W, H] = this._wh, dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (this.shape.width !== Math.round(W * dpr)) { this.shape.width = Math.round(W * dpr); this.shape.height = Math.round(H * dpr); this._barDirty = true; }
+    const N = this.lit.length, dur = course.duration;
     const t = rider.t, pos = Math.max(0, Math.min(1, t / dur));
     const k = Math.floor(pos * (N - 1));
-    if (k >= 0 && this.lit[k] < 0) this.lit[k] = rider.flow;
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.clearRect(0, 0, W, H);
-    for (let i = 0; i < N; i++) {
-      const tt = (i / (N - 1)) * dur;
-      const e = course.sample(tt).energy;
-      const h = 2 + e * (H - 4);
-      const x = (i / N) * W, w = W / N + 0.5;
-      const lit = this.lit[i];
-      const kind = course.kind[Math.floor((tt - course.t0) * 120)] || 0;
-      if (lit >= 0) {
-        g.fillStyle = KIND_COLOR[kind];
-        g.globalAlpha = 0.35 + 0.65 * lit;
-      } else {
-        g.fillStyle = '#ffffff'; g.globalAlpha = 0.16;
+    if (k >= 0 && this.lit[k] < 0) { this.lit[k] = rider.flow; this._barDirty = true; }
+    if (this._barDirty) {
+      this._barDirty = false;
+      const g = this.g;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, W, H);
+      for (let i = 0; i < N; i++) {
+        const h = 2 + this.barE[i] * (H - 4);
+        const x = (i / N) * W, w = W / N + 0.5;
+        const lit = this.lit[i];
+        if (lit >= 0) { g.fillStyle = KIND_COLOR[this.barK[i]]; g.globalAlpha = 0.35 + 0.65 * lit; }
+        else { g.fillStyle = '#ffffff'; g.globalAlpha = 0.16; }
+        g.fillRect(x, (H - h) / 2, w, h);
       }
-      g.fillRect(x, (H - h) / 2, w, h);
+      g.globalAlpha = 1;
     }
-    g.globalAlpha = 1; g.fillStyle = '#ffffff';
-    g.fillRect(pos * W - 1, 0, 2, H);
-    this.speed.textContent = Math.round(rider.v * 3.6) + ' KM/H';
+    if (this.markEl) this.markEl.style.transform = `translateX(${(pos * W).toFixed(1)}px)`;
+    const spd = Math.round(rider.v * 3.6);
+    if (spd !== this._spd) { this._spd = spd; this.speed.textContent = spd + ' KM/H'; }
     this.target = rider.score.points;
     if (this.shown !== this.target) {
       this.shown += Math.max(1, Math.ceil((this.target - this.shown) * 0.18));

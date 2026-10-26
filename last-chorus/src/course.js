@@ -62,7 +62,7 @@ export class Course {
     this.kind = new Uint8Array(n);
     this.energy = new Float32Array(n);
     this.press = new Int8Array(n);      // +1 where pressing gains (descent), -1 where it costs (ascent)
-    this.body = new Uint8Array(n);      // 1 inside a section's rollers (not a launch, kicker or catch)
+    this.body = new Uint8Array(n);      // 1 inside a section's rollers or a launch's catch (not the launch or a kicker)
     this.hold = new Float32Array(n);    // inside a hold zone (crest to valley): 0..1 how far down; -1 outside
     this.turn = new Float32Array(n).fill(1);   // how much the road may turn here (a section's turn, default 1)
     this.rand = mulberry32(hashStr(chart.id || chart.title || 'x'));
@@ -206,7 +206,9 @@ export class Course {
           const tc0 = this.beats[bL], tc1 = this.beats[bC], Lc = tc1 - tc0;
           const yc0 = y, sc0 = s, s1 = -1.5;
           const y1 = clamp(y + 0.5 * (s + s1) * Lc * 0.62, H_MIN + 2, H_MAX);
-          pieces.push({ ta: tc0, tb: tc1, kind: sec.kind, turn: sec.turn, f: (t) => hermite(yc0, sc0, y1, s1, Lc, (t - tc0) / Lc) });
+          // (the catch is ridden like the rollers: she lands on it going downhill, and its dip is
+          // judged as a pump, so it gets a hold zone like theirs)
+          pieces.push({ ta: tc0, tb: tc1, kind: sec.kind, turn: sec.turn, zone: true, f: (t) => hermite(yc0, sc0, y1, s1, Lc, (t - tc0) / Lc) });
           y = y1; s = s1;
           b = bC;
         } else b = bL;
@@ -279,7 +281,7 @@ export class Course {
       const p = pieces[Math.min(pi, pieces.length - 1)];
       Y[i] = p.f(Math.min(t, p.tb));
       this.kind[i] = KIND_ID[p.kind] ?? 1;
-      this.body[i] = p.amps ? 1 : 0;
+      this.body[i] = p.amps || p.zone ? 1 : 0;
       this.turn[i] = p.turn ?? 1;
     }
     // never below the street: soft floor at 3 m
@@ -304,7 +306,8 @@ export class Course {
     // the bottoms of the dips: where you let go, on the beat
     this.valleys = [];
     for (let i = 1; i < n; i++) if (this.vy[i - 1] < -0.3 && this.vy[i] >= -0.3) this.valleys.push(this.t0 + i / RATE);
-    // hold zones: each run downhill inside the rollers, from the crest to the valley.
+    // hold zones: each run downhill inside the rollers (and down a launch's catch into them), from
+    // the crest to the valley.
     // That is where you hold; the valley at its end is where you let go, on the beat.
     this.hold.fill(-1);
     this.crests = [];
@@ -427,6 +430,22 @@ export class Course {
     out.gap = this.gapMask ? this.gapMask[i] : 0;
     const h0 = this.hold[i], h1 = this.hold[i + 1];
     out.hold = h0 >= 0 && h1 >= 0 ? h0 + (h1 - h0) * a : (a < 0.5 ? h0 : h1);
+    return out;
+  }
+
+  // just the heading at t, and just height, heading and turn rate: the layout, the road and the
+  // scenery ask for these thousands of times a frame, and a whole sample() each time cost them
+  yawAt(t) {
+    const f = (t - this.t0) * RATE;
+    const i = clamp(Math.floor(f), 0, this.n - 2), a = clamp(f - i, 0, 1), Y = this.yaw;
+    return Y[i] + (Y[i + 1] - Y[i]) * a;
+  }
+  yyw(t, out) {
+    const f = (t - this.t0) * RATE;
+    const i = clamp(Math.floor(f), 0, this.n - 2), a = clamp(f - i, 0, 1);
+    out.y = this.y[i] + (this.y[i + 1] - this.y[i]) * a;
+    out.yaw = this.yaw[i] + (this.yaw[i + 1] - this.yaw[i]) * a;
+    out.yawRate = this.yawRate[i] + (this.yawRate[i + 1] - this.yawRate[i]) * a;
     return out;
   }
 

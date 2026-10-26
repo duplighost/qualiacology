@@ -10,6 +10,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07050d; ove
 #songbar { position: absolute; left: 50%; top: calc(18px + env(safe-area-inset-top)); transform: translateX(-50%); width: min(560px, 60vw); height: 22px; opacity: 0; transition: opacity 1.2s; }
 #songbar.on { opacity: .85; }
 #shape { width: 100%; height: 100%; display: block; }
+#songbar .mark { position: absolute; left: -1px; top: 0; width: 2px; height: 100%; background: #fff; will-change: transform; }
 
 #title { position: absolute; left: 0; right: 0; bottom: 12vh; text-align: center; transition: opacity .9s; }
 #title .name { font-size: 15px; letter-spacing: .62em; font-weight: 700; padding-left: .62em; opacity: .92; }

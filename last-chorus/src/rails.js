@@ -18,9 +18,11 @@ export class Rails {
     const post = new THREE.CylinderGeometry(0.05, 0.07, 1, 6); post.translate(0, -0.5, 0);
     const cap = new THREE.SphereGeometry(0.2, 12, 8);
     this.edge = new THREE.Color(P.rail ?? P.edge);
+    // (what it's lit with now: its own colour, turning the hold colour while she holds down on it)
+    this.rimNow = this.edge.clone(); this.holdK = 0;
     this.pipeMat = new THREE.MeshStandardMaterial({ color: 0xe8e6f0, roughness: 0.28, metalness: 0.55, emissive: this.edge.clone(), emissiveIntensity: 0.6 });
     this.pipeMat.onBeforeCompile = (sh) => {
-      sh.uniforms.uBeat = { value: 0 }; sh.uniforms.uRim = { value: this.edge };
+      sh.uniforms.uBeat = { value: 0 }; sh.uniforms.uRim = { value: this.rimNow };
       this.pipeMat.userData.shader = sh;
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uBeat; uniform vec3 uRim;')
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
@@ -32,7 +34,7 @@ export class Rails {
     // the light it throws on the ribbon under it: a soft strip
     const strip = new THREE.PlaneGeometry(1, 1); strip.rotateX(-Math.PI / 2); strip.translate(0, 0, 0.5);
     this.glowMat = new THREE.ShaderMaterial({
-      uniforms: { uCol: { value: this.edge.clone() }, uK: { value: 1 } },
+      uniforms: { uCol: { value: this.rimNow }, uK: { value: 1 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }',
       fragmentShader: 'uniform vec3 uCol; uniform float uK; varying vec2 vUv; void main(){ float d = abs(vUv.x - 0.5) * 2.0; gl_FragColor = vec4(uCol * exp(-d * d * 6.0) * 0.55 * uK, 1.0); }',
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2,
@@ -44,7 +46,8 @@ export class Rails {
     this._a = new THREE.Vector3(); this._b = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._s = new THREE.Vector3(); this._z = new THREE.Vector3(0, 0, 1); this._d = new THREE.Vector3(); this._g = new THREE.Vector3();
   }
 
-  update(track, rider, beat) {
+  // hold: she's on a rail holding down (holdCol, the song's hold colour); dt for the fade
+  update(track, rider, beat, hold = 0, holdCol = null, dt = 1 / 60) {
     if (!this.on) return;
     const t = rider.t;
     let ns = 0, np = 0, nc = 0;
@@ -77,8 +80,12 @@ export class Rails {
     }
     this.segs.count = ns; this.glow.count = ns; this.posts.count = np; this.caps.count = nc;
     this.segs.instanceMatrix.needsUpdate = true; this.glow.instanceMatrix.needsUpdate = true; this.posts.instanceMatrix.needsUpdate = true; this.caps.instanceMatrix.needsUpdate = true;
-    this.glowMat.uniforms.uK.value = 0.7 + 0.8 * clamp(beat, 0, 1) + (rider.rail ? 0.6 : 0);
+    // held down on it, the rail goes the hold colour and burns: the grind you're pumping
+    this.holdK += ((hold ? 1 : 0) - this.holdK) * Math.min(1, dt * (hold ? 14 : 6));
+    this.rimNow.copy(this.edge);
+    if (holdCol) this.rimNow.lerp(holdCol, this.holdK);
+    this.glowMat.uniforms.uK.value = (0.7 + 0.8 * clamp(beat, 0, 1) + (rider.rail ? 0.6 : 0)) * (1 + 0.8 * this.holdK);
     const sh = this.pipeMat.userData.shader;
-    if (sh) sh.uniforms.uBeat.value = clamp(beat, 0, 1) * (rider.rail ? 1.4 : 1);
+    if (sh) sh.uniforms.uBeat.value = clamp(beat, 0, 1) * (rider.rail ? 1.4 : 1) + 1.1 * this.holdK;
   }
 }

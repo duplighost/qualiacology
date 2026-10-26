@@ -9,8 +9,9 @@
 // is judged on when you actually let go, not on the next frame.
 
 const PRESS_KEYS = new Set(['Space', 'KeyJ', 'KeyK', 'ShiftLeft', 'ShiftRight', 'ArrowDown', 'KeyS']);
-const THUMB_DEAD = 6;    // px a thumb can wobble without steering
-const THUMB_SPAN = 110;  // px of push past that to full lock
+const THUMB_DEAD = 10;   // px a thumb can wobble without steering
+const THUMB_SPAN = 170;  // px of push past that to full lock (110 was twitchy on a phone)
+const THUMB_CURVE = 1.3; // small pushes move her less than big ones, for fine lines
 
 export class Input {
   constructor(el) {
@@ -94,8 +95,8 @@ export class Input {
   }
   _push(f) {
     const dx = f.x - f.x0;
-    const s = Math.sign(dx) * Math.max(0, Math.abs(dx) - THUMB_DEAD) / THUMB_SPAN;
-    return Math.max(-1, Math.min(1, f.base + s));
+    const u = Math.min(1.2, Math.max(0, Math.abs(dx) - THUMB_DEAD) / THUMB_SPAN);
+    return Math.max(-1, Math.min(1, f.base + Math.sign(dx) * Math.pow(u, THUMB_CURVE)));
   }
   // the left thumb while it's down, for the ring drawn under it
   get thumb() { const f = this._steering(); return f && f.role === 'steer' ? f : null; }

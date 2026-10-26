@@ -9,7 +9,26 @@ import { GEO, buildingMaterial, tintMaterial, glowMaterial, signMaterial, makeAt
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 function mulberry32(a) { return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-export const col = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
+// (kept: the parts ask for the same few colours thousands of times a frame; never change one in place)
+const _cols = new Map();
+export const col = (hex) => {
+  let v = _cols.get(hex);
+  if (!v) { const c = new THREE.Color(hex); v = [c.r, c.g, c.b]; if (_cols.size > 2048) _cols.clear(); _cols.set(hex, v); }
+  return v;
+};
+
+// What a thing hands its layer: the layer copies the numbers out at once, so these few are filled
+// and handed over again and again instead of a new object (and array) for every thing, every
+// frame: thousands a frame were tens of megabytes of garbage a second, and a phone stalls to
+// collect it. (Use one before asking for the next.)
+const _T = { aTint: null }, _G = { aTint: null, aWake: [0, 0] }, _B = { aWake: [0, 0, 0], aTint: null }, _I = { aIdx: 0, aWake: [0, 0] }, _S3 = { aWake: [0, 0, 0] };
+export const tintV = (c) => { _T.aTint = c; return _T; };
+export const wakeV = (w0, w1, w2, c) => { const w = _B.aWake; w[0] = w0; w[1] = w1; w[2] = w2; _B.aTint = c; return _B; };
+export const signV = (idx, w0, w1 = 0) => { _I.aIdx = idx; _I.aWake[0] = w0; _I.aWake[1] = w1; return _I; };
+const store3V = (w0, w1, w2) => { const w = _S3.aWake; w[0] = w0; w[1] = w1; w[2] = w2; return _S3; };
+const GREY_POLE = [0.2, 0.2, 0.25], LAMP_POST = [0.25, 0.24, 0.3], HW_POST = [0.3, 0.3, 0.34], BOARD_BACK = [0.18, 0.16, 0.22], CANOPY = [0.85, 0.85, 0.9], STATION_SHOP = [0.9, 0.9, 0.95], RED_LIGHT = [1, 0.1, 0.1];
+const AWNINGS = [0x8a2030, 0x204a6a, 0x2a5a3a, 0x6a4a20], SPOT = [1, 0.95, 0.85];
+const HEAD = [1.0, 0.92, 0.75], TAIL = [1.0, 0.08, 0.1], SIREN_R = [1, 0.05, 0.08], SIREN_B = [0.1, 0.25, 1], POLICE = [0.95, 0.95, 1], CAR_SIDES = [-0.65, 0.65];
 
 class Layer {
   constructor(scene, geo, mat, max, attrs = {}) {
@@ -24,20 +43,26 @@ class Layer {
     this.mesh = new THREE.InstancedMesh(geo, mat, max);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.count = 0; this.mesh.frustumCulled = false;
+    // (a layer never moves: its instances carry where things are, so no matrices to work out each frame)
+    this.mesh.matrixAutoUpdate = false; this.mesh.matrixWorldAutoUpdate = false;
     scene.add(this.mesh);
   }
   begin() { this.n = 0; }
   add(m, vals) {
     if (this.n >= this.max) return -1;
     this.mesh.setMatrixAt(this.n, m);
-    if (vals) for (const k in vals) { const A = this.attrs[k]; if (A) { const v = vals[k]; if (A.size === 1) A.a.array[this.n] = v; else A.a.array.set(v, this.n * A.size); } }
+    if (vals) for (const k in vals) { const A = this.attrs[k]; if (A) { const v = vals[k], arr = A.a.array, sz = A.size, o = this.n * sz; if (sz === 1) arr[o] = v; else for (let i = 0; i < sz; i++) arr[o + i] = v[i]; } }
     return this.n++;
   }
   // send only the part of each buffer in use this frame (the whole of it every frame cost
   // megabytes of uploads), and nothing at all for a layer with nothing in it
+  // (an empty layer is hidden: it still went the whole way through the renderer, its shader, its
+  // uniforms and a draw of nothing, and empty ones were half the draws in some songs; wait is set
+  // while a layer first used mid-ride compiles in the background)
   end() {
     const n = this.n;
     this.mesh.count = n;
+    this.mesh.visible = n > 0 && !this.wait;
     if (n === 0) return;
     const im = this.mesh.instanceMatrix;
     im.clearUpdateRanges(); im.addUpdateRange(0, n * 16); im.needsUpdate = true;
@@ -119,7 +144,7 @@ export class Scenery {
     const defs = LAYER_DEFS;
     // (onLate, set once the ride is loaded: a layer first wanted mid-ride compiles in the background)
     this.onLate = null;
-    this.layers = new Proxy(this._layers, { get: (o, k) => { if (o[k] || typeof k !== 'string') return o[k]; const d = defs[k]; if (!d) return undefined; const [geo, mat, max, attrs] = d(this.mats); const L = (o[k] = new Layer(scene, geo, mat, max, attrs)); if (this.onLate) this.onLate(L.mesh); return L; } });
+    this.layers = new Proxy(this._layers, { get: (o, k) => { if (o[k] || typeof k !== 'string') return o[k]; const d = defs[k]; if (!d) return undefined; const [geo, mat, max, attrs] = d(this.mats); const L = (o[k] = new Layer(scene, geo, mat, max, attrs)); if (this.onLate) this.onLate(L.mesh, L); return L; } });
     this.items = [];
     this.traffic = [];
     this.roads = [];
@@ -128,6 +153,9 @@ export class Scenery {
     this._lo = 0;
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(); this._e = new THREE.Euler(); this._o = new THREE.Vector3();
     this.beat = 0;
+    // how far up the road (seconds of song) things are built: less on a phone that can't keep up
+    // (main.js), where the furthest lights fade in instead of appearing
+    this.ahead = 46; this._fade = 1;
     this.wakeAll = 0;     // finale: everything lights
     this.roadMeshes = this.roads.map((r) => new Road(scene, course, r, P));
     const seen = new Set();
@@ -172,7 +200,7 @@ export class Scenery {
   // set-pieces draw their lights through the same glow/pool layers
   glow(x, y, z, size, color, strength, mode = 0) { glowAt(this, x, y, z, size, color, strength, mode); }
   pool(x, y, z, size, color, strength) { poolAt(this, x, y, z, size, color, strength); }
-  parkedCar(x, y, z, yaw, tint) { this._e.set(0, yaw, 0); this._q.setFromEuler(this._e); this._m.compose(this._p.set(x, y, z), this._q, this._s.set(1, 1, 1)); this.layers.car.add(this._m, { aTint: tint }); }
+  parkedCar(x, y, z, yaw, tint) { this._q.set(0, Math.sin(yaw * 0.5), 0, Math.cos(yaw * 0.5)); this._m.compose(this._p.set(x, y, z), this._q, this._s.set(1, 1, 1)); this.layers.car.add(this._m, tintV(tint)); }
 
   update(track, rider, songT, dt, beat, extra) {
     const t = rider.t, items = this.items, Ls = this.layers;
@@ -181,43 +209,46 @@ export class Scenery {
     while (this._lo < items.length && items[this._lo].t < t - 5) this._lo++;
     const m = this._m, q = this._q, p = this._p, s = this._s, e = this._e, o = this._o;
     const flowWake = clamp((rider.flow - 0.2) / 0.6, 0, 1);
+    const edge = t + this.ahead, fadeIn = this.ahead < 46;
     for (let i = this._lo; i < items.length; i++) {
       const it = items[i];
-      if (it.t > t + 46) break;
+      if (it.t > edge) break;
+      if (fadeIn) this._fade = Math.min(1, (edge - it.t) / 4);
       if (it.ahead !== undefined && it.t > t + it.ahead) continue;
       if (!it.passed && it.t < t + 0.7 + Math.abs(it.x) / 90) { it.passed = true; it.target = Math.max(it.wake0 ?? 0, flowWake * clamp(1.3 - Math.abs(it.x) / 200, 0.3, 1)); }
       const tgt = Math.max(it.passed ? it.target : (it.wake0 ?? 0), this.wakeAll, it.keepLit ? 1 : 0);
       it.wakeNow = (it.wakeNow ?? it.wake0 ?? 0) + (tgt - (it.wakeNow ?? it.wake0 ?? 0)) * Math.min(1, dt * (1.2 + (it.seed ?? 0.5) * 2.5));
-      track.ground(it.t, it.x, p);
-      const yaw = this.course.sample(it.t, this._smp || (this._smp = {})).yaw + (it.rot || 0);
+      const yaw = track.groundYaw(it.t, it.x, p) + (it.rot || 0);
       p.y = it.h || 0;
-      e.set(0, yaw, 0); q.setFromEuler(e);
+      q.set(0, Math.sin(yaw * 0.5), 0, Math.cos(yaw * 0.5));
       PARTS[it.parts](this, it, p, q, yaw);
     }
+    this._fade = 1;
     // traffic
+    const tAhead = Math.min(34, this.ahead);
     for (const car of this.traffic) {
       let tau = car.tau0 + car.rate * songT;
       const span = this.course.duration + 26;
       tau = ((tau + 8) % span + span) % span - 8;
-      if (tau < t - 3 || tau > t + 34 || tau < car.from || tau > car.to) continue;
-      track.ground(tau, car.x, p);
+      if (tau < t - 3 || tau > t + tAhead || tau < car.from || tau > car.to) continue;
+      const yaw = track.groundYaw(tau, car.x, p) + (car.dir > 0 ? 0 : Math.PI);
       if (car.road.follow && this.floorFn) p.y = this.floorFn(tau, car.x);
-      const yaw = this.course.sample(tau, this._smp || (this._smp = {})).yaw + (car.dir > 0 ? 0 : Math.PI);
-      e.set(0, yaw, 0); q.setFromEuler(e);
+      q.set(0, Math.sin(yaw * 0.5), 0, Math.cos(yaw * 0.5));
       s.setScalar(1);
       m.compose(p, q, s);
-      Ls.car.add(m, { aTint: car.police ? [0.95, 0.95, 1] : car.tint });
+      Ls.car.add(m, tintV(car.police ? POLICE : car.tint));
       // lights: head white-gold in front, tail red behind. The glows face the camera, so a car
       // going her way shows its tails, not a pair of floodlights; one coming at her, its heads
       const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = -Math.cos(yaw), rz = Math.sin(yaw);
       const away = car.dir > 0 ? 1 : 0;
-      for (const side of [-0.65, 0.65]) {
-        glowAt(this, p.x + fx * 2.3 + rx * side, p.y + 0.62, p.z + fz * 2.3 + rz * side, 1.6, [1.0, 0.92, 0.75], away ? 0.12 : 1.3);
-        glowAt(this, p.x - fx * 2.3 + rx * side, p.y + 0.66, p.z - fz * 2.3 + rz * side, 1.25, [1.0, 0.08, 0.1], away ? 1.3 : 0.2);
+      for (let si = 0; si < 2; si++) {
+        const side = CAR_SIDES[si];
+        glowAt(this, p.x + fx * 2.3 + rx * side, p.y + 0.62, p.z + fz * 2.3 + rz * side, 1.6, HEAD, away ? 0.12 : 1.3);
+        glowAt(this, p.x - fx * 2.3 + rx * side, p.y + 0.66, p.z - fz * 2.3 + rz * side, 1.25, TAIL, away ? 1.3 : 0.2);
       }
       if (car.police) {
-        glowAt(this, p.x + rx * 0.4, p.y + 1.55, p.z + rz * 0.4, 2.2, [1, 0.05, 0.08], 2.4, 2);
-        glowAt(this, p.x - rx * 0.4, p.y + 1.55, p.z - rz * 0.4, 2.2, [0.1, 0.25, 1], 2.4, 3);
+        glowAt(this, p.x + rx * 0.4, p.y + 1.55, p.z + rz * 0.4, 2.2, SIREN_R, 2.4, 2);
+        glowAt(this, p.x - rx * 0.4, p.y + 1.55, p.z - rz * 0.4, 2.2, SIREN_B, 2.4, 3);
       }
     }
     if (extra) extra(this);
@@ -242,21 +273,23 @@ export class Scenery {
 export function poolAt(S, x, y, z, size, color, strength) {
   const m = S._m3 || (S._m3 = new THREE.Matrix4());
   m.makeScale(size, 1, size); m.setPosition(x, y, z);
-  S.layers.pool.add(m, { aTint: color, aWake: [strength, 0] });
+  _G.aTint = color; _G.aWake[0] = strength * S._fade; _G.aWake[1] = 0;
+  S.layers.pool.add(m, _G);
 }
 
 export function glowAt(S, x, y, z, size, color, strength, mode = 0) {
   const m = S._m2 || (S._m2 = new THREE.Matrix4());
   m.makeScale(size, size, size); m.setPosition(x, y, z);
-  S.layers.glow.add(m, { aTint: color, aWake: [strength, mode] });
+  _G.aTint = color; _G.aWake[0] = strength * S._fade; _G.aWake[1] = mode;
+  S.layers.glow.add(m, _G);
 }
 
 // a panel facing the rider coming up the road, turned a little toward the road
+// (its yaw is left in S._fyaw)
 export function faceQ(S, it) {
-  const h = S.course.sample(it.t).yaw;
-  const yaw = h + Math.PI + (it.x > 0 ? -0.55 : 0.55);
-  S._e.set(0, yaw, 0);
-  return S._q2 ? S._q2.setFromEuler(S._e) : (S._q2 = new THREE.Quaternion().setFromEuler(S._e));
+  const yaw = S.course.yawAt(it.t) + Math.PI + (it.x > 0 ? -0.55 : 0.55);
+  S._fyaw = yaw;
+  return (S._q2 || (S._q2 = new THREE.Quaternion())).set(0, Math.sin(yaw * 0.5), 0, Math.cos(yaw * 0.5));
 }
 
 // world position of an item-local offset
@@ -272,91 +305,91 @@ export const PARTS = {
   house(S, it, p, q) {
     const m = S._m, sc = S._s.set(it.s, it.s, it.s);
     m.compose(p, q, sc);
-    S.layers.house.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
-    S.layers.roof.add(m, { aTint: it.roofTint });
+    S.layers.house.add(m, wakeV(it.wakeNow, it.seed, it.boarded || 0, it.tint));
+    S.layers.roof.add(m, tintV(it.roofTint));
     // porch light
     const o = local(p, it.yaw ?? 0, 0, 0, 0, S._o);
-    if (it.porch) { const w = local(p, S.course.sample(it.t).yaw + it.rot, 0, 2.4 * it.s, 4.3 * it.s, S._o); glowAt(S, w.x, w.y, w.z, 1.6 * it.s, col(S.P.window), 0.5 + 1.2 * it.wakeNow); poolAt(S, w.x, p.y + 0.06, w.z + 0.0, 7 * it.s, col(S.P.window), 0.25 + 0.7 * it.wakeNow); }
+    if (it.porch) { const w = local(p, S.course.yawAt(it.t) + it.rot, 0, 2.4 * it.s, 4.3 * it.s, S._o); glowAt(S, w.x, w.y, w.z, 1.6 * it.s, col(S.P.window), 0.5 + 1.2 * it.wakeNow); poolAt(S, w.x, p.y + 0.06, w.z + 0.0, 7 * it.s, col(S.P.window), 0.25 + 0.7 * it.wakeNow); }
   },
   block(S, it, p, q) {
     const m = S._m, sy = it.sy ?? it.s;
-    m.compose(p, q, S._s.set(it.s, sy, it.s)); S.layers.block.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
+    m.compose(p, q, S._s.set(it.s, sy, it.s)); S.layers.block.add(m, wakeV(it.wakeNow, it.seed, it.boarded || 0, it.tint));
     // the roof: parapet, air handlers, now and then a water tank
     S._o.copy(p); S._o.y = p.y + 24 * sy;
     m.compose(S._o, q, S._s.set(it.s, it.s, it.s));
-    const dark = [it.tint[0] * 0.42, it.tint[1] * 0.42, it.tint[2] * 0.45];
-    S.layers[it.seed > 0.62 ? 'roofTank' : 'roofKit'].add(m, { aTint: dark });
+    const dark = it._dark || (it._dark = [it.tint[0] * 0.42, it.tint[1] * 0.42, it.tint[2] * 0.45]);
+    S.layers[it.seed > 0.62 ? 'roofTank' : 'roofKit'].add(m, tintV(dark));
     // shops along the street on the blocks that front it
     if (Math.abs(it.x) < 34 && !it.noShop) {
       m.compose(p, q, S._s.set(it.s, Math.min(1.2, Math.max(0.85, sy)), it.s));
-      S.layers.store.add(m, { aWake: [0.25 + 0.75 * it.wakeNow, (it.seed * 7.31) % 1, 0] });
+      S.layers.store.add(m, store3V(0.25 + 0.75 * it.wakeNow, (it.seed * 7.31) % 1, 0));
       const awn = it.seed * 13.7 % 1;
-      S.layers.awning.add(m, { aTint: col([0x8a2030, 0x204a6a, 0x2a5a3a, 0x6a4a20][Math.floor(awn * 4)]) });
+      S.layers.awning.add(m, tintV(col(AWNINGS[Math.floor(awn * 4)])));
     }
   },
   tower(S, it, p, q, yaw) {
-    const m = S._m, sy = it.sy ?? it.s; m.compose(p, q, S._s.set(it.s, sy, it.s)); S.layers.tower.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
+    const m = S._m, sy = it.sy ?? it.s; m.compose(p, q, S._s.set(it.s, sy, it.s)); S.layers.tower.add(m, wakeV(it.wakeNow, it.seed, it.boarded || 0, it.tint));
     // a stepped crown and a mast with the aircraft light at the top
     S._o.copy(p); S._o.y = p.y + 64 * sy;
     m.compose(S._o, q, S._s.set(it.s, it.s, it.s));
-    S.layers.towerTop.add(m, { aTint: [it.tint[0] * 0.5, it.tint[1] * 0.5, it.tint[2] * 0.55] });
-    glowAt(S, p.x, p.y + 64 * sy + 23 * it.s, p.z, 3.4, [1, 0.08, 0.08], 1.7, 1);   // (from the tower's own foot: on raised ground it sat below the mast)
+    S.layers.towerTop.add(m, tintV(it._top || (it._top = [it.tint[0] * 0.5, it.tint[1] * 0.5, it.tint[2] * 0.55])));
+    glowAt(S, p.x, p.y + 64 * sy + 23 * it.s, p.z, 3.4, TAIL, 1.7, 1);   // (from the tower's own foot: on raised ground it sat below the mast)
   },
   shop(S, it, p, q, yaw) {
-    const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.shop.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
+    const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.shop.add(m, wakeV(it.wakeNow, it.seed, it.boarded || 0, it.tint));
     if (it.idx !== undefined) {
       const w = local(p, yaw, 0, 6.4 * it.s, 5.2 * it.s, S._o);
-      m.compose(w, q, S._s.set(0.9 * it.s, 0.9 * it.s, 1)); S.layers.sign.add(m, { aIdx: it.idx, aWake: [0.4 + 0.6 * it.wakeNow, 0] });
+      m.compose(w, q, S._s.set(0.9 * it.s, 0.9 * it.s, 1)); S.layers.sign.add(m, signV(it.idx, 0.4 + 0.6 * it.wakeNow));
     }
   },
   motel(S, it, p, q, yaw) {
-    const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.motel.add(m, { aWake: [it.wakeNow, it.seed, it.boarded || 0], aTint: it.tint });
+    const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.motel.add(m, wakeV(it.wakeNow, it.seed, it.boarded || 0, it.tint));
     // tall sign by the road
     const fq = faceQ(S, it);
     const w = local(p, yaw, -24 * it.s, 0, 10 * it.s, S._o);
-    m.compose(w, fq, S._s.set(1.2, 1.4, 1.2)); S.layers.signPole.add(m, { aTint: [0.2, 0.2, 0.25] });
-    S.layers.sign.add(m, { aIdx: S.atlas.index.MOTEL, aWake: [0.5 + 0.5 * it.wakeNow, 0] });
+    m.compose(w, fq, S._s.set(1.2, 1.4, 1.2)); S.layers.signPole.add(m, tintV(GREY_POLE));
+    S.layers.sign.add(m, signV(S.atlas.index.MOTEL, 0.5 + 0.5 * it.wakeNow));
     const w2 = local(p, yaw, -24 * it.s, -3.4, 10 * it.s, S._o);
-    m.compose(w2, fq, S._s.set(0.9, 0.9, 1)); S.layers.sign.add(m, { aIdx: it.wakeNow > 0.5 ? S.atlas.index.VACANCY : S.atlas.index.NOVAC, aWake: [0.4 + 0.6 * it.wakeNow, 0] });
+    m.compose(w2, fq, S._s.set(0.9, 0.9, 1)); S.layers.sign.add(m, signV(it.wakeNow > 0.5 ? S.atlas.index.VACANCY : S.atlas.index.NOVAC, 0.4 + 0.6 * it.wakeNow));
     // door lights along the walkway
     for (let k = -4; k <= 4; k++) { const d = local(p, yaw, k * 4.6 * it.s, 5.6 * it.s, 4.7 * it.s, S._o); glowAt(S, d.x, d.y, d.z, 1.3, col(S.P.window), 0.4 + 0.9 * it.wakeNow); }
   },
   station(S, it, p, q, yaw) {
-    const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.canopy.add(m, { aTint: [0.85, 0.85, 0.9] }); S.layers.canopyLight.add(m, {});
-    const w = local(p, yaw, 13, 0, 4, S._o); m.compose(w, faceQ(S, it), S._s.set(0.9, 1, 0.9)); S.layers.signPole.add(m, { aTint: [0.2, 0.2, 0.25] });
-    S.layers.sign.add(m, { aIdx: S.atlas.index.GAS, aWake: [0.6 + 0.4 * it.wakeNow, 0] });
-    const sh = local(p, yaw, 0, 0, -12, S._o); m.compose(sh, q, S._s.set(0.8, 0.9, 0.8)); S.layers.shop.add(m, { aWake: [0.4 + 0.6 * it.wakeNow, it.seed, 0], aTint: [0.9, 0.9, 0.95] });
+    const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.canopy.add(m, tintV(CANOPY)); S.layers.canopyLight.add(m);
+    const w = local(p, yaw, 13, 0, 4, S._o); m.compose(w, faceQ(S, it), S._s.set(0.9, 1, 0.9)); S.layers.signPole.add(m, tintV(GREY_POLE));
+    S.layers.sign.add(m, signV(S.atlas.index.GAS, 0.6 + 0.4 * it.wakeNow));
+    const sh = local(p, yaw, 0, 0, -12, S._o); m.compose(sh, q, S._s.set(0.8, 0.9, 0.8)); S.layers.shop.add(m, wakeV(0.4 + 0.6 * it.wakeNow, it.seed, 0, STATION_SHOP));
   },
-  tree(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(it.s, it.s * (it.sy ?? 1), it.s)); S.layers[it.pine ? 'pine' : 'tree'].add(m, { aTint: it.tint }); },
+  tree(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(it.s, it.s * (it.sy ?? 1), it.s)); S.layers[it.pine ? 'pine' : 'tree'].add(m, tintV(it.tint)); },
   lamp(S, it, p, q, yaw) {
-    const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.lamp.add(m, { aTint: [0.25, 0.24, 0.3] });
+    const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.lamp.add(m, tintV(LAMP_POST));
     const k = it.dim ?? 1;
     const w = local(p, yaw, 0, 7.75, 2.1, S._o); glowAt(S, w.x, w.y, w.z, 3.6, col(S.P.lamp), (0.55 + 0.9 * it.wakeNow) * k, S.beatLamps ? 4 : 0);
     poolAt(S, w.x, p.y + 0.06, w.z, 13, col(S.P.lamp), (0.35 + 0.8 * it.wakeNow) * k);
   },
   hwLamp(S, it, p, q, yaw) {
-    const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.hwLamp.add(m, { aTint: [0.3, 0.3, 0.34] });
-    for (const z of [-2.9, 2.9]) { const w = local(p, yaw, 0, 12.6, z, S._o); glowAt(S, w.x, w.y, w.z, 4.6, col(S.P.street), 0.6 + 0.9 * it.wakeNow); poolAt(S, w.x, p.y + 0.07, w.z, 20, col(S.P.street), 0.3 + 0.7 * it.wakeNow); }
+    const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.hwLamp.add(m, tintV(HW_POST));
+    for (let zi = -1; zi <= 1; zi += 2) { const z = 2.9 * zi, w = local(p, yaw, 0, 12.6, z, S._o); glowAt(S, w.x, w.y, w.z, 4.6, col(S.P.street), 0.6 + 0.9 * it.wakeNow); poolAt(S, w.x, p.y + 0.07, w.z, 20, col(S.P.street), 0.3 + 0.7 * it.wakeNow); }
   },
   billboard(S, it, p, q) {
     if (S.floorFn && it.floor) p.y = S.floorFn(it.t, it.x);
     const fq = faceQ(S, it);
-    const m = S._m; m.compose(p, fq, S._s.set(it.s, it.s, it.s)); S.layers.billboard.add(m, { aTint: [0.18, 0.16, 0.22] });
-    S.layers.board.add(m, { aIdx: it.idx, aWake: [it.keepLit ? 1 : 0.3 + 0.7 * it.wakeNow, 0] });
+    const m = S._m; m.compose(p, fq, S._s.set(it.s, it.s, it.s)); S.layers.billboard.add(m, tintV(BOARD_BACK));
+    S.layers.board.add(m, signV(it.idx, it.keepLit ? 1 : 0.3 + 0.7 * it.wakeNow));
     // two spotlights under the board
-    const by = new THREE.Euler().setFromQuaternion(fq, 'YXZ').y;
-    for (const x of [-4, 4]) { const w = local(p, by, x * it.s, 10.6 * it.s, 1.2 * it.s, S._o); glowAt(S, w.x, w.y, w.z, 2.2 * it.s, [1, 0.95, 0.85], 0.9); }
+    const by = S._fyaw;
+    for (let x = -4; x <= 4; x += 8) { const w = local(p, by, x * it.s, 10.6 * it.s, 1.2 * it.s, S._o); glowAt(S, w.x, w.y, w.z, 2.2 * it.s, SPOT, 0.9); }
   },
   sign(S, it, p, q) {
     if (S.floorFn && it.floor) p.y = S.floorFn(it.t, it.x);
     const m = S._m; m.compose(p, faceQ(S, it), S._s.set(it.s, it.s, it.s));
-    S.layers.signPole.add(m, { aTint: [0.2, 0.2, 0.25] });
-    S.layers.sign.add(m, { aIdx: it.idx, aWake: [0.35 + 0.65 * it.wakeNow, 0] });
+    S.layers.signPole.add(m, tintV(GREY_POLE));
+    S.layers.sign.add(m, signV(it.idx, 0.35 + 0.65 * it.wakeNow));
   },
-  overpass(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.overpass.add(m, { aTint: it.tint }); },
-  water(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.water.add(m, { aTint: it.tint }); glowAt(S, p.x, 26 * it.s, p.z, 2.5, [1, 0.1, 0.1], 1.3, 1); },
-  parked(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.car.add(m, { aTint: it.tint }); },
-  fence(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(1, 1, it.s)); S.layers.fence.add(m, { aTint: it.tint }); },
+  overpass(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.overpass.add(m, tintV(it.tint)); },
+  water(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.water.add(m, tintV(it.tint)); glowAt(S, p.x, 26 * it.s, p.z, 2.5, RED_LIGHT, 1.3, 1); },
+  parked(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(1, 1, 1)); S.layers.car.add(m, tintV(it.tint)); },
+  fence(S, it, p, q) { const m = S._m; m.compose(p, q, S._s.set(1, 1, it.s)); S.layers.fence.add(m, tintV(it.tint)); },
 };
 
 

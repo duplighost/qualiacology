@@ -36,3 +36,14 @@ proto.customProgramCacheKey = function () {
   this._lcHook = hook; this._lcKey = key;
   return key;
 };
+
+// Math.hypot is a builtin that boxes its arguments: thousands of calls a frame (the road's rows,
+// the hillsides' normals) made megabytes of garbage a second for a phone to stop and collect.
+// For two or three numbers, the plain root of the sum (inlined where it's called).
+const hypot0 = Math.hypot;
+Math.hypot = function hypot(a, b, c) {
+  const n = arguments.length;
+  if (n === 2) return Math.sqrt(a * a + b * b);
+  if (n === 3) return Math.sqrt(a * a + b * b + c * c);
+  return hypot0.apply(Math, arguments);
+};

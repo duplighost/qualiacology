@@ -4,7 +4,7 @@
 // the far road breathes a little when you speed up but the near road never moves.
 
 import * as THREE from 'three';
-import { KIND_ID } from './course.js';
+import { KIND_ID, RATE } from './course.js';
 
 const R = 60;               // render samples per second of song (fine enough to draw the hold zones' edges sharp)
 const BACK = 2.5;           // seconds of ribbon drawn behind
@@ -25,14 +25,33 @@ export class Track {
     this.fx = new Float32Array(this.Nf); this.fz = new Float32Array(this.Nf);
     this.t0w = 0; this.tNow = 0;
     this.frozen = new Map();     // render sample index -> [x, z] once ridden
-    this.lit = new Map();        // render sample index -> flow when you passed (for the glow you leave)
-    this.held = new Map();       // render sample index -> 1 if she was holding down as she passed it, else 0
     this.s = {};
+    // What never changes about a row of road (all but where it's laid and how it was ridden),
+    // worked out once a song, by the row's index k in song time from kLo: the ribbon copied it
+    // out of the course, 800 rows a frame, and that was most of its cost on a phone.
+    // (from a few seconds before the course to well past its end: the ribbon is drawn past the finish)
+    this.kLo = Math.floor((course.t0 - 4) * R);
+    const nk = this.nk = Math.ceil((course.t0 + (course.n - 1) / RATE + BACK + AHEAD + 30) * R) - this.kLo;
+    const F = () => new Float32Array(nk);
+    this.kY = F(); this.kVY = F(); this.kCY = F(); this.kSY = F(); this.kYR = F(); this.kW = F();
+    this.kHold = F(); this.kGap = F(); this.kBeat = F(); this.kVD = F(); this.kCD = F();
+    this.lit = F().fill(-1);     // flow when you passed (for the glow you leave), -1 not yet
+    this.held = F().fill(-1);    // 1 if she was holding down as she passed it, 0 if not, -1 not yet
+    const spb = 60 / course.chart.bpm, sm = {};
+    for (let j = 0; j < nk; j++) {
+      const tk = (this.kLo + j) / R;
+      course.sample(tk, sm);
+      this.kY[j] = sm.y; this.kVY[j] = sm.vy; this.kCY[j] = Math.cos(sm.yaw); this.kSY[j] = Math.sin(sm.yaw); this.kYR[j] = sm.yawRate;
+      this.kW[j] = sm.width; this.kHold[j] = sm.hold; this.kGap[j] = sm.gap;
+      this.kBeat[j] = course.beatAt(tk); this.kVD[j] = course.valleyDist(tk) / spb; this.kCD[j] = course.crestDist(tk) / spb;
+    }
     this._buildMesh(scene, palette);
   }
 
   // a new run from the start line: forget what was ridden
-  restart() { this.frozen.clear(); this.lit.clear(); this.held.clear(); this._lastK = undefined; }
+  restart() { this.frozen.clear(); this.lit.fill(-1); this.held.fill(-1); this._lastK = undefined; }
+  // a row's slot in the per-row arrays (clamped to the song)
+  _j(k) { const j = k - this.kLo; return j < 0 ? 0 : j >= this.nk ? this.nk - 1 : j; }
 
   // where the rider is; called after physics each frame
   update(rider) {
@@ -49,14 +68,15 @@ export class Track {
         if (this.frozen.has(k)) continue;
         const tk = k / R;
         const back = (t - tk) * (rider.stopping ? rider.stopV0 : rider.v);
-        const yaw = c.sample(tk, this.s).yaw;
+        const yaw = c.yawAt(tk);
         this.frozen.set(k, [rider.xz.x - Math.sin(yaw) * back, rider.xz.z - Math.cos(yaw) * back]);
-        this.lit.set(k, rider.flow);
-        this.held.set(k, rider.press && !rider.stopping ? 1 : 0);
+        const j = this._j(k);
+        this.lit[j] = rider.flow;
+        this.held[j] = rider.press && !rider.stopping ? 1 : 0;
       }
       this._lastK = kr;
       // forget far past
-      for (const key of this.frozen.keys()) { if (key < k0 - 4) { this.frozen.delete(key); this.lit.delete(key); this.held.delete(key); } else break; }
+      for (const key of this.frozen.keys()) { if (key < k0 - 4) this.frozen.delete(key); else break; }
     }
     // integrate ahead from the rider
     const v0 = rider.stopping ? rider.stopV0 : rider.v, va = rider.stopping ? rider.stopV0 : Math.max(rider.vAvg, 18);
@@ -68,7 +88,7 @@ export class Track {
         const f = this.frozen.get(k);
         if (f) { this.wx[i] = f[0]; this.wz[i] = f[1]; }
         else {
-          const back = (t - tk) * (rider.stopping ? rider.stopV0 : rider.v), yaw = c.sample(tk, this.s).yaw;
+          const back = (t - tk) * (rider.stopping ? rider.stopV0 : rider.v), yaw = c.yawAt(tk);
           this.wx[i] = rider.xz.x - Math.sin(yaw) * back; this.wz[i] = rider.xz.z - Math.cos(yaw) * back;
         }
         continue;
@@ -77,7 +97,7 @@ export class Track {
       const dt = tk - tp;
       const tm = (tp + tk) / 2;
       const vp = v0 + (va - v0) * smooth(0, 3.2, tm - t);
-      const yaw = c.sample(tm, this.s).yaw;
+      const yaw = c.yawAt(tm);
       x += Math.sin(yaw) * vp * dt; z += Math.cos(yaw) * vp * dt;
       this.wx[i] = x; this.wz[i] = z; tp = tk;
     }
@@ -86,56 +106,62 @@ export class Track {
     this.fx[0] = this.wx[N - 1]; this.fz[0] = this.wz[N - 1];
     for (let i = 1; i < this.Nf; i++) {
       const ta = this.tf0 + (i - 1) / 4, tb = this.tf0 + i / 4;
-      const yaw = c.sample((ta + tb) / 2, this.s).yaw;
+      const yaw = c.yawAt((ta + tb) / 2);
       this.fx[i] = this.fx[i - 1] + Math.sin(yaw) * va * 0.25;
       this.fz[i] = this.fz[i - 1] + Math.cos(yaw) * va * 0.25;
     }
     this._writeMesh(rider);
   }
 
-  // world position on the course at song time t, lateral offset x, height above ribbon h
-  at(t, x = 0, h = 0, out = new THREE.Vector3()) {
-    const c = this.c;
-    let px, pz;
+  // where the course's centre line is laid out at song time t: x and z into out (y untouched)
+  _xz(t, out) {
     const fi = (t - this.t0w) * R;
     if (fi >= 0 && fi <= this.N - 1) {
       const i = Math.floor(fi), a = fi - i, j = Math.min(i + 1, this.N - 1);
-      px = this.wx[i] + (this.wx[j] - this.wx[i]) * a;
-      pz = this.wz[i] + (this.wz[j] - this.wz[i]) * a;
+      out.x = this.wx[i] + (this.wx[j] - this.wx[i]) * a;
+      out.z = this.wz[i] + (this.wz[j] - this.wz[i]) * a;
     } else if (fi > this.N - 1) {
       const ff = (t - this.tf0) * 4;
       const i = clamp(Math.floor(ff), 0, this.Nf - 2), a = clamp(ff - i, 0, 1.5);
-      px = this.fx[i] + (this.fx[i + 1] - this.fx[i]) * a;
-      pz = this.fz[i] + (this.fz[i + 1] - this.fz[i]) * a;
+      out.x = this.fx[i] + (this.fx[i + 1] - this.fx[i]) * a;
+      out.z = this.fz[i] + (this.fz[i + 1] - this.fz[i]) * a;
     } else {
       // behind the window: extrapolate backward from its start
-      const yaw = c.sample(this.t0w, this.s).yaw;
+      const yaw = this.c.yawAt(this.t0w);
       const back = (this.t0w - t) * 30;
-      px = this.wx[0] - Math.sin(yaw) * back; pz = this.wz[0] - Math.cos(yaw) * back;
+      out.x = this.wx[0] - Math.sin(yaw) * back; out.z = this.wz[0] - Math.cos(yaw) * back;
     }
-    const s = c.sample(t, this.s);
-    const bank = this.bankAt(t);
+    return out;
+  }
+
+  // world position on the course at song time t, lateral offset x, height above ribbon h
+  at(t, x = 0, h = 0, out = new THREE.Vector3()) {
+    this._xz(t, out);
+    const s = this.c.yyw(t, this.s3 || (this.s3 = {}));
     const cy = Math.cos(s.yaw), sy = Math.sin(s.yaw);
     // right vector (x across): heading (sin,cos) rotated -90deg in plane
     const rx = -cy, rz = sy;   // right = forward x up
+    if (x === 0) { out.y = s.y + h; return out; }
+    const bank = clamp(Math.atan2(this.speedAt(t) * s.yawRate, 9.8) * 0.7, -0.36, 0.36);
     const cb = Math.cos(bank), sb = Math.sin(bank);
-    out.set(px + rx * x * cb, s.y + x * sb + h, pz + rz * x * cb);
+    out.set(out.x + rx * x * cb, s.y + x * sb + h, out.z + rz * x * cb);
     return out;
   }
 
   // ground-level point under the course at lateral offset x (no bank), y = 0
-  ground(t, x = 0, out = new THREE.Vector3()) {
-    this.at(t, 0, 0, out);
-    const yaw = this.c.sample(t, this.s).yaw;
+  ground(t, x = 0, out = new THREE.Vector3()) { this.groundYaw(t, x, out); return out; }
+  // ... and the course's heading there, returned (the scenery wants both for every thing it places)
+  groundYaw(t, x, out) {
+    this._xz(t, out);
+    const yaw = this.c.yawAt(t);
     out.x += -Math.cos(yaw) * x; out.z += Math.sin(yaw) * x; out.y = 0;
-    return out;
+    return yaw;
   }
 
   // the ribbon banks into turns like a coordinated turn would at the speed laid out
   bankAt(t) {
-    const s = this.c.sample(t, this.s);
-    const v = this.speedAt(t);
-    return clamp(Math.atan2(v * s.yawRate, 9.8) * 0.7, -0.36, 0.36);
+    const s = this.c.yyw(t, this.s3 || (this.s3 = {}));
+    return clamp(Math.atan2(this.speedAt(t) * s.yawRate, 9.8) * 0.7, -0.36, 0.36);
   }
   speedAt(t) {
     const fi = clamp((t - this.t0w) * R, 0, this.N - 2), i = Math.floor(fi);
@@ -151,34 +177,34 @@ export class Track {
 
   _buildMesh(scene, palette) {
     const N = this.N, M = ACROSS;
+    // The ribbon's numbers, one column of texels per row of road (where it is, which way across,
+    // its normal, the beat, the hold zones...), written each frame and read by the vertex shader,
+    // which builds the strip from them. Writing every vertex of the strip every frame was the
+    // biggest single cost of a frame on a phone.
+    this.rowData = new Float32Array(N * ROW_TEXELS * 4);
+    const rt = new THREE.DataTexture(this.rowData, N, ROW_TEXELS, THREE.RGBAFormat, THREE.FloatType);
+    rt.minFilter = THREE.NearestFilter; rt.magFilter = THREE.NearestFilter; rt.generateMipmaps = false; rt.needsUpdate = true;
+    this.rowTex = rt;
+    // the strip itself never changes: which row each vertex belongs to, and where across it
     const g = new THREE.BufferGeometry();
-    const pos = new Float32Array(N * (M + 1) * 3);
-    const nor = new Float32Array(N * (M + 1) * 3);
-    const tim = new Float32Array(N * (M + 1));
-    const side = new Float32Array(N * (M + 1));
-    const misc = new Float32Array(N * (M + 1) * 4);   // beat, slope, lit, kind
+    const nv = N * (M + 1);
+    const row = new Float32Array(nv), side = new Float32Array(nv);
+    for (let i = 0; i < N; i++) for (let j = 0; j <= M; j++) { const o = i * (M + 1) + j; row[o] = i; side[o] = j / M * 2 - 1; }
     const idx = [];
     for (let i = 0; i < N - 1; i++) for (let j = 0; j < M; j++) {
       const a = i * (M + 1) + j, b = a + 1, c = a + (M + 1), d = c + 1;
       idx.push(a, c, b, b, c, d);
     }
     g.setIndex(idx);
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('normal', new THREE.BufferAttribute(nor, 3).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('aTime', new THREE.BufferAttribute(tim, 1).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('aSide', new THREE.BufferAttribute(side, 1).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('aMisc', new THREE.BufferAttribute(misc, 4).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('aDist', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('aHold', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(N * (M + 1)), 1).setUsage(THREE.DynamicDrawUsage));
-    // beats to the nearest start of a hold zone, and whether she held through this bit (-1 not ridden yet)
-    g.setAttribute('aZone', new THREE.BufferAttribute(new Float32Array(N * (M + 1) * 2), 2).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(nv * 3), 3));   // (unused: the shader places each vertex)
+    g.setAttribute('aRow', new THREE.BufferAttribute(row, 1));
+    g.setAttribute('aSide', new THREE.BufferAttribute(side, 1));
     this.geo = g;
     // the hold zones' colour, pushed to read as a colour of its own against the road
-    const hc = new THREE.Color(palette.hold ?? palette.glow), hsl = {};
-    hc.getHSL(hsl); hc.setHSL(hsl.h, Math.max(hsl.s, 0.72), Math.min(0.62, Math.max(hsl.l, 0.5)));
+    const hc = holdColour(palette);
     this.mat = new THREE.ShaderMaterial({
       uniforms: {
+        uRows: { value: rt },
         uTime: { value: 0 }, uSong: { value: 0 }, uFlow: { value: 0.3 }, uBeatPhase: { value: 0 },
         uBase: { value: new THREE.Color(palette.ribbon) }, uEdge: { value: new THREE.Color(palette.edge) },
         uFret: { value: new THREE.Color(palette.fret) }, uGlow: { value: new THREE.Color(palette.glow) },
@@ -195,21 +221,26 @@ export class Track {
     scene.add(mesh);
     this.mesh = mesh;
 
-    // under-glow: a soft additive skirt under each edge so the ribbon reads at night
+    // under-glow: a soft additive skirt under each edge so the ribbon reads at night (built from the same rows)
     const sg = new THREE.BufferGeometry();
-    const sp = new Float32Array(N * 4 * 3), sa = new Float32Array(N * 4);
+    const srow = new Float32Array(N * 4), sedge = new Float32Array(N * 4 * 2);
+    for (let i = 0; i < N; i++) for (let e = 0; e < 2; e++) for (let b = 0; b < 2; b++) {
+      const o = i * 4 + e * 2 + b;
+      srow[o] = i; sedge[o * 2] = e ? 1 : -1; sedge[o * 2 + 1] = b;
+    }
     const sidx = [];
     for (let i = 0; i < N - 1; i++) for (const e of [0, 2]) {
       const a = i * 4 + e, b = a + 1, c = a + 4, d = c + 1;
       sidx.push(a, c, b, b, c, d);
     }
     sg.setIndex(sidx);
-    sg.setAttribute('position', new THREE.BufferAttribute(sp, 3).setUsage(THREE.DynamicDrawUsage));
-    sg.setAttribute('aFade', new THREE.BufferAttribute(sa, 1).setUsage(THREE.DynamicDrawUsage));
+    sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 4 * 3), 3));
+    sg.setAttribute('aRow', new THREE.BufferAttribute(srow, 1));
+    sg.setAttribute('aEdge', new THREE.BufferAttribute(sedge, 2));
     this.skirtGeo = sg;
     this.skirtMat = new THREE.ShaderMaterial({
-      uniforms: { uEdge: this.mat.uniforms.uEdge, uFlow: this.mat.uniforms.uFlow },
-      vertexShader: `attribute float aFade; varying float vF; void main(){ vF=aFade; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+      uniforms: { uRows: this.mat.uniforms.uRows, uEdge: this.mat.uniforms.uEdge, uFlow: this.mat.uniforms.uFlow },
+      vertexShader: SKIRT_VS,
       fragmentShader: `uniform vec3 uEdge; uniform float uFlow; varying float vF; void main(){ float a = vF; gl_FragColor = vec4(uEdge * a * (0.35 + 0.65*uFlow), 1.0);} `,
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide,
     });
@@ -217,85 +248,93 @@ export class Track {
   }
 
   _writeMesh(rider) {
-    const N = this.N, M = ACROSS, c = this.c;
-    const pos = this.geo.attributes.position.array, nor = this.geo.attributes.normal.array;
-    const tim = this.geo.attributes.aTime.array, side = this.geo.attributes.aSide.array, misc = this.geo.attributes.aMisc.array;
-    const hold = this.geo.attributes.aHold.array, gapA = this.geo.attributes.aGap.array, zone = this.geo.attributes.aZone.array;
+    const N = this.N, c = this.c, D = this.rowData;
     const spb = 60 / c.chart.bpm;
-    const sp = this.skirtGeo.attributes.position.array, sa = this.skirtGeo.attributes.aFade.array;
-    const s = this.s;
     // distance along the ribbon, fixed to the world (anchored to how far you've ridden)
-    const dist = this.geo.attributes.aDist.array;
     const cum = this._cum || (this._cum = new Float32Array(N));
     for (let i = 1; i < N; i++) cum[i] = cum[i - 1] + Math.hypot(this.wx[i] - this.wx[i - 1], this.wz[i] - this.wz[i - 1]);
     const fr = (this.tNow - this.t0w) * R, ir = Math.min(N - 2, Math.max(0, Math.floor(fr)));
     const base = rider.stats.dist - (cum[ir] + (cum[ir + 1] - cum[ir]) * (fr - ir));
+    const k00 = Math.floor(this.t0w * R);
+    const O1 = N * 4, O2 = 2 * N * 4, O3 = 3 * N * 4, O4 = 4 * N * 4, O5 = 5 * N * 4;
+    const kY = this.kY, kVY = this.kVY, kCY = this.kCY, kSY = this.kSY, kYR = this.kYR, kW = this.kW;
+    const kHold = this.kHold, kGap = this.kGap, kBeat = this.kBeat, kVD = this.kVD, kCD = this.kCD, kLit = this.lit, kHeld = this.held;
+    const wx = this.wx, wz = this.wz, tNow = this.tNow;
     for (let i = 0; i < N; i++) {
-      const k = Math.floor(this.t0w * R) + i, tk = k / R;
-      c.sample(tk, s);
-      const px = this.wx[i], pz = this.wz[i];
-      const yaw = s.yaw, cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const k = k00 + i, tk = k / R, j = this._j(k);
+      const px = wx[i], pz = wz[i];
+      const cy = kCY[j], sy = kSY[j], vy = kVY[j];
       const rx = -cy, rz = sy;   // right = forward x up
-      const v = i + 1 < N ? Math.hypot(this.wx[i + 1] - px, this.wz[i + 1] - pz) * R : Math.hypot(px - this.wx[i - 1], pz - this.wz[i - 1]) * R;
+      const v = i + 1 < N ? Math.hypot(wx[i + 1] - px, wz[i + 1] - pz) * R : Math.hypot(px - wx[i - 1], pz - wz[i - 1]) * R;
       const vv = Math.max(v, 8);
-      const bank = clamp(Math.atan2(vv * s.yawRate, 9.8) * 0.7, -0.36, 0.36);
+      const bank = clamp(Math.atan2(vv * kYR[j], 9.8) * 0.7, -0.36, 0.36);
       const cb = Math.cos(bank), sb = Math.sin(bank);
-      const w = s.width;
-      const slope = -s.vy / vv;               // + downhill
+      const slope = -vy / vv;               // + downhill
       // surface normal: tilt by slope (pitch) and bank (roll)
-      const fwx = sy, fwz = cy, fwy = s.vy / vv;
-      const fl = Math.hypot(fwx, fwy, fwz);
+      const fwy = vy / vv, il = 1 / Math.sqrt(1 + fwy * fwy);   // (forward is (sy, fwy, cy), |(sy, cy)| = 1)
+      const fx = sy * il, fy = fwy * il, fz = cy * il;
       const rlx = rx * cb, rly = sb, rlz = rz * cb;
       // n = right x forward
-      let nx = rly * (fwz / fl) - rlz * (fwy / fl), ny = rlz * (fwx / fl) - rlx * (fwz / fl), nz = rlx * (fwy / fl) - rly * (fwx / fl);
+      let nx = rly * fz - rlz * fy, ny = rlz * fx - rlx * fz, nz = rlx * fy - rly * fx;
       if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
-      const beatPos = c.beatAt(tk);
-      const lit = this.lit.has(k) ? this.lit.get(k) : -1;
-      const vd = c.valleyDist(tk) / spb;   // in beats
-      const cd = c.crestDist(tk) / spb;
-      const hd = this.held.has(k) ? this.held.get(k) : -1;
-      for (let j = 0; j <= M; j++) {
-        const u = j / M * 2 - 1;
-        // a shallow trough: edges curl up a little so it reads as a track
-        const lip = Math.pow(Math.abs(u), 6) * 0.55;
-        const xo = u * w;
-        const o = (i * (M + 1) + j);
-        pos[o * 3] = px + rlx * xo; pos[o * 3 + 1] = s.y + rly * xo + lip; pos[o * 3 + 2] = pz + rlz * xo;
-        nor[o * 3] = nx; nor[o * 3 + 1] = ny; nor[o * 3 + 2] = nz;
-        tim[o] = tk; side[o] = u;
-        misc[o * 4] = beatPos; misc[o * 4 + 1] = slope; misc[o * 4 + 2] = lit; misc[o * 4 + 3] = vd;
-        dist[o] = cum[i] + base;
-        hold[o] = s.hold;
-        gapA[o] = s.gap;
-        zone[o * 2] = cd; zone[o * 2 + 1] = hd;
-      }
-      // skirts hang from both edges
-      for (let e = 0; e < 2; e++) {
-        const u = e ? 1 : -1, xo = u * (w + 0.05);
-        const bx = px + rlx * xo, by = s.y + rly * xo + 0.5, bz = pz + rlz * xo;
-        const o = i * 4 + e * 2;
-        sp[o * 3] = bx; sp[o * 3 + 1] = by; sp[o * 3 + 2] = bz;
-        sp[(o + 1) * 3] = bx; sp[(o + 1) * 3 + 1] = by - 3.2; sp[(o + 1) * 3 + 2] = bz;
-        const fade = smooth(-BACK, -BACK + 1, tk - this.tNow) * (1 - smooth(AHEAD - 3, AHEAD, tk - this.tNow));
-        sa[o] = s.gap ? 0 : 0.16 * fade; sa[o + 1] = 0;
-      }
+      const o = i * 4;
+      D[o] = px; D[o + 1] = kY[j]; D[o + 2] = pz; D[o + 3] = kW[j];
+      D[O1 + o] = rlx; D[O1 + o + 1] = rly; D[O1 + o + 2] = rlz; D[O1 + o + 3] = tk;
+      D[O2 + o] = nx; D[O2 + o + 1] = ny; D[O2 + o + 2] = nz; D[O2 + o + 3] = cum[i] + base;
+      D[O3 + o] = kBeat[j]; D[O3 + o + 1] = slope; D[O3 + o + 2] = kLit[j]; D[O3 + o + 3] = kVD[j];   // (in beats)
+      D[O4 + o] = kHold[j]; D[O4 + o + 1] = kGap[j]; D[O4 + o + 2] = kCD[j]; D[O4 + o + 3] = kHeld[j];
+      const dtk = tk - tNow;
+      const fade = smooth(-BACK, -BACK + 1, dtk) * (1 - smooth(AHEAD - 3, AHEAD, dtk));
+      D[O5 + o] = kGap[j] ? 0 : 0.16 * fade;
     }
-    for (const a of ['position', 'normal', 'aTime', 'aSide', 'aMisc', 'aDist', 'aHold', 'aGap', 'aZone']) this.geo.attributes[a].needsUpdate = true;
+    this.rowTex.needsUpdate = true;
     // the let-go window (a perfect release) either side of the gate, in beats
     this.mat.uniforms.uWin.value = 0.085 / spb;
-    this.skirtGeo.attributes.position.needsUpdate = true; this.skirtGeo.attributes.aFade.needsUpdate = true;
     this.mat.uniforms.uSong.value = this.tNow;
   }
 }
 
+// how many RGBA texels a row of road takes in the row texture (see _writeMesh)
+const ROW_TEXELS = 6;
+
+// the hold zones' colour: the song's own, saturated and bright enough to read as a colour of its
+// own against its road (into out, when the looks change it mid-song)
+const _hsl = {};
+export function holdColour(palette, out = new THREE.Color()) {
+  out.set(palette.hold ?? palette.glow);
+  out.getHSL(_hsl); out.setHSL(_hsl.h, Math.max(_hsl.s, 0.72), Math.min(0.62, Math.max(_hsl.l, 0.5)));
+  return out;
+}
+
 const RIBBON_VS = /* glsl */`
-attribute float aTime; attribute float aSide; attribute vec4 aMisc; attribute float aDist; attribute float aHold; attribute float aGap; attribute vec2 aZone;
+uniform highp sampler2D uRows;
+attribute float aRow; attribute float aSide;
 varying float vTime; varying float vSide; varying vec4 vMisc; varying vec3 vWorld; varying vec3 vN; varying float vDist; varying float vHold; varying float vGap; varying vec2 vZone;
 void main(){
-  vTime = aTime; vSide = aSide; vMisc = aMisc; vN = normal; vDist = aDist; vHold = aHold; vGap = aGap; vZone = aZone;
-  vec4 w = modelMatrix * vec4(position, 1.0);
+  int i = int(aRow + 0.5);
+  vec4 r0 = texelFetch(uRows, ivec2(i, 0), 0), r1 = texelFetch(uRows, ivec2(i, 1), 0), r2 = texelFetch(uRows, ivec2(i, 2), 0);
+  vec4 r3 = texelFetch(uRows, ivec2(i, 3), 0), r4 = texelFetch(uRows, ivec2(i, 4), 0);
+  float u = aSide, xo = u * r0.w;
+  // a shallow trough: the edges curl up a little so it reads as a track
+  float lip = pow(abs(u), 6.0) * 0.55;
+  vec3 p = vec3(r0.x + r1.x * xo, r0.y + r1.y * xo + lip, r0.z + r1.z * xo);
+  vTime = r1.w; vSide = u; vMisc = r3; vN = r2.xyz; vDist = r2.w; vHold = r4.x; vGap = r4.y; vZone = r4.zw;
+  vec4 w = modelMatrix * vec4(p, 1.0);
   vWorld = w.xyz;
   gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+
+const SKIRT_VS = /* glsl */`
+uniform highp sampler2D uRows;
+attribute float aRow; attribute vec2 aEdge;
+varying float vF;
+void main(){
+  int i = int(aRow + 0.5);
+  vec4 r0 = texelFetch(uRows, ivec2(i, 0), 0), r1 = texelFetch(uRows, ivec2(i, 1), 0), r5 = texelFetch(uRows, ivec2(i, 5), 0);
+  float xo = aEdge.x * (r0.w + 0.05);
+  vec3 p = vec3(r0.x + r1.x * xo, r0.y + r1.y * xo + 0.5 - 3.2 * aEdge.y, r0.z + r1.z * xo);
+  vF = r5.x * (1.0 - aEdge.y);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 
 const RIBBON_FS = /* glsl */`
@@ -362,8 +401,11 @@ void main(){
   // (the chevrons and the start's bar are only drawn ahead of her, and fade before they reach the
   // camera: thin bright stripes sweeping under it strobed, a flash across the bottom of the screen)
   float chevK = smoothstep(0.08, 0.6, ahead) * camNear;
-  float fillA = (0.2 + 0.36 * hp * hp + 0.2 * chevron * chevK) * (0.35 + 0.65 * nearCam);
-  float fillR = mix(0.015, 0.42 + 0.3 * hp, heldS);
+  // (coming up, a solid slab of the colour, so it reads from far off against the dark road the way
+  // a long note does; ridden, a held one keeps a soft glow and a missed one goes dark, so the pink
+  // under and behind her doesn't drown out the zones still coming)
+  float fillA = (0.5 + 0.25 * hp + 0.22 * chevron * chevK) * (0.55 + 0.45 * nearCam);
+  float fillR = mix(0.0, 0.13 + 0.1 * hp, heldS);
   float fill = mix(fillA, fillR, rode);
   col = mix(col, col * 0.5, hz * lane * seen * 0.7);
   col += uHoldCol * hz * lane * seen * fill;

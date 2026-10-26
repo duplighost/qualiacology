@@ -32,8 +32,26 @@ export const SKATERS = [
 
 const cache = new Map();
 export function loadSkater(file) {
-  if (!cache.has(file)) cache.set(file, new GLTFLoader().loadAsync(file).catch((e) => { console.warn('skater', file, e); return null; }));
+  if (!cache.has(file)) cache.set(file, new GLTFLoader().loadAsync(file).then((g) => { mendClips(g.animations); return g; }).catch((e) => { console.warn('skater', file, e); return null; }));
   return cache.get(file);
+}
+
+// Some of the clips carry a key turned right round: Bam's and Red's arms spin 178 degrees for one
+// frame of the celebration and of the open-armed air, their legs in the tuck, and back the next,
+// which read as the arms stuttering. A key that far from both its neighbours while they agree with
+// each other is put back between them.
+function mendClips(clips) {
+  const a = new THREE.Quaternion(), b = new THREE.Quaternion(), c = new THREE.Quaternion();
+  const ang = (p, q) => 2 * Math.acos(Math.min(1, Math.abs(p.dot(q))));
+  for (const clip of clips || []) for (const tr of clip.tracks) {
+    if (tr.ValueTypeName !== 'quaternion') continue;
+    const v = tr.values, T = tr.times, n = T.length;
+    for (let i = 1; i < n - 1; i++) {
+      a.fromArray(v, (i - 1) * 4); b.fromArray(v, i * 4); c.fromArray(v, (i + 1) * 4);
+      const a1 = ang(a, b), a2 = ang(b, c);
+      if (a1 > 0.5 && a2 > 0.5 && ang(a, c) < Math.max(a1, a2) * 0.5) a.slerp(c, (T[i] - T[i - 1]) / (T[i + 1] - T[i - 1])).toArray(v, i * 4);
+    }
+  }
 }
 
 // put one in the rider's place: returns the controller RiderView drives each frame
@@ -110,7 +128,8 @@ export function attachSkater(view, gltf, def, P) {
       ease('up', (1 - air) * goingUp * (1 - crouch) * 0.8, 6);
       ease('left', (1 - air) * Math.max(0, -lean), 8);
       ease('right', (1 - air) * Math.max(0, lean), 8);
-      ease('air', air * (1 - tuck), 8);
+      // (on a rail: some of the open-armed pose for balance, less as she crouches to hold it down)
+      ease('air', air * (1 - tuck) + (1 - air) * (p.rail || 0) * (0.5 - 0.25 * crouch), 8);
       ease('tuck', air * tuck, 10);
       if (cheer > 0.05) {
         if (!cheerOn) { cheerOn = true; cheerClock = 0; startCheer(); }
