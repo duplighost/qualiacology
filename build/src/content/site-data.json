@@ -576,13 +576,13 @@
     {
       "slug": "giants-wake",
       "title": "GIANT’S WAKE",
-      "descriptor": "A climb across three moving creatures",
+      "descriptor": "A climb across ten moving creatures",
       "group": "worlds",
       "featured": false,
       "image": "/assets/games/giants-wake-card-v1.jpg",
       "alt": "Three enormous creatures chained over a blue sea, with an orchard on a stone shell, broad bronze-lined wings, and a cathedral along a whale’s spine",
-      "summary": "Three creatures are chained above the sea. Run across their backs, hook to the gold rings, and cut the restraints. Their bodies move as they wake. There is a storm engine at the far end.",
-      "metaDescription": "Run, jump, grapple, and cut the restraints on three moving creatures above the sea. A desktop adventure with an ending, hidden lights, and a return journey.",
+      "summary": "Ten creatures are chained above the sea. Run across their backs, hook to the gold rings, and cut the restraints. Climb a snail's shell, ride a jellyfish's tentacles, cross a moving serpent, and open a beetle's shell. The storm engine is on the last creature.",
+      "metaDescription": "Run, jump, grapple, and cut the restraints on ten different moving creatures above the sea. A desktop adventure with an ending, 35 hidden lights, and a return journey.",
       "controls": "Desktop · WASD move · Space jump · Shift dash · E hook · Click / J cut · Right drag or Q / C look · Esc pause",
       "actionLabel": "Go to them"
     }
