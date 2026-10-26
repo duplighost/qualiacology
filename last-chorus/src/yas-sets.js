@@ -359,6 +359,9 @@ extend({
     // the projector, its beam across the room to the far wall, the scene on it (the sign layer)
     yasProjector(S, it, p, q, yaw) {
       const m = S._m, s = it.s ?? 1; m.compose(p, q, S._s.set(s, s, s)); S.layers.yasProjector.add(m);
+      // (the scenery's first pass runs before there's a road to aim at: make the beam's layer then,
+      // so it compiles with the rest and not mid-ride)
+      if (!S.track) { void S.layers.yasBeam; return; }
       const lens = local(p, yaw, 0, 7.2 * s, 5.1 * s, S._p4 || (S._p4 = new THREE.Vector3()));
       const tgt = S.track.ground(it.t + (it.dt ?? 0.15), it.screenX ?? 37.2, S._p2 || (S._p2 = new THREE.Vector3())); tgt.y = p.y + (it.screenY ?? 17);
       const d = (S._d4 || (S._d4 = new THREE.Vector3())).copy(tgt).sub(lens), L = d.length();

@@ -8,7 +8,10 @@ const clamp01 = (x) => Math.max(0, Math.min(1, x));
 export class Sound {
   constructor() {
     const AC = window.AudioContext || window.webkitAudioContext;
-    this.ctx = new AC({ latencyHint: 'interactive' });
+    // (a phone gets a little more room in its audio buffer: under a busy game the smallest one can
+    // run dry and the music stutters; the picture follows what's heard either way)
+    let coarse = false; try { coarse = matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches; } catch (e) { /* old browser */ }
+    this.ctx = new AC({ latencyHint: coarse ? 'balanced' : 'interactive' });
     // an iPhone's silent switch mutes web audio unless the page says it's playing music
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* fine */ }
     const c = this.ctx;
@@ -183,29 +186,35 @@ export class Sound {
   }
   get running() { return this.ctx.state === 'running'; }
 
-  // The time in the song that is coming out of the speakers right now.
-  // Smoothed so frames advance evenly, but never allowed to drift from the audio.
-  // While the song is stopped or the context isn't running it stands still.
-  time() {
+  // The time in the song coming out of the speakers, for the frame being drawn. now is that
+  // frame's own timestamp (requestAnimationFrame's), so each frame moves on by exactly the time
+  // between frames; the clock follows the audio by running a touch fast or slow, never by jumping
+  // (a phone's audio clock is coarse and jittery, and following it step by step shook the picture),
+  // and jumps only when it is well off (a stall, a seek). Asked twice in a frame, it answers the
+  // same. While the song is stopped or the context isn't running it stands still.
+  time(now) {
     const c = this.ctx;
     if (this._frozen != null) return this._frozen;
     if (c.state !== 'running') return this._clockT ?? (c.currentTime - this.t0);
-    let t;
+    const pnow = performance.now();
+    if (now === undefined) now = pnow;
+    if (this._clockT != null && now === this._clockP) return this._clockT;
+    // where the music coming out of the speakers was at now
+    let a;
     const ts = c.getOutputTimestamp ? c.getOutputTimestamp() : null;
-    if (ts && ts.performanceTime > 0 && ts.contextTime > 0) {
-      t = ts.contextTime + (performance.now() - ts.performanceTime) / 1000 - this.t0;
-    } else {
-      t = c.currentTime - (c.outputLatency || c.baseLatency || 0) - this.t0;
-    }
+    if (ts && ts.performanceTime > 0 && ts.contextTime > 0) a = ts.contextTime + (now - ts.performanceTime) / 1000 - this.t0;
+    else a = c.currentTime - (c.outputLatency || c.baseLatency || 0) - (pnow - now) / 1000 - this.t0;
     // an output stamp from before a pause can run far ahead: never trust one past what the context has actually played
     const played = c.currentTime - this.t0;
-    if (t > played + 0.05) t = played;
-    const now = performance.now();
-    if (this._clockT == null) { this._clockT = t; this._clockP = now; return t; }
-    const pred = this._clockT + Math.min(0.1, (now - this._clockP) / 1000);
-    const err = t - pred;
-    this._clockT = Math.abs(err) > 0.06 ? t : pred + err * 0.08;
+    if (a > played + 0.05) a = played;
+    if (this._clockT == null || !(now > this._clockP)) { this._clockT = a; this._clockP = now; this._err = 0; return a; }
+    const step = Math.min(0.1, (now - this._clockP) / 1000), pred = this._clockT + step;
+    const err = a - pred;
     this._clockP = now;
+    if (Math.abs(err) > 0.15) { this._clockT = a; this._err = 0; return a; }
+    // (the error smoothed over a sixth of a second, then made up at most 4% faster or slower)
+    this._err += (err - this._err) * Math.min(1, step * 6);
+    this._clockT = pred + step * Math.max(-0.04, Math.min(0.04, this._err * 3));
     return this._clockT;
   }
 
@@ -218,9 +227,9 @@ export class Sound {
     const hp = Math.exp(lerp(Math.log(380), Math.log(18), e));
     let lp = Math.exp(lerp(Math.log(2400), Math.log(20000), e));
     lp = Math.exp(lerp(Math.log(lp), Math.log(520), clamp01(muffle)));
-    this.hp.frequency.setTargetAtTime(hp, now, 0.09);
-    this.lp.frequency.setTargetAtTime(lp, now, muffle > 0.01 ? 0.03 : 0.09);
-    this.roomSend.gain.setTargetAtTime(0.06 + 0.5 * room + 0.25 * (1 - e), now, 0.15);
+    this._glide(this.hp.frequency, hp, 0.09, hp * 0.01);
+    this._glide(this.lp.frequency, lp, muffle > 0.01 ? 0.03 : 0.09, lp * 0.01);
+    this._glide(this.roomSend.gain, 0.06 + 0.5 * room + 0.25 * (1 - e), 0.15, 0.003);
   }
 
   duck(depth = 0.5, time = 0.6) {
@@ -252,15 +261,27 @@ export class Sound {
   }
 
   setMotion(speed, air, press, on = 1) {
-    const c = this.ctx, now = c.currentTime;
     const s = clamp01((speed - 10) / 70);
-    this.windGain.gain.setTargetAtTime(on * (0.015 + 0.09 * s * s + (air ? 0.03 : 0)), now, 0.15);
-    this.windBp.frequency.setTargetAtTime(260 + 900 * s + (air ? 300 : 0), now, 0.2);
+    this._glide(this.windGain.gain, on * (0.015 + 0.09 * s * s + (air ? 0.03 : 0)), 0.15, 0.0005);
+    this._glide(this.windBp.frequency, 260 + 900 * s + (air ? 300 : 0), 0.2, 4);
     const f = 42 + 50 * s + (press ? 6 : 0);
-    this.hum[0].frequency.setTargetAtTime(f, now, 0.08);
-    this.hum[1].frequency.setTargetAtTime(f * 2.003, now, 0.08);
-    this.humLp.frequency.setTargetAtTime(300 + 900 * s + (press ? 500 : 0), now, 0.06);
-    this.humGain.gain.setTargetAtTime(on * (air ? 0.002 : 0.006 + 0.007 * s), now, 0.12);
+    this._glide(this.hum[0].frequency, f, 0.08, 0.25);
+    this._glide(this.hum[1].frequency, f * 2.003, 0.08, 0.5);
+    this._glide(this.humLp.frequency, 300 + 900 * s + (press ? 500 : 0), 0.06, 4);
+    this._glide(this.humGain.gain, on * (air ? 0.002 : 0.006 + 0.007 * s), 0.12, 0.0002);
+  }
+  // A glide toward v, not every frame: an AudioParam keeps every target it's set, and a dozen set
+  // every frame were a few percent of a phone's frame. Set again only when it's moved by more
+  // than eps (a small move at most twenty times a second), and every half second regardless.
+  _glide(p, v, tc, eps) {
+    const now = this.ctx.currentTime, last = p._lcV;
+    if (last !== undefined && now >= p._lcAt) {
+      const d = Math.abs(v - last), since = now - p._lcAt;
+      if (d <= eps && since < 0.5) return;
+      if (d < eps * 20 && since < 0.05) return;
+    }
+    p._lcV = v; p._lcAt = now;
+    p.setTargetAtTime(v, now, tc);
   }
 
   // ---------- one-shots ----------
@@ -406,8 +427,8 @@ export class Sound {
       this._charge = { bp, g };
     }
     const s = this._charge;
-    s.bp.frequency.setTargetAtTime(380 + 1500 * progress * progress, now, 0.05);
-    s.g.gain.setTargetAtTime(on ? 0.012 + 0.03 * progress : 0, now, on ? 0.06 : 0.03);
+    this._glide(s.bp.frequency, 380 + 1500 * progress * progress, 0.05, 4);
+    this._glide(s.g.gain, on ? 0.012 + 0.03 * progress : 0, on ? 0.06 : 0.03, 0.0005);
   }
 
   // on a rail: a low metal hiss under the music while she's on it
@@ -426,6 +447,15 @@ export class Sound {
     s.bp.frequency.setTargetAtTime(on ? 2900 : 2200, now, 0.2);
   }
 
+  // ... and held down on the rail it bites: louder, higher
+  grindPress(k) {
+    const s = this._grind;
+    if (!s) return;
+    const now = this.ctx.currentTime;
+    s.g.gain.setTargetAtTime(k ? 0.06 : 0.035, now, 0.03);
+    s.bp.frequency.setTargetAtTime(k ? 3900 : 2900, now, 0.05);
+  }
+
   // the stop at the end: a soft hiss of spray off the edge, falling with her speed
   skid(level = 0) {
     const c = this.ctx, now = c.currentTime;
@@ -438,8 +468,8 @@ export class Sound {
       this._skid = { bp, g };
     }
     const s = this._skid;
-    s.bp.frequency.setTargetAtTime(700 + 2600 * level, now, 0.06);
-    s.g.gain.setTargetAtTime(0.09 * level, now, level > 0.01 ? 0.04 : 0.12);
+    this._glide(s.bp.frequency, 700 + 2600 * level, 0.06, 6);
+    this._glide(s.g.gain, 0.09 * level, level > 0.01 ? 0.04 : 0.12, 0.0008);
   }
 
   // a siren going past: a slow wail, quiet, higher coming toward you and lower going away
@@ -457,8 +487,8 @@ export class Sound {
     const s = this._siren;
     const ph = ((now - s.t0) / 2.4) % 1;
     const f = (680 + 520 * (0.5 - 0.5 * Math.cos(ph * Math.PI * 2))) * doppler;
-    s.o.frequency.setTargetAtTime(f, now, 0.03);
-    s.g.gain.setTargetAtTime(0.035 * clamp01(level), now, 0.12);
+    if (level > 0.001) this._glide(s.o.frequency, f, 0.03, 3);
+    this._glide(s.g.gain, 0.035 * clamp01(level), 0.12, 0.0005);
   }
 
   // a heart monitor's beep, on the song's root

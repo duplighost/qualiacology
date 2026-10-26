@@ -20,8 +20,10 @@ export const POINTS = {
   trick: { grab: 120, spin: 150, roll: 180, flip: 220 },
 };
 export const GRADES = ['S', 'A', 'B', 'C', 'D'];
-// a grade by the share of what the autopilot (who never misses a pump) scores on the same song
-export const GRADE_AT = { S: 0.82, A: 0.64, B: 0.45, C: 0.25 };
+// a grade by the share of what the autopilot (who never misses a pump) scores on the same song.
+// The multiplier makes that share steep (a miss drops the run to x1), so the marks sit low: someone
+// pressing down every slope a little late gets an A, and only riding in time all song gets an S
+export const GRADE_AT = { S: 0.65, A: 0.45, B: 0.28, C: 0.16 };
 
 export class Score {
   constructor() { this.reset(); }

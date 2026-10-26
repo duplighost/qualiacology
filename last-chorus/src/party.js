@@ -160,7 +160,8 @@ export class HeartStage {
     const nT = 46, teeth = new THREE.InstancedMesh(teethG, this.zipMat, nT * 2), m = new THREE.Matrix4();
     for (let side = 0; side < 2; side++) for (let i = 0; i < nT; i++) { m.makeTranslation(i % 2 ? 0.42 : -0.42, 6.8 - i * 0.44, side ? -8.15 : 8.15); teeth.setMatrixAt(side * nT + i, m); }
     this.pivot.add(teeth);
-    const pull = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.2, 0.5), this.zipMat); pull.position.set(0.2, 5.4, 8.5); pull.rotation.z = 0.25; this.pivot.add(pull);
+    // (one instance of its own: a plain mesh on the teeth's material swapped its shader twice a frame)
+    const pull = new THREE.InstancedMesh(new THREE.BoxGeometry(1.6, 3.2, 0.5), this.zipMat, 1); pull.setMatrixAt(0, new THREE.Matrix4()); pull.position.set(0.2, 5.4, 8.5); pull.rotation.z = 0.25; this.pivot.add(pull);
     this.pivot.scale.setScalar(this.size);
     // moving heads on the roof: beams that sweep the sky over the crowd
     this.beams = [];

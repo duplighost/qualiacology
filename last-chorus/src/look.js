@@ -3,6 +3,7 @@
 // Each frame the blended palette is pushed into every shader that uses it.
 
 import * as THREE from 'three';
+import { holdColour } from './track.js';
 
 const COLOR_KEYS = ['glass', 'cloud', 'water', 'sand', 'zenith', 'horizon', 'skyGlow', 'moon', 'fog', 'ground', 'street', 'roof', 'wall', 'tree', 'window', 'windowAlt', 'lamp', 'ribbon', 'edge', 'fret', 'glow', 'skyline', 'skyLight', 'bounce', 'heart', 'hold', 'gate', 'gem'];
 const NUM_KEYS = ['fogDensity', 'stars', 'sunSize', 'snow', 'rain', 'wake', 'snowGround', 'sunK', 'hemiK', 'fillK', 'clouds', 'dapple', 'shade', 'hills', 'breath', 'windowK', 'daze'];
@@ -57,7 +58,7 @@ export function applyLook(S, L) {
   const tu = S.track.mat.uniforms;
   if (tu.uDapple) { tu.uDapple.value = L.dapple ?? 0; tu.uShade.value = L.shade ?? 0; set(tu.uSun, L.moon); if (L.moonDir) tu.uSunDir.value.set(...L.moonDir).normalize(); }
   set(tu.uBase, L.ribbon); set(tu.uEdge, L.edge); set(tu.uFret, L.fret); set(tu.uGlow, L.glow); set(tu.uSky, L.horizon); set(tu.uFogColor, L.fog);
-  if (tu.uHoldCol) { tu.uHoldCol.value.set(L.hold ?? L.glow); if (L.gate !== undefined) tu.uGateCol.value.set(L.gate); else tu.uGateCol.value.set(L.edge).lerp(S._white || (S._white = tu.uHitCol.value.clone().setRGB(1, 1, 1)), 0.55); }
+  if (tu.uHoldCol) { holdColour(L, tu.uHoldCol.value); if (L.gate !== undefined) tu.uGateCol.value.set(L.gate); else tu.uGateCol.value.set(L.edge).lerp(S._white || (S._white = tu.uHitCol.value.clone().setRGB(1, 1, 1)), 0.55); }
   tu.uFogDensity.value = L.fogDensity;
   // scenery reads its palette object every frame for lamps and porch lights
   Object.assign(S.town.P, L);

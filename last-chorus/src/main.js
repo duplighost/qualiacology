@@ -88,9 +88,11 @@ window.__LC.autopilot = autopilot;
 // pixels wide). It steps down only when the graphics are what's slow: a phone short of processor
 // time lost all its sharpness to the old rule and gained no speed from it.
 const fixedScale = params.has('scale');
-const topScale = window.matchMedia && window.matchMedia('(pointer: coarse)').matches && (window.devicePixelRatio || 1) >= 2 ? 1.25 : 1;
+const topScale = 1;
 let renderScale = fixedScale ? clamp(parseFloat(params.get('scale')), 0.4, 2) : (() => { try { const v = +localStorage.getItem('lc-scale2'); return v ? clamp(v, 0.7, topScale) : topScale; } catch (e) { return topScale; } })();
 const perf = [], perfCpu = [];
+// how far up the road the scenery is built (seconds), stepped down on a device that can't keep up
+let detailAhead = (() => { try { const v = +localStorage.getItem('lc-ahead'); return v ? clamp(v, 26, 46) : 46; } catch (e) { return 46; } })();
 // ?fps: a readout for checking a phone: frames a second, the worst frame lately, the render size
 const fpsEl = params.has('fps') ? document.getElementById('hud').appendChild(Object.assign(document.createElement('div'), { id: 'fps' })) : null;
 const fpsLog = { n: 0, t: 0, worst: 0, gpu: '' };
@@ -216,6 +218,7 @@ function build(S) {
   skyline.material.uniforms.uStyle.value = S.entry.skyline === 'hills' ? 1 : 0;
   ground.material.uniforms.uStyle && (ground.material.uniforms.uStyle.value = S.entry.groundStyle === 'country' ? 1 : 0);
   const town = new Scenery(scene, course, P, S.entry.scenery, 11);
+  town.ahead = detailAhead;
   const view = new RiderView(scene, P, SKATERS.find((s) => s.id === (params.get('rider') || progress.get().rider)));
   // her cheer at the end bounces on the song's beat (a quick song's in half time)
   { const bps = (S.chart.bpm || 120) / 60; view.tempo = bps > 2.25 ? bps / 2 : bps; }
@@ -290,15 +293,56 @@ async function prepare(S) {
   await precompile(S);
   // a layer a place first wants mid-ride compiles in the background, hidden until it's ready,
   // instead of the ride stopping while it compiles (it shows a moment late, far up the road)
-  if (S.town && renderer.compileAsync) S.town.onLate = (mesh) => {
+  if (S.town && renderer.compileAsync) S.town.onLate = (mesh, layer) => {
+    singlePass(mesh);
     mesh.visible = false;
-    const show = () => { mesh.visible = true; };
+    if (layer) layer.wait = true;
+    const show = () => { if (layer) layer.wait = false; mesh.visible = true; };
     renderer.compileAsync(mesh, camera, S.scene).then(show, show);
   };
 }
 
+// three.js draws a see-through two-sided thing twice a frame, back faces then front, switching its
+// shader (and working out which one) both times. For a flat thing, or one that adds light (where
+// the order doesn't matter), drawing it once makes the same picture.
+function singlePass(root) {
+  const ok = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (!m || !m.transparent || m.side !== THREE.DoubleSide || m.forceSinglePass) continue;
+      ok.set(m, (ok.get(m) ?? true) && (m.blending === THREE.AdditiveBlending || flatGeometry(o.geometry)));
+    }
+  });
+  for (const [m, f] of ok) if (f) m.forceSinglePass = true;
+}
+
+// every point of it in one plane (however that plane is turned)
+function flatGeometry(g) {
+  if (!g || !g.attributes.position) return false;
+  if (g._lcFlat !== undefined) return g._lcFlat;
+  const P = g.attributes.position, n = P.count;
+  let flat = false;
+  if (n >= 3) {
+    // a normal from the first three points that aren't in a line, and every point's distance off it
+    const a = new THREE.Vector3().fromBufferAttribute(P, 0), b = new THREE.Vector3(), c = new THREE.Vector3(), nrm = new THREE.Vector3(), v = new THREE.Vector3();
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    const tol = Math.max(1e-6, g.boundingSphere.radius * 1e-4);
+    for (let i = 1; i < Math.min(n, 200) && nrm.lengthSq() === 0; i++) {
+      b.fromBufferAttribute(P, i).sub(a);
+      for (let j = i + 1; j < Math.min(n, i + 200); j++) { c.fromBufferAttribute(P, j).sub(a); nrm.crossVectors(b, c); if (nrm.lengthSq() > tol * tol * 1e-2) break; nrm.set(0, 0, 0); }
+    }
+    if (nrm.lengthSq() > 0) {
+      nrm.normalize(); flat = true;
+      for (let i = 0; i < n; i++) if (Math.abs(v.fromBufferAttribute(P, i).sub(a).dot(nrm)) > tol) { flat = false; break; }
+    }
+  }
+  return (g._lcFlat = flat);
+}
+
 // compile every shader now, hidden things included, so nothing compiles mid-ride
 async function precompile(S) {
+  singlePass(S.scene);
   const hidden = [], culled = [], empty = [];
   S.scene.traverse((o) => {
     if (!o.visible) { hidden.push(o); o.visible = true; }
@@ -441,13 +485,18 @@ function frameBody(now) {
       fpsLog.n = 0; fpsLog.t = 0; fpsLog.worst = 0;
     }
   }
-  if (!fixedScale && state === 'ride' && !paused && document.hasFocus()) {
+  if (state === 'ride' && !paused && document.hasFocus()) {
     perf.push(rawDt); perfCpu.push(lastCpu);
     if (perf.length >= 240) {
       perf.sort((a, b) => a - b); perfCpu.sort((a, b) => a - b);
       const med = perf[120], cpu = perfCpu[120]; perf.length = 0; perfCpu.length = 0;
+      // the frame's own work alone leaves no room for 60 a second: build less of the road ahead
+      if (cpu > 0.011 && S && S.town && S.town.ahead > 26) {
+        S.town.ahead = detailAhead = Math.max(26, S.town.ahead - 10);
+        try { localStorage.setItem('lc-ahead', detailAhead); } catch (e) { /* private mode */ }
+      }
       // slow, and the frame's own work is well under the time between frames: the GPU is behind
-      if (med > 0.0195 && cpu < med * 0.55 && renderScale > 0.71) {
+      if (!fixedScale && med > 0.0195 && cpu < med * 0.55 && renderScale > 0.71) {
         renderScale = Math.max(0.7, Math.round((renderScale - 0.15) * 100) / 100);
         resize();
         try { localStorage.setItem('lc-scale2', renderScale); } catch (e) { /* private mode */ }
@@ -460,13 +509,13 @@ function frameBody(now) {
   hud.thumb(state === 'ride' && !paused ? input.thumb : null);
 
   if (state === 'ride' && !paused) {
-    const songT = sound.time();
+    const songT = sound.time(now);
     watchClock(S, songT);
     const inp = autopilot.on ? autoInput(S) : { press: input.press, steer: input.steer(dt) };
     if (!autopilot.on) {
-      const nowMs = performance.now();
-      inp.pressAt = songT - Math.max(0, nowMs - input.downAt) / 1000;
-      inp.releaseAt = songT - Math.max(0, nowMs - input.upAt) / 1000;
+      // (songT is the song at this frame's timestamp: count back from that to the press)
+      inp.pressAt = songT - Math.max(0, now - input.downAt) / 1000;
+      inp.releaseAt = songT - Math.max(0, now - input.upAt) / 1000;
     }
     // back from a pause: she holds where she was until the song comes round to her
     if (S.resume && S.resume.playing && songT >= S.resume.t) S.resume = null;
@@ -502,12 +551,16 @@ function frameBody(now) {
   chase.liftFov = 7 * LK + 6 * LD;
 
   track.update(rider);
-  const songNow = state === 'ride' && !paused ? Math.max(rider.t, sound.time()) : rider.t;
+  const songNow = state === 'ride' && !paused ? Math.max(rider.t, sound.time(now)) : rider.t;
   S.gates.update(track, rider, dt, beatPulse, time);
-  S.rails.update(track, rider, beatPulse);
+  // on a rail and holding down: the rail lights in the hold colour, the grind screeches higher
+  const railHold = state === 'ride' && !paused && rider.rail && rider.press ? 1 : 0;
+  S.rails.update(track, rider, beatPulse, railHold, S.track.mat.uniforms.uHoldCol.value, dt);
+  if (railHold !== (S.railHold || 0)) { S.railHold = railHold; sound.grindPress(railHold); }
+  if (railHold) grindShower(S, dt);
   if (rider.rail && state === 'ride' && Math.random() < dt * 30) {
-    const p = track.at(rider.t, rider.x, rider.rail.h + 0.05);
-    S.sparks.emit(p, track.dirAt(rider.t, new THREE.Vector3()).multiplyScalar(-rider.v * 0.3), new THREE.Color(1, 0.75, 0.45).multiplyScalar(2.6), 3, { spread: 2.5, life: 0.4, size: 0.12, grav: 12, up: 0.8 });
+    const p = track.at(rider.t, rider.x, rider.rail.h + 0.05, S._rp || (S._rp = new THREE.Vector3()));
+    S.sparks.emit(p, track.dirAt(rider.t, S._rd || (S._rd = new THREE.Vector3())).multiplyScalar(-rider.v * 0.3), RAIL_SPARK, 3, { spread: 2.5, life: 0.4, size: 0.12, grav: 12, up: 0.8 });
   }
   if (S.pyro > 0) pyroFrame(S, dt);
   const sec = course.sectionAt(rider.t);
@@ -587,8 +640,8 @@ function frameBody(now) {
   // (fainter on a phone, where a one-pixel line is three of the screen's)
   S.streaks.update(camera, vel, rider.v, (state === 'ride' ? clamp((rider.v - 22) / 50, 0, 1) * (0.5 + 0.5 * S.mixFlow) + 0.45 * LK : 0) * (document.body.classList.contains('touch') ? 0.5 : 1));
   if (state === 'ride' && rider.grounded && rider.flow > 0.55 && Math.random() < dt * 40 * rider.flow) {
-    const p = track.at(rider.t, rider.x + (Math.random() - 0.5) * 0.8, 0.15);
-    S.sparks.emit(p, vel.clone().multiplyScalar(0.55), new THREE.Color(P.edge).multiplyScalar(1.2), 1, { spread: 0.8, life: 0.5, size: 0.12, grav: 0, drag: 0.6 });
+    const p = track.at(rider.t, rider.x + (Math.random() - 0.5) * 0.8, 0.15, S._fp || (S._fp = new THREE.Vector3()));
+    S.sparks.emit(p, (S._fv || (S._fv = new THREE.Vector3())).copy(vel).multiplyScalar(0.55), (S._fc || (S._fc = new THREE.Color())).set(P.edge).multiplyScalar(1.2), 1, { spread: 0.8, life: 0.5, size: 0.12, grav: 0, drag: 0.6 });
   }
   S.sparks.update(dt);
   S.weather.update(camera, vel, dt, time);
@@ -637,7 +690,7 @@ function frameBody(now) {
   pc.uBloom.value = 0.55 + 0.3 * S.mixFlow + 0.18 * LK + 0.22 * LD;
   post.render(S.scene, camera);
   if (state === 'ride') {
-    hud.count(S.resume && !paused ? S.resume.sticks.filter((b) => b > sound.time() + 0.01).length : 0);
+    hud.count(S.resume && !paused ? S.resume.sticks.filter((b) => b > sound.time(now) + 0.01).length : 0);
     hud.frame(rider, course);
     // the word for each pump sits just over her head
     const hp = S._hp || (S._hp = new THREE.Vector3());
@@ -709,11 +762,16 @@ function handleEvents(S, dt) {
         break;
       }
       case 'railTrick': {
-        // a pump let go on the beat on a rail: the board goes round under her feet
+        // a pump let go on the beat on a rail: she hops and the board goes round under her feet,
+        // a ring and a burst of the hold colour off the rail
         view.railTrick(e.kind);
         kit.trick(e.t, e.grade === 'perfect' ? 0.8 : 0.5);
         const hc = S.track.mat.uniforms.uHoldCol.value;
-        sparks.emit(track.at(rider.t, rider.x, (rider.rail ? rider.rail.h : 0.5) + 0.1), new THREE.Vector3(0, 2.5, 0), hc.clone().multiplyScalar(3), 36, { spread: 6, life: 0.5, size: 0.14, grav: 9, up: 1.2 });
+        const rp = track.at(rider.t, rider.x, (rider.rail ? rider.rail.h : 0.5) + 0.1);
+        sparks.emit(rp, new THREE.Vector3(0, 3.5, 0), hc.clone().multiplyScalar(3.2), e.grade === 'perfect' ? 70 : 44, { spread: 8, life: 0.6, size: 0.15, grav: 9, up: 1.4 });
+        sparks.emit(rp, new THREE.Vector3(0, 2, 0), new THREE.Color(1, 1, 1).multiplyScalar(2.6), 20, { spread: 5, life: 0.35, size: 0.1, grav: 12 });
+        S.rings.fire(hc.clone().multiplyScalar(2.2), e.grade === 'perfect' ? 5.5 : 4, 0.45, 0.05);
+        chase.impulse(0.25, 0.2, 0.6);
         hud.points(e.points, view.root, camera, e.kind === 'kickflip' ? 'KICKFLIP' : 'SHOVE-IT', true);
         break;
       }
@@ -829,6 +887,29 @@ function holdSpray(S, dt, hp) {
   }
 }
 const WHITE = new THREE.Color(1, 1, 1);
+// held down on a rail: a shower off the board where it meets the rail, streaming back and up, hot
+// white at the heart and the hold colour round it (on top of the zone's spray, so a held grind
+// can't be missed)
+function grindShower(S, dt) {
+  const { rider, track, sparks } = S;
+  if (!rider.rail) return;
+  S.grindAcc = (S.grindAcc || 0) + dt * 160;
+  const n = Math.floor(S.grindAcc);
+  if (n < 1) return;
+  S.grindAcc -= n;
+  const f = track.dirAt(rider.t, S._gf || (S._gf = new THREE.Vector3()));
+  const o = track.at(rider.t, rider.x, rider.rail.h + 0.08, S._go || (S._go = new THREE.Vector3()));
+  const vel = S._gv || (S._gv = new THREE.Vector3()), c = S._gc || (S._gc = new THREE.Color());
+  const hc = S.track.mat.uniforms.uHoldCol.value, v = Math.max(rider.v, 12);
+  for (let i = 0; i < n; i++) {
+    const hot = Math.random() < 0.4;
+    vel.copy(f).multiplyScalar(v * (0.55 + 0.25 * Math.random()));
+    vel.x += (Math.random() - 0.5) * 6; vel.z += (Math.random() - 0.5) * 6; vel.y += 2.5 + 4.5 * Math.random();
+    c.copy(hc).lerp(WHITE, hot ? 0.65 : 0.1).multiplyScalar(hot ? 3.4 : 2.6);
+    sparks.emit(o, vel, c, 1, { spread: 1.2, life: 0.28 + 0.25 * Math.random(), size: 0.06 + 0.08 * Math.random(), grav: 16, drag: 0.4, jitter: 0.1 });
+  }
+}
+const RAIL_SPARK = new THREE.Color(1, 0.75, 0.45).multiplyScalar(2.6);
 
 // fountains of sparks off the tops of the gate's towers for a moment
 function pyroFrame(S, dt) {
@@ -938,7 +1019,7 @@ function gatePosts(S, T, beatPulse) {
   let lo = 0, hi = v.length;
   while (lo < hi) { const m = (lo + hi) >> 1; if (v[m] < t - 0.05) lo = m + 1; else hi = m; }
   const col = S._gateCol || (S._gateCol = [0, 0, 0]);
-  const c = new THREE.Color(S.P.gate ?? S.P.edge); col[0] = c.r; col[1] = c.g; col[2] = c.b;
+  const c = (S._gateC || (S._gateC = new THREE.Color())).set(S.P.gate ?? S.P.edge); col[0] = c.r; col[1] = c.g; col[2] = c.b;
   const p = S._gp || (S._gp = new THREE.Vector3());
   for (let i = lo; i < v.length && v[i] < t + 5.5; i++) {
     const ahead = v[i] - t;

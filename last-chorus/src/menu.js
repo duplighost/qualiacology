@@ -59,9 +59,12 @@ export class Screens {
   _introGo() {
     this.active = null;
     this.intro.classList.add('going');
-    // and nothing on the songs answers a finger for a moment, whatever's still in flight
+    // and nothing on the songs answers a finger until the title has gone and a moment more: a
+    // second tap on the title (it fades for most of a second, and seemed not to have heard the
+    // first) landed on the board button under its middle and opened the locker
     this.menu.classList.add('arriving');
-    setTimeout(() => this.menu.classList.remove('arriving'), 450);
+    clearTimeout(this._arriveT);
+    this._arriveT = setTimeout(() => this.menu.classList.remove('arriving'), 1100);
     this._sfx('start');
     const done = this.onStart; this.onStart = null;
     setTimeout(() => { this.intro.classList.remove('on', 'going'); this.film.pause(); this._rootOff(); }, 700);

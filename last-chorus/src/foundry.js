@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { extend, glowAt, poolAt, local, col } from './scenery.js';
 import { buildingMaterial, GEO } from './props.js';
-import { prepare, groundAt, Terrain, alongAt } from './trail.js';
+import { prepare, groundAt, Terrain, alongAt, gridNormals, normalsDue } from './trail.js';
 import { seeded } from './summer.js';
 import { G, T as TOWN, M as MEM, FLAMES, furnace, furnaceGlow, merge } from './usf-geo.js';
 
@@ -254,8 +254,7 @@ class UsfTerrain extends Terrain {
     let lx = 0, lz = 0;
     for (let i = 0; i < N; i++) {
       const t = t0 + i * YD, hs = this.rowHeights(k0 + i);
-      track.ground(t, 0, this._c);
-      const yaw = c.sample(t, this._s).yaw, rx = -Math.cos(yaw), rz = Math.sin(yaw);
+      const yaw = track.groundYaw(t, 0, this._c), rx = -Math.cos(yaw), rz = Math.sin(yaw);
       for (let j = 0; j < M; j++) {
         const x = cols[j], o = i * M + j;
         pos[o * 3] = this._c.x + rx * x; pos[o * 3 + 1] = hs[j]; pos[o * 3 + 2] = this._c.z + rz * x;
@@ -266,15 +265,9 @@ class UsfTerrain extends Terrain {
     }
     const base = rider.stats.dist - alongAt(cum, (rider.t - t0) / YD);
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) this.uvs[(i * M + j) * 2 + 1] = cum[i] + base;
-    const a = this._a, b = this._b;
-    for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {
-      const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1), j0 = Math.max(0, j - 1), j1 = Math.min(M - 1, j + 1);
-      a.set(pos[(i1 * M + j) * 3] - pos[(i0 * M + j) * 3], pos[(i1 * M + j) * 3 + 1] - pos[(i0 * M + j) * 3 + 1], pos[(i1 * M + j) * 3 + 2] - pos[(i0 * M + j) * 3 + 2]);
-      b.set(pos[(i * M + j1) * 3] - pos[(i * M + j0) * 3], pos[(i * M + j1) * 3 + 1] - pos[(i * M + j0) * 3 + 1], pos[(i * M + j1) * 3 + 2] - pos[(i * M + j0) * 3 + 2]);
-      a.cross(b).normalize(); if (a.y < 0) a.negate();
-      const o = (i * M + j) * 3; this.nor[o] = a.x; this.nor[o + 1] = a.y; this.nor[o + 2] = a.z;
-    }
-    const g = this.geo.attributes; g.position.needsUpdate = true; g.normal.needsUpdate = true; g.uv.needsUpdate = true;
+    const g = this.geo.attributes;
+    if (normalsDue(this, k0)) { gridNormals(pos, this.nor, N, M); g.normal.needsUpdate = true; }
+    g.position.needsUpdate = true; g.uv.needsUpdate = true;
     const u = this.mat.uniforms;
     u.uSun.value.set(P.moon); if (P.moonDir) u.uSunDir.value.set(...P.moonDir).normalize();
     u.uSunK.value = P.sunK ?? 1; u.uHemiK.value = P.hemiK ?? 1.5;

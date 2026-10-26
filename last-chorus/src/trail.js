@@ -21,6 +21,24 @@ const hash = (x) => { const s = Math.sin(x * 127.1 + 311.7) * 43758.5453; return
 // the distance along the rows at a fractional row (where she is): the ground's along-the-road
 // coordinate is anchored there, so it stays fixed to the world between rows instead of creeping
 // forward with her and snapping back at each new row (lawn stripes and paths flickered)
+// a ground grid's normals from its neighbours, inline (no vector objects: it's thousands a frame)
+export function gridNormals(P3, nor, N, M) {
+  for (let i = 0; i < N; i++) {
+    const i0 = i > 0 ? i - 1 : 0, i1 = i < N - 1 ? i + 1 : N - 1;
+    for (let j = 0; j < M; j++) {
+      const j0 = j > 0 ? j - 1 : 0, j1 = j < M - 1 ? j + 1 : M - 1;
+      const a1 = (i1 * M + j) * 3, a0 = (i0 * M + j) * 3, b1 = (i * M + j1) * 3, b0 = (i * M + j0) * 3;
+      const ax = P3[a1] - P3[a0], ay = P3[a1 + 1] - P3[a0 + 1], az = P3[a1 + 2] - P3[a0 + 2];
+      const bx = P3[b1] - P3[b0], by = P3[b1 + 1] - P3[b0 + 1], bz = P3[b1 + 2] - P3[b0 + 2];
+      let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+      const l = Math.hypot(nx, ny, nz) || 1, sg = ny < 0 ? -1 / l : 1 / l;
+      const o = (i * M + j) * 3; nor[o] = nx * sg; nor[o + 1] = ny * sg; nor[o + 2] = nz * sg;
+    }
+  }
+}
+// (and only when the rows have moved on, or now and then: between, the grid only slides a little)
+export function normalsDue(T, k0) { T._nf = (T._nf || 0) + 1; if (k0 !== T._nk || T._nf % 4 === 0) { T._nk = k0; return true; } return false; }
+
 export function alongAt(cum, f) {
   const n = cum.length, i = clamp(Math.floor(f), 0, n - 2), a = clamp(f - i, 0, 1);
   return cum[i] + (cum[i + 1] - cum[i]) * a;
@@ -73,7 +91,8 @@ export function groundBase(course, t) {
   const f = (t - course.t0) * RATE;
   const i = clamp(Math.floor(f), 0, course.n - 2), a = clamp(f - i, 0, 1);
   let base = T.base[i] + (T.base[i + 1] - T.base[i]) * a - T.drop;
-  for (const [a0, a1, y] of T.flats) { const k = smooth(a0 - 4, a0, t) * (1 - smooth(a1, a1 + 4, t)); base += (y - base) * k; }
+  const F = T.flats;
+  for (let n = 0; n < F.length; n++) { const f = F[n], a0 = f[0], a1 = f[1]; const k = smooth(a0 - 4, a0, t) * (1 - smooth(a1, a1 + 4, t)); base += (f[2] - base) * k; }
   return Math.max(0, base);
 }
 export function groundSide(course, t, x, base) {
@@ -178,9 +197,8 @@ export class Terrain {
     const smp = this._smp || (this._smp = {});
     for (let i = 0; i < N; i++) {
       const t = t0 + i * YD, hs = this.baseRow(k0 + i);
-      // (track.ground(t, x) is the row's centre slid x along its right: once per row, not per point)
-      track.ground(t, 0, this._p);
-      const yaw = c.sample(t, smp).yaw, rx = -Math.cos(yaw), rz = Math.sin(yaw);
+      // (the row's centre, and the columns slid along its right: once per row, not per point)
+      const yaw = track.groundYaw(t, 0, this._p), rx = -Math.cos(yaw), rz = Math.sin(yaw);
       for (let j = 0; j < M; j++) {
         const x = this.cols[j];
         const o = (i * M + j) * 3;
@@ -193,15 +211,8 @@ export class Terrain {
     const base = rider.stats.dist - alongAt(cum, (rider.t - t0) / YD);
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) this.uvs[(i * M + j) * 2 + 1] = cum[i] + base;
     // normals from the neighbours
-    const P3 = this.pos, a = this._a, b = this._b;
-    for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {
-      const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1), j0 = Math.max(0, j - 1), j1 = Math.min(M - 1, j + 1);
-      a.set(P3[(i1 * M + j) * 3] - P3[(i0 * M + j) * 3], P3[(i1 * M + j) * 3 + 1] - P3[(i0 * M + j) * 3 + 1], P3[(i1 * M + j) * 3 + 2] - P3[(i0 * M + j) * 3 + 2]);
-      b.set(P3[(i * M + j1) * 3] - P3[(i * M + j0) * 3], P3[(i * M + j1) * 3 + 1] - P3[(i * M + j0) * 3 + 1], P3[(i * M + j1) * 3 + 2] - P3[(i * M + j0) * 3 + 2]);
-      a.cross(b).normalize(); if (a.y < 0) a.negate();
-      const o = (i * M + j) * 3; this.nor[o] = a.x; this.nor[o + 1] = a.y; this.nor[o + 2] = a.z;
-    }
-    this.geo.attributes.position.needsUpdate = true; this.geo.attributes.normal.needsUpdate = true; this.geo.attributes.uv.needsUpdate = true;
+    if (normalsDue(this, k0)) { gridNormals(this.pos, this.nor, N, M); this.geo.attributes.normal.needsUpdate = true; }
+    this.geo.attributes.position.needsUpdate = true; this.geo.attributes.uv.needsUpdate = true;
     const u = this.mat.uniforms;
     u.uSun.value.set(P.moon); if (P.moonDir) u.uSunDir.value.set(...P.moonDir).normalize();
     u.uSunK.value = P.sunK ?? 1; u.uHemiK.value = P.hemiK ?? 1.5;
@@ -660,30 +671,25 @@ class YahTerrain extends Terrain {
     for (let i = 0; i < N; i++) {
       const t = t0 + i * YD, hs = this.rowHeights(k0 + i);
       // one point on the line and the way across it; the columns are along that
-      track.ground(t, 0, this._c);
-      const yaw = c.sample(t).yaw, rx = -Math.cos(yaw), rz = Math.sin(yaw);
+      const yaw = track.groundYaw(t, 0, this._c), rx = -Math.cos(yaw), rz = Math.sin(yaw);
       const zi = clamp(Math.round((t - c.t0) / YD), 0, this.zt[0].length / 4 - 1) * 4;
+      const newRows = k0 !== this._zk;
       for (let j = 0; j < M; j++) {
         const x = cols[j], o = i * M + j;
         pos[o * 3] = this._c.x + rx * x; pos[o * 3 + 1] = hs[j]; pos[o * 3 + 2] = this._c.z + rz * x;
         this.uvs[o * 2] = x;
-        const zt = this.zt[x > 0 ? 1 : 0];
-        Z[o * 4] = zt[zi]; Z[o * 4 + 1] = zt[zi + 1]; Z[o * 4 + 2] = zt[zi + 2]; Z[o * 4 + 3] = zt[zi + 3];
+        // (a row's place in the zones never changes: written only when the rows move on)
+        if (newRows) { const zt = this.zt[x > 0 ? 1 : 0]; Z[o * 4] = zt[zi]; Z[o * 4 + 1] = zt[zi + 1]; Z[o * 4 + 2] = zt[zi + 2]; Z[o * 4 + 3] = zt[zi + 3]; }
       }
       cum[i] = i ? cum[i - 1] + Math.hypot(this._c.x - lx, this._c.z - lz) : 0;
       lx = this._c.x; lz = this._c.z;
     }
     const base = rider.stats.dist - alongAt(cum, (rider.t - t0) / YD);
     for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) this.uvs[(i * M + j) * 2 + 1] = cum[i] + base;
-    const a = this._a, b = this._b;
-    for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {
-      const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1), j0 = Math.max(0, j - 1), j1 = Math.min(M - 1, j + 1);
-      a.set(pos[(i1 * M + j) * 3] - pos[(i0 * M + j) * 3], pos[(i1 * M + j) * 3 + 1] - pos[(i0 * M + j) * 3 + 1], pos[(i1 * M + j) * 3 + 2] - pos[(i0 * M + j) * 3 + 2]);
-      b.set(pos[(i * M + j1) * 3] - pos[(i * M + j0) * 3], pos[(i * M + j1) * 3 + 1] - pos[(i * M + j0) * 3 + 1], pos[(i * M + j1) * 3 + 2] - pos[(i * M + j0) * 3 + 2]);
-      a.cross(b).normalize(); if (a.y < 0) a.negate();
-      const o = (i * M + j) * 3; this.nor[o] = a.x; this.nor[o + 1] = a.y; this.nor[o + 2] = a.z;
-    }
-    const g = this.geo.attributes; g.position.needsUpdate = true; g.normal.needsUpdate = true; g.uv.needsUpdate = true; g.aZone.needsUpdate = true;
+    const g = this.geo.attributes;
+    if (k0 !== this._zk) { this._zk = k0; g.aZone.needsUpdate = true; }
+    if (normalsDue(this, k0)) { gridNormals(pos, this.nor, N, M); g.normal.needsUpdate = true; }
+    g.position.needsUpdate = true; g.uv.needsUpdate = true;
     const u = this.mat.uniforms;
     u.uSun.value.set(P.moon); if (P.moonDir) u.uSunDir.value.set(...P.moonDir).normalize();
     u.uSunK.value = P.sunK ?? 1; u.uHemiK.value = P.hemiK ?? 1.5;
@@ -1352,7 +1358,10 @@ export class TrailWorld {
     this.shafts = new YahShafts(scene);
     this.birds = new YahBirds(scene);
     this.water = waterM(M);
-    this.gorges = (c._yahCuts || []).filter((g) => !g.rim).map((g) => new YahGorge(scene, g, this.water));
+    // (the gorges draw it on plain meshes and the spring's layer on instanced ones: one material for
+    // both swapped its shader twice a frame, so the gorges get their own, sharing its uniforms)
+    const wg = this.water.clone(); wg.uniforms = this.water.uniforms;
+    this.gorges = (c._yahCuts || []).filter((g) => !g.rim).map((g) => new YahGorge(scene, g, wg));
     this.fired = new Set();
     this.spots = []; this.hits = [];
     for (const z of plan.zones || []) if (z.kits.includes('yahSets')) for (const a of z.at || []) { if (a.beam) this.spots.push(a); else if (a.hit !== undefined) this.hits.push(a); }

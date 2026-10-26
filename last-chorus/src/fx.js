@@ -21,7 +21,7 @@ export class Sparks {
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uScale: { value: 600 } },
       vertexShader: `attribute float aA; attribute float aS; varying vec3 vC; varying float vA; uniform float uScale;
-        void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position,1.0); vA = aA * smoothstep(0.6, 2.4, -mv.z); gl_PointSize = min(aS * uScale / -mv.z, 80.0); gl_Position = projectionMatrix * mv; }`,
+        void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position,1.0); vA = aA * smoothstep(0.6, 2.4, -mv.z); gl_PointSize = vA > 0.0 ? min(aS * uScale / -mv.z, 80.0) : 0.0; gl_Position = vA > 0.0 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0); }`,
       fragmentShader: `varying vec3 vC; varying float vA; void main(){ vec2 d = gl_PointCoord - 0.5; float r = dot(d,d)*4.0; float a = exp(-r*3.0); gl_FragColor = vec4(vC * a * vA, 1.0); }`,
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, vertexColors: true,
     });

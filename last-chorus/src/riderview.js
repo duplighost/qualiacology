@@ -224,6 +224,9 @@ export class RiderView {
     const braking = rider.stopping && rider.stopV0 > 0 ? rider.stopVel / rider.stopV0 : 0;
     // stopped and cheering: the board comes back level under her
     p.edge = (p.edge ?? 0) + ((rider.stopping && !this.cheering ? 0.2 + 0.55 * Math.sqrt(braking) : 0) - (p.edge ?? 0)) * Math.min(1, dt * (this.cheering ? 4 : 7));
+    // ... and as she comes to a stop she stands up straight, however the hill runs under her: the
+    // slope she stopped on had pitched her (and her cheer) a third of the way onto her back
+    p.level = (p.level ?? 0) + ((rider.stopping ? 1 - braking : 0) - (p.level ?? 0)) * Math.min(1, dt * 3);
 
     // stopped, the board hovers: a slow bob and a little roll, never quite still
     this.clock += dt;
@@ -231,7 +234,8 @@ export class RiderView {
     pos.y += p.rest * (0.045 * Math.sin(this.clock * 2.1) + 0.015 * Math.sin(this.clock * 3.7 + 1)) + (p.hop || 0);
     this.root.position.copy(pos);
     this.root.rotation.order = 'YXZ';
-    this.root.rotation.set(-pitch + p.rest * 0.025 * Math.sin(this.clock * 1.6), yaw, -bank * 0.85 + p.lean * 0.42 + p.rest * 0.03 * Math.sin(this.clock * 1.3 + 0.5));
+    const lv = p.level * p.level * (3 - 2 * p.level);
+    this.root.rotation.set(-pitch * (1 - lv) + p.rest * 0.025 * Math.sin(this.clock * 1.6), yaw, (-bank * 0.85 + p.lean * 0.42) * (1 - 0.8 * lv) + p.rest * 0.03 * Math.sin(this.clock * 1.3 + 0.5));
     // tricks turn the whole board (she's strapped to it): about her middle for flips and rolls
     let ang = 0, ang2 = 0;
     const tr = this.trick;
@@ -291,9 +295,9 @@ export class RiderView {
   _railTrickFrame(dt) {
     const rt = this.rt;
     if (!rt) return;
-    rt.f = Math.min(1, rt.f + dt / 0.36);
+    rt.f = Math.min(1, rt.f + dt / 0.42);
     const f = rt.f, e = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
-    const hop = Math.sin(Math.PI * f) * 0.42;
+    const hop = Math.sin(Math.PI * f) * 0.68;
     this.deck.rotation.set(0, rt.kind === 'shuvit' ? e * Math.PI * 2 : 0, rt.kind === 'kickflip' ? e * Math.PI * 2 : 0);
     this.char.position.y = 0.205 + hop;
     this.deck.position.y = 0.17 + hop * 0.35;
@@ -335,6 +339,9 @@ export class RiderView {
     const gr = p.grab * p.grab * (3 - 2 * p.grab);
     let armDown = (1.05 - 0.75 * air - 0.15 * c) * (1 - hu) - 1.3 * hu;
     armDown = armDown * (1 - st) + (0.3 - 0.15 * sk) * st;      // arms out for the stop: the front one up and out
+    // on a rail: arms out for balance, lower and wider in the crouch while she holds it down
+    const ra = (p.rail ?? 0) * (1 - hu);
+    if (ra > 0.01) armDown = armDown * (1 - ra) + (0.32 - 0.22 * clamp((c - 0.4) / 0.5, 0, 1)) * ra;
     // grab: the back hand reaches down to the edge of the board
     let armR = armDown * (1 - gr) + 1.55 * gr;
     if (st > 0.01) { armR = armR * (1 - st) + (0.95 - 0.25 * sk) * st; this._rot('upperarm_r', X, -0.55 * st); this._rot('lowerarm_r', Z, 0.4 * st); }
@@ -370,10 +377,11 @@ export class RiderView {
     const pumping = 1 - bb;
     // the pump: straight up on the beat, a fist by her head between
     const up = dip;
-    // stand tall, chest up, chin up; leaning back into each pump, nodding with it
-    this._rot('spine_01', X, (-0.14 - 0.06 * up * pumping) * ww);
-    this._rot('spine_02', X, -0.06 * ww);
-    this._rot('Head', X, (-0.22 + 0.16 * dip) * ww);
+    // stand tall, chest a little up, nodding with each pump (not leaning back into them: from the
+    // end shot she looked to be lying back)
+    this._rot('spine_01', X, (-0.05 - 0.03 * up * pumping) * ww);
+    this._rot('spine_02', X, -0.02 * ww);
+    this._rot('Head', X, (-0.1 + 0.12 * dip) * ww);
     // hips and shoulders going with the rock
     this._rot('pelvis', Z, 0.07 * sway * ww);
     this._rot('spine_02', Z, -0.05 * sway * ww);
