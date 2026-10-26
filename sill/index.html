@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SILL | Qualiacology</title>
+  <meta name="description" content="SILL is a wordless Windows game that lives on your desktop: an old window opens over your apps, a fledgling falls out of it, and you look after it from summer to winter by moving the window." />
+  <meta name="theme-color" content="#121427" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Qualiacology" />
+  <meta property="og:title" content="SILL | Qualiacology" />
+  <meta property="og:description" content="A window opens on your desktop and something falls out of it. A Windows game about a fledgling, from summer to winter." />
+  <meta property="og:url" content="https://qualiacology.com/sill/" />
+  <meta property="og:image" content="https://qualiacology.com/assets/og/sill-og-v1.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="An old sash window on a dark computer desktop, a robin feeding a nestling seen through it at sunset, a speckled fledgling on the sill outside" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SILL | Qualiacology" />
+  <meta name="twitter:description" content="A window opens on your desktop and something falls out of it." />
+  <meta name="twitter:image" content="https://qualiacology.com/assets/og/sill-og-v1.jpg" />
+  <link rel="canonical" href="https://qualiacology.com/sill/" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #121427; color: #ece6da;
+      font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+      line-height: 1.6; min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse at 18% -8%, rgba(255, 196, 120, 0.16), transparent 55%),
+        radial-gradient(ellipse at 95% 30%, rgba(120, 140, 255, 0.07), transparent 45%);
+    }
+    .home-link {
+      position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 20;
+      color: rgba(255, 214, 160, .85); text-decoration: none; font: 800 11px/1.2 system-ui, sans-serif;
+      letter-spacing: .14em; text-transform: uppercase; padding: 8px 12px; border-radius: 999px;
+      border: 1px solid rgba(255, 214, 160, .28); background: rgba(18, 20, 39, .72);
+    }
+    .home-link:hover, .home-link:focus-visible { color: #fff; border-color: rgba(255, 214, 160, .7); outline: 0; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 4.6rem 1.4rem 5rem; }
+    .eyebrow { text-transform: uppercase; letter-spacing: 0.28em; font-size: 0.72rem; color: #ffc27a; font-weight: 700; }
+    h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); line-height: 1; margin: 0.5rem 0 1.6rem; letter-spacing: 0.04em; }
+    .shot { width: 100%; height: auto; display: block; border-radius: 14px;
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06); }
+    .summary { font-size: clamp(1.08rem, 2.2vw, 1.3rem); max-width: 40em; margin: 2rem 0 2.2rem; }
+    .get { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.2rem; }
+    .button {
+      display: inline-block; background: #ffc27a; color: #1c1a14; text-decoration: none; font-weight: 800;
+      padding: 0.9rem 1.5rem; border-radius: 999px; letter-spacing: 0.02em;
+      box-shadow: 0 10px 30px rgba(255, 180, 90, 0.18);
+    }
+    .button:hover, .button:focus-visible { background: #ffd8a2; outline: 3px solid rgba(255, 214, 160, 0.45); outline-offset: 3px; }
+    .size { color: #a9a6b8; font-size: 0.95rem; }
+    .notes { margin-top: 2.6rem; color: #b7b3c4; font-size: 0.98rem; max-width: 40em; }
+    .notes p + p { margin-top: 0.7rem; }
+    @media (max-width: 560px) { .wrap { padding-top: 4rem; } }
+  </style>
+</head>
+<body>
+  <a class="home-link" href="/">Qualiacology</a>
+  <main class="wrap">
+    <p class="eyebrow">For Windows · Fifteen minutes or so</p>
+    <h1>SILL</h1>
+    <img class="shot" src="/assets/games/sill-card-clean.jpg" width="1280" height="720"
+      alt="An old cream-painted sash window open on a dark computer desktop. Through it, at sunset, a robin with a worm stands over a nestling in a nest. A speckled fledgling stands on the sill outside, looking back in, and light from the window falls on the desktop below." />
+    <p class="summary">A window opens on your desktop and something falls out of it. It can’t fly yet. It stands on your real windows and rides them when you move them. Get it home, feed it, keep it away from the cat, and then let it go.</p>
+    <div class="get">
+      <a class="button" href="/sill/download">Download SILL</a>
+      <span class="size">Windows 10 or 11 · a 140 MB zip</span>
+    </div>
+    <div class="notes">
+      <p>Unzip it and open SILL.exe. The first time, Windows says it doesn’t recognise it: More info, then Run anyway.</p>
+      <p>It sits on top of whatever you have open. Your mouse goes through to your own apps everywhere except the window and the bird.</p>
+      <p>Sound on. Right-click the bird by the clock to start over or quit.</p>
+    </div>
+  </main>
+</body>
+</html>

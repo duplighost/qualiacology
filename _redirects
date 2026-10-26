@@ -201,3 +201,8 @@
 # --- LAST CHORUS ---
 /last-chorus.html  /last-chorus/  301!
 /chorus  /last-chorus/  302
+
+# --- SILL ---
+/sill.html  /sill/  301!
+/fledgling  /sill/  302
+/sill/download  https://github.com/duplighost/qualiacology/releases/download/sill-v1.0.0/SILL-windows.zip  302

@@ -92,6 +92,20 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "sill",
+      "title": "SILL",
+      "descriptor": "A fledgling on your real desktop",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/sill-card-clean.jpg",
+      "alt": "An old cream-painted sash window open on a dark computer desktop. Through it, at sunset, a robin with a worm stands over a nestling in a nest; a speckled fledgling stands on the sill outside, looking back in, and the window's light falls on the desktop below",
+      "summary": "A window opens on your desktop and something falls out of it. It can’t fly yet. It stands on your real windows and rides them when you move them. Get it home, feed it, keep it away from the cat, and then let it go. A Windows download, not a page.",
+      "metaDescription": "SILL is a wordless Windows game that lives on your desktop: an old window opens over your apps, a fledgling falls out of it, and you look after it from summer to winter by moving the window.",
+      "controls": "Windows download · mouse only · drag the window · right-click the bird by the clock to quit",
+      "actionLabel": "Open the window",
+      "duration": "Fifteen minutes or so"
+    },
+    {
       "slug": "collateral",
       "title": "COLLATERAL",
       "descriptor": "First-person catch-and-throw",
