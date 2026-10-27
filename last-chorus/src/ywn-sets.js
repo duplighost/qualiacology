@@ -42,7 +42,12 @@ function paperTexture() {
 function inkTexture() {
   return canvasTex(1024, 512, (g, W, H) => {
     g.clearRect(0, 0, W, H);
-    g.save(); g.translate(W / 2, H / 2 + 10); g.rotate(-0.08); g.fillStyle = '#1a2a6a'; g.font = 'italic 700 190px "Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('555-0173', 0, 0); g.restore();
+    // (sized to clear both edges, and the tenth of the napkin the pen's reveal shows before it starts:
+    // at a fixed 190px the first 5 and the last 3 were cut off)
+    const hand = (s) => `italic 700 ${s}px "Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive`;
+    g.save(); g.translate(W / 2, H / 2 + 10); g.rotate(-0.08); g.fillStyle = '#1a2a6a'; g.font = hand(190); g.textAlign = 'center'; g.textBaseline = 'middle';
+    const nw = g.measureText('555-0173').width; if (nw > 740) g.font = hand(Math.floor(190 * 740 / nw));
+    g.fillText('555-0173', 0, 0); g.restore();
     g.strokeStyle = '#1a2a6a'; g.lineWidth = 9; g.lineCap = 'round'; g.beginPath(); g.moveTo(170, 400); g.bezierCurveTo(380, 430, 640, 420, 860, 380); g.stroke();
   });
 }

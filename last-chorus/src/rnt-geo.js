@@ -326,8 +326,10 @@ export function bannerTexture(word = 'WELCOME HOME') {
   g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, CH);
   [...word.padEnd(12, ' ')].forEach((ch, i) => {
     g.fillStyle = '#ffffff'; g.fillRect(i * CW, 0, CW, CH);
-    g.fillStyle = '#2a0a1a'; g.font = '900 92px "Arial Black", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(ch, i * CW + CW / 2, CH * 0.36);
+    // (a little smaller and higher, where the pennant is wider: low on the point, the edges shaved the
+    // outer feet off the W and the Ms)
+    g.fillStyle = '#2a0a1a'; g.font = '900 80px "Arial Black", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(ch, i * CW + CW / 2, CH * 0.3);
   });
   return tex(c, 4);
 }

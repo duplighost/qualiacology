@@ -36,11 +36,13 @@ function posterTexture() {
   return canvasTex(512, 720, (g, W, H) => {
     g.fillStyle = '#efe2c0'; g.fillRect(0, 0, W, H);
     g.strokeStyle = '#3a2a1a'; g.lineWidth = 10; g.strokeRect(16, 16, W - 32, H - 32);
-    g.fillStyle = '#2a1a10'; g.textAlign = 'center'; g.font = '900 120px "Arial Black", Impact, sans-serif'; g.fillText('WANTED', W / 2, 150);
+    // (the words sized to fit inside the border: at a fixed 120px WANTED lost a third of its W and its D)
+    const fit = (t, px, max) => { g.font = `900 ${px}px "Arial Black", Impact, sans-serif`; const w = g.measureText(t).width; if (w > max) g.font = `900 ${Math.floor(px * max / w)}px "Arial Black", Impact, sans-serif`; };
+    g.fillStyle = '#2a1a10'; g.textAlign = 'center'; fit('WANTED', 120, W - 96); g.fillText('WANTED', W / 2, 150);
     g.fillStyle = '#d8c8a4'; g.fillRect(76, 200, W - 152, 300); g.strokeStyle = '#3a2a1a'; g.lineWidth = 6; g.strokeRect(76, 200, W - 152, 300);
     lips(g, W / 2, 340, 1.25);
     g.fillStyle = '#ff4f8a'; g.beginPath(); const hx = 400, hy = 250; g.moveTo(hx, hy + 18); g.bezierCurveTo(hx - 40, hy - 10, hx - 18, hy - 40, hx, hy - 16); g.bezierCurveTo(hx + 18, hy - 40, hx + 40, hy - 10, hx, hy + 18); g.fill();
-    g.fillStyle = '#2a1a10'; g.font = '900 64px "Arial Black", Impact, sans-serif'; g.fillText('SWEETHEART', W / 2, 590);
+    g.fillStyle = '#2a1a10'; fit('SWEETHEART', 64, W - 96); g.fillText('SWEETHEART', W / 2, 590);
     g.font = '700 40px "Arial Narrow", Arial, sans-serif'; g.fillText('REWARD', W / 2, 660);
   });
 }

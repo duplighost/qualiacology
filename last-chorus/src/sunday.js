@@ -376,7 +376,7 @@ extend({
     nhPicture: (M) => [SETS.picture(), M.nhPicM || (M.nhPicM = cellMaterial(M, CANVAS.paintings(), 6, { k: 1.1 })), 12, { aIdx: 1 }],
     nhCourthouse: (M) => [SETS.courthouse(), VC(M, 'nhVC'), 2, {}],
     nhClock: (M) => [SETS.clockFace(), M.nhClockM || (M.nhClockM = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.96, 0.85).multiplyScalar(1.3) })), 2, {}],
-    nhCourtWords: (M) => [(() => { const g = new THREE.PlaneGeometry(16, 1.3); g.translate(0, 18.4, 13.72); return g; })(), M.nhCourtM || (M.nhCourtM = new THREE.MeshBasicMaterial({ map: CANVAS.letterBoard(['COURT ADJOURNED'], { bg: '#e8e4d8', ink: '#3a3a40', rule: 'rgba(0,0,0,0)', size: 150 }) })), 2, {}],
+    nhCourtWords: (M) => [(() => { const g = new THREE.PlaneGeometry(16, 1.3); g.translate(0, 18.4, 13.72); return g; })(), M.nhCourtM || (M.nhCourtM = new THREE.MeshBasicMaterial({ map: CANVAS.frieze('COURT ADJOURNED', 16, 1.3, { bg: '#e8e4d8', ink: '#3a3a40' }) })), 2, {}],
     nhGavel: (M) => [SETS.gavel(), VC(M, 'nhGlossVC', { rough: 0.45 }), 2, {}],
     nhGavelBlock: (M) => [SETS.block(), VC(M, 'nhGlossVC', { rough: 0.45 }), 2, {}],
     nhFireTruck: (M) => [SETS.fireTruck(), VC(M, 'nhGlossVC', { rough: 0.45 }), 4, {}],

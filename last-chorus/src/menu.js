@@ -383,7 +383,7 @@ export class Screens {
         bar.style.width = ((L.from + (L.to - L.from) * e) * 100).toFixed(1) + '%';
         if (f < 1) { requestAnimationFrame(step); return; }
         if (L.full) {
-          ln.textContent = L.level + 1; up.textContent = '+1 BOARD';
+          ln.textContent = L.level + 1; up.textContent = '+1 PICK';   // (a rider or a board: the song list says "TO PICK")
           box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
           if (fx.levelUp) fx.levelUp();
           setTimeout(next, 700);

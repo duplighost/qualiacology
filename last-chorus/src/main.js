@@ -1015,7 +1015,7 @@ function heroShot(S, fo, orbit) {
 function gatePosts(S, T, beatPulse) {
   const { rider, course, track } = S;
   if (state !== 'ride' && state !== 'title') return;
-  const v = course.valleys, t = rider.t;
+  const v = course.gates, t = rider.t;   // (only the dips you pump into: the same gates the road draws)
   let lo = 0, hi = v.length;
   while (lo < hi) { const m = (lo + hi) >> 1; if (v[m] < t - 0.05) lo = m + 1; else hi = m; }
   const col = S._gateCol || (S._gateCol = [0, 0, 0]);
@@ -1023,7 +1023,6 @@ function gatePosts(S, T, beatPulse) {
   const p = S._gp || (S._gp = new THREE.Vector3());
   for (let i = lo; i < v.length && v[i] < t + 5.5; i++) {
     const ahead = v[i] - t;
-    if (course.sample(v[i] - 0.15).hold < 0) continue;          // only dips you pump into
     const w = course.sample(v[i]).width;
     // (gone the moment she's through: past her they swept by beside the camera, huge, a flash at the
     // sides of the screen on every dip, worst on a phone held upright)
