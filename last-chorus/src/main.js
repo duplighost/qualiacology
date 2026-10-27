@@ -11,6 +11,7 @@ import { ChaseCam } from './camera.js';
 import { Post } from './post.js';
 import { Sparks, Streaks, Trail, Fireworks, Weather } from './fx.js';
 import { Notes, Rings } from './feedback.js';
+import { haptics } from './haptics.js';
 import { Look, applyLook } from './look.js';
 import { Wreck } from './setpieces.js';
 import { Land, oceanMaterial, Train, FerrisWheel, BeachWorld } from './beach.js';
@@ -68,6 +69,7 @@ const input = new Input(canvas);
 // a phone is one from the start, anything else the moment a finger touches it
 if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch');
 input.onTouch = () => document.body.classList.add('touch');
+haptics.off = params.has('nobuzz');
 const hud = new Hud();
 const ui = new Screens();
 ui.sfx = (kind, i) => sound.ui(kind, i);
@@ -139,7 +141,8 @@ const PREVIEW = {
 function openMenu(sel = menuSel) {
   if (S) { sound.stop(); sound.charge(false); sound.siren(0); sound.skid(0); }
   paused = false; ui.hidePause(); ui.hideEnd();
-  state = 'menu';
+  state = 'menu'; haptics.live(false);
+  document.body.classList.remove('fever'); if (S) S.feverOn = false;
   document.body.classList.remove('riding');
   hud.hideAll();
   ui.showMenu(ALBUM.map((_, i) => card(i)), sel, (i) => { menuSel = i; sound.resume(); chooseSong(i); }, ME, PREVIEW);
@@ -378,6 +381,7 @@ function startRide() {
     S.went = false;
   }
   S.crossed = false; S.wdT = null; S.resume = null;
+  S.thumbCrest = 0; S.purrTo = null;   // (the hold zones in your hand start over too)
   hud.start(S.course);
   S.titleK = 1;
   S.pressHint = 0;
@@ -525,8 +529,10 @@ function frameBody(now) {
     else rider.advance(Math.max(rider.t, songT), inp);
     startAndFinish(S, songT);
     handleEvents(S, dt);
+    beatInThumb(S);
     if (songT > course.duration + 3.0 && state === 'ride') endSong();
   }
+  haptics.live(state === 'ride' && !paused);
   if (state === 'title') {
     // idle on the start line, breathing with nothing yet
     S.pulse = 0.5 + 0.5 * Math.sin(time * 2.2);
@@ -537,6 +543,15 @@ function frameBody(now) {
   const bf = bpos - Math.floor(bpos);
   const beatPulse = state === 'ride' ? Math.exp(-bf * 6) : 0;
   S.flash *= Math.exp(-dt * 5);
+  // the arcade: a hit's surge, a broken run's drain, the colour flick; and the multiplier the world
+  // is lit by (rising fast, sinking slower), at x4 the fever
+  S.burst = (S.burst || 0) * Math.exp(-dt * 3.5);
+  S.drain = (S.drain || 0) * Math.exp(-dt * 2.6);
+  S.aberrK = (S.aberrK || 0) * Math.exp(-dt * 9);
+  const multNow = state === 'ride' ? rider.score.mult : 1, tierT = (multNow - 1) / 3;
+  S.tier = (S.tier || 0) + (tierT - (S.tier || 0)) * Math.min(1, dt * (tierT > (S.tier || 0) ? 6 : 2.5));
+  S.feverK = (S.feverK || 0) + ((multNow >= 4 ? 1 : 0) - (S.feverK || 0)) * Math.min(1, dt * 4);
+  if ((multNow >= 4) !== !!S.feverOn) { S.feverOn = multNow >= 4; document.body.classList.toggle('fever', S.feverOn); }
   // the chorus lift: its first beat hits, and the whole thing opens up while it lasts
   if (S.lift.update(S, dt, beatPulse, state === 'ride' && !paused)) {
     const ec = new THREE.Color(S.entry.lift?.flash ?? P.edge);
@@ -593,9 +608,10 @@ function frameBody(now) {
   S.hit *= Math.exp(-dt * 5);
   view.update(track, rider, dt, beatPulse);
   view.setTint(rider.flow);
-  if (S.hoverboard) { S.trail.mesh.visible = false; S.hoverboard.update(dt, { speed: state === 'ride' || state === 'results' ? rider.v : 0, beat: beatPulse, boost: clamp(rider.flow * (state === 'ride' ? 1 : 0.3), 0, 1), airborne: !rider.grounded }); }
+  // (a hit flares the board's engine: S.burst)
+  if (S.hoverboard) { S.trail.mesh.visible = false; S.hoverboard.update(dt, { speed: state === 'ride' || state === 'results' ? rider.v : 0, beat: beatPulse, boost: clamp(rider.flow * (state === 'ride' ? 1 : 0.3) + 0.8 * S.burst, 0, 1), airborne: !rider.grounded }); }
   // (faint while she's turning a trick: the tail going round in circles drew knots in the air)
-  else S.trail.push(view.board, state === 'ride' ? clamp(0.15 + 0.85 * rider.flow, 0, 1) * clamp((rider.v - 15) / 30, 0.2, 1) * (view.trick ? 0.12 : 1) : 0);
+  else S.trail.push(view.board, state === 'ride' ? clamp(0.15 + 0.85 * rider.flow + 0.6 * S.burst, 0, 1) * clamp((rider.v - 15) / 30, 0.2, 1) * (view.trick ? 0.12 : 1) : 0);
   S.titleK = state === 'title' ? 1 : Math.max(0, (S.titleK || 0) - dt * 1.4);
   if (state === 'results' && S.finale) { S.outroK = Math.min(1, (S.outroK || 0) + dt / 2.2); S.orbitA = (S.orbitA ?? 2.2) + dt * 0.16; }
   const fo = (S.plan.finale && S.plan.finale.orbit) || {};
@@ -638,7 +654,7 @@ function frameBody(now) {
   const vel = S._vel || (S._vel = new THREE.Vector3());
   track.dirAt(rider.t, vel).multiplyScalar(rider.v);
   // (fainter on a phone, where a one-pixel line is three of the screen's)
-  S.streaks.update(camera, vel, rider.v, (state === 'ride' ? clamp((rider.v - 22) / 50, 0, 1) * (0.5 + 0.5 * S.mixFlow) + 0.45 * LK : 0) * (document.body.classList.contains('touch') ? 0.5 : 1));
+  S.streaks.update(camera, vel, rider.v, (state === 'ride' ? clamp((rider.v - 22) / 50, 0, 1) * (0.5 + 0.5 * S.mixFlow) + 0.45 * LK + 0.5 * S.burst : 0) * (document.body.classList.contains('touch') ? 0.5 : 1));
   if (state === 'ride' && rider.grounded && rider.flow > 0.55 && Math.random() < dt * 40 * rider.flow) {
     const p = track.at(rider.t, rider.x + (Math.random() - 0.5) * 0.8, 0.15, S._fp || (S._fp = new THREE.Vector3()));
     S.sparks.emit(p, (S._fv || (S._fv = new THREE.Vector3())).copy(vel).multiplyScalar(0.55), (S._fc || (S._fc = new THREE.Color())).set(P.edge).multiplyScalar(1.2), 1, { spread: 0.8, life: 0.5, size: 0.12, grav: 0, drag: 0.6 });
@@ -674,11 +690,12 @@ function frameBody(now) {
   const pc = post.comp.uniforms;
   pc.uTime.value = time;
   pc.uSpeed.value = state === 'ride' ? clamp((rider.v - 25) / 55, 0, 1) : 0;
-  pc.uAberr.value = 0.15 + 0.5 * pc.uSpeed.value;
-  pc.uSat.value = 0.9 + 0.4 * S.mixFlow + 0.16 * LK;
+  pc.uAberr.value = 0.15 + 0.5 * pc.uSpeed.value + 1.6 * S.aberrK;
+  pc.uSat.value = 0.9 + 0.4 * S.mixFlow + 0.16 * LK + 0.24 * S.tier;
   pc.uVig.value = 0.55 - 0.18 * LK;
   S.hurt = (S.hurt || 0) * Math.exp(-dt * 0.9);
-  pc.uDesat.value = Math.max(rider.wipe > 0 ? 0.5 : 0, 0.55 * S.hurt);
+  pc.uDesat.value = Math.max(rider.wipe > 0 ? 0.5 : 0, 0.55 * S.hurt, 0.6 * S.drain);
+  pc.uFever.value = S.feverK * (0.5 + 0.5 * beatPulse);
   S.flashTint = (S.flashTint || 0) * Math.exp(-dt * 3);
   if (S.flashTint < 0.02) pc.uFlashColor.value.setRGB(1, 0.6, 0.85);
   pc.uFlash.value = S.flash;
@@ -687,7 +704,7 @@ function frameBody(now) {
   let black = 0;
   if (S.black) { const u = (rider.t - S.black.t0) / S.black.dur; black = u < 0 || u > 1 ? 0 : S.black.k * Math.min(1, u * 12, (1 - u) * 5); }
   pc.uExposure.value = (1 - black) * (1 + 0.04 * LB + 0.03 * LK);
-  pc.uBloom.value = 0.55 + 0.3 * S.mixFlow + 0.18 * LK + 0.22 * LD;
+  pc.uBloom.value = 0.55 + 0.3 * S.mixFlow + 0.18 * LK + 0.22 * LD + 0.18 * S.tier;
   post.render(S.scene, camera);
   if (state === 'ride') {
     hud.count(S.resume && !paused ? S.resume.sticks.filter((b) => b > sound.time(now) + 0.01).length : 0);
@@ -736,6 +753,7 @@ function handleEvents(S, dt) {
         sparks.emit(track.at(rider.t, rider.x, 0.4), new THREE.Vector3(0, 3, 0), gold.multiplyScalar(3), 40, { spread: 8, life: 0.7, size: 0.2, grav: 4, up: 1.5 });
         kit.trick(e.t, e.kind === 'flip' || e.combo ? 1 : 0.6); S.flash = Math.max(S.flash, 0.1);
         hud.points(e.points, view.root, camera, trickName(e));
+        haptics.buzz([8, 26, 8, 26, 14], 2);
         break;
       }
       case 'gap': {
@@ -743,6 +761,7 @@ function handleEvents(S, dt) {
         S.rings.fire(new THREE.Color(S.P.edge).multiplyScalar(2.2), 7, 0.6, 0.05);
         S.flash = Math.max(S.flash, 0.16);
         hud.points(e.points, view.root, camera, 'GAP');
+        haptics.buzz([10, 40, 24], 2);
         break;
       }
       case 'grindStart': {
@@ -754,11 +773,12 @@ function handleEvents(S, dt) {
         kit.grind(S.course.timeOfBeat(e.beat));
         const p = track.at(rider.t, rider.x, (rider.rail ? rider.rail.h : 0.5));
         sparks.emit(p, track.dirAt(rider.t, new THREE.Vector3()).multiplyScalar(-6), new THREE.Color(S.P.edge).multiplyScalar(3), 22, { spread: 3, life: 0.45, size: 0.14, grav: 10 });
+        haptics.buzz([5], 1);   // the rail, a beat at a time
         break;
       }
       case 'grindEnd': {
         sound.grind(false);
-        if (e.onBeat) { kit.pop(e.t); S.rings.fire(new THREE.Color(S.P.edge).multiplyScalar(1.8), 4, 0.42, 0.06); hud.points(e.points, view.root, camera, 'POP'); }
+        if (e.onBeat) { kit.pop(e.t); S.rings.fire(new THREE.Color(S.P.edge).multiplyScalar(1.8), 4, 0.42, 0.06); hud.points(e.points, view.root, camera, 'POP'); haptics.buzz([18], 2); }
         break;
       }
       case 'railTrick': {
@@ -773,11 +793,15 @@ function handleEvents(S, dt) {
         S.rings.fire(hc.clone().multiplyScalar(2.2), e.grade === 'perfect' ? 5.5 : 4, 0.45, 0.05);
         chase.impulse(0.25, 0.2, 0.6);
         hud.points(e.points, view.root, camera, e.kind === 'kickflip' ? 'KICKFLIP' : 'SHOVE-IT', true);
+        haptics.buzz([12, 30, 12], 3);
         break;
       }
       case 'land': {
         if (e.hard > 0.05) sound.land(e.quality, e.hard);
         else kit.land(e.t, e.quality);
+        // a thump as hard as the landing, a light tap for a clean one
+        if (e.hard > 0.05) haptics.buzz([Math.round(20 + 50 * e.hard)], 3);
+        else if (e.quality > 0 && e.air > 0.25) haptics.buzz([Math.round(8 + 10 * e.quality)], 2);
         if (e.hard > 0.05) {
           chase.impulse(0.5 + e.hard, 0.6 * e.hard, 0);
           const p = track.at(rider.t, rider.x, 0.1);
@@ -793,6 +817,7 @@ function handleEvents(S, dt) {
       }
       case 'crash':
         sound.crash(); S.muffle = 1; chase.impulse(1.4, 0.8, 0);
+        haptics.buzz([90, 40, 140], 5);
         break;
       case 'note': {
         kit.pickup(e.at, rider.score.mult, e.bar);
@@ -1031,18 +1056,47 @@ function gatePosts(S, T, beatPulse) {
   }
 }
 
+// the hold zones in your hand, the way a long note is under your fingers: a tap on the crest where
+// one starts (press; set up a few frames ahead so it lands on time), a purr while you hold it that
+// ends on a firm tick at its gate (let go), and it stops dead the moment you let go
+function beatInThumb(S) {
+  const r = S.rider, c = S.course;
+  if (!haptics.enabled || r.stopping) return;
+  const cr = c.crests;
+  let i = S.thumbCrest ?? 0; while (i < cr.length && cr[i] <= r.t) i++;
+  if (i < cr.length && cr[i] - r.t < 0.1 && r.grounded) { haptics.at(cr[i] - r.t, [14], 2, () => state === 'ride' && !paused); i++; }
+  S.thumbCrest = i;
+  const inZone = c.sample(r.t).hold >= 0;
+  if (r.press && inZone) {
+    if (S.purrTo === undefined || S.purrTo === null) {
+      let g = null; for (const t of c.gates) if (t > r.t) { g = t; break; }
+      if (g !== null && g - r.t < 4) { haptics.purr((g - r.t) * 1000); S.purrTo = g; }
+    }
+  } else if (S.purrTo != null) {
+    if (r.t < S.purrTo - 0.02) haptics.stop();      // let go before the gate: the purr stops dead
+    S.purrTo = null;
+  }
+}
+
 // a pump, graded as you let go: the bigger the hit, the more the world answers
 function judgeFeedback(S, e) {
   const { rider, sparks, track, P } = S;
   if (state !== 'ride') return;
   const g = e.grade;
   if (g === 'miss' && !e.lost) return;              // not pumping at all: say nothing
-  hud.judge(g, e.streak);
+  hud.judge(g, e.streak, e.points);
   const mult = rider.score.mult;
   kit.pump(g, e.at ?? rider.t, mult, e.streak);
   if (e.points) hud.score(rider.score.points, mult);
   // a new multiplier: a short fill into the next beat and a ring
-  if ((g === 'perfect' || g === 'good') && e.streak > 0 && e.streak % 8 === 0 && e.streak <= 24) { kit.fill(rider.t, mult); hud.mult(mult); }
+  const step = (g === 'perfect' || g === 'good') && e.streak > 0 && e.streak % 8 === 0 && e.streak <= 24;
+  if (step) { kit.fill(rider.t, mult); hud.mult(mult); }
+  // and in your hand: the multiplier's pulses, a double tap for a perfect, a tap for a good, a dull
+  // buzz for a run broken
+  if (step) haptics.buzz(haptics.mult(mult), 4);
+  else if (g === 'perfect') haptics.buzz([14, 36, 14], 3);
+  else if (g === 'good') haptics.buzz([10], 2);
+  else if (e.lost >= 4) haptics.buzz([45], 3);
   const p = track.at(rider.t, rider.x, 0.15);
   if (g === 'perfect') {
     const gold = new THREE.Color(1, 0.82, 0.38);
@@ -1050,16 +1104,36 @@ function judgeFeedback(S, e) {
     S.rings.fire(new THREE.Color(P.gate ?? P.edge).multiplyScalar(1.3), 2.2, 0.34, 0.09, 0.06);
     sparks.emit(p, new THREE.Vector3(0, 2, 0), gold.clone().multiplyScalar(3), 34, { spread: 7, life: 0.6, size: 0.22, grav: 5, up: 1.4 });
     S.hit = 1;
-    chase.impulse(0, 0.12, 0.35);
     if (e.streak > 0 && e.streak % 8 === 0) S.rings.fire(gold.clone().multiplyScalar(2.2), 5.5, 0.55, 0.045, 0.1);
+    // it lands: the view snaps in and rushes out wider (more the higher the multiplier), a flash of
+    // gold, the colour flicking at the screen's edges, the speed lines and the board's flare surging
+    chase.punch(0.7 + 0.1 * mult);
+    chase.impulse(0, 0.12, 0.6 + 0.15 * (mult - 1));
+    S.burst = 1; S.aberrK = 1;
+    S.flash = Math.max(S.flash, 0.05 + 0.015 * mult); post.comp.uniforms.uFlashColor.value.setRGB(1, 0.8, 0.4); S.flashTint = 0.5;
+    hud.bump(1 + 0.25 * (mult - 1));
   } else if (g === 'good') {
     S.rings.fire(new THREE.Color(1, 1, 1).multiplyScalar(1.1), 2.6, 0.32, 0.08);
     sparks.emit(p, new THREE.Vector3(0, 1.5, 0), new THREE.Color(P.gate ?? P.edge).multiplyScalar(2.2), 16, { spread: 5, life: 0.45, size: 0.18, grav: 5 });
     S.hit = Math.max(S.hit, 0.45);
-    chase.impulse(0, 0.06, 0.15);
+    chase.impulse(0, 0.06, 0.25); chase.punch(0.3);
+    S.burst = Math.max(S.burst || 0, 0.4);
+    hud.bump(0.6);
   } else if (e.lost >= 4) {
-    // a run broken: a dull grey crack where it ended
+    // a run broken: a dull grey crack where it ended, the needle dragged across the record, the
+    // song dropping out a moment and the colour draining out of everything (more for a longer run)
     S.rings.fire(new THREE.Color(0.35, 0.33, 0.4), 2.2, 0.4, 0.12);
+    const big = Math.min(1, e.lost / 24);
+    sound.scratch(0.5 + 0.5 * big);
+    S.muffle = Math.max(S.muffle, 0.55 + 0.35 * big);
+    S.drain = Math.max(S.drain || 0, 0.55 + 0.45 * big);
+    chase.impulse(0.4, 0.2, 0);
+  }
+  // a new multiplier at x4: the run's top. A run up the key, a gold flash, the world takes off
+  if (step && mult >= 4) {
+    sound.flourish(e.streak);
+    S.flash = Math.max(S.flash, 0.18); post.comp.uniforms.uFlashColor.value.setRGB(1, 0.78, 0.35); S.flashTint = 0.8;
+    chase.impulse(0.3, 0.2, 1.4);
   }
 }
 
@@ -1235,7 +1309,8 @@ function endSong() {
     dist: st.dist, inTime, perfects: st.perfects, bestStreak: st.bestStreak, notes: st.notes, notesTotal: st.notesTotal, top: st.top, collect: S.entry.collect, tricks: st.tricks,
     level: { before: res.before, gained: points, need: levelNeed } };
   S.endData = data;
-  const fx = { tick: (k) => kit.tick(k), grade: (g) => kit.grade(g), rise: (d) => kit.rise(d), levelUp: () => { kit.levelUp(); S.cheer = Math.max(S.cheer || 0, 1); } };
+  // (the grade lands like a stamp: a thump in your hand too, a longer one for an S)
+  const fx = { tick: (k) => kit.tick(k), grade: (g) => { kit.grade(g); haptics.once(g === 'S' ? [30, 40, 30, 40, 70] : g === 'A' ? [30, 40, 50] : [40]); }, rise: (d) => kit.rise(d), levelUp: () => { kit.levelUp(); S.cheer = Math.max(S.cheer || 0, 1); haptics.once([18, 50, 18, 50, 18]); } };
   // let the ending breathe a moment before the card comes up
   setTimeout(() => { if (state === 'results') ui.showEnd(data, last ? [menu, again] : [next, again, menu], fx); }, 1400);
 }

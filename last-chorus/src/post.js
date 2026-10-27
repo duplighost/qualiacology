@@ -39,7 +39,7 @@ void main(){
 }`;
 
 const COMP = /* glsl */`
-uniform sampler2D tScene, tBloom; uniform vec2 uRes; uniform float uBloom, uExposure, uTime, uSpeed, uSat, uVig, uFlash, uGrain, uAberr, uDesat, uDaze;
+uniform sampler2D tScene, tBloom; uniform vec2 uRes; uniform float uBloom, uExposure, uTime, uSpeed, uSat, uVig, uFlash, uGrain, uAberr, uDesat, uDaze, uFever;
 uniform vec3 uTint, uFlashColor, uLift;
 varying vec2 vUv;
 vec3 aces(vec3 x){ // ACES fitted (Hill)
@@ -93,6 +93,10 @@ void main(){
   col += uLift * (1.0 - col);
   // vignette
   col *= 1.0 - (uVig + 0.45 * uDaze) * smoothstep(0.35 - 0.15 * uDaze, 1.05, r);
+  // fever (a run at x4): a band round the screen's edges burns gold, breathing with the beat (as
+  // wide on every side, whatever the screen's shape)
+  float fe = smoothstep(0.84, 1.0, max(abs(dc.x), abs(dc.y)) * 2.0);
+  col += vec3(1.0, 0.6, 0.12) * uFever * fe * fe * 0.7;
   col = srgb(col);
   col += (h12(gl_FragCoord.xy + fract(uTime) * 917.0) - 0.5) * uGrain;
   gl_FragColor = vec4(col, 1.0);
@@ -111,7 +115,7 @@ export class Post {
       uniforms: {
         tScene: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uBloom: { value: 0.9 }, uExposure: { value: 1.0 },
         uTime: { value: 0 }, uSpeed: { value: 0 }, uSat: { value: 1.12 }, uVig: { value: 0.55 }, uFlash: { value: 0 }, uGrain: { value: 0.035 },
-        uAberr: { value: 0.0 }, uDesat: { value: 0 }, uDaze: { value: 0 }, uTint: { value: new THREE.Color(1, 1, 1) }, uFlashColor: { value: new THREE.Color(1, 0.6, 0.85) },
+        uAberr: { value: 0.0 }, uDesat: { value: 0 }, uDaze: { value: 0 }, uFever: { value: 0 }, uTint: { value: new THREE.Color(1, 1, 1) }, uFlashColor: { value: new THREE.Color(1, 0.6, 0.85) },
         uLift: { value: new THREE.Color(0.012, 0.006, 0.02) },
       },
       vertexShader: VS, fragmentShader: COMP, depthTest: false, depthWrite: false,
