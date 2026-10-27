@@ -391,6 +391,20 @@
       "metaDescription": "Tideglass is a desktop action game in the browser: draw a chained glass weight through stained glass, turn the capstans to drop the water, and open a flooded glassworks to the sea.",
       "controls": "Desktop only · WASD move · hold LMB and draw the weight · hold RMB to raise it · Space double jump · hold E for a lifting ring · R reel in · arrows, middle drag or screen edge to turn the view",
       "actionLabel": "Play Tideglass"
+    },
+    {
+      "slug": "starstruck",
+      "title": "STARSTRUCK",
+      "descriptor": "First-person survival shooter",
+      "group": "horror",
+      "featured": false,
+      "image": "/assets/games/starstruck-card-v20261027.jpg",
+      "alt": "A cemetery at night under a full moon and a sky of stars and thin cloud: a tall marble obelisk on a lit plinth in front, a columned mausoleum on the left, a small chapel with its two windows lit, a colonnade with a car parked beyond it, and palms against the sky on the right",
+      "summary": "A survival game with an addictive level-up system. One night in the Hills: mansions, a studio backlot, a cemetery, a waterfall you can walk through, the dead always coming, and bosses that come at certain intervals, in certain places. A gun in the right hand, a throwing star in the left, XP that soars into you like a magnet, and a skill tree in the sky that keeps what you've placed. How long can you survive. Keyboard and mouse.",
+      "metaDescription": "STARSTRUCK is a fast first-person survival shooter: one night in the Hills, with mansions, a studio backlot, a cemetery and a waterfall, the dead always coming, bosses on a schedule and an addictive level-up system. How long can you survive. Keyboard and mouse.",
+      "controls": "WASD + mouse · Space jump, again in the air, hold to climb · Shift run, in the air dash · C crouch, running slide · click fire, right click aim · Q throws the star, hold to spin · F kick · 1 2 3 or wheel guns · R reload · Tab the tree",
+      "actionLabel": "Survive the night",
+      "duration": "As long as you last"
     }
   ],
   "albums": [
