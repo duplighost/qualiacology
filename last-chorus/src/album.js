@@ -2,6 +2,19 @@
 // Section times are seconds into the song, each on the beat the music changes.
 // kinds: intro verse pre chorus post bridge break final outro
 // start: 'launch' makes the section open with a lip you fly off (kick = m/s upward).
+// The songs added on 27 Oct 2026 keep their entry and palettes in their own <prefix>-song.js, beside
+// their place; seven go in before Heart of the Party and CUT ME OFF goes after it, last on the record
+// (bottom of this file).
+
+import * as nlg from './nlg-song.js';
+import * as yst from './yst-song.js';
+import * as dam from './dam-song.js';
+import * as rpd from './rpd-song.js';
+import * as ycl from './ycl-song.js';
+import * as irt from './irt-song.js';
+import * as wxm from './wxm-song.js';
+import * as cmo from './cmo-song.js';
+const ADDED = [nlg, yst, dam, rpd, ycl, irt, wxm];
 
 // a doorway between the rooms of her apartment
 const DOOR = { kind: 'wall', hw: 11.5, hh: 30 };
@@ -5240,3 +5253,8 @@ export const PALETTES = {
     skyLight: 0x4a5878, bounce: 0x3a3440,
   },
 };
+
+// the songs added on 27 Oct 2026: seven in before Heart of the Party, and CUT ME OFF to close the record
+ALBUM.splice(ALBUM.findIndex((e) => e.id === 'heart-of-the-party'), 0, ...ADDED.map((m) => m.song));
+ALBUM.push(cmo.song);
+for (const m of [...ADDED, cmo]) Object.assign(PALETTES, m.palettes);

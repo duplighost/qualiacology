@@ -188,3 +188,42 @@ export function realHeartGeometry() {
   const gr = new THREE.TorusGeometry(0.42, 0.02, 6, 18, 1.4); gr.rotateZ(2.2); gr.translate(0.3, 0.12, 0.25); parts.push(paint(gr, [0.5, 0.03, 0.08]));
   return merge(parts);
 }
+
+// I Remember Them Too: an instant photograph, white border, an evening of people in it
+export function polaroidGeometry() {
+  const parts = [paint(new THREE.BoxGeometry(0.78, 0.94, 0.05), [0.96, 0.95, 0.92])];
+  for (const z of [0.027, -0.027]) {
+    const r = z > 0 ? 0 : Math.PI;
+    const sky = new THREE.PlaneGeometry(0.66, 0.36); sky.rotateY(r); sky.translate(0, 0.17, z); parts.push(paint(sky, [0.85, 0.55, 0.42]));
+    const gr = new THREE.PlaneGeometry(0.66, 0.3); gr.rotateY(r); gr.translate(0, -0.16, z); parts.push(paint(gr, [0.3, 0.22, 0.26]));
+    for (let k = 0; k < 3; k++) {
+      const x = -0.2 + k * 0.2, h = new THREE.CircleGeometry(0.06, 10), b = new THREE.PlaneGeometry(0.11, 0.18);
+      h.rotateY(r); h.translate(x, 0.06, z * 1.04); b.rotateY(r); b.translate(x, -0.1, z * 1.04);
+      parts.push(paint(h, [0.95, 0.78, 0.62]), paint(b, [[0.8, 0.3, 0.35], [0.3, 0.4, 0.7], [0.85, 0.75, 0.5]][k]));
+    }
+  }
+  return merge(parts);
+}
+
+// No Lifeguard On Duty: the whistle they took, on its cord
+export function whistleGeometry() {
+  const parts = [], O = [1, 0.34, 0.16];
+  const barrel = new THREE.CylinderGeometry(0.36, 0.36, 0.42, 22); barrel.rotateX(Math.PI / 2); parts.push(paint(barrel, O));
+  const mouth = new THREE.BoxGeometry(0.62, 0.22, 0.3); mouth.translate(0.5, 0.13, 0); parts.push(paint(mouth, O));
+  const slot = new THREE.BoxGeometry(0.2, 0.06, 0.24); slot.translate(0.05, 0.36, 0); parts.push(paint(slot, [0.25, 0.05, 0.03]));
+  const ring = new THREE.TorusGeometry(0.14, 0.035, 8, 18); ring.translate(-0.42, 0.18, 0); parts.push(paint(ring, [0.85, 0.86, 0.9]));
+  const cord = new THREE.TorusGeometry(0.38, 0.04, 6, 26); cord.scale(1, 0.7, 1); cord.translate(-0.7, 0.45, 0); parts.push(paint(cord, [0.9, 0.12, 0.12]));
+  return merge(parts);
+}
+
+// Don't Anybody Move: a red party cup, white inside, the white rim, two ridges round it
+export function cupGeometry() {
+  const V = (pts) => pts.map(([r, y]) => new THREE.Vector2(r, y));
+  const parts = [];
+  parts.push(paint(new THREE.LatheGeometry(V([[0.2, -0.36], [0.31, 0.3]]), 24), [0.9, 0.1, 0.1]));
+  parts.push(paint(new THREE.LatheGeometry(V([[0.29, 0.3], [0.19, -0.3]]), 24), [0.96, 0.95, 0.93]));
+  const rim = new THREE.TorusGeometry(0.305, 0.024, 6, 24); rim.rotateX(Math.PI / 2); rim.translate(0, 0.3, 0); parts.push(paint(rim, [1, 1, 1]));
+  const base = new THREE.CircleGeometry(0.2, 24); base.rotateX(Math.PI / 2); base.translate(0, -0.36, 0); parts.push(paint(base, [0.8, 0.08, 0.08]));
+  for (const y of [-0.12, 0.08]) { const ring = new THREE.TorusGeometry(0.204 + (y + 0.36) * 0.1667, 0.009, 4, 24); ring.rotateX(Math.PI / 2); ring.translate(0, y, 0); parts.push(paint(ring, [0.72, 0.06, 0.06])); }
+  return merge(parts);
+}

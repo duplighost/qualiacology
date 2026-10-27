@@ -3,7 +3,8 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { lipsGeometry, shellGeometry, candyGeometry, perfumeGeometry, donutGeometry, cuffsGeometry, coffeeGeometry, crownGeometry, popsicleGeometry, drinkGeometry, pinGeometry, realHeartGeometry } from './pickups.js';
+import { lipsGeometry, shellGeometry, candyGeometry, perfumeGeometry, donutGeometry, cuffsGeometry, coffeeGeometry, crownGeometry, popsicleGeometry, drinkGeometry, pinGeometry, realHeartGeometry, polaroidGeometry, whistleGeometry, cupGeometry } from './pickups.js';
+import { tabGeometry } from './yst-tab.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -238,6 +239,10 @@ const PICKUP = {
   drink: { geo: drinkGeometry, color: 0x60ffe0, mat: std({ rough: 0.08, metal: 0.3, emissive: 0x0a4a40, emissiveK: 1.3 }), s: 1.4, lit: 1.2, beat: 0.08, move: turn(0.12, 1.6, 0.12, 1.4, 1.1) },
   pin: { geo: pinGeometry, color: 0xff3040, mat: std({ rough: 0.2, metal: 0.2, emissive: 0x5a0810 }), s: 1.45, lit: 1.25, bob: 0.25, move: (e, time, i) => e.set(0, time * 2.2 + i * 1.3, 0) },
   heart: { geo: realHeartGeometry, color: 0xff2a40, mat: std({ rough: 0.22, metal: 0.15, emissive: 0x6a0812 }), s: 1.45, lit: 1.25, beat: 0.22, move: (e, time, i) => e.set(Math.sin(time * 1.2 + i) * 0.2, time * 1.3 + i * 1.3, Math.sin(time * 1.4 + i) * 0.15) },
+  polaroid: { geo: polaroidGeometry, color: 0xf4f0e8, mat: std({ rough: 0.35, metal: 0.05, emissive: 0x3a3430 }), s: 1.5, lit: 1.2, face: true, move: (e, time, i, yaw) => e.set(Math.sin(time * 1.3 + i) * 0.15, yaw + Math.sin(time * 1.1 + i * 1.7) * 0.5, Math.sin(time * 0.9 + i) * 0.12) },
+  whistle: { geo: whistleGeometry, color: 0xff5a2a, mat: std({ rough: 0.25, metal: 0.1, emissive: 0x4a1008 }), s: 1.35, lit: 1.2, move: turn(0.25, 2.2, 0.2, 1.7, 1.3) },
+  cup: { geo: cupGeometry, color: 0xe8302a, mat: std({ rough: 0.3, metal: 0.05, emissive: 0x4a0808 }), s: 1.45, lit: 1.2, move: turn(0.25, 1.8, 0.2, 1.5, 1.2) },
+  tab: { geo: tabGeometry, color: 0xf6f4ee, mat: std({ rough: 0.65, metal: 0, emissive: 0x2a3038, side: THREE.DoubleSide }), s: 1.6, lit: 1.2, move: (e, time, i) => e.set(Math.sin(time * 2.0 + i) * 0.45, time * 1.7 + i * 1.3, Math.sin(time * 2.6 + i) * 0.35) },
 };
 export const PICKUP_KINDS = Object.keys(PICKUP);
 
