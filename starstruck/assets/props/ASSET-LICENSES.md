@@ -17,14 +17,16 @@ resized to 1024 px WebP and meshopt-compressed (for STARSTRUCK).
 
 ## CC0 1.0
 
-- `piano.glb`, `lounger.glb`, `kitchen.glb`, `hot-tub.glb`, `sundial.glb`:
+- `piano.glb`, `lounger.glb`, `kitchen.glb`, `hot-tub.glb`, `sundial.glb`, `helicopter.glb`,
+  `billiards.glb` (the last two from the "Beyond the Gates" pack):
   Innerscene Free Parts Library (CC0), batched static versions.
   https://www.innerscene.com/tools/library/terms
 - `fire-pit.glb` (Stone Fire Pit), `table-set.glb` (Outdoor Table Chair Set 01),
   `lounge-chair.glb` (Mid Century Lounge Chair), `coffee-table.glb` (Coffee Table
   Round 01), `bust.glb` (Marble Bust 01), `whale.glb` (Bronze Whale Statue),
   `manta.glb` (Bronze Ray Statue), `horse.glb` (Horse Head), `vase.glb` (Antique
-  Ceramic Vase 01), `wine.glb` (Wine Bottles 01): Poly Haven (CC0).
+  Ceramic Vase 01), `wine.glb` (Wine Bottles 01), `clock.glb` (Vintage Grandfather
+  Clock 01, Yann Kervran and James Ray Cock; glass made clear): Poly Haven (CC0).
   https://polyhaven.com/license
 
 CC0: https://creativecommons.org/publicdomain/zero/1.0/
