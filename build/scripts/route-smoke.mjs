@@ -90,8 +90,8 @@ const retiredRoutes = [
     "ninefold-burn",
   ].map((slug) => `/${slug}/`),
   // NINEFOLD BURN's legacy .html, retired with the game. Its three vanity
-  // short links (/ninefold, /burn, /nine-worlds) are NOT here: they now point
-  // at SPACEBOARDING, which replaced it.
+  // short links (/ninefold, /burn, /nine-worlds) went to SPACEBOARDING, which
+  // replaced it, and came off with SPACEBOARDING on 2026-10-27 (below).
   "/ninefold-burn.html",
   // STARLING and STAY came off the shelf 2026-08-30 with nothing replacing
   // them, so their legacy .html and every vanity short link they owned were
@@ -122,6 +122,54 @@ const retiredRoutes = [
   "/stormglass/index.html",
   "/stormglass.html",
   "/storm",
+  // Sixteen games came off the site 2026-10-27 (Alex: "could we take these games
+  // down from my website"). Their own routes, legacy .html and every short link
+  // they owned went with them; /horror pointed at MARROW and went too.
+  ...[
+    "lil-big-bang",
+    "i-seent-it",
+    "free-play",
+    "hand-me-down",
+    "lead",
+    "secondhand-saint",
+    "falling-open",
+    "pocket-sun",
+    "galaxy-sandbox",
+    "party-animal",
+    "marrow",
+    "still",
+    "pasta-mortale",
+    "wick",
+    "spaceboarding",
+    "the-last-room",
+  ].flatMap((slug) => [`/${slug}/`, `/${slug}/index.html`, `/${slug}.html`]),
+  "/lbb",
+  "/bang",
+  "/seent",
+  "/custody",
+  "/horror",
+  "/the-house",
+  "/galaxy",
+  "/sandbox",
+  "/pasta",
+  "/spaghetti",
+  "/party",
+  "/pinata",
+  "/pocketsun",
+  "/rope",
+  "/ninefold",
+  "/burn",
+  "/nine-worlds",
+  "/board",
+  "/drop-in",
+  "/last-room",
+  "/saint",
+  "/vespera",
+  "/dial",
+  "/freeplay",
+  "/pinball",
+  "/handmedown",
+  "/slotcars",
 ];
 const results = [];
 const failures = [];

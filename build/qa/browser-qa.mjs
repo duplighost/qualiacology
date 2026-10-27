@@ -211,7 +211,7 @@ try {
     check(horror.status === horrorStatus, `Horror filter status failed: ${horror.status}`);
     // Catalog order, and FETCH leads the catalog (Alex, 2026-08-17: it takes
     // the first game slot; THE EATEN PATH comes off the homepage and stays on
-    // /games/). THE LAST ROOM is the sixth horror world.
+    // /games/).
     check(horror.visible.join(",") === horrorSlugs.join(","), `Horror filter results failed: ${horror.visible.join(",")} (expected ${horrorSlugs.join(",")})`);
     check(horror.query === "?filter=horror", `Horror filter URL failed: ${horror.query}`);
     report.interactions.filters = { ...horror, errors: finishErrors() };

@@ -69,18 +69,6 @@
 /assets/catalog/*
   Cache-Control: public, max-age=31536000, immutable
 
-/i-seent-it/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/i-seent-it/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/i-seent-it/og.png
-  Cache-Control: public, max-age=31536000, immutable
-
-/i-seent-it/favicon.svg
-  Cache-Control: public, max-age=31536000, immutable
-
 /fetch/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
@@ -108,18 +96,6 @@
 /rocket-shoes/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-/marrow/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/marrow/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/marrow/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/marrow/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
 /skyshard/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
@@ -132,21 +108,6 @@
 /skyshard/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-/still/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/still/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/still/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/still/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/galaxy-sandbox/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
 /behind-you/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
@@ -157,15 +118,6 @@
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
 /rally/js/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/pasta-mortale/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/pasta-mortale/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/pasta-mortale/src/*
   Cache-Control: public, max-age=0, must-revalidate
 
 /instead-of-the-goodbye/index.html
@@ -217,32 +169,8 @@
 /eaten-path/vendor/*
   Cache-Control: public, max-age=31536000, immutable
 
-/party-animal/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
 # --- shared game startup guard ---
 /assets/game-webgl-guard.js
-  Cache-Control: public, max-age=0, must-revalidate
-
-# --- POCKET SUN ---
-/pocket-sun/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/pocket-sun/manifest.webmanifest
-  Content-Type: application/manifest+json; charset=UTF-8
-  Cache-Control: public, max-age=0, must-revalidate
-
-/pocket-sun/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/pocket-sun/icons/*
-  Cache-Control: public, max-age=3600, must-revalidate
-
-# --- WICK ---
-/wick/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/wick/js/*
   Cache-Control: public, max-age=0, must-revalidate
 
 # --- KICKMOON ---
@@ -287,23 +215,6 @@
 /vigil/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# --- FALLING OPEN ---
-/falling-open/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/falling-open/styles.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/falling-open/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-# --- THE LAST ROOM ---
-/the-last-room/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/the-last-room/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
 # --- WINTERLINE ---
 /winterline/
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
@@ -332,11 +243,4 @@
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
 /skip/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-# --- FREE PLAY ---
-/free-play/
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/free-play/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0

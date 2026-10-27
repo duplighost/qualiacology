@@ -18,11 +18,6 @@
 /luma    /   302
 /visualizer /  302
 
-# --- I SEENT IT ---
-/i-seent-it.html  /i-seent-it/  301!
-/seent             /i-seent-it/  302
-/custody           /i-seent-it/  302
-
 # --- retired toys (links land home) ---
 /banana         /   302
 /banana.html    /   302
@@ -34,20 +29,8 @@
 # --- Rocket Shoes ---
 /rocket-shoes.html  /rocket-shoes/            301!
 /rocketshoes        /rocket-shoes/            302
-/lbb                /lil-big-bang/            302
-/bang               /lil-big-bang/            302
 /rockets            /rocket-shoes/            302
 /moon-boots         /rocket-shoes/            302
-
-# --- Marrow ---
-/marrow.html        /marrow/                  301!
-/horror             /marrow/                  302
-/the-house          /marrow/                  302
-
-# --- Galaxy Sandbox ---
-/galaxy-sandbox.html /galaxy-sandbox/             301!
-/galaxy              /galaxy-sandbox/             302
-/sandbox             /galaxy-sandbox/             302
 
 # --- Behind You ---
 /behind-you.html   /behind-you/             301!
@@ -58,15 +41,6 @@
 /rally.html    /rally/             301!
 /tennis        /rally/             302
 /duel          /rally/             302
-
-# --- Pasta Mortale ---
-/pasta         /pasta-mortale/           302
-/spaghetti     /pasta-mortale/           302
-
-# --- PARTY ANIMAL ---
-/party-animal.html /party-animal/            301!
-/party             /party-animal/            302
-/pinata            /party-animal/            302
 
 # --- THE EATEN PATH ---
 /eaten-path.html /eaten-path/              301!
@@ -93,14 +67,6 @@
 /this-helped-someone     /404.html  404!
 /this-helped-someone/*   /404.html  404!
 
-# --- POCKET SUN ---
-/pocket-sun.html  /pocket-sun/  301!
-
-/pocketsun  /pocket-sun/  302
-
-# --- WICK ---
-/wick.html  /wick/  301!
-
 # --- KICKMOON (was MOONKICK, was KICK BALL // LUNAR VELOCITY) ---
 /moonkick                          /kickmoon/  301!
 /moonkick/*                        /kickmoon/  301!
@@ -120,36 +86,6 @@
 # --- THROWN ---
 /thrown.html  /thrown/  301!
 /hands        /thrown/  302
-
-# --- LEAD ---
-/lead.html  /lead/  301!
-/rope       /lead/  302
-
-# --- SPACEBOARDING (replaced NINEFOLD BURN, 2026-08-29) ---
-# The three vanity links NINEFOLD BURN owned are repointed at its successor
-# rather than dropped, which is the same call /vesper got when VESPERBANE came
-# off the shelf and VESPERWAKE stayed (VESPERWAKE and /vesper came off on 2026-09-05). The game's own route and its legacy
-# .html are NOT repointed: they name a page that no longer exists, so they 404
-# and are asserted 404 in route-smoke's retiredRoutes.
-/ninefold           /spaceboarding/  302
-/burn               /spaceboarding/  302
-/nine-worlds        /spaceboarding/  302
-/spaceboarding.html /spaceboarding/  301!
-/board              /spaceboarding/  302
-/drop-in            /spaceboarding/  302
-
-# --- FALLING OPEN ---
-/falling-open.html  /falling-open/  301!
-
-# --- THE LAST ROOM ---
-/the-last-room.html  /the-last-room/  301!
-/last-room           /the-last-room/  302
-
-# --- SECONDHAND SAINT ---
-/secondhand-saint.html  /secondhand-saint/  301!
-/saint                  /secondhand-saint/  302
-/vespera                /secondhand-saint/  302
-/dial                   /secondhand-saint/  302
 
 # --- ARC ---
 /arc.html   /arc/  301!
@@ -171,16 +107,6 @@
 
 # --- SKIP ---
 /skip.html  /skip/  301!
-
-# --- FREE PLAY ---
-/free-play.html  /free-play/  301!
-/freeplay  /free-play/  302
-/pinball  /free-play/  302
-
-# --- HAND-ME-DOWN ---
-/hand-me-down.html  /hand-me-down/  301!
-/handmedown  /hand-me-down/  302
-/slotcars  /hand-me-down/  302
 
 # --- BELFRY ---
 /belfry.html  /belfry/  301!
