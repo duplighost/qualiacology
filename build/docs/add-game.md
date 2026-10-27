@@ -12,7 +12,7 @@ touching site.css/site.js/templates.
    (reuse the card image as `og:image`), the site favicon, and a home-link
    pill (`<a href="/">Qualiacology</a>`) styled to the game's palette with a
    z-index above the game's UI (hide it during pointer lock if the game uses
-   it). Model: `behind-you/index.html` or `pasta-mortale/index.html`.
+   it). Model: `behind-you/index.html`.
 
 2b. **If the game came from somewhere else**, it will assume its old host.
    Everything on this site is self-contained and offline-capable, so before
