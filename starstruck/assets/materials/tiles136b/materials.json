@@ -1,0 +1,46 @@
+{
+ "tiles136b": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "tiles136b.albedo.dds",
+   "normal": "tiles136b.normal.ktx2",
+   "orm": "tiles136b.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 42.29,
+   "normalXY": 46.09,
+   "orm": {
+    "ao": 38.51,
+    "rough": 33.35,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png",
+   "ao": "ao.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.418,
+   "p99": 3.257
+  },
+  "specAA": true,
+  "seconds": 4.6
+ }
+}

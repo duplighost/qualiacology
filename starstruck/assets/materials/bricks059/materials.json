@@ -1,0 +1,45 @@
+{
+ "bricks059": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "bricks059.albedo.dds",
+   "normal": "bricks059.normal.ktx2",
+   "orm": "bricks059.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 174904
+  },
+  "psnr": {
+   "albedo": 36.11,
+   "normalXY": 42.02,
+   "orm": {
+    "ao": 99.0,
+    "rough": 37.15,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.934,
+   "p99": 5.059
+  },
+  "specAA": true,
+  "seconds": 5.1
+ }
+}
