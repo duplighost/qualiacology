@@ -329,7 +329,7 @@ export class Screens {
     this.end.innerHTML = `
       <div class="card" style="--accent:${d.accent}">
         <div class="song">${esc(d.title)}</div>
-        <div class="head"><div class="grade g${d.grade}">${d.grade}</div><div class="pts"><div class="n">0</div><div class="sub">${d.newBest ? '<span class="nb">NEW BEST</span>' : (d.best ? 'BEST ' + d.best.toLocaleString('en-US') : '')}</div></div></div>
+        <div class="head"><div class="grade g${d.grade}">${d.grade}<i class="stamp"></i></div><div class="pts"><div class="n">0</div><div class="sub">${d.newBest ? '<span class="nb">NEW BEST</span>' : (d.best ? 'BEST ' + d.best.toLocaleString('en-US') : '')}</div></div></div>
         <div class="rows">
           ${row('IN TIME', d.inTime + '%')}
           ${row('PERFECT', d.perfects)}
@@ -358,7 +358,15 @@ export class Screens {
       nEl.textContent = Math.round(d.points * e).toLocaleString('en-US');
       if (f > 0 && f < 1 && performance.now() - lastTick > 55) { lastTick = performance.now(); if (fx.tick) fx.tick(1 - f * 0.6); }
       if (f < 1) requestAnimationFrame(count);
-      else { gEl.classList.add('in'); if (fx.grade) fx.grade(d.grade); setTimeout(() => { if (alive()) this._levelAnim(d, fx, token); }, 650); }
+      else {
+        gEl.classList.add('in'); if (fx.grade) fx.grade(d.grade);
+        // it lands like a stamp: the card jolts, a ring goes out from it (gold for an S)
+        const big = d.grade === 'S' || d.grade === 'A';
+        card.animate([{ translate: '0 0' }, { translate: `${big ? -6 : -4}px ${big ? 4 : 3}px`, offset: 0.18 }, { translate: '4px -3px', offset: 0.42 }, { translate: '-2px 1px', offset: 0.68 }, { translate: '0 0' }], { duration: big ? 360 : 280, delay: 90, easing: 'ease-out' });
+        const st = card.querySelector('.stamp');
+        if (st) st.animate([{ opacity: 0.95, transform: 'scale(1)' }, { opacity: 0, transform: `scale(${big ? 16 : 11})` }], { duration: big ? 620 : 480, delay: 90, easing: 'cubic-bezier(.2,.8,.3,1)' });
+        setTimeout(() => { if (alive()) this._levelAnim(d, fx, token); }, 650);
+      }
     };
     requestAnimationFrame(count);
   }

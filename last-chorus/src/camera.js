@@ -21,6 +21,8 @@ export class ChaseCam {
   }
 
   impulse(shake, dip = 0, kick = 0) { this.shake = Math.max(this.shake, shake); this.dip = Math.min(this.dip + dip, 0.8); this.kick = Math.max(this.kick, kick); }
+  // a hit: the view snaps in a few degrees and springs back in a blink (before the kick's slower rush out)
+  punch(k) { this.punchK = Math.max(this.punchK || 0, k); }
 
   // orbit: { center: Vector3, k: 0..1, angle } eases the camera off the rider to circle a place
   update(track, rider, dt, titleK = 0, orbit = null) {
@@ -94,7 +96,7 @@ export class ChaseCam {
     // least 48° fits across, so the road's width and the next hills are in the picture
     const a = this.cam.aspect, tall = a < 1;
     const ride = tall ? Math.max(this.fov, 2 * Math.atan(Math.tan(24 * Math.PI / 180) / a) * 180 / Math.PI) : this.fov;
-    this.cam.fov = ride * (1 - titleK) + 46 * titleK;
+    this.cam.fov = (ride - 4.5 * (this.punchK || 0)) * (1 - titleK) + 46 * titleK;
     if (orbit && orbit.k > 0) this.cam.fov = this.cam.fov + ((orbit.fov ?? 42) - this.cam.fov) * orbit.k;
     // the end card is a sheet up the bottom of a tall screen: the end shot lifts clear of it
     // (setViewOffset sets the camera's aspect to fullWidth / fullHeight, here 1: on a phone upright the
@@ -105,6 +107,7 @@ export class ChaseCam {
     this.cam.updateProjectionMatrix();
     this.dip *= Math.exp(-dt * 6);
     this.kick *= Math.exp(-dt * 3);
+    this.punchK = (this.punchK || 0) * Math.exp(-dt * 16);
   }
 }
 

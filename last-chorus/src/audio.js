@@ -667,6 +667,23 @@ export class Sound {
       o.connect(gg).connect(this.sfx); o.start(t + dt); o.stop(t + dt + 0.3);
     }
   }
+  // a run broken: the needle dragged across the record, short, and the song ducks under it
+  scratch(level = 0.7) {
+    const c = this.ctx, t = c.currentTime;
+    const n = c.createBufferSource(); n.buffer = this._noise;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 6;
+    bp.frequency.setValueAtTime(2400, t); bp.frequency.exponentialRampToValueAtTime(420, t + 0.09);
+    bp.frequency.exponentialRampToValueAtTime(1500, t + 0.16); bp.frequency.exponentialRampToValueAtTime(300, t + 0.26);
+    const g = c.createGain(); this._env(g, t, 0.004, 0.22 * level, 0.24);
+    n.connect(bp).connect(g).connect(this.sfx); n.start(t, Math.random()); n.stop(t + 0.32);
+    const o = c.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(320, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.09);
+    o.frequency.exponentialRampToValueAtTime(240, t + 0.16); o.frequency.exponentialRampToValueAtTime(60, t + 0.26);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800;
+    const g2 = c.createGain(); this._env(g2, t, 0.004, 0.05 * level, 0.22);
+    o.connect(lp).connect(g2).connect(this.sfx); o.start(t); o.stop(t + 0.3);
+    this.duck(0.45, 0.45);
+  }
   // a knock you feel more than hear
   thud(level = 1) {
     const c = this.ctx, t = c.currentTime;

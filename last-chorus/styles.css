@@ -48,6 +48,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07050d; ove
 #judge .streak { margin-top: 6px; font-size: 15px; font-weight: 700; letter-spacing: .2em; opacity: 0; font-variant-numeric: tabular-nums; color: #ffe9b0; text-shadow: 0 0 12px rgba(255,200,90,.8); }
 #score { position: absolute; right: calc(26px + env(safe-area-inset-right)); top: calc(14px + env(safe-area-inset-top)); font: 26px/1 var(--display); letter-spacing: .02em; opacity: 0; font-variant-numeric: tabular-nums; transition: opacity 1s; text-shadow: 0 0 14px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.6); }
 #score.on { opacity: .95; }
+#score { transform-origin: 100% 0; transition: opacity 1s, color .4s, text-shadow .4s; }
+/* a run at x4: the score burns gold with the screen's edges */
+body.fever #score { color: #fff3c9; text-shadow: 0 0 18px rgba(255,214,106,.95), 0 1px 2px rgba(0,0,0,.6); }
 /* the run of pumps in time, top left: the multiplier, eight pips to the next, how many in a row */
 #combo { position: absolute; left: calc(24px + env(safe-area-inset-left)); top: calc(14px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 12px; opacity: 0; transition: opacity 1s; }
 #combo.on { opacity: 1; }
@@ -121,6 +124,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07050d; ove
 #end .head { display: flex; align-items: center; gap: 26px; margin: 16px 0 20px; }
 #end .grade { font-size: 92px; line-height: .9; font-weight: 900; width: 84px; text-align: center; opacity: 0; transform: scale(2.4); filter: blur(6px); transition: opacity .18s, transform .35s cubic-bezier(.2,1.5,.4,1), filter .25s; color: #fff; }
 #end .grade.in { opacity: 1; transform: scale(1); filter: none; }
+/* the ring that goes out from the grade as it lands */
+#end .grade { position: relative; }
+#end .grade .stamp { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; border: 1px solid var(--accent, #fff); box-shadow: 0 0 10px var(--accent, #fff); opacity: 0; pointer-events: none; }
+#end .grade.gS .stamp { border-color: #ffe27a; box-shadow: 0 0 12px rgba(255,214,90,.9); }
 #end .grade.gS { color: #ffe27a; text-shadow: 0 0 26px rgba(255,214,90,.95), 0 0 6px rgba(255,255,255,.8); }
 #end .grade.gA { color: #fff; text-shadow: 0 0 22px var(--accent); }
 #end .grade.gB { color: #e8e4f0; text-shadow: 0 0 14px rgba(255,255,255,.35); }

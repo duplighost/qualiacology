@@ -21,14 +21,24 @@ export class Hud {
   // a new multiplier: it slams in
   mult(m) { this._mult(m, true); }
   _mult(m, loud) {
-    const up = m > this.multNow;
+    const up = m > this.multNow, fell = m < this.multNow && this.multNow >= 2;
     this.multNow = m;
     this.comboM.textContent = String(m);
     this.comboEl.classList.toggle('m2', m === 2); this.comboEl.classList.toggle('m3', m === 3); this.comboEl.classList.toggle('m4', m >= 4);
     if (loud && up) {
       this.comboMx.getAnimations().forEach((a) => a.cancel());
       this.comboMx.animate([{ transform: 'scale(2.1)', filter: 'brightness(2.6)' }, { transform: 'scale(.92)', filter: 'brightness(1.4)', offset: 0.45 }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 560, easing: 'cubic-bezier(.2,1.4,.4,1)' });
+    } else if (loud && fell) {
+      // the run broken: the multiplier drops off its perch, red, and climbs back as a x1
+      this.comboMx.getAnimations().forEach((a) => a.cancel());
+      this.comboMx.animate([{ transform: 'translateY(0) rotate(0)', color: '#ff6b7a', opacity: 1 }, { transform: 'translateY(12px) rotate(-10deg)', color: '#ff6b7a', opacity: 0.35, offset: 0.4 }, { transform: 'none', opacity: 1 }], { duration: 560, easing: 'ease-out' });
     }
+  }
+  // the points just won: the score kicks
+  bump(k = 1) {
+    const el = this.scoreEl;
+    el.getAnimations().forEach((a) => a.cancel());
+    el.animate([{ transform: `scale(${(1 + 0.07 * k).toFixed(3)})`, filter: 'brightness(1.6)' }, { transform: 'scale(1)', filter: 'brightness(1)' }], { duration: 240, easing: 'ease-out' });
   }
   // the run of pumps in time: how many, and the pips to the next multiplier (eight a step)
   combo(streak, how = '') {
@@ -160,14 +170,20 @@ export class Hud {
     el.animate([{ opacity: 0.95, transform: 'translate(-50%, -50%) scale(1.25)' }, { opacity: 0.85, transform: 'translate(-50%, -50%) scale(1)', offset: 0.3 }, { opacity: 0.25, transform: 'translate(-50%, -50%) scale(0.96)' }], { duration: 420, easing: 'ease-out', fill: 'forwards' });
   }
 
-  // the word for a pump, the moment you let go
-  judge(grade, streak) {
+  // the word for a pump, the moment you let go, and what it was worth under it
+  judge(grade, streak, points = 0) {
     const w = this.jw;
     w.className = 'word ' + grade;
     w.textContent = { perfect: 'PERFECT', good: 'GOOD', early: 'EARLY', late: 'LATE', miss: 'MISS' }[grade] || '';
     const big = grade === 'perfect';
     w.getAnimations().forEach((a) => a.cancel());
-    w.animate([{ opacity: 1, transform: `scale(${big ? 1.35 : 1.15})` }, { opacity: 1, transform: 'scale(1)', offset: 0.18 }, { opacity: 0, transform: 'scale(0.96)' }], { duration: big ? 620 : 480, easing: 'ease-out' });
+    w.animate([{ opacity: 1, transform: `scale(${big ? 1.5 : 1.15})` }, { opacity: 1, transform: 'scale(1)', offset: 0.16 }, { opacity: 0, transform: 'scale(0.96)' }], { duration: big ? 640 : 480, easing: 'ease-out' });
+    const s = this.js;
+    s.getAnimations().forEach((a) => a.cancel());
+    if (points > 0 && (big || grade === 'good')) {
+      s.textContent = '+' + points.toLocaleString('en-US');
+      s.animate([{ opacity: 1, transform: 'translateY(6px) scale(1.25)' }, { opacity: 1, transform: 'translateY(0) scale(1)', offset: 0.2 }, { opacity: 0, transform: 'translateY(-12px) scale(1)' }], { duration: 700, easing: 'ease-out' });
+    } else s.textContent = '';
   }
 
   // ndc position of the rider's head: the judgment floats there, smoothed so it doesn't jitter

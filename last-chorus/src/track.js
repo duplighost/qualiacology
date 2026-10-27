@@ -415,12 +415,10 @@ void main(){
   col += uHoldCol * hz * laneEdge * seen * (0.5 + 0.5 * hp) * mix(0.45 + 0.55 * nearCam, 0.1 + 0.4 * heldS, rode);
   // while you hold, it lights up round the board
   col += mix(uHoldCol, vec3(1.0), 0.2) * hz * uPress * exp(-abs(ahead) * 9.0) * lane * (0.3 + 0.4 * hp) * (1.0 - across * 0.6);
-  // the start: a bright bar across where the zone begins, a short glow leading up to it
-  float sbar = aaLine(cdz, 0.035) * (1.0 - rode) * smoothstep(0.02, 0.3, ahead);
-  float lead = exp(-max(-cdz, 0.0) * 9.0) * step(cdz, 0.0) * (1.0 - hz) * (1.0 - rode);
-  col += uHoldCol * (sbar * 1.6 + lead * 0.22) * lane * seen * (0.5 + 0.5 * nearCam) * camNear;
-  // (no hairline across on every beat: the only lines across the road are a hold zone's start and
-  // its gate, so every line there means hold or let go)
+  // (no bar across where a zone starts, nor a glow leading up to it: a zone starts at a crest, so
+  // from this side of the hill all that showed was the bar, a line alone on the hilltop with its
+  // colour hidden beyond. The slab's own edge is its start. No hairline on every beat either: the
+  // only line across the road is a zone's gate, where the colour you held ends)
   float approach = exp(-max(ahead, 0.0) * 0.45);
   // THE GATE at the bottom of each dip with a hold zone into it: let go here. A bright bar with a
   // soft band, pulsing on the beat as it nears, and either side of it, faintly, the window a perfect
@@ -456,9 +454,8 @@ void main(){
   col += uGlow * passed * max(lit, 0.0) * 0.06 * (1.0 - edge);
   // the broken edge of a gap burns
   col += uEdge * smoothstep(0.02, 0.45, vGap) * 3.0;
-  // the start line, and the chequered finish
-  float ds = vTime - uStartT;
-  col += vec3(1.0) * aaLine(ds, 0.012) * 1.6 * (1.0 - across * 0.3);
+  // the chequered finish. (No white start line: it was a bar across the road that meant neither hold
+  // nor let go; the gantry with the song's name over the road is the start)
   float df = vTime - uFinishT;
   if (abs(df) < 0.07) {
     float ch = mod(floor((vSide + 1.0) * 5.0) + floor(vDist / 0.95), 2.0);
