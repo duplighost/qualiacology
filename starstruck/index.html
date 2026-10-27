@@ -15,8 +15,8 @@
 body.playing .home-link{opacity:0;visibility:hidden;pointer-events:none}
 </style>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <script type="module" crossorigin src="./assets/index-CItu7yQu.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BIPkUyH9.css">
+  <script type="module" crossorigin src="./assets/index-7hz2oytF.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-psXYBgYZ.css">
 </head>
 <body>
 <a class="home-link" href="/">Qualiacology</a>
@@ -26,7 +26,7 @@ body.playing .home-link{opacity:0;visibility:hidden;pointer-events:none}
   <div id="crosshair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><b></b></div>
   <div id="hitmark"><i></i><i></i><i></i><i></i></div>
   <div id="dmgdir"></div>
-  <div id="clock"><span id="clock-time">0:00</span></div>
+  <div id="clock"><span id="clock-time">0:00</span><i id="clock-encore"></i></div>
   <div id="bossbar"><div id="boss-name"></div><div id="boss-track"><i id="boss-fill"></i><i id="boss-lag"></i></div></div>
   <div id="vitals">
     <div id="health-track"><i id="health-lag"></i><i id="health-fill"></i></div>
@@ -50,7 +50,7 @@ body.playing .home-link{opacity:0;visibility:hidden;pointer-events:none}
 
 <main id="menu">
   <div class="menu-card">
-    <div class="overline">ONE NIGHT IN THE HILLS</div>
+    <div class="overline">HOW LONG CAN YOU SURVIVE</div>
     <h1>STARSTRUCK</h1>
     <div class="rule"></div>
     <button id="play" disabled>Loading&hellip;</button>
@@ -85,9 +85,13 @@ body.playing .home-link{opacity:0;visibility:hidden;pointer-events:none}
 
 <div id="death" class="hidden">
   <div class="death-card">
-    <small>YOU DIED AS</small>
-    <h2 id="death-title">THE NEWCOMER</h2>
+    <small id="death-encore"></small>
+    <small class="over">YOU DIED AS</small>
+    <h2 id="death-title">THE EXTRA</h2>
+    <div class="rule"></div>
     <div id="death-stats"></div>
+    <div id="death-cut"></div>
+    <div id="death-found"></div>
     <button id="again">Again</button>
     <p class="hint"><kbd>SPACE</kbd></p>
   </div>
