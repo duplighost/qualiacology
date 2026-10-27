@@ -338,7 +338,10 @@ export const PARTS = {
   shop(S, it, p, q, yaw) {
     const m = S._m; m.compose(p, q, S._s.set(it.s, it.s, it.s)); S.layers.shop.add(m, wakeV(it.wakeNow, it.seed, it.boarded || 0, it.tint));
     if (it.idx !== undefined) {
-      const w = local(p, yaw, 0, 6.4 * it.s, 5.2 * it.s, S._o);
+      // the sign along the roof's front edge, its foot on the roof: the face's geometry stands 10.4
+      // up (made for the top of a 9 m pole), so that comes off at this scale. (Lifted 6.4 on top of
+      // it, every shop's sign hung 10 m over its roof with nothing holding it: CLAM SHACK in the sky)
+      const w = local(p, yaw, 0, (6.0 - 10.4 * 0.9) * it.s, 5.2 * it.s, S._o);
       m.compose(w, q, S._s.set(0.9 * it.s, 0.9 * it.s, 1)); S.layers.sign.add(m, signV(it.idx, 0.4 + 0.6 * it.wakeNow));
     }
   },
