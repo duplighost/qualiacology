@@ -43,7 +43,7 @@ export class Track {
       course.sample(tk, sm);
       this.kY[j] = sm.y; this.kVY[j] = sm.vy; this.kCY[j] = Math.cos(sm.yaw); this.kSY[j] = Math.sin(sm.yaw); this.kYR[j] = sm.yawRate;
       this.kW[j] = sm.width; this.kHold[j] = sm.hold; this.kGap[j] = sm.gap;
-      this.kBeat[j] = course.beatAt(tk); this.kVD[j] = course.valleyDist(tk) / spb; this.kCD[j] = course.crestDist(tk) / spb;
+      this.kBeat[j] = course.beatAt(tk); this.kVD[j] = course.gateDist(tk) / spb; this.kCD[j] = course.crestDist(tk) / spb;
     }
     this._buildMesh(scene, palette);
   }
@@ -390,7 +390,8 @@ void main(){
   float hz = smoothstep(-0.56, -0.44, vHold);
   float hp = clamp(vHold, 0.0, 1.0);
   float cdz = vZone.x, heldS = max(vZone.y, 0.0), rode = step(-0.5, vZone.y);
-  float seen = smoothstep(-2.4, -0.05, ahead) * (1.0 - smoothstep(6.5, 10.0, ahead));
+  float farK = 1.0 - smoothstep(6.5, 10.0, ahead);
+  float seen = smoothstep(-2.4, -0.05, ahead) * farK;
   float lane = 1.0 - smoothstep(0.84, 0.88, across);
   float laneEdge = aaLine(across - 0.865, 0.014);
   float chev = fract(vDist / 2.2 - across * 0.85);
@@ -403,30 +404,32 @@ void main(){
   float chevK = smoothstep(0.08, 0.6, ahead) * camNear;
   // (coming up, a solid slab of the colour, so it reads from far off against the dark road the way
   // a long note does; ridden, a held one keeps a soft glow and a missed one goes dark, so the pink
-  // under and behind her doesn't drown out the zones still coming)
-  float fillA = (0.5 + 0.25 * hp + 0.22 * chevron * chevK) * (0.55 + 0.45 * nearCam);
+  // under and behind her doesn't drown out the zones still coming. Filled bright from its first
+  // row, its edges only a little brighter: bright edges round a dim middle bloomed into an outline
+  // up the road, or a line, and read as something other than a space to hold)
+  float fillA = (0.9 + 0.3 * hp + 0.14 * chevron * chevK) * (0.55 + 0.45 * nearCam);
   float fillR = mix(0.0, 0.13 + 0.1 * hp, heldS);
   float fill = mix(fillA, fillR, rode);
   col = mix(col, col * 0.5, hz * lane * seen * 0.7);
   col += uHoldCol * hz * lane * seen * fill;
-  col += uHoldCol * hz * laneEdge * seen * (1.5 + 1.5 * hp) * mix(0.45 + 0.55 * nearCam, 0.1 + 0.4 * heldS, rode);
+  col += uHoldCol * hz * laneEdge * seen * (0.5 + 0.5 * hp) * mix(0.45 + 0.55 * nearCam, 0.1 + 0.4 * heldS, rode);
   // while you hold, it lights up round the board
   col += mix(uHoldCol, vec3(1.0), 0.2) * hz * uPress * exp(-abs(ahead) * 9.0) * lane * (0.3 + 0.4 * hp) * (1.0 - across * 0.6);
   // the start: a bright bar across where the zone begins, a short glow leading up to it
   float sbar = aaLine(cdz, 0.035) * (1.0 - rode) * smoothstep(0.02, 0.3, ahead);
   float lead = exp(-max(-cdz, 0.0) * 9.0) * step(cdz, 0.0) * (1.0 - hz) * (1.0 - rode);
-  col += uHoldCol * (sbar * 2.6 + lead * 0.22) * lane * seen * (0.5 + 0.5 * nearCam) * camNear;
-  // every beat a hairline across
-  float fb = fract(beat + 0.5) - 0.5;
+  col += uHoldCol * (sbar * 1.6 + lead * 0.22) * lane * seen * (0.5 + 0.5 * nearCam) * camNear;
+  // (no hairline across on every beat: the only lines across the road are a hold zone's start and
+  // its gate, so every line there means hold or let go)
   float approach = exp(-max(ahead, 0.0) * 0.45);
-  col += uFret * aaLine(fb, 0.012) * (0.05 + 0.2 * approach) * (1.0 - across * 0.6) * smoothstep(0.02, 0.3, ahead) * camNear;
-  // THE GATE at the bottom of each dip: let go here. A bright bar with a soft band, pulsing on the
-  // beat as it nears, and either side of it, faintly, the window a perfect release falls in
+  // THE GATE at the bottom of each dip with a hold zone into it: let go here. A bright bar with a
+  // soft band, pulsing on the beat as it nears, and either side of it, faintly, the window a perfect
+  // release falls in. (Out as far as the zones are: beyond them a gate was a line on its own)
   float vb = aaLine(vd, 0.03);
   float band = exp(-abs(vd) * 30.0);
   float win = 1.0 - smoothstep(uWin * 0.85, uWin * 1.08, abs(vd));
   float passed = smoothstep(0.1, -0.05, ahead);
-  float coming = (0.6 + 1.5 * approach) * (1.0 - passed) * (0.85 + 0.3 * uPulse) * (0.3 + 0.7 * smoothstep(0.02, 0.45, ahead));
+  float coming = (0.6 + 1.5 * approach) * (1.0 - passed) * (0.85 + 0.3 * uPulse) * (0.3 + 0.7 * smoothstep(0.02, 0.45, ahead)) * farK;
   col += uGateCol * (vb * 2.4 + band * 0.3 + win * 0.1 * lane) * coming * camNear;
   // what you cleared stays lit behind you; the one you just hit flares. Both fade out before
   // they reach the camera, so a hit never washes over the screen

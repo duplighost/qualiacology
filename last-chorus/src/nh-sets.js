@@ -39,6 +39,21 @@ export const CANVAS = {
     });
     return tex(c);
   },
+  // words cut across a frieze: one line of spaced capitals on a canvas the shape of the strip they're
+  // on (w x h metres). (On a letter board's 2:1 sheet, squeezed onto the courthouse's 12:1 frieze,
+  // COURT ADJOURNED ran off both ends and came out six times too wide)
+  frieze(text, w, h, opt = {}) {
+    const W = 2048, H = Math.round(W * h / w), [c, g] = canvas(W, H);
+    g.fillStyle = opt.bg || '#e8e4d8'; g.fillRect(0, 0, W, H);
+    const font = (s) => `700 ${s}px "Arial Narrow", "Helvetica Neue", Arial, sans-serif`;
+    let size = Math.round(H * 0.7); g.font = font(size);
+    const gap = () => size * 0.28, span = () => [...text].reduce((s, ch) => s + g.measureText(ch).width, 0) + gap() * (text.length - 1);
+    if (span() > W * 0.9) { size = Math.floor(size * W * 0.9 / span()); g.font = font(size); }
+    g.fillStyle = opt.ink || '#3a3a40'; g.textBaseline = 'middle';
+    let x = (W - span()) / 2;
+    for (const ch of text) { g.fillText(ch, x, H / 2 + size * 0.04); x += g.measureText(ch).width + gap(); }
+    return tex(c);
+  },
   // the receipt: thermal paper, item lines, a total, a barcode (no words: you know it's a receipt)
   receipt() {
     const [c, g] = canvas(256, 1024), R = seeded(31);
@@ -163,7 +178,10 @@ export const CANVAS = {
     g.fillStyle = 'rgba(120,80,20,0.18)'; for (let y = 120; y < 700; y += 26) g.fillRect(30, y, 452, 2);
     g.save(); g.translate(256, 380); g.rotate(-0.22);
     g.strokeStyle = '#c4141e'; g.lineWidth = 12; g.strokeRect(-210, -70, 420, 140);
-    g.fillStyle = '#c4141e'; g.font = '900 96px "Arial Black", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('EVIDENCE', 0, 6);
+    // (sized to the stamp's box: at a fixed 96px the word ran out past it and off the folder)
+    g.fillStyle = '#c4141e'; g.font = '900 96px "Arial Black", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const ew = g.measureText('EVIDENCE').width; if (ew > 372) g.font = `900 ${Math.floor(96 * 372 / ew)}px "Arial Black", Impact, sans-serif`;
+    g.fillText('EVIDENCE', 0, 4);
     g.restore();
     return tex(c);
   },
@@ -171,9 +189,15 @@ export const CANVAS = {
   tape() {
     const [c, g] = canvas(1024, 64);
     g.fillStyle = '#ffd21a'; g.fillRect(0, 0, 1024, 64);
+    // four whole words to the strip, each with its slash, so it repeats along the tape without a cut
+    // one (every 300 px left the fourth CAUTION running off the end: CAUTI)
     g.fillStyle = '#141414'; g.font = '800 40px "Arial Narrow", Arial, sans-serif'; g.textBaseline = 'middle';
-    for (let x = 10; x < 1024; x += 300) g.fillText('CAUTION', x, 33);
-    for (let x = 230; x < 1024; x += 300) { g.beginPath(); g.moveTo(x, 54); g.lineTo(x + 30, 10); g.lineTo(x + 46, 10); g.lineTo(x + 16, 54); g.fill(); }
+    const cw = g.measureText('CAUTION').width; if (cw > 168) g.font = `800 ${Math.floor(40 * 168 / cw)}px "Arial Narrow", Arial, sans-serif`;
+    const tw = Math.min(cw, 168);
+    for (let k = 0; k < 4; k++) {
+      const x = k * 256 + 16; g.fillText('CAUTION', x, 33);
+      const sx = x + tw + 18; g.beginPath(); g.moveTo(sx, 54); g.lineTo(sx + 30, 10); g.lineTo(sx + 46, 10); g.lineTo(sx + 16, 54); g.fill();
+    }
     const t = tex(c, 4); t.wrapS = THREE.RepeatWrapping; return t;
   },
 };

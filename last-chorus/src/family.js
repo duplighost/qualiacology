@@ -66,7 +66,10 @@ function phoneTexture() {
 // the scales' face, the market's aisle sign, the gift's card
 function aisleTexture() {
   return canvasTex(1024, 256, (g, W, H) => {
-    g.fillStyle = '#1a4a8a'; g.fillRect(0, 0, W, H); g.fillStyle = '#f4f8ff'; g.font = `900 120px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('FROZEN FOODS', W / 2, H / 2 + 6);
+    // (sized with a margin each side: at a fixed 120px the F touched one end and the S lost its edge)
+    g.fillStyle = '#1a4a8a'; g.fillRect(0, 0, W, H); g.fillStyle = '#f4f8ff'; g.font = `900 120px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const fw = g.measureText('FROZEN FOODS').width; if (fw > W - 112) g.font = `900 ${Math.floor(120 * (W - 112) / fw)}px ${FONT}`;
+    g.fillText('FROZEN FOODS', W / 2, H / 2 + 6);
     g.fillStyle = '#e82a2a'; g.fillRect(0, 0, W, 16); g.fillRect(0, H - 16, W, 16);
   });
 }

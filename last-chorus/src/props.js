@@ -196,17 +196,29 @@ export function makeAtlas(entries, cols = 4, rows = 8, cw = 512, ch = 160) {
     if (e.bg) { g.fillStyle = e.bg; g.fillRect(x + 6, y + 6, cw - 12, ch - 12); }
     if (e.frame) { g.strokeStyle = e.frame; g.lineWidth = 6; g.shadowColor = e.frame; g.shadowBlur = 18; g.strokeRect(x + 14, y + 14, cw - 28, ch - 28); }
     const lines = e.text.split('\n');
+    const font = (s) => `${e.weight || 900} ${s}px ${e.font || '"Arial Black", Impact, sans-serif'}`;
+    // (a face of another shape than the cell, like a tall road sign, stretches it: drawn squashed by
+    // as much, the letters come out the right shape on it)
+    const k = e.faceAspect ? (cw / ch) / e.faceAspect : 1;
     let size = e.size || 84;
-    g.font = `${e.weight || 900} ${size}px ${e.font || '"Arial Black", Impact, sans-serif'}`;
+    g.font = font(size); g.textAlign = 'center'; g.textBaseline = 'middle';
     const maxW = cw - 60;
     const widest = Math.max(...lines.map((l) => g.measureText(l).width));
-    if (widest > maxW) { size = Math.floor(size * maxW / widest); g.font = `${e.weight || 900} ${size}px ${e.font || '"Arial Black", Impact, sans-serif'}`; }
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    const lh = size * 1.05, y0 = y + ch / 2 - (lines.length - 1) * lh / 2;
+    if (widest > maxW) { size = Math.floor(size * maxW / widest); g.font = font(size); }
+    // ... and the lines' ink fits its height, inside the frame where there is one (two or three lines
+    // at full size ran off the top and bottom of the cell)
+    const ink = () => { let a = 0, d = 0; for (const l of lines) { const m = g.measureText(l); a = Math.max(a, m.actualBoundingBoxAscent); d = Math.max(d, m.actualBoundingBoxDescent); } return [a, d]; };
+    const framed = e.frame && !/rgba\([^)]*,\s*0(\.0*)?\s*\)/.test(e.frame);
+    const maxH = (ch - 2 * (framed ? 24 : 14)) * k;
+    let [a, d] = ink();
+    const inkH = (lines.length - 1) * size * 1.05 + a + d;
+    if (inkH > maxH) { size = Math.floor(size * maxH / inkH); g.font = font(size); [a, d] = ink(); }
+    const lh = size * 1.05, y0 = -((lines.length - 1) * lh + d - a) / 2;   // the ink centred in the cell
+    g.translate(x + cw / 2, y + ch / 2); g.scale(1, 1 / k);
     for (let pass = 0; pass < 3; pass++) {
-      g.shadowColor = e.color; g.shadowBlur = [26, 10, 0][pass];
+      g.shadowColor = e.color; g.shadowBlur = [26, 10, 0][pass] / k;   // (the glow is stretched with the face too)
       g.fillStyle = pass === 2 ? (e.core || '#ffffff') : e.color;
-      lines.forEach((l, k) => g.fillText(l, x + cw / 2, y0 + k * lh));
+      lines.forEach((l, j) => g.fillText(l, 0, y0 + j * lh));
     }
     g.restore();
   });

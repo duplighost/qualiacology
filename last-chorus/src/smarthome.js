@@ -154,7 +154,9 @@ function talkTexture() {
     g.fillStyle = '#9aa0b0'; g.font = `700 26px ${FONT}`; g.textAlign = 'center'; g.fillText('♥', W / 2, 60);
     g.fillStyle = '#ff4fd8'; g.beginPath(); g.roundRect(40, 140, W - 80, 220, 44); g.fill();
     g.beginPath(); g.moveTo(80, 350); g.lineTo(60, 400); g.lineTo(130, 356); g.fill();
+    // (both lines sized to stay in the bubble: at a fixed 52px the K of TALK hung off its edge)
     g.fillStyle = '#ffffff'; g.font = `900 52px ${FONT}`; g.textAlign = 'left'; g.textBaseline = 'middle';
+    const room = (W - 40 - 24) - 80, tw = g.measureText('NEED TO TALK').width; if (tw > room) g.font = `900 ${Math.floor(52 * room / tw)}px ${FONT}`;
     g.fillText('HEY, WE', 80, 210); g.fillText('NEED TO TALK', 80, 286);
     g.fillStyle = '#2a2c36'; g.beginPath(); g.roundRect(40, 470, 220, 110, 55); g.fill();
   });

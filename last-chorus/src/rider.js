@@ -184,7 +184,10 @@ export class Rider {
           this.asc += dt;
           if (this.press) { this.ascP += dt; if (Math.random() < dt * 6) this.events.push({ type: 'scrape', amount: clamp(s.vy / 6, 0.2, 1) }); }
         }
-        if (vyPrev < -0.35 && s.vy >= -0.35 && this.desc > 0.12) this._valley();
+        // (judged only at a gate, the bottom of a dip with a hold zone into it, so what's judged is
+        // what the road shows: a launch's landing with no zone on it, or a flat moment partway down a
+        // zone, was judged as a dip, and holding on to the gate as shown came out LATE)
+        if (vyPrev < -0.35 && s.vy >= -0.35 && this.desc > 0.12 && Math.abs(c.gateDist(this.t + dt)) < 0.2) this._valley();
         if (vyPrev > 0.35 && s.vy <= 0.35) { this.prevAscFrac = this.asc > 0.1 ? this.ascP / this.asc : this.prevAscFrac; this.asc = 0; this.ascP = 0; }
         this.compress = Math.max(this.compress, clamp(s.ay / 40, 0, 1) * (this.press ? 1 : 0.6));
       }

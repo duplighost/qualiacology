@@ -20,8 +20,12 @@ const spring = (f, k = 9, w = 16) => (f <= 0 ? 0 : 1 - Math.exp(-f * k) * Math.c
 function lipTexture() {
   return canvasTex(1024, 320, (g, W, H) => {
     g.clearRect(0, 0, W, H);
-    g.save(); g.translate(430, 170); g.rotate(-0.06);
-    g.font = 'italic 700 150px "Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    // (the number sized to end before the kiss, and before 80% across, where the writing waits for the
+    // kiss: at a fixed 150px it ran from the left edge into the kiss, the 3 under it)
+    g.save(); g.translate(420, 170); g.rotate(-0.06);
+    const hand = (s) => `italic 700 ${s}px "Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive`;
+    g.font = hand(150); g.textAlign = 'center'; g.textBaseline = 'middle';
+    const nw = g.measureText('555-0173').width; if (nw > 680) g.font = hand(Math.floor(150 * 680 / nw));
     const R = seeded(9);
     for (let k = 0; k < 6; k++) { g.globalAlpha = 0.3; g.fillStyle = '#d01430'; g.fillText('555-0173', (R() - 0.5) * 5, (R() - 0.5) * 5); }
     g.globalAlpha = 0.92; g.fillStyle = '#c8102a'; g.fillText('555-0173', 0, 0); g.restore();

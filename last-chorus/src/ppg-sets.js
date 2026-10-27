@@ -327,7 +327,8 @@ function chartTex() {
     g.fillStyle = '#c9d0d6'; g.fillRect(0, 0, W, H);
     g.fillStyle = '#1a1c22'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = '700 30px "Arial Black", Arial, sans-serif';
     const feet = ['7\'0"', '6\'6"', '6\'0"', '5\'6"', '5\'0"', '4\'6"', '4\'0"'];
-    for (let k = 0; k <= 18; k++) { const y = 40 + k * 46; g.fillRect(0, y, k % 3 === 0 ? W : 60, k % 3 === 0 ? 5 : 3); if (k % 3 === 0) g.fillText(feet[k / 3], 18, y + 24); }
+    // (each height over its line, as on a booking wall: under it, 4'0" fell off the bottom of the chart)
+    for (let k = 0; k <= 18; k++) { const y = 40 + k * 46; g.fillRect(0, y, k % 3 === 0 ? W : 60, k % 3 === 0 ? 5 : 3); if (k % 3 === 0) g.fillText(feet[k / 3], 18, y - 20); }
     g.fillStyle = 'rgba(30,26,30,0.5)';
     const hx = W / 2 + 40, hy = 330;
     g.beginPath(); g.ellipse(hx, hy, 104, 120, 0, 0, Math.PI * 2); g.fill();
@@ -339,7 +340,9 @@ function chartTex() {
 function paintTex(text) {
   return canvasTex(2048, 640, (g, W, H) => {
     const R = seeded(23), lines = text.split('\n'), f = (s) => `900 ${s}px Impact, "Arial Black", "Haettenschweiler", sans-serif`;
-    const size = fitLines(g, lines, f, W - 120, 300);
+    // (no bigger than leaves the last line room for its drips: at 300px RED-HANDED sat on the bottom
+    // edge and its drips were cut off)
+    const size = fitLines(g, lines, f, W - 120, Math.min(300, Math.floor((H - 60 - 170) / (0.9 + (lines.length - 1) * 1.02))));
     g.textAlign = 'center'; g.textBaseline = 'alphabetic';
     lines.forEach((l, i) => {
       const y = 60 + size * 0.9 + i * size * 1.02;

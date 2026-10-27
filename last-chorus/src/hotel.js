@@ -72,8 +72,10 @@ function chequeTexture() {
     g.strokeStyle = '#b8a070'; g.lineWidth = 10; g.strokeRect(10, 10, W - 20, H - 20);
     g.fillStyle = '#2a2a30'; g.font = `700 30px ${SERIF}`; g.fillText('PAY TO THE ORDER OF', 44, 110);
     g.fillRect(380, 112, 340, 3); g.fillRect(44, 202, 460, 3);
-    g.strokeStyle = '#2a2a30'; g.lineWidth = 3; g.strokeRect(540, 150, 180, 64);
-    g.font = `900 40px ${SERIF}`; g.fillText('$ 1,000,000', 548, 196);
+    // (the amount sized to its box, a little wider: at a fixed 40px it ran over the box and lost its last 0)
+    g.strokeStyle = '#2a2a30'; g.lineWidth = 3; g.strokeRect(516, 150, 214, 64);
+    g.font = `900 40px ${SERIF}`; const aw = g.measureText('$ 1,000,000').width; if (aw > 194) g.font = `900 ${Math.floor(40 * 194 / aw)}px ${SERIF}`;
+    g.fillText('$ 1,000,000', 526, 196);
     g.font = `italic 700 44px ${SERIF}`; g.fillStyle = '#1a2a6a'; g.fillText('Cash', 420, 104);
     g.strokeStyle = '#1a2a6a'; g.lineWidth = 4; g.beginPath(); g.moveTo(470, 300); for (let k = 0; k < 14; k++) g.lineTo(480 + k * 16, 290 + Math.sin(k * 1.7) * 18); g.stroke();
     g.fillStyle = '#2a2a30'; g.fillRect(450, 312, 270, 3);

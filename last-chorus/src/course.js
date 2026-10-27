@@ -324,6 +324,15 @@ export class Course {
         run = -1;
       }
     }
+    // the gates: the bottoms of the dips a hold zone runs into, where you let go. Most other
+    // "dips" are wobbles a few centimetres deep where two pieces of road meet, never judged; a
+    // bright bar across the road there was a line that meant nothing
+    const back = Math.round(RATE * 0.15);
+    this.gates = this.valleys.filter((tv) => {
+      const i = Math.round((tv - this.t0) * RATE);
+      for (let k = Math.max(0, i - back); k < Math.min(n, i); k++) if (this.hold[k] >= 0) return true;
+      return false;
+    });
   }
 
   _defaultTarget(sec, y, next) {
@@ -449,8 +458,8 @@ export class Course {
     return out;
   }
 
-  // signed seconds to the nearest dip bottom
-  valleyDist(t) { return nearestDist(this.valleys, t); }
+  // signed seconds to the nearest gate (the bottom of a dip with a hold zone into it)
+  gateDist(t) { return nearestDist(this.gates, t); }
   // ... and to the nearest start of a hold zone (the crest where pressing begins to pay)
   crestDist(t) { return nearestDist(this.crests, t); }
 

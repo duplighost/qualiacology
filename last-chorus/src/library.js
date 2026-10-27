@@ -49,8 +49,11 @@ function spineTexture() {
     ['1911', '1952', '1987'].forEach((y, i) => {
       const x = i * 256; g.fillStyle = ['#5a1a18', '#1a3a2a', '#1a2a4a'][i]; g.fillRect(x, 0, 256, 512);
       g.fillStyle = '#c8a050'; for (const yy of [40, 70, 440, 470]) g.fillRect(x + 20, yy, 216, 8);
-      g.fillStyle = '#e8c880'; g.font = `700 80px ${SERIF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(y, x + 128, 256);
-      g.strokeStyle = '#c8a050'; g.lineWidth = 4; g.strokeRect(x + 46, 196, 164, 120);
+      // (the box a little wider and the year sized inside it: 1952 and 1987 ran over its sides)
+      g.fillStyle = '#e8c880'; g.font = `700 80px ${SERIF}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const yw = g.measureText(y).width; if (yw > 160) g.font = `700 ${Math.floor(80 * 160 / yw)}px ${SERIF}`;
+      g.fillText(y, x + 128, 256);
+      g.strokeStyle = '#c8a050'; g.lineWidth = 4; g.strokeRect(x + 34, 196, 188, 120);
     });
   });
 }

@@ -78,12 +78,13 @@ function tallyTexture() {
   return canvasTex(512, 256, (g, W, H) => {
     g.fillStyle = '#2a2e2a'; g.fillRect(0, 0, W, H);
     g.strokeStyle = 'rgba(240,240,232,0.92)'; g.lineWidth = 9; g.lineCap = 'round';
-    const R = seeded(19);
-    let x = 34;
+    // (spaced so all nineteen fit: at 26 apart the 18th and 19th fell off the right edge)
+    const R = seeded(19), step = 22, after = 32;
+    let x = (W - (3 * (4 * step + after) + 3 * step)) / 2;
     for (let k = 0; k < 19; k++) {
       const grp = k % 5;
-      if (grp === 4) { g.beginPath(); g.moveTo(x - 4 * 26 - 10, 170 + R() * 6); g.lineTo(x + 8, 78 + R() * 6); g.stroke(); x += 40; continue; }
-      g.beginPath(); g.moveTo(x + R() * 4, 70 + R() * 8); g.lineTo(x + R() * 6 - 3, 190 + R() * 8); g.stroke(); x += 26;
+      if (grp === 4) { g.beginPath(); g.moveTo(x - 4 * step - 10, 170 + R() * 6); g.lineTo(x + 8, 78 + R() * 6); g.stroke(); x += after; continue; }
+      g.beginPath(); g.moveTo(x + R() * 4, 70 + R() * 8); g.lineTo(x + R() * 6 - 3, 190 + R() * 8); g.stroke(); x += step;
     }
   });
 }
