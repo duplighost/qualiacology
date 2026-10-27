@@ -43,7 +43,10 @@ export class Track {
       course.sample(tk, sm);
       this.kY[j] = sm.y; this.kVY[j] = sm.vy; this.kCY[j] = Math.cos(sm.yaw); this.kSY[j] = Math.sin(sm.yaw); this.kYR[j] = sm.yawRate;
       this.kW[j] = sm.width; this.kHold[j] = sm.hold; this.kGap[j] = sm.gap;
-      this.kBeat[j] = course.beatAt(tk); this.kVD[j] = course.gateDist(tk) / spb; this.kCD[j] = course.crestDist(tk) / spb;
+      // (how far from the nearest gate, never which side: the signed distance flips from + to −
+      // halfway between two gates, and blended between rows that flip drew a gate line on every
+      // hilltop and in the middle of every stretch with no hold zone)
+      this.kBeat[j] = course.beatAt(tk); this.kVD[j] = Math.abs(course.gateDist(tk)) / spb; this.kCD[j] = Math.abs(course.crestDist(tk)) / spb;
     }
     this._buildMesh(scene, palette);
   }
