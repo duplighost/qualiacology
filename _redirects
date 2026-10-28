@@ -124,9 +124,13 @@
 /forest  /in-every-direction/  302
 /leaves  /in-every-direction/  302
 
-# --- LAST CHORUS ---
-/last-chorus.html  /last-chorus/  301!
-/chorus  /last-chorus/  302
+# --- SIDECHAIN (LAST CHORUS until 27 Oct 2026: its old address and its app's download still land) ---
+/sidechain.html  /sidechain/  301!
+/last-chorus/last-chorus.apk  /sidechain/sidechain.apk  301!
+/last-chorus/*  /sidechain/:splat  301!
+/last-chorus  /sidechain/  301!
+/last-chorus.html  /sidechain/  301!
+/chorus  /sidechain/  302
 
 # --- SILL ---
 /sill.html  /sill/  301!

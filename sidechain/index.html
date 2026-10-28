@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SIDECHAIN">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icon/sidechain-180.png">
+<title>SIDECHAIN | Qualiacology</title>
+<meta name="description" content="Thirty-five songs. One board. Every dip is a downbeat, every hill a bar — pump in time and the record carries you: through a car crash, a candy factory at night, a library where every scream has a surname. Ride it to the last chorus. Keyboard, mouse or thumbs.">
+<meta name="theme-color" content="#0a0414">
+<link rel="canonical" href="https://qualiacology.com/sidechain/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SIDECHAIN | Qualiacology">
+<meta property="og:description" content="Thirty-five songs. One board. Every dip is a downbeat, every hill a bar — pump in time and the record carries you: through a car crash, a candy factory at night, a library where every scream has a surname. Ride it to the last chorus. Keyboard, mouse or thumbs.">
+<meta property="og:url" content="https://qualiacology.com/sidechain/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/sidechain-card-v20261027.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="A pink-haired rider crouched low on a hoverboard, carving along a glowing ribbon of pink and orange bubbles above a neon city on the water at night, a huge glossy heart unzipping in the sky behind her">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="SIDECHAIN | Qualiacology">
+<meta name="twitter:description" content="Thirty-five songs. One board. Every dip is a downbeat, every hill a bar — pump in time and the record carries you: through a car crash, a candy factory at night, a library where every scream has a surname. Ride it to the last chorus. Keyboard, mouse or thumbs.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/sidechain-card-v20261027.jpg">
+<style>
+.home-link{position:fixed;right:12px;top:12px;z-index:200;color:rgba(255,200,224,.8);text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(10,4,20,.5);border:1px solid rgba(255,90,140,.35);cursor:pointer;transition:opacity .4s}
+.home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(255,90,140,.8);outline:0}
+.riding .home-link{opacity:0;pointer-events:none}
+</style>
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/jsm/" } }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<a class="home-link" href="/">Qualiacology</a>
+<div id="hud">
+  <div id="songbar"><canvas id="shape"></canvas><i class="mark"></i></div>
+  <div id="title"><div class="name">SIDECHAIN</div><div class="pick"><span class="num"></span><span class="song"></span></div><div class="best"></div><div class="hint"><span class="kb">hold <b>space</b> or <b>click</b> down the glow &nbsp;&middot;&nbsp; let go on the line</span><span class="tp">hold the <b>right half</b> down the glow &nbsp;&middot;&nbsp; let go on the line</span></div><div class="back"><span class="kb"><b>esc</b> all songs</span><span class="tp"><b>left half</b> steers &nbsp;&middot;&nbsp; <span class="go">all songs</span></span></div></div>
+  <div id="speed"></div>
+  <div id="score"><span class="n">0</span></div>
+  <div id="combo"><div class="mx"><span class="by">&times;</span><span class="m">1</span></div><div class="side"><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="ct"><b>0</b> combo</div></div></div>
+  <button id="groovy" aria-label="groovy"><span class="w">GROOVY</span><span class="k kb">G</span><i class="t"></i></button>
+  <div id="pops"></div>
+  <div id="judge"><div class="word"></div><div class="streak"></div></div>
+  <div id="gems"><span class="icon">&#9670;</span><span class="n">0</span></div>
+  <div id="count"></div>
+  <div id="results"></div>
+  <div id="loading"></div>
+  <div id="thumb"><i></i></div>
+  <button id="pausebtn" aria-label="pause"><i></i><i></i></button>
+</div>
+<div id="screens">
+  <div id="intro">
+    <video class="film" muted playsinline loop autoplay preload="auto" disablepictureinpicture></video>
+    <div class="shade"></div>
+    <div class="logo"><span class="w">SIDE</span><span class="w">CHAIN</span></div>
+    <div class="press"><span class="kb">press any key</span><span class="tp">tap to start</span></div>
+  </div>
+  <div id="menu">
+    <div class="bg"><img class="a" alt=""><img class="b" alt=""></div>
+    <div class="shade"></div>
+    <header class="top"><div class="brand">SIDECHAIN</div><div class="me"></div></header>
+    <section class="detail">
+      <div class="pic"><img class="a" alt=""><img class="b" alt=""><div class="num"></div></div>
+      <div class="info">
+        <div class="name"></div>
+        <canvas class="profile"></canvas>
+        <div class="facts"></div>
+      </div>
+    </section>
+    <button class="ride"><span class="go">RIDE</span><span class="what"></span><span class="k">enter</span></button>
+    <section class="gear"></section>
+    <ol class="list"></ol>
+    <div class="foot"><span class="kb"><b>&uarr; &darr;</b> songs &nbsp;&middot;&nbsp; <b>enter</b> ride &nbsp;&middot;&nbsp; <b>&larr; &rarr;</b> rider &nbsp;&middot;&nbsp; <b>B</b> board</span><span class="tp">tap a song, then ride</span></div>
+    <div class="locker"></div>
+  </div>
+  <div id="load"><div class="img"></div><div class="shade"></div><div class="box"><div class="name"></div><div class="bar"><i></i></div></div></div>
+  <div id="end"></div>
+  <div id="pause"></div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
