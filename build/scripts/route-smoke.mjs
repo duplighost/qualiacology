@@ -152,7 +152,7 @@ const retiredRoutes = [
   "/galaxy",
   "/sandbox",
   "/pasta",
-  "/spaghetti",
+  // "/spaghetti" was PASTA MORTALE's short link too; since 2026-10-28 it is the SPAGHETTI game's own route.
   "/party",
   "/pinata",
   "/pocketsun",

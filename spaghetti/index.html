@@ -1,0 +1,3347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPAGHETTI | Qualiacology</title>
+<meta name="description" content="SPAGHETTI is a side-scrolling browser game where everything is made out of spaghetti: you are a twirl of cooked spaghetti on two loose ends, dry bundles snap apart when you hit them, and the rods across the gaps bend and break. Keyboard.">
+<meta name="theme-color" content="#0b0806">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:title" content="SPAGHETTI | Qualiacology">
+<meta property="og:description" content="Everything is made out of spaghetti. Nothing cannot be spaghetti.">
+<meta property="og:url" content="https://qualiacology.com/spaghetti/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/spaghetti-card-v20261028.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="SPAGHETTI | Qualiacology">
+<meta name="twitter:description" content="Everything is made out of spaghetti. Nothing cannot be spaghetti.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/spaghetti-card-v20261028.jpg">
+<link rel="canonical" href="https://qualiacology.com/spaghetti/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0806; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  body.play canvas { cursor: none; }
+  #veil { position: fixed; inset: 0; cursor: pointer; }
+  #veil.gone { display: none; }
+  #err { position: fixed; left: 20px; top: 20px; right: 20px; max-height: 90vh; overflow: auto; white-space: pre-wrap; font: 12px monospace; color: #f88; }
+  /* the way home to the site: over the title and the pause, out of sight while playing */
+  .home-link { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 200; color: rgba(246,236,214,.86);
+    text-decoration: none; font: 800 11px/1.2 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; padding: 8px 10px; border-radius: 999px;
+    background: rgba(22,14,8,.55); border: 1px solid rgba(246,236,214,.28); backdrop-filter: blur(8px); transition: opacity .3s ease; }
+  .home-link:hover, .home-link:focus-visible { color: #fff; border-color: rgba(246,236,214,.65); outline: 0; }
+  body.play .home-link { opacity: 0; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) { .home-link { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="veil"></div>
+<div id="err"></div>
+<a class="home-link" href="/">Qualiacology</a>
+<script>
+'use strict';
+// ---- 00-util.js ----
+// Shared helpers: URL switches, math, seeded random numbers, 4x4 matrices.
+// Units everywhere are centimetres and seconds. x runs right, y up, z toward the camera.
+
+const PARAMS = new URLSearchParams(location.search);
+function qnum(k, d) { const v = PARAMS.get(k); return v === null || v === '' ? d : Number(v); }
+function qflag(k) { return PARAMS.has(k) && PARAMS.get(k) !== '0'; }
+
+const TAU = Math.PI * 2;
+function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function smoothstep(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+function damp(a, b, rate, dt) { return b + (a - b) * Math.exp(-rate * dt); }
+function approach(a, b, step) { return a < b ? Math.min(a + step, b) : Math.max(a - step, b); }
+
+function makeRng(seed) {
+  let s = seed >>> 0;
+  const r = () => {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  r.range = (a, b) => a + (b - a) * r();
+  r.int = (a, b) => a + Math.floor(r() * (b - a + 1));
+  r.sign = () => (r() < 0.5 ? -1 : 1);
+  r.gauss = () => { let u = 0; while (u === 0) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * r()); };
+  return r;
+}
+
+// Column-major 4x4 matrices in Float32Array(16), as WebGL wants them.
+const M4 = {
+  create() { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; },
+  mul(a, b, out) { // out = a * b (out must not be a or b)
+    for (let c = 0; c < 4; c++) {
+      const b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
+      out[c * 4] = a[0] * b0 + a[4] * b1 + a[8] * b2 + a[12] * b3;
+      out[c * 4 + 1] = a[1] * b0 + a[5] * b1 + a[9] * b2 + a[13] * b3;
+      out[c * 4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
+      out[c * 4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+    }
+    return out;
+  },
+  perspective(fovy, aspect, near, far, out) {
+    const f = 1 / Math.tan(fovy / 2);
+    out.fill(0);
+    out[0] = f / aspect; out[5] = f; out[10] = (far + near) / (near - far); out[11] = -1; out[14] = (2 * far * near) / (near - far);
+    return out;
+  },
+  ortho(l, r, b, t, n, f, out) {
+    out.fill(0);
+    out[0] = 2 / (r - l); out[5] = 2 / (t - b); out[10] = -2 / (f - n);
+    out[12] = -(r + l) / (r - l); out[13] = -(t + b) / (t - b); out[14] = -(f + n) / (f - n); out[15] = 1;
+    return out;
+  },
+  lookAt(ex, ey, ez, tx, ty, tz, ux, uy, uz, out) {
+    let zx = ex - tx, zy = ey - ty, zz = ez - tz;
+    let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+    let xx = uy * zz - uz * zy, xy = uz * zx - ux * zz, xz = ux * zy - uy * zx;
+    l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    out[0] = xx; out[1] = yx; out[2] = zx; out[3] = 0;
+    out[4] = xy; out[5] = yy; out[6] = zy; out[7] = 0;
+    out[8] = xz; out[9] = yz; out[10] = zz; out[11] = 0;
+    out[12] = -(xx * ex + xy * ey + xz * ez);
+    out[13] = -(yx * ex + yy * ey + yz * ez);
+    out[14] = -(zx * ex + zy * ey + zz * ez);
+    out[15] = 1;
+    return out;
+  },
+  invert(a, out) {
+    const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3], a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+    const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11], a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+    const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10;
+    const b03 = a01 * a12 - a02 * a11, b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12;
+    const b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30, b08 = a20 * a33 - a23 * a30;
+    const b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+    let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+    if (!det) return out.fill(0);
+    det = 1 / det;
+    out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det;
+    out[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
+    out[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det;
+    out[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
+    out[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det;
+    out[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
+    out[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det;
+    out[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
+    out[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det;
+    out[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
+    out[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det;
+    out[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
+    out[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det;
+    out[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det;
+    out[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det;
+    out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
+    return out;
+  },
+};
+
+// ---- 10-gl.js ----
+// WebGL2 context, programs, textures and framebuffers.
+
+const canvas = document.getElementById('c');
+const errBox = document.getElementById('err');
+function fail(msg) { errBox.textContent += msg + '\n'; throw new Error(msg); }
+window.addEventListener('error', (e) => { if (!errBox.textContent) errBox.textContent = String(e.message || e); });
+
+const gl = canvas.getContext('webgl2', {
+  antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false,
+  powerPreference: 'high-performance', preserveDrawingBuffer: false,
+});
+if (!gl) fail('This needs WebGL2.');
+if (!gl.getExtension('EXT_color_buffer_float')) fail('This needs EXT_color_buffer_float.');
+gl.getExtension('OES_texture_float_linear');
+
+function compileShader(type, src, name) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(sh) || '';
+    const lines = src.split('\n');
+    const m = log.match(/0:(\d+)/);
+    const at = m ? Number(m[1]) : 1;
+    const near = lines.slice(Math.max(0, at - 5), at + 2).map((l, i) => `${Math.max(0, at - 5) + i + 1}: ${l}`).join('\n');
+    fail(`${name}: ${log}\n${near}`);
+  }
+  return sh;
+}
+
+function makeProgram(name, vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compileShader(gl.VERTEX_SHADER, vs, name + ' (vertex)'));
+  gl.attachShader(p, compileShader(gl.FRAGMENT_SHADER, fs, name + ' (fragment)'));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail(name + ' link: ' + gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i);
+    u[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, info.name);
+  }
+  return { p, u, name };
+}
+
+function makeTex(w, h, internal, filter = gl.NEAREST) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, internal, w, h);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+
+// A framebuffer over textures (and/or a depth renderbuffer). Returns { fb, tex, depth, w, h }.
+function makeTarget(w, h, { color = gl.RGBA16F, filter = gl.LINEAR, depthTex = false, depthRb = false } = {}) {
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  let tex = null, depth = null;
+  if (color) {
+    tex = makeTex(w, h, color, filter);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+  } else {
+    gl.drawBuffers([gl.NONE]);
+    gl.readBuffer(gl.NONE);
+  }
+  if (depthTex) {
+    depth = makeTex(w, h, gl.DEPTH_COMPONENT24, gl.NEAREST);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depth, 0);
+  } else if (depthRb) {
+    depth = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+  }
+  const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (st !== gl.FRAMEBUFFER_COMPLETE) fail('framebuffer incomplete: 0x' + st.toString(16));
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { fb, tex, depth, w, h };
+}
+
+// Multisampled colour + depth, resolved into a target that has a colour texture and a depth texture.
+function makeMsaa(w, h, samples) {
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  const c = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, c);
+  gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA16F, w, h);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, c);
+  const d = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, d);
+  gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT24, w, h);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, d);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+  const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (st !== gl.FRAMEBUFFER_COMPLETE) fail('msaa framebuffer incomplete: 0x' + st.toString(16));
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { fb, rbs: [c, d], w, h, samples };
+}
+
+function freeTarget(t) {
+  if (!t) return;
+  gl.deleteFramebuffer(t.fb);
+  if (t.tex) gl.deleteTexture(t.tex);
+  if (t.depth) { if (t.depth instanceof WebGLTexture) gl.deleteTexture(t.depth); else gl.deleteRenderbuffer(t.depth); }
+  if (t.rbs) t.rbs.forEach((r) => gl.deleteRenderbuffer(r));
+}
+
+const EMPTY_VAO = gl.createVertexArray();
+function fullscreen() { gl.bindVertexArray(EMPTY_VAO); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+// ---- 20-pools.js ----
+// Strand pools. Every visible thing is a strand: a chain of points drawn as a tube.
+// A pool holds strands of up to N points. Points live in float textures; the vertex shader
+// builds each tube from them (no vertex buffers), so moving a noodle is just rewriting its points.
+// N = 2 strands are straight rods (dry spaghetti); 32 and 64 point strands bend (cooked).
+
+const TEXW = 2048;
+const RADIAL = 6;          // sides of every tube (keep in step with RAD in the tube shader)
+const F_CLOSED = 1, F_FLAT = 2;
+
+class Pool {
+  constructor(name, N, cap, batch) {
+    this.name = name; this.N = N; this.cap = cap; this.batch = batch;
+    this.rows = Math.ceil((cap * N) / TEXW);
+    this.metaRows = Math.ceil(cap / TEXW);
+    const pts = this.rows * TEXW;
+    this.pos = new Float32Array(pts * 4);   // x y z radius
+    this.frm = new Float32Array(pts * 4);   // frame normal xyz, arc length
+    this.meta = new Float32Array(this.metaRows * TEXW * 4); // material, seed, flags, count
+    this.prev = new Float32Array(cap * N * 3);
+    this.inv = new Float32Array(cap * N).fill(1);   // inverse mass; 0 pins a point
+    this.tgt = new Float32Array(cap * N * 3);       // soft-body target
+    this.tk = new Float32Array(cap * N);            // pull toward target per iteration
+    this.seg = new Float32Array(cap);               // rest length between points
+    this.used = 0;
+    this.bodies = { main: [], mid: [] };
+    this.spans = [];
+    this.texPos = makeTex(TEXW, this.rows, gl.RGBA32F);
+    this.texFrm = makeTex(TEXW, this.rows, gl.RGBA32F);
+    this.texMeta = makeTex(TEXW, this.metaRows, gl.RGBA32F);
+    // One index pattern for `batch` strands; draws offset by strand with uBase.
+    const rings = N + 4, cols = RADIAL + 1;
+    this.idxPer = (rings - 1) * RADIAL * 6;
+    const idx = new Uint32Array(batch * this.idxPer);
+    let o = 0;
+    for (let b = 0; b < batch; b++) {
+      const base = b * rings * cols;
+      for (let k = 0; k < rings - 1; k++) {
+        for (let c = 0; c < RADIAL; c++) {
+          const v00 = base + k * cols + c, v01 = v00 + 1, v10 = v00 + cols, v11 = v10 + 1;
+          idx[o++] = v00; idx[o++] = v01; idx[o++] = v10;
+          idx[o++] = v01; idx[o++] = v11; idx[o++] = v10;
+        }
+      }
+    }
+    this.vao = gl.createVertexArray();
+    gl.bindVertexArray(this.vao);
+    this.ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+  }
+
+  alloc(n) {
+    const s = this.used;
+    if (s + n > this.cap) fail(`strand pool ${this.name} is full (${this.cap})`);
+    this.used += n;
+    return s;
+  }
+
+  count(s) { return this.meta[s * 4 + 3]; }
+  setCount(s, c) { this.meta[s * 4 + 3] = c; }
+  setMeta(s, mat, seed, flags, count) {
+    const o = s * 4;
+    this.meta[o] = mat; this.meta[o + 1] = seed; this.meta[o + 2] = flags; this.meta[o + 3] = count;
+  }
+
+  // Parallel-transport frames so each tube twists as little as possible, plus arc length.
+  computeFrames(s) {
+    const N = this.N, b = s * N, P = this.pos, F = this.frm;
+    const c = this.meta[s * 4 + 3] | 0;
+    if (c < 2) return;
+    const closed = (this.meta[s * 4 + 2] & F_CLOSED) !== 0;
+    let nx = 0, ny = 0, nz = 0, u = 0;
+    for (let i = 0; i < c; i++) {
+      const ia = closed ? (i - 1 + c) % c : (i > 0 ? i - 1 : 0);
+      const ib = closed ? (i + 1) % c : (i < c - 1 ? i + 1 : c - 1);
+      const oa = (b + ia) * 4, ob = (b + ib) * 4, o = (b + i) * 4;
+      let tx = P[ob] - P[oa], ty = P[ob + 1] - P[oa + 1], tz = P[ob + 2] - P[oa + 2];
+      let tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+      if (tl < 1e-9) { tx = 1; ty = 0; tz = 0; tl = 1; }
+      tx /= tl; ty /= tl; tz /= tl;
+      if (i > 0) { const d = nx * tx + ny * ty + nz * tz; nx -= tx * d; ny -= ty * d; nz -= tz * d; }
+      let nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      if (i === 0 || nl < 1e-5) {
+        const rz = Math.abs(tz) < 0.9 ? 1 : 0, ry = 1 - rz;
+        nx = ty * rz - tz * ry; ny = -tx * rz; nz = tx * ry;
+        nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+      }
+      nx /= nl; ny /= nl; nz /= nl;
+      F[o] = nx; F[o + 1] = ny; F[o + 2] = nz; F[o + 3] = u;
+      if (i < c - 1) {
+        const o2 = o + 4;
+        u += Math.sqrt((P[o2] - P[o]) ** 2 + (P[o2 + 1] - P[o + 1]) ** 2 + (P[o2 + 2] - P[o + 2]) ** 2);
+      }
+    }
+  }
+
+  markDirty(s0, s1) { this.spans.push(s0, s1); }
+
+  uploadAll() {
+    const rows = Math.max(1, Math.ceil((this.used * this.N) / TEXW));
+    gl.bindTexture(gl.TEXTURE_2D, this.texPos);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEXW, rows, gl.RGBA, gl.FLOAT, this.pos, 0);
+    gl.bindTexture(gl.TEXTURE_2D, this.texFrm);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEXW, rows, gl.RGBA, gl.FLOAT, this.frm, 0);
+    const mrows = Math.max(1, Math.ceil(this.used / TEXW));
+    gl.bindTexture(gl.TEXTURE_2D, this.texMeta);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEXW, mrows, gl.RGBA, gl.FLOAT, this.meta, 0);
+    this.spans.length = 0;
+  }
+
+  // Upload only the rows touched this frame (nearby spans merged).
+  flush() {
+    const sp = this.spans;
+    if (!sp.length) return;
+    const list = [];
+    for (let i = 0; i < sp.length; i += 2) list.push([sp[i], sp[i + 1]]);
+    list.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const r of list) {
+      const last = merged[merged.length - 1];
+      if (last && r[0] <= last[1] + 32) last[1] = Math.max(last[1], r[1]); else merged.push(r.slice());
+    }
+    const N = this.N;
+    for (const [s0, s1] of merged) {
+      const r0 = Math.floor((s0 * N) / TEXW), r1 = Math.floor((s1 * N - 1) / TEXW);
+      gl.bindTexture(gl.TEXTURE_2D, this.texPos);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, r0, TEXW, r1 - r0 + 1, gl.RGBA, gl.FLOAT, this.pos, r0 * TEXW * 4);
+      gl.bindTexture(gl.TEXTURE_2D, this.texFrm);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, r0, TEXW, r1 - r0 + 1, gl.RGBA, gl.FLOAT, this.frm, r0 * TEXW * 4);
+      const m0 = Math.floor(s0 / TEXW), m1 = Math.floor((s1 - 1) / TEXW);
+      gl.bindTexture(gl.TEXTURE_2D, this.texMeta);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, m0, TEXW, m1 - m0 + 1, gl.RGBA, gl.FLOAT, this.meta, m0 * TEXW * 4);
+    }
+    sp.length = 0;
+  }
+
+  bindFor(prog) {
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.texPos);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.texFrm);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.texMeta);
+    gl.uniform1i(prog.u.uN, this.N);
+    gl.bindVertexArray(this.vao);
+  }
+
+  drawRange(prog, s0, n) {
+    for (let s = s0; s < s0 + n; s += this.batch) {
+      const k = Math.min(this.batch, s0 + n - s);
+      gl.uniform1i(prog.u.uBase, s);
+      gl.drawElements(gl.TRIANGLES, k * this.idxPer, gl.UNSIGNED_INT, 0);
+      STATS.tris += k * this.idxPer / 3;
+      STATS.draws++;
+    }
+  }
+
+  snapshot() {
+    this.snap = { pos: this.pos.slice(), frm: this.frm.slice(), meta: this.meta.slice(), prev: this.prev.slice(), inv: this.inv.slice(), tk: this.tk.slice(), seg: this.seg.slice() };
+  }
+  restore() {
+    const s = this.snap;
+    this.pos.set(s.pos); this.frm.set(s.frm); this.meta.set(s.meta); this.prev.set(s.prev); this.inv.set(s.inv); this.tk.set(s.tk); this.seg.set(s.seg);
+    this.uploadAll();
+  }
+}
+
+const STATS = { tris: 0, draws: 0 };
+const POOLS = {};
+let POOL_LIST = [];
+function makePools() {
+  POOLS.rod = new Pool('rod', 2, 80000, 8192);
+  POOLS.s32 = new Pool('s32', 32, 2048, 1024);
+  POOLS.s64 = new Pool('s64', 64, 3072, 512);
+  POOL_LIST = [POOLS.rod, POOLS.s32, POOLS.s64];
+}
+
+// A straight rod of dry spaghetti with flat, snapped ends.
+function putRod(pool, s, x0, y0, z0, x1, y1, z1, r, mat, seed) {
+  const b = s * pool.N, P = pool.pos, Q = pool.prev;
+  let o = b * 4, q = b * 3;
+  P[o] = x0; P[o + 1] = y0; P[o + 2] = z0; P[o + 3] = r;
+  Q[q] = x0; Q[q + 1] = y0; Q[q + 2] = z0;
+  o += 4; q += 3;
+  P[o] = x1; P[o + 1] = y1; P[o + 2] = z1; P[o + 3] = r;
+  Q[q] = x1; Q[q + 1] = y1; Q[q + 2] = z1;
+  pool.setMeta(s, mat, seed, F_FLAT, 2);
+  pool.seg[s] = Math.hypot(x1 - x0, y1 - y0, z1 - z0);
+  pool.computeFrames(s);
+}
+
+// A bendy strand from a flat xyz array. Unused points sit on the last one.
+function putStrand(pool, s, pts, count, r, mat, seed, flags = 0) {
+  const N = pool.N, b = s * N, P = pool.pos, Q = pool.prev;
+  for (let i = 0; i < N; i++) {
+    const k = Math.min(i, count - 1);
+    const o = (b + i) * 4, q = (b + i) * 3;
+    P[o] = pts[k * 3]; P[o + 1] = pts[k * 3 + 1]; P[o + 2] = pts[k * 3 + 2]; P[o + 3] = r;
+    Q[q] = P[o]; Q[q + 1] = P[o + 1]; Q[q + 2] = P[o + 2];
+    pool.inv[b + i] = 1; pool.tk[b + i] = 0;
+  }
+  pool.setMeta(s, mat, seed, flags, count);
+  let L = 0;
+  for (let i = 1; i < count; i++) L += Math.hypot(pts[i * 3] - pts[i * 3 - 3], pts[i * 3 + 1] - pts[i * 3 - 2], pts[i * 3 + 2] - pts[i * 3 - 1]);
+  if (flags & F_CLOSED) {
+    const j = (count - 1) * 3;
+    L += Math.hypot(pts[0] - pts[j], pts[1] - pts[j + 1], pts[2] - pts[j + 2]);
+    pool.seg[s] = L / count;
+  } else pool.seg[s] = count > 1 ? L / (count - 1) : 0;
+  pool.computeFrames(s);
+}
+
+// ---- 25-shaders.js ----
+// GLSL. One tube vertex shader serves every pass; the fragment side shades pasta.
+
+const GL_HEAD = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n';
+
+// Pasta kinds. Albedo is linear. sss = how much light diffuses through; dry rods are glassier.
+//            albedo r,g,b       rough  coat  coatR  sss   fleck   sss colour          dry
+const MATS = [
+  /* 0 cooked semolina */ [0.84, 0.59, 0.19, 0.42, 0.85, 0.20, 1.00, 0.02, 1.00, 0.40, 0.05, 0.0],
+  /* 1 dry semolina    */ [0.82, 0.53, 0.14, 0.34, 0.25, 0.24, 0.80, 0.25, 1.00, 0.48, 0.06, 1.0],
+  /* 2 cooked spinach  */ [0.07, 0.15, 0.028, 0.42, 0.85, 0.20, 0.55, 0.35, 0.40, 0.90, 0.12, 0.0],
+  /* 3 cooked ink      */ [0.012, 0.011, 0.014, 0.30, 0.95, 0.16, 0.08, 0.00, 0.30, 0.22, 0.30, 0.0],
+  /* 4 dry tomato      */ [0.58, 0.13, 0.045, 0.36, 0.20, 0.25, 0.70, 0.25, 1.00, 0.25, 0.06, 1.0],
+  /* 5 dry wholewheat  */ [0.42, 0.22, 0.085, 0.48, 0.12, 0.28, 0.45, 0.70, 0.95, 0.42, 0.10, 1.0],
+  /* 6 cooked wheat    */ [0.42, 0.24, 0.10, 0.48, 0.70, 0.14, 0.70, 0.80, 0.95, 0.42, 0.12, 0.0],
+  /* 7 spare           */ [0.84, 0.59, 0.19, 0.42, 0.85, 0.20, 1.00, 0.12, 1.00, 0.40, 0.05, 0.0],
+];
+
+const SH_TUBE_VS = GL_HEAD + `
+uniform sampler2D uPos;
+uniform sampler2D uFrm;
+uniform sampler2D uMeta;
+uniform int uN;
+uniform int uBase;
+uniform mat4 uViewProj;
+out vec3 vW;
+out vec3 vNrm;
+out vec3 vTan;
+out vec2 vUV;
+out float vCap;
+flat out vec2 vInfo;
+const int RAD = ${RADIAL};
+const int TW = ${TEXW};
+ivec2 tc(int i) { return ivec2(i % TW, i / TW); }
+void main() {
+  int cols = RAD + 1;
+  int rings = uN + 4;
+  int per = rings * cols;
+  int sl = gl_VertexID / per;
+  int local = gl_VertexID - sl * per;
+  int ring = local / cols;
+  int col = local - ring * cols;
+  int s = uBase + sl;
+  vec4 meta = texelFetch(uMeta, tc(s), 0);
+  int count = int(meta.w + 0.5);
+  int flags = int(meta.z + 0.5);
+  vInfo = vec2(meta.y, meta.x);
+  vCap = 0.0;
+  if (count < 2) {
+    vW = vec3(0.0); vNrm = vec3(0.0, 1.0, 0.0); vTan = vec3(1.0, 0.0, 0.0); vUV = vec2(0.0);
+    gl_Position = vec4(0.0, 0.0, -10.0, 1.0);
+    return;
+  }
+  bool closed = (flags & 1) != 0;
+  bool flatCap = (flags & 2) != 0;
+  int pi = 0;
+  int cap = 0;
+  if (closed) {
+    int k = ring - 2;
+    pi = (k < 0 || k >= count) ? 0 : k;
+  } else if (ring == 0) { pi = 0; cap = 2; }
+  else if (ring == 1) { pi = 0; cap = 1; }
+  else if (ring == rings - 1) { pi = count - 1; cap = 4; }
+  else if (ring == rings - 2) { pi = count - 1; cap = 3; }
+  else { pi = min(ring - 2, count - 1); }
+  int base = s * uN;
+  vec4 P = texelFetch(uPos, tc(base + pi), 0);
+  int ia = closed ? (pi + count - 1) % count : max(pi - 1, 0);
+  int ib = closed ? (pi + 1) % count : min(pi + 1, count - 1);
+  vec3 T = texelFetch(uPos, tc(base + ib), 0).xyz - texelFetch(uPos, tc(base + ia), 0).xyz;
+  float tl = length(T);
+  T = tl > 1e-6 ? T / tl : vec3(1.0, 0.0, 0.0);
+  vec4 F = texelFetch(uFrm, tc(base + pi), 0);
+  vec3 Nf = F.xyz - T * dot(F.xyz, T);
+  float nl = length(Nf);
+  Nf = nl > 1e-4 ? Nf / nl : normalize(cross(T, abs(T.z) < 0.9 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0)));
+  vec3 Bf = cross(T, Nf);
+  float ang = float(col) * (6.28318530718 / float(RAD));
+  vec3 rad = cos(ang) * Nf + sin(ang) * Bf;
+  float r = P.w;
+  vec3 pos = P.xyz + rad * r;
+  vec3 nrm = rad;
+  float u = F.w;
+  if (closed && ring == count + 2) {
+    vec3 pl = texelFetch(uPos, tc(base + count - 1), 0).xyz;
+    u = texelFetch(uFrm, tc(base + count - 1), 0).w + distance(pl, P.xyz);
+  }
+  if (cap != 0) {
+    float sg = cap <= 2 ? -1.0 : 1.0;
+    bool tip = cap == 2 || cap == 4;
+    if (flatCap) {
+      if (tip) pos = P.xyz;
+      nrm = T * sg;
+      vCap = 1.0;
+    } else if (tip) {
+      pos = P.xyz + T * (sg * r * 0.9);
+      nrm = T * sg;
+    } else {
+      pos = P.xyz + T * (sg * r * 0.6) + rad * (r * 0.78);
+      nrm = normalize(rad * 0.7 + T * (sg * 0.7));
+    }
+  }
+  vW = pos;
+  vNrm = nrm;
+  vTan = T;
+  vUV = vec2(u, float(col) / float(RAD));
+  gl_Position = uViewProj * vec4(pos, 1.0);
+}`;
+
+const SH_DEPTH_FS = GL_HEAD + 'void main() {}';
+
+const GL_NOISE = `
+float h11(float p) { p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
+float h21(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float vnoise(float x) { float i = floor(x); float f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(h11(i), h11(i + 1.0), f); }
+float vnoise2(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  float a = h21(i), b = h21(i + vec2(1.0, 0.0)), c = h21(i + vec2(0.0, 1.0)), d = h21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+`;
+
+const SH_PASTA_FS = GL_HEAD + `
+in vec3 vW;
+in vec3 vNrm;
+in vec3 vTan;
+in vec2 vUV;
+in float vCap;
+flat in vec2 vInfo;
+uniform vec3 uCam;
+uniform vec3 uKeyDir;
+uniform vec3 uKeyCol;
+uniform vec3 uRimDir;
+uniform vec3 uRimCol;
+uniform vec3 uSky;
+uniform vec3 uGnd;
+uniform vec4 uMatA[8];
+uniform vec4 uMatB[8];
+uniform vec4 uMatC[8];
+uniform sampler2D uShadow;
+uniform mat4 uShadowMat;
+uniform vec4 uShadowP;   // texel (uv), penumbra per depth, depth bias, search radius (uv)
+uniform float uDebug;
+layout(location = 0) out vec4 oCol;
+const float PI = 3.14159265;
+${GL_NOISE}
+const vec2 PD[16] = vec2[16](
+  vec2(-0.94201624, -0.39906216), vec2(0.94558609, -0.76890725), vec2(-0.09418410, -0.92938870), vec2(0.34495938, 0.29387760),
+  vec2(-0.91588581, 0.45771432), vec2(-0.81544232, -0.87912464), vec2(-0.38277543, 0.27676845), vec2(0.97484398, 0.75648379),
+  vec2(0.44323325, -0.97511554), vec2(0.53742981, -0.47373420), vec2(-0.26496911, -0.41893023), vec2(0.79197514, 0.19090188),
+  vec2(-0.24188840, 0.99706507), vec2(-0.81409955, 0.91437590), vec2(0.19984126, 0.78641367), vec2(0.14383161, -0.14100790));
+
+// Soft shadows from a window-sized light: blocker search, then a filter as wide as the penumbra.
+float shadowAt(vec3 wp, vec3 n, float rnd) {
+  vec4 sc = uShadowMat * vec4(wp + uKeyDir * 0.09 + n * 0.025, 1.0);
+  vec3 p = sc.xyz * 0.5 + 0.5;
+  if (p.x <= 0.002 || p.x >= 0.998 || p.y <= 0.002 || p.y >= 0.998 || p.z >= 1.0) return 1.0;
+  float zr = p.z - uShadowP.z;
+  float a = rnd * 6.2831853;
+  float ca = cos(a), sa = sin(a);
+  mat2 rot = mat2(ca, sa, -sa, ca);
+  float bsum = 0.0, bcnt = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float d = texture(uShadow, p.xy + rot * PD[i * 2] * uShadowP.w).r;
+    if (d < zr) { bsum += d; bcnt += 1.0; }
+  }
+  if (bcnt < 0.5) return 1.0;
+  float pen = clamp((zr - bsum / bcnt) * uShadowP.y, uShadowP.x * 0.8, uShadowP.x * 16.0);
+  float lit = 0.0;
+  for (int i = 0; i < 16; i++) {
+    float d = texture(uShadow, p.xy + rot * PD[i] * pen).r;
+    lit += d < zr ? 0.0 : 1.0;
+  }
+  return lit / 16.0;
+}
+
+float D_GGX(float NdH, float a) { float a2 = a * a; float d = NdH * NdH * (a2 - 1.0) + 1.0; return a2 / (PI * d * d); }
+float V_GGX(float NdV, float NdL, float a) {
+  float a2 = a * a;
+  float gv = NdL * sqrt(NdV * NdV * (1.0 - a2) + a2);
+  float gl = NdV * sqrt(NdL * NdL * (1.0 - a2) + a2);
+  return 0.5 / max(gv + gl, 1e-5);
+}
+
+vec3 directLight(vec3 L, vec3 Lc, vec3 N, vec3 V, float NdV, vec3 alb, float rough, float coat, float coatR, float sss, vec3 sssCol) {
+  float NdL = dot(N, L);
+  float lam = max(NdL, 0.0);
+  float w = 0.85 * sss;
+  float wrap = max((NdL + w) / (1.0 + w), 0.0);
+  vec3 diff = alb / PI * (vec3(lam) + (wrap - lam) * sssCol);
+  vec3 H = normalize(L + V);
+  float NdH = max(dot(N, H), 0.0);
+  float VdH = max(dot(V, H), 0.0);
+  float fw = pow(1.0 - VdH, 5.0);
+  float a = max(rough * rough, 0.003);
+  float spec = D_GGX(NdH, a) * V_GGX(NdV, lam, a) * (0.04 + 0.96 * fw);
+  float ac = max(coatR * coatR, 0.003);
+  float fc = (0.04 + 0.96 * fw) * coat;
+  float specC = D_GGX(NdH, ac) * V_GGX(NdV, lam, ac) * fc;
+  vec3 res = (diff + vec3(spec * lam)) * (1.0 - fc) + vec3(specC * lam);
+  vec3 Ht = normalize(L + N * 0.5);
+  float tr = pow(clamp(dot(V, -Ht), 0.0, 1.0), 3.0) * sss;
+  res += alb * sssCol * (tr * 0.7);
+  return res * Lc;
+}
+
+// A room with one big window (the key) and a second, smaller one behind (the rim).
+vec3 envLight(vec3 R, float rough, float sh) {
+  vec3 c = mix(uGnd, uSky, smoothstep(-0.5, 0.9, R.y));
+  float soft = 0.05 + rough * 1.1;
+  float gain = 1.0 / (1.0 + rough * 5.0);
+  vec3 W = uKeyDir;
+  vec3 Wx = normalize(cross(vec3(0.0, 1.0, 0.0), W));
+  vec3 Wy = cross(W, Wx);
+  float d = dot(R, W);
+  if (d > 0.05) {
+    vec2 q = vec2(dot(R, Wx), dot(R, Wy)) / d;
+    float m = (1.0 - smoothstep(0.62 - soft, 0.62 + soft, abs(q.x))) * (1.0 - smoothstep(0.42 - soft, 0.42 + soft, abs(q.y)));
+    m *= 0.85 + 0.15 * step(0.03, abs(q.x + 0.1));   // a window bar
+    c += uKeyCol * (0.42 * m * gain * mix(0.2, 1.0, sh));
+  }
+  vec3 Q = uRimDir;
+  vec3 Qx = normalize(cross(vec3(0.0, 1.0, 0.0), Q));
+  vec3 Qy = cross(Q, Qx);
+  float e = dot(R, Q);
+  if (e > 0.05) {
+    vec2 q = vec2(dot(R, Qx), dot(R, Qy)) / e;
+    float m = (1.0 - smoothstep(0.35 - soft, 0.35 + soft, abs(q.x))) * (1.0 - smoothstep(0.8 - soft, 0.8 + soft, abs(q.y)));
+    c += uRimCol * (0.3 * m * gain);
+  }
+  return c;
+}
+
+void main() {
+  int mi = int(vInfo.y + 0.5);
+  float seed = vInfo.x;
+  vec4 A = uMatA[mi];
+  vec4 B = uMatB[mi];
+  vec4 C = uMatC[mi];
+  vec3 alb = A.rgb;
+  float rough = A.a;
+  float coat = B.x, coatR = B.y, sss = B.z, fleck = B.w;
+  vec3 sssCol = C.rgb;
+  float dry = C.a;
+  vec3 Ng = normalize(vNrm);
+  vec3 N = Ng;
+  vec3 T = vTan - N * dot(vTan, N);
+  float tl = length(T);
+  T = tl > 1e-4 ? T / tl : vec3(1.0, 0.0, 0.0);
+  vec3 Cr = cross(N, T);
+  float u = vUV.x, v = vUV.y;
+  alb *= 0.86 + 0.24 * h11(seed * 91.7 + 3.1);
+  alb *= 0.93 + 0.14 * vnoise(u * 1.1 + seed * 13.0);
+  if (vCap < 0.5) {
+    float hA = vnoise(u * 7.0 + seed * 7.0);
+    float hB = vnoise(u * 7.0 + seed * 7.0 + 0.14);
+    float du = (hB - hA) / 0.02;
+    float gr = sin(v * 6.2831853 * 9.0 + vnoise(u * 2.0 + seed * 5.0) * 7.0);
+    N = normalize(N + T * (du * mix(0.02, 0.012, dry)) + Cr * (gr * mix(0.02, 0.06, dry)));
+    float sp = h21(vec2(floor(u * 11.0), floor(v * 6.0)) + seed * 3.7);
+    float speck = step(1.0 - 0.07 * fleck, sp);
+    alb = mix(alb, alb * vec3(0.55, 0.45, 0.35), speck * 0.6);
+  } else {
+    float n = vnoise2(vW.xy * 22.0 + vec2(vW.z * 9.0, seed * 5.0));
+    alb = mix(alb, min(alb * 1.35 + 0.04, vec3(1.0)), 0.65) * (0.82 + 0.3 * n);
+    rough = 0.8; coat = 0.0; sss *= 0.6;
+    N = normalize(N + (vec3(n, vnoise2(vW.yz * 19.0 + seed), 0.5) - 0.5) * 0.35);
+  }
+  vec3 V = normalize(uCam - vW);
+  if (dot(N, V) < 0.0) N = normalize(N - V * dot(N, V) * 1.02);
+  float NdV = max(dot(N, V), 0.02);
+  float sh = shadowAt(vW, Ng, ign(gl_FragCoord.xy));
+  vec3 col = directLight(uKeyDir, uKeyCol * sh, N, V, NdV, alb, rough, coat, coatR, sss, sssCol);
+  col += directLight(uRimDir, uRimCol, N, V, NdV, alb, rough, coat, coatR, sss, sssCol);
+  vec3 amb = mix(uGnd, uSky, N.y * 0.5 + 0.5);
+  col += alb * amb * (vec3(1.0) + sssCol * (0.35 * sss));
+  vec3 Rv = reflect(-V, N);
+  float fv = pow(1.0 - NdV, 5.0);
+  float Fb = 0.04 + (max(1.0 - rough, 0.04) - 0.04) * fv;
+  float Fc = (0.04 + 0.96 * fv) * coat;
+  col += envLight(Rv, rough, sh) * (Fb * (1.0 - Fc)) + envLight(Rv, coatR, sh) * Fc;
+  if (uDebug > 0.5) col = vec3(sh) * (0.3 + 0.7 * max(dot(N, uKeyDir), 0.0));
+  oCol = vec4(col, 1.0);
+}`;
+
+// The dark inside of a slab, only ever seen through gaps between rods.
+const SH_BOX_VS = GL_HEAD + `
+layout(location = 0) in vec3 aPos;
+uniform mat4 uViewProj;
+void main() { gl_Position = uViewProj * vec4(aPos, 1.0); }`;
+const SH_BOX_FS = GL_HEAD + `
+uniform vec3 uCol;
+layout(location = 0) out vec4 oCol;
+void main() { oCol = vec4(uCol, 1.0); }`;
+
+// Far back: a drying rack hung with fresh spaghetti, lit from a window behind it.
+// It is always far out of focus, so it is drawn as a pattern on one plane and then blurred.
+const SH_FAR_VS = GL_HEAD + `
+uniform mat4 uViewProj;
+uniform vec4 uRect;
+uniform float uZ;
+out vec3 vW;
+void main() {
+  vec2 c = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+  vec3 w = vec3(mix(uRect.x, uRect.z, c.x), mix(uRect.y, uRect.w, c.y), uZ);
+  vW = w;
+  gl_Position = uViewProj * vec4(w, 1.0);
+}`;
+const SH_FAR_FS = GL_HEAD + `
+in vec3 vW;
+uniform vec3 uGlow;
+layout(location = 0) out vec4 oCol;
+${GL_NOISE}
+void main() {
+  float x = vW.x, y = vW.y;
+  // window light behind the rack: bright high up, warmer and dimmer toward the table
+  float hi = smoothstep(-48.0, 22.0, y);
+  vec3 light = uGlow * mix(0.35, 2.6, hi * hi) * (0.82 + 0.36 * vnoise(x * 0.03 + 3.0));
+  float pitch = 0.36;
+  float cid = floor(x / pitch);
+  float h = h11(cid * 1.37);
+  float cx = (cid + 0.25 + 0.5 * h) * pitch;
+  float d = abs(x - cx) / 0.105;
+  float bottom = -40.0 + 70.0 * h11(cid * 7.13);
+  float on = (1.0 - smoothstep(0.8, 1.0, d)) * smoothstep(bottom - 0.5, bottom + 0.5, y);
+  float prof = sqrt(max(1.0 - d * d, 0.0));
+  // backlit strands glow amber at the core and go dark at the edges
+  vec3 strand = vec3(1.0, 0.55, 0.16) * (0.25 + 1.1 * prof * prof) * (0.6 + 0.6 * h11(cid * 3.1));
+  vec3 col = mix(light, strand * light, on * 0.85);
+  oCol = vec4(col, 1.0);
+}`;
+
+const SH_SCREEN_VS = GL_HEAD + `
+out vec2 vUV;
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  vUV = p;
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+// Lens blur: a golden-angle disc, brights weighted up so highlights open into round bokeh.
+const SH_BOKEH_FS = GL_HEAD + `
+in vec2 vUV;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uRadius;
+uniform float uBoost;
+layout(location = 0) out vec4 oCol;
+void main() {
+  vec4 acc = vec4(0.0);
+  float wsum = 0.0;
+  for (int i = 0; i < 40; i++) {
+    float r = sqrt((float(i) + 0.5) / 40.0);
+    float a = float(i) * 2.39996323;
+    vec2 off = vec2(cos(a), sin(a)) * (r * uRadius) * uTexel;
+    vec4 c = texture(uSrc, vUV + off);
+    float l = min(dot(c.rgb, vec3(0.3, 0.55, 0.15)), 4.0);
+    float w = 1.0 + l * l * uBoost;
+    acc += c * w;
+    wsum += w;
+  }
+  oCol = acc / wsum;
+}`;
+
+// Ambient occlusion from depth (half resolution): dark where noodles touch and cross.
+function aoKernel() {
+  const rng = makeRng(7);
+  const k = [];
+  for (let i = 0; i < 12; i++) {
+    let x, y, z, l;
+    do { x = rng() * 2 - 1; y = rng() * 2 - 1; z = rng(); l = Math.hypot(x, y, z); } while (l > 1 || l < 0.2);
+    const s = lerp(0.15, 1.0, ((i + 1) / 12) ** 2) / l;
+    k.push(`vec3(${(x * s).toFixed(4)}, ${(y * s).toFixed(4)}, ${(z * s).toFixed(4)})`);
+  }
+  return `const vec3 KER[12] = vec3[12](${k.join(', ')});`;
+}
+const SH_AO_FS = GL_HEAD + `
+in vec2 vUV;
+uniform sampler2D uDepth;
+uniform vec2 uFull;      // full-resolution texel
+uniform mat4 uInvProj;
+uniform mat4 uProj;
+uniform float uRadius;
+layout(location = 0) out vec4 oCol;
+${aoKernel()}
+${GL_NOISE}
+vec3 viewPos(vec2 uv) {
+  float d = texture(uDepth, uv).r;
+  vec4 p = uInvProj * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  return p.xyz / p.w;
+}
+void main() {
+  float d0 = texture(uDepth, vUV).r;
+  if (d0 >= 1.0) { oCol = vec4(1.0, -1e4, 0.0, 1.0); return; }
+  vec3 P = viewPos(vUV);
+  vec3 Px = viewPos(vUV + vec2(uFull.x, 0.0)), Pnx = viewPos(vUV - vec2(uFull.x, 0.0));
+  vec3 Py = viewPos(vUV + vec2(0.0, uFull.y)), Pny = viewPos(vUV - vec2(0.0, uFull.y));
+  vec3 dx = abs(Px.z - P.z) < abs(P.z - Pnx.z) ? Px - P : P - Pnx;
+  vec3 dy = abs(Py.z - P.z) < abs(P.z - Pny.z) ? Py - P : P - Pny;
+  vec3 N = normalize(cross(dx, dy));
+  float n = ign(gl_FragCoord.xy) * 6.2831853;
+  vec3 rv = vec3(cos(n), sin(n), 0.37);
+  vec3 Tt = normalize(rv - N * dot(rv, N));
+  vec3 Bt = cross(N, Tt);
+  float occ = 0.0;
+  for (int i = 0; i < 12; i++) {
+    vec3 k = KER[i];
+    vec3 S = P + (Tt * k.x + Bt * k.y + N * k.z) * uRadius;
+    vec4 c = uProj * vec4(S, 1.0);
+    vec2 suv = c.xy / c.w * 0.5 + 0.5;
+    float sz = viewPos(suv).z;
+    float range = smoothstep(0.0, 1.0, uRadius / max(abs(P.z - sz), 1e-4));
+    occ += (sz >= S.z + 0.015 ? 1.0 : 0.0) * range;
+  }
+  oCol = vec4(1.0 - occ / 12.0, P.z, 0.0, 1.0);
+}`;
+const SH_AOBLUR_FS = GL_HEAD + `
+in vec2 vUV;
+uniform sampler2D uSrc;
+uniform vec2 uDir;
+layout(location = 0) out vec4 oCol;
+void main() {
+  vec2 c = texture(uSrc, vUV).xy;
+  float sum = c.x, w = 1.0;
+  for (int i = -4; i <= 4; i++) {
+    if (i == 0) continue;
+    vec2 s = texture(uSrc, vUV + uDir * float(i)).xy;
+    float wt = exp(-abs(s.y - c.y) * 6.0) * (1.0 - abs(float(i)) / 5.0);
+    sum += s.x * wt;
+    w += wt;
+  }
+  oCol = vec4(sum / w, c.y, 0.0, 1.0);
+}`;
+
+// Bloom: keep only what is brighter than paper, shrink, then grow back.
+const SH_BRIGHT_FS = GL_HEAD + `
+in vec2 vUV;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uThresh;
+layout(location = 0) out vec4 oCol;
+void main() {
+  vec3 c = vec3(0.0);
+  c += texture(uSrc, vUV + uTexel * vec2(-0.5, -0.5)).rgb;
+  c += texture(uSrc, vUV + uTexel * vec2(0.5, -0.5)).rgb;
+  c += texture(uSrc, vUV + uTexel * vec2(-0.5, 0.5)).rgb;
+  c += texture(uSrc, vUV + uTexel * vec2(0.5, 0.5)).rgb;
+  c *= 0.25;
+  float l = max(c.r, max(c.g, c.b));
+  float k = max(l - uThresh, 0.0);
+  k = k * k / (k + 1.0);
+  oCol = vec4(c * (k / max(l, 1e-4)), 1.0);
+}`;
+const SH_DOWN_FS = GL_HEAD + `
+in vec2 vUV;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+layout(location = 0) out vec4 oCol;
+void main() {
+  vec4 c = texture(uSrc, vUV) * 0.5;
+  c += texture(uSrc, vUV + uTexel * vec2(-1.0, -1.0)) * 0.125;
+  c += texture(uSrc, vUV + uTexel * vec2(1.0, -1.0)) * 0.125;
+  c += texture(uSrc, vUV + uTexel * vec2(-1.0, 1.0)) * 0.125;
+  c += texture(uSrc, vUV + uTexel * vec2(1.0, 1.0)) * 0.125;
+  oCol = c;
+}`;
+const SH_UP_FS = GL_HEAD + `
+in vec2 vUV;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uGain;
+layout(location = 0) out vec4 oCol;
+void main() {
+  vec3 c = texture(uSrc, vUV).rgb * 4.0;
+  c += texture(uSrc, vUV + uTexel * vec2(-1.0, 0.0)).rgb * 2.0;
+  c += texture(uSrc, vUV + uTexel * vec2(1.0, 0.0)).rgb * 2.0;
+  c += texture(uSrc, vUV + uTexel * vec2(0.0, -1.0)).rgb * 2.0;
+  c += texture(uSrc, vUV + uTexel * vec2(0.0, 1.0)).rgb * 2.0;
+  c += texture(uSrc, vUV + uTexel * vec2(-1.0, -1.0)).rgb;
+  c += texture(uSrc, vUV + uTexel * vec2(1.0, -1.0)).rgb;
+  c += texture(uSrc, vUV + uTexel * vec2(-1.0, 1.0)).rgb;
+  c += texture(uSrc, vUV + uTexel * vec2(1.0, 1.0)).rgb;
+  oCol = vec4(c / 16.0 * uGain, 1.0);
+}`;
+
+// The lens on the sharp layer itself: a thin slice around the path stays crisp; nearer and further soften.
+// Each pixel gathers neighbours whose blur circle reaches it, so soft edges spread over sharp ones.
+const SH_DOF_FS = GL_HEAD + `
+in vec2 vUV;
+uniform sampler2D uSrc;
+uniform sampler2D uDepth;
+uniform sampler2D uAO;
+uniform vec2 uTexel;
+uniform float uAOStr;
+uniform mat4 uInvProj;
+uniform vec4 uPlane;      // the sharp plane (the path), in view space
+uniform float uScale;     // blur radius in pixels per cm off that plane
+uniform float uMaxR;
+layout(location = 0) out vec4 oCol;
+vec3 viewPos(vec2 uv, float d) { vec4 p = uInvProj * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); return p.xyz / p.w; }
+float coc(vec3 p, float d) { return d >= 1.0 ? uMaxR : min(abs(dot(p, uPlane.xyz) + uPlane.w) * uScale, uMaxR); }
+vec4 shade(vec2 uv) { vec4 c = texture(uSrc, uv); c.rgb *= mix(1.0, texture(uAO, uv).r, uAOStr); return c; }
+void main() {
+  float dd0 = texture(uDepth, vUV).r;
+  vec3 p0 = viewPos(vUV, dd0);
+  float c0 = coc(p0, dd0);
+  vec4 acc = shade(vUV);
+  float wsum = 1.0;
+  if (uMaxR < 0.5) { oCol = acc; return; }
+  for (int i = 0; i < 24; i++) {
+    float r = sqrt((float(i) + 0.5) / 24.0) * uMaxR;
+    float a = float(i) * 2.39996323;
+    vec2 uv = vUV + vec2(cos(a), sin(a)) * r * uTexel;
+    float dds = texture(uDepth, uv).r;
+    vec3 ps = viewPos(uv, dds);
+    float spread = smoothstep(r - 1.0, r, coc(ps, dds));   // that sample's blur circle reaches here
+    float own = smoothstep(r - 1.0, r, c0);                // this pixel's own blur reaches there
+    float w = (dds >= 1.0 || ps.z < p0.z - 0.5) ? min(spread, own) : spread; // what lies behind never blurs over what is in front
+    acc += shade(uv) * w;
+    wsum += w;
+  }
+  oCol = acc / wsum;
+}`;
+
+// Everything comes together: far rack, middle heaps, the sharp layer, occlusion, bloom, lens, film.
+const SH_FINAL_FS = GL_HEAD + `
+in vec2 vUV;
+uniform sampler2D uFar;
+uniform sampler2D uMid;
+uniform sampler2D uMain;
+uniform sampler2D uMainBlur;
+uniform sampler2D uAO;
+uniform sampler2D uBloom;
+uniform float uDefocus;
+uniform float uAOStr;
+uniform float uBloomStr;
+uniform float uExposure;
+uniform float uCA;
+uniform float uTime;
+uniform float uFade;
+uniform vec2 uRes;
+layout(location = 0) out vec4 oCol;
+${GL_NOISE}
+vec3 sceneAt(vec2 uv, float ao) {
+  vec3 col = texture(uFar, uv).rgb;
+  vec4 mid = texture(uMid, uv);
+  col = col * (1.0 - mid.a) + mid.rgb;
+  vec4 m = texture(uMain, uv);
+  m.rgb *= mix(1.0, ao, uAOStr);
+  if (uDefocus > 0.001) m = mix(m, texture(uMainBlur, uv), uDefocus);
+  return col * (1.0 - m.a) + m.rgb;
+}
+vec3 aces(vec3 x) {
+  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+void main() {
+  float ao = texture(uAO, vUV).r;
+  vec2 dv = vUV - 0.5;
+  float r2 = dot(dv, dv);
+  vec2 ca = dv * r2 * uCA;
+  vec3 col = vec3(sceneAt(vUV + ca, ao).r, sceneAt(vUV, ao).g, sceneAt(vUV - ca, ao).b);
+  col += texture(uBloom, vUV).rgb * uBloomStr;
+  col *= uExposure;
+  col = aces(col);
+  col = pow(col, vec3(1.0 / 2.2));
+  col *= 1.0 - smoothstep(0.18, 0.75, r2) * 0.32;
+  float g = h21(gl_FragCoord.xy + fract(uTime * 7.31) * 517.0) + h21(gl_FragCoord.yx * 1.37 + fract(uTime * 3.17) * 211.0) - 1.0;
+  col += g * 0.018;
+  col *= uFade;
+  oCol = vec4(col, 1.0);
+}`;
+
+// ---- 30-level.js ----
+// The level: a grid of 3 cm tiles, 200 wide and 15 tall. Row 0 is the top; rows 13-14 are the floor,
+// whose top is y = 0. Everything in it is spaghetti, but the grid is what the player stands on.
+//   #  stacked dry whole-wheat rods topped with cooked spaghetti     B  a bundle of dry spaghetti (breaks)
+//   R  a bundle of dry tomato spaghetti with loops inside            U  an upright bundle (2 tiles wide)
+
+const TILE = 3;
+const LW = 200, LH = 15;
+const LEVEL_X1 = LW * TILE;
+const rowY = (r) => (12 - r) * TILE;          // y of the bottom of row r
+const rowOf = (y) => 12 - Math.floor(y / TILE);
+const colOf = (x) => Math.floor(x / TILE);
+
+const LEVEL = { grid: null, blocks: [], columns: [], loops: [], enemies: [], hangs: [], bridges: [], nest: null, start: null, checkpoints: [] };
+
+function makeLevel() {
+  const g = Array.from({ length: LH }, () => new Array(LW).fill(' '));
+  const floor = (a, b) => { for (let i = a; i <= b; i++) { g[13][i] = '#'; g[14][i] = '#'; } };
+  const stack = (a, b, h) => { for (let i = a; i <= b; i++) for (let k = 0; k < h; k++) g[12 - k][i] = '#'; };
+  const block = (i, r, t = 'B') => { g[r][i] = t; LEVEL.blocks.push({ i, r, t }); };
+  const shelf = (a, b, r, t = 'B') => { for (let i = a; i <= b; i++) block(i, r, t); };
+  const column = (i, h) => { LEVEL.columns.push({ i, h }); for (let k = 0; k < h; k++) { g[12 - k][i] = 'U'; g[12 - k][i + 1] = 'U'; } };
+  const loop = (i, r) => LEVEL.loops.push({ i, r });
+  const enemy = (i) => LEVEL.enemies.push({ i });
+  const hang = (a, b) => LEVEL.hangs.push({ a, b });
+  const bridge = (a, b, hold) => LEVEL.bridges.push({ a, b, hold });
+
+  // Walk, take two loops, brush through some hanging strands, break a bundle.
+  floor(0, 61);
+  LEVEL.start = { i: 3 };
+  loop(7, 12); loop(9, 12);
+  hang(11, 13);
+  block(16, 9, 'R');
+  block(21, 9); block(22, 9);
+  column(26, 2);
+  block(30, 6, 'R');
+  enemy(33);
+  column(37, 3); loop(37, 9);
+  enemy(41); enemy(43);
+  column(47, 2);
+  hang(51, 53);
+  shelf(55, 57, 9); loop(56, 8);
+  // A small gap, a shelf, then rods across a gap too wide to jump.
+  floor(64, 76);
+  shelf(67, 70, 9); loop(68, 8); loop(69, 8);
+  enemy(73);
+  bridge(77, 81, 1.0);
+  floor(82, 112);
+  block(86, 9); block(87, 9); block(90, 9, 'R');
+  enemy(94); enemy(96);
+  stack(100, 100, 1); stack(101, 101, 2); stack(102, 102, 3); stack(103, 109, 4);
+  loop(105, 8);
+  hang(106, 108);
+  // Higher up, then a longer bridge.
+  floor(116, 148);
+  LEVEL.checkpoints.push({ i: 117 });
+  column(119, 4);
+  enemy(123);
+  column(126, 2);
+  block(129, 9);
+  shelf(132, 136, 6); loop(133, 5); loop(135, 5);
+  block(139, 9, 'R');
+  enemy(142); enemy(145);
+  bridge(149, 154, 0.75);
+  floor(155, 165);
+  enemy(160);
+  floor(168, 199);
+  column(171, 2); column(175, 4); column(179, 6);
+  LEVEL.nest = { i0: 184, i1: 189 };
+  g[12][184] = 'N'; g[12][189] = 'N';   // the nest's rim: get in from above
+  column(196, 8);
+  LEVEL.grid = g;
+}
+
+function tileCh(i, r) {
+  if (i < 0 || i >= LW) return '#';
+  if (r < 0) return ' ';
+  if (r >= LH) r = LH - 1;
+  return LEVEL.grid[r][i];
+}
+function solidAt(i, r) { const c = tileCh(i, r); return c === '#' || c === 'B' || c === 'R' || c === 'U' || c === 'N'; }
+function setTile(i, r, c) { LEVEL.grid[r][i] = c; }
+
+// Height of the floor stack in each column (tiles above the floor top), or null over a gap.
+function floorHeights() {
+  const h = new Array(LW).fill(null);
+  for (let i = 0; i < LW; i++) {
+    if (LEVEL.grid[13][i] !== '#') continue;
+    let k = 0;
+    while (k < 12 && LEVEL.grid[12 - k][i] === '#') k++;
+    h[i] = k;
+  }
+  return h;
+}
+
+// ---- 35-build.js ----
+// Builds every noodle that starts at rest: the floor (stacked dry whole-wheat rods with cooked
+// spaghetti dropped over the top), bundles on dry-spaghetti stilts, upright bundles, the nest,
+// and the hanging rack behind. Cooked strands are dropped and settled, so they drape for real.
+
+const SLAB_Z = 3.5, SLAB_BOTTOM = -10;
+const ROD_R = 0.09, PITCH = 0.18, ROWP = 0.156;
+const CARPET_T = 0.36;        // the dry stack sits this far below the walking surface; the cooked layer fills it
+const FILL = [];               // triangles for the dark insides of the floor stacks
+let STRIPS = [];
+
+function buildStatic() {
+  const rng = makeRng(20261027);
+  const H = floorHeights();
+  STRIPS = makeStrips(H);
+  for (const S of STRIPS) buildSlab(S, rng);
+  buildCarpet(H, rng);
+  for (const b of LEVEL.blocks) buildBlock(b, rng);
+  for (const c of LEVEL.columns) buildColumn(c, rng);
+  buildNest(rng);
+  buildMid(rng);
+}
+
+function makeStrips(H) {
+  const out = [];
+  let i = 0;
+  while (i < LW) {
+    if (H[i] === null) { i++; continue; }
+    let j = i;
+    while (j + 1 < LW && H[j + 1] === H[i]) j++;
+    // A neighbour that is a gap leaves this side open all the way down; the level's own ends are never seen.
+    const side = (k) => (k < 0 || k >= LW ? 99 : H[k] === null ? -99 : H[k]);
+    out.push({ a: i, b: j, h: H[i], x0: i * TILE, x1: (j + 1) * TILE, top: H[i] * TILE, leftTop: side(i - 1), rightTop: side(j + 1) });
+    i = j + 1;
+  }
+  return out;
+}
+
+function pushBox(x0, x1, y0, y1, z0, z1) {
+  const v = [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]];
+  const f = [[0, 1, 2, 0, 2, 3], [5, 4, 7, 5, 7, 6], [4, 0, 3, 4, 3, 7], [1, 5, 6, 1, 6, 2], [3, 2, 6, 3, 6, 7], [4, 5, 1, 4, 1, 0]];
+  for (const face of f) for (const k of face) FILL.push(v[k][0], v[k][1], v[k][2]);
+}
+
+// Allocates rods (flat list of x0,y0,z0,x1,y1,z1,r,seed) grouped into bodies ~24 cm wide.
+function emitRods(rods, mat, chunk = 24, opts = {}) {
+  const pool = POOLS.rod;
+  const n = rods.length / 8;
+  if (!n) return [];
+  const order = Array.from({ length: n }, (_, k) => k);
+  const key = (k) => Math.floor((rods[k * 8] + rods[k * 8 + 3]) * 0.5 / chunk);
+  order.sort((a, b) => key(a) - key(b));
+  const bodies = [];
+  let k = 0;
+  while (k < n) {
+    const c = key(order[k]);
+    const s0 = pool.used;
+    let m = 0;
+    while (k < n && key(order[k]) === c) {
+      const j = order[k] * 8;
+      putRod(pool, pool.alloc(1), rods[j], rods[j + 1], rods[j + 2], rods[j + 3], rods[j + 4], rods[j + 5], rods[j + 6], mat, rods[j + 7]);
+      k++; m++;
+    }
+    bodies.push(new Body(pool, s0, m, opts));
+  }
+  return bodies;
+}
+
+// A floor stack: rods along x, hex-packed. Only the outer two layers (front and top) run full length;
+// where a side is open, short stubs fill the whole face so its cut ends show.
+function buildSlab(S, rng) {
+  const exposedL = (y) => S.a > 0 && y > S.leftTop * TILE - CARPET_T;
+  const exposedR = (y) => S.b < LW - 1 && y > S.rightTop * TILE - CARPET_T;
+  const top = S.top - CARPET_T;
+  const rows = Math.floor((top - SLAB_BOTTOM) / ROWP);
+  const ncol = Math.floor((2 * SLAB_Z - 2 * ROD_R) / PITCH) + 1;
+  const rods = [];
+  const j = () => rng.range(-0.013, 0.013);
+  for (let k = 0; k < rows; k++) {
+    const y = top - ROD_R - k * ROWP;
+    for (let m = 0; m < ncol; m++) {
+      const z = SLAB_Z - ROD_R - m * PITCH - (k & 1 ? PITCH * 0.5 : 0);
+      if (z < -SLAB_Z + ROD_R) continue;
+      const shell = k < 2 || m < 2;
+      const eL = exposedL(y), eR = exposedR(y);
+      if (!shell && !eL && !eR) continue;
+      const xs = S.x0 + (eL ? rng.range(-0.2, 0.14) : 0.02);
+      const xe = S.x1 - (eR ? rng.range(-0.2, 0.14) : 0.02);
+      const r = ROD_R * rng.range(0.95, 1.05);
+      if (shell) {
+        let x = xs;
+        while (x < xe - 0.05) {
+          let x2 = Math.min(x + rng.range(4.5, 15), xe);
+          if (xe - x2 < 1.2) x2 = xe;
+          rods.push(x, y + j(), z + j(), x2, y + j(), z + j(), r, rng() * 100);
+          x = x2 + rng.range(0.01, 0.09);
+        }
+      } else {
+        if (eL) rods.push(xs, y + j(), z + j(), xs + rng.range(0.8, 2.2), y + j(), z + j(), r, rng() * 100);
+        if (eR) rods.push(xe - rng.range(0.8, 2.2), y + j(), z + j(), xe, y + j(), z + j(), r, rng() * 100);
+      }
+    }
+  }
+  S.bodies = emitRods(rods, 5);
+  S.box = addWorldBox(S.x0, S.x1, -60, S.top - 0.06, -SLAB_Z, SLAB_Z, 'floor');
+  const inL = exposedL(top - 0.5) ? 0.45 : 0, inR = exposedR(top - 0.5) ? 0.45 : 0;
+  pushBox(S.x0 + inL, S.x1 - inR, SLAB_BOTTOM, top - 0.33, -SLAB_Z + 0.25, SLAB_Z - 0.34);
+}
+
+function linkFlat(p, a, b, L) {
+  const oa = a * 3, ob = b * 3;
+  const dx = p[ob] - p[oa], dy = p[ob + 1] - p[oa + 1], dz = p[ob + 2] - p[oa + 2];
+  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (d < 1e-9) return;
+  const f = (d - L) / d * 0.5;
+  p[oa] += dx * f; p[oa + 1] += dy * f; p[oa + 2] += dz * f;
+  p[ob] -= dx * f; p[ob + 1] -= dy * f; p[ob + 2] -= dz * f;
+}
+function spreadFlat(p, a, b, L, k) {
+  const oa = a * 3, ob = b * 3;
+  const dx = p[ob] - p[oa], dy = p[ob + 1] - p[oa + 1], dz = p[ob + 2] - p[oa + 2];
+  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (d >= L || d < 1e-9) return;
+  const f = (d - L) / d * 0.5 * k;
+  p[oa] += dx * f; p[oa + 1] += dy * f; p[oa + 2] += dz * f;
+  p[ob] -= dx * f; p[ob + 1] -= dy * f; p[ob + 2] -= dz * f;
+}
+
+// Cooked spaghetti dropped over the floor. Strands settle onto the stack and onto each other
+// (a height map remembers where earlier strands landed); ends that miss the stack hang over the edge.
+function buildCarpet(H, rng) {
+  const colTop = new Float32Array(LW).fill(-1e9);
+  for (let i = 0; i < LW; i++) if (H[i] !== null) colTop[i] = H[i] * TILE - CARPET_T;
+  const RES = 10, HX0 = -2, HW = Math.ceil((LEVEL_X1 + 4) * RES), HZN = Math.round(2 * SLAB_Z * RES) + 1;
+  const hf = new Float32Array(HW * HZN).fill(-1e9);
+  const baseAt = (x, z) => {
+    if (z < -SLAB_Z || z > SLAB_Z) return -1e9;
+    const i = Math.floor(x / TILE);
+    return i < 0 || i >= LW ? -1e9 : colTop[i];
+  };
+  const hfAt = (x, z) => {
+    const ix = Math.round((x - HX0) * RES), iz = Math.round((z + SLAB_Z) * RES);
+    if (ix < 0 || ix >= HW || iz < 0 || iz >= HZN) return -1e9;
+    return hf[iz * HW + ix];
+  };
+  const support = (x, z) => Math.max(baseAt(x, z), hfAt(x, z));
+  const splat = (x, z, y) => {
+    const ix = Math.round((x - HX0) * RES), iz = Math.round((z + SLAB_Z) * RES);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const a = ix + dx, b = iz + dz;
+      if (a < 0 || a >= HW || b < 0 || b >= HZN) continue;
+      const k = b * HW + a, yy = y - (dx * dx + dz * dz) * 0.03;
+      if (yy > hf[k]) hf[k] = yy;
+    }
+  };
+  const C = 64, R = 0.1;
+  const px = new Float32Array(C * 3), pv = new Float32Array(C * 3);
+  const pool = POOLS.s64;
+  for (const S of STRIPS) {
+    const width = S.x1 - S.x0;
+    const cells = Math.max(1, Math.round(width / 12));
+    for (let ci = 0; ci < cells; ci++) {
+      const cx0 = S.x0 + (width * ci) / cells, cx1 = S.x0 + (width * (ci + 1)) / cells;
+      const n = Math.round((cx1 - cx0) * 3.2);
+      const s0 = pool.used;
+      for (let k = 0; k < n; k++) {
+        const edge = rng() < 0.11;
+        let x = rng.range(cx0, cx1);
+        let z = edge ? rng.range(2.2, 3.3) : rng.range(-SLAB_Z + 0.2, SLAB_Z - 1.2);
+        let ang = edge ? Math.PI / 2 + rng.range(-0.45, 0.45) : rng.range(0, TAU);
+        const L = edge ? rng.range(5, 10) : rng.range(7, 13), seg = L / (C - 1);
+        let curv = rng.gauss() * (edge ? 0.08 : 0.25);
+        const surf = S.top - CARPET_T;
+        for (let i = 0; i < C; i++) {
+          px[i * 3] = x; px[i * 3 + 2] = z;
+          curv = curv * 0.94 + rng.gauss() * (edge ? 0.03 : 0.07);
+          ang += curv * seg * 1.6;
+          let nx = x + Math.cos(ang) * seg;
+          const col = Math.floor(nx / TILE);
+          if (col < 0 || col >= LW || colTop[col] > surf + 0.5) { ang = Math.PI - ang; nx = x + Math.cos(ang) * seg; }  // turn away from a taller wall
+          x = nx; z += Math.sin(ang) * seg;
+        }
+        for (let i = 0; i < C; i++) {
+          const s = support(px[i * 3], px[i * 3 + 2]);
+          px[i * 3 + 1] = (s > -1e8 ? s : S.top - CARPET_T) + R + 0.04;
+        }
+        // Rest length from the strand as laid over what is already there, so settling never squeezes it.
+        let L3 = 0;
+        for (let i = 1; i < C; i++) L3 += Math.hypot(px[i * 3] - px[i * 3 - 3], px[i * 3 + 1] - px[i * 3 - 2], px[i * 3 + 2] - px[i * 3 - 1]);
+        pv.set(px);
+        settle(px, pv, C, (L3 / (C - 1)) * 1.002, support, colTop, edge ? 60 : 30);
+        let low = 1e9, high = -1e9;
+        for (let i = 0; i < C; i++) { low = Math.min(low, px[i * 3 + 1]); high = Math.max(high, px[i * 3 + 1]); }
+        if (low < S.top - 7 || high > S.top + 0.8 || !Number.isFinite(low + high)) continue;
+        for (let i = 0; i < C; i++) {
+          splat(px[i * 3], px[i * 3 + 2], px[i * 3 + 1] + R * 0.85);
+          if (i < C - 1) splat((px[i * 3] + px[i * 3 + 3]) * 0.5, (px[i * 3 + 2] + px[i * 3 + 5]) * 0.5, (px[i * 3 + 1] + px[i * 3 + 4]) * 0.5 + R * 0.85);
+        }
+        putStrand(pool, pool.alloc(1), px, C, R * rng.range(0.94, 1.06), 0, rng() * 100, 0);
+      }
+      if (pool.used > s0) new Body(pool, s0, pool.used - s0, {});
+    }
+  }
+}
+
+function settle(px, pv, C, seg, support, colTop, iters) {
+  const R = 0.1, g = 0.03;
+  for (let it = 0; it < iters; it++) {
+    for (let i = 0; i < C; i++) {
+      const o = i * 3;
+      let vx = (px[o] - pv[o]) * 0.9, vy = (px[o + 1] - pv[o + 1]) * 0.9, vz = (px[o + 2] - pv[o + 2]) * 0.9;
+      const vl = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      if (vl > 0.25) { const k = 0.25 / vl; vx *= k; vy *= k; vz *= k; }
+      pv[o] = px[o]; pv[o + 1] = px[o + 1]; pv[o + 2] = px[o + 2];
+      px[o] += vx; px[o + 1] += vy - g; px[o + 2] += vz;
+    }
+    // Stiff enough against folding that a squeezed strand curves instead of buckling into zigzags.
+    for (let c = 0; c < 3; c++) {
+      for (let i = 0; i < C - 1; i++) linkFlat(px, i, i + 1, seg);
+      for (let i = 0; i < C - 2; i++) spreadFlat(px, i, i + 2, seg * 1.97, 0.55);
+      for (let i = 0; i < C - 3; i++) spreadFlat(px, i, i + 3, seg * 2.9, 0.25);
+    }
+    for (let i = 0; i < C; i++) {
+      const o = i * 3;
+      let x = px[o], y = px[o + 1], z = px[o + 2];
+      const s = support(x, z) + R;
+      if (y < s) {
+        if (pv[o + 1] >= s - 0.3) {
+          y = s;
+          pv[o] += (x - pv[o]) * 0.85; pv[o + 2] += (z - pv[o + 2]) * 0.85; pv[o + 1] = y;
+        } else {
+          const i0 = clamp(Math.floor(pv[o] / TILE), 0, LW - 1), i1 = clamp(Math.floor(x / TILE), 0, LW - 1);
+          if (i0 !== i1 && colTop[i1] + R > y) x = (i1 > i0 ? i1 * TILE - R - 0.01 : i0 * TILE + R + 0.01);
+          else if (pv[o + 2] > SLAB_Z - 0.05) z = SLAB_Z + R;
+          else if (pv[o + 2] < -SLAB_Z + 0.05) z = -SLAB_Z - R;
+          else if (s - y < 0.6) y = s;
+        }
+      }
+      px[o] = x; px[o + 1] = y; px[o + 2] = z;
+    }
+  }
+  // Relax what is left of any kink: smooth along the strand, then sit back on whatever is underneath.
+  for (let pass = 0; pass < 8; pass++) {
+    for (let i = 1; i < C - 1; i++) {
+      const o = i * 3;
+      for (let a = 0; a < 3; a++) px[o + a] = px[o + a] * 0.5 + (px[o - 3 + a] + px[o + 3 + a]) * 0.25;
+    }
+    for (let i = 0; i < C; i++) {
+      const o = i * 3, s = support(px[o], px[o + 2]) + R;
+      if (px[o + 1] < s && s - px[o + 1] < 0.6) px[o + 1] = s;
+    }
+  }
+}
+
+function inRoundSq(x, y, h, rc) {
+  const qx = Math.abs(x) - (h - rc), qy = Math.abs(y) - (h - rc);
+  if (Math.abs(x) > h || Math.abs(y) > h) return false;
+  if (qx <= 0 || qy <= 0) return true;
+  return qx * qx + qy * qy <= rc * rc;
+}
+
+// A point at distance d around a rounded square of half-size h and corner radius rc.
+function roundSqPoint(d, h, rc) {
+  const e = 2 * (h - rc), a = (Math.PI / 2) * rc, per = 4 * (e + a);
+  d = ((d % per) + per) % per;
+  const segs = [
+    (t) => [h, -(h - rc) + t], (t) => { const ang = t / rc; return [(h - rc) + Math.cos(ang) * rc, (h - rc) + Math.sin(ang) * rc]; },
+    (t) => [(h - rc) - t, h], (t) => { const ang = Math.PI / 2 + t / rc; return [-(h - rc) + Math.cos(ang) * rc, (h - rc) + Math.sin(ang) * rc]; },
+    (t) => [-h, (h - rc) - t], (t) => { const ang = Math.PI + t / rc; return [-(h - rc) + Math.cos(ang) * rc, -(h - rc) + Math.sin(ang) * rc]; },
+    (t) => [-(h - rc) + t, -h], (t) => { const ang = 1.5 * Math.PI + t / rc; return [(h - rc) + Math.cos(ang) * rc, -(h - rc) + Math.sin(ang) * rc]; },
+  ];
+  const lens = [e, a, e, a, e, a, e, a];
+  for (let k = 0; k < 8; k++) { if (d <= lens[k]) return segs[k](d); d -= lens[k]; }
+  return segs[0](0);
+}
+
+// A bundle of dry spaghetti seen end-on, tied with a cooked strand, standing on dry-spaghetti stilts.
+function buildBlock(blk, rng) {
+  const pool = POOLS.rod;
+  const cx = blk.i * TILE + 1.5, cy = rowY(blk.r) + 1.5;
+  const mat = blk.t === 'R' ? 4 : 1;
+  const hs = 1.38, rc = 0.42;
+  const pts = [];
+  for (let k = 0; ; k++) {
+    const y = -hs + ROD_R + k * ROWP;
+    if (y > hs - ROD_R) break;
+    for (let x = -hs + ROD_R + (k & 1) * PITCH * 0.5; x <= hs - ROD_R + 1e-6; x += PITCH * 1.02) {
+      if (inRoundSq(x, y, hs - ROD_R, rc)) pts.push(x, y);
+    }
+  }
+  const n = pts.length / 2;
+  const s0 = pool.alloc(n * 2);
+  for (let k = 0; k < n; k++) {
+    const x = cx + pts[k * 2] + rng.range(-0.012, 0.012), y = cy + pts[k * 2 + 1] + rng.range(-0.012, 0.012);
+    const tx = rng.gauss() * 0.02, ty = rng.gauss() * 0.02;
+    putRod(pool, s0 + k, x - tx, y - ty, -1.45 + rng.range(-0.06, 0.06), x + tx, y + ty, 1.45 + rng.range(-0.05, 0.03), ROD_R * rng.range(0.95, 1.05), mat, rng() * 100);
+  }
+  for (let k = n; k < 2 * n; k++) { putRod(pool, s0 + k, cx, cy, 0, cx + 0.1, cy, 0, ROD_R, mat, rng() * 100); pool.setCount(s0 + k, 0); }
+  blk.cx = cx; blk.cy = cy; blk.hs = hs; blk.nRods = n;
+  blk.rods = new Body(pool, s0, 2 * n, { sim: true, grav: 1, damp: 0.999, fric: 0.32, rest: 0.32, bend: 0, iters: 2, hitMin: 22, owner: blk });
+  blk.rods.spares = [];
+  for (let k = n; k < 2 * n; k++) blk.rods.spares.push(s0 + k);
+  // The tie: a cooked strand twice round the middle, its end hanging.
+  const tp = POOLS.s64, ts = tp.alloc(1), C = 64, tie = new Float32Array(C * 3);
+  const per = 8 * (hs + 0.1 - 0.45) + TAU * 0.45, d0 = rng.range(0, per), turns = 1.35;
+  for (let i = 0; i < C; i++) {
+    const t = i / (C - 1);
+    const [x, y] = roundSqPoint(d0 + t * turns * per, hs + 0.1, 0.45);
+    tie[i * 3] = cx + x; tie[i * 3 + 1] = cy + y; tie[i * 3 + 2] = 0.35 + t * 0.45 + Math.sin(t * 9) * 0.03;
+  }
+  putStrand(tp, ts, tie, C, 0.1, mat === 4 ? 2 : 0, rng() * 100, 0);
+  blk.tie = new Body(tp, ts, 1, { sim: true, grav: 1, damp: 0.99, fric: 0.5, bend: 0.04, iters: 2, owner: blk });
+  blk.box = addWorldBox(cx - hs, cx + hs, cy - hs, cy + hs, -1.5, 1.5, 'block');
+  // Stilts down to whatever is below, kept behind the path so you pass in front of them.
+  let r2 = blk.r + 1;
+  while (r2 < 13 && !solidAt(blk.i, r2)) r2++;
+  if (r2 > blk.r + 1 && solidAt(blk.i, r2)) {
+    const ch = tileCh(blk.i, r2);
+    const yb = rowY(r2) + TILE + (ch === '#' ? -0.12 : 0.03), yt = cy - hs + 0.02;
+    const rods = [];
+    const sx = cx + rng.range(-0.3, 0.3);
+    for (const [ox, oz] of [[-0.095, -1.42], [0.095, -1.42], [0, -1.585]]) {
+      rods.push(sx + ox + rng.gauss() * 0.01, yb, oz, sx + ox + rng.gauss() * 0.01, yt, oz + rng.gauss() * 0.01, ROD_R, rng() * 100);
+    }
+    if (yt - yb > 8) {   // tall stilts get a brace from low on the stilt up to the bundle's corner
+      const side = rng.sign();
+      rods.push(sx + side * 0.05, yb + (yt - yb) * 0.45, -1.6, cx + side * (hs - 0.25), yt - 0.05, -1.55, ROD_R, rng() * 100);
+    }
+    blk.stilts = emitRods(rods, 1, 1000, { sim: true, grav: 1, damp: 0.999, fric: 0.35, rest: 0.25, bend: 0, iters: 2, hitMin: 25 });
+  }
+}
+
+// An upright bundle, like spaghetti standing in a jar with no jar. Its top is a face of cut ends.
+function buildColumn(c, rng) {
+  const pool = POOLS.rod;
+  const cx = c.i * TILE + TILE, top = c.h * TILE, R = 2.62;
+  const rods = [];
+  const lean = () => rng.gauss() * 0.012;
+  for (let k = 0; k < 3; k++) {
+    const rr = R - ROD_R - k * ROWP;
+    const n = Math.floor((TAU * rr) / (PITCH * 1.01));
+    for (let j = 0; j < n; j++) {
+      const a = ((j + (k & 1) * 0.5) / n) * TAU;
+      const x = cx + Math.cos(a) * rr, z = Math.sin(a) * rr;
+      if (k > 0 && z < -0.6) continue;
+      rods.push(x + lean(), -0.3, z + lean(), x + lean(), top + rng.range(-0.05, 0.3), z + lean(), ROD_R * rng.range(0.95, 1.05), rng() * 100);
+    }
+  }
+  const ri = R - ROD_R - 3 * ROWP;
+  for (let k = 0; ; k++) {
+    const z = -ri + k * ROWP;
+    if (z > ri) break;
+    for (let x = -ri + (k & 1) * PITCH * 0.5; x <= ri; x += PITCH * 1.01) {
+      if (x * x + z * z > ri * ri) continue;
+      rods.push(cx + x, top - 1.6, z, cx + x + rng.gauss() * 0.01, top + rng.range(-0.05, 0.3), z + rng.gauss() * 0.01, ROD_R * rng.range(0.95, 1.05), rng() * 100);
+    }
+  }
+  c.bodies = emitRods(rods, 1, 1000);
+  const tp = POOLS.s64, C = 64, pts = new Float32Array(C * 3);
+  for (const f of [0.3, 0.68]) {
+    const a0 = rng.range(0, TAU), yc = Math.max(1.0, top * f);
+    for (let i = 0; i < C; i++) {
+      const t = i / (C - 1), a = a0 + t * TAU * 1.15;
+      pts[i * 3] = cx + Math.cos(a) * (R + 0.1); pts[i * 3 + 1] = yc + t * 0.3 + Math.sin(t * 13) * 0.02; pts[i * 3 + 2] = Math.sin(a) * (R + 0.1);
+    }
+    const s = tp.alloc(1);
+    putStrand(tp, s, pts, C, 0.1, 0, rng() * 100, 0);
+    new Body(tp, s, 1, {});
+  }
+  c.box = addWorldBox(cx - R, cx + R, -60, top + 0.18, -R, R, 'column');
+}
+
+// The goal: a nest of cooked spaghetti on the floor near the end.
+function buildNest(rng) {
+  const N = LEVEL.nest;
+  const cx = ((N.i0 + N.i1 + 1) * TILE) / 2;
+  const R0 = 6.8, r0 = 1.9, zs = 0.42;
+  const pool = POOLS.s64, C = 64, pts = new Float32Array(C * 3);
+  const s0 = pool.used;
+  for (let k = 0; k < 170; k++) {
+    let phi = rng.range(0, TAU), psi = rng.range(0, TAU);
+    const dphi = (rng.range(0.7, 1.6) * rng.sign()) / (C - 1), dpsi = (rng.range(2.5, 6.5) * rng.sign()) / (C - 1);
+    const rr = r0 * rng.range(0.55, 1.12);
+    for (let i = 0; i < C; i++) {
+      phi += dphi + rng.gauss() * 0.004;
+      psi += dpsi + rng.gauss() * 0.02;
+      const Rr = R0 + rr * Math.cos(psi);
+      pts[i * 3] = cx + Rr * Math.cos(phi);
+      pts[i * 3 + 1] = Math.max(r0 * 0.95 + rr * Math.sin(psi) * 0.9, 0.12);
+      pts[i * 3 + 2] = Rr * Math.sin(phi) * zs;
+    }
+    putStrand(pool, pool.alloc(1), pts, C, 0.1, 0, rng() * 100, 0);
+  }
+  new Body(pool, s0, pool.used - s0, {});
+  N.cx = cx; N.R = R0; N.r = r0;
+}
+
+// Behind the floor: more spaghetti hung up to dry, well out of focus.
+function buildMid(rng) {
+  const pool = POOLS.s32, C = 32, pts = new Float32Array(C * 3);
+  for (let x = -40; x < LEVEL_X1 + 60; x += rng.range(6, 15)) {
+    const z = rng.range(-22, -42);
+    const s0 = pool.used;
+    const n = rng.int(3, 10);
+    const topY = rng.range(50, 60);
+    for (let k = 0; k < n; k++) {
+      const sx = x + rng.range(-2.5, 2.5), sz = z + rng.range(-1.5, 1.5);
+      const yEnd = rng.range(-14, 24);
+      const len = topY - yEnd;
+      const ph = rng.range(0, TAU);
+      for (let i = 0; i < C; i++) {
+        const t = i / (C - 1);
+        const curl = Math.max(0, (t - 0.9) / 0.1);
+        pts[i * 3] = sx + Math.sin(t * 3 + ph) * 0.2 * t + curl * curl * 0.6;
+        pts[i * 3 + 1] = topY - t * len + curl * curl * 0.5;
+        pts[i * 3 + 2] = sz + Math.cos(t * 2 + ph) * 0.15 * t;
+      }
+      putStrand(pool, pool.alloc(1), pts, C, 0.1, 0, rng() * 100, 0);
+    }
+    new Body(pool, s0, pool.used - s0, { layer: 'mid' });
+  }
+}
+
+// ---- 40-physics.js ----
+// Strand physics. Each point is integrated with Verlet, held to its neighbours' distance,
+// kept from folding too sharply, and pushed out of whatever it touches with friction.
+// Cooked strands are long chains that sag and stick; dry pieces are two-point rods that tumble and bounce.
+
+const GRAV = -981;            // real gravity: things this small fall fast
+const DT = 1 / 120;
+const BODIES = [];
+const AWAKE = new Set();
+const KICKABLE = [];
+const WORLD = { boxes: [], buckets: null };
+const COLLIDERS = [];         // capsules that push strands this step (the twirl, the clumps)
+
+function addWorldBox(x0, x1, y0, y1, z0, z1, kind) {
+  const b = { x0, x1, y0, y1, z0, z1, kind, on: true };
+  WORLD.boxes.push(b);
+  return b;
+}
+function finishWorld() {
+  WORLD.buckets = Array.from({ length: LW }, () => []);
+  for (const bx of WORLD.boxes) {
+    const i0 = Math.max(0, Math.floor((bx.x0 - 1) / TILE)), i1 = Math.min(LW - 1, Math.floor((bx.x1 + 1) / TILE));
+    for (let i = i0; i <= i1; i++) WORLD.buckets[i].push(bx);
+  }
+}
+
+class Body {
+  constructor(pool, s0, n, o = {}) {
+    this.pool = pool; this.s0 = s0; this.n = n;
+    this.layer = o.layer || 'main';
+    this.sim = !!o.sim;
+    this.awake = false; this.calm = 0; this.keep = !!o.keep;
+    this.grav = o.grav ?? 1; this.damp = o.damp ?? 0.995; this.fric = o.fric ?? 0.35; this.rest = o.rest ?? 0;
+    this.bend = o.bend ?? 0.05; this.bendLen = o.bendLen ?? 0.995; this.iters = o.iters ?? 2;
+    this.world = o.world !== false; this.targets = !!o.targets;
+    this.onHit = o.onHit || null; this.hitMin = o.hitMin ?? 30;
+    this.owner = o.owner || null;
+    this.kick = false; this.listed = false; this.hidden = false; this.moved = false; this.cgroup = null;
+    this.x0 = 0; this.x1 = 0; this.y0 = 0; this.y1 = 0; this.z0 = 0; this.z1 = 0;
+    BODIES.push(this);
+    pool.bodies[this.layer].push(this);
+    this.measure();
+    if (o.kick) this.setKick(true);
+  }
+  setKick(on) { if (on && !this.listed) { KICKABLE.push(this); this.listed = true; } this.kick = on; }
+  wake() { if (!this.sim || this.awake) return; this.awake = true; this.calm = 0; AWAKE.add(this); }
+  sleep() { this.awake = false; AWAKE.delete(this); this.moved = true; }
+  touch() { this.moved = true; }
+  measure() {
+    const P = this.pool, N = P.N, pos = P.pos, meta = P.meta;
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (let s = this.s0; s < this.s0 + this.n; s++) {
+      const c = meta[s * 4 + 3] | 0;
+      for (let i = 0; i < c; i++) {
+        const o = (s * N + i) * 4, r = pos[o + 3];
+        const x = pos[o], y = pos[o + 1], z = pos[o + 2];
+        if (x - r < x0) x0 = x - r; if (x + r > x1) x1 = x + r;
+        if (y - r < y0) y0 = y - r; if (y + r > y1) y1 = y + r;
+        if (z - r < z0) z0 = z - r; if (z + r > z1) z1 = z + r;
+      }
+    }
+    this.empty = x0 > x1;
+    if (this.empty) { x0 = x1 = y0 = y1 = z0 = z1 = -9999; }
+    this.x0 = x0; this.x1 = x1; this.y0 = y0; this.y1 = y1; this.z0 = z0; this.z1 = z1;
+  }
+}
+
+function linkPts(pos, inv, a, b, L, k) {
+  const wa = inv[a], wb = inv[b], w = wa + wb;
+  if (w === 0) return;
+  const oa = a * 4, ob = b * 4;
+  const dx = pos[ob] - pos[oa], dy = pos[ob + 1] - pos[oa + 1], dz = pos[ob + 2] - pos[oa + 2];
+  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (d < 1e-9) return;
+  const f = ((d - L) / (d * w)) * k;
+  pos[oa] += dx * f * wa; pos[oa + 1] += dy * f * wa; pos[oa + 2] += dz * f * wa;
+  pos[ob] -= dx * f * wb; pos[ob + 1] -= dy * f * wb; pos[ob + 2] -= dz * f * wb;
+}
+function spreadPts(pos, inv, a, b, L, k) { // only pushes apart: resists folding, allows curling
+  const wa = inv[a], wb = inv[b], w = wa + wb;
+  if (w === 0) return;
+  const oa = a * 4, ob = b * 4;
+  const dx = pos[ob] - pos[oa], dy = pos[ob + 1] - pos[oa + 1], dz = pos[ob + 2] - pos[oa + 2];
+  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (d >= L || d < 1e-9) return;
+  const f = ((d - L) / (d * w)) * k;
+  pos[oa] += dx * f * wa; pos[oa + 1] += dy * f * wa; pos[oa + 2] += dz * f * wa;
+  pos[ob] -= dx * f * wb; pos[ob + 1] -= dy * f * wb; pos[ob + 2] -= dz * f * wb;
+}
+
+function stepBody(b, dt) {
+  const P = b.pool, N = P.N, pos = P.pos, prev = P.prev, inv = P.inv, meta = P.meta;
+  const g = GRAV * b.grav * dt * dt, dmp = b.damp;
+  const sEnd = b.s0 + b.n;
+  let motion = 0;
+  for (let s = b.s0; s < sEnd; s++) {
+    const c = meta[s * 4 + 3] | 0;
+    if (c < 1) continue;
+    const base = s * N;
+    for (let i = 0; i < c; i++) {
+      const p = base + i;
+      if (inv[p] === 0) continue;
+      const o = p * 4, q = p * 3;
+      const x = pos[o], y = pos[o + 1], z = pos[o + 2];
+      const vx = (x - prev[q]) * dmp, vy = (y - prev[q + 1]) * dmp, vz = (z - prev[q + 2]) * dmp;
+      prev[q] = x; prev[q + 1] = y; prev[q + 2] = z;
+      pos[o] = x + vx; pos[o + 1] = y + vy + g; pos[o + 2] = z + vz;
+      const m = Math.abs(vx) + Math.abs(vy) + Math.abs(vz);
+      if (m > motion) motion = m;
+    }
+  }
+  const tk = P.tk, tgt = P.tgt;
+  for (let it = 0; it < b.iters; it++) {
+    for (let s = b.s0; s < sEnd; s++) {
+      const c = meta[s * 4 + 3] | 0;
+      if (c < 2) continue;
+      const base = s * N, L = P.seg[s];
+      const closed = (meta[s * 4 + 2] & F_CLOSED) !== 0;
+      for (let i = 0; i < c - 1; i++) linkPts(pos, inv, base + i, base + i + 1, L, 1);
+      if (closed) linkPts(pos, inv, base + c - 1, base, L, 1);
+      if (b.bend > 0 && c > 2) {
+        const L2 = 2 * L * b.bendLen;
+        for (let i = 0; i < c - 2; i++) spreadPts(pos, inv, base + i, base + i + 2, L2, b.bend);
+        if (closed) { spreadPts(pos, inv, base + c - 2, base, L2, b.bend); spreadPts(pos, inv, base + c - 1, base + 1, L2, b.bend); }
+      }
+      if (b.targets) {
+        for (let i = 0; i < c; i++) {
+          const p = base + i, k = tk[p];
+          if (k <= 0 || inv[p] === 0) continue;
+          const o = p * 4, q = p * 3;
+          pos[o] += (tgt[q] - pos[o]) * k;
+          pos[o + 1] += (tgt[q + 1] - pos[o + 1]) * k;
+          pos[o + 2] += (tgt[q + 2] - pos[o + 2]) * k;
+        }
+      }
+    }
+    if (b.tether) tetherBody(b);
+    collideBody(b, dt, it === b.iters - 1);
+  }
+  return motion;
+}
+
+// Strands hung from a pinned first point can never be further from it than their own length:
+// one cheap check per point keeps a long hanging chain from stretching under its own weight.
+function tetherBody(b) {
+  const P = b.pool, N = P.N, pos = P.pos, meta = P.meta;
+  for (let s = b.s0; s < b.s0 + b.n; s++) {
+    const c = meta[s * 4 + 3] | 0, base = s * N, L = P.seg[s];
+    const ao = base * 4, ax = pos[ao], ay = pos[ao + 1], az = pos[ao + 2];
+    for (let i = 2; i < c; i++) {
+      const o = (base + i) * 4;
+      const dx = pos[o] - ax, dy = pos[o + 1] - ay, dz = pos[o + 2] - az;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz), m = i * L;
+      if (d > m) { const k = m / d; pos[o] = ax + dx * k; pos[o + 1] = ay + dy * k; pos[o + 2] = az + dz * k; }
+    }
+  }
+}
+
+function collideBody(b, dt, last) {
+  const P = b.pool, N = P.N, pos = P.pos, prev = P.prev, inv = P.inv, meta = P.meta;
+  const fr = 1 - b.fric, rest = b.rest, buckets = WORLD.buckets, ncol = COLLIDERS.length;
+  const sEnd = b.s0 + b.n;
+  for (let s = b.s0; s < sEnd; s++) {
+    const c = meta[s * 4 + 3] | 0;
+    if (c < 1) continue;
+    const base = s * N;
+    for (let i = 0; i < c; i++) {
+      const p = base + i;
+      if (inv[p] === 0) continue;
+      const o = p * 4, q = p * 3;
+      let x = pos[o], y = pos[o + 1], z = pos[o + 2];
+      const r = pos[o + 3];
+      if (b.world) {
+        const col = Math.floor(x / TILE);
+        if (col >= 0 && col < LW) {
+          const list = buckets[col];
+          for (let j = 0; j < list.length; j++) {
+            const bx = list[j];
+            if (!bx.on) continue;
+            if (x <= bx.x0 - r || x >= bx.x1 + r || y <= bx.y0 - r || y >= bx.y1 + r || z <= bx.z0 - r || z >= bx.z1 + r) continue;
+            const px = prev[q], py = prev[q + 1], pz = prev[q + 2];
+            let nx = 0, ny = 1, nz = 0, d = bx.y1 + r - y;
+            if (py < bx.y1 + r - 0.03) {
+              let e = x - (bx.x0 - r);
+              if (e < d) { d = e; nx = -1; ny = 0; nz = 0; }
+              e = bx.x1 + r - x; if (e < d) { d = e; nx = 1; ny = 0; nz = 0; }
+              e = y - (bx.y0 - r); if (e < d) { d = e; nx = 0; ny = -1; nz = 0; }
+              e = bx.z1 + r - z; if (e < d) { d = e; nx = 0; ny = 0; nz = 1; }
+              e = z - (bx.z0 - r); if (e < d) { d = e; nx = 0; ny = 0; nz = -1; }
+            }
+            const vx = x - px, vy = y - py, vz = z - pz;
+            const vn = vx * nx + vy * ny + vz * nz;
+            x += nx * d; y += ny * d; z += nz * d;
+            if (vn < 0) {
+              const tx = vx - vn * nx, ty = vy - vn * ny, tz = vz - vn * nz;
+              const e2 = -vn * rest;
+              prev[q] = x - (tx * fr + nx * e2);
+              prev[q + 1] = y - (ty * fr + ny * e2);
+              prev[q + 2] = z - (tz * fr + nz * e2);
+              if (b.onHit && -vn > b.hitMin * dt) b.onHit(b, s, i, -vn / dt, x, y, z);
+            }
+          }
+        }
+      }
+      for (let j = 0; j < ncol; j++) {
+        const C = COLLIDERS[j];
+        if (C.owner === b.cgroup) continue;
+        if (x < C.minx - r || x > C.maxx + r || y < C.miny - r || y > C.maxy + r || z < C.minz - r || z > C.maxz + r) continue;
+        let t = C.uu > 0 ? ((x - C.ax) * C.ux + (y - C.ay) * C.uy + (z - C.az) * C.uz) / C.uu : 0;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const dx = x - (C.ax + C.ux * t), dy = y - (C.ay + C.uy * t), dz = z - (C.az + C.uz * t);
+        const dd = dx * dx + dy * dy + dz * dz, R = C.r + r;
+        if (dd >= R * R) continue;
+        const d = Math.sqrt(dd) || 1e-6, k = (R - d) / d;
+        x += dx * k; y += dy * k; z += dz * k;
+        if (last) {
+          const dr = C.drag;
+          prev[q] = x - lerp(x - prev[q], C.vx * dt, dr);
+          prev[q + 1] = y - lerp(y - prev[q + 1], C.vy * dt, dr);
+          prev[q + 2] = z - lerp(z - prev[q + 2], C.vz * dt, dr);
+        }
+      }
+      pos[o] = x; pos[o + 1] = y; pos[o + 2] = z;
+    }
+  }
+}
+
+function setCollider(C, ax, ay, az, bx, by, bz, r, vx, vy, vz, drag) {
+  C.ax = ax; C.ay = ay; C.az = az; C.ux = bx - ax; C.uy = by - ay; C.uz = bz - az;
+  C.uu = C.ux * C.ux + C.uy * C.uy + C.uz * C.uz; C.r = r;
+  C.minx = Math.min(ax, bx) - r; C.maxx = Math.max(ax, bx) + r;
+  C.miny = Math.min(ay, by) - r; C.maxy = Math.max(ay, by) + r;
+  C.minz = Math.min(az, bz) - r; C.maxz = Math.max(az, bz) + r;
+  C.vx = vx; C.vy = vy; C.vz = vz; C.drag = drag;
+  return C;
+}
+
+function simulate(dt) {
+  // Anything sleeping that a collider reaches wakes up.
+  for (let j = 0; j < COLLIDERS.length; j++) {
+    const C = COLLIDERS[j];
+    for (let k = 0; k < KICKABLE.length; k++) {
+      const b = KICKABLE[k];
+      if (b.awake || !b.kick || b.empty) continue;
+      if (b.x1 < C.minx - 0.3 || b.x0 > C.maxx + 0.3 || b.y1 < C.miny - 0.3 || b.y0 > C.maxy + 0.3 || b.z1 < C.minz - 0.3 || b.z0 > C.maxz + 0.3) continue;
+      b.wake();
+    }
+  }
+  for (const b of AWAKE) {
+    const motion = stepBody(b, dt);
+    b.measure();
+    b.moved = true;
+    if (!b.keep) {
+      if (motion < 0.0035) b.calm += dt; else b.calm = 0;
+      if (b.calm > 0.6) b.sleep();
+      if (b.y1 < -60) { b.sleep(); }
+    }
+  }
+}
+
+// Before drawing: refresh frames for whatever moved and queue its rows for upload.
+function flushBodies() {
+  for (const b of BODIES) {
+    if (!b.moved) continue;
+    b.moved = false;
+    const P = b.pool;
+    for (let s = b.s0; s < b.s0 + b.n; s++) P.computeFrames(s);
+    P.markDirty(b.s0, b.s0 + b.n);
+  }
+  for (const P of POOL_LIST) P.flush();
+}
+
+// ---- 45-render.js ----
+// Drawing. Order each frame: key-light shadow map, the far rack (tiny, then blurred hard), the middle
+// rack (half size, blurred), the sharp layer (4x MSAA, HDR), occlusion, bloom, then one pass that
+// stacks the layers like a lens would and develops the picture (tone, vignette, grain).
+
+const SHADOW_SIZE = 2048;
+const REN = {
+  scale: clamp(qnum('scale', 1), 0.4, 1.5), samples: 4,
+  cw: 0, ch: 0, W: 0, H: 0, T: null, progs: null,
+  view: M4.create(), proj: M4.create(), vp: M4.create(), invProj: M4.create(),
+  lightView: M4.create(), lightProj: M4.create(), lightVP: M4.create(),
+  eye: [0, 0, 60], target: [0, 0, 0],
+  keyDir: null, rimDir: null,
+  frameMs: 16, slowT: 0, fastT: 0, lastScaleChange: 0,
+  boxVao: null, boxCount: 0,
+};
+
+function norm3(x, y, z) { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; }
+
+function initRender() {
+  const P = {};
+  P.tube = makeProgram('pasta', SH_TUBE_VS, SH_PASTA_FS);
+  P.depth = makeProgram('shadow', SH_TUBE_VS, SH_DEPTH_FS);
+  P.box = makeProgram('fill', SH_BOX_VS, SH_BOX_FS);
+  P.far = makeProgram('far', SH_FAR_VS, SH_FAR_FS);
+  P.bokeh = makeProgram('bokeh', SH_SCREEN_VS, SH_BOKEH_FS);
+  P.ao = makeProgram('ao', SH_SCREEN_VS, SH_AO_FS);
+  P.aoBlur = makeProgram('aoblur', SH_SCREEN_VS, SH_AOBLUR_FS);
+  P.bright = makeProgram('bright', SH_SCREEN_VS, SH_BRIGHT_FS);
+  P.down = makeProgram('down', SH_SCREEN_VS, SH_DOWN_FS);
+  P.up = makeProgram('up', SH_SCREEN_VS, SH_UP_FS);
+  P.final = makeProgram('final', SH_SCREEN_VS, SH_FINAL_FS);
+  P.dof = makeProgram('dof', SH_SCREEN_VS, SH_DOF_FS);
+  REN.progs = P;
+
+  REN.keyDir = norm3(-0.48, 0.78, 0.42);
+  REN.rimDir = norm3(0.55, 0.5, -0.67);
+  gl.useProgram(P.tube.p);
+  const A = [], B = [], C = [];
+  for (const m of MATS) { A.push(m[0], m[1], m[2], m[3]); B.push(m[4], m[5], m[6], m[7]); C.push(m[8], m[9], m[10], m[11]); }
+  gl.uniform4fv(P.tube.u.uMatA, A);
+  gl.uniform4fv(P.tube.u.uMatB, B);
+  gl.uniform4fv(P.tube.u.uMatC, C);
+  gl.uniform1i(P.tube.u.uPos, 0); gl.uniform1i(P.tube.u.uFrm, 1); gl.uniform1i(P.tube.u.uMeta, 2); gl.uniform1i(P.tube.u.uShadow, 3);
+  gl.useProgram(P.depth.p);
+  gl.uniform1i(P.depth.u.uPos, 0); gl.uniform1i(P.depth.u.uFrm, 1); gl.uniform1i(P.depth.u.uMeta, 2);
+  setLook(LOOK);
+
+  REN.shadow = makeTarget(SHADOW_SIZE, SHADOW_SIZE, { color: null, depthTex: true });
+
+  REN.boxVao = gl.createVertexArray();
+  gl.bindVertexArray(REN.boxVao);
+  const vb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(FILL), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  REN.boxCount = FILL.length / 3;
+
+  const maxS = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES);
+  REN.samples = Math.min(qnum('msaa', 4), maxS && maxS.length ? maxS[0] : 4);
+  resizeRender(true);
+}
+
+// The light in the room. Tuned by eye; kept in one place.
+const LOOK = {
+  key: [1.0, 0.89, 0.74], keyI: 6.2,
+  rim: [1.0, 0.80, 0.56], rimI: 3.4,
+  sky: [0.40, 0.37, 0.33], gnd: [0.30, 0.21, 0.11],
+  glow: [1.0, 0.72, 0.43],
+  exposure: 0.78, ao: 0.9, bloom: 0.07, bloomThresh: 2.2, ca: 0.005,
+  farBlur: 7.0, midBlur: 5.0, aoRadius: 0.45, dofScale: qnum('dof', 1.1), dofMax: 7,
+};
+function setLook(L) {
+  const P = REN.progs;
+  gl.useProgram(P.tube.p);
+  gl.uniform3fv(P.tube.u.uKeyDir, REN.keyDir);
+  gl.uniform3fv(P.tube.u.uRimDir, REN.rimDir);
+  gl.uniform3f(P.tube.u.uKeyCol, L.key[0] * L.keyI, L.key[1] * L.keyI, L.key[2] * L.keyI);
+  gl.uniform3f(P.tube.u.uRimCol, L.rim[0] * L.rimI, L.rim[1] * L.rimI, L.rim[2] * L.rimI);
+  gl.uniform3fv(P.tube.u.uSky, L.sky);
+  gl.uniform3fv(P.tube.u.uGnd, L.gnd);
+  gl.useProgram(P.far.p);
+  gl.uniform3fv(P.far.u.uGlow, L.glow);
+}
+
+function resizeRender(force) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cw = Math.max(2, Math.round(canvas.clientWidth * dpr)), ch = Math.max(2, Math.round(canvas.clientHeight * dpr));
+  const W = Math.max(2, Math.round(cw * REN.scale)), H = Math.max(2, Math.round(ch * REN.scale));
+  if (!force && cw === REN.cw && ch === REN.ch && W === REN.W && H === REN.H) return;
+  canvas.width = cw; canvas.height = ch;
+  REN.cw = cw; REN.ch = ch; REN.W = W; REN.H = H;
+  const old = REN.T;
+  if (old) for (const k in old) freeTarget(old[k]);
+  const h2 = (v) => Math.max(1, Math.round(v / 2)), h4 = (v) => Math.max(1, Math.round(v / 4));
+  const T = {};
+  T.msaa = makeMsaa(W, H, REN.samples);
+  T.res = makeTarget(W, H, { depthTex: true });
+  T.dof = makeTarget(W, H);
+  T.ao = makeTarget(h2(W), h2(H), { color: gl.RG16F });
+  T.ao2 = makeTarget(h2(W), h2(H), { color: gl.RG16F });
+  T.mid = makeTarget(h2(W), h2(H), { depthRb: true });
+  T.mid2 = makeTarget(h2(W), h2(H));
+  T.far = makeTarget(h4(W), h4(H));
+  T.far2 = makeTarget(h4(W), h4(H));
+  T.blur = makeTarget(h2(W), h2(H));
+  T.blur2 = makeTarget(h2(W), h2(H));
+  T.b0 = makeTarget(h2(W), h2(H));
+  T.b1 = makeTarget(h4(W), h4(H));
+  T.b2 = makeTarget(Math.max(1, Math.round(W / 8)), Math.max(1, Math.round(H / 8)));
+  T.b3 = makeTarget(Math.max(1, Math.round(W / 16)), Math.max(1, Math.round(H / 16)));
+  REN.T = T;
+}
+
+// Frame time decides the render size: it drops quickly when the GPU struggles and creeps back up.
+function adaptScale(dtMs, now) {
+  if (qflag('scale')) return;
+  if (!REN.firstFrame) REN.firstFrame = now;
+  if (now - REN.firstFrame < 3000) return;   // shaders and uploads make the first frames slow; ignore them
+  REN.frameMs = lerp(REN.frameMs, Math.min(dtMs, 60), 0.05);
+  if (now - REN.lastScaleChange < 2500) return;
+  if (REN.frameMs > 21 && REN.scale > 0.5) {
+    REN.scale = Math.max(0.5, REN.scale * 0.88); REN.lastScaleChange = now; resizeRender(true);
+  } else if (REN.frameMs < 13.5 && REN.scale < 1) {
+    REN.scale = Math.min(1, REN.scale * 1.06); REN.lastScaleChange = now; resizeRender(true);
+  }
+}
+
+function drawLayer(prog, layer, x0, x1, y0, y1) {
+  for (const pool of POOL_LIST) {
+    const list = pool.bodies[layer];
+    let bound = false, runS = -1, runN = 0;
+    for (let k = 0; k < list.length; k++) {
+      const b = list[k];
+      if (b.empty || b.hidden || b.x1 < x0 || b.x0 > x1 || b.y1 < y0 || b.y0 > y1) continue;
+      if (!bound) { pool.bindFor(prog); bound = true; }
+      if (runN && b.s0 === runS + runN) runN += b.n;
+      else { if (runN) pool.drawRange(prog, runS, runN); runS = b.s0; runN = b.n; }
+    }
+    if (runN) pool.drawRange(prog, runS, runN);
+  }
+}
+
+function blurPass(src, dst, radius, boost = 0.25) {
+  const P = REN.progs.bokeh;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb);
+  gl.viewport(0, 0, dst.w, dst.h);
+  gl.useProgram(P.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex);
+  gl.uniform1i(P.u.uSrc, 0);
+  gl.uniform2f(P.u.uTexel, 1 / src.w, 1 / src.h);
+  gl.uniform1f(P.u.uRadius, radius);
+  gl.uniform1f(P.u.uBoost, boost);
+  fullscreen();
+}
+
+function screenPass(prog, dst, texs, uni) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fb : null);
+  gl.viewport(0, 0, dst ? dst.w : REN.cw, dst ? dst.h : REN.ch);
+  gl.useProgram(prog.p);
+  let unit = 0;
+  for (const name in texs) {
+    gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, texs[name]);
+    gl.uniform1i(prog.u[name], unit); unit++;
+  }
+  if (uni) uni(prog.u);
+  fullscreen();
+}
+
+function cameraMatrices() {
+  const aspect = REN.W / REN.H;
+  const fov = CAM.fov;
+  const el = CAM.elev, dist = CAM.dist;
+  const tx = CAM.x + CAM.shakeX, ty = CAM.y + CAM.shakeY, tz = CAM.z;
+  const ex = tx, ey = ty + Math.sin(el) * dist, ez = tz + Math.cos(el) * dist;
+  REN.eye[0] = ex; REN.eye[1] = ey; REN.eye[2] = ez;
+  M4.lookAt(ex, ey, ez, tx, ty, tz, 0, 1, 0, REN.view);
+  M4.perspective(fov, aspect, 4, 600, REN.proj);
+  M4.mul(REN.proj, REN.view, REN.vp);
+  M4.invert(REN.proj, REN.invProj);
+  REN.tanH = Math.tan(fov / 2) * aspect;
+  REN.tanV = Math.tan(fov / 2);
+  // Key light: an orthographic box that follows the view, snapped to its texels so edges do not crawl.
+  const k = REN.keyDir;
+  const fx = -k[0], fy = -k[1], fz = -k[2];
+  let rx = fy * 0 - fz * 1, ry = fz * 0 - fx * 0, rz = fx * 1 - fy * 0;
+  const rl = Math.hypot(rx, ry, rz); rx /= rl; ry /= rl; rz /= rl;
+  const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
+  const cx = CAM.x, cy = CAM.y + 2, cz = 0;
+  const half = 46, texel = (2 * half) / SHADOW_SIZE;
+  let cr = cx * rx + cy * ry + cz * rz, cu = cx * ux + cy * uy + cz * uz;
+  const cf = cx * fx + cy * fy + cz * fz;
+  cr = Math.round(cr / texel) * texel; cu = Math.round(cu / texel) * texel;
+  const sx = rx * cr + ux * cu + fx * cf, sy = ry * cr + uy * cu + fy * cf, sz = rz * cr + uz * cu + fz * cf;
+  M4.lookAt(sx - fx * 160, sy - fy * 160, sz - fz * 160, sx, sy, sz, 0, 1, 0, REN.lightView);
+  M4.ortho(-half, half, -half * 0.9, half * 0.9, 1, 330, REN.lightProj);
+  M4.mul(REN.lightProj, REN.lightView, REN.lightVP);
+}
+
+// ?prof=1: GPU time per frame from timer queries, where the browser allows them.
+const PROF = { ext: qflag('prof') ? gl.getExtension('EXT_disjoint_timer_query_webgl2') : null, pending: [], ms: 0 };
+function profBegin() {
+  if (!PROF.ext) return;
+  for (let i = PROF.pending.length - 1; i >= 0; i--) {
+    const q = PROF.pending[i];
+    if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+      if (!gl.getParameter(PROF.ext.GPU_DISJOINT_EXT)) PROF.ms = lerp(PROF.ms || 0, gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6, 0.1);
+      gl.deleteQuery(q); PROF.pending.splice(i, 1);
+    }
+  }
+  if (PROF.pending.length > 4) return;
+  PROF.q = gl.createQuery();
+  gl.beginQuery(PROF.ext.TIME_ELAPSED_EXT, PROF.q);
+}
+function profEnd() { if (PROF.ext && PROF.q) { gl.endQuery(PROF.ext.TIME_ELAPSED_EXT); PROF.pending.push(PROF.q); PROF.q = null; } }
+
+function renderFrame(time) {
+  profBegin();
+  renderScene(time);
+  profEnd();
+}
+
+function renderScene(time) {
+  const P = REN.progs, T = REN.T, W = REN.W, H = REN.H;
+  STATS.tris = 0; STATS.draws = 0;
+  cameraMatrices();
+  const ez = REN.eye[2];
+  const hwMain = (ez + 6) * REN.tanH + 2, hvMain = (ez + 6) * REN.tanV + 6;
+  const vx0 = CAM.x - hwMain, vx1 = CAM.x + hwMain;
+
+  // Shadow map (back faces only, so lit surfaces do not shadow themselves).
+  gl.bindFramebuffer(gl.FRAMEBUFFER, REN.shadow.fb);
+  gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
+  gl.clearDepth(1); gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
+  gl.enable(gl.CULL_FACE); gl.cullFace(gl.FRONT);
+  gl.disable(gl.BLEND);
+  gl.useProgram(P.depth.p);
+  gl.uniformMatrix4fv(P.depth.u.uViewProj, false, REN.lightVP);
+  drawLayer(P.depth, 'main', CAM.x - 52, CAM.x + 52, CAM.y - 40, CAM.y + 50);
+  gl.cullFace(gl.BACK);
+
+  // Far rack.
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.far.fb);
+  gl.viewport(0, 0, T.far.w, T.far.h);
+  gl.useProgram(P.far.p);
+  gl.uniformMatrix4fv(P.far.u.uViewProj, false, REN.vp);
+  gl.uniform4f(P.far.u.uRect, CAM.x - 300, -80, CAM.x + 300, 160);
+  gl.uniform1f(P.far.u.uZ, -110);
+  gl.bindVertexArray(EMPTY_VAO);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  blurPass(T.far, T.far2, LOOK.farBlur);
+  blurPass(T.far2, T.far, LOOK.farBlur * 0.7);
+
+  // Middle rack.
+  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.mid.fb);
+  gl.viewport(0, 0, T.mid.w, T.mid.h);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  bindPasta(P.tube);
+  const hwMid = (ez + 45) * REN.tanH + 3;
+  drawLayer(P.tube, 'mid', CAM.x - hwMid, CAM.x + hwMid, -100, 200);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  blurPass(T.mid, T.mid2, LOOK.midBlur);
+
+  // The sharp layer.
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.msaa.fb);
+  gl.viewport(0, 0, W, H);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+  bindPasta(P.tube);
+  drawLayer(P.tube, 'main', vx0, vx1, CAM.y - hvMain - 12, CAM.y + hvMain + 12);
+  gl.useProgram(P.box.p);
+  gl.uniformMatrix4fv(P.box.u.uViewProj, false, REN.vp);
+  gl.uniform3f(P.box.u.uCol, 0.035, 0.018, 0.007);
+  gl.bindVertexArray(REN.boxVao);
+  gl.drawArrays(gl.TRIANGLES, 0, REN.boxCount);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, T.msaa.fb);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, T.res.fb);
+  gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+
+  // Occlusion.
+  screenPass(P.ao, T.ao, { uDepth: T.res.depth }, (u) => {
+    gl.uniform2f(u.uFull, 1 / W, 1 / H);
+    gl.uniformMatrix4fv(u.uInvProj, false, REN.invProj);
+    gl.uniformMatrix4fv(u.uProj, false, REN.proj);
+    gl.uniform1f(u.uRadius, LOOK.aoRadius);
+  });
+  screenPass(P.aoBlur, T.ao2, { uSrc: T.ao.tex }, (u) => gl.uniform2f(u.uDir, 1 / T.ao.w, 0));
+  screenPass(P.aoBlur, T.ao, { uSrc: T.ao2.tex }, (u) => gl.uniform2f(u.uDir, 0, 1 / T.ao.h));
+
+  // Lens on the sharp layer: the plane of the path is in focus (a slight tilt, like a tilt lens).
+  {
+    const v = REN.view, tx = CAM.x + CAM.shakeX, ty = CAM.y + CAM.shakeY;
+    const nx = v[8], ny = v[9], nz = v[10];
+    const px = v[0] * tx + v[4] * ty + v[12], py = v[1] * tx + v[5] * ty + v[13], pz = v[2] * tx + v[6] * ty + v[14];
+    const k = W / 1920;
+    screenPass(P.dof, T.dof, { uSrc: T.res.tex, uDepth: T.res.depth, uAO: T.ao.tex }, (u) => {
+      gl.uniform2f(u.uTexel, 1 / W, 1 / H);
+      gl.uniform1f(u.uAOStr, LOOK.ao);
+      gl.uniformMatrix4fv(u.uInvProj, false, REN.invProj);
+      gl.uniform4f(u.uPlane, nx, ny, nz, -(nx * px + ny * py + nz * pz));
+      gl.uniform1f(u.uScale, LOOK.dofScale * k * (60 / CAM.dist));
+      gl.uniform1f(u.uMaxR, LOOK.dofMax * k);
+    });
+  }
+
+  // Bloom.
+  screenPass(P.bright, T.b0, { uSrc: T.res.tex }, (u) => { gl.uniform2f(u.uTexel, 1 / W, 1 / H); gl.uniform1f(u.uThresh, LOOK.bloomThresh); });
+  screenPass(P.down, T.b1, { uSrc: T.b0.tex }, (u) => gl.uniform2f(u.uTexel, 1 / T.b0.w, 1 / T.b0.h));
+  screenPass(P.down, T.b2, { uSrc: T.b1.tex }, (u) => gl.uniform2f(u.uTexel, 1 / T.b1.w, 1 / T.b1.h));
+  screenPass(P.down, T.b3, { uSrc: T.b2.tex }, (u) => gl.uniform2f(u.uTexel, 1 / T.b2.w, 1 / T.b2.h));
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  screenPass(P.up, T.b2, { uSrc: T.b3.tex }, (u) => { gl.uniform2f(u.uTexel, 1 / T.b3.w, 1 / T.b3.h); gl.uniform1f(u.uGain, 1); });
+  screenPass(P.up, T.b1, { uSrc: T.b2.tex }, (u) => { gl.uniform2f(u.uTexel, 1 / T.b2.w, 1 / T.b2.h); gl.uniform1f(u.uGain, 1); });
+  screenPass(P.up, T.b0, { uSrc: T.b1.tex }, (u) => { gl.uniform2f(u.uTexel, 1 / T.b1.w, 1 / T.b1.h); gl.uniform1f(u.uGain, 1); });
+  gl.disable(gl.BLEND);
+
+  // Out of focus (title, pause, the end): shrink first so highlights spread instead of sparkling.
+  const defocus = clamp(CAM.defocus, 0, 1);
+  if (defocus > 0.001) {
+    screenPass(P.down, T.blur, { uSrc: T.dof.tex }, (u) => gl.uniform2f(u.uTexel, 1 / W, 1 / H));
+    const r = (13 * defocus * W) / 1600 + 0.5;
+    blurPass(T.blur, T.blur2, r, 0.08);
+    blurPass(T.blur2, T.blur, r * 0.7, 0.08);
+  }
+
+  screenPass(P.final, null, { uFar: T.far.tex, uMid: T.mid2.tex, uMain: T.dof.tex, uMainBlur: T.blur.tex, uAO: T.ao.tex, uBloom: T.b0.tex }, (u) => {
+    gl.uniform1f(u.uDefocus, defocus);
+    gl.uniform1f(u.uAOStr, 0);
+    gl.uniform1f(u.uBloomStr, LOOK.bloom);
+    gl.uniform1f(u.uExposure, LOOK.exposure * CAM.exposure);
+    gl.uniform1f(u.uCA, LOOK.ca);
+    gl.uniform1f(u.uTime, time);
+    gl.uniform1f(u.uFade, CAM.fade);
+    gl.uniform2f(u.uRes, REN.cw, REN.ch);
+  });
+}
+
+function bindPasta(prog) {
+  gl.useProgram(prog.p);
+  gl.uniformMatrix4fv(prog.u.uViewProj, false, REN.vp);
+  gl.uniform3fv(prog.u.uCam, REN.eye);
+  M4.mul(REN.lightProj, REN.lightView, REN.lightVP);
+  gl.uniformMatrix4fv(prog.u.uShadowMat, false, REN.lightVP);
+  gl.uniform4f(prog.u.uShadowP, 1 / SHADOW_SIZE, 0.21, 0.00022, 0.006);
+  gl.uniform1f(prog.u.uDebug, qnum('dbg', 0));
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, REN.shadow.depth);
+}
+
+// ---- 50-player.js ----
+// The hero: a twirl of cooked spaghetti, wound as if on a fork, walking on two loose ends.
+// The controller is a plain box with tight numbers; the noodles chase it, so it moves crisply
+// and still wobbles, trails and squashes like what it is. Loops you pick up are worn as rings;
+// a hit knocks rings off, and with none left the twirl comes undone.
+
+const PCFG = {
+  w: 2.2, h: 3.3, maxV: 27, acc: 160, dec: 260, turn: 380, airAcc: 125, airDec: 45,
+  jumpV: 92, gUp: 300, gCut: 860, gDown: 590, maxFall: 175, coyote: 0.085, buffer: 0.13, bounceV: 74,
+};
+const MAX_RINGS = 8;
+const PLAYER = {
+  x: 0, y: 0, vx: 0, vy: 0, prevY: 0, ground: false, groundCh: '#', coyote: 0, jumpBuf: 0, jumping: false, face: 1,
+  alive: true, invuln: 0, lean: 0, sx: 1, sy: 1, sv: 0, bob: 0, phase: 0, deadT: 0, airT: 0,
+  rings: [], body: null, col: {}, stepPhase: [0, Math.PI], chain: 0, chainT: 0,
+};
+const TWIRL = { rest: null, kind: null, n: 10, C: 64, feet: [0, 0], hipDX: [-0.42, 0.42] };
+
+// Strands 0-1 end in legs, 2-3 in short tails hanging off the back, the rest are wound in.
+// Each wraps a band of the bundle at its own tilt and radius, which is what makes it look twirled.
+function initPlayer() {
+  const rng = makeRng(424242);
+  const pool = POOLS.s64, C = TWIRL.C, n = TWIRL.n;
+  const s0 = pool.alloc(n);
+  const rest = new Float32Array(n * C * 3), kind = new Uint8Array(n * C);
+  const hipA = [Math.atan2(0.55, -0.42), Math.atan2(0.55, 0.42)];
+  const pts = new Float32Array(C * 3);
+  const seg = 0.19;
+  for (let k = 0; k < n; k++) {
+    const free = k < 2 ? 7 : k < 4 ? 6 : 0;
+    const wound = C - 1 - free;
+    const r = k < 4 ? rng.range(1.0, 1.12) : rng.range(0.78, 1.16);
+    const len = wound * seg;
+    const yb = k < 2 ? 1.02 : rng.range(1.0, 1.9), yt = k < 2 ? rng.range(2.6, 3.15) : Math.min(3.25, yb + rng.range(0.7, 1.5));
+    const turns = Math.sqrt(Math.max(len * len - (yt - yb) ** 2, 1)) / (TAU * r);
+    const ax = rng.gauss() * 0.16, az = rng.gauss() * 0.16;
+    let a0, a1, y0, y1;
+    if (k < 2) { a1 = hipA[k]; a0 = a1 - turns * TAU; y0 = yt; y1 = yb; }
+    else if (k < 4) { a0 = rng.range(0, TAU); a1 = a0 + turns * TAU; y0 = yt; y1 = yb; }
+    else { a0 = rng.range(0, TAU); a1 = a0 + turns * TAU * rng.sign(); y0 = yb; y1 = yt; }
+    for (let i = 0; i <= wound; i++) {
+      const t = i / wound, a = lerp(a0, a1, t);
+      const y = lerp(y0, y1, t);
+      const shape = 1 - 0.16 * ((y - 2.15) / 1.1) ** 2;
+      let x = Math.cos(a) * r * shape, z = Math.sin(a) * r * shape;
+      const yy = y + x * ax + z * az;
+      pts[i * 3] = x - (y - 2.1) * ax * 0.5; pts[i * 3 + 1] = yy; pts[i * 3 + 2] = z - (y - 2.1) * az * 0.5;
+    }
+    const j = wound * 3;
+    for (let i = wound + 1; i < C; i++) {
+      const m = i - wound;
+      const hx = pts[j], hy = pts[j + 1], hz = pts[j + 2];
+      let dx, dy, dz;
+      if (k < 2) { dx = TWIRL.hipDX[k] * 1.05 - hx; dy = -hy; dz = 0.42 - hz; }
+      else { dx = hx * 0.2; dy = -1; dz = hz * 0.2 - 0.3; }
+      const dl = Math.hypot(dx, dy, dz);
+      pts[i * 3] = hx + (dx / dl) * seg * m; pts[i * 3 + 1] = hy + (dy / dl) * seg * m; pts[i * 3 + 2] = hz + (dz / dl) * seg * m;
+    }
+    for (let i = 0; i < C; i++) {
+      rest[(k * C + i) * 3] = pts[i * 3]; rest[(k * C + i) * 3 + 1] = pts[i * 3 + 1]; rest[(k * C + i) * 3 + 2] = pts[i * 3 + 2];
+      kind[k * C + i] = i <= wound ? 0 : k < 2 ? 1 : 2;
+    }
+    putStrand(pool, s0 + k, pts, C, 0.1, 0, rng() * 100, 0);
+    pool.seg[s0 + k] = seg;
+  }
+  TWIRL.rest = rest; TWIRL.kind = kind;
+  PLAYER.body = new Body(pool, s0, n, { sim: true, keep: true, targets: true, iters: 3, grav: 1, damp: 0.985, fric: 0.45, bend: 0.1, owner: PLAYER });
+  PLAYER.body.cgroup = PLAYER;
+}
+
+function placePlayer(x, y) {
+  const P = PLAYER;
+  Object.assign(P, { x, y, vx: 0, vy: 0, prevY: y, ground: true, coyote: 0, jumpBuf: 0, jumping: false, face: 1, alive: true, invuln: 0, lean: 0, sx: 1, sy: 1, sv: 0, bob: 0, deadT: 0, airT: 0, chain: 0 });
+  P.rings.length = 0;
+  const pool = POOLS.s64, C = TWIRL.C, base = P.body.s0 * C;
+  for (let k = 0; k < TWIRL.n * C; k++) {
+    const o = (base + k) * 4, q = (base + k) * 3;
+    pool.pos[o] = x + TWIRL.rest[k * 3]; pool.pos[o + 1] = y + TWIRL.rest[k * 3 + 1]; pool.pos[o + 2] = TWIRL.rest[k * 3 + 2];
+    pool.prev[q] = pool.pos[o]; pool.prev[q + 1] = pool.pos[o + 1]; pool.prev[q + 2] = pool.pos[o + 2];
+  }
+  twirlTargets(1);
+  P.body.wake();
+  P.body.touch();
+}
+
+function keyLeft() { return INPUT.keys.has('ArrowLeft') || INPUT.keys.has('KeyA'); }
+function keyRight() { return INPUT.keys.has('ArrowRight') || INPUT.keys.has('KeyD'); }
+function keyJump() { for (const c of JUMP_CODES) if (INPUT.keys.has(c)) return true; return false; }
+
+function playerStep(dt) {
+  const P = PLAYER;
+  const control = GAME.mode === 'play' && P.alive;
+  const dir = control ? (keyRight() ? 1 : 0) - (keyLeft() ? 1 : 0) : 0;
+  let a;
+  if (dir !== 0) a = P.ground ? (P.vx * dir < -0.5 ? PCFG.turn : PCFG.acc) : PCFG.airAcc;
+  else a = P.ground ? PCFG.dec : PCFG.airDec;
+  if (P.alive) P.vx = approach(P.vx, dir * PCFG.maxV, a * dt);
+  if (dir) P.face = dir;
+  P.jumpBuf -= dt;
+  P.coyote -= dt;
+  if (P.ground) P.coyote = PCFG.coyote;
+  if (control && P.jumpBuf > 0 && P.coyote > 0) {
+    P.vy = PCFG.jumpV; P.ground = false; P.coyote = 0; P.jumpBuf = 0; P.jumping = true;
+    P.sy = 1.16; P.sv = 0;
+    SND.jump(P.x);
+  }
+  const g = P.vy > 0 ? (P.jumping && keyJump() ? PCFG.gUp : PCFG.gCut) : PCFG.gDown;
+  P.vy = Math.max(P.vy - g * dt, -PCFG.maxFall);
+  if (!P.alive) P.vx *= 0.96;
+  P.x += P.vx * dt;
+  if (P.alive) playerResolveX();
+  P.prevY = P.y;
+  P.y += P.vy * dt;
+  if (P.alive || P.y > -6) playerResolveY();
+  if (P.y < -40) P.y = -40;
+  if (!P.ground) P.airT += dt; else P.airT = 0;
+  if (P.y < -22 && P.alive) killPlayer('fall');
+  P.invuln = Math.max(0, P.invuln - dt);
+  P.chainT -= dt; if (P.chainT <= 0) P.chain = 0;
+
+  // Shape: lean into the run, squash on landing, spring back.
+  P.lean = damp(P.lean, -P.vx * 0.0065 + (P.ground ? 0 : -P.vx * 0.002), 12, dt);
+  P.sv += (1 - P.sy) * 420 * dt - P.sv * 17 * dt;
+  P.sy += P.sv * dt;
+  P.sx = 1 / Math.sqrt(Math.max(P.sy, 0.5));
+  const speed = Math.abs(P.vx);
+  if (P.ground && speed > 1.5) P.phase += speed * dt * (TAU / 2.6);
+  P.bob = P.ground ? Math.abs(Math.sin(P.phase)) * Math.min(speed / PCFG.maxV, 1) * 0.12 : 0;
+
+  if (P.alive) { twirlTargets(dt); feetStep(dt); }
+  ringTargets();
+  const C = P.col;
+  setCollider(C, P.x, P.y + 1.15 + P.bob, 0, P.x, P.y + 2.85 + P.bob, 0, P.alive ? 1.15 : 0.01, P.vx, P.vy, 0, 0.35);
+  C.owner = PLAYER;
+  if (P.alive) COLLIDERS.push(C);
+}
+
+function landPlayer(top, ch) {
+  const P = PLAYER;
+  const v = -P.vy;
+  P.y = top; P.vy = 0; P.ground = true; P.jumping = false; P.groundCh = ch;
+  if (P.airT > 0.06 && v > 25) {
+    P.sy = 1 - Math.min(0.28, v * 0.0017); P.sv = 0;
+    SND.land(P.x, v, ch);
+    if (v > 120) CAM.shake = Math.max(CAM.shake, 0.35);
+  }
+}
+
+function playerResolveX() {
+  const P = PLAYER, hw = PCFG.w / 2;
+  const rTop = rowOf(P.y + PCFG.h - 0.02), rBot = rowOf(P.y + 0.02);
+  if (P.vx > 0) {
+    const i = colOf(P.x + hw);
+    for (let r = rTop; r <= rBot; r++) if (solidAt(i, r)) { P.x = i * TILE - hw - 0.0005; P.vx = 0; break; }
+  } else if (P.vx < 0) {
+    const i = colOf(P.x - hw);
+    for (let r = rTop; r <= rBot; r++) if (solidAt(i, r)) { P.x = (i + 1) * TILE + hw + 0.0005; P.vx = 0; break; }
+  }
+}
+
+function playerResolveY() {
+  const P = PLAYER, hw = PCFG.w / 2 - 0.02;
+  const i0 = colOf(P.x - hw), i1 = colOf(P.x + hw);
+  P.ground = false;
+  if (P.vy <= 0) {
+    const r = rowOf(P.y);
+    let top = -1e9, ch = '#';
+    for (let i = i0; i <= i1; i++) if (solidAt(i, r)) { const t = rowY(r) + TILE; if (t > top) { top = t; ch = tileCh(i, r); } }
+    if (top > -1e9 && P.y < top) landPlayer(top, ch);
+    for (const br of BRIDGES) {
+      if (!br.intact) continue;
+      const sy = bridgeSurface(br, P.x);
+      if (P.x + hw > br.x0 && P.x - hw < br.x1 && P.prevY >= sy - 0.3 && P.y <= sy) {
+        landPlayer(sy, '=');
+        br.loaded = true; br.loadX = P.x;
+      }
+    }
+  } else {
+    const r = rowOf(P.y + PCFG.h);
+    const hits = [];
+    for (let i = i0; i <= i1; i++) if (solidAt(i, r)) hits.push(i);
+    if (!hits.length) return;
+    if (hits.length === 1 && i0 !== i1) { // clipped a corner: slide past it
+      const i = hits[0];
+      const over = i === i0 ? (i + 1) * TILE - (P.x - hw) : P.x + hw - i * TILE;
+      if (over < 0.8) { P.x += i === i0 ? over + 0.02 : -(over + 0.02); return; }
+    }
+    let best = hits[0];
+    for (const i of hits) if (Math.abs((i + 0.5) * TILE - P.x) < Math.abs((best + 0.5) * TILE - P.x)) best = i;
+    P.y = rowY(r) - PCFG.h - 0.001;
+    P.vy = -10;
+    P.jumping = false;
+    bumpTile(best, r);
+  }
+}
+
+// Wound points chase the twirl's rest shape; the twirl leans, squashes and bobs as one.
+function twirlTargets() {
+  const P = PLAYER, pool = POOLS.s64, C = TWIRL.C, base = P.body.s0 * C;
+  const ca = Math.cos(P.lean), sa = Math.sin(P.lean);
+  const k = P.invuln > 0 ? 0.07 : 0.24;
+  for (let j = 0; j < TWIRL.n * C; j++) {
+    const kd = TWIRL.kind[j];
+    if (kd !== 0) { pool.tk[base + j] = 0; continue; }
+    const x = TWIRL.rest[j * 3] * P.sx, y = TWIRL.rest[j * 3 + 1] * P.sy, z = TWIRL.rest[j * 3 + 2] * P.sx;
+    const q = (base + j) * 3;
+    pool.tgt[q] = P.x + x * ca - y * sa;
+    pool.tgt[q + 1] = P.y + P.bob + x * sa + y * ca;
+    pool.tgt[q + 2] = z;
+    pool.tk[base + j] = k;
+  }
+}
+
+// Feet: a running cycle tied to distance travelled. On the ground the foot pushes back; in the air it swings forward.
+function feetStep(dt) {
+  const P = PLAYER, pool = POOLS.s64, C = TWIRL.C;
+  const speed = Math.abs(P.vx), dir = P.vx >= 0 ? 1 : -1;
+  const run = Math.min(speed / 6, 1);
+  for (let k = 0; k < 2; k++) {
+    const p = (P.body.s0 + k) * C + C - 1;
+    const q = p * 3;
+    if (!P.ground) { pool.tk[p] = 0; continue; }
+    const ph = P.phase + k * Math.PI;
+    const hx = P.x + TWIRL.hipDX[k] * 1.05;
+    const fx = hx + dir * 0.62 * Math.cos(ph) * run;
+    const lift = Math.max(0, -Math.sin(ph)) * 0.55 * run;
+    pool.tgt[q] = fx; pool.tgt[q + 1] = P.y + 0.1 + lift; pool.tgt[q + 2] = 0.42;
+    pool.tk[p] = 0.7;
+    // a footfall each time a foot comes down
+    const prev = P.stepPhase[k];
+    const now = Math.floor((ph + Math.PI) / TAU);
+    if (run > 0.3 && now !== prev) { P.stepPhase[k] = now; SND.step(fx, P.groundCh); }
+    else P.stepPhase[k] = now;
+  }
+}
+
+function ringTargets() {
+  const P = PLAYER;
+  for (let j = 0; j < P.rings.length; j++) {
+    const L = P.rings[j], pool = POOLS.s32, base = L.s * 32;
+    const cy = P.y + P.bob + (1.22 + j * 0.25) * P.sy, R = 1.3 * P.sx;
+    const ca = Math.cos(P.lean), sa = Math.sin(P.lean);
+    for (let i = 0; i < 32; i++) {
+      const a = (i / 32) * TAU + L.phase;
+      const lx = Math.cos(a) * R, lz = Math.sin(a) * R, ly = (cy - P.y) + Math.sin(a) * L.tilt;
+      const q = (base + i) * 3;
+      pool.tgt[q] = P.x + lx * ca - ly * sa;
+      pool.tgt[q + 1] = P.y + lx * sa + ly * ca;
+      pool.tgt[q + 2] = lz;
+      pool.tk[base + i] = P.alive ? (P.invuln > 0 ? 0.12 : 0.3) : 0;
+    }
+  }
+}
+
+function hurtPlayer() {
+  const P = PLAYER;
+  if (!P.alive || P.invuln > 0 || GAME.mode !== 'play') return;
+  if (!P.rings.length) { killPlayer('hit'); return; }
+  const lose = Math.min(3, P.rings.length);
+  for (let k = 0; k < lose; k++) {
+    const L = P.rings.pop();
+    const vx = (Math.random() - 0.5) * 70, vy = 45 + Math.random() * 45, vz = 15 + Math.random() * 25;
+    flingLoop(L, vx, vy, vz);
+  }
+  P.invuln = 1.6;
+  P.vy = 55; P.vx = -P.face * 18; P.ground = false; P.jumping = false;
+  SND.unravel(P.x);
+  CAM.shake = Math.max(CAM.shake, 0.5);
+  GAME.hitstop = 0.06;
+}
+
+function killPlayer(why) {
+  const P = PLAYER;
+  if (!P.alive) return;
+  P.alive = false;
+  P.deadT = 0;
+  const pool = POOLS.s64, C = TWIRL.C, base = P.body.s0 * C;
+  for (let j = 0; j < TWIRL.n * C; j++) pool.tk[base + j] = 0;
+  for (const L of P.rings.splice(0)) flingLoop(L, (Math.random() - 0.5) * 40, 20 + Math.random() * 30, 10);
+  if (why === 'hit') { P.vy = 40; GAME.hitstop = 0.08; CAM.shake = 0.6; }
+  P.body.fric = 0.7;
+  SND.die(P.x, why);
+  GAME.mode = 'dead';
+  GAME.deadT = 0;
+}
+
+// ---- 55-enemies.js ----
+// Clumps: balls of squid-ink spaghetti that roll along the floor. Land on one and it splats flat,
+// its strands left lying where they fell. Touch one from the side and it costs you rings.
+
+const ECFG = { r: 1.25, speed: 6.5 };
+const ENEMIES = [];
+
+function initEnemies() {
+  const rng = makeRng(777);
+  for (const spec of LEVEL.enemies) {
+    const pool = POOLS.s32, C = 32, n = 6;
+    const s0 = pool.alloc(n);
+    const rest = new Float32Array(n * C * 3), kind = new Uint8Array(n * C);
+    const pts = new Float32Array(C * 3);
+    for (let k = 0; k < n; k++) {
+      let ax = rng.gauss(), ay = rng.gauss(), az = rng.gauss();
+      let al = Math.hypot(ax, ay, az); ax /= al; ay /= al; az /= al;
+      const rr = 0.76 + 0.12 * (k % 3) + rng.range(-0.03, 0.03);
+      let ang = rng.range(0, TAU);
+      const tail = k < 2 ? 7 : 0;
+      const seg = 0.21;
+      for (let i = 0; i < C; i++) {
+        // basis perpendicular to the drifting axis
+        let ux = ay * 0.3 - az * 0.9, uy = az * 0.1 - ax * 0.3, uz = ax * 0.9 - ay * 0.1;
+        let ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
+        const vx = ay * uz - az * uy, vy = az * ux - ax * uz, vz = ax * uy - ay * ux;
+        let x = rr * (Math.cos(ang) * ux + Math.sin(ang) * vx);
+        let y = rr * (Math.cos(ang) * uy + Math.sin(ang) * vy);
+        let z = rr * (Math.cos(ang) * uz + Math.sin(ang) * vz);
+        if (i >= C - tail) { const m = (i - (C - tail - 1)) * seg; const l = Math.hypot(x, y, z) || 1; x += (x / l) * m; y += (y / l) * m; z += (z / l) * m; }
+        pts[i * 3] = x; pts[i * 3 + 1] = y; pts[i * 3 + 2] = z;
+        rest[(k * C + i) * 3] = x; rest[(k * C + i) * 3 + 1] = y; rest[(k * C + i) * 3 + 2] = z;
+        kind[k * C + i] = i >= C - tail ? 1 : 0;
+        ang += seg / rr;
+        ax += rng.gauss() * 0.05; ay += rng.gauss() * 0.05; az += rng.gauss() * 0.05;
+        al = Math.hypot(ax, ay, az); ax /= al; ay /= al; az /= al;
+      }
+      putStrand(pool, s0 + k, pts, C, 0.1, 3, rng() * 100, 0);
+    }
+    const e = { spec, x: 0, y: 0, vx: -ECFG.speed, vy: 0, roll: 0, state: 'walk', t: 0, rest, kind, s0, n, col: {}, squash: 1 };
+    e.body = new Body(pool, s0, n, { sim: true, targets: true, iters: 2, grav: 1, damp: 0.99, fric: 0.5, bend: 0.06, owner: e });
+    e.body.cgroup = e;
+    ENEMIES.push(e);
+  }
+}
+
+function placeEnemy(e) {
+  e.x = e.spec.i * TILE + 1.5; e.vx = -ECFG.speed; e.vy = 0; e.roll = 0; e.state = 'walk'; e.t = 0; e.squash = 1;
+  let r = 12;
+  while (r > 0 && solidAt(colOf(e.x), r)) r--;
+  e.y = rowY(r);
+  const pool = POOLS.s32, C = 32;
+  for (let j = 0; j < e.n * C; j++) {
+    const p = e.s0 * C + j, o = p * 4, q = p * 3;
+    pool.pos[o] = e.x + e.rest[j * 3]; pool.pos[o + 1] = e.y + ECFG.r + e.rest[j * 3 + 1]; pool.pos[o + 2] = e.rest[j * 3 + 2];
+    pool.prev[q] = pool.pos[o]; pool.prev[q + 1] = pool.pos[o + 1]; pool.prev[q + 2] = pool.pos[o + 2];
+    pool.tk[p] = e.kind[j] === 0 ? 0.3 : 0;
+  }
+  e.body.keep = true; e.body.fric = 0.5; e.body.sleep(); e.body.touch(); e.body.measure();
+}
+
+function enemySolid(e, i, r) {
+  // Clumps treat a gap's edge as a wall only if there is a floor ahead; they roll off ledges.
+  return solidAt(i, r);
+}
+
+function enemiesStep(dt) {
+  const P = PLAYER;
+  for (const e of ENEMIES) {
+    if (e.state === 'gone') continue;
+    if (e.state !== 'walk') { e.t += dt; continue; }
+    const near = Math.abs(e.x - CAM.x) < 50;
+    if (!near) { if (e.body.awake) e.body.sleep(); continue; }
+    if (!e.body.awake) e.body.wake();
+    const R = ECFG.r;
+    e.x += e.vx * dt;
+    const dir = Math.sign(e.vx);
+    const iw = colOf(e.x + dir * R);
+    const rTop = rowOf(e.y + 2 * R - 0.1), rBot = rowOf(e.y + 0.1);
+    for (let r = rTop; r <= rBot; r++) {
+      if (enemySolid(e, iw, r)) { e.x = dir > 0 ? iw * TILE - R - 0.001 : (iw + 1) * TILE + R + 0.001; e.vx = -e.vx; break; }
+    }
+    for (const o of ENEMIES) {
+      if (o === e || o.state !== 'walk') continue;
+      if (Math.abs(o.x - e.x) < 2 * R && Math.abs(o.y - e.y) < 2 * R && (o.x - e.x) * e.vx > 0) { e.vx = -e.vx; o.vx = -o.vx; }
+    }
+    e.vy = Math.max(e.vy - 981 * dt, -200);
+    e.y += e.vy * dt;
+    const rr = rowOf(e.y);
+    let ground = false;
+    for (const ix of [colOf(e.x - R * 0.5), colOf(e.x + R * 0.5)]) {
+      if (solidAt(ix, rr)) { const top = rowY(rr) + TILE; if (e.y < top) { e.y = top; if (e.vy < -60) SND.pat(e.x, -e.vy * 0.5); e.vy = 0; ground = true; } }
+    }
+    for (const br of BRIDGES) {
+      if (!br.intact || e.x < br.x0 || e.x > br.x1) continue;
+      const sy = bridgeSurface(br, e.x);
+      if (e.y <= sy && e.y > sy - 1.5 && e.vy <= 0) { e.y = sy; e.vy = 0; ground = true; }
+    }
+    if (ground) e.roll -= (e.vx * dt) / R;
+    if (e.y < -30) { e.state = 'gone'; e.body.sleep(); for (let s = e.s0; s < e.s0 + e.n; s++) POOLS.s32.setCount(s, 0); e.body.touch(); e.body.measure(); continue; }
+    enemyTargets(e);
+    setCollider(e.col, e.x, e.y + R, 0, e.x, e.y + R, 0, R * 0.95, e.vx, e.vy, 0, 0.4);
+    e.col.owner = e;
+    COLLIDERS.push(e.col);
+    // the hero
+    if (P.alive && GAME.mode === 'play') {
+      const ox = Math.abs(P.x - e.x) < PCFG.w / 2 + R * 0.8;
+      const oy = P.y < e.y + 2 * R - 0.1 && P.y + PCFG.h > e.y + 0.3;
+      if (ox && oy) {
+        if (P.vy < 0 && P.prevY >= e.y + R * 1.05) stompEnemy(e);
+        else hurtPlayer(e);
+      }
+    }
+  }
+}
+
+function enemyTargets(e) {
+  const pool = POOLS.s32, C = 32, R = ECFG.r;
+  const c = Math.cos(e.roll), s = Math.sin(e.roll);
+  for (let j = 0; j < e.n * C; j++) {
+    if (e.kind[j] !== 0) continue;
+    const x = e.rest[j * 3], y = e.rest[j * 3 + 1], z = e.rest[j * 3 + 2];
+    const q = (e.s0 * C + j) * 3;
+    pool.tgt[q] = e.x + x * c - y * s;
+    pool.tgt[q + 1] = e.y + R + x * s + y * c;
+    pool.tgt[q + 2] = z;
+  }
+}
+
+// Let go of the shape: the strands drop and spread where they land.
+function splatEnemy(e, pop) {
+  const pool = POOLS.s32, C = 32;
+  e.state = 'splat'; e.t = 0;
+  for (let j = 0; j < e.n * C; j++) {
+    const p = e.s0 * C + j, o = p * 4, q = p * 3;
+    pool.tk[p] = 0;
+    const dx = pool.pos[o] - e.x, dz = pool.pos[o + 2];
+    const vx = dx * 55 + e.vx * 0.3, vy = pop ? 55 + Math.random() * 40 : -50 - Math.random() * 30, vz = dz * 45;
+    pool.prev[q] = pool.pos[o] - vx * DT; pool.prev[q + 1] = pool.pos[o + 1] - vy * DT; pool.prev[q + 2] = pool.pos[o + 2] - vz * DT;
+  }
+  e.body.keep = false; e.body.fric = 0.75; e.body.wake(); e.body.setKick(true);
+}
+
+function stompEnemy(e) {
+  const P = PLAYER;
+  splatEnemy(e, false);
+  P.vy = keyJump() ? PCFG.jumpV * 0.96 : PCFG.bounceV;
+  P.jumping = keyJump();
+  P.y = Math.max(P.y, e.y + ECFG.r * 1.4);
+  P.sy = 1.12; P.sv = 0;
+  SND.splat(e.x);
+  GAME.hitstop = 0.045;
+  CAM.shake = Math.max(CAM.shake, 0.3);
+}
+
+// ---- 60-items.js ----
+// Loops (spinach spaghetti tied in a ring), bundles that burst, rods laid across gaps,
+// and strands hanging from above that you push through.
+
+const LOOPS = [];
+const BRIDGES = [];
+const HANGERS = [];
+
+// ---- loops ----
+function makeLoop(rng, x, y, z) {
+  const pool = POOLS.s32, C = 32, s = pool.alloc(1);
+  const pts = new Float32Array(C * 3), R = 1.3, ph = rng.range(0, TAU);
+  for (let i = 0; i < C; i++) {
+    const a = (i / C) * TAU + ph;
+    const w = 1 + 0.06 * Math.sin(a * 3 + ph);
+    pts[i * 3] = x + Math.cos(a) * R * w; pts[i * 3 + 1] = y + 0.1 + Math.sin(a * 2 + ph) * 0.03; pts[i * 3 + 2] = z + Math.sin(a) * R * w;
+  }
+  putStrand(pool, s, pts, C, 0.1, 2, rng() * 100, F_CLOSED);
+  const L = { s, x, y, z, state: 'free', t: 0, phase: rng.range(0, TAU), tilt: rng.range(-0.12, 0.12), hidden: false };
+  L.body = new Body(pool, s, 1, { sim: true, targets: true, iters: 3, grav: 1, damp: 0.99, fric: 0.6, bend: 0.3, owner: L, kick: true, hitMin: 40 });
+  L.body.onHit = (b, s2, i, speed, px) => { if (i === 0) SND.pat(px, speed * 0.4); };
+  LOOPS.push(L);
+  return L;
+}
+
+function initLoops() {
+  const rng = makeRng(5150);
+  for (const spec of LEVEL.loops) {
+    const x = spec.i * TILE + 1.5;
+    let r = spec.r + 1;
+    while (r < 13 && !solidAt(spec.i, r)) r++;
+    const ch = tileCh(spec.i, r);
+    const y = rowY(r) + TILE + (ch === '#' ? 0.04 : 0.06);
+    makeLoop(rng, x, y, rng.range(-0.6, 0.6));
+  }
+  for (const b of LEVEL.blocks) {
+    if (b.t !== 'R') continue;
+    b.loops = [];
+    for (let k = 0; k < 4; k++) {
+      const L = makeLoop(rng, b.i * TILE + 1.5, rowY(b.r) + 1.2, 0);
+      L.hidden = true; L.state = 'hidden';
+      POOLS.s32.setCount(L.s, 0);
+      L.body.measure();
+      b.loops.push(L);
+    }
+  }
+}
+
+function loopCenter(L) {
+  const pool = POOLS.s32, base = L.s * 32;
+  let x = 0, y = 0, z = 0;
+  for (let i = 0; i < 32; i++) { const o = (base + i) * 4; x += pool.pos[o]; y += pool.pos[o + 1]; z += pool.pos[o + 2]; }
+  return [x / 32, y / 32, z / 32];
+}
+
+function setLoopPull(L, k) { const base = L.s * 32; for (let i = 0; i < 32; i++) POOLS.s32.tk[base + i] = k; }
+
+function collectLoop(L) {
+  const P = PLAYER;
+  P.chain++; P.chainT = 1.2;
+  SND.slurp(P.x, P.chain);
+  if (P.rings.length >= MAX_RINGS) { // full: it is pulled in and gone
+    L.state = 'gone';
+    POOLS.s32.setCount(L.s, 0); L.body.sleep(); L.body.measure(); L.body.touch();
+    return;
+  }
+  L.state = 'worn';
+  L.phase = Math.random() * TAU; L.tilt = (Math.random() - 0.5) * 0.25;
+  P.rings.push(L);
+  L.body.keep = true; L.body.cgroup = PLAYER; L.body.wake();
+}
+
+function flingLoop(L, vx, vy, vz) {
+  const pool = POOLS.s32, base = L.s * 32;
+  setLoopPull(L, 0);
+  for (let i = 0; i < 32; i++) {
+    const o = (base + i) * 4, q = (base + i) * 3;
+    pool.prev[q] = pool.pos[o] - vx * DT; pool.prev[q + 1] = pool.pos[o + 1] - vy * DT; pool.prev[q + 2] = pool.pos[o + 2] - vz * DT;
+  }
+  L.state = 'flung'; L.t = 0;
+  L.body.keep = false; L.body.cgroup = null; L.body.wake();
+}
+
+function loopsStep(dt) {
+  const P = PLAYER;
+  const cx = P.x, cy = P.y + 1.9;
+  for (const L of LOOPS) {
+    if (L.state === 'flung') { L.t += dt; if (L.t > 0.9) L.state = 'free'; continue; }
+    if (L.state !== 'free' || !P.alive || GAME.mode !== 'play') continue;
+    const b = L.body;
+    if (b.x1 < cx - 2.5 || b.x0 > cx + 2.5 || b.y1 < P.y - 0.5 || b.y0 > P.y + PCFG.h + 0.6) continue;
+    const c = loopCenter(L);
+    const dx = c[0] - cx, dy = c[1] - cy;
+    if (Math.abs(dx) < 2.1 && Math.abs(dy) < 2.6 && Math.abs(c[2]) < 3) collectLoop(L);
+  }
+}
+
+// ---- bundles ----
+function bumpTile(i, r) {
+  const blk = LEVEL.blocks.find((b) => b.i === i && b.r === r && !b.broken);
+  if (!blk) { SND.bump((i + 0.5) * TILE); return; }
+  breakBlock(blk);
+}
+
+function breakBlock(blk) {
+  blk.broken = true;
+  setTile(blk.i, blk.r, ' ');
+  blk.box.on = false;
+  const b = blk.rods, pool = b.pool;
+  b.onHit = rodHit;
+  b.setKick(true);
+  b.wake();
+  const rnd = Math.random;
+  for (let s = b.s0; s < b.s0 + blk.nRods; s++) {
+    const o0 = s * 2 * 4, o1 = o0 + 4, q0 = s * 2 * 3, q1 = q0 + 3;
+    const mx = (pool.pos[o0] + pool.pos[o1]) * 0.5 - blk.cx, my = (pool.pos[o0 + 1] + pool.pos[o1 + 1]) * 0.5 - blk.cy;
+    const vx = mx * 13 + (rnd() - 0.5) * 16, vy = 14 + rnd() * 38 + my * 9, vz = 6 + (rnd() - 0.4) * 22;
+    const sx = (rnd() - 0.5) * 55, sy = (rnd() - 0.5) * 55;
+    pool.prev[q0] = pool.pos[o0] - (vx + sx) * DT; pool.prev[q0 + 1] = pool.pos[o0 + 1] - (vy + sy) * DT; pool.prev[q0 + 2] = pool.pos[o0 + 2] - vz * DT;
+    pool.prev[q1] = pool.pos[o1] - (vx - sx) * DT; pool.prev[q1 + 1] = pool.pos[o1 + 1] - (vy - sy) * DT; pool.prev[q1 + 2] = pool.pos[o1 + 2] - vz * DT;
+  }
+  // Dry spaghetti rarely breaks in two: a good share snap at once, some into three.
+  const snaps = Math.round(blk.nRods * 0.3);
+  for (let k = 0; k < snaps; k++) splitRod(b, b.s0 + Math.floor(rnd() * blk.nRods), true);
+  // With nothing on them, the stilts tip over.
+  if (blk.stilts) {
+    const lean = rnd() < 0.5 ? -1 : 1;
+    for (const sb of blk.stilts) {
+      sb.onHit = rodHit; sb.setKick(true); sb.wake();
+      const sp = sb.pool;
+      for (let s = sb.s0; s < sb.s0 + sb.n; s++) {
+        const top = sp.pos[s * 8 + 1] > sp.pos[s * 8 + 5] ? 0 : 1, q = (s * 2 + top) * 3;
+        sp.prev[q] -= lean * (8 + rnd() * 6) * DT; sp.prev[q + 2] += (2 + rnd() * 4) * DT;
+      }
+    }
+  }
+  blk.tie.setKick(true);
+  blk.tie.wake();
+  const tp = blk.tie.pool, tb = blk.tie.s0 * 64;
+  for (let i = 0; i < 64; i++) { const q = (tb + i) * 3; tp.prev[q + 1] -= 30 * DT; }
+  if (blk.loops) {
+    for (let k = 0; k < blk.loops.length; k++) {
+      const L = blk.loops[k];
+      POOLS.s32.setCount(L.s, 32);
+      L.hidden = false;
+      const ang = -0.9 + (k / 3) * 1.8;
+      flingLoop(L, Math.sin(ang) * 30, 70 + rnd() * 25, 6 + rnd() * 8);
+      L.t = 0.55;
+    }
+  }
+  SND.snap(blk.cx, 5 + Math.floor(rnd() * 3), 1);
+  CAM.shake = Math.max(CAM.shake, 0.45);
+  GAME.hitstop = Math.max(GAME.hitstop, 0.03);
+  for (const e of ENEMIES) {
+    if (e.state === 'walk' && Math.abs(e.x - blk.cx) < TILE && Math.abs(e.y - (blk.cy + blk.hs)) < 0.8) { splatEnemy(e, true); SND.splat(e.x); }
+  }
+}
+
+let rodTicks = 0;
+function rodHit(b, s, i, speed, x) {
+  SND.tick(x, speed);
+  if (speed > 80 && b.spares && b.spares.length && Math.random() < 0.22) splitRod(b, s, false);
+}
+
+// Snap a two-point rod somewhere along its length; the far piece goes into a spare slot.
+function splitRod(b, s, fresh) {
+  const pool = b.pool;
+  if (!b.spares || !b.spares.length || (pool.meta[s * 4 + 3] | 0) < 2) return;
+  const o0 = s * 2 * 4, o1 = o0 + 4, q0 = s * 2 * 3, q1 = q0 + 3;
+  const L = Math.hypot(pool.pos[o1] - pool.pos[o0], pool.pos[o1 + 1] - pool.pos[o0 + 1], pool.pos[o1 + 2] - pool.pos[o0 + 2]);
+  if (L < 0.9) return;
+  const t = 0.25 + Math.random() * 0.5;
+  const s2 = b.spares.pop();
+  const p0 = s2 * 2 * 4, p1 = p0 + 4, r0 = s2 * 2 * 3, r1 = r0 + 3;
+  for (let a = 0; a < 3; a++) {
+    const m = lerp(pool.pos[o0 + a], pool.pos[o1 + a], t), mp = lerp(pool.prev[q0 + a], pool.prev[q1 + a], t);
+    pool.pos[p1 + a] = pool.pos[o1 + a]; pool.prev[r1 + a] = pool.prev[q1 + a];
+    pool.pos[p0 + a] = m; pool.prev[r0 + a] = mp;
+    pool.pos[o1 + a] = m; pool.prev[q1 + a] = mp;
+  }
+  pool.pos[p0 + 3] = pool.pos[p1 + 3] = pool.pos[o0 + 3];
+  // the snap kicks the two pieces apart
+  const kick = (fresh ? 25 : 35) * DT;
+  pool.prev[q1 + 1] += kick; pool.prev[r0 + 1] += kick;
+  pool.prev[q1] += (Math.random() - 0.5) * kick; pool.prev[r0] -= (Math.random() - 0.5) * kick;
+  pool.seg[s] = L * t; pool.seg[s2] = L * (1 - t);
+  pool.setMeta(s2, pool.meta[s * 4], Math.random() * 100, F_FLAT, 2);
+  if (!fresh) SND.snap(pool.pos[o0], 1, 0.35);
+}
+
+// ---- rods across a gap ----
+function bridgeSurface(br, x) {
+  if (br.sag <= 0) return br.y;
+  const half = (br.x1 - br.x0) / 2 + 2;
+  const d = (x - br.loadX) / half;
+  return br.y - br.sag * Math.max(0, 1 - d * d);
+}
+
+function initBridges() {
+  const rng = makeRng(3131);
+  for (const spec of LEVEL.bridges) {
+    const pool = POOLS.s32, n = 7, C = 12;
+    const s0 = pool.alloc(n * 3);
+    const br = { spec, x0: spec.a * TILE, x1: (spec.b + 1) * TILE, y: 0.22, hold: spec.hold, intact: true, loaded: false, loadT: 0, sag: 0, loadX: 0, creakT: 0, s0, n, C, rest: [] };
+    const pts = new Float32Array(C * 3);
+    for (let k = 0; k < n; k++) {
+      const z = -1.15 + (k / (n - 1)) * 2.3 + rng.range(-0.05, 0.05);
+      const xa = br.x0 - rng.range(2.0, 3.2), xb = br.x1 + rng.range(2.0, 3.2);
+      const y = 0.11 + (k % 2) * 0.02;
+      for (let i = 0; i < C; i++) { const t = i / (C - 1); pts[i * 3] = lerp(xa, xb, t); pts[i * 3 + 1] = y + Math.sin(t * Math.PI) * 0.03; pts[i * 3 + 2] = z + (t - 0.5) * rng.range(-0.1, 0.1); }
+      br.rest.push(pts.slice());
+      putStrand(pool, s0 + k, pts, C, ROD_R, 1, rng() * 100, F_FLAT);
+    }
+    for (let k = n; k < 3 * n; k++) { putStrand(pool, s0 + k, pts, 2, ROD_R, 1, rng() * 100, F_FLAT); pool.setCount(s0 + k, 0); }
+    br.body = new Body(pool, s0, 3 * n, { sim: true, grav: 1, iters: 4, bend: 0.9, bendLen: 1.0, fric: 0.3, rest: 0.2, damp: 0.998, owner: br });
+    br.body.spares = [];
+    for (let k = n; k < 3 * n; k++) br.body.spares.push(s0 + k);
+    BRIDGES.push(br);
+  }
+}
+
+function bridgesStep(dt) {
+  for (const br of BRIDGES) {
+    if (!br.intact) continue;
+    if (br.loaded) br.loadT += dt; else br.loadT = Math.max(0, br.loadT - dt * 0.6);
+    br.loaded = false;
+    const sag = smoothstep(0, br.hold, br.loadT) * 0.75;
+    if (Math.abs(sag - br.sag) > 0.002) {
+      br.sag = sag;
+      const pool = POOLS.s32, C = br.C;
+      for (let k = 0; k < br.n; k++) {
+        const rest = br.rest[k], base = (br.s0 + k) * 32;
+        for (let i = 0; i < C; i++) {
+          const o = (base + i) * 4;
+          pool.pos[o + 1] = rest[i * 3 + 1] - (br.y - bridgeSurface(br, rest[i * 3])) * (0.9 + k * 0.03);
+        }
+      }
+      br.body.touch();
+    }
+    if (br.loadT > 0.05) {
+      br.creakT -= dt;
+      if (br.creakT <= 0) { SND.creak((br.x0 + br.x1) / 2, br.loadT / br.hold); br.creakT = lerp(0.11, 0.025, br.loadT / br.hold) * (0.6 + Math.random() * 0.8); }
+    }
+    if (br.loadT >= br.hold) breakBridge(br);
+  }
+}
+
+function breakBridge(br) {
+  br.intact = false;
+  const pool = POOLS.s32, b = br.body;
+  for (let k = 0; k < br.n; k++) {
+    const s = br.s0 + k;
+    // break near the load, once or twice
+    let c = pool.meta[s * 4 + 3] | 0;
+    const breaks = Math.random() < 0.5 ? 2 : 1;
+    let cur = s;
+    for (let m = 0; m < breaks; m++) {
+      const base = cur * 32;
+      let best = 1, bd = 1e9;
+      for (let i = 1; i < c - 1; i++) { const d = Math.abs(pool.pos[(base + i) * 4] - (br.loadX + (Math.random() - 0.5) * 4)); if (d < bd) { bd = d; best = i; } }
+      if (!b.spares.length || best < 1 || best > c - 2) break;
+      const s2 = b.spares.pop();
+      const nb = s2 * 32;
+      const cnt2 = c - best;
+      for (let i = 0; i < cnt2; i++) {
+        const src = base + best + i, dst = nb + i;
+        for (let a = 0; a < 4; a++) pool.pos[dst * 4 + a] = pool.pos[src * 4 + a];
+        for (let a = 0; a < 3; a++) pool.prev[dst * 3 + a] = pool.prev[src * 3 + a];
+        pool.inv[dst] = 1; pool.tk[dst] = 0;
+      }
+      pool.setMeta(s2, 1, Math.random() * 100, F_FLAT, cnt2);
+      pool.seg[s2] = pool.seg[cur];
+      pool.setMeta(cur, 1, pool.meta[cur * 4 + 1], F_FLAT, best + 1);
+      if (m === 0 && breaks === 2) { cur = s2; c = cnt2; }
+    }
+  }
+  // everything drops, the halves turning about the supports
+  for (let s = br.s0; s < br.s0 + br.n * 3; s++) {
+    const c = pool.meta[s * 4 + 3] | 0;
+    for (let i = 0; i < c; i++) {
+      const o = (s * 32 + i) * 4, q = (s * 32 + i) * 3;
+      const near = 1 - Math.min(1, Math.abs(pool.pos[o] - br.loadX) / 10);
+      pool.prev[q + 1] = pool.pos[o + 1] + (10 + near * 40) * DT;
+    }
+  }
+  b.wake();
+  b.onHit = (bb, s, i, speed, x) => SND.tick(x, speed);
+  SND.snap(br.loadX, 7, 1.1);
+  CAM.shake = Math.max(CAM.shake, 0.4);
+}
+
+// ---- strands hanging from above ----
+function initHangers() {
+  const rng = makeRng(9090);
+  for (const h of LEVEL.hangs) {
+    const pool = POOLS.s64, C = 64, n = 14;
+    const s0 = pool.alloc(n);
+    let r = 12;
+    while (r > 0 && solidAt(h.a, r)) r--;
+    const floorY = rowY(r);
+    const pts = new Float32Array(C * 3);
+    for (let k = 0; k < n; k++) {
+      const x = rng.range(h.a * TILE, (h.b + 1) * TILE), z = rng.range(-1.3, 1.3);
+      const yEnd = floorY + rng.range(2.4, 5.2), L = 30, top = yEnd + L;
+      const ph = rng.range(0, TAU), sw = rng.range(0.2, 0.5), curl = rng.range(0.5, 1.2) * rng.sign();
+      for (let i = 0; i < C; i++) {
+        const t = i / (C - 1);
+        const c = Math.max(0, (t - 0.88) / 0.12);
+        pts[i * 3] = x + Math.sin(t * 5 + ph) * sw * t + curl * c * c;
+        pts[i * 3 + 1] = top - t * L + Math.abs(curl) * c * c * 0.6;
+        pts[i * 3 + 2] = z + Math.cos(t * 4 + ph) * sw * 0.6 * t;
+      }
+      putStrand(pool, s0 + k, pts, C, 0.1, 0, rng() * 100, 0);
+      pool.inv[(s0 + k) * C] = 0;
+    }
+    const b = new Body(pool, s0, n, { sim: true, kick: true, iters: 3, grav: 1, damp: 0.985, fric: 0.25, bend: 0.04 });
+    b.tether = true;
+    HANGERS.push(b);
+  }
+}
+
+function itemsStep(dt) {
+  loopsStep(dt);
+  bridgesStep(dt);
+}
+
+// ---- 70-audio.js ----
+// Sounds, all made here from noise and a few sine waves: dry spaghetti cracking (and the pieces
+// ticking down), cooked spaghetti squelching, a slurp when a loop goes on. Quiet, and panned to where it happened.
+
+const SFX = { ctx: null, master: null, white: null, brown: null, muted: false, last: {} };
+
+function audioInit() {
+  if (SFX.ctx) { if (SFX.ctx.state === 'suspended') SFX.ctx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  const ctx = new AC();
+  SFX.ctx = ctx;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -18; comp.knee.value = 10; comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.2;
+  const master = ctx.createGain();
+  master.gain.value = SFX.muted ? 0 : 0.9;
+  master.connect(comp); comp.connect(ctx.destination);
+  SFX.master = master;
+  const len = Math.floor(ctx.sampleRate * 2);
+  const wb = ctx.createBuffer(1, len, ctx.sampleRate), w = wb.getChannelData(0);
+  for (let i = 0; i < len; i++) w[i] = Math.random() * 2 - 1;
+  const bb = ctx.createBuffer(1, len, ctx.sampleRate), b = bb.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; b[i] = last * 3.5; }
+  SFX.white = wb; SFX.brown = bb;
+  // the room: barely there
+  const src = ctx.createBufferSource(); src.buffer = bb; src.loop = true;
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 300;
+  const g = ctx.createGain(); g.gain.value = 0.018;
+  src.connect(f); f.connect(g); g.connect(master); src.start();
+}
+
+function setMuted(m) { SFX.muted = m; if (SFX.master) SFX.master.gain.setTargetAtTime(m ? 0 : 0.9, SFX.ctx.currentTime, 0.02); }
+function sfxPan(x) { return clamp((x - CAM.x) / 32, -0.85, 0.85); }
+function sfxGap(key, ms) { const now = performance.now(); if (now - (SFX.last[key] || 0) < ms) return false; SFX.last[key] = now; return true; }
+
+function burst(o) {
+  const ctx = SFX.ctx;
+  if (!ctx || SFX.muted) return;
+  const t0 = ctx.currentTime + 0.005 + (o.t || 0);
+  const src = ctx.createBufferSource();
+  src.buffer = o.buf || SFX.white;
+  src.playbackRate.value = o.rate || 1;
+  const f = ctx.createBiquadFilter();
+  f.type = o.type || 'bandpass'; f.Q.value = o.q ?? 1;
+  f.frequency.setValueAtTime(o.f, t0);
+  if (o.f2) f.frequency.exponentialRampToValueAtTime(o.f2, t0 + o.dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(o.gain, t0 + (o.att || 0.002));
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
+  src.connect(f); f.connect(g);
+  let out = g;
+  if (o.pan !== undefined && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = o.pan; g.connect(p); out = p; }
+  if (o.am) { // a fast flutter, for wet sounds
+    const lfo = ctx.createOscillator(), lg = ctx.createGain(), mg = ctx.createGain();
+    lfo.frequency.value = o.am; lg.gain.value = 0.5; mg.gain.value = 0.5;
+    lfo.connect(lg); lg.connect(mg.gain); out.connect(mg); out = mg;
+    lfo.start(t0); lfo.stop(t0 + o.dur + 0.05);
+  }
+  out.connect(SFX.master);
+  src.start(t0, Math.random() * 1.6);
+  src.stop(t0 + o.dur + 0.05);
+}
+
+function tone(o) {
+  const ctx = SFX.ctx;
+  if (!ctx || SFX.muted) return;
+  const t0 = ctx.currentTime + 0.005 + (o.t || 0);
+  const osc = ctx.createOscillator();
+  osc.type = o.type || 'sine';
+  osc.frequency.setValueAtTime(o.f, t0);
+  if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t0 + o.dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(o.gain, t0 + (o.att || 0.005));
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
+  osc.connect(g);
+  let out = g;
+  if (o.pan !== undefined && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = o.pan; g.connect(p); out = p; }
+  out.connect(SFX.master);
+  osc.start(t0); osc.stop(t0 + o.dur + 0.05);
+}
+
+const SND = {
+  step(x, ch) {
+    if (!sfxGap('step', 45)) return;
+    const pan = sfxPan(x), r = Math.random();
+    if (ch === '#') {
+      burst({ f: 900 + r * 400, f2: 450, q: 1.3, dur: 0.055, gain: 0.022, pan });
+      burst({ buf: SFX.brown, type: 'lowpass', f: 240, dur: 0.05, gain: 0.03, pan });
+    } else {
+      burst({ f: 3400 + r * 1800, q: 4, dur: 0.016, gain: 0.02, att: 0.0005, pan });
+    }
+  },
+  jump(x) { burst({ f: 520, f2: 2100, q: 0.9, dur: 0.1, gain: 0.02, att: 0.012, pan: sfxPan(x) }); },
+  land(x, v, ch) {
+    const k = clamp(v / 160, 0.25, 1), pan = sfxPan(x);
+    if (ch === '#') {
+      burst({ f: 850, f2: 320, q: 1, dur: 0.09, gain: 0.05 * k, pan, am: 38 });
+      burst({ buf: SFX.brown, type: 'lowpass', f: 170, dur: 0.12, gain: 0.1 * k, pan });
+    } else {
+      burst({ f: 2600, q: 3, dur: 0.03, gain: 0.04 * k, att: 0.0008, pan });
+      burst({ buf: SFX.brown, type: 'lowpass', f: 220, dur: 0.08, gain: 0.06 * k, pan });
+    }
+  },
+  // Dry spaghetti: a sharp crack and the ring of the rod, n times in quick succession.
+  snap(x, n, loud) {
+    const pan = sfxPan(x);
+    let t = 0;
+    for (let i = 0; i < n; i++) {
+      const r = Math.random();
+      burst({ t, type: 'highpass', f: 1400 + r * 1600, q: 0.7, dur: 0.012 + r * 0.01, gain: 0.16 * loud, att: 0.0004, pan });
+      burst({ t, f: 2100 + Math.random() * 3200, q: 8, dur: 0.04, gain: 0.05 * loud, att: 0.0005, pan });
+      t += 0.003 + Math.random() * 0.028;
+    }
+  },
+  tick(x, speed) {
+    if (!sfxGap('tick', 14)) return;
+    const k = clamp(speed / 220, 0.12, 1);
+    burst({ f: 2800 + Math.random() * 4200, q: 5, dur: 0.012, gain: 0.05 * k, att: 0.0003, pan: sfxPan(x) });
+  },
+  pat(x, v) {
+    if (!sfxGap('pat', 30)) return;
+    const k = clamp(v / 120, 0.15, 1);
+    burst({ f: 700, f2: 280, q: 1.1, dur: 0.05, gain: 0.03 * k, pan: sfxPan(x) });
+  },
+  slurp(x, chain) {
+    const up = 1 + Math.min(chain - 1, 8) * 0.07, pan = sfxPan(x);
+    burst({ f: 320 * up, f2: 1500 * up, q: 4, dur: 0.17, gain: 0.07, att: 0.02, pan, am: 34 });
+    tone({ t: 0.15, f: 640 * up, f2: 900 * up, dur: 0.05, gain: 0.025, pan });
+  },
+  splat(x) {
+    const pan = sfxPan(x);
+    burst({ type: 'lowpass', f: 2400, f2: 260, q: 1.2, dur: 0.16, gain: 0.15, pan, am: 30 });
+    tone({ f: 120, f2: 55, dur: 0.14, gain: 0.1, pan });
+    burst({ t: 0.03, f: 1500, f2: 650, q: 2, dur: 0.07, gain: 0.04, pan });
+  },
+  unravel(x) {
+    const pan = sfxPan(x);
+    burst({ f: 2600, f2: 420, q: 2.4, dur: 0.3, gain: 0.07, pan, am: 22 });
+    for (let i = 0; i < 4; i++) burst({ t: 0.08 + i * 0.07 + Math.random() * 0.03, f: 700, f2: 300, q: 1, dur: 0.05, gain: 0.025, pan });
+  },
+  creak(x, k) {
+    burst({ f: 700 + Math.random() * 900, q: 9, dur: 0.02, gain: 0.02 + 0.05 * k, att: 0.0006, pan: sfxPan(x) });
+  },
+  bump(x) {
+    const pan = sfxPan(x);
+    burst({ buf: SFX.brown, type: 'lowpass', f: 380, dur: 0.07, gain: 0.08, pan });
+    burst({ f: 1300, q: 2, dur: 0.03, gain: 0.03, pan });
+  },
+  die(x, why) {
+    const pan = sfxPan(x);
+    burst({ f: 2200, f2: 300, q: 2, dur: 0.5, gain: 0.06, pan, am: 18 });
+    tone({ type: 'triangle', f: 220, f2: 70, dur: 0.7, gain: 0.035, pan });
+    for (let i = 0; i < 6; i++) burst({ t: 0.2 + i * 0.09 + Math.random() * 0.04, f: 650, f2: 260, q: 1, dur: 0.05, gain: 0.025, pan });
+  },
+  win(x) {
+    const pan = sfxPan(x);
+    for (let i = 0; i < 9; i++) burst({ t: i * 0.11 + Math.random() * 0.05, f: 760 - i * 30, f2: 300, q: 1, dur: 0.06, gain: 0.03, pan });
+    tone({ t: 0.4, f: 196, dur: 3.2, gain: 0.03, att: 0.6 });
+    tone({ t: 0.7, f: 294, dur: 3.0, gain: 0.022, att: 0.7 });
+    tone({ t: 1.0, f: 392, dur: 2.6, gain: 0.014, att: 0.8 });
+  },
+};
+
+// ---- 80-camera.js ----
+// A long lens close to the table, a little above it, following the twirl. Out of focus before
+// you start and when paused; it pulls focus when you play.
+
+const CAM = {
+  x: 30, y: 9.5, z: 0, fov: (qnum('fov', 27) * Math.PI) / 180, elev: qnum('elev', 0.3), baseElev: qnum('elev', 0.3), dist: 60, baseDist: qnum('dist', 60), dy: qnum('dy', 0), dx: qnum('dx', 0),
+  look: 0, shake: 0, shakeX: 0, shakeY: 0,
+  defocus: 1, defocusTarget: 1, fade: 1, fadeTarget: 1, exposure: 1,
+};
+const CAM_BASE_Y = 9.6;
+
+function camHalfWidth() { return CAM.baseDist * Math.tan(CAM.fov / 2) * (REN.cw / REN.ch); }
+
+function camUpdate(dt, snap) {
+  const P = PLAYER;
+  CAM.look = damp(CAM.look, clamp(P.vx * 0.2, -5, 5), 1.8, dt);
+  const hw = camHalfWidth();
+  let tx = clamp(P.x + CAM.look, hw, LEVEL_X1 - hw) + CAM.dx;
+  let ty = CAM_BASE_Y + Math.max(0, P.y - 7) * 0.8 + CAM.dy;
+  let dist = CAM.baseDist, elev = CAM.baseElev;
+  if (GAME.mode === 'win') {
+    const k = smoothstep(0.4, 5, GAME.winT);
+    tx = LEVEL.nest.cx; ty = lerp(CAM_BASE_Y - 3, 1.5, k); dist = lerp(60, 30, k); elev = lerp(CAM.baseElev, 0.85, k);
+  }
+  CAM.elev = snap ? elev : damp(CAM.elev, elev, 1.2, dt);
+  if (GAME.mode === 'dead' && P.y < 0) ty = CAM.y;
+  if (snap) { CAM.x = tx; CAM.y = ty; CAM.dist = dist; }
+  else {
+    CAM.x = damp(CAM.x, tx, 6.5, dt);
+    CAM.y = damp(CAM.y, ty, 2.6, dt);
+    CAM.dist = damp(CAM.dist, dist, 0.8, dt);
+  }
+  CAM.shake = Math.max(0, CAM.shake - dt * 2.8);
+  const s = CAM.shake * CAM.shake * 0.22;
+  CAM.shakeX = (Math.random() - 0.5) * s;
+  CAM.shakeY = (Math.random() - 0.5) * s;
+  CAM.defocus = snap ? CAM.defocusTarget : damp(CAM.defocus, CAM.defocusTarget, 3.2, dt);
+  CAM.fade = snap ? CAM.fadeTarget : damp(CAM.fade, CAM.fadeTarget, 3.5, dt);
+}
+
+// ---- 90-main.js ----
+// Boot, input, the fixed-step loop, and what happens when you fall, get caught, or reach the nest.
+
+const GAME = { mode: 'boot', t: 0, hitstop: 0, deadT: 0, winT: 0, checkpoint: null, gridStart: null };
+const INPUT = { keys: new Set() };
+const JUMP_CODES = new Set(['Space', 'ArrowUp', 'KeyW', 'KeyZ', 'KeyK']);
+const veil = document.getElementById('veil');
+const TIMESCALE = qnum('speed', 1);
+
+function begin() {
+  audioInit();
+  veil.classList.add('gone');
+  document.body.classList.add('play');
+  CAM.defocusTarget = 0;
+  if (GAME.mode === 'title' || GAME.mode === 'paused') GAME.mode = GAME.resume || 'play';
+}
+function pause() {
+  if (GAME.mode !== 'play') return;
+  GAME.resume = 'play';
+  GAME.mode = 'paused';
+  CAM.defocusTarget = 1;
+  veil.classList.remove('gone');
+  document.body.classList.remove('play');
+  INPUT.keys.clear();
+}
+
+window.addEventListener('keydown', (e) => {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  if (GAME.mode === 'boot') return;
+  if (GAME.mode === 'title' || GAME.mode === 'paused') { if (e.code !== 'Escape') begin(); return; }
+  if (SFX.ctx && SFX.ctx.state === 'suspended') SFX.ctx.resume();
+  INPUT.keys.add(e.code);
+  if (JUMP_CODES.has(e.code)) PLAYER.jumpBuf = PCFG.buffer;
+  if (e.code === 'KeyM') setMuted(!SFX.muted);
+  if (e.code === 'KeyF') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); }
+  if (e.code === 'Escape') pause();
+});
+window.addEventListener('keyup', (e) => INPUT.keys.delete(e.code));
+window.addEventListener('blur', () => { INPUT.keys.clear(); pause(); });
+veil.addEventListener('pointerdown', () => { if (GAME.mode === 'title' || GAME.mode === 'paused') begin(); });
+window.addEventListener('resize', () => resizeRender(false));
+
+function startPoint() {
+  const c = GAME.checkpoint || LEVEL.start;
+  return [c.i * TILE + 1.5, 0];
+}
+
+function resetWorld() {
+  for (const P of POOL_LIST) P.restore();
+  for (const b of BODIES) {
+    b.awake = false; b.calm = 0;
+    b.kick = b.init.kick; b.keep = b.init.keep; b.onHit = b.init.onHit; b.cgroup = b.init.cgroup; b.fric = b.init.fric;
+    if (b.init.spares) b.spares = b.init.spares.slice();
+    b.measure();
+  }
+  AWAKE.clear();
+  for (let r = 0; r < LH; r++) LEVEL.grid[r] = GAME.gridStart[r].slice();
+  for (const bx of WORLD.boxes) bx.on = true;
+  for (const blk of LEVEL.blocks) blk.broken = false;
+  for (const L of LOOPS) { L.state = L.hidden0 ? 'hidden' : 'free'; L.hidden = L.hidden0; L.t = 0; }
+  for (const br of BRIDGES) { br.intact = true; br.loadT = 0; br.sag = 0; br.loaded = false; }
+  for (const e of ENEMIES) placeEnemy(e);
+  for (const b of BODIES) if (b.kick && !b.listed) { KICKABLE.push(b); b.listed = true; }
+  const [x, y] = startPoint();
+  placePlayer(x, y);
+  PLAYER.body.fric = 0.45;
+}
+
+function gameStep(dt) {
+  if (GAME.hitstop > 0) { GAME.hitstop -= dt; return; }
+  GAME.t += dt;
+  COLLIDERS.length = 0;
+  playerStep(dt);
+  enemiesStep(dt);
+  itemsStep(dt);
+  simulate(dt);
+  for (const c of LEVEL.checkpoints) if (PLAYER.alive && PLAYER.x > c.i * TILE && GAME.checkpoint !== c) GAME.checkpoint = c;
+  const N = LEVEL.nest;
+  if (GAME.mode === 'play' && PLAYER.alive && Math.abs(PLAYER.x - N.cx) < N.R - N.r && PLAYER.y < 3) win();
+  if (GAME.mode === 'dead') {
+    GAME.deadT += dt;
+    if (GAME.deadT > 0.5) CAM.defocusTarget = 0.45;
+    if (GAME.deadT > 1.5) CAM.fadeTarget = 0;
+    if (GAME.deadT > 2.1) { resetWorld(); GAME.mode = 'play'; CAM.fadeTarget = 1; CAM.defocusTarget = 0; camUpdate(0, true); CAM.fade = 0; }
+  }
+  if (GAME.mode === 'win') {
+    GAME.winT += dt;
+    winStep();
+    if (GAME.winT > 7.5) CAM.fadeTarget = 0;
+    if (GAME.winT > 8.6) { GAME.checkpoint = null; resetWorld(); GAME.mode = 'play'; CAM.fadeTarget = 1; CAM.defocusTarget = 0; camUpdate(0, true); CAM.fade = 0; }
+  }
+}
+
+// In the nest the twirl lets go slowly: its shape fades over a couple of seconds and it slumps in.
+function win() {
+  const P = PLAYER;
+  GAME.mode = 'win';
+  GAME.winT = 0;
+  P.alive = false;
+  P.vx *= 0.3;
+  P.body.fric = 0.7;
+  SND.win(P.x);
+}
+function winStep() {
+  const P = PLAYER, pool = POOLS.s64, C = TWIRL.C, base = P.body.s0 * C;
+  const k = 0.24 * (1 - smoothstep(0.2, 2.6, GAME.winT));
+  P.sy = lerp(P.sy, 0.75, 0.01);
+  if (k > 0) twirlTargets();
+  for (let j = 0; j < TWIRL.n * C; j++) if (TWIRL.kind[j] === 0) pool.tk[base + j] = k;
+}
+
+let lastFrame = 0, acc = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dtMs = lastFrame ? now - lastFrame : 16.7;
+  lastFrame = now;
+  const dt = Math.min(dtMs / 1000, 0.1);
+  if (GAME.mode !== 'paused') {
+    acc += dt * TIMESCALE;
+    let n = 0;
+    while (acc >= DT && n < 5) { gameStep(DT); acc -= DT; n++; }
+    if (n === 5) acc = 0;
+  }
+  camUpdate(dt, false);
+  flushBodies();
+  renderFrame(now / 1000);
+  if (GAME.mode === 'play' || GAME.mode === 'title') adaptScale(dtMs, now);
+}
+
+function boot() {
+  const t0 = performance.now();
+  makeLevel();
+  GAME.gridStart = LEVEL.grid.map((r) => r.slice());
+  makePools();
+  initPlayer();
+  initHangers();
+  initEnemies();
+  initLoops();
+  initBridges();
+  const t1 = performance.now();
+  buildStatic();
+  const t2 = performance.now();
+  finishWorld();
+  for (const P of POOL_LIST) for (const layer in P.bodies) P.bodies[layer].sort((a, b) => a.s0 - b.s0);
+  for (const b of BODIES) b.init = { kick: b.kick, keep: b.keep, onHit: b.onHit, cgroup: b.cgroup || null, fric: b.fric, spares: b.spares ? b.spares.slice() : null };
+  for (const L of LOOPS) L.hidden0 = L.hidden;
+  for (const e of ENEMIES) placeEnemy(e);
+  for (const P of POOL_LIST) { P.snapshot(); P.uploadAll(); }
+  initRender();
+  const sx = qnum('x', -1);
+  if (sx >= 0) GAME.checkpoint = { i: sx };
+  resetWorld();
+  if (sx >= 0) GAME.checkpoint = null;
+  camUpdate(0, true);
+  const counts = POOL_LIST.map((p) => `${p.name}:${p.used}`).join(' ');
+  window.SPAG.boot = { level: Math.round(t1 - t0), build: Math.round(t2 - t1), total: Math.round(performance.now() - t0), strands: counts };
+  if (qflag('auto')) { GAME.mode = 'play'; veil.classList.add('gone'); CAM.defocusTarget = 0; CAM.defocus = 0; audioInit(); }
+  else GAME.mode = 'title';
+  window.SPAG.ready = true;
+  requestAnimationFrame(frame);
+}
+
+window.SPAG = {
+  ready: false,
+  boot: null,
+  state() {
+    const P = PLAYER;
+    return { mode: GAME.mode, x: +P.x.toFixed(2), y: +P.y.toFixed(2), vx: +P.vx.toFixed(1), vy: +P.vy.toFixed(1), ground: P.ground, rings: P.rings.length,
+      scale: +REN.scale.toFixed(2), ms: +REN.frameMs.toFixed(1), gpu: +PROF.ms.toFixed(2), tris: Math.round(STATS.tris), draws: STATS.draws, awake: AWAKE.size, W: REN.W, H: REN.H };
+  },
+  hold(code, on) { if (on) { INPUT.keys.add(code); if (JUMP_CODES.has(code)) PLAYER.jumpBuf = PCFG.buffer; } else INPUT.keys.delete(code); },
+  warp(i) { GAME.checkpoint = { i }; resetWorld(); camUpdate(0, true); },
+  look: LOOK, cam: CAM, game: GAME, player: PLAYER,
+  scale(s) { REN.scale = s; resizeRender(true); },
+};
+
+setTimeout(() => { try { boot(); } catch (e) { errBox.textContent += (e && e.stack) || String(e); } }, 30);
+
+</script>
+</body>
+</html>

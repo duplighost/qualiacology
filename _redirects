@@ -142,3 +142,7 @@
 /salmon  /the-way-i-came/  302
 /upriver  /the-way-i-came/  302
 /star  /starstruck/  302
+
+# --- SPAGHETTI ---
+/spaghetti.html  /spaghetti/  301!
+/noodle  /spaghetti/  302
