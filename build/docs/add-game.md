@@ -11,8 +11,12 @@ touching site.css/site.js/templates.
    `<title>Game Name | Qualiacology</title>`, canonical + OG/Twitter meta
    (reuse the card image as `og:image`), the site favicon, and a home-link
    pill (`<a href="/">Qualiacology</a>`) styled to the game's palette with a
-   z-index above the game's UI (hide it during pointer lock if the game uses
-   it). Model: `behind-you/index.html`.
+   z-index above the game's UI, followed directly by the one-line `<script>`
+   every game page carries after its pill: the first key or click on the game
+   takes the pill away for the rest of the visit. It belongs on the opening
+   screen only, never on screen while the game is played. If the game has a
+   `build-site-copy` script, put both in that script, not in the site copy.
+   Model: `behind-you/index.html`.
 
 2b. **If the game came from somewhere else**, it will assume its old host.
    Everything on this site is self-contained and offline-capable, so before
