@@ -106,32 +106,18 @@
       "duration": "Two first Shines"
     },
     {
-      "slug": "al-dente",
-      "title": "AL DENTE",
-      "descriptor": "3D platformer made of pasta",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/al-dente-card-v20261028.jpg",
-      "alt": "A ball of cooked spaghetti on two noodle legs stuck halfway up a wall of stacked cooked lasagna sheets with green spinach layers, a pasta wagon wheel stuck to the wall beside it and a bed of tangled spaghetti on the ground below",
-      "summary": "It must all be made of absolutely photorealistic pasta and behave that way too. You are a forkful of cooked spaghetti. Cooked pasta sticks to cooked pasta, so you can climb the lasagna. Dry spaghetti snaps under you. Cavatappi are springs, the tagliatelle bridge sags, and the star is in a nest at the top of a rigatoni. Keyboard and mouse.",
-      "metaDescription": "AL DENTE is a 3D platformer in the browser where everything is pasta: you are a forkful of cooked spaghetti, you stick to cooked lasagna walls and climb them, dry spaghetti snaps under you, and the star sits in a nest at the top of a giant rigatoni. Keyboard and mouse.",
-      "controls": "WASD or arrows move · Space jump · jump into a cooked wall to stick, jump again to climb or leap off · drag the mouse or Q E to turn the camera",
-      "actionLabel": "Play AL DENTE",
-      "duration": "A few minutes"
-    },
-    {
       "slug": "spaghetti",
-      "title": "SPAGHETTI",
-      "descriptor": "Side-scroller made of spaghetti",
+      "title": "SPAGHETTI and AL DENTE",
+      "descriptor": "Two pasta platformers on one table",
       "group": "action",
       "featured": false,
-      "image": "/assets/games/spaghetti-card-v20261028.jpg",
-      "alt": "A twirl of cooked spaghetti on two loose ends jumping into a bundle of red tomato spaghetti on a stilt: the bundle bursts into snapped rods and green spinach loops fly off the top. Two bundles of dry spaghetti stand on spaghetti stilts to the right, cooked strands hang from above, and the floor is stacked dry spaghetti under a tangle of cooked",
-      "summary": "Everything is made out of spaghetti. Nothing cannot be spaghetti. You are a twirl of it, walking on two loose ends, in three levels: on the table, under a ceiling of it, and high up on bundles of it. Dry bundles snap apart when you hit them from below. Clumps roll at you, and some drop from the ceiling. Rods across the gaps bend and break, and cooked strands stretched between bundles throw you up until they snap. Keyboard.",
-      "metaDescription": "SPAGHETTI is a side-scrolling browser game in three levels where everything is made out of spaghetti: you are a twirl of cooked spaghetti on two loose ends, dry bundles snap apart when you hit them, and the rods across the gaps bend and break. Keyboard.",
-      "controls": "arrows or A D move · Space, Up, W or Z jump, hold for higher · Esc pause, again for the nests · M mute · F full screen",
-      "actionLabel": "Jump in",
-      "duration": "Ten minutes or so"
+      "image": "/assets/games/spaghetti-card-v20261028b.jpg",
+      "alt": "The words AL DENTE in green dry spaghetti standing on a step of dry rods, and SPAGHETTI in golden dry spaghetti in front of it with cooked strands hung over its letters, on a table of stacked dry spaghetti under a layer of cooked",
+      "summary": "Two games on one table. SPAGHETTI: everything is made out of spaghetti. Nothing cannot be spaghetti. You are a twirl of it on two loose ends, side-on, in five levels. AL DENTE: it must all be made of absolutely photorealistic pasta and behave that way too. You are a forkful of cooked spaghetti in three stages, and cooked pasta sticks to cooked pasta, so you can climb the lasagna. Keyboard, and the mouse for AL DENTE.",
+      "metaDescription": "SPAGHETTI and AL DENTE are two browser platformers made entirely of pasta, on one table: a side-scroller in five levels where you are a twirl of spaghetti, and a 3D platformer in three stages where you are a forkful of it that climbs cooked lasagna.",
+      "controls": "on the table: up and down or the mouse pick a game, any key starts it · SPAGHETTI: arrows or A D move, Space jumps, jump into a hanging bunch to swing, Esc pause, again for the nests · AL DENTE: WASD or arrows, Space, drag the mouse or Q E to turn the camera",
+      "actionLabel": "Pick one",
+      "duration": "Half an hour or so"
     },
     {
       "slug": "sill",
