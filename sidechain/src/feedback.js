@@ -6,6 +6,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { lipsGeometry, shellGeometry, candyGeometry, perfumeGeometry, donutGeometry, cuffsGeometry, coffeeGeometry, crownGeometry, popsicleGeometry, drinkGeometry, pinGeometry, realHeartGeometry, polaroidGeometry, whistleGeometry, cupGeometry } from './pickups.js';
 import { tabGeometry } from './yst-tab.js';
 import { wGeometry } from './scs-props.js';
+import { pickup as hglPickup } from './hgl-props.js';
+import { pickup as ptdPickup } from './ptd-props.js';
+import { pickup as itdPickup } from './itd-props.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -246,6 +249,9 @@ const PICKUP = {
   w: { geo: wGeometry, color: 0xffd84a, mat: std({ rough: 0.18, metal: 0.65, emissive: 0x4a3008 }), s: 1.5, lit: 1.3, face: true, move: (e, time, i, yaw) => e.set(Math.sin(time * 1.6 + i) * 0.12, yaw + Math.sin(time * 1.3 + i * 1.7) * 0.5, Math.sin(time * 1.1 + i) * 0.1) },
   tab: { geo: tabGeometry, color: 0xf6f4ee, mat: std({ rough: 0.65, metal: 0, emissive: 0x2a3038, side: THREE.DoubleSide }), s: 1.6, lit: 1.2, move: (e, time, i) => e.set(Math.sin(time * 2.0 + i) * 0.45, time * 1.7 + i * 1.3, Math.sin(time * 2.6 + i) * 0.35) },
 };
+// the songs added 28 Oct 2026 keep their pickup in their own props file:
+// { key, geo, color, mat (std's options), s, lit, face, beat, bob, flicker, move }
+for (const p of [hglPickup, ptdPickup, itdPickup]) if (p) PICKUP[p.key] = { ...p, mat: std(p.mat) };
 export const PICKUP_KINDS = Object.keys(PICKUP);
 
 // Pickups to steer through, each one a note of a melody. Collected ones fly into the board;

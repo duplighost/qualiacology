@@ -4,7 +4,8 @@
 // start: 'launch' makes the section open with a lip you fly off (kick = m/s upward).
 // The songs added on 27 Oct 2026 keep their entry and palettes in their own <prefix>-song.js, beside
 // their place; seven go in before Heart of the Party and CUT ME OFF goes after it, last on the record
-// (bottom of this file). Summa Cum Stupid (scs, added later on 27 Oct 2026) goes in with the seven, after White Christmas.
+// (bottom of this file). Summa Cum Stupid (scs, added later on 27 Oct 2026) goes in with the seven, after White Christmas;
+// Hot Girl Lobotomy (hgl), PTSDream Girl (ptd) and Isn't That the Dream (itd), added 28 Oct 2026, after it.
 
 import * as nlg from './nlg-song.js';
 import * as yst from './yst-song.js';
@@ -15,7 +16,10 @@ import * as irt from './irt-song.js';
 import * as wxm from './wxm-song.js';
 import * as cmo from './cmo-song.js';
 import * as scs from './scs-song.js';
-const ADDED = [nlg, yst, dam, rpd, ycl, irt, wxm, scs];
+import * as hgl from './hgl-song.js';
+import * as ptd from './ptd-song.js';
+import * as itd from './itd-song.js';
+const ADDED = [nlg, yst, dam, rpd, ycl, irt, wxm, scs, hgl, ptd, itd];
 
 // a doorway between the rooms of her apartment
 const DOOR = { kind: 'wall', hw: 11.5, hh: 30 };
