@@ -41,15 +41,7 @@
 <canvas id="c"></canvas>
 <div id="veil"></div>
 <div id="err"></div>
-<a class="home-link" href="/">Qualiacology</a>
 <script>window.SPAG_SITE = true;   // on qualiacology.com: the other game on the table is at /al-dente/</script>
-<script>
-  (() => {   // the home link comes up while the mouse moves and goes again when it rests
-    let t = 0;
-    const show = () => { document.body.classList.add('pointer'); clearTimeout(t); t = setTimeout(() => document.body.classList.remove('pointer'), 2500); };
-    addEventListener('pointermove', show, { passive: true });
-  })();
-</script>
 <script>
 'use strict';
 // ---- 00-util.js ----

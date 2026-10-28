@@ -22,7 +22,7 @@ an earlier deploy in the Netlify UI.
 git status && git pull        # changes you did not make = another session mid-flight: stop
 git checkout -b <game>-<what>
 # Put the new files in <game>/ (see the table below). The site's own index.html carries
-# the site shell (title, meta, home pill): keep it, or re-shell the new one.
+# the site shell (title, meta; no link home on game pages): keep it, or re-shell the new one.
 node build/scripts/static-server.mjs --root=. --port=4173
 #   open http://localhost:4173/<game>/ and see it boot. That is the whole check.
 git add <game>/ && git commit -m "<GAME>: <what changed>"

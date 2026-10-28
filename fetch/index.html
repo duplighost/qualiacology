@@ -344,13 +344,5 @@
   .qc-home-link:hover,.qc-home-link:focus-visible{color:#fff;border-color:rgba(255,255,255,.45)}
   body:has(canvas:fullscreen) .qc-home-link{opacity:0;pointer-events:none}
 </style>
-<a class="qc-home-link" href="/" aria-label="Return to Qualiacology">Qualiacology</a>
-<script>
-  // Keep the site escape hatch out of pointer-locked play without covering FETCH's pause control.
-  document.addEventListener('pointerlockchange',function(){
-    var a=document.querySelector('.qc-home-link'); if(!a) return;
-    var locked=!!document.pointerLockElement; a.style.opacity=locked?'0':''; a.style.pointerEvents=locked?'none':'';
-  });
-</script>
 </body>
 </html>
