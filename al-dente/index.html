@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AL DENTE | Qualiacology</title>
+<meta name="description" content="AL DENTE is a 3D platformer in the browser where everything is pasta: you are a forkful of cooked spaghetti, you stick to cooked lasagna walls and climb them, dry spaghetti snaps under you, and the star sits in a nest at the top of a giant rigatoni. Keyboard and mouse.">
+<meta name="theme-color" content="#1b140c">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:title" content="AL DENTE | Qualiacology">
+<meta property="og:description" content="It must all be made of absolutely photorealistic pasta and behave that way too.">
+<meta property="og:url" content="https://qualiacology.com/al-dente/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/al-dente-card-v20261028.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AL DENTE | Qualiacology">
+<meta name="twitter:description" content="It must all be made of absolutely photorealistic pasta and behave that way too.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/al-dente-card-v20261028.jpg">
+<link rel="canonical" href="https://qualiacology.com/al-dente/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<style>
+  @font-face { font-family: "Fraunces"; src: url("/assets/fonts/fraunces-italic-latin.woff2") format("woff2"); font-style: italic; font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "Space Grotesk"; src: url("/assets/fonts/space-grotesk-latin-v22.woff2") format("woff2"); font-style: normal; font-weight: 500 700; font-display: swap; }
+  /* One full-bleed canvas. The name in a soft italic serif, numbers in a plain grotesk. */
+  :root {
+    --bg: #1b140c;
+    --ink: #fff6e4;
+    --ink-dim: rgba(255, 246, 228, 0.62);
+    --ink-faint: rgba(255, 246, 228, 0.28);
+    --durum: #f1c86a;
+    --shade: rgba(27, 20, 12, 0.46);
+    --display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --mono: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); overflow: hidden; font: 14px system-ui, sans-serif; }
+  #game { position: fixed; inset: 0; display: block; width: 100%; height: 100%; outline: none; touch-action: none; cursor: grab; }
+  #game:active { cursor: grabbing; }
+  .ui { position: fixed; pointer-events: none; font-family: var(--mono); font-weight: 500; color: var(--ink); text-shadow: 0 1px 12px rgba(40, 24, 6, 0.55); }
+
+  #title { inset: 0; display: grid; place-items: start center; padding-top: 13vh; text-align: center; transition: opacity 1.4s ease; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  #title h1 { margin: 0; font-family: var(--display); font-style: italic; font-weight: 300; font-size: clamp(44px, 9vw, 132px); letter-spacing: 0.12em; line-height: 1; text-wrap: balance; }
+  #keys { position: fixed; left: 0; right: 0; bottom: calc(34px + env(safe-area-inset-bottom, 0px)); transition: opacity 1.2s ease; display: flex; gap: 22px; justify-content: center; align-items: center; opacity: 0.86; flex-wrap: wrap; }
+  .cap { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 8px; border: 1px solid var(--ink-faint); border-radius: 7px; font-size: 13px; color: var(--ink-dim); background: var(--shade); }
+  .cap.wide { min-width: 120px; }
+  .group { display: flex; gap: 5px; align-items: center; }
+  .mouse { width: 20px; height: 30px; border: 1px solid var(--ink-faint); border-radius: 10px; position: relative; background: var(--shade); }
+  .mouse::after { content: ""; position: absolute; left: 50%; top: 5px; width: 2px; height: 7px; margin-left: -1px; border-radius: 1px; background: var(--ink-dim); }
+  .drag { font-size: 13px; color: var(--ink-dim); }
+  #loading { margin-top: 26px; font-size: 12px; letter-spacing: 0.2em; color: var(--ink-dim); text-transform: lowercase; }
+  #loading .bar { width: 160px; height: 2px; margin: 10px auto 0; background: var(--ink-faint); overflow: hidden; }
+  #loading .bar i { display: block; height: 100%; width: 0; background: var(--durum); transition: width 0.2s; }
+
+  #count { top: calc(18px + env(safe-area-inset-top, 0px)); right: max(22px, env(safe-area-inset-right, 0px)); display: flex; align-items: center; gap: 10px; font-size: 15px; font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 0.6s; }
+  #count svg { width: 26px; height: 26px; }
+  #count.show { opacity: 0.92; }
+  #count.bump svg { animation: bump 0.32s ease-out; }
+  @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.28) rotate(-18deg); } 100% { transform: scale(1); } }
+
+  #win { inset: 0; display: grid; place-items: end center; padding-bottom: calc(9vh + env(safe-area-inset-bottom, 0px)); opacity: 0; transition: opacity 1.2s ease; text-align: center; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  #win.show { opacity: 1; pointer-events: auto; }
+  #win .stats { display: flex; gap: 34px; justify-content: center; align-items: center; font-size: 18px; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+  #win .stat { display: flex; align-items: center; gap: 10px; }
+  #win .stat svg { width: 26px; height: 26px; }
+  #win button { margin-top: 30px; font: 500 14px var(--mono); color: var(--ink); background: var(--shade); border: 1px solid var(--ink-faint); border-radius: 999px; width: 54px; height: 54px; cursor: pointer; display: inline-grid; place-items: center; }
+  #win button:hover, #win button:focus-visible { border-color: var(--durum); outline: none; }
+  #win button svg { width: 22px; height: 22px; }
+  #err { inset: auto 0 24px 0; text-align: center; font-size: 12px; color: var(--ink-dim); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  /* the way home to the site: on the title and the win card, out of sight while playing */
+  .home-link { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 200; color: rgba(255, 246, 228, .86);
+    text-decoration: none; font: 800 11px/1.2 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; padding: 8px 10px; border-radius: 999px;
+    background: rgba(27, 20, 12, .55); border: 1px solid rgba(241, 200, 106, .32); backdrop-filter: blur(8px); transition: opacity .3s ease; }
+  .home-link:hover, .home-link:focus-visible { color: #fff; border-color: rgba(241, 200, 106, .75); outline: 0; }
+  body.play .home-link { opacity: 0; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) { #title, #win, #count, .home-link { transition: none; } #count.bump svg { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0" aria-label="AL DENTE, a 3D platformer"></canvas>
+
+<div class="ui" id="title">
+  <div>
+    <h1>AL DENTE</h1>
+    <div id="loading">boiling<div class="bar"><i id="loadbar"></i></div></div>
+  </div>
+</div>
+<div class="keys ui" id="keys" hidden>
+  <span class="group"><span class="cap">W</span><span class="cap">A</span><span class="cap">S</span><span class="cap">D</span></span>
+  <span class="cap wide">space</span>
+  <span class="group"><span class="mouse"></span><span class="drag">&#8596;</span></span>
+</div>
+
+<div class="ui" id="count" aria-live="polite">
+  <svg viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="16" cy="16" r="12.5"/><circle cx="16" cy="16" r="3.2"/><path d="M16 3.5v9.3M16 19.2v9.3M5.2 9.8l8 4.6M18.8 17.6l8 4.6M5.2 22.2l8-4.6M18.8 14.4l8-4.6"/></g></svg>
+  <span id="countn">0</span>
+</div>
+
+<div class="ui" id="win">
+  <div>
+    <div class="stats">
+      <span class="stat"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="16" cy="17" r="11"/><path d="M16 17V10M16 3h0M12 3h8"/></g></svg><span id="wtime">0:00</span></span>
+      <span class="stat"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="16" cy="16" r="12.5"/><circle cx="16" cy="16" r="3.2"/><path d="M16 3.5v9.3M16 19.2v9.3M5.2 9.8l8 4.6M18.8 17.6l8 4.6M5.2 22.2l8-4.6M18.8 14.4l8-4.6"/></g></svg><span id="wcount">0 / 0</span></span>
+    </div>
+    <button id="again" type="button" aria-label="Play again"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M19 12a7 7 0 1 1-2.05-4.95M19 4v4h-4"/></svg></button>
+  </div>
+</div>
+<div class="ui" id="err" hidden></div>
+<a class="home-link" href="/">Qualiacology</a>
+
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.min.js",
+  "three/addons/": "./vendor/jsm/"
+} }
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
