@@ -58,7 +58,7 @@ const VERDE = new THREE.Color('#7f9f48'), NATURAL = new THREE.Color('#f1cf7f');
 const VERDE_TINT = new THREE.Color(VERDE.r / NATURAL.r, VERDE.g / NATURAL.g, VERDE.b / NATURAL.b);
 
 /** A stack of cooked lasagna sheets: wavy sheet edges, slight hand-stacked drift, flat top. */
-export function lasagnaStack({ w, d, y0, y1, lh = 0.24, seed = 1, verde = 0, rc = 0.7, step = 0.42, bands = null }) {
+export function lasagnaStack({ w, d, y0, y1, lh = 0.24, seed = 1, verde = 0, rc = 0.7, step = 0.42, bands = null, bandColor = null, bulgeK = 1, rufK = 1, driftK = 1, tint = null }) {
   const rnd = mulberry32(seed);
   const hw = w / 2, hd = d / 2;
   const P = perimeter(hw, hd, rc, step);
@@ -70,16 +70,17 @@ export function lasagnaStack({ w, d, y0, y1, lh = 0.24, seed = 1, verde = 0, rc 
   let topRing = null;
   for (let L = 0; L < layers; L++) {
     const yb = y0 + L * lhh, yt = yb + lhh;
-    dx = clamp(dx + (rnd() - 0.5) * 0.05, -0.08, 0.08);
-    dz = clamp(dz + (rnd() - 0.5) * 0.05, -0.08, 0.08);
+    dx = clamp(dx + (rnd() - 0.5) * 0.05 * driftK, -0.08 * driftK, 0.08 * driftK);
+    dz = clamp(dz + (rnd() - 0.5) * 0.05 * driftK, -0.08 * driftK, 0.08 * driftK);
     const off = (rnd() - 0.5) * 0.1;
-    const ph = rnd() * 100, ph2 = rnd() * 100, amp = 0.025 + rnd() * 0.05, k = (Math.PI * 2) / (0.75 + rnd() * 0.5);
+    const ph = rnd() * 100, ph2 = rnd() * 100, amp = (0.025 + rnd() * 0.05) * rufK, k = (Math.PI * 2) / (0.75 + rnd() * 0.5);
     const isTop = L === layers - 1;
-    const bulge = lhh * (isTop ? 0.55 : 0.42);
+    const bulge = lhh * (isTop ? 0.55 : 0.42) * bulgeK;
     let tint = NATURAL;
     const isVerde = L < layers - 2 && (bands ? bands(L, layers) : rnd() < verde);
     const c = new THREE.Color(1, 1, 1);
-    if (isVerde) c.copy(VERDE_TINT);
+    if (isVerde) c.copy(bandColor || VERDE_TINT);
+    if (tint) c.multiply(tint);
     c.multiplyScalar(0.93 + rnd() * 0.1);
     const rings = [
       { y: yb, out: off - 0.02, rf: 0.5, yw: 0 },
@@ -181,15 +182,6 @@ export function buildWorld(scene, K, opts = {}) {
   scene.add(ground);
   W.ground = ground;
 
-  // sea of pastina
-  const sg = new THREE.PlaneGeometry(1400, 1400, 1, 1); sg.rotateX(-Math.PI / 2);
-  const suv = sg.getAttribute('uv'), sp = sg.getAttribute('position');
-  for (let i = 0; i < sp.count; i++) suv.setXY(i, sp.getX(i), sp.getZ(i));
-  const sea = new THREE.Mesh(sg, K.pastina);
-  sea.position.y = SEA; sea.receiveShadow = true;
-  scene.add(sea);
-  W.sea = sea;
-
   // lasagna stacks: { id, x, z, w, d, y0, y1, verde, bands }
   const SLABS = [
     // the first wall: a step you climb by sticking to it
@@ -221,28 +213,8 @@ export function buildWorld(scene, K, opts = {}) {
   // camera hint: the chimney wants a camera from the south, looking in
   W.zones.push({ id: 'chimney', x0: -1.6, x1: 1.6, z0: 12.8, z1: 19.0, y0: 3.4, y1: 11.0, yaw: 0, pitch: 0.16, dist: 8.5 });
 
-  // sky
-  const skyMat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { uSun: { value: new THREE.Vector3(0, 1, 0) } },
-    vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
-    fragmentShader: `varying vec3 vDir; uniform vec3 uSun;
-      void main(){
-        vec3 d = normalize(vDir);
-        float h = d.y;
-        vec3 zen = vec3(0.16, 0.33, 0.72) * 1.15;
-        vec3 hor = vec3(1.0, 0.8, 0.58) * 1.1;
-        vec3 low = vec3(0.95, 0.74, 0.5) * 1.1;
-        vec3 c = h > 0.0 ? mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.38)) : mix(hor, low, clamp(-h * 4.0, 0.0, 1.0));
-        float s = max(dot(d, uSun), 0.0);
-        c += vec3(1.0, 0.82, 0.55) * (pow(s, 7.0) * 0.55 + pow(s, 60.0) * 1.4) + vec3(1.0, 0.9, 0.7) * pow(s, 900.0) * 30.0;
-        gl_FragColor = vec4(c, 1.0);
-      }`,
-  });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), skyMat);
-  sky.frustumCulled = false; sky.renderOrder = -1;
-  scene.add(sky);
-  W.sky = sky; W.skyMat = skyMat;
+  const SS = addSeaSky(scene, K);
+  W.sea = SS.sea; W.sky = SS.sky; W.skyMat = SS.skyMat;
 
   buildHeaps(scene, K);
   buildMeadowSheets(scene, K);
@@ -312,9 +284,48 @@ function buildMeadowSheets(scene, K) {
   scene.add(m);
 }
 
+
+// The pastina sea and the sky dome every stage stands in.
+export function addSeaSky(scene, K) {
+  const W = {};
+  // sea of pastina
+  const sg = new THREE.PlaneGeometry(1400, 1400, 1, 1); sg.rotateX(-Math.PI / 2);
+  const suv = sg.getAttribute('uv'), sp = sg.getAttribute('position');
+  for (let i = 0; i < sp.count; i++) suv.setXY(i, sp.getX(i), sp.getZ(i));
+  const sea = new THREE.Mesh(sg, K.pastina);
+  sea.position.y = SEA; sea.receiveShadow = true;
+  scene.add(sea);
+  W.sea = sea;
+
+  // sky
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { uSun: { value: new THREE.Vector3(0, 1, 0) } },
+    vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
+    fragmentShader: `varying vec3 vDir; uniform vec3 uSun;
+      void main(){
+        vec3 d = normalize(vDir);
+        float h = d.y;
+        vec3 zen = vec3(0.16, 0.33, 0.72) * 1.15;
+        vec3 hor = vec3(1.0, 0.8, 0.58) * 1.1;
+        vec3 low = vec3(0.95, 0.74, 0.5) * 1.1;
+        vec3 c = h > 0.0 ? mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.38)) : mix(hor, low, clamp(-h * 4.0, 0.0, 1.0));
+        float s = max(dot(d, uSun), 0.0);
+        c += vec3(1.0, 0.82, 0.55) * (pow(s, 7.0) * 0.55 + pow(s, 60.0) * 1.4) + vec3(1.0, 0.9, 0.7) * pow(s, 900.0) * 30.0;
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), skyMat);
+  sky.frustumCulled = false; sky.renderOrder = -1;
+  scene.add(sky);
+  W.sky = sky; W.skyMat = skyMat;
+
+  return W;
+}
+
 // Pasta heaps rising out of the pastina on the horizon: piles of big tubes and wheels.
-function buildHeaps(scene, K) {
-  const rnd = mulberry32(99);
+export function buildHeaps(scene, K, { seed = 99, cx0 = 0, cz0 = 40, turn = 0 } = {}) {
+  const rnd = mulberry32(seed);
   const tube = new THREE.CylinderGeometry(1, 1, 1, 7, 1, true);
   tube.rotateZ(Math.PI / 2);
   const tubeUv = tube.getAttribute('uv'), tubeP = tube.getAttribute('position');
@@ -330,7 +341,7 @@ function buildHeaps(scene, K) {
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), S = new THREE.Vector3(), Pv = new THREE.Vector3();
   let i = 0;
   for (const h of heaps) {
-    const cx = Math.cos(h.a) * h.r, cz = 40 + Math.sin(h.a) * h.r;
+    const cx = cx0 + Math.cos(h.a + turn) * h.r, cz = cz0 + Math.sin(h.a + turn) * h.r;
     for (let k = 0; k < h.n; k++) {
       const rr = Math.sqrt(rnd()) * h.R, th = rnd() * Math.PI * 2;
       const prof = Math.pow(Math.max(0, 1 - (rr / h.R) ** 2), 0.85);

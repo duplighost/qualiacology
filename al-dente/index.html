@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AL DENTE | Qualiacology</title>
-<meta name="description" content="AL DENTE is a 3D platformer in the browser where everything is pasta: you are a forkful of cooked spaghetti, you stick to cooked lasagna walls and climb them, dry spaghetti snaps under you, and the star sits in a nest at the top of a giant rigatoni. Keyboard and mouse.">
+<meta name="description" content="AL DENTE is a 3D platformer in the browser where everything is pasta: you are a forkful of cooked spaghetti, you stick to cooked lasagna and climb it, dry spaghetti snaps under you. Two stars: one in a nest on top of a giant rigatoni, one on the drying rack of a fortress made of dry pasta. Keyboard and mouse.">
 <meta name="theme-color" content="#1b140c">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Qualiacology">
@@ -44,7 +44,7 @@
 
   #title { inset: 0; display: grid; place-items: start center; padding-top: 13vh; text-align: center; transition: opacity 1.4s ease; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   #title h1 { margin: 0; font-family: var(--display); font-style: italic; font-weight: 300; font-size: clamp(44px, 9vw, 132px); letter-spacing: 0.12em; line-height: 1; text-wrap: balance; }
-  #keys { position: fixed; left: 0; right: 0; bottom: calc(34px + env(safe-area-inset-bottom, 0px)); transition: opacity 1.2s ease; display: flex; gap: 22px; justify-content: center; align-items: center; opacity: 0.86; flex-wrap: wrap; }
+  #keys, #hintTitle { position: fixed; left: 0; right: 0; bottom: calc(34px + env(safe-area-inset-bottom, 0px)); transition: opacity 1.2s ease; display: flex; gap: 22px; justify-content: center; align-items: center; opacity: 0.86; flex-wrap: wrap; }
   .cap { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 8px; border: 1px solid var(--ink-faint); border-radius: 7px; font-size: 13px; color: var(--ink-dim); background: var(--shade); }
   .cap.wide { min-width: 120px; }
   .group { display: flex; gap: 5px; align-items: center; }
@@ -88,6 +88,10 @@
     <div id="loading">boiling<div class="bar"><i id="loadbar"></i></div></div>
   </div>
 </div>
+<div class="keys ui" id="hintTitle" hidden>
+  <span class="group"><span class="mouse"></span><span class="drag">&#10021;</span></span>
+  <span class="cap wide">space</span>
+</div>
 <div class="keys ui" id="keys" hidden>
   <span class="group"><span class="cap">W</span><span class="cap">A</span><span class="cap">S</span><span class="cap">D</span></span>
   <span class="cap wide">space</span>
@@ -105,7 +109,7 @@
       <span class="stat"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="16" cy="17" r="11"/><path d="M16 17V10M16 3h0M12 3h8"/></g></svg><span id="wtime">0:00</span></span>
       <span class="stat"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="16" cy="16" r="12.5"/><circle cx="16" cy="16" r="3.2"/><path d="M16 3.5v9.3M16 19.2v9.3M5.2 9.8l8 4.6M18.8 17.6l8 4.6M5.2 22.2l8-4.6M18.8 14.4l8-4.6"/></g></svg><span id="wcount">0 / 0</span></span>
     </div>
-    <button id="again" type="button" aria-label="Play again"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M19 12a7 7 0 1 1-2.05-4.95M19 4v4h-4"/></svg></button>
+    <button id="again" type="button" aria-label="Back to the nests"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
   </div>
 </div>
 <div class="ui" id="err" hidden></div>

@@ -132,10 +132,11 @@ uniform sampler2D tangleMap;
 uniform sampler2D tangleNormal;
 uniform float tangleScale;
 uniform vec3 tangleTint;
+uniform float tangleBias;
 float pastaHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
 float pastaVN( vec2 p ) { vec2 i = floor( p ), f = fract( p ); vec2 u = f * f * ( 3.0 - 2.0 * f );
 	return mix( mix( pastaHash( i ), pastaHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( pastaHash( i + vec2( 0.0, 1.0 ) ), pastaHash( i + vec2( 1.0, 1.0 ) ), u.x ), u.y ); }
-float tangleMaskAt( vec2 p ) { float n = pastaVN( p * 0.05 ) * 0.62 + pastaVN( p * 0.17 + 7.0 ) * 0.38; return smoothstep( 0.4, 0.53, n ); }
+float tangleMaskAt( vec2 p ) { float n = pastaVN( p * 0.05 ) * 0.62 + pastaVN( p * 0.17 + 7.0 ) * 0.38 + tangleBias; return smoothstep( 0.4, 0.53, n ); }
 #endif
 `;
 
@@ -244,7 +245,7 @@ export function pastaMaterial(o = {}) {
   if (o.tangle) {
     m.defines.PASTA_TANGLE = '';
     if (o.tangle.topOnly) m.defines.PASTA_TANGLE_TOP = '';
-    Object.assign(m.userData.pastaUniforms, { tangleMap: { value: o.tangle.map }, tangleNormal: { value: o.tangle.normal }, tangleScale: { value: 1 / o.tangle.tile }, tangleTint: { value: new THREE.Color(o.tangle.tint ?? '#ffffff') } });
+    Object.assign(m.userData.pastaUniforms, { tangleMap: { value: o.tangle.map }, tangleNormal: { value: o.tangle.normal }, tangleScale: { value: 1 / o.tangle.tile }, tangleTint: { value: new THREE.Color(o.tangle.tint ?? '#ffffff') }, tangleBias: { value: o.tangle.bias ?? 0 } });
   }
   m.onBeforeCompile = onBeforeCompile;
   return m;
@@ -271,6 +272,10 @@ export function makeKit(T) {
   K.sheet = pastaMaterial({ color: '#f4d488', roughness: 0.48, clearcoat: 0.45, clearcoatRoughness: 0.22, sheen: 0.2,
     normalMap: tex('nPores', 0.7), normalScale: 0.9, roughnessMap: tex('rough', 1.1), map: tex('albedo', 1.6),
     sss: SHEET_SSS, macro: 0.8, vertexColors: true, tangle: { map: T.tangle, normal: T.tangleN, tile: 2.6, tint: '#fff6e8', topOnly: true } });
+  // the select island: a sheet mostly buried in a bed of spaghetti
+  K.bed = pastaMaterial({ color: '#f4d488', roughness: 0.48, clearcoat: 0.45, clearcoatRoughness: 0.22, sheen: 0.2,
+    normalMap: tex('nPores', 0.7), normalScale: 0.9, roughnessMap: tex('rough', 1.1), map: tex('albedo', 1.6),
+    sss: SHEET_SSS, macro: 0.8, vertexColors: true, tangle: { map: T.tangle, normal: T.tangleN, tile: 1.9, tint: '#fff6e8', topOnly: true, bias: 0.32 } });
   K.sheetVerde = pastaMaterial({ color: '#7f9f48', roughness: 0.52, clearcoat: 0.3, clearcoatRoughness: 0.3, sheen: 0.2,
     normalMap: tex('nPores', 0.7), normalScale: 0.9, roughnessMap: tex('rough', 1.1), map: tex('albedo', 1.6),
     sss: { ...SHEET_SSS, color: '#c8ff6a' }, macro: 0.7 });
@@ -321,6 +326,26 @@ export function makeKit(T) {
     normalMap: tex('nStriate', 0.35), normalScale: 0.8, roughnessMap: tex('rough', 0.6), sss: { ...DRY_SSS, scale: 2.6 } });
   K.verdeSolid = pastaMaterial({ color: '#7f9f46', roughness: 0.45, clearcoat: 0.35, clearcoatRoughness: 0.22, sheen: 0.15,
     normalMap: tex('nPores', 0.15), normalScale: 0.5, sss: { ...COOKED_SSS, color: '#d9ff7a', scale: 1.5 } });
+  // ---- the dry fortress: teflon-die smooth, glassy, amber at thin edges
+  K.dryStack = pastaMaterial({ color: '#efc675', roughness: 0.34, clearcoat: 0.3, clearcoatRoughness: 0.18, sheen: 0.2, sheenColor: '#fff4d8',
+    normalMap: tex('nStriate', 0.5), normalScale: 0.55, roughnessMap: tex('rough', 0.9), map: tex('albedo', 1.4),
+    sss: { ...DRY_SSS, scale: 1.1, power: 2.6 }, macro: 0.5, vertexColors: true });
+  K.drySheet = pastaMaterial({ color: '#e6b85c', roughness: 0.46, clearcoat: 0.14, clearcoatRoughness: 0.38, sheen: 0.12,
+    normalMap: tex('nStriate', 0.6), normalScale: 0.6, roughnessMap: tex('rough', 1.0), map: tex('albedo', 1.6),
+    sss: { ...DRY_SSS, scale: 1.4 }, macro: 0.6, side: THREE.DoubleSide });
+  // cooked spinach lasagna: the only thing on a dry wall that holds you
+  K.banner = pastaMaterial({ color: '#8aab4e', roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.16, sheen: 0.15,
+    normalMap: tex('nPores', 0.35), normalScale: 0.5, roughnessMap: tex('rough', 0.6), sss: { ...COOKED_SSS, color: '#d4ff6e', scale: 1.9 },
+    sway: [0.05, 0.1, 0.0, 0.7], side: THREE.DoubleSide });
+  K.beetDry = pastaMaterial({ color: '#a83c55', roughness: 0.5, clearcoat: 0.16, clearcoatRoughness: 0.35, sheen: 0.3, sheenColor: '#ffc0cc',
+    normalMap: tex('nStriate', 0.22), normalScale: 0.7, roughnessMap: tex('rough', 0.4), sss: { ...DRY_SSS, color: '#ff4a72', scale: 0.9 } });
+  K.inkDry = pastaMaterial({ color: '#2b2622', roughness: 0.42, clearcoat: 0.3, clearcoatRoughness: 0.25, sheen: 0.35, sheenColor: '#8a7a68',
+    normalMap: tex('nStriate', 0.25), normalScale: 0.7, sss: { ...DRY_SSS, color: '#6a4a3a', scale: 0.3 } });
+  // ---- the face: orecchiette with squid-ink pastina pupils
+  K.eye = pastaMaterial({ color: '#f7e7bf', roughness: 0.4, clearcoat: 0.55, clearcoatRoughness: 0.16, sheen: 0.1,
+    normalMap: tex('nPores', 0.08), normalScale: 0.4, sss: { ...COOKED_SSS, scale: 1.4 } });
+  K.pupil = pastaMaterial({ color: '#141214', roughness: 0.22, clearcoat: 1.0, clearcoatRoughness: 0.06,
+    sss: { ...COOKED_SSS, color: '#30283a', scale: 0.2 } });
   // Pastina sea.
   const pa = T.pastina.clone(); pa.repeat.set(1 / 5.2, 1 / 5.2); pa.needsUpdate = true;
   const pn = T.pastinaN.clone(); pn.repeat.set(1 / 5.2, 1 / 5.2); pn.needsUpdate = true;

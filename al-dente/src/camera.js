@@ -59,7 +59,7 @@ export class FollowCam {
     this.target.x = damp(this.target.x, hp.x, 12, dt);
     this.target.z = damp(this.target.z, hp.z, 12, dt);
     const below = this.target.y - ty;
-    const vRate = hero.grounded || hero.stuck ? 7 : below > 2.5 ? 9 : 2.6;
+    const vRate = hero.grounded || hero.stuck ? 7 : below > 2.5 ? 9 : hero.vel.y > 12 ? 6 : 2.6;
     this.target.y = damp(this.target.y, ty, vRate, dt);
     if (Math.abs(this.target.y - ty) > 5) this.target.y = ty + Math.sign(this.target.y - ty) * 5;
     this.place(dt);

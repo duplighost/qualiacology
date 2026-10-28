@@ -271,15 +271,19 @@ export function cavatappi({ coilRadius = 0.62, tubeRadius = 0.2, height = 1.5, t
 }
 
 // ------------------------------------------------------------------ 6. the giant rigatoni
-export function rigatoniTower({ innerRadius = 1.9, outerRadius = 2.5, height = 12, ridges = 30, notch = { angle: Math.PI / 2, halfWidth: 0.42, height: 2.6 } } = {}) {
+export function rigatoniTower({ innerRadius = 1.9, outerRadius = 2.5, height = 12, ridges = 30, notch = { angle: Math.PI / 2, halfWidth: 0.42, height: 2.6 }, notches = null } = {}) {
   const cols = Math.max(120, ridges * 8), rows = 34;
+  const list = notches || (notch ? [notch] : []);
   const nA = notch?.angle ?? 0, nH = notch?.halfWidth ?? 0, nY = notch?.height ?? 0;
-  const jamb = nY * 0.72;
   const baseY = (a) => {
-    if (!notch) return 0;
-    const d = Math.abs(Math.atan2(Math.sin(a - nA), Math.cos(a - nA)));
-    if (d > nH) return 0;
-    return jamb + (nY - jamb) * Math.cos((d / nH) * Math.PI / 2); // arched top
+    let y = 0;
+    for (const n of list) {
+      const d = Math.abs(Math.atan2(Math.sin(a - n.angle), Math.cos(a - n.angle)));
+      if (d > n.halfWidth) continue;
+      const jamb = n.height * 0.72;
+      y = Math.max(y, jamb + (n.height - jamb) * Math.cos((d / n.halfWidth) * Math.PI / 2)); // arched top
+    }
+    return y;
   };
   const lean = 0.012 * outerRadius, oval = 0.012;
   const place = (a, y, r) => {
@@ -511,4 +515,100 @@ export function lasagnaRiccia({ width = 1.2, length = 3.0, thickness = 0.05, ruf
   const top = grid(nv + 1, nu + 1, (j, i) => { const u = (i / nu) * 2 - 1, v = (j / nv) * 2 - 1; const [x, y, z] = surf(u, v); return [x, y + thickness / 2, z, x, z]; }, { ref: () => [0, 1, 0] });
   const bot = grid(nv + 1, nu + 1, (j, i) => { const u = (i / nu) * 2 - 1, v = (j / nv) * 2 - 1; const [x, y, z] = surf(u, v); return [x, y - thickness / 2, z, x, z]; }, { ref: () => [0, -1, 0] });
   return merge([top, bot]);
+}
+
+// ------------------------------------------------------------------ 15. tortellino (rolls on its edge like a lumpy little wheel)
+// A folded, filled ring: plump belly, a folded crest running round the outside, and two thin pinched
+// corners that cross over each other at the back. Ring in the XY plane, rolling about Z.
+// userData.outer(th) is the outer radius at ring angle th, so it can roll lumpily on its crest.
+export function tortellino({ size = 1.2, rows = 72, cols = 22 } = {}) {
+  const s = size / 1.2;
+  const R = 0.32 * s, rb = 0.215 * s, re = 0.085 * s, TH = 3.36;
+  const prof = (th) => {
+    const a = Math.abs(th);
+    let r = re + (rb - re) * Math.pow(Math.cos(Math.min(1, a / 3.0) * Math.PI / 2), 1.15);
+    if (a > TH - 0.32) r *= Math.sqrt(Math.max(0, 1 - ((a - (TH - 0.32)) / 0.32) ** 2)) * 0.9 + 0.1; // pinched tip
+    return r;
+  };
+  const crestAt = (th, ph) => {
+    const d = Math.atan2(Math.sin(ph), Math.cos(ph));
+    return 1 + 0.4 * Math.exp(-(d * d) / 0.045) * smoothstep(3.0, 1.0, Math.abs(th));
+  };
+  const at = (i, j, seam) => {
+    const th = -TH + (2 * TH) * (i / (rows - 1)), ph = seam ? TAU : (j / cols) * TAU;
+    const r = prof(th) * crestAt(th, ph) * (1 - 0.12 * Math.max(0, -Math.cos(ph)));   // a little flatter where it faces the hole
+    const lift = Math.sign(th) * smoothstep(2.5, 3.2, Math.abs(th)) * re * 1.1;          // the corners cross, one over the other
+    const cx = Math.cos(th) * R, cy = Math.sin(th) * R;
+    const x = cx + Math.cos(th) * Math.cos(ph) * r, y = cy + Math.sin(th) * Math.cos(ph) * r, z = Math.sin(ph) * r * 0.9 + lift;
+    return [x, y, z, th * R, ph * r];
+  };
+  const g = grid(rows, cols, at, { closed: true, ref: (i, j) => { const th = -TH + (2 * TH) * (i / (rows - 1)), ph = (j / cols) * TAU; return [Math.cos(th) * Math.cos(ph), Math.sin(th) * Math.cos(ph), Math.sin(ph)]; } });
+  done(g);
+  g.userData.outer = (th) => { const a = Math.atan2(Math.sin(th), Math.cos(th)); return R + Math.max(prof(a) * crestAt(a, 0), re * 0.85); };
+  return g;
+}
+
+// ------------------------------------------------------------------ 16. orecchiette (a little ear-shaped cup, opening toward +Z)
+export function orecchiette({ radius = 0.1, depth = 0.035, thickness = 0.016 } = {}) {
+  const pts = [];
+  const n = 10;
+  // outer (back) surface from the centre to the rolled rim, then the inner (front) surface back to the centre
+  for (let i = 0; i <= n; i++) { const t = i / n; pts.push(new THREE.Vector2(Math.max(1e-4, radius * t), -depth * (1 - t * t) - thickness * 0.5)); }
+  pts.push(new THREE.Vector2(radius * 1.04, thickness * 0.2));
+  pts.push(new THREE.Vector2(radius * 0.97, thickness * 0.75));
+  for (let i = n; i >= 0; i--) { const t = i / n; pts.push(new THREE.Vector2(Math.max(1e-4, radius * t * 0.94), -depth * (1 - t * t) + thickness * 0.5)); }
+  const g = new THREE.LatheGeometry(pts, 24);
+  g.rotateX(Math.PI / 2);
+  // lathe UVs are 0..1; rescale to meters so the semolina texture keeps its size
+  const uv = g.getAttribute('uv');
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * TAU * radius, uv.getY(i) * radius * 2.2);
+  g.computeVertexNormals();
+  return done(g);
+}
+
+// ------------------------------------------------------------------ 17. gomito (elbow macaroni), bending in the XY plane
+export function gomito({ radius = 0.025, bend = 0.12, arc = 1.6 } = {}) {
+  const P = [];
+  for (let i = 0; i <= 8; i++) { const a = -arc / 2 + (i / 8) * arc; P.push(new V3(Math.sin(a) * bend, bend - Math.cos(a) * bend, 0)); }
+  return tube(P, { radius, radialSegments: 10, tubularSegments: 16 });
+}
+
+// ------------------------------------------------------------------ 18. a cooked sheet draped over a bar or a wall top
+// Hangs in -Y from a fold at y=0, z=0; the short flap lies back along -Z; width along X. aHang: 0 at the fold, 1 at the bottom.
+export function drapedSheet({ width = 2.6, drop = 3.3, flap = 0.6, fold = 0.12, ruffle = 0.09, rows = 120, cols = 26, seed = 1 } = {}) {
+  const rnd = mulberry32(seed);
+  const ph = rnd() * 9, k = TAU / (0.3 + rnd() * 0.06);
+  const L1 = flap, L2 = Math.PI * fold / 2, L3 = drop;
+  const total = L1 + L2 + L3;
+  const along = (s) => {
+    if (s < L1) return [0, -L1 + s, 0, 1, 0];                                // flap on top (y, z), normal up
+    if (s < L1 + L2) { const a = (s - L1) / fold; return [-fold + Math.cos(a) * fold, Math.sin(a) * fold, 0, Math.cos(a), Math.sin(a)]; }
+    return [-fold - (s - L1 - L2), fold + 0.006 * Math.sin((s - L1 - L2) * 3), 0, 0, 1]; // hanging face, normal +Z
+  };
+  const pos = [], uvs = [], hang = [], idx = [];
+  for (let i = 0; i <= rows; i++) {
+    const sN = (i / rows) * total;
+    const [yy, zz, , ny, nz] = along(sN);
+    const h = clamp((sN - L1) / (L2 + L3), 0, 1);
+    for (let j = 0; j <= cols; j++) {
+      const u = j / cols - 0.5;
+      const edge = smoothstep(0.66, 1.0, Math.abs(u) * 2);                    // riccia: only the long edges ruffle
+      const bottom = smoothstep(0.85, 1, sN / total);
+      const wave = Math.sin(sN * k + ph + (u > 0 ? 1.3 : 0)) * ruffle * edge + Math.sin(u * 14 + ph) * ruffle * 0.5 * bottom
+        + Math.sin(sN * 1.7 + u * 3 + ph) * 0.025;                                // a slow buckle across the whole sheet
+      const x = u * width + Math.sign(u) * Math.abs(wave) * 0.4;
+      pos.push(x, yy + ny * wave, zz + nz * wave + 0.004 * Math.sin(u * 9 + sN * 2));
+      uvs.push(x, sN);
+      hang.push(h);
+    }
+  }
+  const C = cols + 1;
+  for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) { const a = i * C + j, b = a + 1, c = a + C, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setAttribute('aHang', new THREE.Float32BufferAttribute(hang, 1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return done(g);
 }
