@@ -107,7 +107,7 @@ class Shore {
     this.cache = new Map();
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uFog: { value: new THREE.Color() }, uFogDensity: { value: 0.002 }, uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uLand: { value: new THREE.Color() }, uLight: { value: new THREE.Color(1, 1, 1) }, uSky: { value: new THREE.Color() }, uMoon: { value: new THREE.Color() } },
-      vertexShader: `attribute vec4 aInfo; varying vec4 vI; varying vec3 vW; void main(){ vI = aInfo; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      vertexShader: `attribute vec4 aInfo; varying vec4 vI; varying vec3 vW; void main(){ vI = aInfo; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
       fragmentShader: /* glsl */`
         uniform vec3 uFog, uCam, uLand, uLight, uSky, uMoon; uniform float uFogDensity, uTime; varying vec4 vI; varying vec3 vW;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -183,7 +183,7 @@ class Surface {
     const g = new THREE.PlaneGeometry(6000, 6000, 1, 1); g.rotateX(-Math.PI / 2);
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uFog: { value: new THREE.Color() }, uFogDensity: { value: 0.006 }, uMoonDir: { value: new THREE.Vector3(0, 1, 0) }, uY: { value: 0 } },
-      vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
       fragmentShader: /* glsl */`
         uniform vec3 uCam, uFog, uMoonDir; uniform float uTime, uFogDensity, uY; varying vec3 vW;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -217,7 +217,7 @@ class Surface {
 function beamMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uK: { value: 0 } },
-    vertexShader: `varying float vL; varying vec3 vN; varying vec3 vV; void main(){ vL = uv.y; vec4 w = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `varying float vL; varying vec3 vN; varying vec3 vV; void main(){ vL = uv.y; vec4 w = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: `uniform float uK; varying float vL; varying vec3 vN; varying vec3 vV; void main(){ float e = pow(clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0), 2.2); float a = e * pow(clamp(vL, 0.0, 1.0), 2.2) * uK;
       // (never a bad value: one NaN in the HDR target blooms white with black holes)
       a = (a == a) ? clamp(a, 0.0, 2.0) : 0.0; gl_FragColor = vec4(vec3(0.85, 0.95, 0.8) * a * 0.42, 1.0); }`,

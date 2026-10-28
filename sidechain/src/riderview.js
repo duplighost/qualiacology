@@ -65,7 +65,7 @@ export class RiderView {
     const pg = new THREE.PlaneGeometry(1.9, 2.6); pg.rotateX(-Math.PI / 2);
     this.poolMat = new THREE.ShaderMaterial({
       uniforms: { uColor: { value: new THREE.Color(P.edge) }, uK: { value: 1 } },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);} ',
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*(modelViewMatrix*vec4(position,1.0));} ',
       fragmentShader: 'uniform vec3 uColor; uniform float uK; varying vec2 vUv; void main(){ vec2 d=(vUv-0.5)*vec2(1.0,0.75)*2.0; float a=exp(-dot(d,d)*5.0); gl_FragColor=vec4(uColor*a*0.9*uK,1.0);} ',
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
     });

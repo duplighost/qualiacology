@@ -79,7 +79,7 @@ function sweetGeo() {
 }
 
 // ---------- the curtain: liquid candy falling, parting where she goes through ----------
-const CURTAIN_VS = `varying vec2 vP; void main(){ vP = vec2(position.x, -position.y); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const CURTAIN_VS = `varying vec2 vP; void main(){ vP = vec2(position.x, -position.y); gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }`;
 const CURTAIN_FS = `uniform vec3 uCol; uniform float uTime, uSince, uPartX, uPartY, uTop, uFog, uK; uniform vec3 uFogCol; varying vec2 vP;
   float h1(float n){ return fract(sin(n) * 43758.5453); }
   float n1(float x){ float i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(h1(i), h1(i + 1.0), f); }

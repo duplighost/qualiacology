@@ -185,7 +185,7 @@ function terrainMaterial(P) {
     },
     vertexShader: /* glsl */`
       varying vec3 vN; varying vec3 vW; varying vec2 vUv;
-      void main(){ vUv = uv; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vUv = uv; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uSun, uSunDir, uSky, uBounce, uFill, uFillDir, uGrass, uDirt, uFog, uCam, uHot, uHorizon;
       uniform float uSunK, uHemiK, uFillK, uFogDensity, uFrost, uTime;

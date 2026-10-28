@@ -55,7 +55,7 @@ const TV = (M, key, opts, k = 0.3) => M[key] || (M[key] = tintVC(key, opts, k));
 // light itself, one colour per instance (lantern glass, windows)
 function emitMaterial() {
   return new THREE.ShaderMaterial({
-    vertexShader: 'attribute vec3 aTint; varying vec3 vC; void main(){ vC = aTint; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }',
+    vertexShader: 'attribute vec3 aTint; varying vec3 vC; void main(){ vC = aTint; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }',
     fragmentShader: 'varying vec3 vC; void main(){ gl_FragColor = vec4(vC, 1.0); }',
   });
 }
@@ -75,7 +75,7 @@ function porcelain() { const m = new THREE.MeshStandardMaterial({ color: 0xfff4f
 function stitchMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uK: { value: 1 } },
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }',
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }',
     fragmentShader: /* glsl */`
       uniform float uK; varying vec2 vUv;
       void main(){

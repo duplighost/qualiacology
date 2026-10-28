@@ -119,7 +119,7 @@ export function mapTexture() {
 export function pictureMaterial(tex) {
   return new THREE.ShaderMaterial({
     uniforms: { uMap: { value: tex }, uLight: { value: new THREE.Color(1, 1, 1) }, uFog: { value: new THREE.Color() }, uFogDensity: { value: 0.0013 }, uCam: { value: new THREE.Vector3() } },
-    vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: `uniform sampler2D uMap; uniform vec3 uLight, uFog, uCam; uniform float uFogDensity; varying vec2 vUv; varying vec3 vW;
       void main(){ vec3 c = texture2D(uMap, vUv).rgb; c = c * c * uLight; float d = length(uCam - vW); float fog = 1.0 - exp(-pow(d * uFogDensity, 1.5)); gl_FragColor = vec4(mix(c, uFog, clamp(fog, 0.0, 1.0)), 1.0); }`,
   });

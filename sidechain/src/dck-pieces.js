@@ -343,7 +343,7 @@ function mirrorStand() {
 function mirrorGlassMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uT: { value: 0 }, uK: { value: 1 } },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform float uT, uK; varying vec2 vUv;
       void main(){
         vec2 p = vUv - vec2(0.5, 0.0);
@@ -465,7 +465,7 @@ extend({
     dckPrizeWall: (M) => [prizeWall(), VC(M, 'dckShelfM', 0.42, { roughness: 0.4 }), 6, {}],
     dckFrame: (M) => [photoFrame(false), VC(M, 'dckWoodM', 0.3, { roughness: 0.5, metalness: 0.2 }), 6, {}],
     dckFrameDown: (M) => [photoFrame(true), VC(M, 'dckWoodM', 0.3, { roughness: 0.5, metalness: 0.2 }), 2, {}],
-    dckPhoto: (M) => [photoGeometry(), M.dckPhotoM || (M.dckPhotoM = new THREE.ShaderMaterial({ uniforms: { uMap: { value: (PHOTOS = PHOTOS || photosTexture()) } }, vertexShader: 'attribute float aIdx; varying vec2 vUv; void main(){ vUv = vec2((uv.x + aIdx) / 3.0, uv.y); gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }', fragmentShader: 'uniform sampler2D uMap; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(uMap, vUv).rgb * 1.15, 1.0); }' })), 6, { aIdx: 1 }],
+    dckPhoto: (M) => [photoGeometry(), M.dckPhotoM || (M.dckPhotoM = new THREE.ShaderMaterial({ uniforms: { uMap: { value: (PHOTOS = PHOTOS || photosTexture()) } }, vertexShader: 'attribute float aIdx; varying vec2 vUv; void main(){ vUv = vec2((uv.x + aIdx) / 3.0, uv.y); gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }', fragmentShader: 'uniform sampler2D uMap; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(uMap, vUv).rgb * 1.15, 1.0); }' })), 6, { aIdx: 1 }],
     dckMirrorStand: (M) => [mirrorStand(), VC(M, 'dckWoodM', 0.3, { roughness: 0.5, metalness: 0.2 }), 2, {}],
     dckMirrorGlass: (M) => [(() => { const g = new THREE.CircleGeometry(10, 48); g.scale(1, 1.35, 1); g.translate(0, 18, 0.15); const uv = g.attributes.uv.array; for (let i = 0; i < uv.length; i += 2) { uv[i + 1] = uv[i + 1]; } return g; })(), M.dckMirrorM || (M.dckMirrorM = mirrorGlassMaterial()), 2, {}],
     dckTruck: (M) => [truck(), VC(M, 'dckTruckM', 0.25, { roughness: 0.5, metalness: 0.4 }), 12, {}],

@@ -699,7 +699,7 @@ function funeralMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
-      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uFogDensity;
       uniform vec3 uFog, uCam, uWarm, uLight, uSkyTop, uSkyLow, uMoon, uBeam;

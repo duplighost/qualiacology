@@ -5,6 +5,7 @@
 // the street (white siding, lit windows, a string of lights) or a plain wall with a door or a window.
 
 import * as THREE from 'three';
+import { AA_GLSL } from './aa.js';
 
 // the cross-sections: [x across, y up (from the floor), measured from the floor, part]
 // parts: 0 floor (or the tabletop), 1 left wall, 2 right wall, 3 ceiling, 4 the tablecloth's drop,
@@ -51,12 +52,18 @@ export function roomMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW;
-      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uFogDensity, uSnow, uBeat, uLamps; uniform vec3 uFog, uCam, uLight, uSkyLo, uSkyHi;
       varying float vPart; varying vec3 vC; varying vec3 vW;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
+      ${AA_GLSL}
+      // grout, seams and each tile's or board's own tone settle to their average where they get down to a
+      // few pixels (qc: the grid without any row's offset): along the walls the floors shimmered
+      float fwm(vec2 qc){ vec2 fw = fwidth(qc); return max(fw.x, fw.y); }
+      float edgeF(vec2 q, vec2 qc, float w){ return mix(edge(fract(q), w), 1.0 - 2.0 * w, smoothstep(w, 4.0 * w, fwm(qc))); }
+      float toneF(vec2 q, vec2 qc){ return mix(h2(floor(q)), 0.5, smoothstep(0.3, 0.7, fwm(qc))); }
       float box2(vec2 p, vec2 a, vec2 b){ return step(a.x, p.x) * step(p.x, b.x) * step(a.y, p.y) * step(p.y, b.y); }
       // snow falling past a window: little bright flecks drifting down
       float snowfall(vec2 q, float k){
@@ -127,9 +134,10 @@ export function roomMaterial() {
             vec2 a = mod(q, r) - r * 0.5, b = mod(q - r * 0.5, r) - r * 0.5;
             vec2 g = dot(a, a) < dot(b, b) ? a : b; vec2 id = q - g;
             float d = max(abs(g.x) * 0.866 + abs(g.y) * 0.5, abs(g.y));
-            float grout = smoothstep(0.4, 0.46, d);
-            float flower = step(0.9, h2(floor(id * 0.34)));
-            col = mix(vec3(0.93, 0.93, 0.9), vec3(0.08, 0.08, 0.1), flower * step(0.5, h2(id)));
+            float hk = fwm(q);
+            float grout = mix(smoothstep(0.4, 0.46, d), 0.26, smoothstep(0.08, 0.3, hk));
+            float flower = step(0.9, h2(floor(id * 0.34))) * step(0.5, h2(id));
+            col = mix(vec3(0.93, 0.93, 0.9), vec3(0.08, 0.08, 0.1), mix(flower, 0.05, smoothstep(0.25, 0.6, hk)));
             col = mix(col, vec3(0.62, 0.62, 0.6), grout);
             // the bath mat
             col = mix(col, vec3(0.86, 0.5, 0.58) * (0.85 + 0.15 * sin(x * 3.0) * sin(along * 3.0)), step(abs(x), 15.0) * step(0.5, fract(along / 90.0)) * step(fract(along / 90.0), 0.78));
@@ -141,13 +149,13 @@ export function roomMaterial() {
             float run = step(abs(x), 16.0);
             vec2 pq = vec2(x, along) / 2.0;
             float pl = 0.55 * step(0.5, fract(pq.x * 0.25)) + 0.45 * step(0.5, fract(pq.y * 0.25));
-            vec3 plaid = mix(vec3(0.62, 0.06, 0.08), vec3(0.12, 0.3, 0.16), pl) * (0.85 + 0.25 * step(0.92, fract(pq.x)) + 0.25 * step(0.92, fract(pq.y)));
+            vec3 plaid = mix(vec3(0.62, 0.06, 0.08), vec3(0.12, 0.3, 0.16), pl) * (0.85 + 0.25 * aaPulse(pq.x - 0.92, 0.08) + 0.25 * aaPulse(pq.y - 0.92, 0.08));
             col = mix(col, plaid, run);
-            col = mix(col, vec3(0.8, 0.62, 0.26), step(abs(abs(x) - 35.0), 0.5));
+            col = mix(col, vec3(0.8, 0.62, 0.26), aaBand(abs(x), 35.0, 0.5));
           } else if (st == 2) {
             // the hall: oak boards and the long runner
-            vec2 pl = vec2(x / 1.6, along / 10.0 + 0.37 * floor(x / 1.6));
-            col = vec3(0.45, 0.28, 0.16) * (0.78 + 0.35 * h2(floor(pl))) * (0.88 + 0.12 * edge(fract(pl), 0.03));
+            vec2 pl = vec2(x / 1.6, along / 10.0 + 0.37 * floor(x / 1.6)), plc = vec2(x / 1.6, along / 10.0);
+            col = vec3(0.45, 0.28, 0.16) * (0.78 + 0.35 * toneF(pl, plc)) * (0.88 + 0.12 * edgeF(pl, plc, 0.03));
             float rug = step(abs(x), 13.0);
             vec2 mq = vec2(x / 2.0, along / 2.0); float motif = step(0.7, abs(sin(mq.x * 2.0) * sin(mq.y * 1.4)));
             vec3 rc = mix(vec3(0.42, 0.08, 0.1), vec3(0.12, 0.16, 0.34), motif);
@@ -155,7 +163,7 @@ export function roomMaterial() {
           } else {
             // the living room's carpet in the dark, the wrapping paper still on it
             vec2 q = vec2(x, along) / 1.2;
-            col = vec3(0.5, 0.44, 0.36) * (0.85 + 0.15 * h2(floor(q)));
+            col = vec3(0.5, 0.44, 0.36) * (0.85 + 0.15 * toneF(q, q));
             vec2 pq = vec2(x, along) / 11.0; vec2 pc = floor(pq);
             float paper = step(0.8, h2(pc)) * step(length(fract(pq) - 0.5), 0.3) * step(16.0, abs(x));
             col = mix(col, mix(vec3(0.75, 0.1, 0.12), vec3(0.15, 0.45, 0.25), h2(pc + 1.0)) * (0.8 + 0.2 * sin(x * 2.0 + along)), paper);
@@ -163,7 +171,7 @@ export function roomMaterial() {
         }
         else if (part == 3) {
           col = st == 3 ? vec3(0.42, 0.42, 0.46) : vec3(0.92, 0.9, 0.86);
-          col *= 0.9 + 0.1 * edge(fract(vec2(x / 8.0, along / 8.0)), 0.02);
+          col *= 0.9 + 0.1 * edgeF(vec2(x / 8.0, along / 8.0), vec2(x / 8.0, along / 8.0), 0.02);
           col *= 0.75;
         }
         else {
@@ -173,7 +181,7 @@ export function roomMaterial() {
             // her bathroom: pink tile to above the shoulder, a maroon line, cream paper with roses
             float tileTop = 20.0;
             vec2 tq = vec2(wa / 1.9, h / 1.9);
-            vec3 tile = vec3(0.93, 0.66, 0.72) * (0.93 + 0.07 * h2(floor(tq))) * (0.86 + 0.14 * edge(fract(tq), 0.07));
+            vec3 tile = vec3(0.93, 0.66, 0.72) * (0.93 + 0.07 * toneF(tq, tq)) * (0.86 + 0.14 * edgeF(tq, tq, 0.07));
             vec2 rq = vec2(wa / 2.6 + 0.5 * mod(floor(h / 2.6), 2.0), h / 2.6); vec2 rf = fract(rq) - 0.5;
             float rose = smoothstep(0.2, 0.12, length(rf)), leaf = smoothstep(0.1, 0.04, length(rf - vec2(0.18, -0.12)));
             vec3 paper = mix(vec3(0.95, 0.9, 0.82), vec3(0.85, 0.42, 0.5), rose * 0.8);

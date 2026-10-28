@@ -75,7 +75,7 @@ const VS = /* glsl */`
     vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0);
     vW = w.xyz;
     vN = normalize(mat3(modelMatrix * instanceMatrix) * n);
-    gl_Position = projectionMatrix * viewMatrix * w;
+    gl_Position = projectionMatrix * (viewMatrix * w);
   }`;
 
 const FS = /* glsl */`

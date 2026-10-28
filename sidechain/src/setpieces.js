@@ -37,7 +37,7 @@ export class Wreck {
     bg.translate(0, 210, 0);
     this.beamMat = new THREE.ShaderMaterial({
       uniforms: { uColor: { value: new THREE.Color(P.jacket) }, uK: { value: 0.4 }, uTime: { value: 0 } },
-      vertexShader: `varying vec3 vP; varying vec3 vN; varying vec3 vV; varying float vD; void main(){ vP = position; vec4 w = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); vD = length(cameraPosition.xz - (modelMatrix * vec4(0.0,0.0,0.0,1.0)).xz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+      vertexShader: `varying vec3 vP; varying vec3 vN; varying vec3 vV; varying float vD; void main(){ vP = position; vec4 w = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); vD = length(cameraPosition.xz - (modelMatrix * vec4(0.0,0.0,0.0,1.0)).xz); gl_Position = projectionMatrix * (viewMatrix * w); }`,
       fragmentShader: `uniform vec3 uColor; uniform float uK, uTime; varying vec3 vP; varying vec3 vN; varying vec3 vV; varying float vD;
         void main(){ float h = vP.y / 420.0; float edge = pow(abs(dot(vN, vV)), 1.5); float a = (1.0 - h) * (1.0 - h) * edge * uK;
           a *= 0.8 + 0.2 * sin(vP.y * 0.05 - uTime * 3.0); a *= smoothstep(60.0, 220.0, vD); gl_FragColor = vec4(uColor * a * 0.9, 1.0); }`,

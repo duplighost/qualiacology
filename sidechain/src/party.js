@@ -98,7 +98,7 @@ function drumsGeometry() {
 const beaterGeometry = () => merge([paint(cyl(0.05, 0.05, 1.2, 6, 0, 0.6, 0), rgb(0xdcdfe6)), paint(sph(0.16, 1, 1, 1.2, 0, 1.25, 0, 8, 6), rgb(0xf0ece4))].map(withUv));
 
 // the screen behind the band: a heart that beats and a trace that writes every beat down
-const SCREEN_VS = `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+const SCREEN_VS = `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`;
 const SCREEN_FS = /* glsl */`
   uniform float uBeat, uBeatPos, uK, uHptFogD; uniform vec3 uCol, uLine, uHptFog;
   varying vec2 vUv; varying vec3 vW;
@@ -121,7 +121,7 @@ const SCREEN_FS = /* glsl */`
     gl_FragColor = vec4(mix(c, uHptFog, clamp(fg, 0.0, 1.0)), 1.0);
   }`;
 // a beam of light out of a moving head on the roof (from its lamp up its length)
-const BEAM_VS = `varying float vH; varying vec3 vN; varying vec3 vV; varying vec3 vA; void main(){ vH = position.y / 160.0; vec4 w = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); vA = normalize(mat3(modelMatrix) * vec3(0.0, 1.0, 0.0)); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const BEAM_VS = `varying float vH; varying vec3 vN; varying vec3 vV; varying vec3 vA; void main(){ vH = position.y / 160.0; vec4 w = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); vA = normalize(mat3(modelMatrix) * vec3(0.0, 1.0, 0.0)); gl_Position = projectionMatrix * (viewMatrix * w); }`;
 const BEAM_FS = `uniform vec3 uColor; uniform float uK; varying float vH; varying vec3 vN; varying vec3 vV; varying vec3 vA;
   void main(){ float e = pow(abs(dot(normalize(vN), normalize(vV))), 2.0); float end = 1.0 - smoothstep(0.55, 0.92, abs(dot(normalize(vA), normalize(vV))));
     float a = pow(max(1.0 - vH, 0.0), 1.5) * smoothstep(0.0, 0.04, vH) * e * uK * end; a = (a == a) ? clamp(a, 0.0, 3.0) : 0.0; gl_FragColor = vec4(uColor * a * 0.6, 1.0); }`;
@@ -370,7 +370,7 @@ function ribMaterial() {
     vertexShader: /* glsl */`
       attribute vec3 aWake; varying float vW; varying vec3 vWp; varying vec3 vN; varying float vU;
       void main(){ vW = aWake.x; vU = uv.x; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vWp = w.xyz;
-        vN = normalize(mat3(modelMatrix * instanceMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`,
+        vN = normalize(mat3(modelMatrix * instanceMatrix) * normal); gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uCol, uGlow, uFog, uCam; uniform float uBeat, uFogDensity; varying float vW; varying vec3 vWp; varying vec3 vN; varying float vU;
       void main(){

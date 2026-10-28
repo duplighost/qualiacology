@@ -237,7 +237,7 @@ const paper = (M, key, map, k = 0.45, opts = {}) => M[key] || (M[key] = new THRE
 function cellPaper(map, cols, rows, k = 0.5) {
   return new THREE.ShaderMaterial({
     uniforms: { tMap: { value: map }, uK: { value: k } },
-    vertexShader: `attribute float aCell; varying vec2 vUv; varying float vCell; void main(){ vUv = uv; vCell = aCell; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aCell; varying vec2 vUv; varying float vCell; void main(){ vUv = uv; vCell = aCell; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform sampler2D tMap; uniform float uK; varying vec2 vUv; varying float vCell; void main(){ float cell = floor(vCell + 0.5); float c = mod(cell, ${cols.toFixed(1)}), r = floor((cell + 0.5) / ${cols.toFixed(1)}); vec3 t = texture2D(tMap, vec2((c + vUv.x) / ${cols.toFixed(1)}, 1.0 - (r + 1.0 - vUv.y) / ${rows.toFixed(1)})).rgb; gl_FragColor = vec4(t * uK, 1.0); }`,
     side: THREE.DoubleSide,
   });
@@ -246,7 +246,7 @@ function cellPaper(map, cols, rows, k = 0.5) {
 function coneMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uCol: { value: new THREE.Color(0xfff0d0) } },
-    vertexShader: `attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform vec3 uCol; varying vec2 vUv; varying float vK; void main(){ float y = clamp(vUv.y, 0.0, 1.0); float a = 0.25 + 0.75 * y * y; gl_FragColor = vec4(uCol * a * 0.12 * vK, 1.0); }`,
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide,
   });
@@ -357,7 +357,7 @@ const BG = {
 };
 
 // a plain glowing colour per instance
-function tintBasic(opts = {}) { return new THREE.ShaderMaterial({ vertexShader: `attribute vec3 aTint; varying vec3 vC; void main(){ vC = aTint; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`, fragmentShader: `varying vec3 vC; void main(){ gl_FragColor = vec4(vC, 1.0); }`, side: THREE.DoubleSide, ...opts }); }
+function tintBasic(opts = {}) { return new THREE.ShaderMaterial({ vertexShader: `attribute vec3 aTint; varying vec3 vC; void main(){ vC = aTint; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`, fragmentShader: `varying vec3 vC; void main(){ gl_FragColor = vec4(vC, 1.0); }`, side: THREE.DoubleSide, ...opts }); }
 // lit, tinted per instance (balloons, flags)
 function tintLit(rough = 0.4, metal = 0.1, k = 0.25) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough, metalness: metal, side: THREE.DoubleSide });
@@ -631,7 +631,7 @@ function venueMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
-      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uBeat, uFogDensity, uLoud;
       uniform vec3 uFog, uCam, uWarm, uLight, uSkyTop, uSkyLow, uGlow;
@@ -759,11 +759,17 @@ function venueMaterial() {
             col = mix(col, vec3(0.5, 0.36, 0.2), sh);
             vec2 bq = vec2(wa / 2.2, (h - 14.0) / 5.0); vec2 bc = floor(bq), bf = fract(bq);
             float tall = 0.55 + 0.25 * h2(bc + 2.0);
-            float body = step(0.3, bf.x) * step(bf.x, 0.7) * step(0.1, bf.y) * step(bf.y, tall);
-            float neck = step(0.44, bf.x) * step(bf.x, 0.56) * step(tall, bf.y) * step(bf.y, tall + 0.22);
-            float bottle = clamp(body + neck, 0.0, 1.0) * shelfZone * step(0.25, h2(bc + 9.0));
+            // (each bottle's edges blended over the pixel, and the shelves settling to their average where
+            // the bottles get down to a few pixels: drawn hard they sparkled along the walls)
+            vec2 bw = max(fwidth(bq), vec2(1e-4));
+            float body = clamp((0.2 - abs(bf.x - 0.5)) / bw.x + 0.5, 0.0, 1.0) * clamp((bf.y - 0.1) / bw.y + 0.5, 0.0, 1.0) * clamp((tall - bf.y) / bw.y + 0.5, 0.0, 1.0);
+            float neck = clamp((0.06 - abs(bf.x - 0.5)) / bw.x + 0.5, 0.0, 1.0) * clamp((bf.y - tall) / bw.y + 0.5, 0.0, 1.0) * clamp((tall + 0.22 - bf.y) / bw.y + 0.5, 0.0, 1.0);
+            float bottle = clamp(body + neck, 0.0, 1.0) * step(0.25, h2(bc + 9.0));
+            float bfar = smoothstep(0.12, 0.35, max(bw.x, bw.y));
+            bottle = mix(bottle, 0.33, bfar) * shelfZone;
             glow += uWarm * 0.12 * shelfZone * (1.0 - bottle);
             vec3 bcol = h2(bc + 1.0) < 0.3 ? vec3(0.9, 0.55, 0.15) : h2(bc + 1.0) < 0.6 ? vec3(0.2, 0.6, 0.25) : h2(bc + 1.0) < 0.8 ? vec3(0.8, 0.85, 0.9) : vec3(0.6, 0.15, 0.2);
+            bcol = mix(bcol, vec3(0.64, 0.55, 0.42), bfar);
             col = mix(col, bcol * 0.4, bottle); glow += bcol * bottle * 0.55;
             col = mix(col, uSkyLow * 0.3 + vec3(0.2), step(abs(h - 32.0), 1.4) * (part == 6 ? 0.0 : 1.0));
           }

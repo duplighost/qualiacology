@@ -267,7 +267,7 @@ const CDY = {
 function swirlMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uA: { value: new THREE.Color(0xff4fa8) }, uB: { value: new THREE.Color(0xfff0f6) }, uBeat: { value: 0 } },
-    vertexShader: 'varying vec2 vP; void main(){ vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }',
+    vertexShader: 'varying vec2 vP; void main(){ vP = position.xz; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }',
     fragmentShader: `uniform float uTime, uBeat; uniform vec3 uA, uB; varying vec2 vP;
       void main(){ float r = length(vP), a = atan(vP.y, vP.x);
         float s = sin(a * 3.0 + r * 0.42 - uTime * 1.6);

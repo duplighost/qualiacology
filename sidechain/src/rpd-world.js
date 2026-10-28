@@ -50,7 +50,7 @@ function roomMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW;
-      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uFogDensity, uLit, uNeg; uniform vec3 uFog, uCam, uLight, uSkyLo, uSkyHi;
       varying float vPart; varying vec3 vC; varying vec3 vW;
@@ -214,7 +214,7 @@ function brainMaterial() {
         float f = folds(vec2(aB.x, aB.y));
         p.y += (smoothstep(0.06, 0.55, f) * 4.6 - 1.2) * aB.z;
         vec4 w = modelMatrix * vec4(p, 1.0); vW = w.xyz;
-        gl_Position = projectionMatrix * viewMatrix * w;
+        gl_Position = projectionMatrix * (viewMatrix * w);
       }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uBeat, uFogDensity, uHemiK, uNeg; uniform vec3 uFog, uCam, uSky, uBounce, uMoon, uMoonDir, uLamp, uGlow;
@@ -263,7 +263,7 @@ function diplomaTexture() {
   g.font = 'italic 700 92px Georgia, "Times New Roman", serif'; g.fillText('Doctor of Philosophy', W / 2, 290);
   g.font = 'italic 40px Georgia, serif'; g.fillText('in', W / 2, 375);
   g.fillStyle = '#6a1428'; g.font = '700 84px Georgia, "Times New Roman", serif'; g.fillText('REVERSE PSYCHOLOGY', W / 2, 460);
-  g.fillStyle = '#2a2220'; g.font = 'italic 38px Georgia, serif'; g.fillText('conferred upon', W / 2, 560); g.fillText('with the highest honours', W / 2, 735);
+  g.fillStyle = '#2a2220'; g.font = 'italic 38px Georgia, serif'; g.fillText('conferred upon', W / 2, 560); g.fillText('with the highest honors', W / 2, 735);
   // the name, written and then gone over and over until it isn't one
   g.strokeStyle = '#1a1414'; g.lineWidth = 3; g.beginPath(); g.moveTo(420, 680); g.lineTo(980, 680); g.stroke();
   g.lineWidth = 7; g.lineCap = 'round';

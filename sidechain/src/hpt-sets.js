@@ -166,7 +166,7 @@ function ribMaterial() {
     vertexShader: /* glsl */`
       attribute float aU; attribute vec2 aK; varying float vU; varying vec2 vK; varying vec3 vW; varying vec3 vN;
       void main(){ vU = aU; vK = aK; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz;
-        vN = normalize(mat3(modelMatrix * instanceMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`,
+        vN = normalize(mat3(modelMatrix * instanceMatrix) * normal); gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uBone, uRed, uCam, uHptFog; uniform float uHptFogD; varying float vU; varying vec2 vK; varying vec3 vW; varying vec3 vN;
       void main(){

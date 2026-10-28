@@ -77,7 +77,7 @@ function walkup() {
 
 // ---------- the front: brick, the windows lit and people dancing in them ----------
 const FACADE_VS = `attribute vec3 aTint; attribute float aSeed; varying vec2 vP; varying vec3 vTint; varying float vSeed; varying vec3 vW;
-  void main(){ vP = position.xy; vTint = aTint; vSeed = aSeed; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+  void main(){ vP = position.xy; vTint = aTint; vSeed = aSeed; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`;
 const FACADE_FS = `uniform float uTime, uBeat, uPhase, uParity, uParty, uFogDensity, uWin; uniform vec3 uFog, uCam, uWarm, uAlt;
   varying vec2 vP; varying vec3 vTint; varying float vSeed; varying vec3 vW;
   // a hash without sin: an interpolated seed is never quite constant across a face, and sin of a

@@ -37,7 +37,7 @@ varying vec2 vUv;
 varying float vFade;
 void main(){
   vColor=color; vUv=uv; vFade=aFade;
-  gl_Position=projectionMatrix*modelViewMatrix*vec4(position+aEdge*uGlow*3.0,1.0);
+  gl_Position=projectionMatrix*(modelViewMatrix*vec4(position+aEdge*uGlow*3.0,1.0));
 }`;
 
 const ribbonFragment = /* glsl */`

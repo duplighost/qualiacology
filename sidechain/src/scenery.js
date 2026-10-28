@@ -135,7 +135,8 @@ export class Scenery {
       ...((plan && plan.signs) || []),
       ...((plan && plan.lyrics) || []).map((l, i) => ({ key: 'LYR' + i, text: l.text, color: l.color || plan.lyricColor || '#ffffff', core: l.core || plan.lyricCore || '#ffffff', bg: l.bg || plan.lyricBg || '#120914', font: l.font || plan.lyricFont, weight: l.weight || plan.lyricWeight, frame: l.frame || P.fret && '#' + new THREE.Color(P.fret).getHexString() })),
     ];
-    this.atlas = makeAtlas(signs, 4, 12);
+    // (a sheet of 12 rows holds 48; a song with more signs and boards than that gets more rows)
+    this.atlas = makeAtlas(signs, 4, Math.max(12, Math.ceil(signs.length / 4)));
 
     this.scene = scene;
     this.mats = makeMaterials(P, this.atlas); this.mats.P = P;
@@ -497,7 +498,7 @@ class Road {
         uW: { value: r.width ?? 22 }, uWalk: { value: r.walk ?? 0 }, uTotal: { value: total }, uLanes: { value: r.laneLines ?? 1 },
         uLampEvery: { value: r.lampEvery ?? 30 }, uMedian: { value: r.median ? 1 : 0 }, uShade: { value: P.shade ?? 0 }, uSun: { value: new THREE.Color(P.moon ?? 0xffffff) }, uSnow: { value: P.snowGround ?? 0 }, uDry: { value: r.dry ? 1 : 0 },
       },
-      vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
       fragmentShader: /* glsl */`
         uniform vec3 uFog, uCam, uLamp, uSky, uSun; uniform float uFogDensity, uW, uWalk, uTotal, uLanes, uLampEvery, uMedian, uShade, uSnow, uDry;
         varying vec2 vUv; varying vec3 vW;

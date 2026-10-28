@@ -94,7 +94,7 @@ function receiptTexture() {
   return canvasTex(256, 1024, (g, W, H) => {
     g.fillStyle = '#f8f6f0'; g.fillRect(0, 0, W, H);
     g.fillStyle = '#2a2a30'; g.font = '700 22px "Courier New", monospace';
-    const items = ['MINIBAR', 'MINIBAR', 'CHAMPAGNE', 'MINIBAR', 'ROOM SVC', 'MINIBAR', 'SPA', 'MINIBAR', 'VALET', 'MINIBAR', 'ROSE', 'MINIBAR', 'CAVIAR', 'MINIBAR', 'MINIBAR', 'SUITE', 'MINIBAR', 'MINIBAR', 'FLOWERS', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'BOAT', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR'];
+    const items = ['MINIBAR', 'MINIBAR', 'CHAMPAGNE', 'MINIBAR', 'ROOM SVC', 'MINIBAR', 'SPA', 'MINIBAR', 'VALET', 'MINIBAR', 'ROSÉ', 'MINIBAR', 'CAVIAR', 'MINIBAR', 'MINIBAR', 'SUITE', 'MINIBAR', 'MINIBAR', 'FLOWERS', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'BOAT', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR', 'MINIBAR'];
     const R = seeded(31);
     items.forEach((s, i) => { const y = 40 + i * 25; g.textAlign = 'left'; g.fillText(s, 16, y); g.textAlign = 'right'; g.fillText((20 + R() * 480).toFixed(2), W - 16, y); });
   }, true);
@@ -145,7 +145,7 @@ const tex = () => TEX || (TEX = { facade: facadeTextures(), cheque: chequeTextur
 function poolMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uNight: { value: 0 }, uSun: { value: new THREE.Color(1, 0.9, 0.7) }, uSky: { value: new THREE.Color(0.6, 0.75, 0.9) }, uFog: { value: new THREE.Color() }, uFogDensity: { value: 0.002 }, uCam: { value: new THREE.Vector3() } },
-    vertexShader: `varying vec3 vW; varying vec2 vUv; void main(){ vUv = uv; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `varying vec3 vW; varying vec2 vUv; void main(){ vUv = uv; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uNight, uFogDensity; uniform vec3 uSun, uSky, uFog, uCam; varying vec3 vW; varying vec2 vUv;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -460,7 +460,7 @@ extend({
     chTable: (M) => [HG.table(), VCm(M, 'chTableM', 0.18, { roughness: 0.8 }), 4, {}],
     chCart2: (M) => [HG.cart2(), VCm(M, 'chCart2M', 0.22, { roughness: 0.4, metalness: 0.3 }), 2, {}],
     chEasel: (M) => [HG.easel(), VCm(M, 'chEaselM', 0.15, { roughness: 0.5, metalness: 0.3 }), 6, {}],
-    chCanvas: (M) => [HG.canvas(), M.chCanvasM || (M.chCanvasM = (() => { const m = new THREE.ShaderMaterial({ uniforms: { tMap: { value: tex().art }, uK: { value: 0.95 } }, vertexShader: `attribute float aCell; varying vec2 vUv; varying float vCell; void main(){ vUv = uv; vCell = aCell; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform sampler2D tMap; uniform float uK; varying vec2 vUv; varying float vCell; void main(){ float c = floor(vCell + 0.5); gl_FragColor = vec4(texture2D(tMap, vec2((c + vUv.x) / 3.0, vUv.y)).rgb * uK, 1.0); }`, side: THREE.DoubleSide }); return m; })()), 6, { aCell: 1 }],
+    chCanvas: (M) => [HG.canvas(), M.chCanvasM || (M.chCanvasM = (() => { const m = new THREE.ShaderMaterial({ uniforms: { tMap: { value: tex().art }, uK: { value: 0.95 } }, vertexShader: `attribute float aCell; varying vec2 vUv; varying float vCell; void main(){ vUv = uv; vCell = aCell; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`, fragmentShader: `uniform sampler2D tMap; uniform float uK; varying vec2 vUv; varying float vCell; void main(){ float c = floor(vCell + 0.5); gl_FragColor = vec4(texture2D(tMap, vec2((c + vUv.x) / 3.0, vUv.y)).rgb * uK, 1.0); }`, side: THREE.DoubleSide }); return m; })()), 6, { aCell: 1 }],
     chGlass: (M) => [HG.wineGlass(), VC(M, 'chGlassM', { roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.55, emissive: 0x2a3034 }), 2, {}],
     chWine: (M) => [HG.wine(), M.chWineM || (M.chWineM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.06, 0.14) })), 2, {}],
     chLipstick: (M) => [HG.lipstick(), M.chLipM || (M.chLipM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.12, 0.22), side: THREE.DoubleSide })), 2, {}],
@@ -667,7 +667,7 @@ function roomMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW;
-      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uBeat, uFogDensity;
       uniform vec3 uFog, uCam, uWarm, uLight, uSkyLow, uSkyTop;
@@ -728,10 +728,15 @@ function roomMaterial() {
             float sh = step(abs(fract((h - 12.0) / 4.0) - 0.05), 0.05) * zone; col = mix(col, vec3(0.78, 0.6, 0.28), sh);
             vec2 bq = vec2(wa / 1.8, (h - 12.0) / 4.0); vec2 bc = floor(bq), bf = fract(bq);
             float tall = 0.55 + 0.25 * h2(bc + 2.0);
-            float body = step(0.3, bf.x) * step(bf.x, 0.7) * step(0.12, bf.y) * step(bf.y, tall);
-            float neck = step(0.44, bf.x) * step(bf.x, 0.56) * step(tall, bf.y) * step(bf.y, tall + 0.22);
-            float bottle = clamp(body + neck, 0.0, 1.0) * zone * step(0.2, h2(bc + 9.0));
+            // (each bottle's edges blended over the pixel, and the shelves settling to their average where
+            // the bottles get down to a few pixels: drawn hard they sparkled along the walls)
+            vec2 bw = max(fwidth(bq), vec2(1e-4));
+            float body = clamp((0.2 - abs(bf.x - 0.5)) / bw.x + 0.5, 0.0, 1.0) * clamp((bf.y - 0.12) / bw.y + 0.5, 0.0, 1.0) * clamp((tall - bf.y) / bw.y + 0.5, 0.0, 1.0);
+            float neck = clamp((0.06 - abs(bf.x - 0.5)) / bw.x + 0.5, 0.0, 1.0) * clamp((bf.y - tall) / bw.y + 0.5, 0.0, 1.0) * clamp((tall + 0.22 - bf.y) / bw.y + 0.5, 0.0, 1.0);
+            float bfar = smoothstep(0.12, 0.35, max(bw.x, bw.y));
+            float bottle = mix(clamp(body + neck, 0.0, 1.0) * step(0.2, h2(bc + 9.0)), 0.34, bfar) * zone;
             vec3 bcol = h2(bc + 1.0) < 0.3 ? vec3(0.95, 0.6, 0.2) : h2(bc + 1.0) < 0.6 ? vec3(0.3, 0.75, 0.35) : h2(bc + 1.0) < 0.8 ? vec3(0.9, 0.9, 0.95) : vec3(0.85, 0.3, 0.45);
+            bcol = mix(bcol, vec3(0.72, 0.62, 0.5), bfar);
             glow += uWarm * 0.12 * zone * (1.0 - bottle);
             col = mix(col, bcol * 0.4, bottle); glow += bcol * bottle * 0.6;
           }

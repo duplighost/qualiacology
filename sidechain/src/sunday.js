@@ -161,7 +161,7 @@ function cellMaterial(M, map, cols, o = {}) {
   const U = clocked(M);
   return new THREE.ShaderMaterial({
     uniforms: { uMap: { value: map }, uK: { value: o.k ?? 1 }, uFog: U.uFog, uFogD: U.uFogD },
-    vertexShader: `attribute float aIdx; varying vec2 vUv; varying vec3 vW; void main(){ vUv = vec2((aIdx + uv.x) / ${cols.toFixed(1)}, uv.y); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `attribute float aIdx; varying vec2 vUv; varying vec3 vW; void main(){ vUv = vec2((aIdx + uv.x) / ${cols.toFixed(1)}, uv.y); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: `uniform sampler2D uMap; uniform float uK, uFogD; uniform vec3 uFog; varying vec2 vUv; varying vec3 vW; void main(){ vec4 c = texture2D(uMap, vUv); ${o.cut ? 'if (c.a < 0.35) discard;' : ''} float d = length(cameraPosition - vW); float f = 1.0 - exp(-pow(d * uFogD, 1.5)); gl_FragColor = vec4(mix(c.rgb * uK, uFog, clamp(f, 0.0, 1.0)), ${o.cut ? 'c.a' : '1.0'}); }`,
     side: THREE.DoubleSide, transparent: !!o.cut,
   });
@@ -189,7 +189,7 @@ function bubbleMaterial(M) {
 function rainbowMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uK: { value: 0 } },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform float uK; varying vec2 vUv; void main(){ float r = vUv.y; vec3 c = clamp(abs(fract(vec3(0.0, 0.33, 0.67) + (1.0 - r) * 0.78) * 6.0 - 3.0) - 1.0, 0.0, 1.0); float band = smoothstep(0.0, 0.12, r) * smoothstep(1.0, 0.82, r); float ends = smoothstep(0.0, 0.25, vUv.x) * smoothstep(1.0, 0.75, vUv.x); gl_FragColor = vec4(c * band * ends * uK * 0.32, 1.0); }`,
     blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
   });

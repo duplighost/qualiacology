@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { lipsGeometry, shellGeometry, candyGeometry, perfumeGeometry, donutGeometry, cuffsGeometry, coffeeGeometry, crownGeometry, popsicleGeometry, drinkGeometry, pinGeometry, realHeartGeometry, polaroidGeometry, whistleGeometry, cupGeometry } from './pickups.js';
 import { tabGeometry } from './yst-tab.js';
+import { wGeometry } from './scs-props.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -242,6 +243,7 @@ const PICKUP = {
   polaroid: { geo: polaroidGeometry, color: 0xf4f0e8, mat: std({ rough: 0.35, metal: 0.05, emissive: 0x3a3430 }), s: 1.5, lit: 1.2, face: true, move: (e, time, i, yaw) => e.set(Math.sin(time * 1.3 + i) * 0.15, yaw + Math.sin(time * 1.1 + i * 1.7) * 0.5, Math.sin(time * 0.9 + i) * 0.12) },
   whistle: { geo: whistleGeometry, color: 0xff5a2a, mat: std({ rough: 0.25, metal: 0.1, emissive: 0x4a1008 }), s: 1.35, lit: 1.2, move: turn(0.25, 2.2, 0.2, 1.7, 1.3) },
   cup: { geo: cupGeometry, color: 0xe8302a, mat: std({ rough: 0.3, metal: 0.05, emissive: 0x4a0808 }), s: 1.45, lit: 1.2, move: turn(0.25, 1.8, 0.2, 1.5, 1.2) },
+  w: { geo: wGeometry, color: 0xffd84a, mat: std({ rough: 0.18, metal: 0.65, emissive: 0x4a3008 }), s: 1.5, lit: 1.3, face: true, move: (e, time, i, yaw) => e.set(Math.sin(time * 1.6 + i) * 0.12, yaw + Math.sin(time * 1.3 + i * 1.7) * 0.5, Math.sin(time * 1.1 + i) * 0.1) },
   tab: { geo: tabGeometry, color: 0xf6f4ee, mat: std({ rough: 0.65, metal: 0, emissive: 0x2a3038, side: THREE.DoubleSide }), s: 1.6, lit: 1.2, move: (e, time, i) => e.set(Math.sin(time * 2.0 + i) * 0.45, time * 1.7 + i * 1.3, Math.sin(time * 2.6 + i) * 0.35) },
 };
 export const PICKUP_KINDS = Object.keys(PICKUP);
@@ -285,7 +287,7 @@ export class Notes {
     this.halo = new THREE.InstancedMesh(hg, this.haloMat, 256);
     this.halo.frustumCulled = false; this.halo.count = 0; scene.add(this.halo);
     this.spotMat = new THREE.ShaderMaterial({
-      vertexShader: `attribute vec3 aCol; varying vec3 vC; varying vec2 vUv; void main(){ vUv = uv; vC = aCol; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+      vertexShader: `attribute vec3 aCol; varying vec3 vC; varying vec2 vUv; void main(){ vUv = uv; vC = aCol; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
       fragmentShader: `varying vec3 vC; varying vec2 vUv; void main(){ float d = length(vUv - 0.5) * 2.0; float ring = exp(-pow((d - 0.78) / 0.09, 2.0)); gl_FragColor = vec4(vC * (ring * 0.9 + exp(-d * d * 3.0) * 0.35) * (1.0 - smoothstep(0.92, 1.0, d)), 1.0); }`,
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -3,
     });
@@ -399,7 +401,7 @@ const RING_VS = /* glsl */`
     vec3 o = w.xyz - uC;
     float d = dot(o, uF), x = dot(o, uR);
     w.xyz += uU * ((uK * d * d + lip(uX0 + x) - lip(uX0)) * uG + 0.05);
-    gl_Position = projectionMatrix * viewMatrix * w;
+    gl_Position = projectionMatrix * (viewMatrix * w);
   }`;
 export class Rings {
   constructor(scene, n = 10) {

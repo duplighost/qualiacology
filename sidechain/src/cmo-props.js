@@ -290,7 +290,8 @@ export const AFTER = {
   backLight() { const g = new THREE.PlaneGeometry(12.2, 22.8); g.translate(0, 11.6, -0.4); return g; },
   exitFace() { const g = new THREE.PlaneGeometry(5.2, 1.9); g.translate(0, 28.2, 0.85); return g; },
   // the tabs left open for the ghosts: a corkboard, papers pinned all over it
-  tabsBoard() { const parts = [paint(box(24, 16, 0.8, 0, 0, 0), rgb(0x8a6a44)), paint(box(25, 17, 0.6, 0, 0, -0.3), WALNUT)]; const R = seeded(12); for (let k = 0; k < 34; k++) { const g = box(2.4 + R(), 4 + R() * 1.6, 0.1, (R() - 0.5) * 20, (R() - 0.5) * 12, 0.5); g.rotateZ((R() - 0.5) * 0.3); parts.push(paint(g, rgb(R() < 0.8 ? 0xf4ecd8 : 0xf0d870))); } return merge(parts); },
+  // (each tab a hair proud of the last: where two overlapped at one depth they flickered)
+  tabsBoard() { const parts = [paint(box(24, 16, 0.8, 0, 0, 0), rgb(0x8a6a44)), paint(box(25, 17, 0.6, 0, 0, -0.3), WALNUT)]; const R = seeded(12); for (let k = 0; k < 34; k++) { const g = box(2.4 + R(), 4 + R() * 1.6, 0.1, (R() - 0.5) * 20, (R() - 0.5) * 12, 0.5 + 0.012 * k); g.rotateZ((R() - 0.5) * 0.3); parts.push(paint(g, rgb(R() < 0.8 ? 0xf4ecd8 : 0xf0d870))); } return merge(parts); },
 };
 
 // ---------- the ghosts of every house band: their gear, carried out the back door ----------

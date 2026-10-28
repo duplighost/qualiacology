@@ -39,7 +39,7 @@ function lakeMaterial() {
       uCracks: { value: Array.from({ length: MAXC }, () => new THREE.Vector4(0, 0, -1e5, 0)) },
       uRift: { value: Array.from({ length: RIFT }, () => new THREE.Vector2(1e5, 1e5)) }, uRiftK: { value: 0 }, uRiftW: { value: 9 },
     },
-    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uSong, uFogDensity, uBreak, uLight, uOpen, uRiftK, uRiftW; uniform vec3 uCam, uFog, uSky, uGlow; uniform vec4 uCracks[${MAXC}]; uniform vec2 uRift[${RIFT}];
       varying vec3 vW;
@@ -112,7 +112,7 @@ function lakeMaterial() {
 function auroraMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uK: { value: 0.5 }, uA: { value: new THREE.Color(0x4affa8) }, uB: { value: new THREE.Color(0x8a4aff) }, uRip: { value: 0 } },
-    vertexShader: `varying vec2 vUv; uniform float uTime; void main(){ vUv = uv; vec3 p = position; p.z += sin(p.x * 0.012 + uTime * 0.3) * 60.0 + sin(p.x * 0.03 - uTime * 0.5) * 20.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`,
+    vertexShader: `varying vec2 vUv; uniform float uTime; void main(){ vUv = uv; vec3 p = position; p.z += sin(p.x * 0.012 + uTime * 0.3) * 60.0 + sin(p.x * 0.03 - uTime * 0.5) * 20.0; gl_Position = projectionMatrix * (modelViewMatrix * vec4(p, 1.0)); }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uK, uRip; uniform vec3 uA, uB; varying vec2 vUv;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -134,7 +134,7 @@ function auroraMaterial() {
 function columnMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uCol: { value: new THREE.Color(0x8af0ff) } },
-    vertexShader: `attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform vec3 uCol; varying vec2 vUv; varying float vK; void main(){ float y = clamp(vUv.y, 0.0, 1.0); float a = (1.0 - y) * (0.35 + 0.65 * (1.0 - y)); gl_FragColor = vec4(uCol * a * 0.32 * vK, 1.0); }`,
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide,
   });
@@ -143,7 +143,7 @@ function columnMaterial() {
 function flakeMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uCol: { value: new THREE.Color(0xc8f4ff) } },
-    vertexShader: `attribute float aK; varying float vK; void main(){ vK = aK; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aK; varying float vK; void main(){ vK = aK; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform vec3 uCol; varying float vK; void main(){ gl_FragColor = vec4(uCol * vK, 1.0); }`,
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide,
   });

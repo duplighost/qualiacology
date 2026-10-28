@@ -332,7 +332,7 @@ extend({
 // ---------- water laid along the road: the canals, and the pool under the jump ----------
 const WATER_VS = /* glsl */`
   attribute vec2 aUv; varying vec2 vUv; varying vec3 vW;
-  void main(){ vUv = aUv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+  void main(){ vUv = aUv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`;
 const WATER_FS = /* glsl */`
   uniform vec3 uCam, uFog, uZen, uHor, uSun, uSunDir, uDeep; uniform float uFogD, uTime, uRain, uPool, uW, uLit;
   varying vec2 vUv; varying vec3 vW;

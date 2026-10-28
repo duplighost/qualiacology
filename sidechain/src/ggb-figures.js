@@ -150,7 +150,7 @@ export function iceMaterial() {
     },
     vertexShader: /* glsl */`
       attribute vec3 aFx; attribute vec3 aTint; varying vec3 vW; varying vec3 vL; varying vec3 vFx; varying vec3 vTint;
-      void main(){ vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; vL = position; vFx = aFx; vTint = aTint; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; vL = position; vFx = aFx; vTint = aTint; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uCam, uFog, uSky, uMoon, uMoonDir, uIce, uDeep, uRim; uniform float uFogDensity, uBeat, uTime;
       varying vec3 vW; varying vec3 vL; varying vec3 vFx; varying vec3 vTint;
@@ -209,7 +209,7 @@ export function birdMaterial() {
         p.x *= 1.0 - 0.18 * w * (0.5 + 0.5 * flap) * aPh.z;
         vTip = w; vK = 1.0;
         vec4 wp = modelMatrix * instanceMatrix * vec4(p, 1.0); vW = wp.xyz;
-        gl_Position = projectionMatrix * viewMatrix * wp;
+        gl_Position = projectionMatrix * (viewMatrix * wp);
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 uCam, uFog, uCol, uGlow; uniform float uFogDensity; varying float vK; varying vec3 vW; varying float vTip;

@@ -144,7 +144,7 @@ function hallMaterial(posters) {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
-      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uBeat, uFogDensity, uScreenAt, uScreenK, uFlow, uDim, uLift, uShadow, uSong;
       uniform vec3 uFog, uCam, uScreenCol, uWarm, uAccent, uLight; uniform sampler2D uPosters;
@@ -579,14 +579,14 @@ function glowBox(color, k = 1.6) { return new THREE.MeshBasicMaterial({ color: n
 function lightPanelMaterial() {
   // per-instance colour, lit from inside, a chase running along it
   return new THREE.ShaderMaterial({
-    vertexShader: `attribute vec3 aTint; varying vec3 vC; varying vec2 vUv; void main(){ vC = aTint; vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute vec3 aTint; varying vec3 vC; varying vec2 vUv; void main(){ vC = aTint; vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform float uT; varying vec3 vC; varying vec2 vUv; void main(){ float chase = 0.75 + 0.25 * step(0.5, fract(vUv.x * 6.0 - uT * 2.0)); gl_FragColor = vec4(vC * chase, 1.0); }`,
     uniforms: { uT: { value: 0 } }, side: THREE.DoubleSide,
   });
 }
 function glassMaterial() {
   return new THREE.ShaderMaterial({
-    vertexShader: `varying vec3 vN; varying vec3 vW; void main(){ vN = normalize(mat3(modelMatrix * instanceMatrix) * normal); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `varying vec3 vN; varying vec3 vW; void main(){ vN = normalize(mat3(modelMatrix * instanceMatrix) * normal); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: `uniform vec3 uCam; varying vec3 vN; varying vec3 vW; void main(){ vec3 V = normalize(uCam - vW); float f = pow(max(1.0 - abs(dot(normalize(vN), V)), 0.0), 3.0); gl_FragColor = vec4(vec3(0.6, 0.8, 1.0) * (0.05 + 0.5 * f), 1.0); }`,
     uniforms: { uCam: { value: new THREE.Vector3() } }, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
   });
@@ -730,7 +730,7 @@ extend({
 function screenMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uT: { value: 0 }, uK: { value: 1 }, uCol: { value: new THREE.Color(0x2a8aff) }, uBurst: { value: 0 }, uBeat: { value: 0 } },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }`,
     fragmentShader: /* glsl */`
       uniform float uT, uK, uBurst, uBeat; uniform vec3 uCol; varying vec2 vUv;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }

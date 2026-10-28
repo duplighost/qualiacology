@@ -77,7 +77,7 @@ export class Streaks {
     g.setAttribute('aA', new THREE.BufferAttribute(this.la, 1).setUsage(THREE.DynamicDrawUsage));
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uColor: { value: new THREE.Color(P.edge) } },
-      vertexShader: `attribute float aA; varying float vA; void main(){ vA = aA; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      vertexShader: `attribute float aA; varying float vA; void main(){ vA = aA; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position,1.0)); }`,
       fragmentShader: `uniform vec3 uColor; varying float vA; void main(){ gl_FragColor = vec4(uColor * vA, 1.0); }`,
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
     });
@@ -205,7 +205,9 @@ export class Trail {
     this.geo = g;
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uA: { value: new THREE.Color(P.jacket) }, uB: { value: new THREE.Color(P.edge) } },
-      vertexShader: `attribute float aA; attribute float aX; varying float vA; varying float vX; void main(){ vA = aA; vX = aX; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      // (gone within a couple of metres of the camera: when she flips, the ribbon swung through the lens and
+      // flashed across the edge of the screen for a frame)
+      vertexShader: `attribute float aA; attribute float aX; varying float vA; varying float vX; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vA = aA * smoothstep(0.6, 2.5, length(mv.xyz)); vX = aX; gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `uniform vec3 uA, uB; varying float vA; varying float vX; void main(){ float core = exp(-vX * vX * 5.0); vec3 c = mix(uB, uA, vA) * (0.4 + 1.8 * core); gl_FragColor = vec4(c * vA * (0.5 + 0.5 * core), 1.0); }`,
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide,
     });

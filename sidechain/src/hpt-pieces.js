@@ -210,7 +210,7 @@ function duoMaterial() {
   const tex = DUO_TEX || (DUO_TEX = duoTexture());
   return new THREE.ShaderMaterial({
     uniforms: { tMap: { value: tex }, ...HFOG },
-    vertexShader: `attribute float aF; varying vec2 vUv; varying vec3 vW; void main(){ float f = floor(aF + 0.5); vUv = vec2((mod(f, 4.0) + uv.x) / 4.0, 1.0 - (floor(f / 4.0) + 1.0 - uv.y) / 2.0); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `attribute float aF; varying vec2 vUv; varying vec3 vW; void main(){ float f = floor(aF + 0.5); vUv = vec2((mod(f, 4.0) + uv.x) / 4.0, 1.0 - (floor(f / 4.0) + 1.0 - uv.y) / 2.0); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: `uniform sampler2D tMap; uniform vec3 uHptFog; uniform float uHptFogD; varying vec2 vUv; varying vec3 vW;
       void main(){ vec3 c = texture2D(tMap, vUv).rgb * 1.5; float d = length(cameraPosition - vW); float f = 1.0 - exp(-pow(d * uHptFogD, 1.5)); gl_FragColor = vec4(mix(c, uHptFog, clamp(f, 0.0, 1.0)), 1.0); }`,
     side: THREE.DoubleSide,

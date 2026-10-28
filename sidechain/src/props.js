@@ -129,7 +129,7 @@ export function storeMaterial() {
     uniforms: { uMap: { value: t }, uFog: { value: new THREE.Color(0x200818) }, uFogDensity: { value: 0.002 }, uCam: { value: new THREE.Vector3() } },
     vertexShader: /* glsl */`
       attribute vec3 aWake; varying vec2 vUv; varying float vW; varying float vRow; varying vec3 vP;
-      void main(){ vUv = uv; vW = aWake.x; vRow = floor(aWake.y * 3.999); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vP = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vUv = uv; vW = aWake.x; vRow = floor(aWake.y * 3.999); vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vP = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform sampler2D uMap; uniform vec3 uFog, uCam; uniform float uFogDensity; varying vec2 vUv; varying float vW; varying float vRow; varying vec3 vP;
       void main(){
@@ -146,7 +146,7 @@ export function poolMaterial() {
   return new THREE.ShaderMaterial({
     vertexShader: /* glsl */`
       attribute vec3 aTint; attribute vec2 aWake; varying vec2 vUv; varying vec3 vC; varying float vA;
-      void main(){ vUv = uv; vC = aTint; vA = aWake.x; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+      void main(){ vUv = uv; vC = aTint; vA = aWake.x; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: /* glsl */`
       varying vec2 vUv; varying vec3 vC; varying float vA;
       void main(){ float d = length(vUv - 0.5) * 2.0; float a = exp(-d * d * 3.2) * (1.0 - smoothstep(0.85, 1.0, d)); gl_FragColor = vec4(vC * a * vA * 0.55, 1.0); }`,
@@ -165,7 +165,7 @@ export function signMaterial(atlas, cols, rows) {
         vUv = vec2((col + uv.x) / ${cols.toFixed(1)}, 1.0 - (row + 1.0 - uv.y) / ${rows.toFixed(1)});
         vWake = aWake.x;
         vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz;
-        gl_Position = projectionMatrix * viewMatrix * w;
+        gl_Position = projectionMatrix * (viewMatrix * w);
       }`,
     fragmentShader: /* glsl */`
       uniform sampler2D tAtlas; uniform float uBeat, uTime, uFogDensity; uniform vec3 uFogColor, uCam;

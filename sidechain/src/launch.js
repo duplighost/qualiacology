@@ -163,13 +163,13 @@ const lit = (M, key, map, k = 1) => M[key] || (M[key] = new THREE.MeshBasicMater
 function cellLed(map, cols, rows, k = 1, led = false) {
   return new THREE.ShaderMaterial({
     uniforms: { tMap: { value: map }, uK: { value: k } },
-    vertexShader: `attribute float aCell; attribute float aOn; varying vec2 vUv; varying float vCell; varying float vOn; void main(){ vUv = uv; vCell = aCell; vOn = aOn; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aCell; attribute float aOn; varying vec2 vUv; varying float vCell; varying float vOn; void main(){ vUv = uv; vCell = aCell; vOn = aOn; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform sampler2D tMap; uniform float uK; varying vec2 vUv; varying float vCell; varying float vOn; void main(){ float cell = floor(vCell + 0.5); float c = mod(cell, ${cols.toFixed(1)}), r = floor((cell + 0.5) / ${cols.toFixed(1)}); vec3 t = texture2D(tMap, vec2((c + vUv.x) / ${cols.toFixed(1)}, 1.0 - (r + 1.0 - vUv.y) / ${rows.toFixed(1)})).rgb; ${led ? 'vec2 lq = vUv * vec2(88.0, 44.0); float near = clamp(1.6 - 2.0 * max(fwidth(lq.x), fwidth(lq.y)), 0.0, 1.0); t *= mix(0.85, 0.45 + 0.9 * smoothstep(0.5, 0.2, length(fract(lq) - 0.5)), near);' : ''} gl_FragColor = vec4(t * uK * vOn, 1.0); }`,
     side: THREE.DoubleSide,
   });
 }
 // a plain colour per instance, unlit (lamps)
-function tintBasic() { return new THREE.ShaderMaterial({ vertexShader: `attribute vec3 aTint; varying vec3 vC; void main(){ vC = aTint; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`, fragmentShader: `varying vec3 vC; void main(){ gl_FragColor = vec4(vC, 1.0); }`, side: THREE.DoubleSide }); }
+function tintBasic() { return new THREE.ShaderMaterial({ vertexShader: `attribute vec3 aTint; varying vec3 vC; void main(){ vC = aTint; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`, fragmentShader: `varying vec3 vC; void main(){ gl_FragColor = vec4(vC, 1.0); }`, side: THREE.DoubleSide }); }
 // a lit colour per instance (the stars, the flags)
 function tintLit(rough = 0.4, metal = 0.1, k = 0.25) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough, metalness: metal, side: THREE.DoubleSide });
@@ -192,7 +192,7 @@ function puffMaterial() {
 function coneMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uCol: { value: new THREE.Color(0xfff0d8) } },
-    vertexShader: `attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform vec3 uCol; varying vec2 vUv; varying float vK; void main(){ float y = clamp(vUv.y, 0.0, 1.0); float a = 0.2 + 0.8 * y * y; gl_FragColor = vec4(uCol * a * 0.11 * vK, 1.0); }`,
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide,
   });
@@ -261,7 +261,8 @@ const LG = {
     for (const s of [-1, 1]) { parts.push(paint(box(60, 1, 4, s * 74, 0.5, -1), wall)); parts.push(paint(box(5, 1, 6, s * 46.5, 0.5, -0.5), gold)); }
     return merge(parts);
   },
-  valance() { const parts = [], gold = rgb(0xc8a040), red = rgb(0x8a1020); parts.push(paint(box(190, 10, 4, 0, 5, -1), red)); parts.push(paint(box(190, 1.6, 4.4, 0, 0.4, -0.8), gold)); parts.push(paint(box(190, 1.6, 4.4, 0, 9.6, -0.8), gold)); return merge(parts); },
+  // (the valance stands proud of the walls' faces and above their tops: flush, it shared them and fought)
+  valance() { const parts = [], gold = rgb(0xc8a040), red = rgb(0x8a1020); parts.push(paint(box(190, 10, 4, 0, 5.3, -0.7), red)); parts.push(paint(box(190, 1.6, 4.4, 0, 0.4, -0.8), gold)); parts.push(paint(box(190, 1.6, 4.4, 0, 9.6, -0.8), gold)); return merge(parts); },
   // ready, set, go: a tall black housing; the lamps and the words are layers
   tree() { return paint(box(28, 42, 3, 0, 0, -1.6), rgb(0x141418)); },
   treeLabel() { const g = new THREE.PlaneGeometry(12, 36); g.translate(6, 0, 0.05); return g; },
@@ -737,7 +738,7 @@ function controlMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW;
-      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uBeat, uFogDensity, uLights;
       uniform vec3 uFog, uCam, uLight, uA, uB;
@@ -819,7 +820,7 @@ function controlMaterial() {
 function digitMaterial(map) {
   return new THREE.ShaderMaterial({
     uniforms: { tMap: { value: map }, uCell: { value: 0 }, uK: { value: 1.35 } },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform sampler2D tMap; uniform float uCell, uK; varying vec2 vUv; void main(){ float c = mod(uCell, 4.0), r = floor((uCell + 0.5) / 4.0); vec3 t = texture2D(tMap, vec2((c + vUv.x) / 4.0, 1.0 - (r + 1.0 - vUv.y) / 3.0)).rgb; vec2 lq = vUv * vec2(88.0, 44.0); float near = clamp(1.6 - 2.0 * max(fwidth(lq.x), fwidth(lq.y)), 0.0, 1.0); t *= mix(0.85, 0.45 + 0.9 * smoothstep(0.5, 0.2, length(fract(lq) - 0.5)), near); gl_FragColor = vec4(t * uK, 1.0); }`,
     side: THREE.DoubleSide,
   });

@@ -86,12 +86,14 @@ function barMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
-      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uFogDensity, uLamp, uHouse, uBeat, uGoldK, uDark, uRain; uniform vec3 uFog, uCam, uLight; uniform vec4 uGaps; uniform sampler2D tBands;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
       ${AA_GLSL}
       float h1(float n){ return fract(sin(n * 127.1 + 3.7) * 43758.5453); }
+      // inside (d > 0) or out, blended over the pixel (w: a pixel's size in d's units)
+      float covP(float d, float w){ return clamp(d / max(w, 1e-4) + 0.5, 0.0, 1.0); }
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
       float box2(vec2 p, vec2 a, vec2 b){ return step(a.x, p.x) * step(p.x, b.x) * step(a.y, p.y) * step(p.y, b.y); }
@@ -186,17 +188,23 @@ function barMaterial() {
               col = vec3(0.03, 0.03, 0.035) + vec3(0.12, 0.08, 0.06) * smoothstep(27.5, 10.0, h);
               for (int s = 0; s < 3; s++) {
                 float base = 11.2 + float(s) * 5.2;
-                float shelf = step(base - 0.35, h) * step(h, base);
+                float shelf = aaBand(h, base - 0.175, 0.175);
                 col = mix(col, vec3(0.18, 0.1, 0.05), shelf); glow += vec3(1.0, 0.75, 0.45) * exp(-pow((h - base - 0.15) * 5.0, 2.0)) * 0.5 * lit;
                 float cw = 1.7, cell = floor(along / cw), fx = fract(along / cw);
                 float hh = 2.4 + 1.9 * h1(cell * 3.1 + float(s) * 17.0);
                 float hb = h - base;
-                float body = step(0.2, fx) * step(fx, 0.8) * step(0.0, hb) * step(hb, hh * 0.68);
-                float shoulder = step(hh * 0.68, hb) * step(hb, hh * 0.8) * step(abs(fx - 0.5), 0.3 - (hb - hh * 0.68) / (hh * 0.12) * 0.18);
-                float neck = step(abs(fx - 0.5), 0.09) * step(hh * 0.8, hb) * step(hb, hh);
+                // (each bottle's edges blended over the pixel, and the row settling to its average glow
+                // where the bottles get down to a few pixels: drawn hard they sparkled along the wall)
+                float ax = fwidth(along / cw), ah = fwidth(h);
+                float body = covP(0.3 - abs(fx - 0.5), ax) * covP(hb, ah) * covP(hh * 0.68 - hb, ah);
+                float shoulder = covP(hb - hh * 0.68, ah) * covP(hh * 0.8 - hb, ah) * covP(0.3 - (hb - hh * 0.68) / (hh * 0.12) * 0.18 - abs(fx - 0.5), ax);
+                float neck = covP(0.09 - abs(fx - 0.5), ax) * covP(hb - hh * 0.8, ah) * covP(hh - hb, ah);
                 float b = clamp(body + shoulder + neck, 0.0, 1.0) * step(0.18, h1(cell + float(s) * 5.0));
+                float far = smoothstep(0.12, 0.35, ax);
+                b = mix(b, 0.42 * covP(hb, ah) * covP(3.2 - hb, ah), far);
                 float k = h1(cell * 7.3 + float(s));
                 vec3 bc = k < 0.35 ? vec3(0.95, 0.55, 0.15) : (k < 0.55 ? vec3(0.25, 0.75, 0.3) : (k < 0.75 ? vec3(0.85, 0.9, 1.0) : (k < 0.88 ? vec3(0.3, 0.45, 1.0) : vec3(0.9, 0.2, 0.25))));
+                bc = mix(bc, vec3(0.7, 0.6, 0.47), far);
                 col = mix(col, bc * 0.3, b); glow += bc * b * (0.55 + 0.45 * smoothstep(hh * 0.68, 0.0, hb)) * 0.9 * lit;
               }
             }
@@ -283,7 +291,7 @@ export function jukeLight(kind, instanced = true) {
         #else
         vK = 1.0;
         #endif
-        gl_Position = projectionMatrix * modelViewMatrix * lp;
+        gl_Position = projectionMatrix * (modelViewMatrix * lp);
       }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uK; varying vec3 vCol; varying vec3 vP; varying float vK;
@@ -313,7 +321,7 @@ function ghostMaterial() {
 // lamp faces that flash (the blinders): how bright is per lamp
 function flashMaterial() {
   return new THREE.ShaderMaterial({
-    vertexShader: /* glsl */`attribute float aK; varying float vK; void main(){ vK = aK; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: /* glsl */`attribute float aK; varying float vK; void main(){ vK = aK; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: /* glsl */`varying float vK; void main(){ gl_FragColor = vec4(vec3(1.0, 0.94, 0.8) * (0.06 + 3.2 * vK), 1.0); }`,
     side: THREE.DoubleSide,
   });

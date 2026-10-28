@@ -54,7 +54,8 @@ export function foldTable() {
   }
   // the chaos: a heap of washing, sleeves hanging off
   for (let k = 0; k < 16; k++) p.push(paint(sph(1.6 + R() * 1.2, 1.4, 0.6, 1, -9 + (R() - 0.5) * 8, 10.5 + R() * 1.6, (R() - 0.5) * 6, 8, 6), rgb(cols[Math.floor(R() * cols.length)])));
-  for (let k = 0; k < 4; k++) p.push(paint(box(1.2, 4 + R() * 3, 0.3, -12 + k * 2.4, 7.5, 5.6).rotateZ((R() - 0.5) * 0.4), rgb(cols[Math.floor(R() * cols.length)])));
+  // (each sleeve a little in front of the last: tilted, neighbours overlapped at the same depth and flickered)
+  for (let k = 0; k < 4; k++) p.push(paint(box(1.2, 4 + R() * 3, 0.3, -12 + k * 2.4, 7.5, 5.6 + 0.05 * k).rotateZ((R() - 0.5) * 0.4), rgb(cols[Math.floor(R() * cols.length)])));
   return merge(p);
 }
 // the change machine on its stand: the quarters come out at the bottom
@@ -104,7 +105,8 @@ export function corkboard() {
   const p = [paint(box(12, 13, 0.6, 0, 6.5, -0.4), rgb(0xa8784a)), paint(box(13, 0.8, 1, 0, 13.2, -0.3), rgb(0x5a3a22)), paint(box(13, 0.8, 1, 0, -0.2, -0.3), rgb(0x5a3a22))];
   for (const x of [-6.1, 6.1]) p.push(paint(box(0.8, 14.2, 1, x, 6.5, -0.3), rgb(0x5a3a22)));
   const R = seeded(23);
-  for (let k = 0; k < 6; k++) { const x = (R() - 0.5) * 9, y = 1.4 + R() * 10.4; p.push(paint(box(2 + R() * 1.6, 2.2 + R() * 1.6, 0.06, x, y, 0).rotateZ((R() - 0.5) * 0.3), rgb([0xf0e8d0, 0xffe880, 0xc8e8ff, 0xffc8d8][k % 4]))); p.push(paint(sph(0.22, 1, 1, 1, x, y + 1, 0.2, 6, 4), rgb([0xff3a3a, 0x3a8aff, 0xffd03a][k % 3]))); }
+  // (each note a little in front of the one before: where two overlapped at the same depth they flickered)
+  for (let k = 0; k < 6; k++) { const x = (R() - 0.5) * 9, y = 1.4 + R() * 10.4; p.push(paint(box(2 + R() * 1.6, 2.2 + R() * 1.6, 0.02, x, y, 0.01 + 0.022 * k).rotateZ((R() - 0.5) * 0.3), rgb([0xf0e8d0, 0xffe880, 0xc8e8ff, 0xffc8d8][k % 4]))); p.push(paint(sph(0.22, 1, 1, 1, x, y + 1, 0.2, 6, 4), rgb([0xff3a3a, 0x3a8aff, 0xffd03a][k % 3]))); }
   return merge(p);
 }
 
