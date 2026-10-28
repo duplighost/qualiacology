@@ -1,0 +1,16 @@
+{
+  "name": "SIDECHAIN",
+  "short_name": "SIDECHAIN",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#07050d",
+  "theme_color": "#07050d",
+  "icons": [
+    { "src": "assets/icon/sidechain-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon/sidechain-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon/sidechain-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
