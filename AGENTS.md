@@ -69,6 +69,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | sidechain (was last-chorus; `_redirects` sends that there) | `Projects\the music game` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | in-every-direction | `Projects\in-every-direction` | `node tools/build-site-copy.mjs <this repo>` there (it writes the card too); never hand-edit the site copy |
 | the-way-i-came | `Projects\the-way-i-came` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
+| spaghetti-sunshine | `D:/Projects/bianco-spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | spaghetti | `Projects\spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | al-dente | `Projects\al-dente` | copy `src/` (and `vendor/` only if three.js changes) into `al-dente/`; keep the site's index.html shell (it self-hosts the fonts and three.js) |
 | rally, rocket-shoes, eaten-path | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
