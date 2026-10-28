@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SPAGHETTI | Qualiacology</title>
-<meta name="description" content="SPAGHETTI is a side-scrolling browser game where everything is made out of spaghetti: you are a twirl of cooked spaghetti on two loose ends, dry bundles snap apart when you hit them, and the rods across the gaps bend and break. Keyboard.">
+<meta name="description" content="SPAGHETTI is a side-scrolling browser game in three levels where everything is made out of spaghetti: you are a twirl of cooked spaghetti on two loose ends, dry bundles snap apart when you hit them, and the rods across the gaps bend and break. Keyboard.">
 <meta name="theme-color" content="#0b0806">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Qualiacology">
@@ -27,12 +27,13 @@
   #veil { position: fixed; inset: 0; cursor: pointer; }
   #veil.gone { display: none; }
   #err { position: fixed; left: 20px; top: 20px; right: 20px; max-height: 90vh; overflow: auto; white-space: pre-wrap; font: 12px monospace; color: #f88; }
-  /* the way home to the site: over the title and the pause, out of sight while playing */
+  /* the way home to the site: on the opening and the pause when the mouse moves, otherwise out of the picture */
   .home-link { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 200; color: rgba(246,236,214,.86);
     text-decoration: none; font: 800 11px/1.2 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; padding: 8px 10px; border-radius: 999px;
-    background: rgba(22,14,8,.55); border: 1px solid rgba(246,236,214,.28); backdrop-filter: blur(8px); transition: opacity .3s ease; }
+    background: rgba(22,14,8,.55); border: 1px solid rgba(246,236,214,.28); backdrop-filter: blur(8px); transition: opacity .3s ease;
+    opacity: 0; pointer-events: none; }
+  body.pointer:not(.play) .home-link, .home-link:focus-visible { opacity: 1; pointer-events: auto; }
   .home-link:hover, .home-link:focus-visible { color: #fff; border-color: rgba(246,236,214,.65); outline: 0; }
-  body.play .home-link { opacity: 0; pointer-events: none; }
   @media (prefers-reduced-motion: reduce) { .home-link { transition: none; } }
 </style>
 </head>
@@ -41,6 +42,13 @@
 <div id="veil"></div>
 <div id="err"></div>
 <a class="home-link" href="/">Qualiacology</a>
+<script>
+  (() => {   // the home link comes up while the mouse moves and goes again when it rests
+    let t = 0;
+    const show = () => { document.body.classList.add('pointer'); clearTimeout(t); t = setTimeout(() => document.body.classList.remove('pointer'), 2500); };
+    addEventListener('pointermove', show, { passive: true });
+  })();
+</script>
 <script>
 'use strict';
 // ---- 00-util.js ----
@@ -415,6 +423,15 @@ class Pool {
     }
   }
 
+  // Empty, for the next level. The textures stay; only what is allocated ever gets drawn.
+  reset() {
+    this.used = 0;
+    this.bodies = { main: [], mid: [] };
+    this.spans.length = 0;
+    this.inv.fill(1); this.tk.fill(0); this.meta.fill(0);
+    this.snap = null;
+  }
+
   snapshot() {
     this.snap = { pos: this.pos.slice(), frm: this.frm.slice(), meta: this.meta.slice(), prev: this.prev.slice(), inv: this.inv.slice(), tk: this.tk.slice(), seg: this.seg.slice() };
   }
@@ -429,7 +446,7 @@ const STATS = { tris: 0, draws: 0 };
 const POOLS = {};
 let POOL_LIST = [];
 function makePools() {
-  POOLS.rod = new Pool('rod', 2, 80000, 8192);
+  POOLS.rod = new Pool('rod', 2, 120000, 8192);
   POOLS.s32 = new Pool('s32', 32, 2048, 1024);
   POOLS.s64 = new Pool('s64', 64, 3072, 512);
   POOL_LIST = [POOLS.rod, POOLS.s32, POOLS.s64];
@@ -485,7 +502,11 @@ const MATS = [
   /* 4 dry tomato      */ [0.58, 0.13, 0.045, 0.36, 0.20, 0.25, 0.70, 0.25, 1.00, 0.25, 0.06, 1.0],
   /* 5 dry wholewheat  */ [0.42, 0.22, 0.085, 0.48, 0.12, 0.28, 0.45, 0.70, 0.95, 0.42, 0.10, 1.0],
   /* 6 cooked wheat    */ [0.42, 0.24, 0.10, 0.48, 0.70, 0.14, 0.70, 0.80, 0.95, 0.42, 0.12, 0.0],
-  /* 7 spare           */ [0.84, 0.59, 0.19, 0.42, 0.85, 0.20, 1.00, 0.12, 1.00, 0.40, 0.05, 0.0],
+  /* 7 cooked tomato   */ [0.60, 0.12, 0.040, 0.42, 0.85, 0.20, 0.85, 0.10, 1.00, 0.25, 0.08, 0.0],
+  /* 8 dry spinach     */ [0.13, 0.21, 0.050, 0.36, 0.20, 0.25, 0.60, 0.30, 0.50, 0.90, 0.20, 1.0],
+  /* 9 dry squid ink   */ [0.020, 0.019, 0.024, 0.32, 0.25, 0.24, 0.10, 0.10, 0.30, 0.25, 0.30, 1.0],
+  /* 10 spare          */ [0.84, 0.59, 0.19, 0.42, 0.85, 0.20, 1.00, 0.12, 1.00, 0.40, 0.05, 0.0],
+  /* 11 spare          */ [0.82, 0.53, 0.14, 0.34, 0.25, 0.24, 0.80, 0.25, 1.00, 0.48, 0.06, 1.0],
 ];
 
 const SH_TUBE_VS = GL_HEAD + `
@@ -607,9 +628,9 @@ uniform vec3 uRimDir;
 uniform vec3 uRimCol;
 uniform vec3 uSky;
 uniform vec3 uGnd;
-uniform vec4 uMatA[8];
-uniform vec4 uMatB[8];
-uniform vec4 uMatC[8];
+uniform vec4 uMatA[12];
+uniform vec4 uMatB[12];
+uniform vec4 uMatC[12];
 uniform sampler2D uShadow;
 uniform mat4 uShadowMat;
 uniform vec4 uShadowP;   // texel (uv), penumbra per depth, depth bias, search radius (uv)
@@ -1045,10 +1066,13 @@ void main() {
 }`;
 
 // ---- 30-level.js ----
-// The level: a grid of 3 cm tiles, 200 wide and 15 tall. Row 0 is the top; rows 13-14 are the floor,
-// whose top is y = 0. Everything in it is spaghetti, but the grid is what the player stands on.
-//   #  stacked dry whole-wheat rods topped with cooked spaghetti     B  a bundle of dry spaghetti (breaks)
-//   R  a bundle of dry tomato spaghetti with loops inside            U  an upright bundle (2 tiles wide)
+// Levels: grids of 3 cm tiles, 200 wide and 15 tall. Row 0 is the top; rows 13-14 are the floor,
+// whose top is y = 0. Everything in them is spaghetti, but the grid is what the player stands on.
+//   #  stacked dry rods topped with cooked spaghetti        B  a bundle of dry spaghetti (breaks)
+//   R  a bundle of dry tomato spaghetti with loops inside   U  an upright bundle (2 tiles wide)
+//   C  dry rods packed overhead (a ceiling)                 N  a nest's rim
+// Each level is a LEVEL_DEFS entry. make(K) lays out the grid with the K helpers below; the optional
+// parts (look, cam, init, build, step, reset) let a level bring its own light and its own things.
 
 const TILE = 3;
 const LW = 200, LH = 15;
@@ -1057,121 +1081,1224 @@ const rowY = (r) => (12 - r) * TILE;          // y of the bottom of row r
 const rowOf = (y) => 12 - Math.floor(y / TILE);
 const colOf = (x) => Math.floor(x / TILE);
 
-const LEVEL = { grid: null, blocks: [], columns: [], loops: [], enemies: [], hangs: [], bridges: [], nest: null, start: null, checkpoints: [] };
+const LEVEL = { grid: null };
+const LEVEL_DEFS = {};
+const SOLID_T = new Uint8Array(128);
+for (const c of '#BRUNCK') SOLID_T[c.charCodeAt(0)] = 1;
 
-function makeLevel() {
+function makeLevel(def) {
+  for (const k of Object.keys(LEVEL)) delete LEVEL[k];
+  Object.assign(LEVEL, {
+    def, id: def.id, grid: null, blocks: [], columns: [], loops: [], enemies: [], hangs: [], bridges: [], nests: [], nest: null,
+    start: { i: 3 }, checkpoints: [], x0: 0, x1: LEVEL_X1, slabBottom: def.slabBottom ?? -10, ceilTop: def.ceilTop ?? 0,
+  });
   const g = Array.from({ length: LH }, () => new Array(LW).fill(' '));
-  const floor = (a, b) => { for (let i = a; i <= b; i++) { g[13][i] = '#'; g[14][i] = '#'; } };
-  const stack = (a, b, h) => { for (let i = a; i <= b; i++) for (let k = 0; k < h; k++) g[12 - k][i] = '#'; };
-  const block = (i, r, t = 'B') => { g[r][i] = t; LEVEL.blocks.push({ i, r, t }); };
-  const shelf = (a, b, r, t = 'B') => { for (let i = a; i <= b; i++) block(i, r, t); };
-  const column = (i, h) => { LEVEL.columns.push({ i, h }); for (let k = 0; k < h; k++) { g[12 - k][i] = 'U'; g[12 - k][i + 1] = 'U'; } };
-  const loop = (i, r) => LEVEL.loops.push({ i, r });
-  const enemy = (i) => LEVEL.enemies.push({ i });
-  const hang = (a, b) => LEVEL.hangs.push({ a, b });
-  const bridge = (a, b, hold) => LEVEL.bridges.push({ a, b, hold });
-
-  // Walk, take two loops, brush through some hanging strands, break a bundle.
-  floor(0, 61);
-  LEVEL.start = { i: 3 };
-  loop(7, 12); loop(9, 12);
-  hang(11, 13);
-  block(16, 9, 'R');
-  block(21, 9); block(22, 9);
-  column(26, 2);
-  block(30, 6, 'R');
-  enemy(33);
-  column(37, 3); loop(37, 9);
-  enemy(41); enemy(43);
-  column(47, 2);
-  hang(51, 53);
-  shelf(55, 57, 9); loop(56, 8);
-  // A small gap, a shelf, then rods across a gap too wide to jump.
-  floor(64, 76);
-  shelf(67, 70, 9); loop(68, 8); loop(69, 8);
-  enemy(73);
-  bridge(77, 81, 1.0);
-  floor(82, 112);
-  block(86, 9); block(87, 9); block(90, 9, 'R');
-  enemy(94); enemy(96);
-  stack(100, 100, 1); stack(101, 101, 2); stack(102, 102, 3); stack(103, 109, 4);
-  loop(105, 8);
-  hang(106, 108);
-  // Higher up, then a longer bridge.
-  floor(116, 148);
-  LEVEL.checkpoints.push({ i: 117 });
-  column(119, 4);
-  enemy(123);
-  column(126, 2);
-  block(129, 9);
-  shelf(132, 136, 6); loop(133, 5); loop(135, 5);
-  block(139, 9, 'R');
-  enemy(142); enemy(145);
-  bridge(149, 154, 0.75);
-  floor(155, 165);
-  enemy(160);
-  floor(168, 199);
-  column(171, 2); column(175, 4); column(179, 6);
-  LEVEL.nest = { i0: 184, i1: 189 };
-  g[12][184] = 'N'; g[12][189] = 'N';   // the nest's rim: get in from above
-  column(196, 8);
+  const K = {
+    g,
+    floor(a, b) { for (let i = a; i <= b; i++) { g[13][i] = '#'; g[14][i] = '#'; } },
+    stack(a, b, h) { for (let i = a; i <= b; i++) for (let k = 0; k < h; k++) g[12 - k][i] = '#'; },
+    // a slab with nothing under it: its top h tiles above the floor line, t tiles thick
+    raft(a, b, h, t = 1) { for (let i = a; i <= b; i++) for (let k = 0; k < t; k++) g[13 - h + k][i] = '#'; },
+    // dry rods packed overhead, filling rows 0..r (its underside is the bottom of row r)
+    ceiling(a, b, r) { for (let i = a; i <= b; i++) for (let k = 0; k <= r; k++) g[k][i] = 'C'; },
+    block(i, r, t = 'B') { g[r][i] = t; LEVEL.blocks.push({ i, r, t }); },
+    shelf(a, b, r, t = 'B') { for (let i = a; i <= b; i++) K.block(i, r, t); },
+    // an upright bundle two tiles wide, h tiles tall; deep ones stand on nothing you can see
+    column(i, h, o = {}) {
+      LEVEL.columns.push({ i, h, ...o });
+      for (let k = o.deep ? -2 : 0; k < h; k++) { g[12 - k][i] = 'U'; g[12 - k][i + 1] = 'U'; }
+    },
+    loop(i, r) { LEVEL.loops.push({ i, r }); },
+    enemy(i, o = {}) { LEVEL.enemies.push({ i, ...o }); },
+    hang(a, b, o = {}) { LEVEL.hangs.push({ a, b, ...o }); },
+    bridge(a, b, hold, o = {}) { LEVEL.bridges.push({ a, b, hold, ...o }); },
+    // a nest between rim tiles i0 and i1 in row o.r (default 12), sitting on whatever is under that row
+    nest(i0, i1, o = {}) { const row = o.r ?? 12; const { r, ...rest } = o; LEVEL.nests.push({ i0, i1, row, ...rest }); g[row][i0] = 'N'; g[row][i1] = 'N'; },
+    start(i) { LEVEL.start = { i }; },
+    checkpoint(i) { LEVEL.checkpoints.push({ i }); },
+  };
+  def.make(K, LEVEL);
   LEVEL.grid = g;
+  LEVEL.nest = LEVEL.nests[0] || null;
 }
 
 function tileCh(i, r) {
   if (i < 0 || i >= LW) return '#';
-  if (r < 0) return ' ';
+  if (r < 0) return LEVEL.grid[0][i] === 'C' ? 'C' : ' ';
   if (r >= LH) r = LH - 1;
   return LEVEL.grid[r][i];
 }
-function solidAt(i, r) { const c = tileCh(i, r); return c === '#' || c === 'B' || c === 'R' || c === 'U' || c === 'N'; }
+function solidAt(i, r) { return SOLID_T[tileCh(i, r).charCodeAt(0)] === 1; }
 function setTile(i, r, c) { LEVEL.grid[r][i] = c; }
 
-// Height of the floor stack in each column (tiles above the floor top), or null over a gap.
-function floorHeights() {
-  const h = new Array(LW).fill(null);
+// For each column, the first run of '#' from the top: { top, bottom } in cm, or null over a gap.
+// A run that reaches the floor rows goes down out of sight (the level's slabBottom).
+function floorRuns() {
+  const out = new Array(LW).fill(null);
   for (let i = 0; i < LW; i++) {
-    if (LEVEL.grid[13][i] !== '#') continue;
-    let k = 0;
-    while (k < 12 && LEVEL.grid[12 - k][i] === '#') k++;
-    h[i] = k;
+    let r = 0;
+    while (r < LH && LEVEL.grid[r][i] !== '#') r++;
+    if (r >= LH) continue;
+    let r2 = r;
+    while (r2 + 1 < LH && LEVEL.grid[r2 + 1][i] === '#') r2++;
+    out[i] = { top: rowY(r) + TILE, bottom: r2 >= 13 ? LEVEL.slabBottom : rowY(r2) };
   }
-  return h;
+  return out;
 }
 
-// ---- 35-build.js ----
-// Builds every noodle that starts at rest: the floor (stacked dry whole-wheat rods with cooked
-// spaghetti dropped over the top), bundles on dry-spaghetti stilts, upright bundles, the nest,
-// and the hanging rack behind. Cooked strands are dropped and settled, so they drape for real.
+// For each column, the underside of the ceiling hanging from row 0 (cm), or null where it is open.
+function ceilRuns() {
+  const out = new Array(LW).fill(null);
+  for (let i = 0; i < LW; i++) {
+    if (LEVEL.grid[0][i] !== 'C') continue;
+    let r = 0;
+    while (r + 1 < LH && LEVEL.grid[r + 1][i] === 'C') r++;
+    out[i] = rowY(r);
+  }
+  return out;
+}
 
-const SLAB_Z = 3.5, SLAB_BOTTOM = -10;
+// The first level. Walk, take two loops, brush through some hanging strands, break a bundle.
+LEVEL_DEFS[1] = {
+  id: 1, seed: 20261027,
+  make(K) {
+    K.floor(0, 61);
+    K.start(3);
+    K.loop(7, 12); K.loop(9, 12);
+    K.hang(11, 13);
+    K.block(16, 9, 'R');
+    K.block(21, 9); K.block(22, 9);
+    K.column(26, 2);
+    K.block(30, 6, 'R');
+    K.enemy(33);
+    K.column(37, 3); K.loop(37, 9);
+    K.enemy(41); K.enemy(43);
+    K.column(47, 2);
+    K.hang(51, 53);
+    K.shelf(55, 57, 9); K.loop(56, 8);
+    // A small gap, a shelf, then rods across a gap too wide to jump.
+    K.floor(64, 76);
+    K.shelf(67, 70, 9); K.loop(68, 8); K.loop(69, 8);
+    K.enemy(73);
+    K.bridge(77, 81, 1.0);
+    K.floor(82, 112);
+    K.block(86, 9); K.block(87, 9); K.block(90, 9, 'R');
+    K.enemy(94); K.enemy(96);
+    K.stack(100, 100, 1); K.stack(101, 101, 2); K.stack(102, 102, 3); K.stack(103, 109, 4);
+    K.loop(105, 8);
+    K.hang(106, 108);
+    // Higher up, then a longer bridge.
+    K.floor(116, 148);
+    K.checkpoint(117);
+    K.column(119, 4);
+    K.enemy(123);
+    K.column(126, 2);
+    K.block(129, 9);
+    K.shelf(132, 136, 6); K.loop(133, 5); K.loop(135, 5);
+    K.block(139, 9, 'R');
+    K.enemy(142); K.enemy(145);
+    K.bridge(149, 154, 0.75);
+    K.floor(155, 165);
+    K.enemy(160);
+    K.floor(168, 199);
+    K.column(171, 2); K.column(175, 4); K.column(179, 6);
+    K.nest(184, 189);   // the rim tiles: you get in from above
+    K.column(196, 8);
+  },
+};
+
+// ---- 31-level2.js ----
+// Level 2: under. A run beneath a ceiling of packed dry spaghetti. Light falls through the
+// gaps in it and pools on the floor; between the pools it is dark. The clumps here are cooked tomato,
+// and some hang from the ceiling on a strand until you pass under them. At the end a woven lid of
+// loose dry rods holds the light back: knock it out from below and climb up to the nest.
+
+const L2 = { drips: [], lid: null, dripT: 3, lastVy: 0 };
+const L2_LID = 'w';
+SOLID_T[L2_LID.charCodeAt(0)] = 1;
+
+// Far back: darkness, light falling a long way off, and where it opens at the top, the light itself.
+const L2_FAR_FS = GL_HEAD + `
+in vec3 vW;
+uniform vec3 uGlow;
+uniform vec4 uFarA;   // base, far shafts, shaft spacing, light high up
+uniform float uTime;
+layout(location = 0) out vec4 oCol;
+${GL_NOISE}
+void main() {
+  float x = vW.x, y = vW.y;
+  vec3 col = uGlow * uFarA.x * (0.55 + 0.45 * smoothstep(-40.0, 30.0, y));
+  float sp = uFarA.z;
+  float cell = floor(x / sp);
+  float h = h11(cell * 3.71 + 1.3);
+  float cx = (cell + 0.25 + 0.5 * h11(cell * 1.93 + 0.7)) * sp;
+  float w = 1.2 + 3.2 * h11(cell * 5.31 + 2.1);
+  float lean = (h11(cell * 9.17) - 0.5) * 0.12;
+  float dx = x - cx - (y - 30.0) * lean;
+  float beam = step(0.42, h) * exp(-dx * dx / (w * w)) * smoothstep(-30.0, 40.0, y);
+  float dust = 0.75 + 0.5 * vnoise2(vec2(x * 0.6, y * 0.35 - uTime * 0.15));
+  col += uGlow * beam * uFarA.y * dust;
+  col += uGlow * uFarA.w * smoothstep(20.0, 48.0, y) * smoothstep(505.0, 575.0, x);   // only out past the lid
+  oCol = vec4(col, 1.0);
+}`;
+
+// ---- clumps that hang from the ceiling ----
+// A ball of cooked tomato spaghetti on one strand. When you come close it stretches, shivers and lets go.
+function makeDripper(rng, i, trig) {
+  const pool = POOLS.s32, C = 32, n = 6, R = ECFG.r;
+  const s0 = pool.alloc(n);
+  const rest = new Float32Array(n * C * 3), kind = new Uint8Array(n * C), pts = new Float32Array(C * 3);
+  for (let k = 0; k < n; k++) {
+    let ax = rng.gauss(), ay = rng.gauss(), az = rng.gauss();
+    let al = Math.hypot(ax, ay, az); ax /= al; ay /= al; az /= al;
+    const rr = 0.76 + 0.12 * (k % 3) + rng.range(-0.03, 0.03);
+    let ang = rng.range(0, TAU);
+    const tail = k < 2 ? 6 : k === 2 ? 4 : 0, seg = 0.21;
+    for (let j = 0; j < C; j++) {
+      let ux = ay * 0.3 - az * 0.9, uy = az * 0.1 - ax * 0.3, uz = ax * 0.9 - ay * 0.1;
+      const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
+      const vx = ay * uz - az * uy, vy = az * ux - ax * uz, vz = ax * uy - ay * ux;
+      let x = rr * (Math.cos(ang) * ux + Math.sin(ang) * vx);
+      let y = rr * (Math.cos(ang) * uy + Math.sin(ang) * vy);
+      let z = rr * (Math.cos(ang) * uz + Math.sin(ang) * vz);
+      if (j >= C - tail) { const m = (j - (C - tail - 1)) * seg; y -= m; x *= 0.85; z *= 0.85; }   // loose ends droop
+      pts[j * 3] = x; pts[j * 3 + 1] = y; pts[j * 3 + 2] = z;
+      rest[(k * C + j) * 3] = x; rest[(k * C + j) * 3 + 1] = y; rest[(k * C + j) * 3 + 2] = z;
+      kind[k * C + j] = j >= C - tail ? 1 : 0;
+      ang += seg / rr;
+      ax += rng.gauss() * 0.05; ay += rng.gauss() * 0.05; az += rng.gauss() * 0.05;
+      al = Math.hypot(ax, ay, az); ax /= al; ay /= al; az /= al;
+    }
+    putStrand(pool, s0 + k, pts, C, 0.1, 7, rng() * 100, 0);
+  }
+  const hx = i * TILE + 1.5;
+  const top = ceilRuns()[i];
+  const len = 2.6 + rng.range(-0.3, 0.5);
+  const hy = top - len - R * 0.8;
+  // the strand it hangs by, pinned to the ceiling at the top and held by the clump at the bottom
+  const ss = pool.alloc(1);
+  const sp = new Float32Array(C * 3);
+  const zs = rng.range(-0.3, 0.3);
+  for (let j = 0; j < C; j++) {
+    const t = j / (C - 1);
+    sp[j * 3] = hx + Math.sin(t * 3 + zs) * 0.05; sp[j * 3 + 1] = top - 0.02 - t * (top - 0.02 - (hy + R * 0.7)); sp[j * 3 + 2] = zs * (1 - t);
+  }
+  putStrand(pool, ss, sp, C, 0.1, 7, rng() * 100, 0);
+  pool.inv[ss * C] = 0; pool.inv[ss * C + C - 1] = 0;
+  const sbody = new Body(pool, ss, 1, { sim: true, grav: 1, damp: 0.985, fric: 0.3, bend: 0.05, iters: 3 });
+  sbody.tether = true;
+  const e = {
+    spec: { i }, rest, kind, s0, n, hx, hy, top, x: hx, y: hy, vx: 0, vy: 0, state: 'hang', t: 0, trig, ph: rng.range(0, TAU),
+    roll: 0, squash: 1, col: {}, ss, sbody, seg0: pool.seg[ss], ground: 0,
+    step: dripStep, place: dripPlace,
+  };
+  e.body = new Body(pool, s0, n, { sim: true, targets: true, iters: 2, grav: 1, damp: 0.99, fric: 0.5, bend: 0.06, owner: e });
+  e.body.cgroup = e;
+  ENEMIES.push(e);
+  L2.drips.push(e);
+}
+
+function dripPlace(e) {
+  const pool = POOLS.s32, C = 32;
+  e.state = 'hang'; e.t = 0; e.vx = 0; e.vy = 0; e.x = e.hx; e.y = e.hy;
+  for (let j = 0; j < e.n * C; j++) {
+    const p = e.s0 * C + j, o = p * 4, q = p * 3;
+    pool.pos[o] = e.x + e.rest[j * 3]; pool.pos[o + 1] = e.y + e.rest[j * 3 + 1]; pool.pos[o + 2] = e.rest[j * 3 + 2];
+    pool.prev[q] = pool.pos[o]; pool.prev[q + 1] = pool.pos[o + 1]; pool.prev[q + 2] = pool.pos[o + 2];
+    pool.tk[p] = e.kind[j] === 0 ? 0.3 : 0;
+  }
+  pool.seg[e.ss] = e.seg0;
+  pool.inv[e.ss * C + C - 1] = 0;
+  e.body.keep = true; e.body.fric = 0.5; e.body.sleep(); e.body.touch(); e.body.measure();
+  e.sbody.sleep(); e.sbody.touch();
+}
+
+function dripTargets(e) {
+  const pool = POOLS.s32, C = 32;
+  const st = e.state === 'fall' ? clamp(1 + -e.vy * 0.0016, 1, 1.25) : 1;   // pulled long as it drops
+  for (let j = 0; j < e.n * C; j++) {
+    if (e.kind[j] !== 0) continue;
+    const q = (e.s0 * C + j) * 3;
+    pool.tgt[q] = e.x + e.rest[j * 3] / Math.sqrt(st);
+    pool.tgt[q + 1] = e.y + e.rest[j * 3 + 1] * st;
+    pool.tgt[q + 2] = e.rest[j * 3 + 2] / Math.sqrt(st);
+  }
+}
+
+function dripSound(x, what) {
+  const pan = sfxPan(x);
+  if (what === 'peel') {
+    burst({ f: 420, f2: 1250, q: 3.2, dur: 0.32, gain: 0.032, att: 0.05, pan, am: 24 });
+    burst({ buf: SFX.brown, type: 'lowpass', f: 260, dur: 0.25, gain: 0.03, att: 0.08, pan });
+  } else {
+    burst({ f: 1900, f2: 650, q: 2.2, dur: 0.05, gain: 0.035, att: 0.001, pan });
+    tone({ f: 300, f2: 140, dur: 0.08, gain: 0.02, pan });
+  }
+}
+
+function dripStep(e, dt) {
+  if (e.state === 'splat' || e.state === 'gone') { e.t += dt; return; }
+  const P = PLAYER, pool = POOLS.s32, C = 32, R = ECFG.r;
+  if (e.state === 'hang' && Math.abs(e.hx - CAM.x) > 50) {
+    if (e.body.awake) e.body.sleep();
+    if (e.sbody.awake) e.sbody.sleep();
+    return;
+  }
+  if (!e.body.awake) e.body.wake();
+  if (!e.sbody.awake) e.sbody.wake();
+  e.t += dt;
+  if (e.state === 'hang') {
+    e.x = e.hx + Math.sin(GAME.t * 1.3 + e.ph) * 0.12;
+    e.y = e.hy + Math.sin(GAME.t * 2.2 + e.ph) * 0.05;
+    if (P.alive && GAME.mode === 'play' && P.x > e.hx - e.trig && P.x < e.hx + 1.5) { e.state = 'peel'; e.t = 0; dripSound(e.x, 'peel'); }
+  } else if (e.state === 'peel') {
+    const k = Math.min(e.t / 0.34, 1);
+    e.x = e.hx + Math.sin(GAME.t * 41 + e.ph) * 0.09 * k;   // it shivers as it lets go
+    e.y = e.hy - k * k * 1.3;
+    pool.seg[e.ss] = e.seg0 * (1 + 0.34 * k * k);          // and the strand stretches
+    if (e.t >= 0.34) {
+      e.state = 'fall'; e.vy = -14;
+      pool.inv[e.ss * C + C - 1] = 1;   // the strand lets go of it
+      pool.seg[e.ss] = e.seg0 * 1.05;
+      e.ground = surfaceY(colOf(e.x), rowOf(e.y));
+      dripSound(e.x, 'let');
+    }
+  } else if (e.state === 'fall') {
+    e.vy = Math.max(e.vy - 981 * dt, -230);
+    e.y += e.vy * dt;
+    if (e.y - R * 0.9 <= e.ground) {
+      e.y = e.ground + R * 0.9;
+      dripTargets(e);
+      e.vx = 0;
+      splatEnemy(e, false);
+      SND.splat(e.x);
+      CAM.shake = Math.max(CAM.shake, 0.22);
+      return;
+    }
+  }
+  if (e.state !== 'fall') {   // the strand's end goes where the clump goes
+    const p = e.ss * C + C - 1, o = p * 4, q = p * 3;
+    pool.pos[o] = e.x; pool.pos[o + 1] = e.y + R * 0.7; pool.pos[o + 2] = 0;
+    pool.prev[q] = e.x; pool.prev[q + 1] = e.y + R * 0.7; pool.prev[q + 2] = 0;
+    e.sbody.touch();
+  }
+  dripTargets(e);
+  setCollider(e.col, e.x, e.y, 0, e.x, e.y, 0, R * 0.9, 0, e.vy, 0, 0.4);
+  e.col.owner = e;
+  COLLIDERS.push(e.col);
+  if (P.alive && GAME.mode === 'play') {
+    const ox = Math.abs(P.x - e.x) < PCFG.w / 2 + R * 0.75;
+    const oy = P.y < e.y + R * 0.85 && P.y + PCFG.h > e.y - R * 0.85;
+    if (ox && oy) {
+      if (P.vy < 0 && P.prevY >= e.y + R * 0.6) stompEnemy(e);
+      else hurtPlayer(e);
+    }
+  }
+}
+
+// The light comes from a little behind; the ceiling runs a little further back than the floor, so the
+// back of the floor stays dark where the ceiling is over it. (Only its underside: nothing else is seen.)
+function buildLip(rng) {
+  const Cb = ceilRuns();
+  let i = 0;
+  while (i < LW) {
+    if (Cb[i] === null) { i++; continue; }
+    let j = i;
+    while (j + 1 < LW && Cb[j + 1] === Cb[i]) j++;
+    const x0 = i * TILE + 0.02, x1 = (j + 1) * TILE - 0.02, bottom = Cb[i];
+    const rods = [];
+    for (let k = 0; k < 2; k++) {
+      const y = bottom + ROD_R + k * ROWP;
+      for (let m = 0; m < 18; m++) {
+        const z = -SLAB_Z - 0.05 - m * PITCH - (k & 1 ? PITCH * 0.5 : 0);
+        let x = x0 + rng.range(-0.15, 0.1);
+        while (x < x1 - 0.05) {
+          let x2 = Math.min(x + rng.range(4.5, 15), x1);
+          if (x1 - x2 < 1.2) x2 = x1;
+          rods.push(x, y + rng.range(-0.013, 0.013), z + rng.range(-0.013, 0.013), x2, y + rng.range(-0.013, 0.013), z + rng.range(-0.013, 0.013), ROD_R * rng.range(0.95, 1.05), rng() * 100);
+          x = x2 + rng.range(0.01, 0.09);
+        }
+      }
+    }
+    emitRods(rods, LEVEL.def.ceilMat ?? 5);
+    i = j + 1;
+  }
+}
+
+// The end of the ceiling is the one part seen from above its underside (climbing out into the light),
+// so there it goes on up out of the picture: its front, and the cut ends of its last face.
+function buildCeilingEnd(rng, a, b, y0, y1) {
+  const rods = [];
+  const x0 = a * TILE + 0.02, x1 = (b + 1) * TILE;
+  const rows = Math.floor((y1 - y0) / ROWP), ncol = Math.floor((2 * SLAB_Z - 2 * ROD_R) / PITCH) + 1;
+  const j = () => rng.range(-0.013, 0.013);
+  for (let k = 0; k < rows; k++) {
+    const y = y0 + ROD_R + k * ROWP;
+    for (let m = 0; m < ncol; m++) {
+      const z = SLAB_Z - ROD_R - m * PITCH - (k & 1 ? PITCH * 0.5 : 0);
+      if (z < -SLAB_Z + ROD_R) continue;
+      const r = ROD_R * rng.range(0.95, 1.05), xe = x1 + rng.range(-0.2, 0.14);
+      if (m < 2) {
+        let x = x0;
+        while (x < xe - 0.05) {
+          let x2 = Math.min(x + rng.range(4.5, 15), xe);
+          if (xe - x2 < 1.2) x2 = xe;
+          rods.push(x, y + j(), z + j(), x2, y + j(), z + j(), r, rng() * 100);
+          x = x2 + rng.range(0.01, 0.09);
+        }
+      } else rods.push(xe - rng.range(0.8, 2.2), y + j(), z + j(), xe, y + j(), z + j(), r, rng() * 100);
+    }
+  }
+  emitRods(rods, LEVEL.def.ceilMat ?? 5);
+  pushBox(x0, x1 - 0.45, y0, y1, -SLAB_Z + 0.25, SLAB_Z - 0.34);
+}
+
+// ---- the lid ----
+// Two layers of dry spaghetti laid across the last opening, gaps between the rods so light comes
+// through in dots. Knock it from below and it goes up, comes down in pieces, and the light comes in.
+function buildLid(rng, a, b, r) {
+  const pool = POOLS.rod;
+  const yb = rowY(r), x0 = a * TILE - 1.4, x1 = (b + 1) * TILE + 1.4;
+  const rods = [];
+  for (let z = -3.32; z <= 3.33; z += 0.47) {
+    const y = yb + 0.1 + rng.range(-0.015, 0.02);
+    let xa = x0 + rng.range(-0.6, 0.4);
+    while (xa < x1 - 0.5) {   // laid end to end: lengths of dry spaghetti
+      const xb = Math.min(x1 + rng.range(-0.4, 0.6), xa + rng.range(9, 14));
+      rods.push(xa, y, z + rng.range(-0.05, 0.05), xb, y + rng.range(-0.02, 0.02), z + rng.range(-0.05, 0.05), ROD_R * rng.range(0.95, 1.05), rng() * 100);
+      xa = xb + rng.range(-0.5, 0.2);
+    }
+  }
+  for (let x = a * TILE + 0.25; x < (b + 1) * TILE - 0.2; x += rng.range(0.55, 0.75)) {
+    const y = yb + 0.29 + rng.range(-0.01, 0.02);
+    rods.push(x + rng.range(-0.05, 0.05), y, -3.7 + rng.range(-0.2, 0.2), x + rng.range(-0.12, 0.12), y + rng.range(-0.015, 0.015), 3.7 + rng.range(-0.2, 0.2), ROD_R * rng.range(0.95, 1.05), rng() * 100);
+  }
+  const n = rods.length / 8, s0 = pool.alloc(n * 2);
+  for (let k = 0; k < n; k++) { const j = k * 8; putRod(pool, s0 + k, rods[j], rods[j + 1], rods[j + 2], rods[j + 3], rods[j + 4], rods[j + 5], rods[j + 6], 1, rods[j + 7]); }
+  for (let k = n; k < 2 * n; k++) { putRod(pool, s0 + k, x0, yb, 0, x0 + 0.1, yb, 0, ROD_R, 1, rng() * 100); pool.setCount(s0 + k, 0); }
+  const body = new Body(pool, s0, 2 * n, { sim: true, grav: 1, damp: 0.999, fric: 0.35, rest: 0.25, bend: 0, iters: 2, hitMin: 22 });
+  body.onHit = rodHit;
+  body.spares = [];
+  for (let k = n; k < 2 * n; k++) body.spares.push(s0 + k);
+  L2.lid = { a, b, r, body, n, s0, cx: ((a + b + 1) * TILE) / 2, broken: false };
+}
+
+function breakLid() {
+  const L = L2.lid, b = L.body, pool = b.pool, rnd = Math.random;
+  L.broken = true;
+  for (let i = L.a; i <= L.b; i++) setTile(i, L.r, ' ');
+  b.wake();
+  const hx = PLAYER.x;
+  for (let s = b.s0; s < b.s0 + L.n; s++) {
+    const o0 = s * 8, o1 = o0 + 4, q0 = s * 6, q1 = q0 + 3;
+    const mx = (pool.pos[o0] + pool.pos[o1]) * 0.5;
+    const near = Math.max(0, 1 - Math.abs(mx - hx) / 9);
+    const vx = (mx - hx) * 1.6 + (rnd() - 0.5) * 18, vy = 6 + near * 42 + rnd() * 16, vz = (rnd() - 0.45) * 26;
+    const sx = (rnd() - 0.5) * 30, sy = (rnd() - 0.5) * 30;
+    pool.prev[q0] = pool.pos[o0] - (vx + sx) * DT; pool.prev[q0 + 1] = pool.pos[o0 + 1] - (vy + sy) * DT; pool.prev[q0 + 2] = pool.pos[o0 + 2] - vz * DT;
+    pool.prev[q1] = pool.pos[o1] - (vx - sx) * DT; pool.prev[q1 + 1] = pool.pos[o1 + 1] - (vy - sy) * DT; pool.prev[q1 + 2] = pool.pos[o1 + 2] - vz * DT;
+  }
+  const snaps = Math.round(L.n * 0.35);
+  for (let k = 0; k < snaps; k++) splitRod(b, b.s0 + Math.floor(rnd() * L.n), true);
+  SND.snap(hx, 7, 1.15);
+  SND.snap(hx + 3, 4, 0.6, 0.06);
+  CAM.shake = Math.max(CAM.shake, 0.55);
+  GAME.hitstop = Math.max(GAME.hitstop, 0.04);
+}
+
+LEVEL_DEFS[2] = {
+  id: 2, seed: 20261102,
+  slabMat: 5, ceilMat: 5, carpetMat: 6, enemyMat: 7, ceilTop: 23, floorLift: 0.25,
+  cam: { y: 8.0, dist: 52, elev: 0.06, follow: 0.6, above: 6 },
+  buildMid() {},   // nothing hung behind: lit from straight above, it only glittered
+  farFS: L2_FAR_FS,
+  look: {
+    keyDir: [-0.12, 0.985, -0.13], key: [1.0, 0.86, 0.66], keyI: 9.0,
+    rimDir: [0.45, 0.28, -0.85], rim: [0.78, 0.64, 0.5], rimI: 0.9,
+    sky: [0.02, 0.019, 0.02], gnd: [0.075, 0.05, 0.028],
+    glow: [1.0, 0.7, 0.4], farA: [0.025, 0.5, 46, 0.9], farZ: -110,
+    fill: [0.012, 0.007, 0.003],
+    exposure: 0.95, bloom: 0.09, bloomThresh: 2.0,
+  },
+  make(K) {
+    // A: the way in. One gap above lets light down onto the start; the rest is under the table.
+    K.floor(0, 40);
+    K.start(4);
+    K.ceiling(0, 1, 7); K.ceiling(7, 25, 7);
+    K.loop(6, 12);
+    K.hang(10, 13, { mat: 3, n: 9 });
+    K.stack(16, 18, 1);
+    // B: a clump rolls at you through the next pool of light; a gap to jump, lit from above.
+    K.hang(26, 29, { mat: 3, n: 6 });
+    K.loop(27, 12); K.loop(29, 12);
+    K.ceiling(30, 40, 7);
+    K.enemy(36);
+    K.floor(44, 84);
+    K.ceiling(44, 46, 7);
+    // C: the ceiling comes down. Keep your head low.
+    K.ceiling(47, 51, 9); K.ceiling(52, 57, 10); K.ceiling(58, 61, 9);
+    K.hang(53, 56, { mat: 3, n: 7, gap: [2.7, 3.5] });
+    K.enemy(66);   // out of the squeeze, something comes the other way through the light
+    K.loop(64, 12);
+    // D: clumps hanging from the ceiling, and a tomato bundle stuck up there with loops inside.
+    K.ceiling(67, 102, 7);
+    K.block(88, 8, 'R');
+    K.floor(85, 103);
+    // E: halfway. Rods laid over a drop, lit from above: they will not hold you for long.
+    K.checkpoint(95);
+    K.bridge(104, 108, 0.7);
+    K.hang(105, 107, { mat: 3, n: 5 });
+    K.floor(109, 118);
+    K.ceiling(110, 118, 7);
+    K.enemy(114);
+    // a drop with a clump keeping to the far side of it
+    K.floor(122, 161);
+    K.ceiling(122, 128, 7);
+    K.enemy(125, { edge: 'turn' });
+    // F: a higher room with stacks to climb, a clump keeping to its ledge, a bundle overhead.
+    K.ceiling(129, 143, 5);
+    K.stack(131, 133, 2); K.stack(134, 137, 4); K.stack(140, 142, 2);
+    K.enemy(136, { r: 7, edge: 'turn' });
+    K.block(139, 6, 'R');
+    K.loop(132, 9); K.loop(141, 9);
+    K.hang(144, 146, { mat: 3, n: 6 });
+    K.loop(145, 12);
+    // G: the last of the dark: a drop, and something waiting over its edge if you stop to look.
+    K.ceiling(147, 161, 7); K.ceiling(165, 169, 7);
+    K.floor(165, 199);
+    K.enemy(168, { edge: 'turn' });
+    // H: the lid, and the way up into the light.
+    for (let i = 170; i <= 175; i++) K.g[7][i] = L2_LID;
+    K.stack(173, 175, 2);
+    K.stack(176, 181, 6);
+    K.stack(182, 199, 7);
+    K.hang(182, 183, { mat: 0, n: 6 });
+    K.nest(185, 190, { r: 5, mat: 3 });
+    K.column(194, 10);
+  },
+  init(rng) {
+    L2.drips = []; L2.lid = null; L2.dripT = 3; L2.lastVy = 0;
+    makeDripper(rng, 70, 13);   // the first one comes down well ahead of you
+    makeDripper(rng, 79, 5.5);
+    makeDripper(rng, 82, 5);
+    makeDripper(rng, 151, 5.5);
+    makeDripper(rng, 155, 5);
+    makeDripper(rng, 161, 3.5);   // over the edge of the drop
+    buildLid(rng, 170, 175, 7);
+  },
+  build(rng) { buildLip(rng); buildCeilingEnd(rng, 163, 169, 23, 41); },
+  reset() {
+    if (L2.lid) L2.lid.broken = false;
+    L2.lastVy = 0;
+  },
+  step(dt) {
+    const P = PLAYER;
+    // the camera barely lifts while the ceiling is over you; out in the open at the end it follows you up
+    CAM.follow = P.x > 512 ? 0.6 : 0.22;
+    CAM.baseY = 8 + 5 * smoothstep(524, 556, P.x);   // up on the last stacks it sits higher, so a jump stays in the picture
+    // and coming out into the light, the picture opens up (back to normal the moment you leave)
+    const lit = GAME.mode === 'play' || GAME.mode === 'dead' || GAME.mode === 'win' ? 1 + 0.2 * smoothstep(505, 548, P.x) : 1;
+    CAM.exposure = GAME.mode === 'loading' ? 1 : damp(CAM.exposure, lit, 2.5, dt);
+    // a head against the lid knocks it out
+    if (L2.lid && !L2.lid.broken && L2.lastVy > 0 && P.vy === -10) {
+      const hw = PCFG.w / 2 - 0.02, r = rowOf(P.y + PCFG.h + 0.01);
+      if (tileCh(colOf(P.x - hw), r) === L2_LID || tileCh(colOf(P.x + hw), r) === L2_LID) breakLid();
+    }
+    L2.lastVy = P.vy;
+    // somewhere off in the dark, a strand lets go of something wet
+    if (SFX.ctx && GAME.mode === 'play') {
+      L2.dripT -= dt;
+      if (L2.dripT <= 0) {
+        L2.dripT = 2.8 + Math.random() * 5.5;
+        const x = CAM.x + (Math.random() - 0.5) * 70;
+        burst({ f: 900 + Math.random() * 700, f2: 360, q: 2.2, dur: 0.05, gain: 0.011, pan: sfxPan(x), am: 30 });
+      }
+    }
+  },
+};
+
+// ---- 32-level3.js ----
+// Level 3: high up. Slabs of dry spaghetti on upright bundles that rise out of sight, with nothing
+// between them. Cooked strands stretched between two bundles give under you and throw you up, and wear
+// out; bundles laid on thin dry stilts crack and drop a moment after you land. Bright, hazy light.
+
+const L3 = { beds: [], perches: [] };
+const BEDCFG = { k: 1100, c: 5, rest: 0.45, w: 0.55, cap: 4.6, hard: 60 };
+
+function inRoundRect(a, b, ha, hb, rc) {
+  if (Math.abs(a) > ha || Math.abs(b) > hb) return false;
+  const qa = Math.abs(a) - (ha - rc), qb = Math.abs(b) - (hb - rc);
+  if (qa <= 0 || qb <= 0) return true;
+  return qa * qa + qb * qb <= rc * rc;
+}
+
+const SND3 = {
+  // landing on stretched cooked strands: a low give and a wet slap
+  thrum(x, v) {
+    const k = clamp(v / 170, 0.2, 1), pan = sfxPan(x);
+    tone({ type: 'triangle', f: 70 + 30 * k, f2: 120 + 40 * k, dur: 0.14, gain: 0.045 * k, pan });
+    burst({ buf: SFX.brown, type: 'lowpass', f: 340, dur: 0.09, gain: 0.08 * k, pan, am: 26 });
+  },
+  // thrown: the strands spring back
+  twang(x, k) {
+    const pan = sfxPan(x);
+    tone({ type: 'triangle', f: 105 + 40 * k, f2: 230 + 120 * k, dur: 0.12, gain: 0.03 + 0.02 * k, pan });
+    burst({ f: 900, f2: 2600, q: 1.6, dur: 0.07, gain: 0.018, att: 0.006, pan });
+  },
+  // a cooked strand giving way
+  wetSnap(x) {
+    const pan = sfxPan(x);
+    burst({ type: 'highpass', f: 2200, q: 0.8, dur: 0.012, gain: 0.06, att: 0.0005, pan });
+    burst({ f: 1500, f2: 420, q: 2.2, dur: 0.08, gain: 0.05, pan, am: 44 });
+  },
+};
+
+// ---- cooked strands stretched across a gap ----
+// The strands are posed, not simulated, while whole: a spring gives the sag under the twirl and the throw.
+function bedShape(T, x) {
+  if (x <= T.x0 || x >= T.x1) return 0;
+  const sine = Math.sin((Math.PI * (x - T.x0)) / (T.x1 - T.x0));
+  if (T.press <= 0.001) return sine;
+  const lx = Math.max(0.6, T.loadX - T.x0), rx = Math.max(0.6, T.x1 - T.loadX);
+  const d = x - T.loadX, L = d < 0 ? lx : rx, ad = Math.abs(d), rr = 1.1;
+  const v = ad < rr ? 1 - (ad * ad + rr * rr) / (2 * rr * L) : 1 - ad / L;
+  return lerp(sine, Math.max(0, v), T.press);
+}
+
+function makeBed(spec, rng) {
+  const pool = POOLS.s32, C = 32, n = spec.n ?? 8;
+  const x0 = spec.a * TILE, x1 = (spec.b + 1) * TILE, top = spec.h * TILE;
+  const T = {
+    spec, x0, x1, xa: x0 - 1.7, xb: x1 + 1.7, top, n, C, s0: pool.alloc(n * 2), S: BEDCFG.rest, Sv: 0, press: 0, loadX: (x0 + x1) / 2,
+    state: 'idle', intact: [], bodies: [], zs: [], drop: [], hard: 0, life: spec.life ?? 3, lastVy: 0, touched: false, wasOn: false, pose: true, gone: false,
+  };
+  const pts = new Float32Array(C * 3), mat = spec.mat ?? 7;
+  for (let k = 0; k < n; k++) {
+    const z = -1.2 + (k / (n - 1)) * 2.4 + rng.range(-0.07, 0.07);
+    T.zs.push(z); T.drop.push(rng.range(0, 0.14)); T.intact.push(true);
+    for (let i = 0; i < C; i++) {
+      const t = i / (C - 1);
+      pts[i * 3] = lerp(T.xa, T.xb, t); pts[i * 3 + 1] = top - 0.12 - T.drop[k]; pts[i * 3 + 2] = z + Math.sin(t * 6 + k * 1.7) * 0.06;
+    }
+    const s = T.s0 + 2 * k;
+    putStrand(pool, s, pts, C, 0.118 * rng.range(0.94, 1.06), mat, rng() * 100, 0);
+    putStrand(pool, s + 1, pts, 2, 0.118, mat, rng() * 100, 0);   // the far half goes here when it snaps
+    pool.setCount(s + 1, 0);
+    T.bodies.push(new Body(pool, s, 2, { sim: true, iters: 4, grav: 1, damp: 0.985, fric: 0.45, bend: 0.05 }));
+  }
+  T.surf = { x0, x1, on: true, ch: '~', y: (x) => T.top - Math.min(T.S, BEDCFG.cap) * bedShape(T, x), stand: (P) => bedStand(T, P) };
+  SURFACES.push(T.surf);
+  L3.beds.push(T);
+}
+
+function bedPose(T) {
+  const pool = POOLS.s32, C = T.C, S = Math.min(T.S, BEDCFG.cap);
+  for (let k = 0; k < T.n; k++) {
+    if (!T.intact[k]) continue;
+    const base = (T.s0 + 2 * k) * C;
+    const sk = S * (1 - 0.08 * Math.abs(T.zs[k]));   // the outer strands give a little less
+    for (let i = 0; i < C; i++) {
+      const x = lerp(T.xa, T.xb, i / (C - 1));
+      const y = T.top - 0.12 - T.drop[k] - sk * bedShape(T, x);
+      pool.pos[(base + i) * 4 + 1] = y; pool.prev[(base + i) * 3 + 1] = y;
+    }
+    T.bodies[k].touch();
+  }
+}
+
+function bedStand(T, P) {
+  T.touched = true;
+  if (T.state === 'carry') return;
+  const v = -T.lastVy;
+  T.loadX = clamp(P.x, T.x0 + 0.4, T.x1 - 0.4);
+  if (v > 45) {
+    T.state = 'carry'; T.Sv = Math.min(v, 200) * 0.95; T.press = 1;
+    if (v > BEDCFG.hard) T.hard++;
+    SND3.thrum(P.x, v);
+  } else T.state = 'stand';
+}
+
+function throwFrom(T, pressed) {
+  const P = PLAYER;
+  const up = Math.max(0, -T.Sv);   // the strands coming back up
+  const hold = pressed || keyJump();
+  let v = Math.max(up * 0.92, 45);
+  if (hold) v = Math.max(v + 30, PCFG.jumpV + 24);
+  v = Math.min(v, 142);
+  P.vy = v; P.jumping = hold; P.ground = false; P.coyote = 0; P.jumpBuf = 0;
+  P.y = T.surf.y(P.x) + 0.02;
+  P.sy = 1.2; P.sv = 0;
+  T.state = 'ring';
+  T.Sv = Math.min(T.Sv, -25);      // they carry on up past flat and shiver
+  SND3.twang(P.x, v / 142);
+  if (T.hard > T.life) wearOut(T);
+}
+
+// Each throw past its life snaps a third of the strands; when two or fewer are left the rest go too.
+function wearOut(T) {
+  const left = [];
+  T.intact.forEach((ok, k) => { if (ok) left.push(k); });
+  for (let m = Math.ceil(T.n / 3); m > 0 && left.length; m--) snapStrand(T, left.splice(Math.floor(Math.random() * left.length), 1)[0]);
+  if (left.length <= 2) {
+    for (const k of left) snapStrand(T, k);
+    T.surf.on = false; T.gone = true;
+  }
+}
+
+// Snap one strand near where it was pressed: the two halves hang from where they are held.
+function snapStrand(T, k) {
+  if (!T.intact[k]) return;
+  T.intact[k] = false;
+  const pool = POOLS.s32, C = T.C, s = T.s0 + 2 * k, s2 = s + 1, base = s * C, nb = s2 * C;
+  const f = (T.loadX - T.xa) / (T.xb - T.xa);
+  const m = clamp(Math.round(f * (C - 1)) + Math.floor(Math.random() * 5) - 2, 4, C - 5);
+  const cnt2 = C - m;
+  for (let i = 0; i < cnt2; i++) {
+    const src = base + (C - 1 - i), dst = nb + i;
+    for (let a = 0; a < 4; a++) pool.pos[dst * 4 + a] = pool.pos[src * 4 + a];
+    for (let a = 0; a < 3; a++) pool.prev[dst * 3 + a] = pool.prev[src * 3 + a];
+    pool.tk[dst] = 0;
+  }
+  pool.setMeta(s2, pool.meta[s * 4], Math.random() * 100, 0, cnt2);
+  pool.seg[s2] = pool.seg[s];
+  pool.setMeta(s, pool.meta[s * 4], pool.meta[s * 4 + 1], 0, m + 1);
+  for (const [b0, cnt, dir] of [[base, m + 1, -1], [nb, cnt2, 1]]) {
+    for (let i = 0; i < cnt; i++) {
+      const p = b0 + i, x = pool.pos[p * 4];
+      pool.inv[p] = x <= T.x0 + 0.05 || x >= T.x1 - 0.05 ? 0 : 1;   // what is buried in the slab stays put
+      if (!pool.inv[p]) continue;
+      const near = cnt > 1 ? i / (cnt - 1) : 1;   // 1 at the broken end: it whips back toward where it is held
+      pool.prev[p * 3] = pool.pos[p * 4] - dir * near * 38 * DT;
+      pool.prev[p * 3 + 1] = pool.pos[p * 4 + 1] - near * 8 * DT;
+    }
+  }
+  T.bodies[k].wake();
+  SND3.wetSnap(T.loadX);
+}
+
+function bedStep(T, dt) {
+  const P = PLAYER, cfg = BEDCFG;
+  const on = T.touched, was = T.wasOn;
+  T.touched = false; T.wasOn = on;
+  if (T.gone) {
+    T.lastVy = P.vy;
+    return;
+  }
+  const loaded = cfg.rest + cfg.w;   // where it settles with the twirl on it
+  if (T.state === 'carry') {
+    if (!P.alive || P.x < T.x0 - 1.1 || P.x > T.x1 + 1.1) T.state = 'ring';
+    else {
+      T.loadX = clamp(P.x, T.x0 + 0.4, T.x1 - 0.4);
+      const a = -cfg.k * (T.S - loaded) - cfg.c * T.Sv;
+      T.Sv += a * dt; T.S += T.Sv * dt;
+      const jumped = P.vy > 50 && P.jumping;
+      if (jumped || (T.Sv < 0 && T.S <= loaded + 0.05)) throwFrom(T, jumped);
+      else {
+        P.y = T.surf.y(P.x); P.vy = -T.Sv; P.ground = true; P.jumping = false;
+        P.sy = 1 - Math.min(0.3, Math.min(T.S - cfg.rest, cfg.cap) * 0.075); P.sv = 0;
+      }
+    }
+  } else if (T.state === 'stand') {
+    if (was && !on && P.vy > 50 && P.jumping && P.x > T.x0 - 1.1 && P.x < T.x1 + 1.1) throwFrom(T, true);
+    else if (!on) T.state = 'ring';
+    else {
+      T.loadX = clamp(P.x, T.x0 + 0.4, T.x1 - 0.4);
+      T.press = Math.min(1, T.press + dt * 8);
+      const a = -cfg.k * 0.5 * (T.S - loaded) - 24 * T.Sv;   // settles under the twirl's weight
+      T.Sv += a * dt; T.S += T.Sv * dt;
+    }
+  }
+  if (T.state === 'ring' || T.state === 'idle') {
+    T.press = Math.max(0, T.press - dt * 5);
+    const a = -cfg.k * (T.S - cfg.rest) - 9 * T.Sv;
+    T.Sv += a * dt; T.S += T.Sv * dt;
+    if (T.state === 'ring' && Math.abs(T.S - cfg.rest) < 0.004 && Math.abs(T.Sv) < 0.3) { T.S = cfg.rest; T.Sv = 0; T.state = 'idle'; T.pose = true; }
+  }
+  if (T.state !== 'idle' || T.pose) { bedPose(T); T.pose = false; }
+  T.lastVy = P.vy;
+}
+
+function bedReset(T) {
+  Object.assign(T, { S: BEDCFG.rest, Sv: 0, press: 0, state: 'idle', hard: 0, lastVy: 0, touched: false, wasOn: false, pose: true, gone: false });
+  T.intact.fill(true);
+  T.surf.on = true;
+}
+
+// ---- a bundle laid on thin dry stilts: it goes a moment after you land on it ----
+function makePerch(spec, rng) {
+  const pool = POOLS.rod;
+  const x0 = spec.i0 * TILE + 0.1, x1 = (spec.i1 + 1) * TILE - 0.1, top = spec.h * TILE;
+  const hy = 0.92, hz = 1.28, cy = top - hy - 0.03, mat = spec.mat ?? 1;
+  const cs = [];
+  for (let k = 0; ; k++) {
+    const y = -hy + ROD_R + k * ROWP;
+    if (y > hy - ROD_R + 1e-6) break;
+    for (let z = -hz + ROD_R + (k & 1) * PITCH * 0.5; z <= hz - ROD_R + 1e-6; z += PITCH * 1.02) {
+      if (inRoundRect(z, y, hz - ROD_R, hy - ROD_R, 0.38)) cs.push(y, z);
+    }
+  }
+  const n = cs.length / 2, s0 = pool.alloc(n * 2);
+  for (let k = 0; k < n; k++) {
+    const y = cy + cs[k * 2] + rng.range(-0.012, 0.012), z = cs[k * 2 + 1] + rng.range(-0.012, 0.012);
+    putRod(pool, s0 + k, x0 + rng.range(-0.1, 0.08), y + rng.gauss() * 0.01, z, x1 + rng.range(-0.08, 0.1), y + rng.gauss() * 0.01, z + rng.gauss() * 0.01, ROD_R * rng.range(0.95, 1.05), mat, rng() * 100);
+  }
+  for (let k = n; k < 2 * n; k++) { putRod(pool, s0 + k, x0, cy, 0, x0 + 0.1, cy, 0, ROD_R, mat, rng() * 100); pool.setCount(s0 + k, 0); }
+  const rods = new Body(pool, s0, 2 * n, { sim: true, grav: 1, damp: 0.999, fric: 0.32, rest: 0.3, bend: 0, iters: 2, hitMin: 22 });
+  rods.spares = [];
+  for (let k = n; k < 2 * n; k++) rods.spares.push(s0 + k);
+  // tied round with a cooked strand, its end hanging
+  const tp = POOLS.s64, C = 64, tie = new Float32Array(C * 3), ties = [];
+  const nt = x1 - x0 > 7 ? 2 : 1, wrap = 50;
+  for (let j = 0; j < nt; j++) {
+    const xt = nt === 1 ? (x0 + x1) / 2 + rng.range(-0.7, 0.7) : lerp(x0, x1, j ? 0.76 : 0.24);
+    const a0 = rng.range(0, TAU);
+    for (let i = 0; i < C; i++) {
+      if (i < wrap) {
+        const t = i / (wrap - 1), a = a0 + t * 1.35 * TAU;
+        const sy = Math.sin(a), sz = Math.cos(a);
+        tie[i * 3] = xt + t * 0.45 + Math.sin(t * 11) * 0.03;
+        tie[i * 3 + 1] = cy + Math.sign(sy) * Math.pow(Math.abs(sy), 0.55) * (hy + 0.1);
+        tie[i * 3 + 2] = Math.sign(sz) * Math.pow(Math.abs(sz), 0.55) * (hz + 0.1);
+      } else {
+        const o = (wrap - 1) * 3, m = i - wrap + 1;
+        tie[i * 3] = tie[o] + m * 0.02; tie[i * 3 + 1] = tie[o + 1] - m * 0.19; tie[i * 3 + 2] = tie[o + 2] + m * 0.03;
+      }
+    }
+    const s = tp.alloc(1);
+    putStrand(tp, s, tie, C, 0.1, 0, rng() * 100, 0);
+    ties.push(new Body(tp, s, 1, { sim: true, grav: 1, damp: 0.99, fric: 0.5, bend: 0.04, iters: 2 }));
+  }
+  // three stilts down out of sight, and spares for when they snap
+  const ss = pool.alloc(6), yb = LEVEL.slabBottom, yt = cy - hy + 0.03;
+  const legs = [[x0 + 0.75, -0.5], [(x0 + x1) / 2 + rng.range(-0.4, 0.4), 0.42], [x1 - 0.75, -0.15]];
+  legs.forEach(([lx, lz], k) => putRod(pool, ss + k, lx + rng.gauss() * 0.2, yb, lz + rng.gauss() * 0.15, lx + rng.gauss() * 0.02, yt, lz, ROD_R * 1.05, 1, rng() * 100));
+  for (let k = 3; k < 6; k++) { putRod(pool, ss + k, x0, yb, 0, x0 + 0.1, yb, 0, ROD_R, 1, rng() * 100); pool.setCount(ss + k, 0); }
+  const stilts = new Body(pool, ss, 6, { sim: true, grav: 1, damp: 0.999, fric: 0.35, rest: 0.25, bend: 0, iters: 2, hitMin: 25 });
+  stilts.spares = [ss + 3, ss + 4, ss + 5];
+  const box = addWorldBox(x0, x1, cy - hy, top - 0.06, -hz, hz, 'perch');
+  L3.perches.push({ spec, x0, x1, top, cy, n, rods, ties, stilts, box, state: 'up', t: 0, applied: 0, creakT: 0 });
+}
+
+function perchShift(p, dy) {
+  const d = dy - p.applied;
+  if (Math.abs(d) < 1e-4) return;
+  p.applied = dy;
+  for (const b of [p.rods, ...p.ties]) {
+    const pool = b.pool, N = pool.N;
+    for (let s = b.s0; s < b.s0 + b.n; s++) {
+      const c = pool.meta[s * 4 + 3] | 0;
+      for (let i = 0; i < c; i++) { const p2 = s * N + i; pool.pos[p2 * 4 + 1] += d; pool.prev[p2 * 3 + 1] += d; }
+    }
+    b.touch();
+  }
+  const st = p.stilts, sp = st.pool;
+  for (let s = st.s0; s < st.s0 + 3; s++) { const top = sp.pos[s * 8 + 1] > sp.pos[s * 8 + 5] ? 0 : 1; sp.pos[(s * 2 + top) * 4 + 1] += d; sp.prev[(s * 2 + top) * 3 + 1] += d; }
+  st.touch();
+}
+
+function perchStep(p, dt) {
+  if (p.state === 'down') return;
+  const P = PLAYER, hold = p.spec.hold ?? 0.55;
+  const on = P.alive && P.ground && P.groundCh === 'K' && P.x + 1.0 > p.x0 && P.x - 1.0 < p.x1 && Math.abs(P.y - p.top) < 0.4;
+  if (p.state === 'up' && on) {
+    p.state = 'loaded'; p.t = 0; p.creakT = 0;
+    SND.snap((p.x0 + p.x1) / 2, 1, 0.3);
+  }
+  if (p.state !== 'loaded') return;
+  p.t += dt;
+  const k = Math.min(1, p.t / hold);
+  perchShift(p, -0.22 * k * k);   // it gives, a little more each moment
+  p.creakT -= dt;
+  if (p.creakT <= 0) { SND.creak((p.x0 + p.x1) / 2, 0.3 + 0.7 * k); p.creakT = lerp(0.09, 0.03, k) * (0.6 + Math.random() * 0.8); }
+  if (p.t >= hold) dropPerch(p);
+}
+
+function dropPerch(p) {
+  p.state = 'down';
+  for (let i = p.spec.i0; i <= p.spec.i1; i++) setTile(i, 13 - p.spec.h, ' ');
+  p.box.on = false;
+  const b = p.rods, pool = b.pool, rnd = Math.random;
+  b.onHit = rodHit; b.wake();
+  for (let s = b.s0; s < b.s0 + p.n; s++) {
+    const o0 = s * 8, q0 = s * 6;
+    const vx = (rnd() - 0.5) * 7, vy = -3 - rnd() * 9, vz = (rnd() - 0.4) * 7, sp = (rnd() - 0.5) * 9;
+    pool.prev[q0] = pool.pos[o0] - (vx + sp) * DT; pool.prev[q0 + 1] = pool.pos[o0 + 1] - vy * DT; pool.prev[q0 + 2] = pool.pos[o0 + 2] - vz * DT;
+    pool.prev[q0 + 3] = pool.pos[o0 + 4] - (vx - sp) * DT; pool.prev[q0 + 4] = pool.pos[o0 + 5] - vy * DT; pool.prev[q0 + 5] = pool.pos[o0 + 6] - vz * DT;
+  }
+  for (const t of p.ties) t.wake();
+  const st = p.stilts, sp = st.pool;
+  st.onHit = rodHit; st.wake();
+  splitRod(st, st.s0, true); splitRod(st, st.s0 + 2, true);
+  const lean = rnd() < 0.5 ? -1 : 1;
+  for (let s = st.s0; s < st.s0 + 6; s++) {
+    if ((sp.meta[s * 4 + 3] | 0) < 2) continue;
+    const top = sp.pos[s * 8 + 1] > sp.pos[s * 8 + 5] ? 0 : 1, q = (s * 2 + top) * 3;
+    sp.prev[q] -= lean * (6 + rnd() * 6) * DT;
+  }
+  SND.snap((p.x0 + p.x1) / 2, 6, 0.9);
+  CAM.shake = Math.max(CAM.shake, 0.3);
+}
+
+// An upright bundle rising from out of sight, like the level's others but built for being looked at from
+// the front and a little above: full-length rods only on the side you see, the rest short, near the cut top.
+function buildTower(c, rng) {
+  const cx = c.i * TILE + TILE, top = c.h * TILE, R = 2.62, y0 = LEVEL.slabBottom;
+  const rods = [];
+  const lean = () => rng.gauss() * 0.012;
+  const ends = () => top + rng.range(-0.05, 0.3);
+  for (let k = 0; k < 2; k++) {
+    const rr = R - ROD_R - k * ROWP;
+    const n = Math.floor((TAU * rr) / (PITCH * 1.01));
+    for (let j = 0; j < n; j++) {
+      const a = ((j + (k & 1) * 0.5) / n) * TAU;
+      const x = cx + Math.cos(a) * rr, z = Math.sin(a) * rr;
+      const full = k === 0 && z > -0.75;   // the back and the inner ring only show at the cut face
+      rods.push(x + lean(), full ? y0 : top - (k ? 2.2 : 1.6), z + lean(), x + lean(), ends(), z + lean(), ROD_R * rng.range(0.95, 1.05), rng() * 100);
+    }
+  }
+  const ri = R - ROD_R - 2 * ROWP;
+  for (let k = 0; ; k++) {
+    const z = -ri + k * ROWP;
+    if (z > ri) break;
+    for (let x = -ri + (k & 1) * PITCH * 0.5; x <= ri; x += PITCH * 1.01) {
+      if (x * x + z * z > ri * ri) continue;
+      rods.push(cx + x, top - 1.6, z, cx + x + rng.gauss() * 0.01, ends(), z + rng.gauss() * 0.01, ROD_R * rng.range(0.95, 1.05), rng() * 100);
+    }
+  }
+  emitRods(rods, LEVEL.def.columnMat ?? 1, 1000);
+  const tp = POOLS.s64, C = 64, pts = new Float32Array(C * 3);
+  for (const yc of [top - 4.5, top - 1.6]) {
+    const a0 = rng.range(0, TAU);
+    for (let i = 0; i < C; i++) {
+      const t = i / (C - 1), a = a0 + t * TAU * 1.15;
+      pts[i * 3] = cx + Math.cos(a) * (R + 0.1); pts[i * 3 + 1] = yc + t * 0.3 + Math.sin(t * 13) * 0.02; pts[i * 3 + 2] = Math.sin(a) * (R + 0.1);
+    }
+    const s = tp.alloc(1);
+    putStrand(tp, s, pts, C, 0.1, 0, rng() * 100, 0);
+    new Body(tp, s, 1, {});
+  }
+  addWorldBox(cx - R, cx + R, -60, top + 0.18, -R, R, 'column');
+}
+
+// Far off: more of the same, bundles standing up out of the haze, some carrying slabs.
+function buildMid3(rng) {
+  const rods = [];
+  for (let x = -60; x < LEVEL.x1 + 80; x += rng.range(11, 26)) {
+    const z = rng.range(-30, -62), r = rng.range(1.4, 3.0), top = rng.range(-8, 36);
+    const n = Math.floor((TAU * r) / 0.26);
+    for (let j = 0; j < n; j++) {
+      const a = (j / n) * TAU;
+      if (Math.sin(a) < -0.3) continue;   // only the side that faces you
+      const cx = x + Math.cos(a) * r, cz = z + Math.sin(a) * r;
+      rods.push(cx, -90, cz, cx + rng.gauss() * 0.02, top + rng.range(-0.1, 0.4), cz, ROD_R * 1.3, rng() * 100);
+    }
+    if (rng() < 0.45) {
+      const w = rng.range(6, 16), th = rng.range(1.5, 4), xs = x - w * rng.range(0.3, 0.7);
+      for (let y = top; y < top + th; y += 0.3) rods.push(xs, y, z + r + 0.2, xs + w, y, z + r + 0.2, ROD_R * 1.3, rng() * 100);
+    }
+  }
+  emitRods(rods, 5, 30, { layer: 'mid' });
+}
+
+const SH_FAR3_FS = GL_HEAD + `
+in vec3 vW;
+uniform vec3 uGlow;
+uniform vec4 uFarA;   // sun: x from the middle of the view, y, strength
+uniform vec4 uFarB;   // mist colour, low down
+uniform vec4 uRect;   // the plane this is drawn on, centred on the camera
+uniform float uTime;
+layout(location = 0) out vec4 oCol;
+${GL_NOISE}
+void main() {
+  float x = vW.x, y = vW.y;
+  float camX = (uRect.x + uRect.z) * 0.5;
+  // haze: warm mist below, cooler and a little deeper overhead
+  float t = smoothstep(-92.0, 22.0, y);   // the camera looks down: this plane shows from about -90 up to the level's height
+  vec3 col = mix(uFarB.rgb, uGlow, t);
+  col *= 0.92 + 0.12 * vnoise(x * 0.018 + y * 0.011 + 7.0);
+  // the sun, up to the right, and its light coming down through the haze in soft rays
+  vec2 d = vec2((x - camX - uFarA.x) * 0.8, y - uFarA.y);
+  float r = length(d);
+  col += vec3(1.0, 0.92, 0.78) * uFarA.z * exp(-r / 50.0);
+  float ang = atan(d.y, d.x);
+  float rays = vnoise(ang * 9.0 + 3.0) * vnoise(ang * 23.0 + 11.0 + uTime * 0.02);
+  col += vec3(1.0, 0.94, 0.82) * uFarA.w * rays * smoothstep(170.0, 25.0, r) * smoothstep(4.0, 30.0, r);
+  // distant bundles in two rows, fading into the mist below
+  for (int L = 0; L < 2; L++) {
+    float fl = float(L);
+    float pitch = mix(31.0, 17.0, fl);
+    float cid = floor(x / pitch);
+    float h = h11(cid * 1.73 + fl * 19.1);
+    if (h < 0.3) continue;
+    float cx = (cid + 0.5 + (h11(cid * 4.7 + fl) - 0.5) * 0.6) * pitch;
+    float w = mix(2.4, 1.3, fl) * (0.7 + 0.6 * h11(cid * 9.1 + fl));
+    float top = mix(10.0, 35.0, fl) + 55.0 * h11(cid * 2.9 + fl * 3.0);
+    float d = abs(x - cx) / w;
+    float on = (1.0 - smoothstep(0.75, 1.0, d)) * (1.0 - smoothstep(top - 1.5, top + 1.5, y));
+    float sw = w * (3.0 + 3.0 * h11(cid * 8.3 + fl));
+    float slab = step(0.55, h11(cid * 6.1 + fl * 7.0)) * (1.0 - smoothstep(sw - 0.8, sw, abs(x - cx))) * (1.0 - smoothstep(1.2, 2.4, abs(y - top - 1.0)));
+    on = max(on, slab);
+    float fade = mix(0.25, 0.75, smoothstep(-60.0, 40.0, y)) * mix(0.62, 0.4, fl);
+    vec3 tc = col * vec3(0.80, 0.72, 0.60);
+    tc = mix(tc, col * vec3(1.04, 0.98, 0.9), smoothstep(-0.2, 0.9, (x - cx) / w) * 0.45);
+    col = mix(col, tc, on * fade);
+  }
+  oCol = vec4(col, 1.0);
+}`;
+
+LEVEL_DEFS[3] = {
+  id: 3, seed: 20261103, slabBottom: -60,
+  slabMat: 5, columnMat: 1, carpetMat: 0, enemyMat: 3,
+  cam: { y: 10, dist: 64, elev: 0.36 },
+  look: {
+    key: [1.0, 0.95, 0.88], keyI: 6.4, keyDir: [0.5, 0.74, 0.45],
+    rim: [0.95, 0.88, 0.75], rimI: 2.6, rimDir: [-0.62, 0.42, -0.66],
+    sky: [0.42, 0.47, 0.55], gnd: [0.36, 0.29, 0.20],
+    glow: [0.46, 0.54, 0.68], farB: [1.16, 1.05, 0.86, 0], farA: [62, 12, 0.85, 0.55], farZ: -120,
+    exposure: 0.78, bloom: 0.08, midBlur: 7.5,
+  },
+  farFS: SH_FAR3_FS,
+  buildMid: buildMid3,
+  make(K, L) {
+    L.beds = []; L.perches = []; L.towers = [];
+    // an upright bundle from out of sight up to h tiles (built here, not by the core: see buildTower)
+    const leg = (i, h) => { L.towers.push({ i, h }); for (let k = -2; k < h; k++) { K.g[12 - k][i] = 'U'; K.g[12 - k][i + 1] = 'U'; } };
+    const raft = (a, b, h, t, legs = []) => { K.raft(a, b, h, t); for (const i of legs) leg(i, h - t); };
+    const post = (i, h) => leg(i, h);   // an upright bundle you can stand on
+    const perch = (i0, i1, h, hold = 0.55) => { for (let i = i0; i <= i1; i++) K.g[13 - h][i] = 'K'; L.perches.push({ i0, i1, h, hold }); };
+    const bed = (a, b, h, o = {}) => L.beds.push({ a, b, h, ...o });
+    const loopOn = (i, h) => K.loop(i, 12 - h);
+    const clump = (i) => K.enemy(i, { edge: 'turn' });
+
+    // Out over nothing.
+    raft(0, 12, 3, 2, [2, 9]); K.start(3); loopOn(6, 3); loopOn(8, 3);
+    raft(15, 22, 3, 1, [18]); clump(20);
+    raft(26, 30, 4, 1, [27]); loopOn(29, 4);
+    // Cooked strands stretched between two bundles; the way on is up.
+    raft(33, 38, 3, 2, [34]);
+    post(39, 3);
+    bed(41, 45, 3, { life: 4 });
+    post(46, 8);
+    raft(48, 55, 8, 1, [51]); loopOn(50, 8); loopOn(53, 8);
+    // Bundles on stilts: they go a moment after you land.
+    perch(59, 60, 7);
+    perch(64, 65, 7);
+    perch(69, 70, 6);
+    raft(73, 84, 5, 2, [74, 81]); K.checkpoint(75); loopOn(78, 5); clump(82);
+    // Rods across a gap, clumps, then strands from the edge to a tall bundle: up its side.
+    K.bridge(85, 90, 0.8);
+    raft(91, 101, 5, 2, [92, 98]); clump(95); clump(99); loopOn(100, 5);
+    bed(102, 107, 5, { life: 3 });
+    post(108, 10);
+    raft(110, 118, 10, 2, [114]); loopOn(112, 10); loopOn(116, 10);
+    // High and narrow.
+    raft(122, 127, 10, 1, [124]); clump(125);
+    perch(131, 132, 9);
+    perch(136, 137, 10);
+    raft(141, 150, 9, 2, [142, 148]); K.checkpoint(142); loopOn(144, 9); loopOn(146, 9);
+    K.bridge(151, 155, 0.7);
+    raft(156, 160, 9, 1, [157]);
+    // Down, then the last strands up to the nest.
+    raft(164, 171, 6, 2, [165, 169]); clump(168);
+    post(172, 6);
+    bed(174, 178, 6, { life: 2 });
+    post(179, 11);
+    raft(181, 199, 11, 2, [184, 194]);
+    K.nest(186, 191, { mat: 2, r: 1 });
+  },
+  init(rng) {
+    L3.beds = []; L3.perches = [];
+    for (const b of LEVEL.beds) makeBed(b, rng);
+    for (const p of LEVEL.perches) makePerch(p, rng);
+  },
+  build(rng) {
+    for (const c of LEVEL.towers) buildTower(c, rng);
+  },
+  step(dt) {
+    for (const T of L3.beds) bedStep(T, dt);
+    for (const p of L3.perches) perchStep(p, dt);
+  },
+  reset() {
+    for (const T of L3.beds) bedReset(T);
+    for (const p of L3.perches) { p.state = 'up'; p.t = 0; p.applied = 0; p.creakT = 0; }
+  },
+};
+
+// ---- 33-hub.js ----
+// The opening and the way in. The word stands on the table, made of dry spaghetti; the first key
+// knocks it down. Then the twirl drops in beside three nests, one for each level: jump into one.
+// A nest whose level you have finished keeps a twirl lying in it.
+
+const HUB = { letters: [], held: true, holdUntil: 1e9, dropX: 52.5, t: 0 };
+
+// A stick alphabet: strokes in a unit box, x right and y up.
+const GLYPHS = {
+  S: [[1, 1, 0, 1], [0, 1, 0, 0.52], [0, 0.52, 1, 0.48], [1, 0.48, 1, 0], [1, 0, 0, 0]],
+  P: [[0, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0.48], [1, 0.48, 0, 0.48]],
+  A: [[0, 0, 0.5, 1], [0.5, 1, 1, 0], [0.2, 0.38, 0.8, 0.38]],
+  G: [[1, 1, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0.46], [1, 0.46, 0.45, 0.46]],
+  H: [[0, 0, 0, 1], [1, 0, 1, 1], [0, 0.5, 1, 0.5]],
+  E: [[0, 0, 0, 1], [0, 1, 1, 1], [0, 0.52, 0.8, 0.52], [0, 0, 1, 0]],
+  T: [[0, 1, 1, 1], [0.5, 1, 0.5, 0]],
+  I: [[0.5, 0, 0.5, 1], [0.12, 1, 0.88, 1], [0.12, 0, 0.88, 0]],
+};
+const TITLE = { word: 'SPAGHETTI', x: 5.4, w: 3.3, h: 7.0, gap: 0.95, y: 0.4 };
+
+// Each stroke is a bundle of eight rods (four across, two deep) cut a little long, so joints overlap.
+function buildTitle(rng) {
+  HUB.letters = [];
+  const pool = POOLS.rod;
+  let x = TITLE.x;
+  for (const ch of TITLE.word) {
+    const rods = [];
+    for (const [u0, v0, u1, v1] of GLYPHS[ch]) {
+      const ax = x + u0 * TITLE.w, ay = TITLE.y + v0 * TITLE.h, bx = x + u1 * TITLE.w, by = TITLE.y + v1 * TITLE.h;
+      const L = Math.hypot(bx - ax, by - ay), tx = (bx - ax) / L, ty = (by - ay) / L, nx = -ty, ny = tx;
+      for (const d of [-0.255, -0.085, 0.085, 0.255]) for (const z of [-0.095, 0.095]) {
+        const e0 = 0.1 + rng.range(-0.06, 0.1), e1 = 0.1 + rng.range(-0.06, 0.1);
+        const oz = z + rng.range(-0.02, 0.02), od = d + rng.range(-0.015, 0.015);
+        let y0 = ay + ny * od - ty * e0, y1 = by + ny * od + ty * e1;
+        const lift = Math.min(y0, y1) < ROD_R ? ROD_R - Math.min(y0, y1) : 0;   // nothing pokes into the table
+        rods.push(ax + nx * od - tx * e0, y0 + lift, oz, bx + nx * od + tx * e1, y1 + lift, oz, ROD_R * rng.range(0.95, 1.05), rng() * 100);
+      }
+    }
+    const n = rods.length / 8, s0 = pool.alloc(n * 2);
+    for (let k = 0; k < n; k++) { const j = k * 8; putRod(pool, s0 + k, rods[j], rods[j + 1], rods[j + 2], rods[j + 3], rods[j + 4], rods[j + 5], rods[j + 6], 1, rods[j + 7]); }
+    for (let k = n; k < 2 * n; k++) { putRod(pool, s0 + k, x, 1, 0, x + 0.1, 1, 0, ROD_R, 1, rng() * 100); pool.setCount(s0 + k, 0); }
+    const body = new Body(pool, s0, 2 * n, { sim: true, grav: 1, damp: 0.999, fric: 0.42, rest: 0.25, bend: 0, iters: 2, hitMin: 22, kick: true });
+    body.onHit = rodHit;
+    body.spares = [];
+    for (let k = n; k < 2 * n; k++) body.spares.push(s0 + k);
+    HUB.letters.push({ ch, x, body, n });
+    x += TITLE.w + TITLE.gap;
+  }
+}
+
+// A twirl left lying in a finished nest: the hero's own shape, slumped.
+function buildRestingTwirl(N, rng) {
+  if (!TWIRL.rest) return;
+  const pool = POOLS.s64, C = TWIRL.C, n = TWIRL.n;
+  const cx = ((N.i0 + N.i1 + 1) * TILE) / 2 + rng.range(-0.4, 0.4), y0 = rowY(N.row) + 0.7;
+  const a = rng.range(-0.5, 0.5), ca = Math.cos(a), sa = Math.sin(a);
+  const s0 = pool.alloc(n), pts = new Float32Array(C * 3);
+  for (let k = 0; k < n; k++) {
+    for (let i = 0; i < C; i++) {
+      const j = (k * C + i) * 3;
+      let x = TWIRL.rest[j] * 1.12, y = TWIRL.rest[j + 1], z = TWIRL.rest[j + 2] * 1.12;
+      if (TWIRL.kind[k * C + i] !== 0) { y = Math.max(y * 0.2, 0.25); x *= 1.6; z = z * 1.3 + 0.4; }   // the loose ends lie flat
+      else y = 0.3 + (y - 1.0) * 0.85;   // settled, but its coil still shows over the rim
+      pts[i * 3] = cx + x * ca - z * sa; pts[i * 3 + 1] = y0 + Math.max(y, 0.1); pts[i * 3 + 2] = x * sa + z * ca;
+    }
+    putStrand(pool, s0 + k, pts, C, 0.1, 0, rng() * 100, 0);
+  }
+  new Body(pool, s0, n, {});
+}
+
+// Over before you play: every rod is let go with a shove, and they come down cracking.
+function collapseTitle() {
+  const rnd = Math.random;
+  HUB.letters.forEach((L, li) => {
+    const b = L.body, pool = b.pool;
+    b.wake();
+    const side = rnd() < 0.5 ? -1 : 1;
+    for (let s = b.s0; s < b.s0 + L.n; s++) {
+      const o0 = s * 8, o1 = o0 + 4, q0 = s * 6, q1 = q0 + 3;
+      const hi = pool.pos[o0 + 1] > pool.pos[o1 + 1] ? 0 : 1;
+      const vx = side * (4 + rnd() * 14) + (rnd() - 0.5) * 10, vy = 4 + rnd() * 18, vz = 6 + rnd() * 16;
+      for (const [o, q, top] of [[o0, q0, hi === 0], [o1, q1, hi === 1]]) {
+        const k = top ? 1.6 : 0.4;
+        pool.prev[q] = pool.pos[o] - vx * k * DT; pool.prev[q + 1] = pool.pos[o + 1] - vy * DT; pool.prev[q + 2] = pool.pos[o + 2] - vz * k * DT;
+      }
+    }
+    for (let k = 0; k < 3; k++) splitRod(b, b.s0 + Math.floor(rnd() * L.n), true);
+    SND.snap(L.x, 3 + Math.floor(rnd() * 3), 0.7 * (0.6 + 0.4 * rnd()), li * 0.03);
+  });
+  CAM.shake = Math.max(CAM.shake, 0.35);
+}
+
+LEVEL_DEFS.hub = {
+  id: 'hub', seed: 20261028,
+  floorLift: 0.3,   // the fallen word lies on the cooked layer, not in it
+  // A low step of dry rods with the three nests set into it: hop a gap to pass a nest, walk into one to choose it.
+  make(K, L) {
+    K.floor(0, 70);
+    L.x1 = 42 * TILE;
+    K.stack(14, 18, 1); K.stack(31, 36, 1);
+    K.start(17);
+    K.nest(19, 22, { target: 1, mat: 0, R0: 3.95, r0: 1.2, count: 90 });
+    K.nest(23, 26, { target: 2, mat: 3, R0: 3.95, r0: 1.2, count: 90 });
+    K.nest(27, 30, { target: 3, mat: 2, R0: 3.95, r0: 1.2, count: 90 });
+  },
+  build(rng) {
+    buildTitle(rng);
+    const done = loadDone();
+    for (const N of LEVEL.nests) if (done.includes(N.target)) buildRestingTwirl(N, rng);
+  },
+  // the opening is one fixed shot of the word; then the nests
+  // the word holds until it has fallen, then the camera finds the nests
+  shot(mode) {
+    const word = { x: 24.05, y: 4.6, dist: 54, elev: 0.1, rate: 2.2 };
+    if (mode === 'title' || (mode === 'intro' && HUB.fromTitle && GAME.introT < 0.7)) return word;
+    if (mode === 'intro') return { x: 72, y: 6, rate: 1.7 };
+    if (mode === 'select') return { x: clamp(PLAYER.x + 20, 25.6, 72), y: 6, rate: 4 };   // all three nests in view; it follows you back to the word
+    return null;
+  },
+  enter(opts) {
+    HUB.held = true;
+    HUB.fromTitle = !opts.select;
+    HUB.holdUntil = opts.select ? 0.2 : 1.45;
+    if (opts.select) { GAME.mode = 'intro'; GAME.introT = 0; }
+    placePlayer(HUB.dropX, 90);
+  },
+  intro() { collapseTitle(); },
+  step() {
+    if (!HUB.held) return;
+    const P = PLAYER;
+    if (GAME.mode === 'intro' && GAME.introT >= HUB.holdUntil) {
+      HUB.held = false;
+      placePlayer(HUB.dropX, 27);
+      P.vy = -30; P.ground = false; P.airT = 0.2;
+    } else { P.x = HUB.dropX; P.y = 90; P.vx = 0; P.vy = 0; }
+  },
+};
+
+// ---- 35-build.js ----
+// Builds every noodle that starts at rest: the floor (stacked dry rods with cooked spaghetti dropped
+// over the top), any ceiling, bundles on dry-spaghetti stilts, upright bundles, the nests, and the
+// hanging rack behind. Cooked strands are dropped and settled, so they drape for real.
+
+const SLAB_Z = 3.5;
 const ROD_R = 0.09, PITCH = 0.18, ROWP = 0.156;
 const CARPET_T = 0.36;        // the dry stack sits this far below the walking surface; the cooked layer fills it
-const FILL = [];               // triangles for the dark insides of the floor stacks
+const FILL = [];               // triangles for the dark insides of the stacks
 let STRIPS = [];
 
 function buildStatic() {
-  const rng = makeRng(20261027);
-  const H = floorHeights();
-  STRIPS = makeStrips(H);
+  const def = LEVEL.def;
+  const rng = makeRng(def.seed ?? 20261027);
+  const R = floorRuns();
+  STRIPS = makeStrips(R);
   for (const S of STRIPS) buildSlab(S, rng);
-  buildCarpet(H, rng);
+  buildCarpet(R, rng);
+  buildCeilings(rng);
   for (const b of LEVEL.blocks) buildBlock(b, rng);
   for (const c of LEVEL.columns) buildColumn(c, rng);
-  buildNest(rng);
-  buildMid(rng);
+  for (const n of LEVEL.nests) buildNest(n, rng);
+  if (def.buildMid) def.buildMid(rng); else buildMid(rng, def.mid || {});
+  if (def.build) def.build(rng);
 }
 
-function makeStrips(H) {
+function makeStrips(R) {
   const out = [];
+  const same = (a, b) => a && b && a.top === b.top && a.bottom === b.bottom;
+  // Past the level's ends nothing is ever seen; over a gap a side is open top to bottom.
+  const nb = (k) => (k < 0 || k >= LW ? { top: 1e9, bottom: -1e9 } : R[k] || { top: -1e9, bottom: 1e9 });
   let i = 0;
   while (i < LW) {
-    if (H[i] === null) { i++; continue; }
+    if (!R[i]) { i++; continue; }
     let j = i;
-    while (j + 1 < LW && H[j + 1] === H[i]) j++;
-    // A neighbour that is a gap leaves this side open all the way down; the level's own ends are never seen.
-    const side = (k) => (k < 0 || k >= LW ? 99 : H[k] === null ? -99 : H[k]);
-    out.push({ a: i, b: j, h: H[i], x0: i * TILE, x1: (j + 1) * TILE, top: H[i] * TILE, leftTop: side(i - 1), rightTop: side(j + 1) });
+    while (j + 1 < LW && same(R[j + 1], R[i])) j++;
+    out.push({ a: i, b: j, x0: i * TILE, x1: (j + 1) * TILE, top: R[i].top, bottom: R[i].bottom, nl: nb(i - 1), nr: nb(j + 1) });
     i = j + 1;
   }
   return out;
@@ -1207,13 +2334,13 @@ function emitRods(rods, mat, chunk = 24, opts = {}) {
   return bodies;
 }
 
-// A floor stack: rods along x, hex-packed. Only the outer two layers (front and top) run full length;
-// where a side is open, short stubs fill the whole face so its cut ends show.
+// A stack: rods along x, hex-packed. Only the outer two layers (front and top, and the underside of a
+// slab with nothing below it) run full length; where a side is open, short stubs fill the face so its cut ends show.
 function buildSlab(S, rng) {
-  const exposedL = (y) => S.a > 0 && y > S.leftTop * TILE - CARPET_T;
-  const exposedR = (y) => S.b < LW - 1 && y > S.rightTop * TILE - CARPET_T;
   const top = S.top - CARPET_T;
-  const rows = Math.floor((top - SLAB_BOTTOM) / ROWP);
+  const raft = S.bottom > LEVEL.slabBottom;
+  const exposed = (nb, y) => y > nb.top - CARPET_T || y < nb.bottom;
+  const rows = Math.floor((top - S.bottom) / ROWP);
   const ncol = Math.floor((2 * SLAB_Z - 2 * ROD_R) / PITCH) + 1;
   const rods = [];
   const j = () => rng.range(-0.013, 0.013);
@@ -1222,8 +2349,8 @@ function buildSlab(S, rng) {
     for (let m = 0; m < ncol; m++) {
       const z = SLAB_Z - ROD_R - m * PITCH - (k & 1 ? PITCH * 0.5 : 0);
       if (z < -SLAB_Z + ROD_R) continue;
-      const shell = k < 2 || m < 2;
-      const eL = exposedL(y), eR = exposedR(y);
+      const shell = k < 2 || m < 2 || (raft && k >= rows - 2);
+      const eL = exposed(S.nl, y), eR = exposed(S.nr, y);
       if (!shell && !eL && !eR) continue;
       const xs = S.x0 + (eL ? rng.range(-0.2, 0.14) : 0.02);
       const xe = S.x1 - (eR ? rng.range(-0.2, 0.14) : 0.02);
@@ -1242,10 +2369,61 @@ function buildSlab(S, rng) {
       }
     }
   }
-  S.bodies = emitRods(rods, 5);
-  S.box = addWorldBox(S.x0, S.x1, -60, S.top - 0.06, -SLAB_Z, SLAB_Z, 'floor');
-  const inL = exposedL(top - 0.5) ? 0.45 : 0, inR = exposedR(top - 0.5) ? 0.45 : 0;
-  pushBox(S.x0 + inL, S.x1 - inR, SLAB_BOTTOM, top - 0.33, -SLAB_Z + 0.25, SLAB_Z - 0.34);
+  S.bodies = emitRods(rods, LEVEL.def.slabMat ?? 5);
+  S.box = addWorldBox(S.x0, S.x1, raft ? S.bottom : -60, S.top - 0.06 + (LEVEL.def.floorLift || 0), -SLAB_Z, SLAB_Z, 'floor');
+  const inL = exposed(S.nl, top - 0.5) ? 0.45 : 0, inR = exposed(S.nr, top - 0.5) ? 0.45 : 0;
+  pushBox(S.x0 + inL, S.x1 - inR, S.bottom + (raft ? 0.33 : 0), top - 0.33, -SLAB_Z + 0.25, SLAB_Z - 0.34);
+}
+
+// Dry rods packed overhead: the same stack turned over. Its underside and front are whole rods;
+// where it opens (a light well, or where it ends) the cut ends show.
+function buildCeilings(rng) {
+  const Cb = ceilRuns();
+  if (!Cb.some((v) => v !== null)) return;
+  const topY = LEVEL.ceilTop || 46;
+  const bottomOf = (k) => (k < 0 || k >= LW ? -1e9 : Cb[k] === null ? 1e9 : Cb[k]);
+  const ncol = Math.floor((2 * SLAB_Z - 2 * ROD_R) / PITCH) + 1;
+  let i = 0;
+  while (i < LW) {
+    if (Cb[i] === null) { i++; continue; }
+    let jj = i;
+    while (jj + 1 < LW && Cb[jj + 1] === Cb[i]) jj++;
+    const x0 = i * TILE, x1 = (jj + 1) * TILE, bottom = Cb[i];
+    const nL = bottomOf(i - 1), nR = bottomOf(jj + 1);
+    const rows = Math.floor((topY - bottom) / ROWP);
+    const rods = [];
+    const j = () => rng.range(-0.013, 0.013);
+    for (let k = 0; k < rows; k++) {
+      const y = bottom + ROD_R + k * ROWP;
+      for (let m = 0; m < ncol; m++) {
+        const z = SLAB_Z - ROD_R - m * PITCH - (k & 1 ? PITCH * 0.5 : 0);
+        if (z < -SLAB_Z + ROD_R) continue;
+        const shell = k < 2 || m < 2;
+        const eL = y < nL, eR = y < nR;
+        if (!shell && !eL && !eR) continue;
+        const xs = x0 + (eL ? rng.range(-0.2, 0.14) : 0.02);
+        const xe = x1 - (eR ? rng.range(-0.2, 0.14) : 0.02);
+        const r = ROD_R * rng.range(0.95, 1.05);
+        if (shell) {
+          let x = xs;
+          while (x < xe - 0.05) {
+            let x2 = Math.min(x + rng.range(4.5, 15), xe);
+            if (xe - x2 < 1.2) x2 = xe;
+            rods.push(x, y + j(), z + j(), x2, y + j(), z + j(), r, rng() * 100);
+            x = x2 + rng.range(0.01, 0.09);
+          }
+        } else {
+          if (eL) rods.push(xs, y + j(), z + j(), xs + rng.range(0.8, 2.2), y + j(), z + j(), r, rng() * 100);
+          if (eR) rods.push(xe - rng.range(0.8, 2.2), y + j(), z + j(), xe, y + j(), z + j(), r, rng() * 100);
+        }
+      }
+    }
+    emitRods(rods, LEVEL.def.ceilMat ?? LEVEL.def.slabMat ?? 5);
+    addWorldBox(x0, x1, bottom + 0.06, 400, -SLAB_Z, SLAB_Z, 'ceiling');
+    const inL = bottom + 0.5 < nL ? 0.45 : 0, inR = bottom + 0.5 < nR ? 0.45 : 0;
+    pushBox(x0 + inL, x1 - inR, bottom + 0.33, topY, -SLAB_Z + 0.25, SLAB_Z - 0.34);
+    i = jj + 1;
+  }
 }
 
 function linkFlat(p, a, b, L) {
@@ -1269,9 +2447,9 @@ function spreadFlat(p, a, b, L, k) {
 
 // Cooked spaghetti dropped over the floor. Strands settle onto the stack and onto each other
 // (a height map remembers where earlier strands landed); ends that miss the stack hang over the edge.
-function buildCarpet(H, rng) {
+function buildCarpet(Rn, rng) {
   const colTop = new Float32Array(LW).fill(-1e9);
-  for (let i = 0; i < LW; i++) if (H[i] !== null) colTop[i] = H[i] * TILE - CARPET_T;
+  for (let i = 0; i < LW; i++) if (Rn[i]) colTop[i] = Rn[i].top - CARPET_T;
   const RES = 10, HX0 = -2, HW = Math.ceil((LEVEL_X1 + 4) * RES), HZN = Math.round(2 * SLAB_Z * RES) + 1;
   const hf = new Float32Array(HW * HZN).fill(-1e9);
   const baseAt = (x, z) => {
@@ -1295,6 +2473,7 @@ function buildCarpet(H, rng) {
     }
   };
   const C = 64, R = 0.1;
+  const mat = LEVEL.def.carpetMat ?? 0, dens = LEVEL.def.carpetDensity ?? 3.2;
   const px = new Float32Array(C * 3), pv = new Float32Array(C * 3);
   const pool = POOLS.s64;
   for (const S of STRIPS) {
@@ -1302,7 +2481,7 @@ function buildCarpet(H, rng) {
     const cells = Math.max(1, Math.round(width / 12));
     for (let ci = 0; ci < cells; ci++) {
       const cx0 = S.x0 + (width * ci) / cells, cx1 = S.x0 + (width * (ci + 1)) / cells;
-      const n = Math.round((cx1 - cx0) * 3.2);
+      const n = Math.round((cx1 - cx0) * dens);
       const s0 = pool.used;
       for (let k = 0; k < n; k++) {
         const edge = rng() < 0.11;
@@ -1337,7 +2516,7 @@ function buildCarpet(H, rng) {
           splat(px[i * 3], px[i * 3 + 2], px[i * 3 + 1] + R * 0.85);
           if (i < C - 1) splat((px[i * 3] + px[i * 3 + 3]) * 0.5, (px[i * 3 + 2] + px[i * 3 + 5]) * 0.5, (px[i * 3 + 1] + px[i * 3 + 4]) * 0.5 + R * 0.85);
         }
-        putStrand(pool, pool.alloc(1), px, C, R * rng.range(0.94, 1.06), 0, rng() * 100, 0);
+        putStrand(pool, pool.alloc(1), px, C, R * rng.range(0.94, 1.06), mat, rng() * 100, 0);
       }
       if (pool.used > s0) new Body(pool, s0, pool.used - s0, {});
     }
@@ -1415,7 +2594,8 @@ function roundSqPoint(d, h, rc) {
   return segs[0](0);
 }
 
-// A bundle of dry spaghetti seen end-on, tied with a cooked strand, standing on dry-spaghetti stilts.
+// A bundle of dry spaghetti seen end-on, tied with a cooked strand, standing on dry-spaghetti stilts
+// (none when something solid is right above it: then it hangs from that).
 function buildBlock(blk, rng) {
   const pool = POOLS.rod;
   const cx = blk.i * TILE + 1.5, cy = rowY(blk.r) + 1.5;
@@ -1453,6 +2633,7 @@ function buildBlock(blk, rng) {
   blk.tie = new Body(tp, ts, 1, { sim: true, grav: 1, damp: 0.99, fric: 0.5, bend: 0.04, iters: 2, owner: blk });
   blk.box = addWorldBox(cx - hs, cx + hs, cy - hs, cy + hs, -1.5, 1.5, 'block');
   // Stilts down to whatever is below, kept behind the path so you pass in front of them.
+  if (solidAt(blk.i, blk.r - 1)) return;
   let r2 = blk.r + 1;
   while (r2 < 13 && !solidAt(blk.i, r2)) r2++;
   if (r2 > blk.r + 1 && solidAt(blk.i, r2)) {
@@ -1472,9 +2653,11 @@ function buildBlock(blk, rng) {
 }
 
 // An upright bundle, like spaghetti standing in a jar with no jar. Its top is a face of cut ends.
+// A deep one rises from out of sight below.
 function buildColumn(c, rng) {
   const pool = POOLS.rod;
   const cx = c.i * TILE + TILE, top = c.h * TILE, R = 2.62;
+  const y0 = c.deep ? LEVEL.slabBottom : -0.3;
   const rods = [];
   const lean = () => rng.gauss() * 0.012;
   for (let k = 0; k < 3; k++) {
@@ -1484,7 +2667,7 @@ function buildColumn(c, rng) {
       const a = ((j + (k & 1) * 0.5) / n) * TAU;
       const x = cx + Math.cos(a) * rr, z = Math.sin(a) * rr;
       if (k > 0 && z < -0.6) continue;
-      rods.push(x + lean(), -0.3, z + lean(), x + lean(), top + rng.range(-0.05, 0.3), z + lean(), ROD_R * rng.range(0.95, 1.05), rng() * 100);
+      rods.push(x + lean(), y0, z + lean(), x + lean(), top + rng.range(-0.05, 0.3), z + lean(), ROD_R * rng.range(0.95, 1.05), rng() * 100);
     }
   }
   const ri = R - ROD_R - 3 * ROWP;
@@ -1496,29 +2679,30 @@ function buildColumn(c, rng) {
       rods.push(cx + x, top - 1.6, z, cx + x + rng.gauss() * 0.01, top + rng.range(-0.05, 0.3), z + rng.gauss() * 0.01, ROD_R * rng.range(0.95, 1.05), rng() * 100);
     }
   }
-  c.bodies = emitRods(rods, 1, 1000);
+  c.bodies = emitRods(rods, c.mat ?? LEVEL.def.columnMat ?? 1, 1000);
   const tp = POOLS.s64, C = 64, pts = new Float32Array(C * 3);
-  for (const f of [0.3, 0.68]) {
-    const a0 = rng.range(0, TAU), yc = Math.max(1.0, top * f);
+  const ties = c.deep ? [top - 4.5, top - 1.6] : [Math.max(1.0, top * 0.3), Math.max(1.0, top * 0.68)];
+  for (const yc of ties) {
+    const a0 = rng.range(0, TAU);
     for (let i = 0; i < C; i++) {
       const t = i / (C - 1), a = a0 + t * TAU * 1.15;
       pts[i * 3] = cx + Math.cos(a) * (R + 0.1); pts[i * 3 + 1] = yc + t * 0.3 + Math.sin(t * 13) * 0.02; pts[i * 3 + 2] = Math.sin(a) * (R + 0.1);
     }
     const s = tp.alloc(1);
-    putStrand(tp, s, pts, C, 0.1, 0, rng() * 100, 0);
+    putStrand(tp, s, pts, C, 0.1, c.tieMat ?? 0, rng() * 100, 0);
     new Body(tp, s, 1, {});
   }
   c.box = addWorldBox(cx - R, cx + R, -60, top + 0.18, -R, R, 'column');
 }
 
-// The goal: a nest of cooked spaghetti on the floor near the end.
-function buildNest(rng) {
-  const N = LEVEL.nest;
+// A nest of cooked spaghetti sitting between its two rim tiles.
+function buildNest(N, rng) {
   const cx = ((N.i0 + N.i1 + 1) * TILE) / 2;
-  const R0 = 6.8, r0 = 1.9, zs = 0.42;
+  const R0 = N.R0 ?? 6.8, r0 = N.r0 ?? 1.9, zs = 0.42, y0 = rowY(N.row);
   const pool = POOLS.s64, C = 64, pts = new Float32Array(C * 3);
   const s0 = pool.used;
-  for (let k = 0; k < 170; k++) {
+  const count = N.count ?? 170;
+  for (let k = 0; k < count; k++) {
     let phi = rng.range(0, TAU), psi = rng.range(0, TAU);
     const dphi = (rng.range(0.7, 1.6) * rng.sign()) / (C - 1), dpsi = (rng.range(2.5, 6.5) * rng.sign()) / (C - 1);
     const rr = r0 * rng.range(0.55, 1.12);
@@ -1527,26 +2711,28 @@ function buildNest(rng) {
       psi += dpsi + rng.gauss() * 0.02;
       const Rr = R0 + rr * Math.cos(psi);
       pts[i * 3] = cx + Rr * Math.cos(phi);
-      pts[i * 3 + 1] = Math.max(r0 * 0.95 + rr * Math.sin(psi) * 0.9, 0.12);
+      pts[i * 3 + 1] = y0 + Math.max(r0 * 0.95 + rr * Math.sin(psi) * 0.9, 0.12);
       pts[i * 3 + 2] = Rr * Math.sin(phi) * zs;
     }
-    putStrand(pool, pool.alloc(1), pts, C, 0.1, 0, rng() * 100, 0);
+    putStrand(pool, pool.alloc(1), pts, C, 0.1, N.mat ?? 0, rng() * 100, 0);
   }
-  new Body(pool, s0, pool.used - s0, {});
-  N.cx = cx; N.R = R0; N.r = r0;
+  N.body = new Body(pool, s0, pool.used - s0, {});
+  N.cx = cx; N.R = R0; N.r = r0; N.y0 = y0;
 }
 
 // Behind the floor: more spaghetti hung up to dry, well out of focus.
-function buildMid(rng) {
+function buildMid(rng, o) {
   const pool = POOLS.s32, C = 32, pts = new Float32Array(C * 3);
-  for (let x = -40; x < LEVEL_X1 + 60; x += rng.range(6, 15)) {
-    const z = rng.range(-22, -42);
+  const step = o.step || [6, 15], zr = o.z || [-22, -42], count = o.count || [3, 10];
+  const topR = o.top || [50, 60], endR = o.end || [-14, 24], mat = o.mat ?? 0;
+  for (let x = -40; x < LEVEL.x1 + 60; x += rng.range(step[0], step[1])) {
+    const z = rng.range(zr[0], zr[1]);
     const s0 = pool.used;
-    const n = rng.int(3, 10);
-    const topY = rng.range(50, 60);
+    const n = rng.int(count[0], count[1]);
+    const topY = rng.range(topR[0], topR[1]);
     for (let k = 0; k < n; k++) {
       const sx = x + rng.range(-2.5, 2.5), sz = z + rng.range(-1.5, 1.5);
-      const yEnd = rng.range(-14, 24);
+      const yEnd = rng.range(endR[0], endR[1]);
       const len = topY - yEnd;
       const ph = rng.range(0, TAU);
       for (let i = 0; i < C; i++) {
@@ -1556,7 +2742,7 @@ function buildMid(rng) {
         pts[i * 3 + 1] = topY - t * len + curl * curl * 0.5;
         pts[i * 3 + 2] = sz + Math.cos(t * 2 + ph) * 0.15 * t;
       }
-      putStrand(pool, pool.alloc(1), pts, C, 0.1, 0, rng() * 100, 0);
+      putStrand(pool, pool.alloc(1), pts, C, 0.1, mat, rng() * 100, 0);
     }
     new Body(pool, s0, pool.used - s0, { layer: 'mid' });
   }
@@ -1574,6 +2760,11 @@ const AWAKE = new Set();
 const KICKABLE = [];
 const WORLD = { boxes: [], buckets: null };
 const COLLIDERS = [];         // capsules that push strands this step (the twirl, the clumps)
+
+function resetPhysics() {
+  BODIES.length = 0; AWAKE.clear(); KICKABLE.length = 0; COLLIDERS.length = 0;
+  WORLD.boxes.length = 0; WORLD.buckets = null;
+}
 
 function addWorldBox(x0, x1, y0, y1, z0, z1, kind) {
   const b = { x0, x1, y0, y1, z0, z1, kind, on: true };
@@ -1869,8 +3060,6 @@ function initRender() {
   P.dof = makeProgram('dof', SH_SCREEN_VS, SH_DOF_FS);
   REN.progs = P;
 
-  REN.keyDir = norm3(-0.48, 0.78, 0.42);
-  REN.rimDir = norm3(0.55, 0.5, -0.67);
   gl.useProgram(P.tube.p);
   const A = [], B = [], C = [];
   for (const m of MATS) { A.push(m[0], m[1], m[2], m[3]); B.push(m[4], m[5], m[6], m[7]); C.push(m[8], m[9], m[10], m[11]); }
@@ -1880,34 +3069,54 @@ function initRender() {
   gl.uniform1i(P.tube.u.uPos, 0); gl.uniform1i(P.tube.u.uFrm, 1); gl.uniform1i(P.tube.u.uMeta, 2); gl.uniform1i(P.tube.u.uShadow, 3);
   gl.useProgram(P.depth.p);
   gl.uniform1i(P.depth.u.uPos, 0); gl.uniform1i(P.depth.u.uFrm, 1); gl.uniform1i(P.depth.u.uMeta, 2);
-  setLook(LOOK);
+  REN.farProgs = { default: P.far };
 
   REN.shadow = makeTarget(SHADOW_SIZE, SHADOW_SIZE, { color: null, depthTex: true });
 
   REN.boxVao = gl.createVertexArray();
   gl.bindVertexArray(REN.boxVao);
-  const vb = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(FILL), gl.STATIC_DRAW);
+  REN.boxVbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, REN.boxVbo);
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
-  REN.boxCount = FILL.length / 3;
 
   const maxS = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES);
   REN.samples = Math.min(qnum('msaa', 4), maxS && maxS.length ? maxS[0] : 4);
   resizeRender(true);
 }
 
-// The light in the room. Tuned by eye; kept in one place.
+// The dark insides of the stacks, rebuilt with each level.
+function uploadFill() {
+  gl.bindBuffer(gl.ARRAY_BUFFER, REN.boxVbo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(FILL.length ? FILL : [0, 0, 0]), gl.STATIC_DRAW);
+  REN.boxCount = FILL.length / 3;
+}
+
+// The light in the room. Tuned by eye; kept in one place. A level's look overrides any of these.
 const LOOK = {
-  key: [1.0, 0.89, 0.74], keyI: 6.2,
-  rim: [1.0, 0.80, 0.56], rimI: 3.4,
+  key: [1.0, 0.89, 0.74], keyI: 6.2, keyDir: [-0.48, 0.78, 0.42],
+  rim: [1.0, 0.80, 0.56], rimI: 3.4, rimDir: [0.55, 0.5, -0.67],
   sky: [0.40, 0.37, 0.33], gnd: [0.30, 0.21, 0.11],
-  glow: [1.0, 0.72, 0.43],
+  glow: [1.0, 0.72, 0.43], farA: [0, 0, 0, 0], farB: [0, 0, 0, 0], farZ: -110,
+  fill: [0.035, 0.018, 0.007],
   exposure: 0.78, ao: 0.9, bloom: 0.07, bloomThresh: 2.2, ca: 0.005,
   farBlur: 7.0, midBlur: 5.0, aoRadius: 0.45, dofScale: qnum('dof', 1.1), dofMax: 7,
 };
+const LOOK_BASE = JSON.parse(JSON.stringify(LOOK));
+
+// A level's light: its own numbers over the room's, and its own far background if it brings one.
+function applyLook(def) {
+  for (const k of Object.keys(LOOK)) delete LOOK[k];
+  Object.assign(LOOK, JSON.parse(JSON.stringify(LOOK_BASE)), def.look || {});
+  if (def.look && def.look.dofScale === undefined) LOOK.dofScale = qnum('dof', LOOK.dofScale);
+  REN.keyDir = norm3(...LOOK.keyDir);
+  REN.rimDir = norm3(...LOOK.rimDir);
+  const key = def.farFS ? 'L' + def.id : 'default';
+  if (!REN.farProgs[key]) REN.farProgs[key] = makeProgram('far ' + def.id, SH_FAR_VS, def.farFS);
+  REN.progs.farNow = REN.farProgs[key];
+  setLook(LOOK);
+}
 function setLook(L) {
   const P = REN.progs;
   gl.useProgram(P.tube.p);
@@ -1917,8 +3126,11 @@ function setLook(L) {
   gl.uniform3f(P.tube.u.uRimCol, L.rim[0] * L.rimI, L.rim[1] * L.rimI, L.rim[2] * L.rimI);
   gl.uniform3fv(P.tube.u.uSky, L.sky);
   gl.uniform3fv(P.tube.u.uGnd, L.gnd);
-  gl.useProgram(P.far.p);
-  gl.uniform3fv(P.far.u.uGlow, L.glow);
+  const F = P.farNow || P.far;
+  gl.useProgram(F.p);
+  gl.uniform3fv(F.u.uGlow, L.glow);
+  if (F.u.uFarA) gl.uniform4fv(F.u.uFarA, L.farA);
+  if (F.u.uFarB) gl.uniform4fv(F.u.uFarB, L.farB);
 }
 
 function resizeRender(force) {
@@ -2082,10 +3294,12 @@ function renderScene(time) {
   gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
   gl.bindFramebuffer(gl.FRAMEBUFFER, T.far.fb);
   gl.viewport(0, 0, T.far.w, T.far.h);
-  gl.useProgram(P.far.p);
-  gl.uniformMatrix4fv(P.far.u.uViewProj, false, REN.vp);
-  gl.uniform4f(P.far.u.uRect, CAM.x - 300, -80, CAM.x + 300, 160);
-  gl.uniform1f(P.far.u.uZ, -110);
+  const F = P.farNow || P.far;
+  gl.useProgram(F.p);
+  gl.uniformMatrix4fv(F.u.uViewProj, false, REN.vp);
+  gl.uniform4f(F.u.uRect, CAM.x - 300, -80, CAM.x + 300, 160);
+  gl.uniform1f(F.u.uZ, LOOK.farZ);
+  if (F.u.uTime) gl.uniform1f(F.u.uTime, time);
   gl.bindVertexArray(EMPTY_VAO);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   blurPass(T.far, T.far2, LOOK.farBlur);
@@ -2111,7 +3325,7 @@ function renderScene(time) {
   drawLayer(P.tube, 'main', vx0, vx1, CAM.y - hvMain - 12, CAM.y + hvMain + 12);
   gl.useProgram(P.box.p);
   gl.uniformMatrix4fv(P.box.u.uViewProj, false, REN.vp);
-  gl.uniform3f(P.box.u.uCol, 0.035, 0.018, 0.007);
+  gl.uniform3fv(P.box.u.uCol, LOOK.fill);
   gl.bindVertexArray(REN.boxVao);
   gl.drawArrays(gl.TRIANGLES, 0, REN.boxCount);
   gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
@@ -2281,7 +3495,7 @@ function keyJump() { for (const c of JUMP_CODES) if (INPUT.keys.has(c)) return t
 
 function playerStep(dt) {
   const P = PLAYER;
-  const control = GAME.mode === 'play' && P.alive;
+  const control = (GAME.mode === 'play' || GAME.mode === 'select') && P.alive;
   const dir = control ? (keyRight() ? 1 : 0) - (keyLeft() ? 1 : 0) : 0;
   let a;
   if (dir !== 0) a = P.ground ? (P.vx * dir < -0.5 ? PCFG.turn : PCFG.acc) : PCFG.airAcc;
@@ -2304,6 +3518,7 @@ function playerStep(dt) {
   P.prevY = P.y;
   P.y += P.vy * dt;
   if (P.alive || P.y > -6) playerResolveY();
+  stepUpLedge();
   if (P.y < -40) P.y = -40;
   if (!P.ground) P.airT += dt; else P.airT = 0;
   if (P.y < -22 && P.alive) killPlayer('fall');
@@ -2350,6 +3565,21 @@ function playerResolveX() {
   }
 }
 
+// Rods and strands sag under the twirl, so at their far end it would walk into the face of the slab it
+// is stepping onto. Lift it onto a ledge less than a strand's sag above its feet.
+function stepUpLedge() {
+  const P = PLAYER;
+  if (!P.alive || !P.ground || (P.groundCh !== '=' && P.groundCh !== '~')) return;
+  const dir = keyRight() ? 1 : keyLeft() ? -1 : 0;
+  if (!dir || !(GAME.mode === 'play' || GAME.mode === 'select')) return;
+  const hw = PCFG.w / 2, i = colOf(P.x + dir * (hw + 0.05)), r = rowOf(P.y + 0.02);
+  if (!solidAt(i, r)) return;
+  const top = rowY(r) + TILE;
+  if (top < P.y || top - P.y > 1.25) return;
+  for (let rr = rowOf(top + PCFG.h); rr <= rowOf(top + 0.05); rr++) if (solidAt(i, rr)) return;
+  P.y = top + 0.005; P.prevY = P.y; P.x += dir * 0.06; P.groundCh = tileCh(i, r);
+}
+
 function playerResolveY() {
   const P = PLAYER, hw = PCFG.w / 2 - 0.02;
   const i0 = colOf(P.x - hw), i1 = colOf(P.x + hw);
@@ -2366,6 +3596,11 @@ function playerResolveY() {
         landPlayer(sy, '=');
         br.loaded = true; br.loadX = P.x;
       }
+    }
+    for (const sf of SURFACES) {
+      if (!sf.on || P.x + hw <= sf.x0 || P.x - hw >= sf.x1) continue;
+      const sy = sf.y(P.x);
+      if (P.prevY >= sy - 0.3 && P.y <= sy) { landPlayer(sy, sf.ch || '='); if (sf.stand) sf.stand(P); }
     }
   } else {
     const r = rowOf(P.y + PCFG.h);
@@ -2482,10 +3717,13 @@ function killPlayer(why) {
 
 const ECFG = { r: 1.25, speed: 6.5 };
 const ENEMIES = [];
+// A level can add its own kinds: push { step(e, dt), place(e), ... } into ENEMIES from its init().
 
 function initEnemies() {
-  const rng = makeRng(777);
+  ENEMIES.length = 0;
+  const rng = makeRng(levelSeed(777));
   for (const spec of LEVEL.enemies) {
+    if (spec.kind) continue;   // the level's own kinds make themselves
     const pool = POOLS.s32, C = 32, n = 6;
     const s0 = pool.alloc(n);
     const rest = new Float32Array(n * C * 3), kind = new Uint8Array(n * C);
@@ -2513,7 +3751,7 @@ function initEnemies() {
         ax += rng.gauss() * 0.05; ay += rng.gauss() * 0.05; az += rng.gauss() * 0.05;
         al = Math.hypot(ax, ay, az); ax /= al; ay /= al; az /= al;
       }
-      putStrand(pool, s0 + k, pts, C, 0.1, 3, rng() * 100, 0);
+      putStrand(pool, s0 + k, pts, C, 0.1, spec.mat ?? LEVEL.def.enemyMat ?? 3, rng() * 100, 0);
     }
     const e = { spec, x: 0, y: 0, vx: -ECFG.speed, vy: 0, roll: 0, state: 'walk', t: 0, rest, kind, s0, n, col: {}, squash: 1 };
     e.body = new Body(pool, s0, n, { sim: true, targets: true, iters: 2, grav: 1, damp: 0.99, fric: 0.5, bend: 0.06, owner: e });
@@ -2523,10 +3761,9 @@ function initEnemies() {
 }
 
 function placeEnemy(e) {
-  e.x = e.spec.i * TILE + 1.5; e.vx = -ECFG.speed; e.vy = 0; e.roll = 0; e.state = 'walk'; e.t = 0; e.squash = 1;
-  let r = 12;
-  while (r > 0 && solidAt(colOf(e.x), r)) r--;
-  e.y = rowY(r);
+  if (e.place) { e.place(e); return; }
+  e.x = e.spec.i * TILE + 1.5; e.vx = -ECFG.speed * (e.spec.dir ?? 1); e.vy = 0; e.roll = 0; e.state = 'walk'; e.t = 0; e.squash = 1;
+  e.y = surfaceY(colOf(e.x), e.spec.r ?? 0);
   const pool = POOLS.s32, C = 32;
   for (let j = 0; j < e.n * C; j++) {
     const p = e.s0 * C + j, o = p * 4, q = p * 3;
@@ -2545,6 +3782,7 @@ function enemySolid(e, i, r) {
 function enemiesStep(dt) {
   const P = PLAYER;
   for (const e of ENEMIES) {
+    if (e.step) { e.step(e, dt); continue; }
     if (e.state === 'gone') continue;
     if (e.state !== 'walk') { e.t += dt; continue; }
     const near = Math.abs(e.x - CAM.x) < 50;
@@ -2557,6 +3795,11 @@ function enemiesStep(dt) {
     const rTop = rowOf(e.y + 2 * R - 0.1), rBot = rowOf(e.y + 0.1);
     for (let r = rTop; r <= rBot; r++) {
       if (enemySolid(e, iw, r)) { e.x = dir > 0 ? iw * TILE - R - 0.001 : (iw + 1) * TILE + R + 0.001; e.vx = -e.vx; break; }
+    }
+    // some clumps keep to their ledge
+    if (e.spec.edge === 'turn' && e.vy === 0 && !solidAt(colOf(e.x + dir * (R * 0.6)), rowOf(e.y - 0.5))) {
+      const onBridge = BRIDGES.some((br) => br.intact && e.x > br.x0 - 1 && e.x < br.x1 + 1);
+      if (!onBridge) { e.x -= e.vx * dt; e.vx = -e.vx; }
     }
     for (const o of ENEMIES) {
       if (o === e || o.state !== 'walk') continue;
@@ -2638,6 +3881,18 @@ function stompEnemy(e) {
 const LOOPS = [];
 const BRIDGES = [];
 const HANGERS = [];
+// Anything else a level adds that the twirl can stand on: { x0, x1, on, y(x), ch, stand(dt) }.
+const SURFACES = [];
+function resetItems() { LOOPS.length = 0; BRIDGES.length = 0; HANGERS.length = 0; SURFACES.length = 0; }
+const levelSeed = (s) => s + ((LEVEL.id | 0) - 1) * 7919;
+
+// Top of the first solid tile at or below row r0 in column i (skipping any ceiling), in cm.
+function surfaceY(i, r0 = 0) {
+  let r = Math.max(0, r0);
+  while (r < LH && tileCh(i, r) === 'C') r++;
+  while (r < LH && !solidAt(i, r)) r++;
+  return r < LH ? rowY(r) + TILE : -1e9;
+}
 
 // ---- loops ----
 function makeLoop(rng, x, y, z) {
@@ -2657,7 +3912,7 @@ function makeLoop(rng, x, y, z) {
 }
 
 function initLoops() {
-  const rng = makeRng(5150);
+  const rng = makeRng(levelSeed(5150));
   for (const spec of LEVEL.loops) {
     const x = spec.i * TILE + 1.5;
     let r = spec.r + 1;
@@ -2830,16 +4085,17 @@ function bridgeSurface(br, x) {
 }
 
 function initBridges() {
-  const rng = makeRng(3131);
+  const rng = makeRng(levelSeed(3131));
   for (const spec of LEVEL.bridges) {
     const pool = POOLS.s32, n = 7, C = 12;
     const s0 = pool.alloc(n * 3);
-    const br = { spec, x0: spec.a * TILE, x1: (spec.b + 1) * TILE, y: 0.22, hold: spec.hold, intact: true, loaded: false, loadT: 0, sag: 0, loadX: 0, creakT: 0, s0, n, C, rest: [] };
+    const base = spec.y ?? surfaceY(spec.a - 1);   // laid across from the top of the left side
+    const br = { spec, x0: spec.a * TILE, x1: (spec.b + 1) * TILE, y: base + 0.22, hold: spec.hold, intact: true, loaded: false, loadT: 0, sag: 0, loadX: 0, creakT: 0, s0, n, C, rest: [] };
     const pts = new Float32Array(C * 3);
     for (let k = 0; k < n; k++) {
       const z = -1.15 + (k / (n - 1)) * 2.3 + rng.range(-0.05, 0.05);
       const xa = br.x0 - rng.range(2.0, 3.2), xb = br.x1 + rng.range(2.0, 3.2);
-      const y = 0.11 + (k % 2) * 0.02;
+      const y = base + 0.11 + (k % 2) * 0.02;
       for (let i = 0; i < C; i++) { const t = i / (C - 1); pts[i * 3] = lerp(xa, xb, t); pts[i * 3 + 1] = y + Math.sin(t * Math.PI) * 0.03; pts[i * 3 + 2] = z + (t - 0.5) * rng.range(-0.1, 0.1); }
       br.rest.push(pts.slice());
       putStrand(pool, s0 + k, pts, C, ROD_R, 1, rng() * 100, F_FLAT);
@@ -2923,18 +4179,23 @@ function breakBridge(br) {
 }
 
 // ---- strands hanging from above ----
+// From above the picture, or from the underside of a ceiling where there is one.
 function initHangers() {
-  const rng = makeRng(9090);
+  const rng = makeRng(levelSeed(9090));
+  const Cb = ceilRuns();
   for (const h of LEVEL.hangs) {
-    const pool = POOLS.s64, C = 64, n = 14;
+    const pool = POOLS.s64, C = 64, n = h.n ?? 14;
     const s0 = pool.alloc(n);
     let r = 12;
     while (r > 0 && solidAt(h.a, r)) r--;
-    const floorY = rowY(r);
+    const floorY = h.floor ?? rowY(r);
     const pts = new Float32Array(C * 3);
     for (let k = 0; k < n; k++) {
       const x = rng.range(h.a * TILE, (h.b + 1) * TILE), z = rng.range(-1.3, 1.3);
-      const yEnd = floorY + rng.range(2.4, 5.2), L = 30, top = yEnd + L;
+      const ci = clamp(Math.floor(x / TILE), 0, LW - 1);
+      const gap = h.gap ?? [2.4, 5.2];
+      let yEnd = floorY + rng.range(gap[0], gap[1]), L = h.len ?? 30, top = yEnd + L;
+      if (Cb[ci] !== null) { top = Cb[ci] - 0.05; L = Math.max(1, top - yEnd); }
       const ph = rng.range(0, TAU), sw = rng.range(0.2, 0.5), curl = rng.range(0.5, 1.2) * rng.sign();
       for (let i = 0; i < C; i++) {
         const t = i / (C - 1);
@@ -2943,7 +4204,7 @@ function initHangers() {
         pts[i * 3 + 1] = top - t * L + Math.abs(curl) * c * c * 0.6;
         pts[i * 3 + 2] = z + Math.cos(t * 4 + ph) * sw * 0.6 * t;
       }
-      putStrand(pool, s0 + k, pts, C, 0.1, 0, rng() * 100, 0);
+      putStrand(pool, s0 + k, pts, C, 0.1, h.mat ?? 0, rng() * 100, 0);
       pool.inv[(s0 + k) * C] = 0;
     }
     const b = new Body(pool, s0, n, { sim: true, kick: true, iters: 3, grav: 1, damp: 0.985, fric: 0.25, bend: 0.04 });
@@ -2955,6 +4216,7 @@ function initHangers() {
 function itemsStep(dt) {
   loopsStep(dt);
   bridgesStep(dt);
+  if (LEVEL.def.step) LEVEL.def.step(dt);
 }
 
 // ---- 70-audio.js ----
@@ -3064,9 +4326,9 @@ const SND = {
     }
   },
   // Dry spaghetti: a sharp crack and the ring of the rod, n times in quick succession.
-  snap(x, n, loud) {
+  snap(x, n, loud, t0 = 0) {
     const pan = sfxPan(x);
-    let t = 0;
+    let t = t0;
     for (let i = 0; i < n; i++) {
       const r = Math.random();
       burst({ t, type: 'highpass', f: 1400 + r * 1600, q: 0.7, dur: 0.012 + r * 0.01, gain: 0.16 * loud, att: 0.0004, pan });
@@ -3114,6 +4376,12 @@ const SND = {
     tone({ type: 'triangle', f: 220, f2: 70, dur: 0.7, gain: 0.035, pan });
     for (let i = 0; i < 6; i++) burst({ t: 0.2 + i * 0.09 + Math.random() * 0.04, f: 650, f2: 260, q: 1, dur: 0.05, gain: 0.025, pan });
   },
+  // dropping into a nest from the table: a soft settle and one low note
+  nest(x) {
+    const pan = sfxPan(x);
+    for (let i = 0; i < 5; i++) burst({ t: i * 0.09 + Math.random() * 0.04, f: 700 - i * 40, f2: 300, q: 1, dur: 0.06, gain: 0.026, pan });
+    tone({ t: 0.3, f: 196, dur: 1.4, gain: 0.022, att: 0.3 });
+  },
   win(x) {
     const pan = sfxPan(x);
     for (let i = 0; i < 9; i++) burst({ t: i * 0.11 + Math.random() * 0.05, f: 760 - i * 30, f2: 300, q: 1, dur: 0.06, gain: 0.03, pan });
@@ -3124,34 +4392,45 @@ const SND = {
 };
 
 // ---- 80-camera.js ----
-// A long lens close to the table, a little above it, following the twirl. Out of focus before
-// you start and when paused; it pulls focus when you play.
+// A long lens close to the table, a little above it, following the twirl. Each level sets its own
+// height, distance and angle; the opening has a set shot; a nest you jump into gets a slow push in.
 
 const CAM = {
-  x: 30, y: 9.5, z: 0, fov: (qnum('fov', 27) * Math.PI) / 180, elev: qnum('elev', 0.3), baseElev: qnum('elev', 0.3), dist: 60, baseDist: qnum('dist', 60), dy: qnum('dy', 0), dx: qnum('dx', 0),
+  x: 30, y: 9.5, z: 0, fov: (qnum('fov', 27) * Math.PI) / 180, elev: 0.3, baseElev: 0.3, dist: 60, baseDist: 60, dy: qnum('dy', 0), dx: qnum('dx', 0),
+  baseY: 9.6, follow: 0.8, above: 7,
   look: 0, shake: 0, shakeX: 0, shakeY: 0,
   defocus: 1, defocusTarget: 1, fade: 1, fadeTarget: 1, exposure: 1,
 };
-const CAM_BASE_Y = 9.6;
 
-function camHalfWidth() { return CAM.baseDist * Math.tan(CAM.fov / 2) * (REN.cw / REN.ch); }
+function camConfig(def) {
+  const c = def.cam || {};
+  CAM.baseY = c.y ?? 9.6; CAM.follow = c.follow ?? 0.8; CAM.above = c.above ?? 7;
+  CAM.baseDist = qnum('dist', c.dist ?? 60); CAM.baseElev = qnum('elev', c.elev ?? 0.3);
+}
+
+function camHalfWidth(dist = CAM.baseDist) { return dist * Math.tan(CAM.fov / 2) * (REN.cw / REN.ch); }
 
 function camUpdate(dt, snap) {
   const P = PLAYER;
   CAM.look = damp(CAM.look, clamp(P.vx * 0.2, -5, 5), 1.8, dt);
-  const hw = camHalfWidth();
-  let tx = clamp(P.x + CAM.look, hw, LEVEL_X1 - hw) + CAM.dx;
-  let ty = CAM_BASE_Y + Math.max(0, P.y - 7) * 0.8 + CAM.dy;
   let dist = CAM.baseDist, elev = CAM.baseElev;
-  if (GAME.mode === 'win') {
-    const k = smoothstep(0.4, 5, GAME.winT);
-    tx = LEVEL.nest.cx; ty = lerp(CAM_BASE_Y - 3, 1.5, k); dist = lerp(60, 30, k); elev = lerp(CAM.baseElev, 0.85, k);
+  const hw = camHalfWidth(dist);
+  let tx = clamp(P.x + CAM.look, LEVEL.x0 + hw, Math.max(LEVEL.x0 + hw, LEVEL.x1 - hw)) + CAM.dx;
+  let ty = CAM.baseY + Math.max(0, P.y - CAM.above) * CAM.follow + CAM.dy;
+  let rate = 6.5;
+  const shot = LEVEL.def.shot && LEVEL.def.shot(GAME.mode);
+  if (shot) { tx = shot.x; ty = shot.y; dist = shot.dist ?? dist; elev = shot.elev ?? elev; rate = shot.rate ?? 2.2; }
+  if (GAME.mode === 'win' || GAME.mode === 'enter') {
+    const N = LEVEL.goal || LEVEL.nest, big = N.R >= 6;
+    const k = smoothstep(0.4, big ? 5 : 2.2, GAME.winT);
+    tx = N.cx; ty = lerp(GAME.winY0, N.y0 + 1.5, k); dist = lerp(CAM.baseDist, big ? 30 : 26, k); elev = lerp(CAM.baseElev, 0.85, k);
+    rate = 3;
   }
   CAM.elev = snap ? elev : damp(CAM.elev, elev, 1.2, dt);
   if (GAME.mode === 'dead' && P.y < 0) ty = CAM.y;
   if (snap) { CAM.x = tx; CAM.y = ty; CAM.dist = dist; }
   else {
-    CAM.x = damp(CAM.x, tx, 6.5, dt);
+    CAM.x = damp(CAM.x, tx, rate, dt);
     CAM.y = damp(CAM.y, ty, 2.6, dt);
     CAM.dist = damp(CAM.dist, dist, 0.8, dt);
   }
@@ -3164,36 +4443,61 @@ function camUpdate(dt, snap) {
 }
 
 // ---- 90-main.js ----
-// Boot, input, the fixed-step loop, and what happens when you fall, get caught, or reach the nest.
+// Boot, input, the fixed-step loop, the way between levels, and what happens when you fall, get
+// caught, or reach a nest. Scenes are 'hub' (the opening and the three nests) and the levels 1-3.
 
-const GAME = { mode: 'boot', t: 0, hitstop: 0, deadT: 0, winT: 0, checkpoint: null, gridStart: null };
+const GAME = { mode: 'boot', t: 0, hitstop: 0, deadT: 0, winT: 0, winY0: 0, checkpoint: null, gridStart: null, scene: null, pending: null, resume: null, introT: 0, goal: null };
 const INPUT = { keys: new Set() };
 const JUMP_CODES = new Set(['Space', 'ArrowUp', 'KeyW', 'KeyZ', 'KeyK']);
 const veil = document.getElementById('veil');
 const TIMESCALE = qnum('speed', 1);
+const LAST_LEVEL = 3;
+const SAVE_KEY = 'spaghetti.done';
 
+function loadDone() { try { const v = JSON.parse(localStorage.getItem(SAVE_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+function markDone(id) {
+  const d = loadDone();
+  if (d.includes(id)) return;
+  d.push(id);
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch (e) { /* a private window: it just won't be remembered */ }
+}
+if (qflag('fresh')) { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ } }
+
+function showVeil(on) { veil.classList.toggle('gone', !on); document.body.classList.toggle('play', !on); }
+
+// The first key or click turns the sound on and leaves the opening shot; later ones end a pause.
 function begin() {
   audioInit();
-  veil.classList.add('gone');
-  document.body.classList.add('play');
-  CAM.defocusTarget = 0;
-  if (GAME.mode === 'title' || GAME.mode === 'paused') GAME.mode = GAME.resume || 'play';
+  if (GAME.mode === 'title') {
+    showVeil(false);
+    GAME.mode = 'intro'; GAME.introT = 0;
+    if (LEVEL.def.intro) LEVEL.def.intro();
+    return;
+  }
+  if (GAME.mode === 'paused') { showVeil(false); GAME.mode = GAME.resume || 'play'; CAM.defocusTarget = 0; }
 }
 function pause() {
   if (GAME.mode !== 'play') return;
   GAME.resume = 'play';
   GAME.mode = 'paused';
   CAM.defocusTarget = 1;
-  veil.classList.remove('gone');
-  document.body.classList.remove('play');
+  showVeil(true);
   INPUT.keys.clear();
+}
+// Esc again while paused: back to the nests.
+function leaveLevel() {
+  if (GAME.scene === 'hub') { begin(); return; }
+  showVeil(false);
+  CAM.defocusTarget = 0;
+  requestScene('hub', { select: true, from: GAME.scene });
 }
 
 window.addEventListener('keydown', (e) => {
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
-  if (GAME.mode === 'boot') return;
-  if (GAME.mode === 'title' || GAME.mode === 'paused') { if (e.code !== 'Escape') begin(); return; }
+  if (GAME.mode === 'boot' || GAME.mode === 'loading') return;
+  if (GAME.mode === 'title') { if (e.code !== 'Escape') begin(); return; }
+  if (GAME.mode === 'paused') { if (e.code === 'Escape') leaveLevel(); else begin(); return; }
   if (SFX.ctx && SFX.ctx.state === 'suspended') SFX.ctx.resume();
   INPUT.keys.add(e.code);
   if (JUMP_CODES.has(e.code)) PLAYER.jumpBuf = PCFG.buffer;
@@ -3208,14 +4512,67 @@ window.addEventListener('resize', () => resizeRender(false));
 
 function startPoint() {
   const c = GAME.checkpoint || LEVEL.start;
-  return [c.i * TILE + 1.5, 0];
+  return [c.i * TILE + 1.5, c.y ?? surfaceY(c.i)];
+}
+
+// Everything for one scene, from nothing: the grid, the noodles, the light.
+function buildScene(id) {
+  const def = LEVEL_DEFS[id];
+  const t0 = performance.now();
+  resetPhysics();
+  for (const P of POOL_LIST) P.reset();
+  resetItems();
+  FILL.length = 0; STRIPS = [];
+  makeLevel(def);
+  GAME.gridStart = LEVEL.grid.map((r) => r.slice());
+  camConfig(def);
+  initPlayer();
+  initHangers();
+  initEnemies();
+  initLoops();
+  initBridges();
+  if (def.init) def.init(makeRng(levelSeed(4321)));
+  const t1 = performance.now();
+  buildStatic();
+  const t2 = performance.now();
+  finishWorld();
+  for (const P of POOL_LIST) for (const layer in P.bodies) P.bodies[layer].sort((a, b) => a.s0 - b.s0);
+  for (const b of BODIES) b.init = { kick: b.kick, keep: b.keep, onHit: b.onHit, cgroup: b.cgroup || null, fric: b.fric, hidden: b.hidden, spares: b.spares ? b.spares.slice() : null };
+  for (const L of LOOPS) L.hidden0 = L.hidden;
+  for (const e of ENEMIES) placeEnemy(e);
+  for (const P of POOL_LIST) { P.snapshot(); P.uploadAll(); }
+  uploadFill();
+  applyLook(def);
+  GAME.scene = id;
+  const counts = POOL_LIST.map((p) => `${p.name}:${p.used}`).join(' ');
+  window.SPAG.boot = { scene: id, level: Math.round(t1 - t0), build: Math.round(t2 - t1), total: Math.round(performance.now() - t0), strands: counts };
+}
+
+function enterScene(id, opts = {}) {
+  buildScene(id);
+  GAME.checkpoint = opts.checkpoint || null;
+  GAME.hitstop = 0; GAME.deadT = 0; GAME.winT = 0; GAME.goal = null;
+  resetWorld();
+  GAME.mode = id === 'hub' ? (opts.select ? 'select' : 'title') : 'play';
+  if (LEVEL.def.enter) LEVEL.def.enter(opts);
+  CAM.defocusTarget = 0; CAM.exposure = 1;
+  camUpdate(0, true);
+  CAM.fade = 0; CAM.fadeTarget = 1;
+  REN.firstFrame = 0;   // the build stalls a frame; let the render size settle again
+}
+
+// Fade out, then build the next scene in the dark.
+function requestScene(id, opts = {}) {
+  GAME.pending = { id, opts };
+  GAME.mode = 'loading';
+  CAM.fadeTarget = 0;
 }
 
 function resetWorld() {
   for (const P of POOL_LIST) P.restore();
   for (const b of BODIES) {
     b.awake = false; b.calm = 0;
-    b.kick = b.init.kick; b.keep = b.init.keep; b.onHit = b.init.onHit; b.cgroup = b.init.cgroup; b.fric = b.init.fric;
+    b.kick = b.init.kick; b.keep = b.init.keep; b.onHit = b.init.onHit; b.cgroup = b.init.cgroup; b.fric = b.init.fric; b.hidden = b.init.hidden;
     if (b.init.spares) b.spares = b.init.spares.slice();
     b.measure();
   }
@@ -3227,6 +4584,7 @@ function resetWorld() {
   for (const br of BRIDGES) { br.intact = true; br.loadT = 0; br.sag = 0; br.loaded = false; }
   for (const e of ENEMIES) placeEnemy(e);
   for (const b of BODIES) if (b.kick && !b.listed) { KICKABLE.push(b); b.listed = true; }
+  if (LEVEL.def.reset) LEVEL.def.reset();
   const [x, y] = startPoint();
   placePlayer(x, y);
   PLAYER.body.fric = 0.45;
@@ -3236,36 +4594,44 @@ function gameStep(dt) {
   if (GAME.hitstop > 0) { GAME.hitstop -= dt; return; }
   GAME.t += dt;
   COLLIDERS.length = 0;
+  if (GAME.mode === 'title') { if (LEVEL.def.step) LEVEL.def.step(dt); simulate(dt); return; }
   playerStep(dt);
   enemiesStep(dt);
   itemsStep(dt);
   simulate(dt);
+  if (GAME.mode === 'intro') { GAME.introT += dt; if (GAME.introT > 0.5 && PLAYER.ground) GAME.mode = 'select'; }
   for (const c of LEVEL.checkpoints) if (PLAYER.alive && PLAYER.x > c.i * TILE && GAME.checkpoint !== c) GAME.checkpoint = c;
-  const N = LEVEL.nest;
-  if (GAME.mode === 'play' && PLAYER.alive && Math.abs(PLAYER.x - N.cx) < N.R - N.r && PLAYER.y < 3) win();
+  if ((GAME.mode === 'play' || GAME.mode === 'select') && PLAYER.alive) {
+    for (const N of LEVEL.nests) {
+      if (Math.abs(PLAYER.x - N.cx) < N.R - N.r && PLAYER.y < N.y0 + 3 && PLAYER.y > N.y0 - 1) { reachNest(N); break; }
+    }
+  }
   if (GAME.mode === 'dead') {
     GAME.deadT += dt;
     if (GAME.deadT > 0.5) CAM.defocusTarget = 0.45;
     if (GAME.deadT > 1.5) CAM.fadeTarget = 0;
     if (GAME.deadT > 2.1) { resetWorld(); GAME.mode = 'play'; CAM.fadeTarget = 1; CAM.defocusTarget = 0; camUpdate(0, true); CAM.fade = 0; }
   }
-  if (GAME.mode === 'win') {
+  if (GAME.mode === 'win' || GAME.mode === 'enter') {
     GAME.winT += dt;
     winStep();
-    if (GAME.winT > 7.5) CAM.fadeTarget = 0;
-    if (GAME.winT > 8.6) { GAME.checkpoint = null; resetWorld(); GAME.mode = 'play'; CAM.fadeTarget = 1; CAM.defocusTarget = 0; camUpdate(0, true); CAM.fade = 0; }
+    if (GAME.mode === 'win') {
+      if (GAME.winT > 7.5) CAM.fadeTarget = 0;
+      if (GAME.winT > 8.6) finishLevel();
+    } else if (GAME.winT > 1.7) requestScene(GAME.goal.target);
   }
 }
 
-// In the nest the twirl lets go slowly: its shape fades over a couple of seconds and it slumps in.
-function win() {
+// In a nest the twirl lets go slowly: its shape fades over a couple of seconds and it slumps in.
+function reachNest(N) {
   const P = PLAYER;
-  GAME.mode = 'win';
-  GAME.winT = 0;
+  GAME.goal = N; LEVEL.goal = N;
+  GAME.mode = GAME.scene === 'hub' ? 'enter' : 'win';
+  GAME.winT = 0; GAME.winY0 = CAM.y - 3;
   P.alive = false;
   P.vx *= 0.3;
   P.body.fric = 0.7;
-  SND.win(P.x);
+  if (GAME.mode === 'win') SND.win(P.x); else SND.nest(P.x);
 }
 function winStep() {
   const P = PLAYER, pool = POOLS.s64, C = TWIRL.C, base = P.body.s0 * C;
@@ -3274,10 +4640,22 @@ function winStep() {
   if (k > 0) twirlTargets();
   for (let j = 0; j < TWIRL.n * C; j++) if (TWIRL.kind[j] === 0) pool.tk[base + j] = k;
 }
+function finishLevel() {
+  markDone(GAME.scene);
+  if (GAME.scene < LAST_LEVEL) requestScene(GAME.scene + 1);
+  else requestScene('hub', { select: true, from: GAME.scene });
+}
 
 let lastFrame = 0, acc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  if (GAME.pending && CAM.fade < 0.03) {
+    const p = GAME.pending;
+    GAME.pending = null;
+    enterScene(p.id, p.opts);
+    lastFrame = 0; acc = 0;
+    return;
+  }
   const dtMs = lastFrame ? now - lastFrame : 16.7;
   lastFrame = now;
   const dt = Math.min(dtMs / 1000, 0.1);
@@ -3290,38 +4668,22 @@ function frame(now) {
   camUpdate(dt, false);
   flushBodies();
   renderFrame(now / 1000);
-  if (GAME.mode === 'play' || GAME.mode === 'title') adaptScale(dtMs, now);
+  if (GAME.mode === 'play' || GAME.mode === 'title' || GAME.mode === 'select') adaptScale(dtMs, now);
 }
 
 function boot() {
   const t0 = performance.now();
-  makeLevel();
-  GAME.gridStart = LEVEL.grid.map((r) => r.slice());
   makePools();
-  initPlayer();
-  initHangers();
-  initEnemies();
-  initLoops();
-  initBridges();
-  const t1 = performance.now();
-  buildStatic();
-  const t2 = performance.now();
-  finishWorld();
-  for (const P of POOL_LIST) for (const layer in P.bodies) P.bodies[layer].sort((a, b) => a.s0 - b.s0);
-  for (const b of BODIES) b.init = { kick: b.kick, keep: b.keep, onHit: b.onHit, cgroup: b.cgroup || null, fric: b.fric, spares: b.spares ? b.spares.slice() : null };
-  for (const L of LOOPS) L.hidden0 = L.hidden;
-  for (const e of ENEMIES) placeEnemy(e);
-  for (const P of POOL_LIST) { P.snapshot(); P.uploadAll(); }
   initRender();
-  const sx = qnum('x', -1);
-  if (sx >= 0) GAME.checkpoint = { i: sx };
-  resetWorld();
-  if (sx >= 0) GAME.checkpoint = null;
-  camUpdate(0, true);
-  const counts = POOL_LIST.map((p) => `${p.name}:${p.used}`).join(' ');
-  window.SPAG.boot = { level: Math.round(t1 - t0), build: Math.round(t2 - t1), total: Math.round(performance.now() - t0), strands: counts };
-  if (qflag('auto')) { GAME.mode = 'play'; veil.classList.add('gone'); CAM.defocusTarget = 0; CAM.defocus = 0; audioInit(); }
-  else GAME.mode = 'title';
+  const lv = qnum('level', 0), auto = qflag('auto'), sx = qnum('x', -1);
+  const first = lv >= 1 && lv <= LAST_LEVEL ? lv : auto && !qflag('select') ? 1 : 'hub';
+  enterScene(first, { checkpoint: sx >= 0 ? { i: sx } : null, select: qflag('select') });
+  if (sx >= 0) GAME.checkpoint = null;   // a test start is not somewhere you come back to
+  if (first !== 'hub') {
+    if (auto) { GAME.mode = 'play'; showVeil(false); audioInit(); }
+    else { GAME.mode = 'paused'; GAME.resume = 'play'; CAM.defocusTarget = 1; CAM.defocus = 1; showVeil(true); }
+  } else if (GAME.mode !== 'title') { showVeil(false); if (auto) audioInit(); }
+  window.SPAG.boot.total = Math.round(performance.now() - t0);
   window.SPAG.ready = true;
   requestAnimationFrame(frame);
 }
@@ -3331,12 +4693,15 @@ window.SPAG = {
   boot: null,
   state() {
     const P = PLAYER;
-    return { mode: GAME.mode, x: +P.x.toFixed(2), y: +P.y.toFixed(2), vx: +P.vx.toFixed(1), vy: +P.vy.toFixed(1), ground: P.ground, rings: P.rings.length,
+    return { scene: GAME.scene, mode: GAME.mode, x: +P.x.toFixed(2), y: +P.y.toFixed(2), vx: +P.vx.toFixed(1), vy: +P.vy.toFixed(1), ground: P.ground, rings: P.rings.length,
       scale: +REN.scale.toFixed(2), ms: +REN.frameMs.toFixed(1), gpu: +PROF.ms.toFixed(2), tris: Math.round(STATS.tris), draws: STATS.draws, awake: AWAKE.size, W: REN.W, H: REN.H };
   },
   hold(code, on) { if (on) { INPUT.keys.add(code); if (JUMP_CODES.has(code)) PLAYER.jumpBuf = PCFG.buffer; } else INPUT.keys.delete(code); },
+  key(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code })); window.dispatchEvent(new KeyboardEvent('keyup', { code })); },
   warp(i) { GAME.checkpoint = { i }; resetWorld(); camUpdate(0, true); },
-  look: LOOK, cam: CAM, game: GAME, player: PLAYER,
+  go(id, opts) { enterScene(id, opts || {}); if (GAME.mode === 'title') showVeil(true); else showVeil(false); },
+  done: loadDone,
+  look: LOOK, cam: CAM, game: GAME, player: PLAYER, level: LEVEL,
   scale(s) { REN.scale = s; resizeRender(true); },
 };
 
