@@ -33,7 +33,7 @@ async function boot() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   setLoad(0.1); await nextFrame();
-  const T = makeTextures(renderer);
+  const T = await makeTextures(renderer);
   setLoad(0.4); await nextFrame();
   const K = makeKit(T);
   const SUN_DIR = new THREE.Vector3(-0.72, 0.58, 0.32).normalize();

@@ -61,28 +61,57 @@ float hStriate(vec2 uv) {
 }
 `;
 
+// The pasta textures are drawn on CPU canvases: on the GPU they would hold up the baked textures' shader compiles,
+// which then run alongside the drawing instead of after it.
+const CPU = { willReadFrequently: true };
+
 const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
-function bakeToData(renderer, size, body) {
+// Draws a texture on the GPU from shader code and reads it back as data. Its shader starts compiling at once (in the
+// background, where the browser can) and `ready` settles when it has; `finish()` then renders and reads it.
+function prepareBake(renderer, size, body) {
   const rt = new THREE.WebGLRenderTarget(size, size, { depthBuffer: false, type: THREE.UnsignedByteType });
   const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: GLSL_NOISE + body, uniforms: { uTexel: { value: 1 / size } }, depthTest: false, depthWrite: false });
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
   quad.frustumCulled = false;
   const scene = new THREE.Scene(); scene.add(quad);
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  // compiled against the target it renders into, so the render below reuses this program
   const prev = renderer.getRenderTarget();
-  renderer.setRenderTarget(rt); renderer.render(scene, cam);
-  const px = new Uint8Array(size * size * 4);
-  renderer.readRenderTargetPixels(rt, 0, 0, size, size, px);
+  renderer.setRenderTarget(rt);
+  const ready = renderer.compileAsync(scene, cam);
   renderer.setRenderTarget(prev);
-  rt.dispose(); mat.dispose(); quad.geometry.dispose();
-  const tex = new THREE.DataTexture(px, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  tex.needsUpdate = true;
-  return tex;
+  const finish = () => {
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(rt); renderer.render(scene, cam);
+    const px = new Uint8Array(size * size * 4);
+    renderer.readRenderTargetPixels(rt, 0, 0, size, size, px);
+    renderer.setRenderTarget(prev);
+    rt.dispose(); mat.dispose(); quad.geometry.dispose();
+    const tex = new THREE.DataTexture(px, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    tex.needsUpdate = true;
+    return tex;
+  };
+  return { ready, finish };
+}
+
+// A height map (the red channel of a canvas read back) to a normal map, wrapping at the edges. Canvas rows run down
+// and texture v runs up, so the rows are stored flipped and the y slope flipped with them. Size is a power of two.
+function heightToNormal(hd, size, k) {
+  const nd = new Uint8Array(size * size * 4), m = size - 1, s = k / 255;
+  for (let y = 0; y < size; y++) {
+    const up = ((y + m) & m) * size, row = y * size, dn = ((y + 1) & m) * size, o = (m - y) * size * 4;
+    for (let x = 0; x < size; x++) {
+      const dx = (hd[(row + ((x + 1) & m)) * 4] - hd[(row + ((x + m) & m)) * 4]) * s, dy = (hd[(dn + x) * 4] - hd[(up + x) * 4]) * s;
+      const il = 1 / Math.sqrt(dx * dx + dy * dy + 1), i = o + x * 4;
+      nd[i] = (-dx * il * 0.5 + 0.5) * 255; nd[i + 1] = (dy * il * 0.5 + 0.5) * 255; nd[i + 2] = (il * 0.5 + 0.5) * 255; nd[i + 3] = 255;
+    }
+  }
+  return nd;
 }
 
 const normalBody = (fn, k) => /* glsl */`
@@ -129,9 +158,10 @@ function makePastina(size, seed) {
   const rnd = mulberry32(seed);
   const cA = document.createElement('canvas'); cA.width = cA.height = size;
   const cH = document.createElement('canvas'); cH.width = cH.height = size;
-  const a = cA.getContext('2d'), h = cH.getContext('2d');
+  const a = cA.getContext('2d', CPU), h = cH.getContext('2d', CPU);
   a.fillStyle = '#7a5520'; a.fillRect(0, 0, size, size);
   h.fillStyle = '#000'; h.fillRect(0, 0, size, size);
+  a.imageSmoothingQuality = h.imageSmoothingQuality = 'high';
   const star = (ctx, r, inner) => {
     ctx.beginPath();
     for (let i = 0; i < 10; i++) {
@@ -148,49 +178,51 @@ function makePastina(size, seed) {
     else { ctx.beginPath(); ctx.ellipse(0, 0, s * 0.7, s * 0.7, 0, 0, Math.PI * 2); ctx.ellipse(0, 0, s * 0.3, s * 0.3, 0, 0, Math.PI * 2, true); }
   };
   const layers = [ { n: 2600, shade: 0.55, hv: 70 }, { n: 2400, shade: 0.78, hv: 150 }, { n: 1700, shade: 1.0, hv: 230 } ];
+  // Every piece is stamped from a sprite drawn once per shape, layer and tint rather than built from a path and
+  // gradients each time, which is several times faster. A sprite holds one piece of s = R, centred, with its shadow.
+  const R = 24, O = 1.5 * R;
+  const sprite = (paint) => { const c = document.createElement('canvas'); c.width = c.height = 3 * R; const x = c.getContext('2d'); x.translate(O, O); paint(x); return c; };
+  const WARM = [0.93, 0.99, 1.05], BLUE = [0.89, 0.975, 1.06];
   for (const L of layers) {
+    const col = [0, 1, 2, 3].map((type) => WARM.map((warm) => BLUE.map((bj) => sprite((x) => {
+      const r = Math.round(236 * L.shade * warm), g = Math.round(190 * L.shade * warm * 0.995), b = Math.round(92 * L.shade * warm * bj);
+      // contact shadow under the piece
+      x.save(); x.translate(R * 0.18, R * 0.22); shapePath(x, type, R * 1.08); x.fillStyle = 'rgba(40,22,4,0.45)'; x.fill(); x.restore();
+      shapePath(x, type, R);
+      x.fillStyle = `rgb(${r},${g},${b})`; x.fill();
+      const grd = x.createRadialGradient(-R * 0.3, -R * 0.35, 0, 0, 0, R * 1.1);
+      grd.addColorStop(0, 'rgba(255,246,214,0.34)'); grd.addColorStop(0.55, 'rgba(255,240,200,0.06)'); grd.addColorStop(1, 'rgba(70,40,5,0.28)');
+      x.fillStyle = grd; x.fill();
+    }))));
+    const hgt = [0, 1, 2, 3].map((type) => sprite((x) => {
+      shapePath(x, type, R);
+      const hg = x.createRadialGradient(0, 0, 0, 0, 0, R);
+      hg.addColorStop(0, `rgb(${L.hv},${L.hv},${L.hv})`); hg.addColorStop(1, `rgb(${L.hv * 0.55 | 0},${L.hv * 0.55 | 0},${L.hv * 0.55 | 0})`);
+      x.fillStyle = hg; x.fill();
+    }));
     for (let i = 0; i < L.n; i++) {
       const x = rnd() * size, y = rnd() * size, rot = rnd() * Math.PI * 2;
       const tr = rnd();
       const type = tr < 0.38 ? 0 : tr < 0.62 ? 1 : tr < 0.88 ? 2 : 3;
       const s = (type === 0 ? 7.5 : 6) * (0.8 + rnd() * 0.5) * (size / 1024);
-      const warm = 0.9 + rnd() * 0.18;
-      const r = Math.round(236 * L.shade * warm), g = Math.round(190 * L.shade * warm * (0.97 + rnd() * 0.05)), b = Math.round(92 * L.shade * warm * (0.85 + rnd() * 0.25));
+      const warm = 0.9 + rnd() * 0.18; rnd();   // this draw once set each piece's green; kept so every piece stays where it was
+      const bj = 0.85 + rnd() * 0.25;
+      const spr = col[type][warm < 0.96 ? 0 : warm < 1.02 ? 1 : 2][bj < 0.93 ? 0 : bj < 1.02 ? 1 : 2];
+      const k = s / R, c = Math.cos(rot) * k, sn = Math.sin(rot) * k;
       for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
         const px = x + ox, py = y + oy;
         if (px < -20 || py < -20 || px > size + 20 || py > size + 20) continue;
-        a.save(); a.translate(px, py); a.rotate(rot);
-        // contact shadow under the piece
-        a.save(); a.translate(s * 0.18, s * 0.22); shapePath(a, type, s * 1.08); a.fillStyle = 'rgba(40,22,4,0.45)'; a.fill(); a.restore();
-        shapePath(a, type, s);
-        a.fillStyle = `rgb(${r},${g},${b})`; a.fill();
-        const grd = a.createRadialGradient(-s * 0.3, -s * 0.35, 0, 0, 0, s * 1.1);
-        grd.addColorStop(0, 'rgba(255,246,214,0.34)'); grd.addColorStop(0.55, 'rgba(255,240,200,0.06)'); grd.addColorStop(1, 'rgba(70,40,5,0.28)');
-        a.fillStyle = grd; a.fill();
-        a.restore();
-        h.save(); h.translate(px, py); h.rotate(rot); shapePath(h, type, s);
-        const hg = h.createRadialGradient(0, 0, 0, 0, 0, s);
-        hg.addColorStop(0, `rgb(${L.hv},${L.hv},${L.hv})`); hg.addColorStop(1, `rgb(${L.hv * 0.55 | 0},${L.hv * 0.55 | 0},${L.hv * 0.55 | 0})`);
-        h.fillStyle = hg; h.fill(); h.restore();
+        a.setTransform(c, sn, -sn, c, px, py); a.drawImage(spr, -O, -O);
+        h.setTransform(c, sn, -sn, c, px, py); h.drawImage(hgt[type], -O, -O);
       }
     }
   }
+  a.setTransform(1, 0, 0, 1, 0, 0); h.setTransform(1, 0, 0, 1, 0, 0);
   const albedo = new THREE.CanvasTexture(cA);
   albedo.colorSpace = THREE.SRGBColorSpace;
   albedo.wrapS = albedo.wrapT = THREE.RepeatWrapping;
   albedo.anisotropy = 8;
-  const hd = h.getImageData(0, 0, size, size).data;
-  const nd = new Uint8Array(size * size * 4);
-  const H = (x, y) => hd[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
-  const k = 2.2;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const dx = (H(x + 1, y) - H(x - 1, y)) * k, dy = (H(x, y + 1) - H(x, y - 1)) * k;
-    const l = Math.hypot(dx, dy, 1);
-    const i = ((size - 1 - y) * size + x) * 4;
-    // canvas rows run down, texture v runs up: store rows flipped and flip the y slope
-    nd[i] = (-dx / l * 0.5 + 0.5) * 255; nd[i + 1] = (dy / l * 0.5 + 0.5) * 255; nd[i + 2] = (1 / l * 0.5 + 0.5) * 255; nd[i + 3] = 255;
-  }
-  const normal = new THREE.DataTexture(nd, size, size, THREE.RGBAFormat);
+  const normal = new THREE.DataTexture(heightToNormal(h.getImageData(0, 0, size, size).data, size, 2.2), size, size, THREE.RGBAFormat);
   normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
   normal.minFilter = THREE.LinearMipmapLinearFilter; normal.magFilter = THREE.LinearFilter; normal.generateMipmaps = true;
   normal.anisotropy = 8; normal.flipY = false; normal.needsUpdate = true;
@@ -202,7 +234,7 @@ function makeOrzo(size, seed) {
   const rnd = mulberry32(seed);
   const cA = document.createElement('canvas'); cA.width = cA.height = size;
   const cH = document.createElement('canvas'); cH.width = cH.height = size;
-  const a = cA.getContext('2d'), h = cH.getContext('2d', { willReadFrequently: true });
+  const a = cA.getContext('2d', CPU), h = cH.getContext('2d', CPU);
   a.fillStyle = '#b9ae98'; a.fillRect(0, 0, size, size);
   h.fillStyle = '#000'; h.fillRect(0, 0, size, size);
   a.imageSmoothingQuality = h.imageSmoothingQuality = 'high';
@@ -249,17 +281,7 @@ function makeOrzo(size, seed) {
   albedo.colorSpace = THREE.SRGBColorSpace;
   albedo.wrapS = albedo.wrapT = THREE.RepeatWrapping;
   albedo.anisotropy = 8;
-  const hd = h.getImageData(0, 0, size, size).data;
-  const nd = new Uint8Array(size * size * 4);
-  const H = (x, y) => hd[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
-  const k = 2.0;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const dx = (H(x + 1, y) - H(x - 1, y)) * k, dy = (H(x, y + 1) - H(x, y - 1)) * k;
-    const l = Math.hypot(dx, dy, 1);
-    const i = ((size - 1 - y) * size + x) * 4;
-    nd[i] = (-dx / l * 0.5 + 0.5) * 255; nd[i + 1] = (dy / l * 0.5 + 0.5) * 255; nd[i + 2] = (1 / l * 0.5 + 0.5) * 255; nd[i + 3] = 255;
-  }
-  const normal = new THREE.DataTexture(nd, size, size, THREE.RGBAFormat);
+  const normal = new THREE.DataTexture(heightToNormal(h.getImageData(0, 0, size, size).data, size, 2.0), size, size, THREE.RGBAFormat);
   normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
   normal.minFilter = THREE.LinearMipmapLinearFilter; normal.magFilter = THREE.LinearFilter; normal.generateMipmaps = true;
   normal.anisotropy = 8; normal.flipY = false; normal.needsUpdate = true;
@@ -271,12 +293,17 @@ function makeTangle(size, seed) {
   const rnd = mulberry32(seed);
   const cA = document.createElement('canvas'); cA.width = cA.height = size;
   const cH = document.createElement('canvas'); cH.width = cH.height = size;
-  const a = cA.getContext('2d'), h = cH.getContext('2d');
+  const a = cA.getContext('2d', CPU), h = cH.getContext('2d', CPU);
   a.fillStyle = '#5c3d14'; a.fillRect(0, 0, size, size);
   h.fillStyle = '#000'; h.fillRect(0, 0, size, size);
   a.lineCap = h.lineCap = 'round'; a.lineJoin = h.lineJoin = 'round';
   const W = size / 1024 * 22;
   const strands = 230;
+  // each strand's path is built once and stroked seven times; the offset strokes move the context, not the points
+  const stroke = (ctx, path, style, width, dx = 0, dy = 0) => {
+    ctx.strokeStyle = style; ctx.lineWidth = width;
+    if (dx || dy) { ctx.translate(dx, dy); ctx.stroke(path); ctx.translate(-dx, -dy); } else ctx.stroke(path);
+  };
   for (let s = 0; s < strands; s++) {
     const layer = s / strands;
     // a lazy curve: random walk with smooth turning
@@ -292,49 +319,44 @@ function makeTangle(size, seed) {
     const warm = 0.92 + rnd() * 0.12;
     const base = [Math.round(232 * warm), Math.round(188 * warm), Math.round(104 * warm * (0.9 + rnd() * 0.15))];
     const hv = 40 + layer * 200;
+    let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+    for (let i = 0; i < pts.length; i += 2) { minx = Math.min(minx, pts[i]); maxx = Math.max(maxx, pts[i]); miny = Math.min(miny, pts[i + 1]); maxy = Math.max(maxy, pts[i + 1]); }
+    const path = new Path2D(); path.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
+    const rim = `rgb(${base[0] * 0.72 | 0},${base[1] * 0.68 | 0},${base[2] * 0.6 | 0})`, body = `rgb(${base[0]},${base[1]},${base[2]})`;
+    const grey = (f) => { const v = hv * f | 0; return `rgb(${v},${v},${v})`; };
     for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
       // skip copies that can't touch the tile
-      let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
-      for (let i = 0; i < pts.length; i += 2) { minx = Math.min(minx, pts[i] + ox); maxx = Math.max(maxx, pts[i] + ox); miny = Math.min(miny, pts[i + 1] + oy); maxy = Math.max(maxy, pts[i + 1] + oy); }
-      if (maxx < -W || minx > size + W || maxy < -W || miny > size + W) continue;
-      const path = (ctx, dx = 0, dy = 0) => { ctx.beginPath(); ctx.moveTo(pts[0] + ox + dx, pts[1] + oy + dy); for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i] + ox + dx, pts[i + 1] + oy + dy); };
-      // contact shadow on what's below
-      a.strokeStyle = 'rgba(45,25,4,0.55)'; a.lineWidth = W * 1.35; path(a, W * 0.18, W * 0.24); a.stroke();
-      // body, darker rim, lit center, specular streak
-      a.strokeStyle = `rgb(${base[0] * 0.72 | 0},${base[1] * 0.68 | 0},${base[2] * 0.6 | 0})`; a.lineWidth = W; path(a); a.stroke();
-      a.strokeStyle = `rgb(${base[0]},${base[1]},${base[2]})`; a.lineWidth = W * 0.72; path(a); a.stroke();
-      a.strokeStyle = `rgba(255,236,190,0.55)`; a.lineWidth = W * 0.28; path(a, -W * 0.12, -W * 0.14); a.stroke();
+      if (maxx + ox < -W || minx + ox > size + W || maxy + oy < -W || miny + oy > size + W) continue;
+      a.setTransform(1, 0, 0, 1, ox, oy); h.setTransform(1, 0, 0, 1, ox, oy);
+      // contact shadow on what's below; then body, darker rim, lit center, specular streak
+      stroke(a, path, 'rgba(45,25,4,0.55)', W * 1.35, W * 0.18, W * 0.24);
+      stroke(a, path, rim, W); stroke(a, path, body, W * 0.72);
+      stroke(a, path, 'rgba(255,236,190,0.55)', W * 0.28, -W * 0.12, -W * 0.14);
       // height: rounded profile, later strands on top
-      h.strokeStyle = `rgb(${hv * 0.55 | 0},${hv * 0.55 | 0},${hv * 0.55 | 0})`; h.lineWidth = W; path(h); h.stroke();
-      h.strokeStyle = `rgb(${hv * 0.85 | 0},${hv * 0.85 | 0},${hv * 0.85 | 0})`; h.lineWidth = W * 0.6; path(h); h.stroke();
-      h.strokeStyle = `rgb(${hv | 0},${hv | 0},${hv | 0})`; h.lineWidth = W * 0.25; path(h); h.stroke();
+      stroke(h, path, grey(0.55), W); stroke(h, path, grey(0.85), W * 0.6); stroke(h, path, grey(1), W * 0.25);
     }
   }
+  a.setTransform(1, 0, 0, 1, 0, 0); h.setTransform(1, 0, 0, 1, 0, 0);
   const albedo = new THREE.CanvasTexture(cA);
   albedo.colorSpace = THREE.SRGBColorSpace;
   albedo.wrapS = albedo.wrapT = THREE.RepeatWrapping; albedo.anisotropy = 8;
-  const hd = h.getImageData(0, 0, size, size).data;
-  const nd = new Uint8Array(size * size * 4);
-  const H = (x, y) => hd[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
-  const k = 2.6;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const dx = (H(x + 1, y) - H(x - 1, y)) * k, dy = (H(x, y + 1) - H(x, y - 1)) * k;
-    const l = Math.hypot(dx, dy, 1), i = ((size - 1 - y) * size + x) * 4;
-    nd[i] = (-dx / l * 0.5 + 0.5) * 255; nd[i + 1] = (dy / l * 0.5 + 0.5) * 255; nd[i + 2] = (1 / l * 0.5 + 0.5) * 255; nd[i + 3] = 255;
-  }
-  const normal = new THREE.DataTexture(nd, size, size, THREE.RGBAFormat);
+  const normal = new THREE.DataTexture(heightToNormal(h.getImageData(0, 0, size, size).data, size, 2.6), size, size, THREE.RGBAFormat);
   normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
   normal.minFilter = THREE.LinearMipmapLinearFilter; normal.magFilter = THREE.LinearFilter; normal.generateMipmaps = true;
   normal.anisotropy = 8; normal.needsUpdate = true;
   return { albedo, normal };
 }
 
-export function makeTextures(renderer) {
+export async function makeTextures(renderer) {
   const T = {};
-  T.nPores = bakeToData(renderer, 512, normalBody('hPores', '0.0045'));
-  T.nStriate = bakeToData(renderer, 512, normalBody('hStriate', '0.0042'));
-  T.albedo = bakeToData(renderer, 512, ALBEDO_BODY);
-  T.rough = bakeToData(renderer, 256, ROUGH_BODY);
+  // The GPU-drawn textures' shaders compile while the pasta below is drawn on canvases; then each is rendered.
+  const bakes = {
+    nPores: prepareBake(renderer, 512, normalBody('hPores', '0.0045')),
+    nStriate: prepareBake(renderer, 512, normalBody('hStriate', '0.0042')),
+    albedo: prepareBake(renderer, 512, ALBEDO_BODY),
+    rough: prepareBake(renderer, 256, ROUGH_BODY),
+  };
+  await new Promise((r) => setTimeout(r, 0));   // one turn, so the browser sends those compiles to the GPU now
   const p = makePastina(1024, 11);
   T.pastina = p.albedo; T.pastinaN = p.normal;
   const tg = makeTangle(1024, 23);
@@ -347,6 +369,8 @@ export function makeTextures(renderer) {
   Object.defineProperty(T, 'orzoN', { get: () => orzo().normal });
   const ozs = makeOrzo(512, 31);
   T.orzoSmall = ozs.albedo; T.orzoSmallN = ozs.normal;
+  await Promise.all(Object.values(bakes).map((b) => b.ready));
+  for (const [name, b] of Object.entries(bakes)) T[name] = b.finish();
   const cache = new Map();
   // Same image, own repeat. Clones share the GPU upload.
   T.at = (name, repeat) => {
