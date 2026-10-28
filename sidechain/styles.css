@@ -367,6 +367,9 @@ body.touch #screens button { padding: 15px 18px; font-size: 13px; }
 
 #menu .foot { grid-area: foot; align-self: end; font: 600 10px/1.5 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: rgba(255,255,255,.4); }
 #menu .foot b { color: rgba(255,255,255,.85); font-weight: 700; }
+#menu > .privacy-link { position: absolute; z-index: 2; top: calc(20px + env(safe-area-inset-top)); right: calc(5vw + env(safe-area-inset-right)); padding: 10px 12px; color: #e3c8dc; font: 600 11px/1.5 var(--ui); letter-spacing: .08em; text-decoration: underline; text-underline-offset: 3px; border-radius: 8px; background: rgba(12,7,20,.65); }
+#menu > .privacy-link:hover { color: #fff; }
+#menu > .privacy-link:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 #menu.locked > .list, #menu.locked > .foot, #menu.locked > .detail, #menu.locked > .ride, #menu.locked > .gear { opacity: .15; pointer-events: none; transition: opacity .25s; }
 #screens > #menu.on.arriving, #menu.arriving * { pointer-events: none; }
 
