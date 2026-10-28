@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SPAGHETTI | Qualiacology</title>
-<meta name="description" content="SPAGHETTI is a side-scrolling browser game in five levels where everything is made out of spaghetti: you are a twirl of cooked spaghetti on two loose ends, dry bundles snap apart when you hit them, the rods across the gaps bend and break, and cooked strands stretch until they snap. Keyboard.">
+<title>SPAGHETTI and AL DENTE | Qualiacology</title>
+<meta name="description" content="SPAGHETTI and AL DENTE are two browser platformers made entirely of pasta, on one table: a side-scroller in five levels where you are a twirl of spaghetti, and a 3D platformer in three stages where you are a forkful of it that climbs cooked lasagna.">
 <meta name="theme-color" content="#0b0806">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Qualiacology">
-<meta property="og:title" content="SPAGHETTI | Qualiacology">
+<meta property="og:title" content="SPAGHETTI and AL DENTE | Qualiacology">
 <meta property="og:description" content="Everything is made out of spaghetti. Nothing cannot be spaghetti.">
 <meta property="og:url" content="https://qualiacology.com/spaghetti/">
-<meta property="og:image" content="https://qualiacology.com/assets/games/spaghetti-card-v20261028.jpg">
+<meta property="og:image" content="https://qualiacology.com/assets/games/spaghetti-card-v20261028b.jpg">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="720">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="SPAGHETTI | Qualiacology">
+<meta name="twitter:title" content="SPAGHETTI and AL DENTE | Qualiacology">
 <meta name="twitter:description" content="Everything is made out of spaghetti. Nothing cannot be spaghetti.">
-<meta name="twitter:image" content="https://qualiacology.com/assets/games/spaghetti-card-v20261028.jpg">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/spaghetti-card-v20261028b.jpg">
 <link rel="canonical" href="https://qualiacology.com/spaghetti/">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <style>
@@ -42,6 +42,7 @@
 <div id="veil"></div>
 <div id="err"></div>
 <a class="home-link" href="/">Qualiacology</a>
+<script>window.SPAG_SITE = true;   // on qualiacology.com: the other game on the table is at /al-dente/</script>
 <script>
   (() => {   // the home link comes up while the mouse moves and goes again when it rests
     let t = 0;
@@ -2125,11 +2126,13 @@ LEVEL_DEFS[3] = {
 };
 
 // ---- 33-hub.js ----
-// The opening and the way in. The word stands on the table, made of dry spaghetti; the first key
-// knocks it down. Then the twirl drops in beside three nests, one for each level: jump into one.
-// A nest whose level you have finished keeps a twirl lying in it.
+// The opening and the way in. Two names stand on the table, made of dry spaghetti: this game in front,
+// and AL DENTE (the 3D one, its own page on the site) on a step of rods behind it. The lens finds the one
+// you point at (the mouse, or up and down); the first key or click knocks it down. For this game the
+// twirl then drops in beside five nests, one per level: hop the gaps, walk into one. A nest whose level
+// you have finished keeps a twirl lying in it.
 
-const HUB = { letters: [], held: true, holdUntil: 1e9, dropX: 52.5, t: 0 };
+const HUB = { words: [], letters: [], held: true, holdUntil: 1e9, dropX: 58.5, sel: 0, leaveT: 0, fromTitle: false, drapes: null };
 
 // A stick alphabet: strokes in a unit box, x right and y up.
 const GLYPHS = {
@@ -2141,51 +2144,94 @@ const GLYPHS = {
   E: [[0, 0, 0, 1], [0, 1, 1, 1], [0, 0.52, 0.8, 0.52], [0, 0, 1, 0]],
   T: [[0, 1, 1, 1], [0.5, 1, 0.5, 0]],
   I: [[0.5, 0, 0.5, 1], [0.12, 1, 0.88, 1], [0.12, 0, 0.88, 0]],
+  L: [[0, 1, 0, 0], [0, 0, 1, 0]],
+  D: [[0, 0, 0, 1], [0, 1, 0.62, 1], [0.62, 1, 1, 0.72], [1, 0.72, 1, 0.28], [1, 0.28, 0.62, 0], [0.62, 0, 0, 0]],
+  N: [[0, 0, 0, 1], [0, 1, 1, 0], [1, 0, 1, 1]],
 };
-const TITLE = { word: 'SPAGHETTI', x: 5.4, w: 3.3, h: 7.0, gap: 0.95, y: 0.4 };
+const TITLE = { w: 3.3, h: 7.0, gap: 0.95, cx: 25.5 };
+const SHELF = { h: 7.6, z0: -3.5, z1: -1.2 };
+const WORDS = [
+  { text: 'SPAGHETTI', y: 0.4, z: 0, mat: 1 },
+  { text: 'AL DENTE', y: SHELF.h + 0.06, z: -2.35, mat: 8, href: '/al-dente/' },
+];
+const wordWidth = (t) => t.length * TITLE.w + (t.length - 1) * TITLE.gap;
 
 // Each stroke is a bundle of eight rods (four across, two deep) cut a little long, so joints overlap.
-function buildTitle(rng) {
-  HUB.letters = [];
-  const pool = POOLS.rod;
-  let x = TITLE.x;
-  for (const ch of TITLE.word) {
+function buildWord(wi, rng) {
+  const W = WORDS[wi], pool = POOLS.rod;
+  const word = { ...W, letters: [], x0: TITLE.cx - wordWidth(W.text) / 2 };
+  let x = word.x0;
+  for (const ch of W.text) {
+    if (ch === ' ') { x += TITLE.w + TITLE.gap; continue; }
     const rods = [];
     for (const [u0, v0, u1, v1] of GLYPHS[ch]) {
-      const ax = x + u0 * TITLE.w, ay = TITLE.y + v0 * TITLE.h, bx = x + u1 * TITLE.w, by = TITLE.y + v1 * TITLE.h;
+      const ax = x + u0 * TITLE.w, ay = W.y + v0 * TITLE.h, bx = x + u1 * TITLE.w, by = W.y + v1 * TITLE.h;
       const L = Math.hypot(bx - ax, by - ay), tx = (bx - ax) / L, ty = (by - ay) / L, nx = -ty, ny = tx;
       for (const d of [-0.255, -0.085, 0.085, 0.255]) for (const z of [-0.095, 0.095]) {
         const e0 = 0.1 + rng.range(-0.06, 0.1), e1 = 0.1 + rng.range(-0.06, 0.1);
-        const oz = z + rng.range(-0.02, 0.02), od = d + rng.range(-0.015, 0.015);
+        const oz = W.z + z + rng.range(-0.02, 0.02), od = d + rng.range(-0.015, 0.015);
         let y0 = ay + ny * od - ty * e0, y1 = by + ny * od + ty * e1;
-        const lift = Math.min(y0, y1) < ROD_R ? ROD_R - Math.min(y0, y1) : 0;   // nothing pokes into the table
+        const floor = W.y - 0.31;   // nothing pokes into what it stands on
+        const lift = Math.min(y0, y1) < floor + ROD_R ? floor + ROD_R - Math.min(y0, y1) : 0;
         rods.push(ax + nx * od - tx * e0, y0 + lift, oz, bx + nx * od + tx * e1, y1 + lift, oz, ROD_R * rng.range(0.95, 1.05), rng() * 100);
       }
     }
     const n = rods.length / 8, s0 = pool.alloc(n * 2);
-    for (let k = 0; k < n; k++) { const j = k * 8; putRod(pool, s0 + k, rods[j], rods[j + 1], rods[j + 2], rods[j + 3], rods[j + 4], rods[j + 5], rods[j + 6], 1, rods[j + 7]); }
-    for (let k = n; k < 2 * n; k++) { putRod(pool, s0 + k, x, 1, 0, x + 0.1, 1, 0, ROD_R, 1, rng() * 100); pool.setCount(s0 + k, 0); }
+    for (let k = 0; k < n; k++) { const j = k * 8; putRod(pool, s0 + k, rods[j], rods[j + 1], rods[j + 2], rods[j + 3], rods[j + 4], rods[j + 5], rods[j + 6], W.mat, rods[j + 7]); }
+    for (let k = n; k < 2 * n; k++) { putRod(pool, s0 + k, x, W.y + 1, W.z, x + 0.1, W.y + 1, W.z, ROD_R, W.mat, rng() * 100); pool.setCount(s0 + k, 0); }
     const body = new Body(pool, s0, 2 * n, { sim: true, grav: 1, damp: 0.999, fric: 0.42, rest: 0.25, bend: 0, iters: 2, hitMin: 22, kick: true });
     body.onHit = rodHit;
     body.spares = [];
     for (let k = n; k < 2 * n; k++) body.spares.push(s0 + k);
-    HUB.letters.push({ ch, x, body, n });
+    const letter = { ch, x, body, n, word: wi };
+    word.letters.push(letter);
+    HUB.letters.push(letter);
     x += TITLE.w + TITLE.gap;
   }
-  hangOnWord(rng);
+  HUB.words[wi] = word;
 }
 
-// A few cooked strands hung over the letters' top bars to dry. They keep still until the word falls.
+// The step the second name stands on: dry whole-wheat rods packed behind the path, their cut ends at either end.
+function buildShelf(rng) {
+  const w = wordWidth(WORDS[1].text), x0 = TITLE.cx - w / 2 - 1.3, x1 = TITLE.cx + w / 2 + 1.3;
+  const rods = [], jj = () => rng.range(-0.013, 0.013);
+  const rows = Math.floor(SHELF.h / ROWP);
+  for (let k = 0; k < rows; k++) {
+    const y = SHELF.h - ROD_R - k * ROWP;
+    for (let m = 0; ; m++) {
+      const z = SHELF.z1 - ROD_R - m * PITCH - (k & 1 ? PITCH * 0.5 : 0);
+      if (z < SHELF.z0 + ROD_R) break;
+      const r = ROD_R * rng.range(0.95, 1.05), xs = x0 + rng.range(-0.2, 0.14), xe = x1 + rng.range(-0.14, 0.2);
+      if (k < 2 || m < 2) {   // the top and the front: whole rods laid end to end
+        let x = xs;
+        while (x < xe - 0.05) {
+          let x2 = Math.min(x + rng.range(4.5, 15), xe);
+          if (xe - x2 < 1.2) x2 = xe;
+          rods.push(x, y + jj(), z + jj(), x2, y + jj(), z + jj(), r, rng() * 100);
+          x = x2 + rng.range(0.01, 0.09);
+        }
+      } else {   // the ends: cut stubs
+        rods.push(xs, y + jj(), z + jj(), xs + rng.range(0.8, 2.2), y + jj(), z + jj(), r, rng() * 100);
+        rods.push(xe - rng.range(0.8, 2.2), y + jj(), z + jj(), xe, y + jj(), z + jj(), r, rng() * 100);
+      }
+    }
+  }
+  emitRods(rods, 5);
+  addWorldBox(x0, x1, -60, SHELF.h - 0.06, SHELF.z0, SHELF.z1, 'shelf');
+  pushBox(x0 + 0.45, x1 - 0.45, 0.2, SHELF.h - 0.33, SHELF.z0 + 0.25, SHELF.z1 - 0.34);
+}
+
+// A few cooked strands hung over the front name's top bars to dry. They keep still until the name falls.
 function hangOnWord(rng) {
   const pool = POOLS.s64, C = 64, pts = new Float32Array(C * 3);
   const spots = [['P', 0.3], ['E', 0.62], ['T', 0.32], ['T', 0.7], ['T', 0.45], ['I', 0.5]];
-  const s0 = pool.used;
+  const s0 = pool.used, W = HUB.words[0];
   const seen = {};
   for (const [ch, u] of spots) {
     const k = seen[ch] = (seen[ch] ?? -1) + 1;
-    const L = HUB.letters.filter((l) => l.ch === ch)[ch === 'T' ? Math.min(k >> 1, 1) : 0];
+    const L = W.letters.filter((l) => l.ch === ch)[ch === 'T' ? Math.min(k >> 1, 1) : 0];
     if (!L) continue;
-    const bx = L.x + u * TITLE.w + rng.range(-0.25, 0.25), by = TITLE.y + TITLE.h + 0.33;
+    const bx = L.x + u * TITLE.w + rng.range(-0.25, 0.25), by = W.y + TITLE.h + 0.33;
     const front = by - rng.range(0.55, 2.4), back = by - rng.range(1.0, 3.0), z0 = rng.range(0.32, 0.42);
     // over the bar: down the front, a turn over the top, down the back
     const total = front + back + 0.9;
@@ -2198,12 +2244,11 @@ function hangOnWord(rng) {
       const curl = Math.max(0, 1 - Math.min(d, total - d) / 0.9);   // the cut ends curl a little
       x += curl * curl * 0.6 * (d < total / 2 ? 1 : -1);
       x += Math.sin(d * 0.9 + u * 5) * 0.12 * Math.min(1, Math.abs(d - front - 0.45) / 3);   // a soft wave down the length
-      pts[i * 3] = x; pts[i * 3 + 1] = Math.max(y, 0.45); pts[i * 3 + 2] = z;
+      pts[i * 3] = x; pts[i * 3 + 1] = Math.max(y, 0.45); pts[i * 3 + 2] = W.z + z;
     }
     putStrand(pool, pool.alloc(1), pts, C, 0.112, 0, rng() * 100, 0);
   }
-  if (pool.used > s0) HUB.drapes = new Body(pool, s0, pool.used - s0, { sim: true, grav: 1, damp: 0.99, fric: 0.55, bend: 0.05, iters: 3 });
-  else HUB.drapes = null;
+  HUB.drapes = pool.used > s0 ? new Body(pool, s0, pool.used - s0, { sim: true, grav: 1, damp: 0.99, fric: 0.55, bend: 0.05, iters: 3 }) : null;
 }
 
 // A twirl left lying in a finished nest: the hero's own shape, slumped.
@@ -2226,10 +2271,10 @@ function buildRestingTwirl(N, rng) {
   new Body(pool, s0, n, {});
 }
 
-// Over before you play: every rod is let go with a shove, and they come down cracking.
-function collapseTitle() {
-  const rnd = Math.random;
-  HUB.letters.forEach((L, li) => {
+// Over before you play: every rod of the name is let go with a shove, and they come down cracking.
+function collapseWord(wi) {
+  const rnd = Math.random, W = HUB.words[wi];
+  W.letters.forEach((L, li) => {
     const b = L.body, pool = b.pool;
     b.wake();
     const side = rnd() < 0.5 ? -1 : 1;
@@ -2245,7 +2290,7 @@ function collapseTitle() {
     for (let k = 0; k < 3; k++) splitRod(b, b.s0 + Math.floor(rnd() * L.n), true);
     SND.snap(L.x, 3 + Math.floor(rnd() * 3), 0.7 * (0.6 + 0.4 * rnd()), li * 0.03);
   });
-  if (HUB.drapes) {   // the strands drying on the word come down with it
+  if (wi === 0 && HUB.drapes) {   // the strands drying on it come down with it
     const D = HUB.drapes, pool = D.pool;
     D.wake();
     for (let s = D.s0; s < D.s0 + D.n; s++) for (let i = 0; i < 64; i++) {
@@ -2256,41 +2301,88 @@ function collapseTitle() {
   CAM.shake = Math.max(CAM.shake, 0.35);
 }
 
+function selectWord(k) {
+  if (k === HUB.sel || !HUB.words[k]) return;
+  HUB.sel = k;
+  SND.tick(TITLE.cx, 40);
+}
+
+// Where a name sits on the screen, from the last frame's camera (y in -1..1, up is +1).
+function wordScreenY(W) {
+  const v = REN.vp, x = TITLE.cx, y = W.y + TITLE.h * 0.5, z = W.z;
+  const cy = v[1] * x + v[5] * y + v[9] * z + v[13], cw = v[3] * x + v[7] * y + v[11] * z + v[15];
+  return cy / cw;
+}
+
 LEVEL_DEFS.hub = {
   id: 'hub', seed: 20261028,
-  floorLift: 0.3,   // the fallen word lies on the cooked layer, not in it
-  // A low step of dry rods with the three nests set into it: hop a gap to pass a nest, walk into one to choose it.
+  floorLift: 0.3,   // fallen names lie on the cooked layer, not in it
+  // A low step of dry rods with the five nests set into it: hop a gap to pass a nest, walk into one to choose it.
   make(K, L) {
-    K.floor(0, 80);
-    L.x1 = 46 * TILE;
-    K.stack(14, 18, 1); K.stack(39, 46, 1);
-    K.start(17);
+    K.floor(0, 84);
+    L.x1 = 50 * TILE;
+    K.stack(16, 20, 1); K.stack(41, 50, 1);
+    K.start(19);
     const mats = [0, 3, 2, 7, 6];   // each nest the colour of its level's own
-    for (let k = 0; k < 5; k++) K.nest(19 + 4 * k, 22 + 4 * k, { target: k + 1, mat: mats[k], R0: 3.95, r0: 1.2, count: 90 });
+    for (let k = 0; k < 5; k++) K.nest(21 + 4 * k, 24 + 4 * k, { target: k + 1, mat: mats[k], R0: 3.95, r0: 1.2, count: 90 });
   },
   build(rng) {
-    buildTitle(rng);
+    HUB.words = []; HUB.letters = [];
+    buildShelf(rng);
+    buildWord(0, rng);
+    buildWord(1, rng);
+    hangOnWord(rng);
     const done = loadDone();
     for (const N of LEVEL.nests) if (done.includes(N.target)) buildRestingTwirl(N, rng);
   },
-  // the opening is one fixed shot of the word; then the nests
-  // the word holds until it has fallen, then the camera finds the nests
+  // the opening: both names in one shot, the lens on the one chosen; once it has fallen, the nests
   shot(mode) {
-    const word = { x: 24.05, y: 4.6, dist: 54, elev: 0.1, rate: 2.2 };
-    if (mode === 'title' || (mode === 'intro' && HUB.fromTitle && GAME.introT < 0.7)) return word;
-    if (mode === 'intro') return { x: 70, y: 6, rate: 1.7 };
-    if (mode === 'select') return { x: clamp(PLAYER.x + 16, 25.6, LEVEL.x1 - 25.6), y: 6, rate: 3.2 };   // it leads you along the nests, and back to the word
+    const names = { x: TITLE.cx, y: 7.6, dist: 58, elev: 0.12, z: WORDS[HUB.sel].z, rate: 2.2 };
+    if (mode === 'title' || mode === 'leaving' || (mode === 'intro' && HUB.fromTitle && GAME.introT < 0.7)) return names;
+    if (mode === 'intro') return { x: 76, y: 6, rate: 1.7 };
+    if (mode === 'select') return { x: clamp(PLAYER.x + 16, 25.6, LEVEL.x1 - 25.6), y: 6, rate: 3.2 };   // it leads you along the nests, and back to the names
     return null;
+  },
+  titleKey(code) {
+    if (code === 'ArrowUp' || code === 'KeyW') { selectWord(1); return true; }
+    if (code === 'ArrowDown' || code === 'KeyS') { selectWord(0); return true; }
+    return false;
+  },
+  titlePointer(cx, cy) {
+    const r = canvas.getBoundingClientRect();
+    const ny = 1 - ((cy - r.top) / r.height) * 2;
+    let best = 0, bd = 1e9;
+    HUB.words.forEach((W, k) => { const d = Math.abs(wordScreenY(W) - ny); if (d < bd) { bd = d; best = k; } });
+    selectWord(best);
+  },
+  // the other name is another game on its own page: knock it down and go there
+  choose() {
+    const W = HUB.words[HUB.sel];
+    if (!W.href) return 'here';
+    collapseWord(HUB.sel);
+    HUB.leaveT = 0;
+    HUB.leaveTo = window.SPAG_SITE ? W.href : 'https://qualiacology.com' + W.href;
+    return 'away';
   },
   enter(opts) {
     HUB.held = true;
+    HUB.sel = 0; HUB.left = false;
     HUB.fromTitle = !opts.select;
     HUB.holdUntil = opts.select ? 0.2 : 1.45;
     if (opts.select) { GAME.mode = 'intro'; GAME.introT = 0; }
     placePlayer(HUB.dropX, 90);
   },
-  intro() { collapseTitle(); },
-  step() {
+  intro() { collapseWord(0); },
+  step(dt) {
+    // a shallower depth of field while the names are on show, so the lens visibly moves between them
+    const menu = GAME.mode === 'title' || GAME.mode === 'leaving';
+    LOOK.dofScale = damp(LOOK.dofScale, menu ? 4.2 : LOOK_BASE.dofScale, 3, dt);
+    LOOK.dofMax = damp(LOOK.dofMax, menu ? 11 : LOOK_BASE.dofMax, 3, dt);
+    if (GAME.mode === 'leaving') {
+      HUB.leaveT += dt;
+      if (HUB.leaveT > 0.75) CAM.fadeTarget = 0;
+      if (HUB.leaveT > 1.6 && !HUB.left) { HUB.left = true; location.href = HUB.leaveTo; }
+    }
     if (!HUB.held) return;
     const P = PLAYER;
     if (GAME.mode === 'intro' && GAME.introT >= HUB.holdUntil) {
@@ -3389,9 +3481,9 @@ function renderScene(time) {
 
   // Lens on the sharp layer: the plane of the path is in focus (a slight tilt, like a tilt lens).
   {
-    const v = REN.view, tx = CAM.x + CAM.shakeX, ty = CAM.y + CAM.shakeY;
+    const v = REN.view, tx = CAM.x + CAM.shakeX, ty = CAM.y + CAM.shakeY, tz = CAM.z;
     const nx = v[8], ny = v[9], nz = v[10];
-    const px = v[0] * tx + v[4] * ty + v[12], py = v[1] * tx + v[5] * ty + v[13], pz = v[2] * tx + v[6] * ty + v[14];
+    const px = v[0] * tx + v[4] * ty + v[8] * tz + v[12], py = v[1] * tx + v[5] * ty + v[9] * tz + v[13], pz = v[2] * tx + v[6] * ty + v[10] * tz + v[14];
     const k = W / 1920;
     screenPass(P.dof, T.dof, { uSrc: T.res.tex, uDepth: T.res.depth, uAO: T.ao.tex }, (u) => {
       gl.uniform2f(u.uTexel, 1 / W, 1 / H);
@@ -4461,7 +4553,9 @@ function camUpdate(dt, snap) {
   let ty = CAM.baseY + Math.max(0, P.y - CAM.above) * CAM.follow + CAM.dy;
   let rate = 6.5;
   const shot = LEVEL.def.shot && LEVEL.def.shot(GAME.mode);
-  if (shot) { tx = shot.x; ty = shot.y; dist = shot.dist ?? dist; elev = shot.elev ?? elev; rate = shot.rate ?? 2.2; }
+  let tz = 0;
+  if (shot) { tx = shot.x; ty = shot.y; dist = shot.dist ?? dist; elev = shot.elev ?? elev; rate = shot.rate ?? 2.2; tz = shot.z ?? 0; }
+  CAM.z = snap ? tz : damp(CAM.z, tz, 4.5, dt);   // where the lens is focused, front to back
   if (GAME.mode === 'win' || GAME.mode === 'enter') {
     const N = LEVEL.goal || LEVEL.nest, big = N.R >= 6;
     const k = smoothstep(0.4, big ? 5 : 2.2, GAME.winT);
@@ -5821,6 +5915,7 @@ function begin() {
   audioInit();
   if (GAME.mode === 'title') {
     showVeil(false);
+    if (LEVEL.def.choose && LEVEL.def.choose() === 'away') { GAME.mode = 'leaving'; return; }   // the other game
     GAME.mode = 'intro'; GAME.introT = 0;
     if (LEVEL.def.intro) LEVEL.def.intro();
     return;
@@ -5846,8 +5941,13 @@ function leaveLevel() {
 window.addEventListener('keydown', (e) => {
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
-  if (GAME.mode === 'boot' || GAME.mode === 'loading') return;
-  if (GAME.mode === 'title') { if (e.code !== 'Escape') begin(); return; }
+  if (GAME.mode === 'boot' || GAME.mode === 'loading' || GAME.mode === 'leaving') return;
+  if (GAME.mode === 'title') {
+    if (e.code === 'Escape') return;
+    if (LEVEL.def.titleKey && LEVEL.def.titleKey(e.code)) return;   // the opening's own keys: moving the focus
+    begin();
+    return;
+  }
   if (GAME.mode === 'paused') { if (e.code === 'Escape') leaveLevel(); else begin(); return; }
   if (SFX.ctx && SFX.ctx.state === 'suspended') SFX.ctx.resume();
   INPUT.keys.add(e.code);
@@ -5858,7 +5958,13 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => INPUT.keys.delete(e.code));
 window.addEventListener('blur', () => { INPUT.keys.clear(); pause(); });
-veil.addEventListener('pointerdown', () => { if (GAME.mode === 'title' || GAME.mode === 'paused') begin(); });
+veil.addEventListener('pointermove', (e) => { if (GAME.mode === 'title' && LEVEL.def.titlePointer) LEVEL.def.titlePointer(e.clientX, e.clientY); });
+veil.addEventListener('pointerdown', (e) => {
+  if (GAME.mode === 'title' && LEVEL.def.titlePointer) LEVEL.def.titlePointer(e.clientX, e.clientY);
+  if (GAME.mode === 'title' || GAME.mode === 'paused') begin();
+});
+// coming back here from the other game: start again from the table
+window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
 window.addEventListener('resize', () => resizeRender(false));
 
 function startPoint() {
@@ -5945,7 +6051,7 @@ function gameStep(dt) {
   if (GAME.hitstop > 0) { GAME.hitstop -= dt; return; }
   GAME.t += dt;
   COLLIDERS.length = 0;
-  if (GAME.mode === 'title') { if (LEVEL.def.step) LEVEL.def.step(dt); simulate(dt); return; }
+  if (GAME.mode === 'title' || GAME.mode === 'leaving') { if (LEVEL.def.step) LEVEL.def.step(dt); simulate(dt); return; }
   playerStep(dt);
   enemiesStep(dt);
   itemsStep(dt);
