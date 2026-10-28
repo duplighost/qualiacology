@@ -38,7 +38,7 @@ const DUCK_TINTS = [[1, 0.78, 0.12], [1, 0.78, 0.12], [1, 0.78, 0.12], [1, 0.78,
 // ---------- the projector's beam: a cone of light from the booth to the screen ----------
 const BEAM_VS = /* glsl */`
   varying vec3 vN; varying vec3 vV; varying vec2 vUv; varying vec3 vW;
-  void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); vV = cameraPosition - w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+  void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); vV = cameraPosition - w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`;
 const BEAM_FS = /* glsl */`
   uniform float uK, uTime, uBeat; uniform vec3 uCol;
   varying vec3 vN; varying vec3 vV; varying vec2 vUv; varying vec3 vW;
@@ -173,7 +173,7 @@ class Lot {
     g.setAttribute('uv', new THREE.BufferAttribute(this.uv, 2).setUsage(THREE.DynamicDrawUsage));
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uFog: { value: new THREE.Color(P.fog) }, uFogDensity: { value: P.fogDensity }, uCam: { value: new THREE.Vector3() } },
-      vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }',
       fragmentShader: /* glsl */`
         uniform vec3 uFog, uCam; uniform float uFogDensity; varying vec2 vUv; varying vec3 vW;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }

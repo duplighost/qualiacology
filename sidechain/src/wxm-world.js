@@ -74,6 +74,12 @@ export class WxmWorld {
     prepare(S.course, S.plan);
     this.mat = roomMaterial();
     this.rooms = (S.plan.rooms || []).map((sp) => new WxmRoom(scene, S.course, sp, this.mat, HOUSE));
+    // where one room ends and the next begins at the same moment, both put their end wall there: one
+    // wall twice, in two rooms' paint, fighting for the same depth (it flickered as you came up to the
+    // door). The next room's goes a step further in, behind the first.
+    for (const a of this.rooms) for (const ca of a.caps) if (ca.userData.k === 1) {
+      for (const b of this.rooms) for (const cb of b.caps) if (cb.userData.k === 0 && Math.abs(cb.userData.t - ca.userData.t) < 0.05) cb.userData.t = ca.userData.t + 0.02;
+    }
     this.snow = bigSnow(1900); scene.add(this.snow);
     this.cfg = S.plan.wxm || {};
     this._g = new THREE.Vector3();

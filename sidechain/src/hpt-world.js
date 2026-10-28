@@ -35,7 +35,7 @@ function balloonGeo(c) {
 }
 
 // the dance floor: tiles that light in a different pattern every beat
-const FLOOR_VS = `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+const FLOOR_VS = `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`;
 const FLOOR_FS = /* glsl */`
   uniform float uBeat, uBar, uK, uFrac, uAlong, uHptFogD; uniform vec3 uHptFog, uCam, uA, uB, uC, uD;
   varying vec2 vUv; varying vec3 vW;
@@ -61,7 +61,7 @@ const inSpan = (spans, t) => { for (const [a, b] of spans || []) if (t >= a && t
 const spanK = (spans, t, fadeIn = 0.6, fadeOut = 0.8) => { let k = 0; for (const [a, b] of spans || []) k = Math.max(k, smooth(a - fadeIn, a, t) * (1 - smooth(b, b + fadeOut, t))); return k; };
 
 // a ring of light on the ground and a low wall of it, going out from under her
-const RING_VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const RING_VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }`;
 const RING_FS = `uniform vec3 uC; uniform float uK; varying vec2 vUv;
   void main(){ float a = uK * pow(max(1.0 - vUv.y, 0.0), 1.6); a = (a == a) ? clamp(a, 0.0, 3.0) : 0.0; gl_FragColor = vec4(uC * a, 1.0); }`;
 const FLAT_FS = `uniform vec3 uC; uniform float uK; varying vec2 vUv;

@@ -317,7 +317,8 @@ extend({
         const c = it.coats[j]; if (!c) continue;
         const gone = c.leave !== undefined ? smooth(c.leave, c.leave + 0.35, T) : 0, come = c.come !== undefined ? smooth(c.come, c.come + 0.35, T) : 1;
         const k = come * (1 - gone); if (k < 0.02) continue;
-        const w = local(at, yaw, 2.4 * s, (1 - k) * 4 * s, (-19.6 + j * 5.6) * s, S._o);
+        // (every other coat a hand further off the wall: neighbours' sleeves overlap, and at one depth they flickered)
+        const w = local(at, yaw, (2.4 + 0.12 * (j % 2)) * s, (1 - k) * 4 * s, (-19.6 + j * 5.6) * s, S._o);
         m.compose(w, q, S._s.set(s, s * k, s)); L.irtHang.add(m, tintV(c.tint));
       }
       const w = local(at, yaw, 6 * s, 20 * s, 0, S._o); glowAt(S, w.x, w.y, w.z, 26 * s, WARM, 0.1);
@@ -408,7 +409,7 @@ function hallMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW;
-      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uFogDensity, uNight, uRain, uPanel; uniform vec3 uFog, uCam, uLight, uSkyLo, uSkyHi;
       varying float vPart; varying vec3 vC; varying vec3 vW;

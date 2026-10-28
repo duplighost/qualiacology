@@ -12,6 +12,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, glowAt, poolAt, local, col, signV } from './scenery.js';
 import { prepare, floorAt } from './trail.js';
 import { paint, rgb, seeded, box } from './summer.js';
+import { AA_GLSL } from './aa.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -91,7 +92,7 @@ export function inkMaterial() {
     uniforms: { uGrow: { value: 0.2 }, uTime: { value: 0 }, uLight: { value: 1 }, uNeg: NEG },
     vertexShader: /* glsl */`
       attribute vec4 aRect; varying vec2 vUv;
-      void main(){ vUv = aRect.xy + uv * aRect.zw; gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
+      void main(){ vUv = aRect.xy + uv * aRect.zw; gl_Position = projectionMatrix * (viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: /* glsl */`
       uniform float uGrow, uTime, uLight, uNeg; varying vec2 vUv;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -123,7 +124,9 @@ export function inkMaterial() {
 
 // ---------- the halls ----------
 // brick, three floors of tall windows lit warm (some dark), slate roofs, white trim. Drawn by its
-// own shader so the windows sit on the walls whatever the hall's size.
+// own shader so the windows sit on the walls whatever the hall's size. (Its seed goes over flat:
+// interpolated, it wobbled in the last decimal across a wall, and the hash of it lit and darkened
+// each window pixel by pixel, a speckle crawling over every wall as you went by.)
 export function hallMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -133,17 +136,21 @@ export function hallMaterial() {
     },
     vertexShader: /* glsl */`
       attribute vec3 aTint; attribute float aSeed; attribute float aPart;
-      varying vec3 vL; varying vec3 vN; varying vec3 vNL; varying vec3 vW; varying vec3 vTint; varying float vSeed; varying float vPart;
+      varying vec3 vL; varying vec3 vN; varying vec3 vNL; varying vec3 vW; varying vec3 vTint; flat varying float vSeed; varying float vPart;
       void main(){
         vL = position; vNL = normal; vN = normalize(mat3(instanceMatrix) * normal); vTint = aTint; vSeed = aSeed; vPart = aPart;
         vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz;
-        gl_Position = projectionMatrix * viewMatrix * w;
+        gl_Position = projectionMatrix * (viewMatrix * w);
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 uFog, uCam, uSky, uBounce, uMoon, uMoonDir, uWin; uniform float uFogDensity, uHemiK, uWinK, uOn, uLit, uNeg;
-      varying vec3 vL; varying vec3 vN; varying vec3 vNL; varying vec3 vW; varying vec3 vTint; varying float vSeed; varying float vPart;
+      varying vec3 vL; varying vec3 vN; varying vec3 vNL; varying vec3 vW; varying vec3 vTint; flat varying float vSeed; varying float vPart;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
+      ${AA_GLSL}
+      // inside (d > 0) or out, blended over the pixel (w: a pixel's size in d's units)
+      float cov(float d, float w){ return clamp(d / max(w, 1e-4) + 0.5, 0.0, 1.0); }
+      float fwm(vec2 q){ vec2 fw = fwidth(q); return max(fw.x, fw.y); }
       void main(){
         int part = int(vPart + 0.5);
         vec3 N = normalize(vN);
@@ -152,25 +159,29 @@ export function hallMaterial() {
           // brick, coursed; the windows: tall, round-headed, three floors, every 4.4 m
           // (which way the wall faces in the hall's own terms: the windows run along it)
           vec2 a = abs(vNL.z) > 0.5 ? vec2(vL.x, vL.y) : vec2(vL.z, vL.y);
-          vec2 br = vec2(a.x / 1.1 + 0.5 * mod(floor(a.y / 0.45), 2.0), a.y / 0.45);
-          alb = vTint * (0.82 + 0.28 * h2(floor(br) + vSeed * 31.0)) * mix(0.75, 1.0, edge(fract(br), 0.08));
+          // (the windows' edges, their mullions and the bricks are all blended over the pixel, settling
+          // to their average far off: drawn hard they crawled along the walls as the halls went by)
+          vec2 br = vec2(a.x / 1.1 + 0.5 * mod(floor(a.y / 0.45), 2.0), a.y / 0.45), brc = vec2(a.x / 1.1, a.y / 0.45);
+          float bfw = fwm(brc);
+          alb = vTint * (0.82 + 0.28 * mix(h2(floor(br) + vSeed * 31.0), 0.5, smoothstep(0.3, 0.7, bfw))) * mix(0.75, 1.0, mix(edge(fract(br), 0.08), 0.84, smoothstep(0.08, 0.32, bfw)));
           vec2 wq = vec2((a.x + 2.2) / 4.4, (a.y - 2.2) / 6.0); vec2 wf = fract(wq);
           float floorOk = step(0.0, a.y - 2.2) * step(a.y, 19.6);
           vec2 wp = (wf - vec2(0.5, 0.0)) * vec2(4.4, 6.0);
-          float arch = step(length(vec2(wp.x, max(0.0, wp.y - 3.6)) / vec2(1.05, 1.05)), 1.0);
-          float win = floorOk * step(abs(wp.x), 1.05) * step(0.6, wp.y) * step(wp.y, 4.65) * arch;
-          float frame = floorOk * step(abs(wp.x), 1.35) * step(0.35, wp.y) * step(wp.y, 4.95) * (1.0 - win);
+          vec2 dw = fwidth(wq) * vec2(4.4, 6.0); float dm = max(dw.x, dw.y);
+          float arch = cov(1.05 - length(vec2(wp.x, max(0.0, wp.y - 3.6))), dm);
+          float win = floorOk * cov(1.05 - abs(wp.x), dw.x) * cov(wp.y - 0.6, dw.y) * cov(4.65 - wp.y, dw.y) * arch;
+          float frame = floorOk * cov(1.35 - abs(wp.x), dw.x) * cov(wp.y - 0.35, dw.y) * cov(4.95 - wp.y, dw.y) * (1.0 - win);
           float id = h2(floor(wq) + vSeed * 17.0);
           float lit = step(0.28, id) * uOn;
           vec3 glass = mix(vec3(0.02, 0.025, 0.04), uWin * (0.75 + 0.35 * id), lit);
           // a mullion and a transom
-          float mull = win * (step(abs(wp.x), 0.07) + step(abs(wp.y - 3.0), 0.07));
+          float mull = win * clamp(aaBand(wp.x, 0.0, 0.07) + aaBand(wp.y, 3.0, 0.07), 0.0, 1.0);
           alb = mix(alb, vec3(0.86, 0.84, 0.78), frame);
           alb = mix(alb, glass, win * (1.0 - mull));
           alb = mix(alb, vec3(0.8, 0.78, 0.72), mull);
           glow += glass * win * (1.0 - mull) * lit * uWinK * 0.9;
           // a stone string course between the floors
-          alb = mix(alb, vec3(0.78, 0.72, 0.62), step(abs(fract(a.y / 6.0 + 0.66) - 0.5), 0.025) * step(2.0, a.y));
+          alb = mix(alb, vec3(0.78, 0.72, 0.62), aaPulse(a.y / 6.0 + 0.66 - 0.475, 0.05) * step(2.0, a.y));
         } else if (part == 1) {
           // slate in courses
           vec2 sq = vec2(vL.x / 0.9 + 0.5 * mod(floor(vL.y / 0.5), 2.0), vL.y / 0.5 + vL.z * 0.6);

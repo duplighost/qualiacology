@@ -193,7 +193,7 @@ const pearlM = (M) => M.ywnPearlM || (M.ywnPearlM = new THREE.MeshStandardMateri
 function bubbleMat(M, key, hex) {
   return M[key] || (M[key] = new THREE.ShaderMaterial({
     uniforms: { uBg: { value: new THREE.Color(hex) }, uBeat: M.sign.uniforms.uBeat, uFogColor: M.sign.uniforms.uFogColor, uFogDensity: M.sign.uniforms.uFogDensity, uCam: M.sign.uniforms.uCam },
-    vertexShader: 'varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix * instanceMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }',
+    vertexShader: 'varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix * instanceMatrix) * normal); gl_Position = projectionMatrix * (viewMatrix * w); }',
     fragmentShader: 'uniform vec3 uBg, uFogColor, uCam; uniform float uBeat, uFogDensity; varying vec3 vW; varying vec3 vN; void main(){ vec3 V = normalize(uCam - vW); float rim = 1.0 - abs(dot(normalize(vN), V)); vec3 col = uBg * 2.2 * (0.85 + 0.35 * uBeat) * (1.0 - 0.25 * rim); float d = length(uCam - vW); float fog = 1.0 - exp(-pow(d * uFogDensity * 0.7, 1.5)); gl_FragColor = vec4(mix(col, uFogColor, clamp(fog, 0.0, 1.0)), 1.0); }',
   }));
 }
@@ -206,7 +206,7 @@ const lipRevealM = (M) => M.ywnLipRM || (M.ywnLipRM = (() => {
 })());
 const mirrorM = (M) => M.ywnMirrorM || (M.ywnMirrorM = new THREE.ShaderMaterial({
   uniforms: { uCam: M.sign.uniforms.uCam },
-  vertexShader: 'varying vec3 vW; varying vec2 vUv; void main(){ vUv = uv; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+  vertexShader: 'varying vec3 vW; varying vec2 vUv; void main(){ vUv = uv; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }',
   fragmentShader: 'uniform vec3 uCam; varying vec3 vW; varying vec2 vUv; void main(){ vec3 c = mix(vec3(0.42, 0.46, 0.5), vec3(0.86, 0.9, 0.94), smoothstep(0.0, 1.0, vUv.y + 0.2 * sin(vW.x * 0.05 + vW.z * 0.05))); c += vec3(0.25) * pow(max(sin((vUv.x + vUv.y) * 9.0 + (vW.x + vW.z) * 0.02), 0.0), 12.0); gl_FragColor = vec4(c, 1.0); }',
 }));
 

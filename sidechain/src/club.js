@@ -159,7 +159,7 @@ const KG = {
 
 function laserMaterial() {
   return new THREE.ShaderMaterial({
-    vertexShader: `attribute vec3 aTint; varying vec3 vC; varying float vY; void main(){ vC = aTint; vY = position.y; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute vec3 aTint; varying vec3 vC; varying float vY; void main(){ vC = aTint; vY = position.y; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `varying vec3 vC; varying float vY; void main(){ float k = smoothstep(-140.0, -100.0, vY) * 0.8 + 0.2; gl_FragColor = vec4(vC * k, 1.0); }`,
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
   });
@@ -345,7 +345,7 @@ function clubMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
-      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uBeat, uFogDensity, uHouse, uRed, uVoid, uFlicker, uChorus, uRingR, uRingK, uAlong, uVu, uSpeed, uMove;
       uniform vec3 uFog, uCam, uWarm, uLight, uA, uB, uSkyTop, uSkyLow;

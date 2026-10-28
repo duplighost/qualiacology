@@ -62,7 +62,7 @@ function lipstickTexture() {
 // ---------- shaders ----------
 const FOGV = /* glsl */`varying vec3 vW;`;
 // glass: the sky in it at an angle, the lit rooms through it face on
-const GLASS_VS = /* glsl */`varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const GLASS_VS = /* glsl */`varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * (viewMatrix * w); }`;
 const GLASS_FS = /* glsl */`
   uniform vec3 uZen, uHor, uSun, uSunDir, uCam, uFog; uniform float uFogD;
   varying vec3 vW; varying vec3 vN;
@@ -98,7 +98,7 @@ const SOFFIT_FS = /* glsl */`
     float d = length(uCam - vW); float fog = 1.0 - exp(-pow(d * uFogD, 1.5));
     gl_FragColor = vec4(mix(col, uFog, clamp(fog, 0.0, 1.0)), 1.0);
   }`;
-const LOCAL_VS = /* glsl */`varying vec3 vW; varying vec3 vL; void main(){ vL = position; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+const LOCAL_VS = /* glsl */`varying vec3 vW; varying vec3 vL; void main(){ vL = position; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`;
 // the pool: lit turquoise from under, a web of light on its floor, and the house in it upside down
 // (a reflection worked out against the house's front: its lit glass, its slabs, the sky over it)
 const POOL_FS = /* glsl */`

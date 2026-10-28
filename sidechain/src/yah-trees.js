@@ -465,7 +465,7 @@ const VS = /* glsl */`
     vW = w.xyz; vO = position;
     vN = normalize(mat3(modelMatrix) * mat3(im) * normal);
     vCol = color * aTint; vKind = aKind;
-    gl_Position = projectionMatrix * viewMatrix * w;
+    gl_Position = projectionMatrix * (viewMatrix * w);
   }`;
 const FS = /* glsl */`
   uniform vec3 uSun, uSunDir, uSky, uBounce, uFill, uFillDir, uFog, uCam;

@@ -4,7 +4,7 @@
 // start: 'launch' makes the section open with a lip you fly off (kick = m/s upward).
 // The songs added on 27 Oct 2026 keep their entry and palettes in their own <prefix>-song.js, beside
 // their place; seven go in before Heart of the Party and CUT ME OFF goes after it, last on the record
-// (bottom of this file).
+// (bottom of this file). Summa Cum Stupid (scs, added later on 27 Oct 2026) goes in with the seven, after White Christmas.
 
 import * as nlg from './nlg-song.js';
 import * as yst from './yst-song.js';
@@ -14,7 +14,8 @@ import * as ycl from './ycl-song.js';
 import * as irt from './irt-song.js';
 import * as wxm from './wxm-song.js';
 import * as cmo from './cmo-song.js';
-const ADDED = [nlg, yst, dam, rpd, ycl, irt, wxm];
+import * as scs from './scs-song.js';
+const ADDED = [nlg, yst, dam, rpd, ycl, irt, wxm, scs];
 
 // a doorway between the rooms of her apartment
 const DOOR = { kind: 'wall', hw: 11.5, hh: 30 };
@@ -1008,7 +1009,7 @@ export const ALBUM = [
         { t: 59.4, text: "SHOW'S OVER,\nCURTAIN'S CLOSING", h: 26, lead: 1.35 },
         { t: 98.9, text: "HERE'S YOUR\nPARTICIPATION TROPHY", h: 15, lead: 0.9 },
         { t: 108.8, text: "BABY, NO PRESSURE,\nWE'VE GOT ALL NIGHT", h: 15 },
-        { t: 111.2, text: 'CHECK PHONE, ACTUALLY,\nNEVER MIND, GOOD NIGHT', h: 15, lead: 1.2 },
+        { t: 111.2, text: 'ACTUALLY, NEVER MIND,\nGOOD NIGHT', h: 15, lead: 1.2 },
         { t: 127.8, text: "THREE, TWO, ONE,\nIT'S MORNING", h: 14 },
         { t: 140.4, text: 'HOUSTON, WE\nHAVE A PROBLEM', h: 14, lead: 1.6 },
         { t: 152.2, text: "YOU'RE OUT\nOF TIME", h: 14 },
@@ -1309,7 +1310,7 @@ export const ALBUM = [
       lyricPart: 'oaSign', lyricX: 0, lyricBg: '#0c0a10', lyricColor: '#ffd0ec', lyricCore: '#ffffff',
       lyrics: [
         { t: 11.88, text: 'SO SOPHISTICATED', h: 14 },
-        { t: 41.74, text: "PRETTIEST YOU'VE BEEN\nSINCE SEVENTEEN", h: 14 },
+        { t: 41.74, text: "PRETTY AS YOU'VE BEEN\nSINCE SEVENTEEN", h: 14 },
         { t: 59.12, text: 'SO PRETTY, PRETTY,\nA BEAUTIFUL BOMB', h: 14 },
         { t: 70.64, text: 'MONETIZE THE MELTDOWN', h: 14 },
         { t: 74.00, text: 'POSTHUMOUS TRINITY', h: 14 },
@@ -2534,7 +2535,7 @@ export const ALBUM = [
         { t: 55.50, text: 'WIPING TEARS\nWITH COUPONS', h: 14 },
         { t: 59.94, text: 'CLICK, CLICK, CLICK!', h: 14 },
         { t: 100.80, text: 'HASHTAG NO REGRETS', h: 14 },
-        { t: 101.98, text: 'BUT TEARS STILL SHOW', h: 14, lead: 2.4 },
+        { t: 101.98, text: 'BUT THE TEARS\nSTILL SHOW', h: 14, lead: 2.4 },
         { t: 107.44, text: 'DO I FEEL GUILTY?\nAS IF', h: 13 },
         { t: 134.74, text: 'SOBBING IN FILTER', h: 14 },
         { t: 137.14, text: 'YOUR PAIN,\nSO AESTHETIC', h: 14 },
@@ -2859,13 +2860,13 @@ export const ALBUM = [
         { t: 59.08, text: 'IF YOU EVER LOVED ME,\nMAKE IT A NO', h: 14 },
         { t: 72.88, text: "AN OPEN DOOR'S\nA FULL-TIME JOB", h: 14 },
         { t: 77.78, text: 'EMBARRASSING THE WAY\nTHE TRUE ONES SOUND', h: 14 },
-        { t: 106.96, text: 'IF YOU EVER LOVED ME,\nMAKE IT ENOUGH', h: 14 },
+        { t: 106.96, text: 'IF YOU EVER LOVED ME,\nMAKE IT A NO', h: 14 },
         { t: 123.10, text: 'OH, THE QUIET AFTERWARDS', h: 13 },
         { t: 133.58, text: 'STRANGEST THANK YOU\nEVER SAID', h: 13 },
         { t: 153.32, text: 'YOU LET THE\nSENTENCE CLOSE', h: 14 },
         { t: 166.78, text: 'THE COUCH IS EMPTY', h: 14 },
-        { t: 169.96, text: 'THE LIGHTS ARE ON', h: 14 },
-        { t: 171.56, text: "THE DOOR'S JUST\nA DOOR NOW", h: 14, lead: 2.4 },
+        // (no board for the line between: half of every reading hears "the lights are on", half "out")
+        { t: 171.56, text: "THE DOOR'S JUST\nA DOOR NOW", h: 14, lead: 2.4, side: -1 },
       ],
       shelf: 60, drop: 5,
       finale: { kind: 'justdoor', t: 191.5, x: -40, s: 1.8, rot: -1.57, orbit: { r: 110, h: 12, y: 16, facing: true, back: 0.6, right: 0.3, swing: 0.12, heroPan: 0.2, heroBack: 10, heroFov: 46, heroUp: 1.8 } },   // the door alone, the empty couch, the lamp beside the card

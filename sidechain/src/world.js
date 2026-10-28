@@ -21,7 +21,7 @@ export function makeSky(scene, P) {
       uMon: { value: 0 }, uMonNow: { value: 0 }, uMonCol: { value: new THREE.Color(0x5cffa8) },
       uSpk: { value: Array.from({ length: 16 }, () => new THREE.Vector2(-99, 0)) },
     },
-    vertexShader: `varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
+    vertexShader: `varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix * (modelViewMatrix * vec4(position,1.0)); gl_Position = p.xyww; }`,
     fragmentShader: /* glsl */`
       uniform vec3 uZenith, uHorizon, uGlow, uGlowDir, uMoonDir, uMoon, uCloud; uniform float uFlow, uTime, uPulse, uStars, uSun, uCloudK, uClouds;
       uniform float uHeart, uHeartBeat, uHeartSize, uMon, uMonNow; uniform vec3 uHeartDir, uHeartCol, uMonCol; uniform vec2 uSpk[16];
@@ -147,7 +147,7 @@ export function makeSkyline(scene, P) {
   g.translate(0, 230, 0);
   const m = new THREE.ShaderMaterial({
     uniforms: { uSil: { value: new THREE.Color(P.skyline ?? 0x150a1e) }, uFog: { value: new THREE.Color(P.fog) }, uWin: { value: new THREE.Color(P.window) }, uAlt: { value: new THREE.Color(P.windowAlt) }, uTime: { value: 0 }, uFlow: { value: 0.3 }, uStyle: { value: 0 }, uHills: { value: 0 } },
-    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uSil, uFog, uWin, uAlt; uniform float uTime, uFlow, uStyle, uHills; varying vec3 vP;
       float h1(float x){ return fract(sin(x * 127.1) * 43758.5453); }
@@ -210,7 +210,7 @@ export function makeGround(scene, P) {
       uGround: { value: new THREE.Color(P.ground) }, uStreet: { value: new THREE.Color(P.street) }, uFlow: { value: 0.3 },
       uHorizon: { value: new THREE.Color(P.horizon) }, uStyle: { value: 0 }, uSnow: { value: P.snowGround ?? 0 },
     },
-    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
+    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW=w.xyz; gl_Position=projectionMatrix*(viewMatrix*w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uCam, uFog, uGround, uStreet, uHorizon; uniform float uFogDensity, uFlow, uStyle, uSnow; varying vec3 vW;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }

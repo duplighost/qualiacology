@@ -259,7 +259,7 @@ function weedMaterial() {
         p.x += sway * uv.y * uv.y;
         p.z += cos(uTime * 0.7 + aSeed * 4.0) * 0.8 * uv.y * uv.y;
         vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vW = w.xyz;
-        gl_Position = projectionMatrix * viewMatrix * w;
+        gl_Position = projectionMatrix * (viewMatrix * w);
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 uFog, uCam; uniform float uFogDensity; varying vec2 vUv; varying vec3 vC; varying vec3 vW;
@@ -283,7 +283,7 @@ function shaftMaterial() {
         // (how square-on it is to the camera: side-on a sheet of light is only a line)
         vec3 n = normalize(mat3(modelMatrix * instanceMatrix) * vec3(0.0, 0.0, 1.0));
         vF = smoothstep(0.15, 0.5, abs(dot(n, normalize(cameraPosition - w.xyz))));
-        gl_Position = projectionMatrix * viewMatrix * w;
+        gl_Position = projectionMatrix * (viewMatrix * w);
       }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uK; varying vec2 vUv; varying float vS; varying float vF;
@@ -299,7 +299,7 @@ function shaftMaterial() {
 // a spreading ring of light on the water, fading as it grows
 function ringMaterial() {
   return new THREE.ShaderMaterial({
-    vertexShader: `attribute float aK; varying float vK; void main(){ vK = aK; gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aK; varying float vK; void main(){ vK = aK; gl_Position = projectionMatrix * (viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `varying float vK; void main(){ float k = (vK == vK) ? clamp(vK, 0.0, 2.0) : 0.0; gl_FragColor = vec4(vec3(0.75, 0.9, 1.0) * k, 1.0); }`,
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide,
   });

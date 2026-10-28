@@ -226,7 +226,7 @@ const VC = (M, key, opts) => M[key] || (M[key] = new THREE.MeshStandardMaterial(
 // lit only by its own colour (bulbs, the ring's stone): each instance its colour
 function tintBasic(k = 1) {
   return new THREE.ShaderMaterial({
-    vertexShader: `attribute vec3 aTint; varying vec3 vC; varying vec3 vN; void main(){ vC = aTint; vN = normalize(normalMatrix * mat3(instanceMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute vec3 aTint; varying vec3 vC; varying vec3 vN; void main(){ vC = aTint; vN = normalize(normalMatrix * mat3(instanceMatrix) * normal); gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `varying vec3 vC; varying vec3 vN; void main(){ float l = 0.6 + 0.4 * max(0.0, vN.z); gl_FragColor = vec4(vC * l * ${k.toFixed(2)}, 1.0); }`,
   });
 }
@@ -508,7 +508,7 @@ function candyMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
-      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uBeat, uFogDensity, uDark, uPulse, uMove;
       uniform vec3 uFog, uCam, uWarm, uLight, uSkyTop, uSkyLow;

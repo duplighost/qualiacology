@@ -49,6 +49,7 @@ import { RpdWorld, RpdFinale } from './rpd-world.js';
 import { YclWorld, YclFinale } from './ycl-world.js';
 import { IrtWorld, IrtFinale } from './irt-world.js';
 import { WxmWorld, WxmFinale } from './wxm-world.js';
+import { ScsWorld, ScsFinale } from './scs-world.js';
 import { Hud } from './hud.js';
 import { Input } from './input.js';
 import { Screens } from './menu.js';
@@ -87,7 +88,7 @@ const chase = new ChaseCam(camera);
 let S = null;            // the current song session
 let state = 'menu';      // menu | loading | title | ride | results
 // (for the tools: the session once there is one, and the rest from the start)
-window.__LC = { S: null, sound, input, autopilot: null, state: () => state, camera, renderer, chase, lastCpu: () => lastCpu };
+window.__LC = { S: null, sound, input, autopilot: null, state: () => state, camera, renderer, chase, post, lastCpu: () => lastCpu };
 let lastFrame = performance.now();
 let paused = false;
 const autopilot = { on: params.has('auto') };
@@ -243,13 +244,13 @@ function build(S) {
   const trail = new Trail(scene, P);
   const fireworks = new Fireworks(scene, [P.jacket, P.edge, P.fret, P.window, 0xffffff]);
   const plan = S.entry.scenery || {};
-  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale, town: TownLineFinale, lamp: LampFinale, portrait: PortraitFinale, wedding: WeddingFinale, busstop: BusStopFinale, crown: CrownFinale, boombox: BoomboxFinale, lipstick: LipstickFinale, till: TillFinale, talk: TalkFinale, key: KeyFinale, rocket: RocketFinale, boat: BoatFinale, book: BookFinale, ship: ShipFinale, house: HouseFinale, justdoor: JustDoorFinale, vanity: VanityFinale, set: SetFinale, furnace: FurnaceFinale, glasshouse: GlassHouseFinale, cmo: CmoFinale, nlg: NlgFinale, yst: YstFinale, dam: DamFinale, rpd: RpdFinale, ycl: YclFinale, irt: IrtFinale, wxm: WxmFinale }[plan.finale?.kind] || Wreck;
+  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale, town: TownLineFinale, lamp: LampFinale, portrait: PortraitFinale, wedding: WeddingFinale, busstop: BusStopFinale, crown: CrownFinale, boombox: BoomboxFinale, lipstick: LipstickFinale, till: TillFinale, talk: TalkFinale, key: KeyFinale, rocket: RocketFinale, boat: BoatFinale, book: BookFinale, ship: ShipFinale, house: HouseFinale, justdoor: JustDoorFinale, vanity: VanityFinale, set: SetFinale, furnace: FurnaceFinale, glasshouse: GlassHouseFinale, cmo: CmoFinale, nlg: NlgFinale, yst: YstFinale, dam: DamFinale, rpd: RpdFinale, ycl: YclFinale, irt: IrtFinale, wxm: WxmFinale, scs: ScsFinale }[plan.finale?.kind] || Wreck;
   const finale = plan.finale ? new Finale(scene, course, P, plan.finale, town) : null;
   const vehicles = plan.vehicles ? new Vehicles(scene, course, plan.vehicles) : null;
   const confetti = S.entry.confetti ? new Confetti(scene, S.entry.confettiColors || [P.heart ?? P.glow, P.edge, P.fret, 0xffffff, P.windowAlt, 0x5ff2ff], 1100, { normal: S.entry.confettiNormal }) : null;
   const trains = plan.trains ? new Train(course, plan.trains.x, plan.trains.passes) : null;
   town.track = track;
-  const WORLDS = { crash: CrashWorld, beach: BeachWorld, trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld, funeral: FuneralWorld, club: ClubWorld, school: SchoolWorld, candy: CandyWorld, court: CourtWorld, shop: ShopWorld, smarthome: SmartWorld, venue: VenueWorld, launch: LaunchWorld, hotel: HotelWorld, library: LibraryWorld, ice: IceWorld, family: FamilyWorld, guest: GuestWorld, glam: GlamWorld, selfie: SelfieWorld, foundry: FoundryWorld, estate: EstateWorld, cmo: CmoWorld, nlg: NlgWorld, yst: YstWorld, dam: DamWorld, rpd: RpdWorld, ycl: YclWorld, irt: IrtWorld, wxm: WxmWorld };
+  const WORLDS = { crash: CrashWorld, beach: BeachWorld, trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld, funeral: FuneralWorld, club: ClubWorld, school: SchoolWorld, candy: CandyWorld, court: CourtWorld, shop: ShopWorld, smarthome: SmartWorld, venue: VenueWorld, launch: LaunchWorld, hotel: HotelWorld, library: LibraryWorld, ice: IceWorld, family: FamilyWorld, guest: GuestWorld, glam: GlamWorld, selfie: SelfieWorld, foundry: FoundryWorld, estate: EstateWorld, cmo: CmoWorld, nlg: NlgWorld, yst: YstWorld, dam: DamWorld, rpd: RpdWorld, ycl: YclWorld, irt: IrtWorld, wxm: WxmWorld, scs: ScsWorld };
   const world = WORLDS[S.entry.world] ? new WORLDS[S.entry.world](scene, { course, plan, P, track, rider, town }) : null;
   const hemi = new THREE.HemisphereLight(new THREE.Color(P.skyLight ?? 0x6a5a9a), new THREE.Color(P.bounce ?? 0x5a3a2a), P.hemiK ?? 1.9);
   scene.add(hemi);

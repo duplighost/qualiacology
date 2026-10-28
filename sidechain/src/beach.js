@@ -215,7 +215,7 @@ export class Land {
     this.geo = g;
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uFog: { value: new THREE.Color(P.fog) }, uFogDensity: { value: P.fogDensity }, uCam: { value: new THREE.Vector3() }, uSand: { value: new THREE.Color(P.sand ?? 0xb8a48a) }, uTown: { value: new THREE.Color(P.ground) }, uSnow: { value: 0 }, uWet: { value: 0 }, uSky: { value: new THREE.Color(P.horizon) }, uTime: { value: 0 }, uX0: { value: this.x0 } },
-      vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
       fragmentShader: /* glsl */`
         uniform vec3 uFog, uCam, uSand, uTown, uSky; uniform float uFogDensity, uSnow, uWet, uTime, uX0; varying vec2 vUv; varying vec3 vW;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -289,7 +289,7 @@ export function oceanMaterial(P) {
       uGround: { value: new THREE.Color(P.water ?? 0x0d1a2a) }, uStreet: { value: new THREE.Color(P.street) }, uFlow: { value: 0.3 },
       uHorizon: { value: new THREE.Color(P.horizon) }, uZenith: { value: new THREE.Color(P.zenith) }, uSunDir: { value: new THREE.Vector3(...(P.moonDir || [0, 0.3, 1])).normalize() }, uSun: { value: new THREE.Color(P.moon) }, uTime: { value: 0 }, uRain: { value: 0 },
     },
-    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uCam, uFog, uGround, uStreet, uHorizon, uZenith, uSunDir, uSun; uniform float uFogDensity, uFlow, uTime, uRain; varying vec3 vW;
       vec2 wv(vec2 p, vec2 d, float f, float s, float a){ float ph = dot(p, d) * f + uTime * s; return d * cos(ph) * f * a; }

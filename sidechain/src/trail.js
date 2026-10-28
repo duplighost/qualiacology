@@ -119,7 +119,7 @@ function terrainMaterial(P) {
     },
     vertexShader: /* glsl */`
       varying vec3 vN; varying vec3 vW; varying vec2 vUv;
-      void main(){ vUv = uv; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vUv = uv; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uSun, uSunDir, uSky, uBounce, uGrass, uDirt, uFog, uCam; uniform float uSunK, uHemiK, uWood, uDry, uFogDensity, uPath, uLawn;
       varying vec3 vN; varying vec3 vW; varying vec2 vUv;
@@ -326,7 +326,7 @@ const TG = {
 
 function blobMaterial() {
   return new THREE.ShaderMaterial({
-    vertexShader: `attribute vec2 aWake; varying vec2 vUv; varying float vA; void main(){ vUv = uv; vA = aWake.x; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute vec2 aWake; varying vec2 vUv; varying float vA; void main(){ vUv = uv; vA = aWake.x; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `varying vec2 vUv; varying float vA; void main(){ float d = length(vUv - 0.5) * 2.0; float a = (1.0 - smoothstep(0.35, 1.0, d)) * vA; gl_FragColor = vec4(0.02, 0.03, 0.01, a); }`,
     transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
@@ -578,7 +578,7 @@ function yahTerrainMaterial(P) {
     },
     vertexShader: /* glsl */`
       attribute vec4 aZone; varying vec4 vZ; varying vec3 vN; varying vec3 vW; varying vec2 vUv;
-      void main(){ vUv = uv; vN = normal; vZ = aZone; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vUv = uv; vN = normal; vZ = aZone; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uSun, uSunDir, uSky, uBounce, uFill, uFillDir, uGrass, uDirt, uFog, uCam;
       uniform float uSunK, uHemiK, uFillK, uFogDensity, uTime, uDapple, uDry;
@@ -713,7 +713,7 @@ const SHAFT_VS = /* glsl */`
     vec3 sd = cross(ax, tc); sd = sd / max(length(sd), 1e-3);
     vec3 p = base + ax * position.y * len + sd * position.x * w * (0.5 + 0.5 * position.y);
     vUv = vec2(position.x + 0.5, position.y); vK = aK; vP = p;
-    gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * (viewMatrix * vec4(p, 1.0));
   }`;
 const SHAFT_FS = /* glsl */`
   uniform vec3 uCol, uL; varying vec2 vUv; varying float vK; varying vec3 vP;
@@ -780,7 +780,7 @@ const BIRD_VS = /* glsl */`
     p.y += sin(uTime * 14.0 + aPh * 6.28) * aWing * 0.55;
     vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0);
     float d = length(uCam - w.xyz); vFog = 1.0 - exp(-pow(d * uFogDensity, 1.5));
-    gl_Position = projectionMatrix * viewMatrix * w;
+    gl_Position = projectionMatrix * (viewMatrix * w);
   }`;
 const BIRD_FS = /* glsl */`uniform vec3 uCol, uFog; varying float vFog; void main(){ gl_FragColor = vec4(mix(uCol, uFog, clamp(vFog, 0.0, 1.0)), 1.0); }`;
 class YahBirds {
@@ -851,7 +851,7 @@ const WATER_VS = /* glsl */`
     #ifdef USE_INSTANCING
       w = modelMatrix * instanceMatrix * vec4(position, 1.0);
     #endif
-    vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+    vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`;
 const WATER_FS = /* glsl */`
   uniform float uTime, uFogDensity; uniform vec3 uSky, uSun, uSunDir, uFog, uCam, uDeep;
   varying vec2 vUv; varying vec3 vW; varying float vFall;
@@ -1370,7 +1370,7 @@ export class TrailWorld {
     const hg = new THREE.BufferGeometry(), hp = [], ha = [];
     for (let i = 0; i < 18; i++) { const a0 = (i / 18) * Math.PI * 2, a1 = a0 + 0.07, L0 = 1; hp.push(0, 0, 0, Math.cos(a0) * L0, Math.sin(a0) * L0, 0, Math.cos(a1) * L0, Math.sin(a1) * L0, 0); ha.push(1, 0, 0); }
     hg.setAttribute('position', new THREE.Float32BufferAttribute(hp, 3)); hg.setAttribute('aC', new THREE.Float32BufferAttribute(ha, 1));
-    this.haloMat = new THREE.ShaderMaterial({ uniforms: { uK: { value: 0 }, uCol: { value: new THREE.Color(1, 0.86, 0.6) } }, vertexShader: 'attribute float aC; varying float vC; void main(){ vC = aC; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', fragmentShader: 'uniform float uK; uniform vec3 uCol; varying float vC; void main(){ gl_FragColor = vec4(uCol * vC * vC * uK, 1.0); }', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    this.haloMat = new THREE.ShaderMaterial({ uniforms: { uK: { value: 0 }, uCol: { value: new THREE.Color(1, 0.86, 0.6) } }, vertexShader: 'attribute float aC; varying float vC; void main(){ vC = aC; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }', fragmentShader: 'uniform float uK; uniform vec3 uCol; varying float vC; void main(){ gl_FragColor = vec4(uCol * vC * vC * uK, 1.0); }', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide });
     this.halo = new THREE.Mesh(hg, this.haloMat); this.halo.frustumCulled = false; this.halo.visible = false; scene.add(this.halo);
   }
   update(S, dt, camera, time) {

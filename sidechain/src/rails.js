@@ -35,7 +35,7 @@ export class Rails {
     const strip = new THREE.PlaneGeometry(1, 1); strip.rotateX(-Math.PI / 2); strip.translate(0, 0, 0.5);
     this.glowMat = new THREE.ShaderMaterial({
       uniforms: { uCol: { value: this.rimNow }, uK: { value: 1 } },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }',
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }',
       fragmentShader: 'uniform vec3 uCol; uniform float uK; varying vec2 vUv; void main(){ float d = abs(vUv.x - 0.5) * 2.0; gl_FragColor = vec4(uCol * exp(-d * d * 6.0) * 0.55 * uK, 1.0); }',
       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2,
     });

@@ -441,7 +441,7 @@ for (const k in FILLS) fillLayers['bosFill' + k] = (M) => [muv(B(26, FILLS[k][1]
 function skylineMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uSil: { value: new THREE.Color() }, uFog: { value: new THREE.Color() }, uSun: { value: new THREE.Color() }, uK: { value: 0.3 } },
-    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uSil, uFog, uSun; uniform float uK; varying vec3 vP;
       float h1(float x){ return fract(sin(x * 127.1) * 43758.5453); }
@@ -481,7 +481,7 @@ class River {
     this.geo = g;
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uSkyTop: BOS.skyTop, uSkyLow: BOS.skyLow, uSun: BOS.sun, uSunDir: BOS.sunDir, uFog: BOS.fog, uFogD: BOS.fogD, uCam: BOS.cam, uTime: BOS.time },
-      vertexShader: `varying vec3 vWP; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vWP = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      vertexShader: `varying vec3 vWP; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vWP = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
       fragmentShader: /* glsl */`
         uniform vec3 uSkyTop, uSkyLow, uSun, uSunDir, uFog, uCam; uniform float uFogD, uTime; varying vec3 vWP;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -537,7 +537,7 @@ class Hill {
     this.geo = g;
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uCam: BOS.cam, uFog: BOS.fog, uFogD: BOS.fogD, uSunDir: BOS.sunDir, uGround: { value: new THREE.Color() }, uStreet: { value: new THREE.Color() }, uSnow: { value: 0 } },
-      vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
       fragmentShader: /* glsl */`
         uniform vec3 uCam, uFog, uSunDir, uGround, uStreet; uniform float uFogD, uSnow; varying vec3 vW;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -953,7 +953,7 @@ class Flock {
           if (aWing != 0.0) p = vec3(p.x * cos(f), p.y + abs(p.x) * sin(f), p.z);
           vC = aCol; vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
           vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vWP = w.xyz;
-          gl_Position = projectionMatrix * viewMatrix * w;
+          gl_Position = projectionMatrix * (viewMatrix * w);
         }`,
       fragmentShader: /* glsl */`
         uniform vec3 uSun, uSunDir, uSky, uFog, uCam; uniform float uFogD; varying vec3 vC; varying vec3 vN; varying vec3 vWP;

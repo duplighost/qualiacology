@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { extend, glowAt, poolAt, local, col } from './scenery.js';
 import { prepare, floorAt } from './trail.js';
 import { Room } from './summer.js';
+import { AA_GLSL } from './aa.js';
 import * as Y from './yst-props.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -51,7 +52,7 @@ function drumMaterial() {
     uniforms: { uTime: { value: 0 }, ...fogUniforms() },
     vertexShader: /* glsl */`
       attribute float aSeed; attribute float aWake; attribute float aKind; varying vec2 vUv; varying float vSeed, vWake, vKind; varying vec3 vW;
-      void main(){ vUv = uv; vSeed = aSeed; vWake = aWake; vKind = aKind; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vUv = uv; vSeed = aSeed; vWake = aWake; vKind = aKind; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uFogDensity; uniform vec3 uFog, uCam;
       varying vec2 vUv; varying float vSeed, vWake, vKind; varying vec3 vW;
@@ -93,7 +94,7 @@ function tileMaterial(hand) {
         float f = aFall * 1.65, y0 = p.y + 0.5;
         p.y = -0.5 + y0 * cos(f); p.z = -y0 * sin(f);
         p *= 1.0 - 0.6 * aFall;
-        vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w;
+        vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w);
       }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uFogDensity; uniform vec3 uFog, uCam; uniform sampler2D uHand;
@@ -144,7 +145,7 @@ function flyerMaterial(atlas) {
         float col = mod(aIdx, ${Y.FLYER_COLS.toFixed(1)}), row = floor(aIdx / ${Y.FLYER_COLS.toFixed(1)});
         vUv = vec2((col + 0.01 + 0.98 * uv.x) / ${Y.FLYER_COLS.toFixed(1)}, 1.0 - (row + 1.0 - (0.01 + 0.98 * uv.y)) / ${Y.FLYER_ROWS.toFixed(1)});
         vWake = aWake;
-        vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w;
+        vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w);
       }`,
     fragmentShader: /* glsl */`
       uniform sampler2D tAtlas; uniform vec3 uLight; uniform float uFogDensity; uniform vec3 uFog, uCam;
@@ -165,7 +166,7 @@ function flyerMaterial(atlas) {
 function glowTint() {
   return new THREE.ShaderMaterial({
     uniforms: { ...fogUniforms() },
-    vertexShader: `attribute vec3 aTint; varying vec3 vTint; varying vec3 vW; void main(){ vTint = aTint; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `attribute vec3 aTint; varying vec3 vTint; varying vec3 vW; void main(){ vTint = aTint; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: `uniform float uFogDensity; uniform vec3 uFog, uCam; varying vec3 vTint; varying vec3 vW; ${FOG} void main(){ gl_FragColor = vec4(mix(vTint, uFog, fogK(vW)), 1.0); }`,
     side: THREE.DoubleSide,
   });
@@ -216,7 +217,7 @@ extend({
     ystPaints: one(Y.paints, 'ystPaintsM', 0.4, { roughness: 0.5 }),
     ystBook: one(Y.book, 'ystBookM', 0.25, { roughness: 0.8 }),
     ystPages: (M) => [Y.bookPages(), pic(M, 'ystPagesM', tex().page, 0.45), 4, {}],
-    ystHand: (M) => [new THREE.PlaneGeometry(1, 1), M.ystHandM || (M.ystHandM = new THREE.ShaderMaterial({ uniforms: { uMap: { value: tex().hand } }, vertexShader: 'attribute vec3 aTint; varying vec2 vUv; varying vec3 vT; void main(){ vUv = uv; vT = aTint; gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }', fragmentShader: 'uniform sampler2D uMap; varying vec2 vUv; varying vec3 vT; void main(){ float a = texture2D(uMap, vUv).a; if (a < 0.05) discard; gl_FragColor = vec4(vT, a * 0.92); }', transparent: true, depthWrite: false, side: THREE.DoubleSide })), 8, { aTint: 3 }],
+    ystHand: (M) => [new THREE.PlaneGeometry(1, 1), M.ystHandM || (M.ystHandM = new THREE.ShaderMaterial({ uniforms: { uMap: { value: tex().hand } }, vertexShader: 'attribute vec3 aTint; varying vec2 vUv; varying vec3 vT; void main(){ vUv = uv; vT = aTint; gl_Position = projectionMatrix * (viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0)); }', fragmentShader: 'uniform sampler2D uMap; varying vec2 vUv; varying vec3 vT; void main(){ float a = texture2D(uMap, vUv).a; if (a < 0.05) discard; gl_FragColor = vec4(vT, a * 0.92); }', transparent: true, depthWrite: false, side: THREE.DoubleSide })), 8, { aTint: 3 }],
     ystCork: one(Y.corkboard, 'ystCorkM', 0.25, { roughness: 0.9 }, 8),
     ystKey: one(Y.keycap, 'ystKeyM', 0.35, { roughness: 0.45 }, 12),
     ystKeyLabel: (M) => [Y.keyLabel(), pic(M, 'ystKeyLabelM', tex().key, 0.7), 12, {}],
@@ -267,7 +268,9 @@ extend({
       m.compose(p, q, S._s.set(s, s, s)); L.ystWash.add(m);
       for (let k = 0; k < 2; k++) {
         const y = k ? 15.6 : 4.6, r = k ? 3.5 : 3.1;
-        const w = local(p, yaw, 0, y * s, 5.27 * s, S._o);
+        // (every other washer's glass a hair further out: where she's slow the machines bunch up and
+        // neighbours' doors overlapped at one depth and flickered)
+        const w = local(p, yaw, 0, y * s, (5.27 + 0.04 * (Math.round(it.t / 0.34) & 1)) * s, S._o);
         m.compose(w, q, S._s.set(r * s, r * s, 1)); L.ystDrum.add(m, drumV(it.seed + k * 0.37, wk, k));
         if (it.lit) { const g = local(p, yaw, 0, y * s, 7 * s, S._o); glowAt(S, g.x, g.y, g.z, 7 * s, k ? CANDLE : TUBE, 0.12 + 0.3 * wk); }
       }
@@ -397,7 +400,9 @@ extend({
       const fy = it.y !== undefined ? it.y * s : Math.max(5 * s, (it._cy ?? (it._cy = S.course.sample(it.t, S._ysts || (S._ysts = {})).y)) + (it.dy ?? -5) - p.y);
       if (it.pole !== false) { m.compose(p, q, S._s.set(s, (fy + 11 * s) / 22, s)); L.ystPole.add(m); }
       const fl = it.flipAt !== undefined ? smooth(it.flipAt - 0.35, it.flipAt, T) : 0;
-      const w = local(p, yaw, 0, fy, 0.75 * s, S._o);
+      // (clear of the old flyers stapled round the pole: at 0.75 their faces and this one met at the
+      // same depth and fought)
+      const w = local(p, yaw, 0, fy, 0.86 * s, S._o);
       S._e.set(0, yaw + (it.tilt ?? 0) + fl * Math.PI * 1.04, (it.seed - 0.5) * 0.1 + Math.sin(T * 1.7 + it.seed * 9) * 0.015);
       const fq = (S._ystfq || (S._ystfq = new THREE.Quaternion())).setFromEuler(S._e);
       m.compose(w, fq, S._s.set(s, s, s)); L.ystFlyer.add(m, flyV(it.idx, wk)); L.ystTape.add(m);
@@ -627,13 +632,19 @@ function placeMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW;
-      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uFogDensity, uNight, uRain; uniform vec3 uFog, uCam, uLight, uSkyLo, uSkyHi, uWin;
       varying float vPart; varying vec3 vC; varying vec3 vW;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
       float box2(vec2 p, vec2 a, vec2 b){ return step(a.x, p.x) * step(p.x, b.x) * step(a.y, p.y) * step(p.y, b.y); }
+      ${AA_GLSL}
+      // grout and each tile's own tone settle to their average where the tiles (qc: their grid, without
+      // any row's offset) get down to a few pixels: down the long room they shimmered
+      float fwm(vec2 qc){ vec2 fw = fwidth(qc); return max(fw.x, fw.y); }
+      float edgeF(vec2 q, vec2 qc, float w){ return mix(edge(fract(q), w), 1.0 - 2.0 * w, smoothstep(w, 4.0 * w, fwm(qc))); }
+      float toneF(vec2 q, vec2 qc){ return mix(h2(floor(q)), 0.5, smoothstep(0.3, 0.7, fwm(qc))); }
       void main(){
         int part = int(vPart + 0.5); int st = int(uStyle + 0.5);
         float x = vC.x, h = vC.y, along = vC.z;
@@ -643,43 +654,43 @@ function placeMaterial() {
         vec3 glow = vec3(0.0); vec3 col;
         if (part == 7) {
           // the building from the street: brick, the flats upstairs (a few lit), a cornice
-          vec2 br = vec2(x / 1.6 + 0.5 * mod(floor(h / 0.7), 2.0), h / 0.7);
-          float mortar = 1.0 - edge(fract(br), 0.06);
+          vec2 br = vec2(x / 1.6 + 0.5 * mod(floor(h / 0.7), 2.0), h / 0.7), brc = vec2(x / 1.6, h / 0.7);
+          float mortar = 1.0 - edgeF(br, brc, 0.06);
           vec3 brick = st == 0 ? vec3(0.34, 0.2, 0.17) : vec3(0.28, 0.17, 0.15);
-          col = mix(brick * (0.8 + 0.3 * h2(floor(br))), vec3(0.42, 0.4, 0.38), mortar) * 0.75;
+          col = mix(brick * (0.8 + 0.3 * toneF(br, brc)), vec3(0.42, 0.4, 0.38), mortar) * 0.75;
           vec2 wq = vec2(x / 9.0, (h - 4.0) / 9.0); vec2 wf = fract(wq);
           float win = step(30.0, h) * box2(wf, vec2(0.28, 0.2), vec2(0.72, 0.82));
           float lit = step(0.6, h2(floor(wq) + 3.0));
           col = mix(col, mix(vec3(0.03, 0.035, 0.05), uWin * 0.9, lit), win); glow += uWin * win * lit * 0.7;
-          col = mix(col, vec3(0.6, 0.58, 0.55), step(abs(fract(h / 9.0 + 0.3) - 0.5), 0.03) * 0.5);
+          col = mix(col, vec3(0.6, 0.58, 0.55), aaPulse(h / 9.0 + 0.3 - 0.47, 0.06) * 0.5);
         }
         else if (part == 8) { col = st == 1 ? vec3(0.1, 0.22, 0.16) : vec3(0.75, 0.78, 0.8); glow += vec3(0.05); }
         else if (part == 0) {
           if (st == 0) {
             // linoleum: cream and mint squares, worn where everyone walks
             vec2 q = vec2(x, along) / 4.0;
-            col = mix(vec3(0.86, 0.84, 0.76), vec3(0.5, 0.66, 0.62), mod(floor(q.x) + floor(q.y), 2.0)) * (0.9 + 0.1 * edge(fract(q), 0.04));
-            col *= 0.9 + 0.1 * h2(floor(q * 3.0));
+            col = mix(vec3(0.86, 0.84, 0.76), vec3(0.5, 0.66, 0.62), aaChk(q)) * (0.9 + 0.1 * edgeF(q, q, 0.04));
+            col *= 0.9 + 0.1 * toneF(q * 3.0, q * 3.0);
             // the tubes overhead, mirrored in it
-            col += vec3(0.25, 0.3, 0.28) * step(abs(abs(x) - 10.0), 3.0) * smoothstep(3.0, 0.0, abs(mod(along, 12.0) - 6.0));
+            col += vec3(0.25, 0.3, 0.28) * aaBand(abs(x), 10.0, 3.0) * smoothstep(3.0, 0.0, abs(mod(along, 12.0) - 6.0));
           } else {
             // old floorboards, a runner by the door
-            vec2 pl = vec2(x / 1.3, along / 8.0 + 0.37 * floor(x / 1.3)); float pid = h2(floor(pl));
-            col = vec3(0.36, 0.22, 0.13) * (0.75 + 0.4 * pid) * (0.86 + 0.14 * edge(fract(pl), 0.03));
+            vec2 pl = vec2(x / 1.3, along / 8.0 + 0.37 * floor(x / 1.3)), plc = vec2(x / 1.3, along / 8.0); float pid = toneF(pl, plc);
+            col = vec3(0.36, 0.22, 0.13) * (0.75 + 0.4 * pid) * (0.86 + 0.14 * edgeF(pl, plc, 0.03));
             if (st == 2) col *= 0.75;
           }
         }
         else if (part == 3) {
           if (st == 0) {
             vec2 cq = vec2(x / 4.0, along / 4.0);
-            col = vec3(0.6, 0.63, 0.62) * (0.88 + 0.12 * edge(fract(cq), 0.05));
-            float tube = step(abs(abs(x) - 10.0), 2.2) * step(abs(mod(along, 12.0) - 6.0), 3.2);
+            col = vec3(0.6, 0.63, 0.62) * (0.88 + 0.12 * edgeF(cq, cq, 0.05));
+            float tube = aaBand(abs(x), 10.0, 2.2) * aaPulse((along - 2.8) / 12.0, 6.4 / 12.0);
             col = mix(col, vec3(0.9), tube); glow += vec3(0.8, 0.95, 0.9) * tube * 0.75;
           } else {
             // dark beams across, pressed tin between
-            float beam = step(0.82, fract(along / 7.0));
-            vec2 tq = fract(vec2(x, along) / 1.6);
-            col = mix(vec3(0.42, 0.36, 0.3) * (0.85 + 0.15 * edge(tq, 0.2)), vec3(0.16, 0.1, 0.07), beam);
+            float beam = aaPulse(along / 7.0 - 0.82, 0.18);
+            vec2 tc = vec2(x, along) / 1.6;
+            col = mix(vec3(0.42, 0.36, 0.3) * (0.85 + 0.15 * edgeF(tc, tc, 0.2)), vec3(0.16, 0.1, 0.07), beam);
             if (st == 2) col *= 0.7;
           }
         }
@@ -688,8 +699,8 @@ function placeMaterial() {
             // white tile to the chair rail, mint paint above, a row of windows high up onto the night
             col = vec3(0.5, 0.62, 0.58);
             vec2 tq = vec2(wa / 1.2 + 0.5 * mod(floor(h / 0.8), 2.0), h / 0.8);
-            col = mix(col, vec3(0.74, 0.76, 0.75) * (0.9 + 0.1 * edge(fract(tq), 0.08)), step(h, 9.0));
-            col = mix(col, vec3(0.25, 0.52, 0.48), step(abs(h - 9.2), 0.35));
+            col = mix(col, vec3(0.74, 0.76, 0.75) * (0.9 + 0.1 * edgeF(tq, vec2(wa / 1.2, h / 0.8), 0.08)), step(h, 9.0));
+            col = mix(col, vec3(0.25, 0.52, 0.48), aaBand(h, 9.2, 0.35));
             float per = 16.0; vec2 wv = vec2(mod(wa, per), h);
             float win = notCap * box2(wv, vec2(1.5, 25.0), vec2(14.5, 31.5));
             vec3 sky = mix(uSkyLo, uSkyHi, clamp((h - 25.0) / 6.5, 0.0, 1.0));
@@ -699,7 +710,7 @@ function placeMaterial() {
             float drops = step(0.985, h2(floor(vec2(wv.x * 3.0, wv.y * 2.0 + uTime * 6.0 + floor(wv.x * 3.0) * 0.37)))) * uRain;
             vec3 glass = sky + uWin * far * 0.8 + vec3(0.5) * drops;
             col = mix(col, glass, win); glow += glass * win * 0.55;
-            col = mix(col, vec3(0.86, 0.88, 0.87), notCap * win * clamp(step(abs(wv.x - 8.0), 0.22) + (1.0 - edge(vec2((wv.x - 1.5) / 13.0, (wv.y - 25.0) / 6.5), 0.04)), 0.0, 1.0));
+            col = mix(col, vec3(0.86, 0.88, 0.87), notCap * win * clamp(aaBand(wv.x, 8.0, 0.22) + (1.0 - edge(vec2((wv.x - 1.5) / 13.0, (wv.y - 25.0) / 6.5), 0.04)), 0.0, 1.0));
             // a clock between the windows: twenty past something
             vec2 cv = vec2(mod(wa + 8.0, 64.0) - 8.0, h - 28.0); float cr = length(cv);
             col = mix(col, vec3(0.96), notCap * step(cr, 2.4)); col = mix(col, vec3(0.15), notCap * step(abs(cr - 2.4), 0.2));
@@ -708,10 +719,10 @@ function placeMaterial() {
           } else {
             // brick to the shoulder, cream plaster above; the big windows onto the wet street; chalkboards between
             col = vec3(0.86, 0.78, 0.62);
-            vec2 br = vec2(wa / 1.6 + 0.5 * mod(floor(h / 0.7), 2.0), h / 0.7);
-            vec3 brick = mix(vec3(0.46, 0.22, 0.16) * (0.8 + 0.35 * h2(floor(br))), vec3(0.62, 0.56, 0.5), 1.0 - edge(fract(br), 0.07));
+            vec2 br = vec2(wa / 1.6 + 0.5 * mod(floor(h / 0.7), 2.0), h / 0.7), brc = vec2(wa / 1.6, h / 0.7);
+            vec3 brick = mix(vec3(0.46, 0.22, 0.16) * (0.8 + 0.35 * toneF(br, brc)), vec3(0.62, 0.56, 0.5), 1.0 - edgeF(br, brc, 0.07));
             col = mix(col, brick, step(h, 10.0));
-            col = mix(col, vec3(0.2, 0.12, 0.08), step(abs(h - 10.2), 0.3));
+            col = mix(col, vec3(0.2, 0.12, 0.08), aaBand(h, 10.2, 0.3));
             float per = 30.0; vec2 wv = vec2(mod(wa, per), h);
             float win = notCap * box2(wv, vec2(2.0, 4.0), vec2(16.0, 24.0));
             vec3 sky = mix(uSkyLo * 1.4, uSkyHi, clamp((h - 4.0) / 20.0, 0.0, 1.0));
@@ -728,12 +739,15 @@ function placeMaterial() {
             glass += vec3(0.25, 0.3, 0.35) * streak;
             if (st == 2) glass *= 0.6;
             col = mix(col, glass, win); glow += glass * win * 0.6;
-            col = mix(col, vec3(0.14, 0.1, 0.07), notCap * clamp(box2(wv, vec2(1.2, 3.2), vec2(16.8, 24.8)) - win + step(abs(wv.x - 9.0), 0.25) * win, 0.0, 1.0));
-            // the chalkboard between them: today's things, written and rubbed out
+            col = mix(col, vec3(0.14, 0.1, 0.07), notCap * clamp(box2(wv, vec2(1.2, 3.2), vec2(16.8, 24.8)) - win + aaBand(wv.x, 9.0, 0.25) * win, 0.0, 1.0));
+            // the chalkboard between them: today's things, written and rubbed out (the writing settles
+            // to a haze where its lines get thinner than a pixel)
             vec2 cv = vec2(mod(wa + 6.0, per), h);
             float board = notCap * box2(cv, vec2(0.0, 12.0), vec2(9.0, 21.0));
             vec2 sq = vec2(cv.x * 3.0, floor(cv.y * 1.1));
-            float chalk = step(0.55, h2(vec2(floor(sq.x * 0.7), sq.y))) * step(0.6, fract(cv.y * 1.1)) * step(1.0, cv.x) * step(cv.x, 8.0);
+            float inBoard = step(1.0, cv.x) * step(cv.x, 8.0);
+            float chalk = step(0.55, h2(vec2(floor(sq.x * 0.7), sq.y))) * step(0.6, fract(cv.y * 1.1)) * inBoard;
+            chalk = mix(chalk, 0.18 * inBoard, smoothstep(0.06, 0.25, fwm(vec2(cv.x * 2.1, h * 1.1))));
             col = mix(col, mix(vec3(0.08, 0.1, 0.09), vec3(0.75), chalk * 0.6), board);
             col = mix(col, vec3(0.3, 0.2, 0.12), notCap * clamp(box2(cv, vec2(-0.4, 11.6), vec2(9.4, 21.4)) - board, 0.0, 1.0));
             if (st == 2) col *= 0.75;

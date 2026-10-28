@@ -77,7 +77,7 @@ const tex = () => TEX || (TEX = { sweater: sweaterTexture(), smile: smileTexture
 function mirrorMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uK: { value: 1 }, uTime: { value: 0 } },
-    vertexShader: `attribute float aK; varying float vK; varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vK = aK; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `attribute float aK; varying float vK; varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vK = aK; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uK, uTime; varying float vK; varying vec2 vUv; varying vec3 vW;
       void main(){

@@ -324,7 +324,7 @@ void main(){
   vTime = r1.w; vSide = u; vMisc = r3; vN = r2.xyz; vDist = r2.w; vHold = r4.x; vGap = r4.y; vZone = r4.zw;
   vec4 w = modelMatrix * vec4(p, 1.0);
   vWorld = w.xyz;
-  gl_Position = projectionMatrix * viewMatrix * w;
+  gl_Position = projectionMatrix * (viewMatrix * w);
 }`;
 
 const SKIRT_VS = /* glsl */`
@@ -337,7 +337,7 @@ void main(){
   float xo = aEdge.x * (r0.w + 0.05);
   vec3 p = vec3(r0.x + r1.x * xo, r0.y + r1.y * xo + 0.5 - 3.2 * aEdge.y, r0.z + r1.z * xo);
   vF = r5.x * (1.0 - aEdge.y);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * (modelViewMatrix * vec4(p, 1.0));
 }`;
 
 const RIBBON_FS = /* glsl */`

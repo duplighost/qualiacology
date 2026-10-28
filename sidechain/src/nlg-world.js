@@ -18,6 +18,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { extend, glowAt, poolAt, local, signV } from './scenery.js';
 import { gridNormals, normalsDue, alongAt } from './trail.js';
 import { paint, rgb, box } from './summer.js';
+import { AA_GLSL } from './aa.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -404,10 +405,11 @@ function shoreMaterial(P) {
     },
     vertexShader: /* glsl */`
       attribute vec2 aE; varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying vec2 vE;
-      void main(){ vUv = uv; vE = aE; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vUv = uv; vE = aE; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uSand, uGrass, uLot, uConc, uSun, uSunDir, uSky, uBounce, uHorizon, uFog, uCam; uniform float uSunK, uHemiK, uFogDensity, uTime;
       varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying vec2 vE;
+      ${AA_GLSL}
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float n2(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f); return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
       void main(){
@@ -437,8 +439,9 @@ function shoreMaterial(P) {
         float wall = step(-0.3, u) * (1.0 - step(0.45, u));
         float cap = step(0.45, u) * (1.0 - step(1.3, u));
         float asphalt = step(1.3, u) * (1.0 - smoothstep(84.0, 88.0, u));
-        float stall = step(fract(along / 3.2), 0.045) * (step(4.0, u) * (1.0 - step(10.0, u)) + step(16.0, u) * (1.0 - step(22.0, u)) + step(40.0, u) * (1.0 - step(46.0, u)));
-        float line = step(abs(u - 2.0), 0.08) + step(abs(u - 13.0), 0.08) * step(0.5, fract(along / 4.0));
+        // (filtered: from the road the stalls' lines are thinner than a pixel and crawled)
+        float stall = aaPulse(along / 3.2, 0.045) * (step(4.0, u) * (1.0 - step(10.0, u)) + step(16.0, u) * (1.0 - step(22.0, u)) + step(40.0, u) * (1.0 - step(46.0, u)));
+        float line = aaBand(u, 2.0, 0.08) + aaBand(u, 13.0, 0.08) * aaSq(along / 4.0);
         vec3 asph = uLot * (0.8 + 0.25 * pat) + vec3(0.55) * clamp(stall + line, 0.0, 1.0) * (0.35 + 0.3 * n2(vec2(along * 0.3, u)));
         vec3 lotCol = mix(mix(col, uConc * 0.85, wall), uConc, cap);
         lotCol = mix(lotCol, asph, asphalt);
@@ -536,7 +539,7 @@ function seaMaterial(P) {
       uHorizon: { value: new THREE.Color(P.horizon) }, uZenith: { value: new THREE.Color(P.zenith) }, uSunDir: { value: new THREE.Vector3(0, 0.3, 1).normalize() }, uSun: { value: new THREE.Color(P.moon) },
       uTime: { value: 0 }, uCalm: { value: 0 }, uWarm: { value: 0 }, uWarmCol: { value: new THREE.Color(0xff7a3a) }, uRain: { value: 0 },
     },
-    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uCam, uFog, uWater, uHorizon, uZenith, uSunDir, uSun, uWarmCol; uniform float uFogDensity, uTime, uCalm, uWarm, uRain; varying vec3 vW;
       vec2 wv(vec2 p, vec2 d, float f, float s, float a){ float ph = dot(p, d) * f + uTime * s; return d * cos(ph) * f * a; }
@@ -559,6 +562,9 @@ function seaMaterial(P) {
         float fog = 1.0 - exp(-pow(d * uFogDensity, 1.4));
         gl_FragColor = vec4(mix(col, uFog, clamp(fog, 0.0, 1.0)), 1.0);
       }`,
+    // a hair behind the sand: the wet sand runs a few centimetres above the sea for metres at the
+    // waterline, and down the shore into the distance the two fought for the same depth (it flickered)
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2,
   });
 }
 

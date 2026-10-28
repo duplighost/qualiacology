@@ -180,7 +180,7 @@ export function glassMaterial() {
         vUv = uv; vWin = aWin; vWake = aWake;
         vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vWP = w.xyz;
         vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
-        gl_Position = projectionMatrix * viewMatrix * w;
+        gl_Position = projectionMatrix * (viewMatrix * w);
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 uSkyTop, uSkyLow, uSun, uSunDir, uWarm, uFog, uCam; uniform float uWinK, uFogD, uTime, uCats;
@@ -247,7 +247,7 @@ export function glassMaterial() {
 // gold leaf: the sky in it, the sun across it, a hot highlight; uFlash lifts it on the beat
 const LIT_VS = /* glsl */`
   varying vec3 vN; varying vec3 vWP; varying vec3 vObj;
-  void main(){ vObj = position; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vWP = w.xyz; vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
+  void main(){ vObj = position; vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vWP = w.xyz; vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal); gl_Position = projectionMatrix * (viewMatrix * w); }`;
 export function goldMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uSun: BOS.sun, uSunDir: BOS.sunDir, uSkyTop: BOS.skyTop, uSkyLow: BOS.skyLow, uFog: BOS.fog, uFogD: BOS.fogD, uCam: BOS.cam, uFlash: BOS.flash, uSunK: BOS.sunK },

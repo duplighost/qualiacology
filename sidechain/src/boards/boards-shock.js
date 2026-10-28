@@ -138,7 +138,7 @@ function plasmaGlass(time) {
 }
 
 // the arc on the tail's ladder: a jagged white line between the two rods, at the height uClimb
-const ARC_VS = /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const ARC_VS = /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0)); }`;
 const ARC_FS = /* glsl */`
 uniform float uTime, uClimb, uOn;
 varying vec2 vUv;

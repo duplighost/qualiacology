@@ -19,6 +19,7 @@ import { glowAt, poolAt } from './scenery.js';
 import { clockAt, heldAt, stopsOf, selfLit } from './dam-sets.js';
 import { DamCrowd, DAM_SHIRTS } from './dam-crowd.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { AA_GLSL } from './aa.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -56,7 +57,7 @@ function houseMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW; varying float vT;
-      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vT = aT; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uFogDensity, uHum, uCatchA, uCatchB, uCatch, uFlash;
       uniform vec3 uFog, uCam, uLight, uSkyLo, uSkyHi;
@@ -64,6 +65,12 @@ function houseMaterial() {
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float edge(vec2 f, float w){ return smoothstep(0.0, w, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))); }
       float box2(vec2 p, vec2 a, vec2 b){ return step(a.x, p.x) * step(p.x, b.x) * step(a.y, p.y) * step(p.y, b.y); }
+      ${AA_GLSL}
+      // seams and each board's own tone settle to their average where the boards (qc: their grid, without a
+      // row's offset) get down to a few pixels: along the walls the floor shimmered
+      float fwm(vec2 qc){ vec2 fw = fwidth(qc); return max(fw.x, fw.y); }
+      float edgeF(vec2 q, vec2 qc, float w){ return mix(edge(fract(q), w), 1.0 - 2.0 * w, smoothstep(w, 4.0 * w, fwm(qc))); }
+      float toneF(vec2 q, vec2 qc){ return mix(h2(floor(q)), 0.5, smoothstep(0.3, 0.7, fwm(qc))); }
       vec3 bulbCol(float id){ float k = mod(id, 6.0); return k < 1.0 ? vec3(1.0, 0.25, 0.2) : (k < 2.0 ? vec3(1.0, 0.8, 0.25) : (k < 3.0 ? vec3(0.3, 1.0, 0.45) : (k < 4.0 ? vec3(0.3, 0.55, 1.0) : (k < 5.0 ? vec3(1.0, 0.4, 0.8) : vec3(1.0, 0.6, 0.2))))); }
       // the dollar lights along the top of a wall: a wire sagging between hooks, a bulb every 2.4
       // (in the living room they're dark until the match, and catch along the room like a fuse)
@@ -84,7 +91,7 @@ function houseMaterial() {
         if (st == 1 || st == 4) { vec2 dq = fract(vec2(wa / 3.2, h / 3.2) + vec2(0.0, 0.5 * mod(floor(wa / 3.2), 2.0))); float dam = smoothstep(0.34, 0.2, length(dq - 0.5)); return vec3(0.34, 0.46, 0.38) * (1.0 - 0.14 * dam) * (st == 4 ? 1.08 : 1.0); }
         if (st == 3) { vec2 q = fract(vec2(wa / 2.2, h / 2.2)); return vec3(0.58, 0.66, 0.78) * (1.0 - 0.1 * smoothstep(0.22, 0.1, length(q - 0.5))); }
         if (st == 2) return vec3(0.95, 0.9, 0.7);
-        return vec3(0.9, 0.72, 0.68) * (1.0 - 0.07 * step(0.5, fract(wa / 2.6)));
+        return vec3(0.9, 0.72, 0.68) * (1.0 - 0.07 * aaSq(wa / 2.6));
       }
       void main(){
         int part = int(vPart + 0.5); int st = int(uStyle + 0.5);
@@ -125,26 +132,26 @@ function houseMaterial() {
         }
         else if (part == 8) { col = vec3(0.92, 0.9, 0.86); glow += vec3(0.06); }
         else if (part == 0) {
-          if (st == 2) { vec2 q = vec2(x, along) / 3.2; col = mix(vec3(0.92, 0.9, 0.86), vec3(0.14, 0.14, 0.16), mod(floor(q.x) + floor(q.y), 2.0)) * (0.92 + 0.08 * edge(fract(q), 0.05)); }
-          else if (st == 3) { col = vec3(0.5, 0.52, 0.6) * (0.9 + 0.1 * h2(floor(vec2(x, along) * 2.0))); float rug = step(abs(x), 14.0); col = mix(col, vec3(0.75, 0.45, 0.35), rug * 0.7); }
+          if (st == 2) { vec2 q = vec2(x, along) / 3.2; col = mix(vec3(0.92, 0.9, 0.86), vec3(0.14, 0.14, 0.16), aaChk(q)) * (0.92 + 0.08 * edgeF(q, q, 0.05)); }
+          else if (st == 3) { col = vec3(0.5, 0.52, 0.6) * (0.9 + 0.1 * toneF(vec2(x, along) * 2.0, vec2(x, along) * 2.0)); float rug = step(abs(x), 14.0); col = mix(col, vec3(0.75, 0.45, 0.35), rug * 0.7); }
           else {
             // floorboards; the hum comes up between them
-            vec2 pl = vec2(x / 1.6, along / 10.0 + 0.37 * floor(x / 1.6)); float pid = h2(floor(pl));
-            float seam = 1.0 - edge(fract(pl), 0.035);
+            vec2 pl = vec2(x / 1.6, along / 10.0 + 0.37 * floor(x / 1.6)), plc = vec2(x / 1.6, along / 10.0); float pid = toneF(pl, plc);
+            float seam = 1.0 - edgeF(pl, plc, 0.035);
             col = vec3(0.5, 0.33, 0.2) * (0.78 + 0.35 * pid) * (1.0 - 0.35 * seam);
-            glow += vec3(1.0, 0.5, 0.16) * seam * uHum * (1.6 + 0.8 * h2(floor(pl) + 7.0));
-            if (st == 0) { float rug = step(abs(x), 13.0) * step(0.15, fract(along / 60.0)); col = mix(col, vec3(0.62, 0.2, 0.3) * (0.9 + 0.12 * step(0.5, fract(x / 2.0 + along / 2.0))), rug * 0.85); }
+            glow += vec3(1.0, 0.5, 0.16) * seam * uHum * (1.6 + 0.8 * toneF(pl + 7.0, plc));
+            if (st == 0) { float rug = step(abs(x), 13.0) * step(0.15, fract(along / 60.0)); col = mix(col, vec3(0.62, 0.2, 0.3) * (0.9 + 0.12 * aaSq(x / 2.0 + along / 2.0)), rug * 0.85); }
             if (st == 1 || st == 4) { float run = step(abs(x), 6.5); col = mix(col, vec3(0.2, 0.28, 0.45), run * 0.8); }
           }
         }
-        else if (part == 3) { col = vec3(0.86, 0.84, 0.8) * (0.92 + 0.08 * edge(fract(vec2(x / 7.0, along / 7.0)), 0.02)); }
+        else if (part == 3) { col = vec3(0.86, 0.84, 0.8) * (0.92 + 0.08 * edgeF(vec2(x / 7.0, along / 7.0), vec2(x / 7.0, along / 7.0), 0.02)); }
         else {
           // walls: paper over a wainscot; windows onto the June night, pictures, the dollar lights along the top
           float H = st == 0 ? 30.0 : 28.0;
           float notCap = part == 6 ? 0.0 : 1.0;
           col = paper(st, wa, h);
           if (st == 2) {
-            vec2 tq = vec2(wa / 1.6 + 0.5 * mod(floor(h / 0.8), 2.0), h / 0.8); col = mix(col, vec3(0.93, 0.95, 0.92) * (0.9 + 0.1 * edge(fract(tq), 0.06)), step(h, 13.0));
+            vec2 tq = vec2(wa / 1.6 + 0.5 * mod(floor(h / 0.8), 2.0), h / 0.8); col = mix(col, vec3(0.93, 0.95, 0.92) * (0.9 + 0.1 * edgeF(tq, vec2(wa / 1.6, h / 0.8), 0.06)), step(h, 13.0));
             // the cupboards up top
             vec2 cq = vec2(fract(wa / 8.0), (h - 16.0) / 9.0); float cab = step(16.0, h) * step(h, 25.0) * notCap;
             col = mix(col, vec3(0.82, 0.78, 0.68) * (0.85 + 0.15 * edge(cq, 0.08)), cab);

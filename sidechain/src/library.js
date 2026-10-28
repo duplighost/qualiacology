@@ -135,7 +135,7 @@ const paper = (M, key, map, k = 0.5) => M[key] || (M[key] = new THREE.MeshStanda
 function cellMat(map, cols, rows, k = 1, additive = false) {
   return new THREE.ShaderMaterial({
     uniforms: { tMap: { value: map }, uK: { value: k } },
-    vertexShader: `attribute float aCell; attribute float aK; varying vec2 vUv; varying float vCell; varying float vK; void main(){ vUv = uv; vCell = aCell; vK = aK; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aCell; attribute float aK; varying vec2 vUv; varying float vCell; varying float vK; void main(){ vUv = uv; vCell = aCell; vK = aK; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: `uniform sampler2D tMap; uniform float uK; varying vec2 vUv; varying float vCell; varying float vK; void main(){ float cell = floor(vCell + 0.5); float c = mod(cell, ${cols.toFixed(1)}), r = floor((cell + 0.5) / ${cols.toFixed(1)}); vec3 t = texture2D(tMap, vec2((c + vUv.x) / ${cols.toFixed(1)}, 1.0 - (r + 1.0 - vUv.y) / ${rows.toFixed(1)})).rgb; gl_FragColor = vec4(t * uK * vK, 1.0); }`,
     side: THREE.DoubleSide, ...(additive ? { blending: THREE.AdditiveBlending, depthWrite: false, transparent: true } : {}),
   });
@@ -152,7 +152,7 @@ function tintLit(rough = 0.7, metal = 0, k = 0.12) {
 function traceMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uFlat: { value: 0 } },
-    vertexShader: `attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * (modelViewMatrix * instanceMatrix * vec4(position, 1.0)); }`,
     fragmentShader: /* glsl */`
       uniform float uTime, uFlat; varying vec2 vUv; varying float vK;
       float h2(float x){ return fract(sin(x * 127.1) * 43758.5453); }
@@ -416,7 +416,7 @@ function roomMaterial() {
     vertexShader: /* glsl */`
       attribute float aPart; attribute vec3 aCoord; attribute float aT;
       varying float vPart; varying vec3 vC; varying vec3 vW;
-      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      void main(){ vPart = aPart; vC = aCoord; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * (viewMatrix * w); }`,
     fragmentShader: /* glsl */`
       uniform float uStyle, uTime, uFogDensity, uFlash;
       uniform vec3 uFog, uCam, uWarm, uLight, uMoon;
@@ -437,6 +437,11 @@ function roomMaterial() {
         c = mix(c, vec3(0.03, 0.02, 0.015), step(top, fy));
         c = mix(c, vec3(0.2, 0.12, 0.06), step(fy, 0.07));
         bright = step(fy, top);
+        // (where the spines get down to a few pixels the row settles to its average, the gold bands to a
+        // haze: drawn sharp, the far shelves sparkled down both walls)
+        vec2 fw = fwidth(vec2(u / 0.45, h / 3.0)); float far = smoothstep(0.15, 0.5, max(fw.x, fw.y));
+        vec3 avg = mix(vec3(0.2, 0.13, 0.09), vec3(0.03, 0.02, 0.015), step(0.85, fy)) * mix(1.0, 0.85, step(fy, 0.07));
+        c = mix(c, avg, far); bright = mix(bright, 0.85, far);
         return c;
       }
       void main(){

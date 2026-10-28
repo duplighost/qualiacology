@@ -202,7 +202,8 @@ const DM = {
   fridge() {
     const parts = [paint(box(0.9, 1.8, 0.72, 0, 0.9, 0), rgb(0xe8e4dc)), paint(box(0.88, 0.012, 0.012, 0, 1.25, 0.366), rgb(0x9a9a98))];
     for (const [y, h] of [[1.5, 0.3], [0.85, 0.5]]) parts.push(paint(box(0.03, h, 0.04, -0.38, y, 0.39), STEEL));
-    const R = seeded(5); for (let k = 0; k < 9; k++) parts.push(paint(box(0.05 + R() * 0.03, 0.04 + R() * 0.03, 0.015, (R() - 0.3) * 0.6, 1.35 + R() * 0.38, 0.37), rgb(pick(R, [0xff4a4a, 0x4a8aff, 0xffd84a, 0x4ac86a, 0xff8ad8]))));
+    // (each magnet a hair proud of the last: where two overlapped at one depth they flickered)
+    const R = seeded(5); for (let k = 0; k < 9; k++) parts.push(paint(box(0.05 + R() * 0.03, 0.04 + R() * 0.03, 0.015, (R() - 0.3) * 0.6, 1.35 + R() * 0.38, 0.37 + 0.003 * k), rgb(pick(R, [0xff4a4a, 0x4a8aff, 0xffd84a, 0x4ac86a, 0xff8ad8]))));
     parts.push(paint(box(0.86, 0.06, 0.66, 0, 0.03, 0.02), rgb(0x2a2a2a)));
     return merge(parts);
   },
