@@ -146,3 +146,7 @@
 # --- SPAGHETTI ---
 /spaghetti.html  /spaghetti/  301!
 /noodle  /spaghetti/  302
+
+# --- AL DENTE ---
+/al-dente.html  /al-dente/  301!
+/pasta  /al-dente/  302

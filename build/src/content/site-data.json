@@ -92,6 +92,20 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "al-dente",
+      "title": "AL DENTE",
+      "descriptor": "3D platformer made of pasta",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/al-dente-card-v20261028.jpg",
+      "alt": "A ball of cooked spaghetti on two noodle legs stuck halfway up a wall of stacked cooked lasagna sheets with green spinach layers, a pasta wagon wheel stuck to the wall beside it and a bed of tangled spaghetti on the ground below",
+      "summary": "It must all be made of absolutely photorealistic pasta and behave that way too. You are a forkful of cooked spaghetti. Cooked pasta sticks to cooked pasta, so you can climb the lasagna. Dry spaghetti snaps under you. Cavatappi are springs, the tagliatelle bridge sags, and the star is in a nest at the top of a rigatoni. Keyboard and mouse.",
+      "metaDescription": "AL DENTE is a 3D platformer in the browser where everything is pasta: you are a forkful of cooked spaghetti, you stick to cooked lasagna walls and climb them, dry spaghetti snaps under you, and the star sits in a nest at the top of a giant rigatoni. Keyboard and mouse.",
+      "controls": "WASD or arrows move · Space jump · jump into a cooked wall to stick, jump again to climb or leap off · drag the mouse or Q E to turn the camera",
+      "actionLabel": "Play AL DENTE",
+      "duration": "A few minutes"
+    },
+    {
       "slug": "spaghetti",
       "title": "SPAGHETTI",
       "descriptor": "Side-scroller made of spaghetti",
