@@ -18,6 +18,8 @@
 //   pastina       granular crunch and pour
 //   dry tortellini  hollow ring ticks when they roll, a hollow crack and a rattle when they shatter
 //   opening screen  pulled noodles: a wet, creaky tension loop, a wet thwip when one snaps, a jiggle
+//   the bay       starchy water: plops and spray, swim strokes and bubbles, the shell's gush, a
+//                 squid; under water the game mix is muffled and a low, slow bed comes up
 //   tone          only where it's needed: a muted plucked strand (spring), a soft cadence (star)
 //
 // Levels: LV is the loudness of each event at full intensity (dB, loudest 30 ms, before the
@@ -38,6 +40,7 @@ const surf = (x) => {
   const s = typeof x === 'string' ? x.toLowerCase() : '';
   if (s === 'dry') return 'dry';
   if (s === 'grain' || s === 'pastina') return 'grain';
+  if (s === 'sand') return 'sand';
   return 'cooked';
 };
 // BiquadFilter Q is in dB for lowpass/highpass and linear for the rest.
@@ -50,7 +53,9 @@ const LV = {
   land_cooked: -22, land_dry: -22, land_grain: -22, stick: -23, leap: -26, creak: -27,
   snap: -21, clatter: -28, spring: -22, bonk: -24, collect: -25, sink: -24, respawn: -26, star: -24,
   strandSnap: -26, wobble: -33, roll: -33, shatter: -20, enter: -25,
-  slide: -17.5, stretch: -23, wind: -30, air: -49, simmer: -38, room: -36,
+  step_sand: -34, land_sand: -22, splash: -20, emerge: -26, paddle: -37, bubble: -41, burst: -23,
+  squid_pulse: -33, squid_bonk: -23, squid_ink: -31,
+  slide: -17.5, stretch: -23, wind: -30, air: -49, simmer: -38, room: -36, uwBed: -32.5, shore: -24,
 };
 
 // Event families. slot: seconds per rendered variant; ps: intensities rendered; n: variants per
@@ -77,10 +82,21 @@ const FAM = {
   strandSnap: { slot: 0.45, ps: [1], n: 6, ch: 1, v: '_vStrandSnap', cal: -21.8, j: { r: 0.06, g: 1, p: 0.1, t: 0, lp: [7000, 14000] } },
   shatter: { slot: 1.0, ps: [0.35, 1], n: 3, ch: 2, v: '_vShatter', cal: -14.3, j: { r: 0.05, g: 0.8, p: 0.1, t: 0, lp: [10000, 18000] } },
   enter: { slot: 0.9, ps: [1], n: 3, ch: 2, v: '_vEnter', cal: -15.6, j: { r: 0.03, g: 0.8, p: 0, t: 0, lp: null } },
+  // The bay. bus 'w': sounds voiced as heard under water skip the underwater low-pass.
+  step_sand: { slot: 0.17, ps: [0.35, 1], n: 8, ch: 1, v: '_vStepSand', cal: -26.7, j: { r: 0.06, g: 1.5, p: 0.08, t: 0.005, lp: [5000, 11000] } },
+  land_sand: { slot: 0.6, ps: [0.2, 0.55, 1], n: 3, ch: 1, v: '_vLandSand', cal: -20.3, j: { r: 0.04, g: 1, p: 0.1, t: 0, lp: [6000, 14000] } },
+  splash: { slot: 1.2, ps: [0.3, 1], n: 3, ch: 2, v: '_vSplash', cal: -14, j: { r: 0.05, g: 1, p: 0.1, t: 0, lp: [9000, 16000] } },
+  emerge: { slot: 1.2, ps: [0.4, 1], n: 3, ch: 1, v: '_vEmerge', cal: -19.9, j: { r: 0.05, g: 1, p: 0.1, t: 0, lp: [8000, 16000] } },
+  paddle: { slot: 0.5, ps: [0.4, 1], n: 6, ch: 1, v: '_vPaddle', cal: -15.8, bus: 'w', j: { r: 0.07, g: 1.5, p: 0.12, t: 0.015, lp: [1500, 3500] } },
+  burst: { slot: 2.0, ps: [0.5, 1], n: 2, ch: 2, v: '_vBurst', cal: -9.2, bus: 'w', j: { r: 0.04, g: 0.8, p: 0.1, t: 0, lp: null } },
+  squid_pulse: { slot: 0.6, ps: [1], n: 5, ch: 1, v: '_vSquidPulse', cal: -12.7, bus: 'w', j: { r: 0.06, g: 1, p: 0.2, t: 0, lp: [1200, 2500] } },
+  squid_bonk: { slot: 0.6, ps: [1], n: 5, ch: 1, v: '_vSquidBonk', cal: -13.5, bus: 'w', j: { r: 0.06, g: 1, p: 0.15, t: 0, lp: [3000, 7000] } },
+  squid_ink: { slot: 0.9, ps: [1], n: 4, ch: 1, v: '_vSquidInk', cal: -12.8, bus: 'w', j: { r: 0.05, g: 1, p: 0.2, t: 0, lp: [1200, 2400] } },
 };
-// Render order after unlock: the opening screen's sounds first, the second stage's last.
+// Render order after unlock: the opening screen's sounds first, the later stages' last.
 const ORDER = ['wobble', 'strandSnap', 'enter', 'step_cooked', 'step_dry', 'step_grain', 'jump', 'land_cooked', 'land_dry',
-  'land_grain', 'stick', 'leap', 'bonk', 'snap', 'sink', 'respawn', 'creak', 'spring', 'star', 'shatter'];
+  'land_grain', 'stick', 'leap', 'bonk', 'snap', 'sink', 'respawn', 'creak', 'spring', 'star', 'shatter',
+  'step_sand', 'land_sand', 'splash', 'paddle', 'emerge', 'squid_pulse', 'squid_bonk', 'squid_ink', 'burst'];
 
 const MAXV = 48; // live-builder voices before low-priority events are dropped
 const STRIPS = 12; // pooled playback strips made at unlock; grows on demand up to 24 (32 for important events)
@@ -434,6 +450,23 @@ function* gRoll(ctx, N) {
   }
   return out;
 }
+// Small water bubbles for bubble(), swim strokes and the shell's gush, from small and high
+// (index 0) to big and low. Each rings briefly and rises in pitch as it closes.
+function* gBlips(ctx, N) {
+  const sr = ctx.sampleRate, out = [];
+  for (let i = 0; i < N; i++) {
+    const f0 = 2400 * Math.pow(380 / 2400, i / (N - 1)) * rr(0.96, 1.04);
+    const len = Math.ceil(sr * 0.13), b = ctx.createBuffer(1, len, sr), d = b.getChannelData(0);
+    // small ones ring a little longer than nature would, so they read as bubbles, not ticks
+    bubble(d, len, Math.ceil(sr * 0.001), f0, 1, sr, rr(0.15, 0.35), rr(0.3, 0.45) + 0.25 * (i / (N - 1)), 0.12, false);
+    const fi = Math.ceil(sr * 0.0025);
+    for (let k = 0; k < fi; k++) d[k] *= k / fi;
+    fadeTail(d, Math.ceil(sr * 0.004)); normPeak(d, 0.9);
+    out.push(b);
+    if (i % 6 === 5) yield;
+  }
+  return out;
+}
 // Final safety: linear to 0.6, then a smooth tanh knee that never exceeds 0.95.
 // The shaper is fed x/2, so the curve covers +/-2 (6 dB over full scale) before it flattens.
 function softClipCurve() {
@@ -480,6 +513,16 @@ export class PastaAudio {
     this._A = null;
     this._menu = 0;
     this._menuSent = -1;
+    this._stripsW = []; // playback strips on the water bus
+    this._bubEnds = [];
+    this._uw = 0; // camera under water 0..1, depth, nearness to the shore
+    this._uwSent = 0;
+    this._depth = 0;
+    this._shore = 0;
+    this._shoreSent = 0;
+    this._nextCreak = 0;
+    this._nextTrickle = 0;
+    this._nextLap = 0;
     this._lastUpd = undefined;
     this._h = 0;
     this._sp = 0;
@@ -605,8 +648,17 @@ export class PastaAudio {
       ws.curve = softClipCurve(); ws.oversample = '2x';
       hp.connect(comp); comp.connect(pre); pre.connect(ws); ws.connect(c.destination);
     }
+    // The game mix reaches the master through an under-water split: _uwDry stays at exactly 1
+    // until the camera goes under, and the muffled path is only built the first time it does.
+    this._uwIn = c.createGain();
+    this._uwDry = c.createGain();
+    this._uwIn.connect(this._uwDry); this._uwDry.connect(m);
     this._sfx = c.createGain();
-    this._sfx.connect(m);
+    this._sfx.connect(this._uwIn);
+    // Water sounds (strokes, bubbles, the shell, the squid) are voiced as heard under water, so
+    // they skip the muffling.
+    this._sfxW = c.createGain();
+    this._sfxW.connect(m);
     for (let i = 0; i < STRIPS; i++) this._strips.push(this._newStrip());
     this._buildTube();
     this._ok = true;
@@ -636,6 +688,7 @@ export class PastaAudio {
     T.push(function* ambience() { if (amb) self._whenRunning(() => self._startAmbience()); });
     T.push(function* bubbles() { if (!b.bub) b.bub = yield* gBubbles(c, 32); });
     T.push(function* roll() { if (!b.roll) { const r = yield* gRoll(c, 12); b.rollN = norm1(r); b.roll = r; } });
+    T.push(function* blips() { if (!b.blip) { const x = yield* gBlips(c, 24); b.blipN = norm1(x); b.blip = x; } });
     for (const name of ORDER) {
       if (name === 'creak') T.push(function* creaks() { if (!b.creak) b.creak = yield* gCreaks(c, 3); });
       if (name === 'spring') T.push(function* twang() { if (!b.twang) b.twang = yield* gPluck(c, 110, 1.0, 0.6, 0.55, 0.22, 0.5); });
@@ -744,6 +797,7 @@ export class PastaAudio {
     this._ctx = oc; this._sr = oc.sampleRate; this._b = b; this._offline = true; this._ok = true;
     this._sfx = oc.createGain();
     this._sfx.connect(oc.destination);
+    this._sfxW = this._sfx;
   }
 
   _applyMaster(tau) {
@@ -767,7 +821,7 @@ export class PastaAudio {
     };
     comb(0.0047, 0.5, 1700);
     comb(0.0071, 0.45, 1300);
-    tout.connect(this._m);
+    tout.connect(this._uwIn);
     const send = c.createGain();
     send.gain.value = 0;
     this._sfx.connect(send);
@@ -788,7 +842,7 @@ export class PastaAudio {
     A.lvl.gain.linearRampToValueAtTime(this._ambLevel, t + 3);
     A.outLP = F('lowpass', Math.min(16000, this._sr * 0.45), 0.7);
     A.outG = G(1);
-    A.lvl.connect(A.outLP); A.outLP.connect(A.outG); A.outG.connect(this._m);
+    A.lvl.connect(A.outLP); A.outLP.connect(A.outG); A.outG.connect(this._uwIn);
     A.tubeWind = G(0);
     A.lvl.connect(A.tubeWind); A.tubeWind.connect(this._tubeIn);
     // The outdoor layers meet in windSum; outdoor stays at exactly 1 unless the menu bed is on.
@@ -866,11 +920,14 @@ export class PastaAudio {
         this._sp = c01(s.speed01, this._sp);
         this._tube = s.inTube ? 1 : 0;
         this._menu = s.menu ? 1 : 0;
+        this._uw = c01(s.underwater, 0);
+        this._depth = c01(s.depth01, 0);
+        this._shore = c01(s.shore01, 0);
       }
       const t = this._now();
       if (this._lastUpd === undefined) this._lastUpd = t;
       const el = t - this._lastUpd;
-      if (el < 0.15 && el >= 0 && this._tube === this._tubeSent && this._menu === this._menuSent) return;
+      if (el < 0.15 && el >= 0 && this._tube === this._tubeSent && this._menu === this._menuSent && Math.abs(this._uw - this._uwSent) < 0.02) return;
       const step = clamp(el, 0.016, 0.5);
       this._lastUpd = t;
       const sl = this._sl;
@@ -879,6 +936,7 @@ export class PastaAudio {
       if (st && !st.on && t - st.offT > 1) this._stretchStop(t);
       if (this._tube !== this._tubeSent) this._applyTube(t);
       if (this._menu !== this._menuSent) this._applyMenu(t);
+      if (this._uw || this._uwSent || this._shore || this._shoreSent) this._applyWater(t, el >= 0.15);
       const A = this._A;
       if (!A) return;
       const W = this._walk, k = Math.sqrt(step / 0.15);
@@ -920,7 +978,7 @@ export class PastaAudio {
     if (!A) return;
     if (m && !A.room) this._buildRoom(t);
     if (!A.room) return;
-    A.outdoor.gain.setTargetAtTime(1 - 0.9 * m, t, tau);
+    A.outdoor.gain.setTargetAtTime(this._outdoorTarget(), t, tau);
     A.window.gain.setTargetAtTime(0.4 * m, t, tau);
     A.gR.gain.setTargetAtTime(m * dB(LV.room) * this._windOn, t, tau);
     A.simMenu.gain.setTargetAtTime(1 + 0.3 * m, t, tau);
@@ -948,26 +1006,193 @@ export class PastaAudio {
     A.room = true;
   }
 
+  _outdoorTarget() {
+    const A = this._A, m = this._menu;
+    return (A && A.room ? 1 - 0.9 * m : 1) * (1 - 0.85 * this._uw * (1 - m));
+  }
+
+  // A slow sine at a random phase added onto an AudioParam.
+  _lfo(f, depth, param, t) {
+    const c = this._ctx, o = c.createOscillator(), g = c.createGain(), ph = R() * TAU;
+    try { o.setPeriodicWave(c.createPeriodicWave(new Float32Array([0, Math.sin(ph)]), new Float32Array([0, Math.cos(ph)]), { disableNormalization: true })); } catch (e) {}
+    o.frequency.value = f;
+    g.gain.value = depth;
+    o.connect(g); g.connect(param); o.start(t);
+  }
+
+  // Under water and at the shore (update() with underwater, depth01, shore01). Going under, the
+  // game mix (not the water sounds, not the menu bed) crossfades to a muffled, slightly thicker
+  // copy, the outdoor air ducks and a low bed comes up: pressure, slow far creaks, distant bubble
+  // trickles; deeper is lower and darker. Near the waterline small waves lap. All smooth ramps.
+  _applyWater(t, full) {
+    const A = this._A, d = this._depth, uw = this._uw * (1 - this._menu), tau = 0.08;
+    const live = this._offline || this._ctx.state === 'running';
+    this._uwSent = this._uw;
+    this._shoreSent = this._shore;
+    if (uw > 0.001 && !this._uwLP) this._buildWet();
+    if (this._uwLP) {
+      this._uwDry.gain.setTargetAtTime(1 - uw, t, tau);
+      this._uwWet.gain.setTargetAtTime(uw, t, tau);
+      this._uwLP.frequency.setTargetAtTime(Math.exp(Math.log(3500) + (Math.log(650 - 230 * d) - Math.log(3500)) * uw), t, tau);
+    }
+    if (!A) return;
+    if (uw > 0.001 && !A.uw) this._buildUWBed(t);
+    if (this._shore > 0.001 && !A.shore) this._buildShore(t);
+    if (A.uw) {
+      A.outdoor.gain.setTargetAtTime(this._outdoorTarget(), t, tau);
+      const bed = uw * this._ambLevel;
+      A.uwG.gain.setTargetAtTime(dB(LV.uwBed) * bed * (0.85 + 0.3 * d), t, 0.12);
+      A.uwLP.frequency.setTargetAtTime(300 - 120 * d, t, 0.6);
+      A.uwBP.frequency.setTargetAtTime(110 - 35 * d, t, 0.6);
+      A.uwFar.frequency.setTargetAtTime(1200 - 550 * d, t, 0.6);
+      if (full && live && bed > 0.25 && !this._muted) {
+        if (t >= this._nextCreak) { this._uwCreak(t + R() * 0.1, d); this._nextCreak = t + rr(4, 10); }
+        if (t >= this._nextTrickle) { this._uwTrickle(t + R() * 0.1); this._nextTrickle = t + rr(3, 8); }
+      }
+    }
+    if (A.shore) {
+      const k = this._shore * (1 - uw);
+      A.shoreG.gain.setTargetAtTime(dB(LV.shore) * k, t, 0.4);
+      if (full && live && k > 0.05 && t >= this._nextLap && !this._muted) { this._lap(t + R() * 0.1); this._nextLap = t + rr(2.2, 4.6); }
+    }
+  }
+
+  _buildWet() {
+    const c = this._ctx;
+    this._uwLP = c.createBiquadFilter();
+    this._uwLP.type = 'lowpass'; this._uwLP.frequency.value = 3500; this._uwLP.Q.value = qv('lowpass', 0.8);
+    const thick = c.createBiquadFilter();
+    thick.type = 'peaking'; thick.frequency.value = 260; thick.Q.value = 0.8; thick.gain.value = 4;
+    this._uwWet = c.createGain();
+    this._uwWet.gain.value = 0;
+    this._uwIn.connect(this._uwLP); this._uwLP.connect(thick); thick.connect(this._uwWet); this._uwWet.connect(this._m);
+  }
+
+  _buildUWBed(t) {
+    const c = this._ctx, b = this._b, A = this._A;
+    if (!b.wind) return;
+    const G = (v) => { const g = c.createGain(); g.gain.value = v; return g; };
+    const F = (type, f, q) => { const x = c.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = qv(type, q); return x; };
+    A.uwG = G(0);
+    A.uwG.connect(this._m);
+    // Pressure: slow, dark noise with a soft low resonance in it, swelling a little.
+    const s = c.createBufferSource();
+    s.buffer = b.wind; s.loop = true; s.playbackRate.value = rr(0.36, 0.44);
+    A.uwLP = F('lowpass', 300, 0.7);
+    A.uwBP = F('bandpass', 110, 2.5);
+    const hum = G(1), res = G(0.7);
+    s.connect(A.uwLP); A.uwLP.connect(hum);
+    s.connect(A.uwBP); A.uwBP.connect(res); res.connect(hum);
+    hum.connect(A.uwG);
+    s.start(t, R() * b.wind.duration * 0.9);
+    this._lfo(rr(0.05, 0.08), 0.25, hum.gain, t);
+    this._lfo(rr(0.011, 0.015), 0.03, s.playbackRate, t);
+    // Far creaks and bubble trickles come in through a darker filter.
+    A.uwFar = F('lowpass', 1200, 0.7);
+    A.uwFar.connect(A.uwG);
+    A.uwTrk = G(0.1);
+    A.uwTrk.connect(A.uwFar);
+    A.uw = true;
+    this._nextCreak = t + rr(2, 5);
+    this._nextTrickle = t + rr(1.5, 4);
+  }
+
+  // A slow, faint creak somewhere in the bay.
+  _uwCreak(t, d) {
+    const c = this._ctx, b = this._b, A = this._A;
+    if (!b.starch) return;
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), p = g.gain;
+    s.buffer = b.starch; s.loop = true; s.playbackRate.value = rr(0.22, 0.35) * (1 - 0.25 * d);
+    f.type = 'lowpass'; f.frequency.value = rr(380, 520) * (1 - 0.3 * d); f.Q.value = qv('lowpass', 0.8);
+    const up = rr(0.5, 1), hold = rr(0.2, 0.8), end = t + up + hold + rr(0.8, 1.6), pk = 0.5 * rr(0.5, 1);
+    p.setValueAtTime(0, t); p.linearRampToValueAtTime(pk, t + up); p.setValueAtTime(pk, t + up + hold); p.linearRampToValueAtTime(0, end);
+    s.connect(f); f.connect(g); g.connect(A.uwFar);
+    s.onended = () => { for (const x of [s, f, g]) { try { x.disconnect(); } catch (e) {} } };
+    s.start(t, R() * b.starch.duration * 0.9);
+    s.stop(end + 0.05);
+  }
+
+  // A few distant bubbles rising, spreading out as they go.
+  _uwTrickle(t) {
+    const c = this._ctx, bb = this._b.blip || this._b.bub, A = this._A;
+    if (!bb) return;
+    let tt = t;
+    for (let k = 0, n = ri(4, 10); k < n; k++) {
+      tt += rr(0.04, 0.16) * (1 + 0.12 * k);
+      const s = c.createBufferSource();
+      s.buffer = bb[ri(Math.floor(bb.length * 0.25), bb.length - 1)];
+      s.playbackRate.value = rr(0.8, 1.1);
+      s.connect(A.uwTrk);
+      s.onended = () => { try { s.disconnect(); } catch (e) {} };
+      s.start(tt);
+    }
+  }
+
+  _buildShore(t) {
+    const c = this._ctx, b = this._b, A = this._A;
+    if (!b.wind) return;
+    A.shoreG = c.createGain();
+    A.shoreG.gain.value = 0;
+    A.shoreG.connect(A.lvl);
+    // A soft, constant water murmur under the laps.
+    const s = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = b.wind; s.loop = true; s.playbackRate.value = rr(0.6, 0.7);
+    lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = qv('lowpass', 0.6);
+    g.gain.value = 0.35;
+    s.connect(lp); lp.connect(g); g.connect(A.shoreG);
+    s.start(t, R() * b.wind.duration * 0.9);
+    this._lfo(rr(0.012, 0.016), 0.03, s.playbackRate, t);
+    this._lfo(rr(0.08, 0.11), 0.12, g.gain, t);
+    A.shore = true;
+    this._nextLap = t + rr(0.3, 1.2);
+  }
+
+  // One small wave on the shore: a soft wash that rises and draws back, foam fizzing as it goes.
+  _lap(t) {
+    const c = this._ctx, b = this._b, A = this._A;
+    if (!b.pink || !b.wet) return;
+    const up = rr(0.35, 0.6), dur = rr(1.5, 2.5), pk = rr(0.55, 1), t2 = t + up * 0.7, d2 = dur * 0.8;
+    const end = Math.max(t + dur, t2 + d2) + 0.12;
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), p = g.gain;
+    s.buffer = b.pink; s.loop = true; s.playbackRate.value = rr(0.8, 1.1);
+    f.type = 'bandpass'; f.Q.value = 0.6;
+    f.frequency.setValueAtTime(rr(350, 450), t);
+    f.frequency.exponentialRampToValueAtTime(rr(900, 1300), t + up);
+    f.frequency.exponentialRampToValueAtTime(rr(500, 700), t + dur);
+    p.setValueAtTime(0, t); p.linearRampToValueAtTime(pk, t + up); p.exponentialRampToValueAtTime(pk * 0.04, t + dur); p.linearRampToValueAtTime(0, t + dur + 0.05);
+    s.connect(f); f.connect(g); g.connect(A.shoreG);
+    const s2 = c.createBufferSource(), f2 = c.createBiquadFilter(), g2 = c.createGain(), q = g2.gain;
+    s2.buffer = b.wet; s2.loop = true; s2.playbackRate.value = rr(1.3, 1.7);
+    f2.type = 'bandpass'; f2.frequency.value = rr(2200, 3200); f2.Q.value = 0.7;
+    q.setValueAtTime(0, t2); q.linearRampToValueAtTime(pk * 0.3, t2 + 0.25); q.exponentialRampToValueAtTime(pk * 0.01, t2 + d2); q.linearRampToValueAtTime(0, t2 + d2 + 0.05);
+    s2.connect(f2); f2.connect(g2); g2.connect(A.shoreG);
+    s.onended = () => { for (const x of [s, f, g, s2, f2, g2]) { try { x.disconnect(); } catch (e) {} } };
+    s.start(t, R() * b.pink.duration * 0.8); s.stop(end);
+    s2.start(t2, R() * b.wet.duration * 0.8); s2.stop(end);
+  }
+
   // ----- playback ------------------------------------------------------------------------------
   // A strip is a persistent lowpass -> gain -> pan chain into the effects bus. A one-shot is a
   // single buffer source plugged into a free strip; it unplugs itself when it ends.
 
-  _newStrip() {
-    const c = this._ctx, f = c.createBiquadFilter(), g = c.createGain();
+  _newStrip(w) {
+    const c = this._ctx, f = c.createBiquadFilter(), g = c.createGain(), bus = w ? this._sfxW : this._sfx;
     f.type = 'lowpass'; f.frequency.value = Math.min(20000, this._sr * 0.45); f.Q.value = qv('lowpass', 0.707);
     f.connect(g);
     let p = null;
-    if (c.createStereoPanner) { p = c.createStereoPanner(); g.connect(p); p.connect(this._sfx); } else g.connect(this._sfx);
+    if (c.createStereoPanner) { p = c.createStereoPanner(); g.connect(p); p.connect(bus); } else g.connect(bus);
     return { f, g, p, busy: 0 };
   }
 
-  _pb(buf, off, dur, t, gain, rate, pan, lp, prio) {
+  // bus 'w' plays on the water bus (its own pool of strips).
+  _pb(buf, off, dur, t, gain, rate, pan, lp, prio, bus) {
+    const w = bus === 'w', pool = w ? this._stripsW : this._strips;
     let st = null;
-    for (let i = 0; i < this._strips.length; i++) if (this._strips[i].busy <= t) { st = this._strips[i]; break; }
+    for (let i = 0; i < pool.length; i++) if (pool[i].busy <= t) { st = pool[i]; break; }
     if (!st) {
-      if (this._strips.length >= (prio >= 2 ? 32 : 24)) return false;
-      st = this._newStrip();
-      this._strips.push(st);
+      if (pool.length >= (prio >= 2 ? 32 : 24)) return false;
+      st = this._newStrip(w);
+      pool.push(st);
     }
     st.busy = t + dur / rate + 0.02;
     // A mono buffer through an equal-power panner loses 3 dB per side at center; put it back.
@@ -1015,9 +1240,9 @@ export class PastaAudio {
       this._lastVar[name] = slot;
       const rate = j.r ? 1 + rr(-j.r, j.r) : 1;
       const lp = j.lp ? rr(j.lp[0], j.lp[1]) : Math.min(20000, this._sr * 0.45);
-      this._pb(B.buf, slot * F.slot, F.slot * 0.95, t, lvl * B.norm[slot], rate, j.p ? rr(-j.p, j.p) : 0, lp, prio);
+      this._pb(B.buf, slot * F.slot, F.slot * 0.95, t, lvl * B.norm[slot], rate, j.p ? rr(-j.p, j.p) : 0, lp, prio, F.bus);
     } else {
-      this._play(t, prio, (v) => { v.o.gain.value = lvl * dB(-F.cal); return this[F.v](v, t, p); });
+      this._play(t, prio, (v) => { v.o.gain.value = lvl * dB(-F.cal); return this[F.v](v, t, p); }, F.bus);
     }
   }
 
@@ -1025,11 +1250,11 @@ export class PastaAudio {
   // A live voice gets an output gain and a silent sentinel source that ends after the voice's
   // last tail; when it ends, every node of the voice is disconnected.
 
-  _play(t, prio, fn) {
+  _play(t, prio, fn, bus) {
     let v = null;
     try {
       if (prune(this._ends, t) >= (prio >= 2 ? MAXV + 16 : MAXV)) return;
-      v = this._vNew(t);
+      v = this._vNew(t, bus);
       v.done = false;
       this._fin(v, fin(fn(v), t + 1));
     } catch (e) {
@@ -1037,9 +1262,9 @@ export class PastaAudio {
     }
   }
 
-  _vNew(t) {
+  _vNew(t, bus) {
     const o = this._ctx.createGain();
-    o.connect(this._sfx);
+    o.connect(bus === 'w' && this._sfxW ? this._sfxW : this._sfx);
     return { o, t, n: [o], done: true };
   }
 
@@ -1506,6 +1731,171 @@ export class PastaAudio {
     return e;
   }
 
+  // Wet pastina sand: a soft thump, a damp crunch, a little squish.
+  _vStepSand(v, t, s) {
+    let e = this._nb(v, t, { buf: 'white', type: 'lowpass', f: rr(220, 320), q: 0.8, a: rr(0.003, 0.006), t60: rr(0.05, 0.08), g: 0.8 });
+    e = Math.max(e, this._nb(v, t + rr(0.004, 0.012), { buf: 'crackle', rate: rr(0.45, 0.7), type: 'bandpass', f: rr(1200, 2000), q: 0.8, type2: 'lowpass', ff: 3200, a: rr(0.008, 0.015), t60: rr(0.06, 0.09), g: 0.55 + 0.25 * s }));
+    e = Math.max(e, this._nb(v, t + 0.006, { buf: 'wet', rate: rr(0.75, 1), type: 'bandpass', f: rr(500, 800), q: 1.1, a: 0.006, t60: rr(0.06, 0.1), g: 0.45 }));
+    return e;
+  }
+
+  // Landing on wet sand: a heavier thump, the crunch, a squelch that sinks, grains settling.
+  _vLandSand(v, t, i) {
+    let e = this._nb(v, t, { buf: 'white', type: 'lowpass', f: 180 + 120 * i, q: 0.8, a: 0.003, t60: 0.09 + 0.12 * i, g: 0.9 });
+    e = Math.max(e, this._nb(v, t + 0.006, { buf: 'crackle', rate: rr(0.5, 0.8), type: 'bandpass', f: rr(1300, 2100), q: 0.8, type2: 'lowpass', ff: 3500, a: 0.008, t60: 0.12 + 0.14 * i, g: 0.7 }));
+    e = Math.max(e, this._nb(v, t + 0.01, { buf: 'wet', rate: rr(0.7, 0.95), type: 'bandpass', f: 900, f2: 450, sw: 0.12, q: 1.3, a: 0.006, t60: 0.12 + 0.2 * i, g: 0.3 + 0.4 * i }));
+    e = Math.max(e, this._nb(v, t + 0.03, { buf: 'pink', type: 'bandpass', f: 1100, q: 0.8, a: 0.03, t60: 0.2 + 0.15 * i, g: 0.12 }));
+    return e;
+  }
+
+  // Hitting the water: a slap on the surface, the cavity closing into a plop, churning bubbles,
+  // then spray falling back. Bigger is heavier, deeper and longer.
+  _vSplash(v, t, s) {
+    const b = this._b, tp = t + rr(0.025, 0.045) + 0.03 * s, f0 = rr(170, 230) * (1.6 - 0.75 * s);
+    let e = this._nb(v, t, { buf: 'white', type: 'bandpass', f: rr(900, 1800), q: 0.6, a: 0.0008, t60: 0.04 + 0.04 * s, g: 0.7 + 0.4 * s });
+    e = Math.max(e, this._nb(v, t, { buf: 'white', type: 'bandpass', f: rr(2500, 4500), q: 0.6, type2: 'lowpass', ff: 8000, a: 0.002, t60: 0.12 + 0.18 * s, g: 0.1 + 0.35 * s }));
+    e = Math.max(e, this._nb(v, t, { buf: 'white', type: 'lowpass', f: 160 + 80 * (1 - s), q: 0.8, a: 0.003, t60: 0.1 + 0.25 * s, g: 0.2 + 0.5 * s }));
+    e = Math.max(e, this._chirp(v, tp, { f: f0, f2: f0 * rr(1.5, 1.9), sw: 0.07 + 0.05 * s, a: 0.003, t60: 0.12 + 0.12 * s, g: 0.4 }));
+    e = Math.max(e, this._chirp(v, tp + rr(0.03, 0.07), { f: f0 * rr(1.7, 2.3), f2: f0 * rr(3, 3.8), sw: 0.04, a: 0.002, t60: 0.06, g: 0.18 }));
+    e = Math.max(e, this._nb(v, t + 0.01, { buf: 'wet', rate: rr(0.7, 0.95), type: 'bandpass', f: 1300, f2: 450, sw: 0.25 + 0.2 * s, q: 1.1, a: 0.008, t60: 0.3 + 0.35 * s, g: 0.5 }));
+    const sp0 = t + 0.06 + 0.05 * s, spDur = 0.35 + 0.45 * s;
+    e = Math.max(e, this._nb(v, sp0, { buf: 'white', type: 'bandpass', f: rr(2600, 3800), q: 0.7, type2: 'lowpass', ff: 7000, a: 0.04, t60: spDur, g: 0.22 + 0.2 * s, pan: rr(-0.3, 0.3) }));
+    for (let k = 0, n = 4 + Math.round(10 * s); k < n; k++) {
+      const dt = sp0 + Math.pow(R(), 1.4) * spDur;
+      e = Math.max(e, this._tk(v, dt, pick(b.drops || []), rr(0.75, 1.3), 0.28 * rr(0.4, 1) * Math.exp(-(dt - sp0) / (0.5 * spDur + 0.05)), rr(-0.6, 0.6)));
+    }
+    return e;
+  }
+
+  // Hopping out at the surface: a wet suck that pops free, a slosh, a little runoff, then drips.
+  _vEmerge(v, t, s) {
+    const b = this._b, tr = t + rr(0.07, 0.1);
+    const src = this._s(v, b.wet || b.pink || b.white, t, tr - t + 0.03, rr(0.8, 1.05));
+    const f = this._f(v, 'bandpass', 450, 1.4);
+    f.frequency.setValueAtTime(rr(380, 480), t);
+    f.frequency.exponentialRampToValueAtTime(rr(1100, 1500), tr);
+    const g = this._g(v, 0), p = g.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.15, t + 0.02);
+    p.exponentialRampToValueAtTime(0.7, tr);
+    p.linearRampToValueAtTime(0, tr + 0.012);
+    src.connect(f); f.connect(g); this._to(v, g, 0);
+    let e = tr + 0.03;
+    e = Math.max(e, this._chirp(v, tr, { f: rr(280, 340), f2: rr(800, 950), sw: 0.025, a: 0.0015, t60: 0.04, g: 0.35 }));
+    e = Math.max(e, this._nb(v, tr, { buf: 'pink', type: 'bandpass', f: rr(600, 900), f2: rr(1200, 1600), sw: 0.12, q: 0.9, a: 0.02, t60: 0.18 + 0.1 * s, g: 0.35 }));
+    e = Math.max(e, this._nb(v, tr + 0.04, { buf: 'wet', rate: rr(0.9, 1.2), type: 'bandpass', f: 1400, q: 1, a: 0.01, t60: 0.2, g: 0.15 }));
+    for (let k = 0, n = 4 + Math.round(6 * s); k < n; k++) {
+      const dt = tr + 0.08 + Math.pow(R(), 1.6) * (0.45 + 0.3 * s);
+      e = Math.max(e, this._tk(v, dt, pick(b.drops || []), rr(0.7, 1.2), 0.2 * rr(0.35, 1) * Math.exp(-(dt - tr) / 0.45), rr(-0.5, 0.5)));
+    }
+    return e;
+  }
+
+  // One swim stroke under water: a soft, muffled whoosh with no hard attack, and a short burble.
+  _vPaddle(v, t, s) {
+    const b = this._b, up = rr(0.06, 0.1), dur = rr(0.22, 0.32);
+    const src = this._s(v, b.pink || b.white, t, dur + 0.05, rr(0.85, 1.1));
+    const lp = this._f(v, 'lowpass', 220, 0.8);
+    lp.frequency.setValueAtTime(rr(200, 260), t);
+    lp.frequency.exponentialRampToValueAtTime(rr(650, 850) + 200 * s, t + up);
+    lp.frequency.exponentialRampToValueAtTime(rr(220, 300), t + dur);
+    const g = this._g(v, 0), p = g.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.8, t + up);
+    p.exponentialRampToValueAtTime(0.03, t + dur);
+    p.linearRampToValueAtTime(0, t + dur + 0.02);
+    src.connect(lp); lp.connect(g); this._to(v, g, 0);
+    let e = t + dur + 0.03;
+    const bb = b.blip || b.bub;
+    if (bb) {
+      for (let k = 0, n = ri(2, 4) + Math.round(2 * s); k < n; k++) {
+        e = Math.max(e, this._tk(v, t + up * 0.6 + rr(0, 0.16), bb[ri(Math.floor(bb.length * 0.3), bb.length - 1)], rr(0.85, 1.15), 0.18 * rr(0.4, 1), rr(-0.3, 0.3)));
+      }
+    }
+    return e;
+  }
+
+  // The giant shell breathing out: a low rumble swelling under a gush of many rising bubbles.
+  _vBurst(v, t, s) {
+    const b = this._b, dur = 1.2 + 0.3 * s;
+    const r = this._s(v, b.pink || b.white, t, dur + 0.1, rr(0.5, 0.6));
+    const rlp = this._f(v, 'lowpass', 130, 0.9), rg = this._g(v, 0), p = rg.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.9, t + 0.15);
+    p.setTargetAtTime(0.45, t + 0.2, 0.4);
+    p.linearRampToValueAtTime(0, t + dur + 0.08);
+    r.connect(rlp); rlp.connect(rg); this._to(v, rg, 0);
+    let e = this._nb(v, t, { buf: 'white', type: 'bandpass', f: rr(75, 100), q: 2, a: 0.03, t60: 0.5, g: 2.5 });
+    const gs = this._s(v, b.wet || b.pink || b.white, t, dur + 0.1, rr(0.55, 0.7));
+    const gbp = this._f(v, 'bandpass', 350, 0.9);
+    gbp.frequency.setValueAtTime(rr(300, 380), t);
+    gbp.frequency.exponentialRampToValueAtTime(rr(800, 1000), t + dur);
+    const gg = this._g(v, 0), q = gg.gain;
+    q.setValueAtTime(0, t);
+    q.linearRampToValueAtTime(0.85, t + 0.12);
+    q.setTargetAtTime(0.5, t + 0.25, 0.5);
+    q.linearRampToValueAtTime(0, t + dur + 0.05);
+    gs.connect(gbp); gbp.connect(gg); this._to(v, gg, 0);
+    const big = b.bub || b.blip, small = b.blip || b.bub;
+    if (big) {
+      for (let k = 0, n = 26 + Math.round(22 * s); k < n; k++) {
+        const u = Math.pow(R(), 1.6), tt = t + 0.03 + u * (dur - 0.1);
+        e = Math.max(e, this._tk(v, tt, pick(R() < 0.6 - 0.4 * u ? big : small), rr(0.8, 1.2), 0.32 * rr(0.35, 1) * (1 - 0.6 * u), rr(-0.6, 0.6)));
+      }
+    }
+    return Math.max(e, t + dur + 0.1);
+  }
+
+  // The squid contracting to swim: a soft, dark jet "whoomp".
+  _vSquidPulse(v, t) {
+    const b = this._b;
+    const src = this._s(v, b.pink || b.white, t, 0.5, rr(0.8, 1));
+    const lp = this._f(v, 'lowpass', 160, 0.9);
+    lp.frequency.setValueAtTime(rr(140, 180), t);
+    lp.frequency.exponentialRampToValueAtTime(rr(600, 750), t + 0.08);
+    lp.frequency.exponentialRampToValueAtTime(rr(170, 220), t + 0.4);
+    const g = this._g(v, 0), p = g.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.9, t + 0.05);
+    p.exponentialRampToValueAtTime(0.03, t + 0.42);
+    p.linearRampToValueAtTime(0, t + 0.45);
+    src.connect(lp); lp.connect(g); this._to(v, g, 0);
+    let e = this._chirp(v, t + 0.01, { f: rr(110, 130), f2: rr(70, 80), sw: 0.15, a: 0.012, t60: 0.22, g: 0.35 });
+    e = Math.max(e, this._nb(v, t + 0.03, { buf: 'wet', rate: rr(0.6, 0.8), type: 'bandpass', f: rr(380, 520), q: 1, a: 0.04, t60: 0.25, g: 0.18 }));
+    return Math.max(e, t + 0.46);
+  }
+
+  // Its tentacles slapping you away: a wet slap with a rubbery wobble in it, a little comic.
+  _vSquidBonk(v, t) {
+    const b = this._b, f0 = rr(240, 280);
+    let e = this._nb(v, t, { buf: 'white', type: 'bandpass', f: rr(800, 1200), q: 0.9, a: 0.001, t60: rr(0.04, 0.06), g: 0.9 });
+    e = Math.max(e, this._nb(v, t, { buf: 'white', type: 'lowpass', f: rr(220, 300), q: 0.8, a: 0.002, t60: 0.09, g: 0.7 }));
+    e = Math.max(e, this._chirp(v, t + 0.006, { f: f0, f2: f0 * 0.62, sw: 0.12, a: 0.003, t60: 0.18, g: 0.45 }));
+    e = Math.max(e, this._chirp(v, t + 0.006, { type: 'triangle', f: f0 * 2.1, f2: f0 * 1.3, sw: 0.08, a: 0.002, t60: 0.08, g: 0.1, lp: 1200 }));
+    e = Math.max(e, this._nb(v, t + 0.004, { buf: 'wet', rate: rr(0.9, 1.15), type: 'bandpass', f: 1100, f2: 450, sw: 0.12, q: 1.4, a: 0.003, t60: 0.14, g: 0.45 }));
+    const bb = b.blip || b.bub;
+    if (bb) for (let k = 0, n = ri(2, 4); k < n; k++) e = Math.max(e, this._tk(v, t + rr(0.03, 0.2), pick(bb), rr(0.85, 1.15), 0.12 * rr(0.4, 1), rr(-0.4, 0.4)));
+    return e;
+  }
+
+  // An ink puff: a dark, muffled "pfff" with a little murky fizz in it.
+  _vSquidInk(v, t) {
+    const b = this._b;
+    const src = this._s(v, b.pink || b.white, t, 0.75, rr(0.8, 1));
+    const lp = this._f(v, 'lowpass', 600, 0.7);
+    lp.frequency.setValueAtTime(rr(900, 1100), t);
+    lp.frequency.exponentialRampToValueAtTime(rr(280, 350), t + 0.6);
+    const g = this._g(v, 0), p = g.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.85, t + 0.03);
+    p.exponentialRampToValueAtTime(0.03, t + 0.65);
+    p.linearRampToValueAtTime(0, t + 0.7);
+    src.connect(lp); lp.connect(g); this._to(v, g, 0);
+    let e = this._nb(v, t + 0.02, { buf: 'wet', rate: rr(0.5, 0.7), type: 'bandpass', f: rr(300, 420), q: 1, a: 0.05, t60: 0.5, g: 0.25 });
+    e = Math.max(e, this._nb(v, t, { buf: 'white', type: 'lowpass', f: 140, q: 0.7, a: 0.01, t60: 0.15, g: 0.25 }));
+    return Math.max(e, t + 0.72);
+  }
+
   // ----- the API -------------------------------------------------------------------------------
 
   step(speed01, surface) {
@@ -1596,6 +1986,55 @@ export class PastaAudio {
       this._lastRoll = k;
       const rate = rr(0.92, 1.08), g = dB(LV.roll) * i * dB(rr(-2.5, 2)) * rn[k];
       if (this._pb(rb[k], 0, rb[k].duration, t, g, rate, rr(-0.3, 0.3), rr(5000, 10000), 0)) this._rollEnds.push(t + rb[k].duration / rate);
+    } catch (e) {}
+  }
+
+  // ----- the bay -----
+
+  // Hitting the water from the air; size from fall speed.
+  splash(size01) {
+    try { const s = c01(size01, 0.6); this._ev('splash', s, 'splash', 0.08, 2, dB(-12 * (1 - s))); } catch (e) {}
+  }
+
+  // Hopping out of the water at the surface.
+  emerge(size01) {
+    try { const s = c01(size01, 0.6); this._ev('emerge', s, 'emerge', 0.12, 2, dB(-8 * (1 - s))); } catch (e) {}
+  }
+
+  // One swim stroke under water. Fine at ~3.5 a second for as long as the player swims.
+  paddle(strength01) {
+    try {
+      const s = c01(strength01, 0.7);
+      if (s >= 0.02) this._ev('paddle', s, 'paddle', 0.12, 0, dB(-8 * (1 - s)));
+    } catch (e) {}
+  }
+
+  // One small bubble: size01 1 is big and low, 0 small and high; pan01 0 left .. 1 right.
+  // Polite by design: quiet, at most 8 at once.
+  bubble(size01, pan01) {
+    try {
+      const t0 = this._gate('bubble', 0.012);
+      if (t0 < 0 || prune(this._bubEnds, t0) >= 8) return;
+      const b = this._b, bb = b.blip, bn = b.blipN;
+      if (!bb || !bn) return;
+      const s = c01(size01, 0.4), last = bb.length - 1;
+      const k = clamp(Math.round(s * last + rr(-2, 2)), 0, last), rate = rr(0.92, 1.08);
+      const g = dB(LV.bubble) * dB(-6 * (1 - s)) * dB(rr(-2, 1.5)) * bn[k], pan = (c01(pan01, 0.5) - 0.5) * 1.6;
+      if (this._pb(bb[k], 0, bb[k].duration, t0 + R() * 0.006, g, rate, pan, 16000, 0, 'w')) this._bubEnds.push(t0 + bb[k].duration / rate);
+    } catch (e) {}
+  }
+
+  // The giant shell breathing out its gush of bubbles.
+  burst(size01) {
+    try { const s = c01(size01, 0.8); this._ev('burst', s, 'burst', 0.5, 3, dB(-8 * (1 - s))); } catch (e) {}
+  }
+
+  // The squid: 'pulse' (it contracts to swim), 'bonk' (its tentacles slap you away), 'ink'.
+  squid(kind) {
+    try {
+      if (kind === 'pulse') this._ev('squid_pulse', 1, 'squid_pulse', 0.15, 1, 1);
+      else if (kind === 'bonk') this._ev('squid_bonk', 1, 'squid_bonk', 0.12, 2, 1);
+      else if (kind === 'ink') this._ev('squid_ink', 1, 'squid_ink', 0.3, 1, 1);
     } catch (e) {}
   }
 

@@ -271,8 +271,8 @@ export function cavatappi({ coilRadius = 0.62, tubeRadius = 0.2, height = 1.5, t
 }
 
 // ------------------------------------------------------------------ 6. the giant rigatoni
-export function rigatoniTower({ innerRadius = 1.9, outerRadius = 2.5, height = 12, ridges = 30, notch = { angle: Math.PI / 2, halfWidth: 0.42, height: 2.6 }, notches = null } = {}) {
-  const cols = Math.max(120, ridges * 8), rows = 34;
+export function rigatoniTower({ innerRadius = 1.9, outerRadius = 2.5, height = 12, ridges = 30, notch = { angle: Math.PI / 2, halfWidth: 0.42, height: 2.6 }, notches = null, cols: colsIn = null, rows: rowsIn = null } = {}) {
+  const cols = colsIn ?? Math.max(120, ridges * 8), rows = rowsIn ?? 34;
   const list = notches || (notch ? [notch] : []);
   const nA = notch?.angle ?? 0, nH = notch?.halfWidth ?? 0, nY = notch?.height ?? 0;
   const baseY = (a) => {
@@ -611,4 +611,95 @@ export function drapedSheet({ width = 2.6, drop = 3.3, flap = 0.6, fold = 0.12, 
   g.setIndex(idx);
   g.computeVertexNormals();
   return done(g);
+}
+
+// ------------------------------------------------------------------ 19. conchiglione (a giant ridged shell, opening along +Y)
+// One closed loop around the cross-section: outer skin, the rolled lip, the inner skin, the other lip.
+// Pinched at both tips; ribs run tip to tip; the lips turn in.
+export function conchiglione({ length = 7, radius = 2.2, thick = 0.2, rows = 70, cols = 96, ribs = 26, open = 2.45 } = {}) {
+  const prof = (u) => Math.pow(Math.max(0, Math.sin(Math.PI * u)), 0.6) * (0.9 + 0.2 * u);
+  const outerR = (u, th) => {
+    const r0 = radius * prof(u);
+    const rib = 1 + 0.075 * Math.pow(Math.abs(Math.sin(th * ribs * 0.5)), 0.45);
+    const curl = 1 - 0.2 * smoothstep(open - 0.75, open, Math.abs(th));
+    return r0 * rib * curl;
+  };
+  const P = (u, th, r) => {
+    const x = (u - 0.5) * length, cy = Math.sin(Math.PI * u) * radius * 0.12;
+    return [x, cy - Math.cos(th) * r, Math.sin(th) * r * 1.04];
+  };
+  const seg = [0.44, 0.06, 0.44, 0.06];                       // outer, lip, inner, lip (fractions of the loop)
+  const at = (i, j, seam) => {
+    const u = i / (rows - 1);
+    let v = seam ? 1 : j / cols;
+    const r0 = Math.max(radius * prof(u), 1e-4), tk = Math.min(thick, r0 * 0.45);
+    let th, r;
+    if (v < seg[0]) { const s = v / seg[0]; th = lerp(-open, open, s); r = outerR(u, th); }
+    else if (v < seg[0] + seg[1]) { const s = (v - seg[0]) / seg[1]; th = open + Math.sin(s * Math.PI) * tk / r0 * 0.9; r = outerR(u, open) - tk * (1 - Math.cos(s * Math.PI)) * 0.5; }
+    else if (v < seg[0] + seg[1] + seg[2]) { const s = (v - seg[0] - seg[1]) / seg[2]; th = lerp(open, -open, s); r = outerR(u, th) - tk; }
+    else { const s = (v - seg[0] - seg[1] - seg[2]) / seg[3]; th = -open - Math.sin(s * Math.PI) * tk / r0 * 0.9; r = outerR(u, -open) - tk * (1 + Math.cos(s * Math.PI)) * 0.5; }
+    const p = P(u, th, Math.max(r, 1e-4));
+    return [p[0], p[1], p[2], p[0], th * radius];
+  };
+  const g = grid(rows, cols, at, { closed: true, ref: (i, j) => { const v = j / cols; const th = lerp(-open, open, v / seg[0]); return v < seg[0] ? [0, -Math.cos(th), Math.sin(th)] : [0, Math.cos(th), -Math.sin(th)]; } });
+  return done(g);
+}
+
+// ------------------------------------------------------------------ 20. mafaldina ribbon (kelp): from y=0 up to y=length, ruffled long edges
+// aHang runs 0 at the root to 1 at the tip, for the sway shader.
+export function mafaldina({ length = 6, width = 0.34, rows = 34, cols = 6, ruffle = 0.07, waves = 2.4, seed = 1 } = {}) {
+  const rnd = mulberry32(seed), ph = rnd() * 9, tw = (rnd() - 0.5) * 1.6;
+  const pos = [], uv = [], hang = [], idx = [];
+  for (let i = 0; i <= rows; i++) {
+    const t = i / rows, y = t * length;
+    const a = tw * t + Math.sin(t * 3 + ph) * 0.3;                         // a slow twist up the ribbon
+    const w = width * (0.75 + 0.25 * smoothstep(0, 0.12, t)) * (1 - 0.35 * smoothstep(0.85, 1, t));
+    for (let j = 0; j <= cols; j++) {
+      const u = j / cols - 0.5;
+      const edge = smoothstep(0.28, 0.5, Math.abs(u));
+      const ruf = Math.sin(y * TAU * waves + ph + (u > 0 ? 1.7 : 0)) * ruffle * edge;
+      const lx = u * w, lz = ruf;
+      pos.push(lx * Math.cos(a) - lz * Math.sin(a), y, lx * Math.sin(a) + lz * Math.cos(a));
+      uv.push(u * w, y);
+      hang.push(t);
+    }
+  }
+  const C = cols + 1;
+  for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) { const a = i * C + j, b = a + 1, c = a + C, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('aHang', new THREE.Float32BufferAttribute(hang, 1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return done(g);
+}
+
+// ------------------------------------------------------------------ 21. squid mantle: a torpedo of squid-ink pasta, tip toward +Y, with two fins
+export function squidMantle({ length = 2.1, radius = 0.46 } = {}) {
+  const pts = [];
+  const n = 18;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const r = radius * (t < 0.12 ? Math.sin((t / 0.12) * Math.PI / 2) * 0.85 + 0.15 : Math.pow(1 - (t - 0.12) / 0.88, 0.75) * (1 + 0.08 * Math.sin(t * 9)));
+    pts.push(new THREE.Vector2(Math.max(r, 0.002), t * length));
+  }
+  const body = new THREE.LatheGeometry(pts, 20);
+  const uvb = body.getAttribute('uv');
+  for (let i = 0; i < uvb.count; i++) uvb.setXY(i, uvb.getX(i) * TAU * radius, uvb.getY(i) * length);
+  const fin = (side) => {
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0); sh.quadraticCurveTo(0.55, 0.15, 0.62, 0.55); sh.quadraticCurveTo(0.3, 0.75, 0, 0.9); sh.lineTo(0, 0);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.02, bevelSegments: 2, curveSegments: 8 });
+    g.translate(0, 0, -0.015);
+    if (side < 0) g.scale(-1, 1, 1);
+    g.translate(side * radius * 0.25, length * 0.55, 0);
+    return g.index ? g.toNonIndexed() : g;
+  };
+  const geos = [body.index ? body.toNonIndexed() : body, fin(1), fin(-1)];
+  for (const g of geos) { g.deleteAttribute('normal'); if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2)); }
+  const m = mergeGeometries(geos.map(g => { const k = g.clone(); for (const a of Object.keys(k.attributes)) if (a !== 'position' && a !== 'uv') k.deleteAttribute(a); return k; }));
+  const mv = mergeVertices(m, 1e-4);
+  mv.computeVertexNormals();
+  return done(mv);
 }

@@ -9,6 +9,7 @@ import { Input } from './input.js';
 import { buildLobby } from './lobby.js';
 import { buildMeadow } from './meadow.js';
 import { buildFortress } from './fortress.js';
+import { buildBay } from './bay.js';
 import { PastaAudio } from './audio.js';
 import { clamp, lerp, damp, smoothstep } from './util.js';
 
@@ -16,7 +17,7 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const setLoad = (f) => { const b = $('loadbar'); if (b) b.style.width = Math.round(f * 100) + '%'; };
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
-const BUILDERS = { meadow: buildMeadow, fortress: buildFortress };
+const BUILDERS = { meadow: buildMeadow, fortress: buildFortress, bay: buildBay };
 const PKEY = 'al-dente.stars';
 const loadStars = () => { try { return new Set(JSON.parse(localStorage.getItem(PKEY) || '[]')); } catch (_) { return new Set(); } };
 const saveStars = (s) => { try { localStorage.setItem(PKEY, JSON.stringify([...s])); } catch (_) { /* private window: keep it for this visit */ } };
@@ -59,7 +60,7 @@ async function boot() {
   const getPlace = (id) => {
     if (built[id]) return built[id];
     const { scene, sun } = makeScene();
-    const p = id === 'lobby' ? buildLobby(scene, K, audio) : BUILDERS[id](scene, K, audio);
+    const p = id === 'lobby' ? buildLobby(scene, K, audio) : BUILDERS[id](scene, K, audio, T);
     p.sun = sun; p.skyMat.uniforms.uSun.value.copy(SUN_DIR);
     built[id] = p;
     return p;
@@ -78,7 +79,8 @@ async function boot() {
     ui.count.classList.remove('bump'); void ui.count.offsetWidth; ui.count.classList.add('bump');
   };
 
-  const ctxFor = (p) => ({ colliders: p.colliders, audio, supports: p.supports, fx: p.fx, onRespawn: () => { p.resetBreakables(); cam.snap(hero); post.params.fade = 0; } });
+  const ctxFor = (p) => ({ colliders: p.colliders, audio, supports: p.supports, fx: p.fx, onRespawn: () => { p.resetBreakables(); cam.snap(hero); post.params.fade = 0; },
+    water: p.water ?? null, sinkY: p.sinkY, safeMinY: p.safeMinY, groundSurface: p.groundSurface, bubbles: p.bubbles ?? null });
   const hero = new Hero(lobby.scene, K, ctxFor(lobby));
   const cam = new FollowCam(camera, lobby.colliders);
   let active = lobby;
@@ -86,6 +88,7 @@ async function boot() {
   lobby.setStars(stars);
 
   const place = (p, pos, facing) => {
+    if (active && active !== p) active.leave?.();
     active = p;
     hero.setScene(p.scene);
     hero.ctx = ctxFor(p);
@@ -202,7 +205,7 @@ async function boot() {
   addEventListener('pointerup', release); addEventListener('pointercancel', release);
 
   // ---------------------------------------------------------------- loop
-  let acc = 0, last = performance.now(), time = 0, frameAvg = 16, paused = false, perfT = 0, goodT = 0, holdT = 2, ceilT = 0;
+  let acc = 0, last = performance.now(), time = 0, frameAvg = 16, paused = false, perfT = 0, goodT = 0, holdT = 2, ceilT = 0, uw = 0;
   const tmpV = new THREE.Vector3();
   window.__game = {
     hero, cam, camera, renderer, post, K, game, input, get active() { return active; }, get scene() { return active.scene; }, get props() { return active; }, get W() { return active; },
@@ -213,7 +216,7 @@ async function boot() {
     go(id) { const p = getPlace(id); p.reset(); place(p, p.spawn, p.facing); game.stage = id; game.mode = 'play'; hero.state = 'play'; show(ui.title, false); show(ui.hint, false); cam.snap(hero); document.body.classList.add('play'); },
     select() { toSelect(); },
     enter(id) { startStage(id); },
-    info() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, frameAvg: +frameAvg.toFixed(1), scale, place: active.id, mode: game.mode, hero: hero.pos.toArray().map(v => +v.toFixed(2)), vel: hero.vel.toArray().map(v => +v.toFixed(2)), state: hero.state, grounded: hero.grounded, stuck: hero.stuck, wall: hero.wallCount, count: active.pickups ? active.pickups.count : 0, stars: [...stars] }; },
+    info() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, frameAvg: +frameAvg.toFixed(1), scale, place: active.id, mode: game.mode, hero: hero.pos.toArray().map(v => +v.toFixed(2)), vel: hero.vel.toArray().map(v => +v.toFixed(2)), state: hero.state, grounded: hero.grounded, stuck: hero.stuck, wall: hero.wallCount, water: hero.inWater, count: active.pickups ? active.pickups.count : 0, stars: [...stars] }; },
   };
 
   function frame(now) {
@@ -309,7 +312,12 @@ async function boot() {
     }
     input.endFrame();
     placeSun(active.sun, game.mode === 'intro' && active.intro && game.t < active.intro.len * 0.8 ? flyLook : (active === lobby ? tmpV.set(0, 1, 0) : cam.target));
-    audio.update(dt, { height01: clamp((hero.pos.y - 1) / 30, 0, 1), speed01: clamp(Math.hypot(hero.vel.x, hero.vel.z) / 7.4, 0, 1), inTube: cam.tubeBlend > 0.5, menu: active === lobby });
+    // the bay's water needs to know where the camera is before drawing
+    const view = active.view ? active.view(dt, time, camera) : null;
+    if (!view) G.uWaterOn.value = 0;
+    uw = damp(uw, view ? view.underwater : 0, 10, dt);
+    audio.update(dt, { height01: clamp((hero.pos.y - 1) / 30, 0, 1), speed01: clamp(Math.hypot(hero.vel.x, hero.vel.z) / 7.4, 0, 1), inTube: cam.tubeBlend > 0.5, menu: active === lobby,
+      underwater: uw, depth01: view ? view.depth01 : 0, shore01: view ? view.shore01 : 0 });
     post.render(active.scene, camera, time);
 
     // keep the frame rate: trade resolution for time. Building a stage hitches, so ignore that;
