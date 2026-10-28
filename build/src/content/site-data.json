@@ -94,16 +94,16 @@
     {
       "slug": "spaghetti-sunshine",
       "title": "SPAGHETTI SUNSHINE",
-      "descriptor": "Two courses made of pasta",
+      "descriptor": "Three courses made of pasta",
       "group": "action",
       "featured": false,
-      "image": "/assets/games/spaghetti-sunshine-card-v20261028.jpg",
-      "alt": "Two miniature courses made of pasta: the windmill and village of Bianco Hills, and the cargo ship and cranes of Ricco Harbor, on a table woven from spaghetti",
-      "summary": "The first Shine in Bianco Hills and Ricco Harbor. All spaghetti. Even Mario. Cross the village, clear the road to the windmill, then climb through the harbor and pull Gooper Blooper out of the crates. Both courses in the same game, with a Shine saved for each. Keyboard and mouse.",
-      "metaDescription": "The first Shine in Bianco Hills and Ricco Harbor, reconstructed in pasta. Two courses, a pasta course select, spray and hover nozzles, and Gooper Blooper's tentacle-and-mouth fight. Keyboard and mouse.",
+      "image": "/assets/games/spaghetti-sunshine-card-v20261028b.jpg",
+      "alt": "Three miniature courses made of pasta on a table woven from spaghetti: Bianco Hills with its windmill, Ricco Harbor with its cargo ship and cranes, and Gelato Beach with palms, the Shine Tower and a sand gate",
+      "summary": "The first Shine in Bianco Hills, Ricco Harbor and Gelato Beach. All spaghetti. Even Mario. Clear the road to the windmill, pull Gooper Blooper out of the crates, then find the Dune Bud and cross the crumbling sand castle without FLUDD. Three courses in the same game, with a Shine saved for each. Keyboard and mouse.",
+      "metaDescription": "The first Shine in Bianco Hills, Ricco Harbor and Gelato Beach, reconstructed in pasta. Three courses, separate saved Shines, spray and hover nozzles, Gooper Blooper, and the Dune Bud Sand Castle Secret. Keyboard and mouse.",
       "controls": "WASD or arrows move · mouse looks · Space jumps · J or click sprays · Shift hovers · Q changes nozzle · hold E to grab, pull back, release to let go · L courses · Esc pause",
       "actionLabel": "Play",
-      "duration": "Two first Shines"
+      "duration": "Three first Shines"
     },
     {
       "slug": "spaghetti",
