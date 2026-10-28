@@ -11,7 +11,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Euler();
 
 // ------------------------------------------------------------------ helpers
-function rodGeometry(len, rad, seg = 10, lenSeg = 10) {
+export function rodGeometry(len, rad, seg = 10, lenSeg = 10) {
   const g = new THREE.CylinderGeometry(rad, rad, len, seg, lenSeg, false);
   g.rotateZ(Math.PI / 2); // along x
   const p = g.getAttribute('position'), uv = g.getAttribute('uv');
@@ -22,7 +22,7 @@ function rodGeometry(len, rad, seg = 10, lenSeg = 10) {
   }
   return g;
 }
-function mergeWithShade(geos, shades) {
+export function mergeWithShade(geos, shades) {
   let vc = 0, ic = 0;
   for (const g of geos) { vc += g.getAttribute('position').count; ic += g.getIndex().count; }
   const pos = new Float32Array(vc * 3), nor = new Float32Array(vc * 3), uv = new Float32Array(vc * 2), sh = new Float32Array(vc), idx = new Uint32Array(ic);
@@ -43,7 +43,7 @@ function mergeWithShade(geos, shades) {
 }
 
 // ------------------------------------------------------------------ FX: rod fragments + pastina splashes
-class FX {
+export class FX {
   constructor(scene, K, audio) {
     this.audio = audio;
     this.frag = new THREE.InstancedMesh(rodGeometry(1, 0.072, 8, 1), K.dry, 96);
@@ -142,9 +142,9 @@ class FX {
 }
 
 // ------------------------------------------------------------------ dry spaghetti planks (they snap)
-class Plank {
-  constructor(scene, K, colliders, fx, audio, { x, y, z, len = 4.2, rods = 7, rot = 0, crack = 0.18, brk = 0.52, seed = 1, safeFirst = false }) {
-    this.fx = fx; this.audio = audio; this.rods = rods; this.len = len;
+export class Plank {
+  constructor(scene, K, colliders, fx, audio, { x, y, z, len = 4.2, rods = 7, rot = 0, crack = 0.18, brk = 0.52, seed = 1, safeFirst = false, regrow = 5, cantilever = false }) {
+    this.fx = fx; this.audio = audio; this.rods = rods; this.len = len; this.regrow = regrow; this.cantilever = cantilever;
     this.crackAt = crack; this.breakAt = brk;
     const rnd = mulberry32(seed);
     const geos = [], shades = [];
@@ -176,7 +176,9 @@ class Plank {
     const p = this.geo.getAttribute('position'), a = p.array, b = this.base, L = this.len / 2;
     for (let i = 0; i < p.count; i++) {
       const x = b[i * 3];
-      a[i * 3 + 1] = b[i * 3 + 1] - s * Math.cos(clamp(x / L, -1, 1) * Math.PI / 2);
+      const u = clamp(x / L, -1, 1);
+      // a bridge sags in the middle; rods stuck in a wall droop at the free end (local -x)
+      a[i * 3 + 1] = b[i * 3 + 1] - s * (this.cantilever ? ((1 - u) / 2) * ((1 - u) / 2) * 1.6 : Math.cos(u * Math.PI / 2));
     }
     p.needsUpdate = true;
   }
@@ -214,29 +216,33 @@ class Plank {
       if (this.t > this.breakAt) this.break();
     } else if (this.state === 'broken') {
       this.down += dt;
-      if (this.down > 5 && !heroNear) { this.reset(); this.mesh.scale.setScalar(0.01); this.grow = 0; }
+      if (this.down > this.regrow && !heroNear) { this.reset(); this.mesh.scale.setScalar(0.01); this.grow = 0; }
     }
     if (this.grow < 1) { this.grow = Math.min(1, this.grow + dt * 3); const g = 1 - Math.pow(1 - this.grow, 3); this.mesh.scale.set(g, 1, 1); }
   }
 }
 
 // ------------------------------------------------------------------ cavatappi spring
-class Spring {
-  constructor(scene, mat, colliders, audio, { x, y, z, power = 22.5 }) {
-    this.audio = audio; this.power = power;
+export class Spring {
+  // wide: fatter coil and top; toss: {x, z} sideways throw; keep: how much run speed the launch keeps
+  constructor(scene, mat, colliders, audio, { x, y, z, power = 22.5, wide = 1, toss = null, keep = 1 }) {
+    this.audio = audio; this.power = power; this.wide = wide; this.toss = toss; this.keep = keep;
     const g = Shapes.cavatappi({ coilRadius: 0.62, tubeRadius: 0.2, height: 1.5, turns: 3.2, ridges: 10, wall: 0.05 });
     this.mesh = new THREE.Mesh(g, mat);
     this.mesh.position.set(x, y, z); this.mesh.castShadow = true; this.mesh.receiveShadow = true;
+    if (toss) { const l = Math.hypot(toss.x, toss.z) || 1; this.mesh.rotation.set(-toss.z / l * 0.12, 0, toss.x / l * 0.12); }
     scene.add(this.mesh);
     this.h = 1.5; this.base = y;
     this.c = 0; this.cv = 0; this.cool = 0;
-    this.col = colliders.add({ type: 'cyl', x, z, r: 0.86, y0: y, y1: y + this.h - 0.05, surface: 'cooked', sticky: false, safe: false,
+    this.col = colliders.add({ type: 'cyl', x, z, r: 0.86 * wide, y0: y, y1: y + this.h - 0.05, surface: 'cooked', sticky: false, safe: false,
       onStand: (hero) => this.launch(hero) });
   }
   launch(hero) {
     if (this.cool > 0) return;
     this.cool = 0.25;
     hero.vel.y = this.power; hero.grounded = false; hero.cut = true; hero.coyote = 0;
+    hero.vel.x *= this.keep; hero.vel.z *= this.keep;
+    if (this.toss) { hero.vel.x += this.toss.x; hero.vel.z += this.toss.z; }
     hero.sqAxisT.set(0, 1, 0); hero.sq = 1.35; hero.sqv = 2.5;
     for (const f of hero.feet) f.planted = false;
     this.cv = -9; this.c = -0.15;
@@ -247,12 +253,12 @@ class Spring {
     const w = TAU * 5.5;
     this.cv += (-2 * 0.18 * w * this.cv - w * w * this.c) * dt;
     this.c += this.cv * dt;
-    this.mesh.scale.set(1 - this.c * 0.25, 1 + this.c, 1 - this.c * 0.25);
+    this.mesh.scale.set((1 - this.c * 0.25) * this.wide, 1 + this.c, (1 - this.c * 0.25) * this.wide);
   }
 }
 
 // ------------------------------------------------------------------ tagliatelle bridge
-class Ribbon {
+export class Ribbon {
   constructor(scene, mat, audio, { a, b, strips = 3, width = 0.5, gap = 0.05, nodes = 30, slack = 0.016, seed = 3 }) {
     this.a = a.clone(); this.b = b.clone(); this.audio = audio;
     this.dir = b.clone().sub(a); this.L = this.dir.length(); this.dir.normalize();
@@ -379,7 +385,7 @@ class Ribbon {
 }
 
 // ------------------------------------------------------------------ lumache snails
-class Snail {
+export class Snail {
   constructor(scene, K, colliders, audio, opts) {
     this.audio = audio; this.opts = opts;
     this.group = new THREE.Group();
@@ -450,7 +456,7 @@ class Snail {
 }
 
 // ------------------------------------------------------------------ rotelle
-class Pickups {
+export class Pickups {
   constructor(scene, K, audio, spots) {
     this.audio = audio;
     const g = Shapes.rotelle({ radius: 0.34, thickness: 0.1, spokes: 6 });

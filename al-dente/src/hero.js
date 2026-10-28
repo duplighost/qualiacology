@@ -2,6 +2,7 @@
 // Gameplay body = one sphere. Look = ~15 verlet strands carried by that sphere.
 import * as THREE from 'three';
 import { mulberry32, clamp, lerp, TAU, dampAngle, angleDiff } from './util.js';
+import * as Shapes from './shapes.js';
 import { SEA } from './world.js';
 
 export const R = 0.45;
@@ -36,7 +37,7 @@ export class Hero {
     this.coyote = 0; this.buffer = 0; this.cut = true;
     this.stuck = false; this.stuckN = new THREE.Vector3(); this.stuckC = null; this.stickT = 0;
     this.lastWall = null; this.lastWallN = new THREE.Vector3(); this.wallCount = 0; this.wallCooldown = 0; this.awayT = 0;
-    this.stun = 0; this.airT = 0; this.sinkT = 0; this.state = 'play';
+    this.stun = 0; this.airT = 0; this.sinkT = 0; this.state = 'play'; this.hopT = 0; this.settleT = 0;
     this.facing = facing; this.spin = 0;
     this.sq = 1; this.sqv = 0; this.sqAxis = new THREE.Vector3(0, 1, 0); this.sqAxisT = new THREE.Vector3(0, 1, 0);
     this.lean = new THREE.Vector2();
@@ -90,7 +91,10 @@ export class Hero {
       const a = (s.start + i - 1) * 3, b = (s.start + i) * 3;
       this.rest[s.start + i] = Math.hypot(this.local[b] - this.local[a], this.local[b + 1] - this.local[a + 1], this.local[b + 2] - this.local[a + 2]);
     }
+    this.strandOf = [];
+    for (const s of S) for (let i = 0; i < s.n; i++) this.strandOf[s.start + i] = s;
     this.buildMesh(K);
+    this.buildFace(K);
   }
 
   buildMesh(K) {
@@ -192,7 +196,7 @@ export class Hero {
       const vx = (X[o] - PX[o]) * damp, vy = (X[o + 1] - PX[o + 1]) * damp, vz = (X[o + 2] - PX[o + 2]) * damp;
       PX[o] = X[o]; PX[o + 1] = X[o + 1]; PX[o + 2] = X[o + 2];
       X[o] += vx; X[o + 1] += vy - (k === 0 ? g * 0.15 : g); X[o + 2] += vz;
-      const kp = k === 0 ? kBody : k === 1 ? 0.028 : 0;
+      const kp = (this.grab && this.grab.idx === i) ? 0 : k === 0 ? kBody : k === 1 ? 0.028 : 0;
       if (kp) { X[o] += (TG[o] - X[o]) * kp; X[o + 1] += (TG[o + 1] - X[o + 1]) * kp; X[o + 2] += (TG[o + 2] - X[o + 2]) * kp; }
     }
     // feet
@@ -210,9 +214,11 @@ export class Hero {
         X[o] += vx; X[o + 1] += vy - g; X[o + 2] += vz;
       }
     }
+    if (this.grab) this.applyGrab(0.55);
     // distance constraints
     for (let it = 0; it < 3; it++) {
       for (const s of this.S) {
+        const soft = this.grab && this.strandOf[this.grab.idx] === s ? 0.2 : 1;
         for (let i = 1; i < s.n; i++) {
           const ia = s.start + i - 1, ib = s.start + i;
           const a = ia * 3, b = ib * 3;
@@ -224,12 +230,13 @@ export class Hero {
           const ex = X[b] - X[a], ey = X[b + 1] - X[a + 1], ez = X[b + 2] - X[a + 2];
           const d = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1e-6;
           const rest = this.rest[ib];
-          const diff = (d - rest) / (d * w);
+          const diff = (d - rest) / (d * w) * soft;
           X[a] += ex * diff * wa; X[a + 1] += ey * diff * wa; X[a + 2] += ez * diff * wa;
           X[b] -= ex * diff * wb; X[b + 1] -= ey * diff * wb; X[b + 2] -= ez * diff * wb;
         }
       }
     }
+    if (this.grab) this.applyGrab(1);
     // free points: drape over the core, rest on the world
     const coreR = BODY_R * 0.8;
     const near = this.nearCols;
@@ -310,7 +317,9 @@ export class Hero {
     if (this.stuck) {
       this.stickUpdate(dt, wx, wz, inLen, input);
     } else if (this.grounded) {
-      const tx = wx * T.maxSpeed, tz = wz * T.maxSpeed;
+      // just climbed over a lip: plant for a beat before running on
+      const mv = this.settleT > 0 ? 0 : 1; this.settleT = Math.max(0, this.settleT - dt);
+      const tx = wx * mv * T.maxSpeed, tz = wz * mv * T.maxSpeed;
       const dvx = tx - this.vel.x, dvz = tz - this.vel.z;
       const dvl = Math.hypot(dvx, dvz);
       const opposing = this.vel.x * wx + this.vel.z * wz < -0.5;
@@ -325,6 +334,8 @@ export class Hero {
       if (sp1 > lim) { this.vel.x *= lim / sp1; this.vel.z *= lim / sp1; }
       if (inLen < 0.1) { const k = Math.max(0, 1 - 1.2 * dt); if (sp0 < T.airMax + 0.5) { this.vel.x *= k; this.vel.z *= k; } }
       if (this.coyote > 0 && this.buffer > 0) this.jump();
+      // a hop up a wall rises along it; it does not fling you over the top
+      if (this.hopT > 0) { this.hopT -= dt; const hs = Math.hypot(this.vel.x, this.vel.z); if (hs > 2.6) { this.vel.x *= 2.6 / hs; this.vel.z *= 2.6 / hs; } }
       if (!input.jumpHeld && !this.cut && this.vel.y > 0) { this.vel.y *= T.jumpCut; this.cut = true; }
       this.vel.y -= T.gravity * (this.vel.y < 0 ? T.fallMul : 1) * dt;
       this.vel.y = Math.max(this.vel.y, -T.terminal);
@@ -358,7 +369,11 @@ export class Hero {
     if (ground) this.groundN.set(ground.nx, ground.ny, ground.nz);
     if (this.grounded) {
       this.coyote = T.coyote; this.lastWall = null; this.wallCount = 0;
-      if (!wasGrounded) this.land();
+      if (!wasGrounded) {
+        if (this.hopT > 0) { this.vel.x *= 0.15; this.vel.z *= 0.15; this.settleT = 0.16; }
+        this.hopT = 0;
+        this.land();
+      }
       if (this.groundC && this.groundC.onStand) this.groundC.onStand(this, dt);
       this.airT = 0;
     } else this.airT += dt;
@@ -383,7 +398,6 @@ export class Hero {
     const sp = Math.hypot(this.vel.x, this.vel.z);
     if (this.stuck) this.facing = dampAngle(this.facing, Math.atan2(-this.stuckN.x, -this.stuckN.z), 16, dt);
     else if (sp > 0.6) this.facing = dampAngle(this.facing, Math.atan2(this.vel.x, this.vel.z), 13, dt);
-    this.spin += sp * dt * 0.55 * (this.grounded ? 1 : 0.4);
     const ax = (this.vel.x - this.prevVel.x) / dt, az = (this.vel.z - this.prevVel.z) / dt;
     // lean into acceleration (in world space, mapped to x/z tilt)
     const lx = clamp(ax * 0.006, -0.3, 0.3), lz = clamp(az * 0.006, -0.3, 0.3);
@@ -437,7 +451,7 @@ export class Hero {
   stick(k, nx, nz, into) {
     if (this.sameWall(k.c, nx, nz)) this.wallCount++; else { this.lastWall = k.c; this.wallCount = 1; }
     this.lastWallN.set(nx, 0, nz);
-    this.stuck = true; this.stuckC = k.c; this.stuckN.set(nx, 0, nz); this.stickT = 0; this.awayT = 0;
+    this.stuck = true; this.stuckC = k.c; this.stuckN.set(nx, 0, nz); this.stickT = 0; this.awayT = 0; this.hopT = 0;
     this.vel.set(0, Math.max(0, this.vel.y * 0.1), 0);
     this.sqAxisT.set(nx, 0, nz); this.sqAxis.set(nx, 0, nz);
     this.sqv -= 3 + into * 0.6;
@@ -461,7 +475,7 @@ export class Hero {
       if (into > 0.3) {
         // climb: a hop back up the same wall
         this.vel.set(n.x * T.hopOut, T.hopV, n.z * T.hopOut);
-        this.wallCooldown = 0.1;
+        this.wallCooldown = 0.1; this.hopT = 0.75;
       } else {
         // leap: off the wall, steered sideways by input
         const lat = { x: wx - n.x * (wx * n.x + wz * n.z), z: wz - n.z * (wx * n.x + wz * n.z) };
@@ -600,9 +614,113 @@ export class Hero {
     this.core.position.copy(c);
     const a = this.sqAxis, s = this.sq;
     // approximate squash for the core: scale along the dominant axis
+    this.updateFace();
     this.core.scale.set(1 + (s - 1) * Math.abs(a.x) - (s - 1) * 0.5 * (1 - Math.abs(a.x)), 1 + (s - 1) * Math.abs(a.y) - (s - 1) * 0.5 * (1 - Math.abs(a.y)), 1 + (s - 1) * Math.abs(a.z) - (s - 1) * 0.5 * (1 - Math.abs(a.z)));
   }
 
   // a point on the outside of the twirl (for things that get tangled in it)
+  // ------------------------------------------------------------------ the face: orecchiette eyes, squid-ink pastina pupils, an elbow smile
+  buildFace(K) {
+    const anchor = (dir) => {
+      const d = new THREE.Vector3(...dir).normalize();
+      let best = -1, bd = -2;
+      for (let i = 0; i < this.N; i++) {
+        if (this.kind[i] !== 0) continue;
+        const v = new THREE.Vector3(this.local[i * 3], this.local[i * 3 + 1], this.local[i * 3 + 2]);
+        const len = v.length(); if (len < BODY_R * 0.82) continue;
+        const dot = v.normalize().dot(d);
+        if (dot > bd) { bd = dot; best = i; }
+      }
+      return { idx: best, dir: d };
+    };
+    this.face = [
+      { a: anchor([-0.38, 0.3, 0.87]), kind: 'eye', side: -1 },
+      { a: anchor([0.38, 0.3, 0.87]), kind: 'eye', side: 1 },
+      { a: anchor([0, -0.27, 0.96]), kind: 'mouth' },
+    ];
+    const eyeG = Shapes.orecchiette({ radius: 0.082, depth: 0.03, thickness: 0.014 });
+    const pupilG = new THREE.SphereGeometry(0.029, 14, 10);
+    const mouthG = Shapes.gomito({ radius: 0.017, bend: 0.075, arc: 1.7 });
+    for (const f of this.face) {
+      if (f.kind === 'eye') {
+        f.mesh = new THREE.Mesh(eyeG, K.eye); f.pupil = new THREE.Mesh(pupilG, K.pupil);
+        f.pupil.castShadow = true; this.scene.add(f.pupil);
+      } else f.mesh = new THREE.Mesh(mouthG, K.pupil);
+      f.mesh.castShadow = true; f.mesh.receiveShadow = true;
+      this.scene.add(f.mesh);
+    }
+    this.lookAt = new THREE.Vector3(0, 0, 0); this.lookAtOn = false;
+    this._fq = new THREE.Quaternion(); this._fm = new THREE.Matrix4(); this._fu = new THREE.Vector3(); this._fo = new THREE.Vector3(); this._fx = new THREE.Vector3(); this._fp = new THREE.Vector3();
+  }
+
+  updateFace() {
+    const c = this.bodyCenter(this._c);
+    const up = this._fu.set(0, 1, 0).applyQuaternion(this._qleg || this._q);
+    for (const f of this.face) {
+      const o = f.a.idx * 3;
+      const p = this._fp.set(this.X[o], this.X[o + 1], this.X[o + 2]);
+      const out = this._fo.subVectors(p, c);
+      if (out.lengthSq() < 1e-8) out.copy(f.a.dir); out.normalize();
+      const x = this._fx.crossVectors(up, out).normalize();
+      const y = new THREE.Vector3().crossVectors(out, x);
+      this._fm.makeBasis(x, y, out);
+      f.mesh.quaternion.setFromRotationMatrix(this._fm);
+      f.mesh.position.copy(p).addScaledVector(out, f.kind === 'eye' ? 0.035 : 0.03);
+      if (f.kind === 'mouth') { f.mesh.position.addScaledVector(y, -0.03); continue; }
+      // pupils roll toward what the hero is looking at
+      const tgt = this.lookAtOn ? this.lookAt : new THREE.Vector3(Math.sin(this.facing), 0, Math.cos(this.facing)).multiplyScalar(10).add(p);
+      const d = new THREE.Vector3().subVectors(tgt, f.mesh.position);
+      const lx = clamp(d.dot(x) / (d.length() + 1e-6), -1, 1), ly = clamp(d.dot(y) / (d.length() + 1e-6), -1, 1);
+      f.pupil.position.copy(f.mesh.position).addScaledVector(out, 0.012).addScaledVector(x, lx * 0.034).addScaledVector(y, ly * 0.03);
+    }
+  }
+
+  // ------------------------------------------------------------------ grabbing noodles (the opening screen)
+  // the front-most noodle point near the ray, so you grab what you see
+  pickPoint(ray, maxDist = 0.16) {
+    let best = -1, bs = Infinity;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < this.N; i++) {
+      v.set(this.X[i * 3], this.X[i * 3 + 1], this.X[i * 3 + 2]);
+      const d2 = ray.distanceSqToPoint(v);
+      if (d2 > maxDist * maxDist) continue;
+      const s = v.sub(ray.origin).dot(ray.direction) + Math.sqrt(d2) * 2.5;
+      if (s < bs) { bs = s; best = i; }
+    }
+    return best;
+  }
+  startGrab(idx, target) {
+    this.grab = { idx, target: target.clone(), stretch: 0 };
+    if (this.kind[idx] === 3) for (const f of this.feet) f.planted = false;
+  }
+  moveGrab(target) { if (this.grab) this.grab.target.copy(target); }
+  endGrab() { const g = this.grab; this.grab = null; return g ? g.stretch : 0; }
+  applyGrab(k) {
+    const g = this.grab, o = g.idx * 3, X = this.X, PX = this.PX;
+    // how far the held point is pulled from where its noodle wants to be
+    let rx, ry, rz;
+    if (this.kind[g.idx] === 0 || this.kind[g.idx] === 2) { rx = this.TG[o]; ry = this.TG[o + 1]; rz = this.TG[o + 2]; }
+    else { const c = this.bodyCenter(this._c); rx = c.x; ry = c.y; rz = c.z; }
+    const pull = Math.hypot(g.target.x - rx, g.target.y - ry, g.target.z - rz);
+    g.stretch = clamp(pull / 0.95, 0, 1.2);
+    if (g.stretch >= 1.0) { // too far: the noodle lets go and whips back
+      this.grab = null;
+      PX[o] = X[o] + (X[o] - rx) * 0.25; PX[o + 1] = X[o + 1] + (X[o + 1] - ry) * 0.25; PX[o + 2] = X[o + 2] + (X[o + 2] - rz) * 0.25;
+      this.ctx.audio?.strandSnap?.();
+      this.snapped = 0.35;
+      return;
+    }
+    const nx = lerp(X[o], g.target.x, k), ny = lerp(X[o + 1], g.target.y, k), nz = lerp(X[o + 2], g.target.z, k);
+    PX[o] = lerp(PX[o], nx, 0.7); PX[o + 1] = lerp(PX[o + 1], ny, 0.7); PX[o + 2] = lerp(PX[o + 2], nz, 0.7);
+    X[o] = nx; X[o + 1] = ny; X[o + 2] = nz;
+  }
+
+  setScene(scene) {
+    const parts = [this.mesh, this.core];
+    for (const f of this.face) { parts.push(f.mesh); if (f.pupil) parts.push(f.pupil); }
+    for (const p of parts) { p.removeFromParent(); scene.add(p); }
+    this.scene = scene;
+  }
+
   strandPoint(i, out) { const o = i * 3; return out.set(this.X[o], this.X[o + 1], this.X[o + 2]); }
 }

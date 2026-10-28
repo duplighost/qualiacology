@@ -91,10 +91,12 @@ export class Colliders {
     const dx = px - c.x, dz = pz - c.z, rho = Math.hypot(dx, dz) || 1e-6;
     const ux = dx / rho, uz = dz / rho;
     const th = Math.atan2(dz, dx);
+    let notch = c.notch;
+    if (c.notches) { let bd = 9; for (const n of c.notches) { const d = Math.abs(Math.atan2(Math.sin(th - n.angle), Math.cos(th - n.angle))); if (d < bd) { bd = d; notch = n; } } }
     let inNotch = false, dTh = 0;
-    if (c.notch) {
-      dTh = Math.atan2(Math.sin(th - c.notch.angle), Math.cos(th - c.notch.angle));
-      inNotch = Math.abs(dTh) < c.notch.half && py < c.y0 + c.notch.h;
+    if (notch) {
+      dTh = Math.atan2(Math.sin(th - notch.angle), Math.cos(th - notch.angle));
+      inNotch = Math.abs(dTh) < notch.half && py < c.y0 + notch.h;
     }
     if (!inNotch) {
       const qr = clamp(rho, c.r0, c.r1), qy = clamp(py, c.y0, c.y1);
@@ -111,21 +113,21 @@ export class Colliders {
           { e: c.y1 - py, nx: 0, ny: 1, nz: 0 },
           { e: py - c.y0, nx: 0, ny: -1, nz: 0 },
         ];
-        if (c.notch && py < c.y0 + c.notch.h) {
-          const arc = (Math.abs(dTh) - c.notch.half) * rho;
+        if (notch && py < c.y0 + notch.h) {
+          const arc = (Math.abs(dTh) - notch.half) * rho;
           const s = Math.sign(dTh) || 1; // push back toward the notch opening (tangent)
           opts.push({ e: arc, nx: uz * s, ny: 0, nz: -ux * s });
         }
-        if (c.notch && Math.abs(dTh) < c.notch.half && py >= c.y0 + c.notch.h) {
-          opts.push({ e: py - (c.y0 + c.notch.h), nx: 0, ny: -1, nz: 0 }); // under the arch
+        if (notch && Math.abs(dTh) < notch.half && py >= c.y0 + notch.h) {
+          opts.push({ e: py - (c.y0 + notch.h), nx: 0, ny: -1, nz: 0 }); // under the arch
         }
         let m = opts[0];
         for (const q of opts) if (q.e < m.e) m = q;
         best = { nx: m.nx, ny: m.ny, nz: m.nz, d: r + m.e };
       }
       // near a jamb but outside the notch: also test the jamb plane
-      if (c.notch && py < c.y0 + c.notch.h + r && rho > c.r0 - r && rho < c.r1 + r) {
-        const j = this.jamb(c, px, py, pz, r, rho, th, dTh);
+      if (notch && py < c.y0 + notch.h + r && rho > c.r0 - r && rho < c.r1 + r) {
+        const j = this.jamb(c, notch, px, py, pz, r, rho, th, dTh);
         if (j && (!best || j.d > best.d)) best = j;
       }
       if (!best) return false;
@@ -133,8 +135,8 @@ export class Colliders {
       return true;
     }
     // inside the doorway: jambs and the arch above
-    const j = this.jamb(c, px, py, pz, r, rho, th, dTh);
-    const top = c.y0 + c.notch.h;
+    const j = this.jamb(c, notch, px, py, pz, r, rho, th, dTh);
+    const top = c.y0 + notch.h;
     let best = j;
     if (rho > c.r0 - r && rho < c.r1 + r) {
       const dy = top - py;
@@ -144,11 +146,11 @@ export class Colliders {
     o.nx = best.nx; o.ny = best.ny; o.nz = best.nz; o.d = best.d;
     return true;
   }
-  jamb(c, px, py, pz, r, rho, th, dTh) {
+  jamb(c, notch, px, py, pz, r, rho, th, dTh) {
     // the two jamb faces are vertical planes at angle notch.angle ± half, spanning rho in [r0, r1]
     let best = null;
     for (const s of [-1, 1]) {
-      const a = c.notch.angle + s * c.notch.half;
+      const a = notch.angle + s * notch.half;
       const ex = Math.cos(a), ez = Math.sin(a); // radial direction of the jamb
       const tx = ez * s, tz = -ex * s;           // normal pointing into the doorway
       const rx = px - c.x, rz = pz - c.z;
@@ -156,7 +158,7 @@ export class Colliders {
       const off = rx * tx + rz * tz; // signed distance from the jamb plane (positive = in doorway)
       // only the doorway side of the plane matters here; inside the wall the annulus handles it
       if (off < 0) continue;
-      const qy = clamp(py, c.y0, c.y0 + c.notch.h);
+      const qy = clamp(py, c.y0, c.y0 + notch.h);
       const qx = c.x + ex * along, qz = c.z + ez * along;
       const nx = px - qx, ny = py - qy, nz = pz - qz;
       const d2 = nx * nx + ny * ny + nz * nz;
@@ -234,7 +236,7 @@ export class Colliders {
       let t = Infinity;
       if (c.type === 'box') t = rayBox(c, ox, oy, oz, dx, dy, dz);
       else if (c.type === 'cyl') t = rayCyl(c.x, c.z, c.r, c.y0, c.y1, ox, oy, oz, dx, dy, dz);
-      else if (c.type === 'tube' && !ignoreTube) t = rayCyl(c.x, c.z, c.r1, c.y0, c.y1, ox, oy, oz, dx, dy, dz, true);
+      else if (c.type === 'tube' && !ignoreTube) t = Math.hypot(ox - c.x, oz - c.z) < c.r0 && oy > c.y0 && oy < c.y1 ? rayInside(c.x, c.z, c.r0, ox, oz, dx, dz) : rayCyl(c.x, c.z, c.r1, c.y0, c.y1, ox, oy, oz, dx, dy, dz, true);
       if (t < best) best = t;
     }
     // heightfield march
@@ -268,6 +270,15 @@ function rayBox(c, ox, oy, oz, dx, dy, dz) {
   }
   if (t1 < 0) return Infinity;
   return t0 > 0 ? t0 : Infinity; // ray starting inside: ignore
+}
+
+function rayInside(cx, cz, r, ox, oz, dx, dz) {
+  const fx = ox - cx, fz = oz - cz, a = dx * dx + dz * dz;
+  if (a < 1e-9) return Infinity;
+  const b = 2 * (fx * dx + fz * dz), cc = fx * fx + fz * fz - r * r;
+  const disc = b * b - 4 * a * cc;
+  if (disc < 0) return Infinity;
+  return (-b + Math.sqrt(disc)) / (2 * a);
 }
 
 function rayCyl(cx, cz, r, y0, y1, ox, oy, oz, dx, dy, dz) {

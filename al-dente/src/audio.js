@@ -16,6 +16,8 @@
 //   cooked pasta  low-mid and damped: soft pats, wet squelch, sticky crackle, bubble plops
 //   dry pasta     bright and clicky: small modal "tick-tack" knocks, sharp cracks, splinters
 //   pastina       granular crunch and pour
+//   dry tortellini  hollow ring ticks when they roll, a hollow crack and a rattle when they shatter
+//   opening screen  pulled noodles: a wet, creaky tension loop, a wet thwip when one snaps, a jiggle
 //   tone          only where it's needed: a muted plucked strand (spring), a soft cadence (star)
 //
 // Levels: LV is the loudness of each event at full intensity (dB, loudest 30 ms, before the
@@ -42,12 +44,13 @@ const surf = (x) => {
 const qv = (type, q) => (type === 'lowpass' || type === 'highpass' ? 20 * Math.log10(Math.max(q, 0.05)) : q);
 
 // Loudness at full intensity: dB of the loudest 30 ms, before the master volume (0.7 = -3 dB).
-// (slide, wind and air are raw gains on their loops; simmer on its bubbles.)
+// (slide, stretch, wind, air and room are raw gains on their loops; simmer on its bubbles.)
 const LV = {
   step_cooked: -33, step_dry: -34, step_grain: -34, jump: -38,
   land_cooked: -22, land_dry: -22, land_grain: -22, stick: -23, leap: -26, creak: -27,
   snap: -21, clatter: -28, spring: -22, bonk: -24, collect: -25, sink: -24, respawn: -26, star: -24,
-  slide: -17.5, wind: -30, air: -49, simmer: -38,
+  strandSnap: -26, wobble: -33, roll: -33, shatter: -20, enter: -25,
+  slide: -17.5, stretch: -23, wind: -30, air: -49, simmer: -38, room: -36,
 };
 
 // Event families. slot: seconds per rendered variant; ps: intensities rendered; n: variants per
@@ -70,9 +73,14 @@ const FAM = {
   sink: { slot: 1.6, ps: [1], n: 3, ch: 1, v: '_vSink', cal: -23.4, j: { r: 0.04, g: 0.8, p: 0.05, t: 0, lp: null } },
   respawn: { slot: 0.5, ps: [1], n: 4, ch: 1, v: '_vRespawn', cal: -11.2, j: { r: 0.05, g: 0.8, p: 0.05, t: 0, lp: null } },
   star: { slot: 3.9, ps: [1], n: 2, ch: 2, v: '_vStar', cal: -20.4, j: { r: 0, g: 0, p: 0, t: 0, lp: null } },
+  wobble: { slot: 0.8, ps: [0.4, 1], n: 3, ch: 1, v: '_vWobble', cal: -16.6, j: { r: 0.06, g: 1, p: 0.08, t: 0, lp: null } },
+  strandSnap: { slot: 0.45, ps: [1], n: 6, ch: 1, v: '_vStrandSnap', cal: -21.8, j: { r: 0.06, g: 1, p: 0.1, t: 0, lp: [7000, 14000] } },
+  shatter: { slot: 1.0, ps: [0.35, 1], n: 3, ch: 2, v: '_vShatter', cal: -14.3, j: { r: 0.05, g: 0.8, p: 0.1, t: 0, lp: [10000, 18000] } },
+  enter: { slot: 0.9, ps: [1], n: 3, ch: 2, v: '_vEnter', cal: -15.6, j: { r: 0.03, g: 0.8, p: 0, t: 0, lp: null } },
 };
-const ORDER = ['step_cooked', 'step_dry', 'step_grain', 'jump', 'land_cooked', 'land_dry', 'land_grain', 'stick', 'leap',
-  'bonk', 'snap', 'sink', 'respawn', 'creak', 'spring', 'star'];
+// Render order after unlock: the opening screen's sounds first, the second stage's last.
+const ORDER = ['wobble', 'strandSnap', 'enter', 'step_cooked', 'step_dry', 'step_grain', 'jump', 'land_cooked', 'land_dry',
+  'land_grain', 'stick', 'leap', 'bonk', 'snap', 'sink', 'respawn', 'creak', 'spring', 'star', 'shatter'];
 
 const MAXV = 48; // live-builder voices before low-priority events are dropped
 const STRIPS = 12; // pooled playback strips made at unlock; grows on demand up to 24 (32 for important events)
@@ -378,6 +386,54 @@ function* gBubbles(ctx, count) {
   }
   return out;
 }
+// Slow starchy creak for a stretched noodle: a soft stick-slip pulse train at a wandering rate
+// through low, damped resonances. Seamless: the pulses are zero-mean and the filters run twice
+// around the loop, so the end flows into the start.
+function* gStarch(ctx, sec) {
+  const sr = ctx.sampleRate, b = mkbuf(ctx, sec), d = b.getChannelData(0), n = d.length, x = new Float32Array(n);
+  const rate = cyc(Array.from({ length: 10 }, () => R())), swell = cyc(Array.from({ length: 7 }, () => R()));
+  let mean = 0;
+  for (let pos = 0; pos < n;) {
+    const u = pos / n, a = (0.25 + 0.75 * clamp(swell(u), 0, 1)) * rr(0.5, 1) * (R() < 0.9 ? 1 : -1);
+    x[pos] += a;
+    mean += a;
+    pos += Math.max(24, Math.round((sr / (18 + 42 * clamp(rate(u), 0, 1))) * rr(0.75, 1.25)));
+  }
+  mean /= n;
+  for (let i = 0; i < n; i++) x[i] -= mean;
+  yield;
+  for (const [f, t60, gain] of [[rr(260, 360), 0.045, 1], [rr(620, 820), 0.028, 0.55], [rr(1300, 1700), 0.016, 0.22]]) {
+    const w = (TAU * f) / sr, r = Math.pow(0.001, 1 / (t60 * sr)), c = 2 * r * Math.cos(w), r2 = r * r, s = Math.sin(w) * gain;
+    let y1 = 0, y2 = 0;
+    for (let k = 0; k < 2 * n; k++) {
+      const y = s * x[k < n ? k : k - n] + c * y1 - r2 * y2;
+      y2 = y1; y1 = y;
+      if (k >= n) d[k - n] += y;
+      if ((k & 32767) === 32767) yield;
+    }
+  }
+  normRms(d, 0.2);
+  return b;
+}
+// Hollow tortellino ticks for rolling: a ring's bending modes (1 : 2.83 : 5.42), a dull cavity
+// "tok" under them and a soft contact click. Short, so a stream of them reads as rolling.
+function* gRoll(ctx, N) {
+  const sr = ctx.sampleRate, out = [];
+  for (let i = 0; i < N; i++) {
+    const f1 = 900 * Math.pow(2600 / 900, i / (N - 1)) * rr(0.97, 1.03);
+    const T0 = rr(0.03, 0.045) * Math.pow(900 / f1, 0.3);
+    const len = Math.ceil(sr * (Math.max(T0, 0.03) + 0.02)), b = ctx.createBuffer(1, len, sr), d = b.getChannelData(0);
+    addMode(d, len, f1, 1, T0, sr);
+    addMode(d, len, f1 * 2.83 * rr(0.98, 1.02), rr(0.25, 0.45), T0 * 0.55, sr);
+    addMode(d, len, f1 * 5.42 * rr(0.98, 1.02), rr(0.06, 0.15), T0 * 0.3, sr);
+    addMode(d, len, f1 * rr(0.38, 0.46), rr(0.5, 0.8), rr(0.02, 0.03), sr);
+    addClick(d, sr, 0.0008, rr(0.15, 0.3));
+    fadeTail(d, Math.ceil(sr * 0.004)); normPeak(d, 0.9);
+    out.push(b);
+    if (i % 4 === 3) yield;
+  }
+  return out;
+}
 // Final safety: linear to 0.6, then a smooth tanh knee that never exceeds 0.95.
 // The shaper is fed x/2, so the curve covers +/-2 (6 dB over full scale) before it flattens.
 function softClipCurve() {
@@ -418,7 +474,12 @@ export class PastaAudio {
     this._bank = {};
     this._strips = [];
     this._sl = null;
+    this._st = null; // stretch loop
+    this._rollEnds = [];
+    this._lastRoll = -1;
     this._A = null;
+    this._menu = 0;
+    this._menuSent = -1;
     this._lastUpd = undefined;
     this._h = 0;
     this._sp = 0;
@@ -565,14 +626,16 @@ export class PastaAudio {
     const c = this._ctx, b = this._b, self = this, T = [];
     const norm1 = (bs) => bs.map((x) => 1 / Math.max(1e-4, loud([x.getChannelData(0)], 0, x.length, x.sampleRate)));
     T.push(function* ticks() { if (!b.ticks) { const t = yield* gTicks(c, 12); b.tickN = norm1(t); b.ticks = t; } });
-    T.push(function* drops() { if (!b.drops) b.drops = genDrops(c, 6); });
     T.push(function* wet() { if (!b.wet) b.wet = yield* gWet(c, 2); });
+    T.push(function* smear() { if (!b.smear) b.smear = yield* gSmear(c, 3.3); });
+    T.push(function* starch() { if (!b.starch) b.starch = yield* gStarch(c, 3.1); });
+    T.push(function* drops() { if (!b.drops) b.drops = genDrops(c, 6); });
     T.push(function* pink() { if (!b.pink) b.pink = yield* gPink(c, 2); });
     T.push(function* wood() { if (!b.wood) { const w = genWood(c, 3); b.woodN = norm1(w); b.wood = w; } });
     T.push(function* wind() { if (!b.wind) b.wind = yield* gWhite(c, 6.1, 2); });
     T.push(function* ambience() { if (amb) self._whenRunning(() => self._startAmbience()); });
     T.push(function* bubbles() { if (!b.bub) b.bub = yield* gBubbles(c, 32); });
-    T.push(function* smear() { if (!b.smear) b.smear = yield* gSmear(c, 3.3); });
+    T.push(function* roll() { if (!b.roll) { const r = yield* gRoll(c, 12); b.rollN = norm1(r); b.roll = r; } });
     for (const name of ORDER) {
       if (name === 'creak') T.push(function* creaks() { if (!b.creak) b.creak = yield* gCreaks(c, 3); });
       if (name === 'spring') T.push(function* twang() { if (!b.twang) b.twang = yield* gPluck(c, 110, 1.0, 0.6, 0.55, 0.22, 0.5); });
@@ -728,6 +791,10 @@ export class PastaAudio {
     A.lvl.connect(A.outLP); A.outLP.connect(A.outG); A.outG.connect(this._m);
     A.tubeWind = G(0);
     A.lvl.connect(A.tubeWind); A.tubeWind.connect(this._tubeIn);
+    // The outdoor layers meet in windSum; outdoor stays at exactly 1 unless the menu bed is on.
+    A.windSum = G(1);
+    A.outdoor = G(1);
+    A.windSum.connect(A.outdoor); A.outdoor.connect(A.lvl);
     // Warm air: low-mid hush with a slow, broad "howl" band wandering inside it.
     A.s1 = S(b.wind, 0.94 + 0.12 * this._walk.rate);
     const hp = F('highpass', 70, 0.5);
@@ -735,13 +802,13 @@ export class PastaAudio {
     A.gW = G(wind);
     A.howl = F('bandpass', 420, 1.4);
     A.gH = G(wind * 0.4);
-    A.s1.connect(hp); hp.connect(A.lp); A.lp.connect(A.gW); A.gW.connect(A.lvl);
-    hp.connect(A.howl); A.howl.connect(A.gH); A.gH.connect(A.lvl);
+    A.s1.connect(hp); hp.connect(A.lp); A.lp.connect(A.gW); A.gW.connect(A.windSum);
+    hp.connect(A.howl); A.howl.connect(A.gH); A.gH.connect(A.windSum);
     // Thin high air that comes up with gusts.
     A.s2 = S(b.wind, rr(0.95, 1.0));
     A.bpA = F('bandpass', 2100, 0.6);
     A.gA = G(air);
-    A.s2.connect(A.bpA); A.bpA.connect(A.gA); A.gA.connect(A.lvl);
+    A.s2.connect(A.bpA); A.bpA.connect(A.gA); A.gA.connect(A.windSum);
     // A pot simmering somewhere off to the side: update() drops single bubbles into simIn.
     A.simIn = G(1);
     A.gS = G(this._simmerOn ? dB(LV.simmer) : 0);
@@ -749,7 +816,8 @@ export class PastaAudio {
     A.simIn.connect(shp); shp.connect(slp); slp.connect(A.gS);
     let tail = A.gS;
     if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = 0.2; A.gS.connect(p); tail = p; }
-    tail.connect(A.lvl);
+    A.simMenu = G(1); // brings the simmer closer on the menu screens
+    tail.connect(A.simMenu); A.simMenu.connect(A.lvl);
     // Slow incommensurate LFOs keep the bed moving even if update() is never called; update()
     // adds random walks on top. The rate LFOs mean the noise loops never line up the same way.
     // Each LFO starts at a random phase, so no two sessions (or loop passes) begin alike.
@@ -769,6 +837,7 @@ export class PastaAudio {
     lfo(rr(0.017, 0.02), 0.03, A.s2.playbackRate);
     this._A = A;
     this._tubeSent = -1;
+    this._menuSent = -1;
   }
 
   // Simmer: a Poisson number of single bubbles over the next `step` seconds; busier when w is high.
@@ -796,16 +865,20 @@ export class PastaAudio {
         this._h = c01(s.height01, this._h);
         this._sp = c01(s.speed01, this._sp);
         this._tube = s.inTube ? 1 : 0;
+        this._menu = s.menu ? 1 : 0;
       }
       const t = this._now();
       if (this._lastUpd === undefined) this._lastUpd = t;
       const el = t - this._lastUpd;
-      if (el < 0.15 && el >= 0 && this._tube === this._tubeSent) return;
+      if (el < 0.15 && el >= 0 && this._tube === this._tubeSent && this._menu === this._menuSent) return;
       const step = clamp(el, 0.016, 0.5);
       this._lastUpd = t;
       const sl = this._sl;
       if (sl && !sl.on && t - sl.offT > 0.8) this._slideStop(t);
+      const st = this._st;
+      if (st && !st.on && t - st.offT > 1) this._stretchStop(t);
       if (this._tube !== this._tubeSent) this._applyTube(t);
+      if (this._menu !== this._menuSent) this._applyMenu(t);
       const A = this._A;
       if (!A) return;
       const W = this._walk, k = Math.sqrt(step / 0.15);
@@ -822,7 +895,7 @@ export class PastaAudio {
       A.howl.frequency.setTargetAtTime(260 + 380 * W.howl + 120 * h, t, 1.5);
       A.gS.gain.setTargetAtTime(this._simmerOn ? dB(LV.simmer) * (0.7 + 0.6 * W.sim) : 0, t, 1.2);
       A.s1.playbackRate.setTargetAtTime(0.94 + 0.12 * W.rate, t, 2);
-      if (this._b.bub && this._simmerOn && (this._offline || this._ctx.state === 'running')) this._bubbles(t, step, W.sim);
+      if (this._b.bub && this._simmerOn && (this._offline || this._ctx.state === 'running')) this._bubbles(t, step, Math.min(1, W.sim + 0.08 * this._menu));
     } catch (e) {}
   }
 
@@ -836,6 +909,43 @@ export class PastaAudio {
       A.tubeWind.gain.setTargetAtTime(1.0 * tube, t, tau);
     }
     this._tubeSent = tube;
+  }
+
+  // The opening and select screens (update() with menu: true): a quieter, warmer bed, like a
+  // kitchen in the afternoon. The outdoor air drops to a muffled "through the window", a soft
+  // room tone comes up and the simmer moves closer. Crossfades over about a second.
+  _applyMenu(t) {
+    const A = this._A, m = this._menu, tau = 0.3;
+    this._menuSent = m;
+    if (!A) return;
+    if (m && !A.room) this._buildRoom(t);
+    if (!A.room) return;
+    A.outdoor.gain.setTargetAtTime(1 - 0.9 * m, t, tau);
+    A.window.gain.setTargetAtTime(0.4 * m, t, tau);
+    A.gR.gain.setTargetAtTime(m * dB(LV.room) * this._windOn, t, tau);
+    A.simMenu.gain.setTargetAtTime(1 + 0.3 * m, t, tau);
+  }
+
+  // Built the first time the menu bed is asked for, so the outdoor bed is untouched until then.
+  _buildRoom(t) {
+    const c = this._ctx, A = this._A, b = this._b;
+    const F = (type, f, q) => { const x = c.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = qv(type, q); return x; };
+    A.window = c.createGain();
+    A.window.gain.value = 0;
+    const wlp = F('lowpass', 450, 0.7);
+    A.windSum.connect(A.window); A.window.connect(wlp); wlp.connect(A.lvl);
+    // Room tone: a soft, steady low hush. Its loop speed drifts so it never lines up twice.
+    const s = c.createBufferSource();
+    s.buffer = b.wind; s.loop = true; s.playbackRate.value = rr(0.5, 0.6);
+    const lp = F('lowpass', 300, 0.5), hp = F('highpass', 50, 0.7);
+    A.gR = c.createGain();
+    A.gR.gain.value = 0;
+    s.connect(lp); lp.connect(hp); hp.connect(A.gR); A.gR.connect(A.lvl);
+    s.start(t, R() * b.wind.duration * 0.9);
+    const o = c.createOscillator(), og = c.createGain();
+    o.frequency.value = rr(0.013, 0.017); og.gain.value = 0.03;
+    o.connect(og); og.connect(s.playbackRate); o.start(t);
+    A.room = true;
   }
 
   // ----- playback ------------------------------------------------------------------------------
@@ -1299,6 +1409,103 @@ export class PastaAudio {
     return e;
   }
 
+  // Noodles springing back after being let go: a few quick wet jiggles that settle.
+  _vWobble(v, t, a) {
+    const b = this._b, f = rr(9, 13), n = 3 + Math.round(2 * a), dur = n / f;
+    const s = this._s(v, b.wet || b.pink || b.white, t, dur + 0.12, rr(0.8, 1.05));
+    const bp = this._f(v, 'bandpass', rr(450, 620) + 220 * a, 1.1);
+    const g = this._g(v, 0), p = g.gain;
+    p.setValueAtTime(0, t);
+    for (let k = 0; k < n; k++) {
+      const tk = t + k / f, amp = Math.pow(0.6, k) * rr(0.8, 1);
+      p.linearRampToValueAtTime(amp, tk + 0.014);
+      p.linearRampToValueAtTime(amp * 0.15, tk + 0.75 / f);
+    }
+    p.linearRampToValueAtTime(0, t + dur + 0.06);
+    s.connect(bp); bp.connect(g); this._to(v, g, 0);
+    let e = t + dur + 0.08;
+    e = Math.max(e, this._nb(v, t, { buf: 'white', type: 'lowpass', f: rr(200, 280), q: 0.8, a: 0.005, t60: 0.09, g: 0.3 }));
+    for (let k = 0; k < 2; k++) e = Math.max(e, this._chirp(v, t + k / f + 0.004, { f: rr(170, 230), f2: rr(260, 340), sw: 0.04, a: 0.004, t60: 0.07, g: 0.22 * Math.pow(0.55, k) }));
+    return e;
+  }
+
+  // A stretched cooked noodle letting go: a fast wet "thwip" rising in pitch, then the end
+  // whips back with a small wet slap. Soft attacks throughout: wet, never a dry crack.
+  _vStrandSnap(v, t) {
+    const b = this._b, tw = t + rr(0.075, 0.11);
+    const s = this._s(v, b.wet || b.pink || b.white, t, 0.12, rr(1, 1.3));
+    const f = this._f(v, 'bandpass', 500, 1.6);
+    f.frequency.setValueAtTime(rr(450, 600), t);
+    f.frequency.exponentialRampToValueAtTime(rr(2000, 2800), t + 0.05);
+    const g = this._g(v, 0), p = g.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.7, t + 0.012);
+    p.exponentialRampToValueAtTime(0.25, t + 0.045);
+    p.linearRampToValueAtTime(0, t + 0.08);
+    s.connect(f); f.connect(g); this._to(v, g, 0);
+    let e = this._nb(v, t, { buf: 'pink', type: 'bandpass', f: 700, f2: 2400, sw: 0.06, q: 1.2, a: 0.01, t60: 0.07, g: 0.35 });
+    e = Math.max(e, this._chirp(v, t + 0.03, { f: rr(500, 650), f2: rr(1300, 1700), sw: 0.025, a: 0.002, t60: 0.035, g: 0.22 }));
+    e = Math.max(e, this._nb(v, tw, { buf: 'white', type: 'lowpass', f: rr(260, 360), q: 0.8, a: 0.0015, t60: 0.05, g: 0.6 }));
+    e = Math.max(e, this._nb(v, tw, { buf: 'white', type: 'bandpass', f: rr(1000, 1400), q: 1.1, a: 0.0008, t60: 0.02, g: 0.3 }));
+    e = Math.max(e, this._nb(v, tw + 0.002, { buf: 'wet', rate: rr(0.9, 1.2), type: 'bandpass', f: 1100, f2: 500, sw: 0.08, q: 1.5, a: 0.003, t60: 0.1, g: 0.45 }));
+    for (let k = 0, n = ri(1, 3); k < n; k++) e = Math.max(e, this._tk(v, tw + rr(0.02, 0.15), pick(b.drops || []), rr(0.85, 1.2), 0.1 * rr(0.5, 1), rr(-0.4, 0.4)));
+    return Math.max(e, t + 0.09);
+  }
+
+  // A dry tortellino cracking apart when stomped: a crisp double crack over a hollow, low body,
+  // a few chunks knocking, then a short rattle of pieces. Bigger and hollower than snap().
+  _vShatter(v, t, s) {
+    const b = this._b, tk = b.ticks, rb = b.roll || tk;
+    const times = [0, rr(0.004, 0.016)];
+    if (R() < 0.3 + 0.4 * s) times.push(rr(0.012, 0.03));
+    let e = t + 0.1;
+    for (let k = 0; k < times.length; k++) {
+      const tc = t + times[k], ak = k === 0 ? 1 : rr(0.45, 0.8);
+      const src = this._s(v, b.white, tc, 0.06, 1);
+      e = Math.max(e, this._nb(v, tc, { src, type: 'highpass', f: rr(900, 1500), q: 0.7, type2: 'lowpass', ff: rr(6000, 8000), a: 0.0004, t60: rr(0.008, 0.014), g: 0.6 * ak }));
+      e = Math.max(e, this._nb(v, tc, { src, type: 'bandpass', f: rr(1600, 2600), q: 1.3, a: 0.0004, t60: rr(0.02, 0.03), g: 0.4 * ak }));
+    }
+    // the hollow body: two low woody tocks and the cavity's short "whomp"
+    e = Math.max(e, this._tk(v, t + 0.001, tk[ri(0, 1)], rr(0.72, 0.85) - 0.08 * s, 0.9, rr(-0.1, 0.1)));
+    e = Math.max(e, this._tk(v, t + rr(0.004, 0.01), tk[ri(1, 3)], rr(0.8, 0.95), 0.5, rr(-0.2, 0.2)));
+    e = Math.max(e, this._nb(v, t, { buf: 'white', type: 'bandpass', f: rr(300, 420) * (1.1 - 0.2 * s), q: 5, a: 0.001, t60: 0.07 + 0.04 * s, g: 3 }));
+    e = Math.max(e, this._nb(v, t, { buf: 'white', type: 'bandpass', f: rr(200, 300), q: 1, a: 0.0015, t60: 0.09 + 0.06 * s, g: 0.45 }));
+    // chunks knocking, then a brief rattle of pieces on the lasagna
+    for (let k = 0, n = 3 + Math.round(2 * s); k < n; k++) {
+      e = Math.max(e, this._tk(v, t + rr(0.03, 0.2), rb[ri(0, 6)], rr(0.85, 1.05), 0.45 * rr(0.5, 1), rr(-0.5, 0.5)));
+    }
+    for (let k = 0, n = 6 + Math.round(6 * s); k < n; k++) {
+      const dt = 0.12 + Math.min(0.42, -Math.log(1 - R()) * 0.12);
+      e = Math.max(e, this._tk(v, t + dt, tk[ri(5, 10)], rr(0.95, 1.25), 0.28 * rr(0.3, 1) * Math.exp(-(dt - 0.12) / 0.2), rr(-0.6, 0.6)));
+    }
+    e = Math.max(e, this._nb(v, t + 0.01, { buf: 'crackle', type: 'bandpass', f: 2600, q: 0.8, a: 0.002, t60: 0.2 + 0.1 * s, g: 0.22 }));
+    return e;
+  }
+
+  // Jumping into a tagliatelle nest: a soft papery rustle of dry ribbons, then a warm low whoosh.
+  _vEnter(v, t) {
+    const b = this._b;
+    let e = t + 0.62;
+    for (const pan of [-0.35, 0.35]) {
+      e = Math.max(e, this._nb(v, t + rr(0, 0.02), { buf: 'crackle', rate: rr(0.5, 0.8), type: 'bandpass', f: rr(2200, 3200), q: 0.7, type2: 'lowpass', ff: 5000, a: rr(0.02, 0.04), t60: rr(0.22, 0.3), g: 0.4, pan }));
+    }
+    for (let k = 0, n = ri(3, 5); k < n; k++) e = Math.max(e, this._tk(v, t + rr(0, 0.18), b.ticks[ri(5, 9)], rr(0.8, 1), 0.12 * rr(0.5, 1), rr(-0.5, 0.5)));
+    const s = this._s(v, b.pink || b.white, t, 0.7, 1);
+    const lp = this._f(v, 'lowpass', 180, 0.9), hp = this._f(v, 'highpass', 60, 0.7);
+    lp.frequency.setValueAtTime(180, t);
+    lp.frequency.exponentialRampToValueAtTime(rr(650, 800), t + 0.24);
+    lp.frequency.exponentialRampToValueAtTime(220, t + 0.6);
+    const g = this._g(v, 0), p = g.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.05, t + 0.05);
+    p.linearRampToValueAtTime(0.9, t + 0.24);
+    p.exponentialRampToValueAtTime(0.08, t + 0.55);
+    p.linearRampToValueAtTime(0, t + 0.62);
+    s.connect(lp); lp.connect(hp); hp.connect(g); this._to(v, g, 0);
+    e = Math.max(e, this._nb(v, t + 0.03, { buf: 'white', type: 'lowpass', f: 200, q: 0.7, a: 0.01, t60: 0.15, g: 0.35 }));
+    return e;
+  }
+
   // ----- the API -------------------------------------------------------------------------------
 
   step(speed01, surface) {
@@ -1347,6 +1554,49 @@ export class PastaAudio {
 
   star() {
     try { this._ev('star', 1, 'star', 1.2, 3, 1); } catch (e) {}
+  }
+
+  // A stretched cooked noodle snapping on the opening screen.
+  strandSnap() {
+    try { this._ev('strandSnap', 1, 'strandSnap', 0.06, 2, 1); } catch (e) {}
+  }
+
+  // Noodles springing back after they're let go. Quiet; 0 makes no sound.
+  wobble(amount01) {
+    try {
+      const a = c01(amount01, 0.6);
+      if (a >= 0.02) this._ev('wobble', a, 'wobble', 0.12, 1, dB(-10 * (1 - a)));
+    } catch (e) {}
+  }
+
+  // A dry tortellino cracking into pieces when stomped.
+  shatter(size01) {
+    try { const s = c01(size01, 0.7); this._ev('shatter', s, 'shatter', 0.05, 3, dB(-7 * (1 - s))); } catch (e) {}
+  }
+
+  // Jumping into a tagliatelle nest to start a stage.
+  enter() {
+    try { this._ev('enter', 1, 'enter', 0.4, 3, 1); } catch (e) {}
+  }
+
+  // One contact tick of a dry tortellino rolling over dry lasagna; intensity already includes
+  // distance. Variant, pitch, level, filter and a few ms of timing all vary, so a stream of
+  // them (4-8 a second per tortellino) reads as rolling rather than as a machine.
+  rollTick(intensity01, pitch01) {
+    try {
+      const i = c01(intensity01, 0.5);
+      if (i < 0.01) return;
+      const t0 = this._gate('roll', 0.002);
+      if (t0 < 0 || prune(this._rollEnds, t0) >= 12) return;
+      const b = this._b, rb = b.roll || b.ticks, rn = b.roll ? b.rollN : b.tickN;
+      if (!rb || !rn) return;
+      const p = c01(pitch01, 0.5), t = t0 + R() * 0.004, last = rb.length - 1;
+      let k = clamp(Math.round(p * last + rr(-1.5, 1.5)), 0, last);
+      if (k === this._lastRoll) k = clamp(k + (R() < 0.5 ? -1 : 1), 0, last);
+      this._lastRoll = k;
+      const rate = rr(0.92, 1.08), g = dB(LV.roll) * i * dB(rr(-2.5, 2)) * rn[k];
+      if (this._pb(rb[k], 0, rb[k].duration, t, g, rate, rr(-0.3, 0.3), rr(5000, 10000), 0)) this._rollEnds.push(t + rb[k].duration / rate);
+    } catch (e) {}
   }
 
   // A dry piece knocking into something; pitch01 picks small and glassy (1) or big and woody (0).
@@ -1441,6 +1691,69 @@ export class PastaAudio {
       sl.s1.onended = () => { for (const x of sl.n) { try { x.disconnect(); } catch (e) {} } };
       sl.s1.stop(t + 0.15);
       sl.s2.stop(t + 0.15);
+    } catch (e) {}
+  }
+
+  // Continuous, while the player pulls the noodles on the opening screen. Call every frame;
+  // 0 means not pulling. Soft wet tension, a slow starchy creak, and a faint sticky crackle
+  // that rises with amount. Every change is a smooth ramp, so it never clicks.
+  stretch(amount01) {
+    try {
+      if (!this._ok) return;
+      const t = this._now(), a = c01(amount01, 0), b = this._b;
+      if (a > 0.005 && !this._muted && (this._offline || this._ctx.state === 'running')) {
+        if (!this._st) {
+          if (!b.smear || !b.starch) return; // textures are made a moment after unlock
+          this._stretchStart(t);
+        }
+        const S = this._st;
+        if (!S.on || Math.abs(a - S.a) > 0.02) {
+          const tau = a >= S.a ? 0.05 : 0.09;
+          S.out.gain.setTargetAtTime(dB(LV.stretch) * Math.pow(a, 0.7), t, tau);
+          S.gC.gain.setTargetAtTime(0.7 * Math.pow(a, 1.3), t, tau);
+          S.gK.gain.setTargetAtTime(0.3 * a * a, t, tau);
+          S.s1.playbackRate.setTargetAtTime(0.55 + 0.4 * a, t, 0.1);
+          S.f1.frequency.setTargetAtTime(380 + 650 * a, t, 0.1);
+          S.s2.playbackRate.setTargetAtTime(0.5 + 0.7 * a, t, 0.15);
+          S.s3.playbackRate.setTargetAtTime(0.4 + 0.8 * a, t, 0.1);
+          S.a = a;
+        }
+        S.on = true;
+      } else if (this._st) {
+        const S = this._st;
+        if (S.on) { S.out.gain.setTargetAtTime(0, t, 0.09); S.on = false; S.offT = t; S.a = 0; }
+        else if (t - S.offT > 1) this._stretchStop(t);
+      }
+    } catch (e) {}
+  }
+
+  _stretchStart(t) {
+    const c = this._ctx, b = this._b;
+    const out = c.createGain();
+    out.gain.value = 0;
+    out.connect(this._sfx);
+    const loop = (buf, rate) => { const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = rate; s.start(t, R() * buf.duration * 0.9); return s; };
+    const flt = (type, f, q) => { const x = c.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = qv(type, q); return x; };
+    const s1 = loop(b.smear, 0.6), f1 = flt('bandpass', 420, 1.1); // soft wet tension
+    const s2 = loop(b.starch, 0.6), f2 = flt('lowpass', 1600, 0.7), gC = c.createGain(); // slow starchy creak
+    const s3 = loop(b.crackle, 0.5), f3 = flt('bandpass', 2400, 1), gK = c.createGain(); // faint sticky crackle
+    gC.gain.value = 0;
+    gK.gain.value = 0;
+    s1.connect(f1); f1.connect(out);
+    s2.connect(f2); f2.connect(gC); gC.connect(out);
+    s3.connect(f3); f3.connect(gK); gK.connect(out);
+    this._st = { out, s1, s2, s3, f1, gC, gK, n: [out, s1, f1, s2, f2, gC, s3, f3, gK], on: false, a: 0, offT: t };
+  }
+
+  _stretchStop(t) {
+    const S = this._st;
+    if (!S) return;
+    this._st = null;
+    try {
+      S.out.gain.cancelScheduledValues(t);
+      S.out.gain.setTargetAtTime(0, t, 0.02);
+      S.s1.onended = () => { for (const x of S.n) { try { x.disconnect(); } catch (e) {} } };
+      for (const s of [S.s1, S.s2, S.s3]) s.stop(t + 0.15);
     } catch (e) {}
   }
 }
