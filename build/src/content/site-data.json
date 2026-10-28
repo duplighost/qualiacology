@@ -92,6 +92,20 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "spaghetti",
+      "title": "SPAGHETTI",
+      "descriptor": "Side-scroller made of spaghetti",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/spaghetti-card-v20261028.jpg",
+      "alt": "A twirl of cooked spaghetti on two loose ends jumping into a bundle of red tomato spaghetti on a stilt: the bundle bursts into snapped rods and green spinach loops fly off the top. Two bundles of dry spaghetti stand on spaghetti stilts to the right, cooked strands hang from above, and the floor is stacked dry spaghetti under a tangle of cooked",
+      "summary": "Everything is made out of spaghetti. Nothing cannot be spaghetti. You are a twirl of it, walking on two loose ends. Hit a dry bundle from below and it snaps apart. Loops of spinach spaghetti go on you, and a hit knocks them off. Clumps of squid ink spaghetti roll at you. The rods across the gaps bend, and break if you stand on them. Keyboard.",
+      "metaDescription": "SPAGHETTI is a side-scrolling browser game where everything is made out of spaghetti: you are a twirl of cooked spaghetti on two loose ends, dry bundles snap apart when you hit them, and the rods across the gaps bend and break. Keyboard.",
+      "controls": "arrows or A D move · Space, Up, W or Z jump, hold for higher · Esc pause · M mute · F full screen",
+      "actionLabel": "Jump in",
+      "duration": "A few minutes"
+    },
+    {
       "slug": "sill",
       "title": "SILL",
       "descriptor": "A fledgling on your real desktop",
