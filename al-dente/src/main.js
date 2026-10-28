@@ -10,6 +10,7 @@ import { buildLobby } from './lobby.js';
 import { buildMeadow } from './meadow.js';
 import { buildFortress } from './fortress.js';
 import { buildBay } from './bay.js';
+import { buildMountain } from './mountain.js';
 import { PastaAudio } from './audio.js';
 import { clamp, lerp, damp, smoothstep } from './util.js';
 
@@ -17,7 +18,7 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const setLoad = (f) => { const b = $('loadbar'); if (b) b.style.width = Math.round(f * 100) + '%'; };
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
-const BUILDERS = { meadow: buildMeadow, fortress: buildFortress, bay: buildBay };
+const BUILDERS = { meadow: buildMeadow, fortress: buildFortress, bay: buildBay, mountain: buildMountain };
 const PKEY = 'al-dente.stars';
 const loadStars = () => { try { return new Set(JSON.parse(localStorage.getItem(PKEY) || '[]')); } catch (_) { return new Set(); } };
 const saveStars = (s) => { try { localStorage.setItem(PKEY, JSON.stringify([...s])); } catch (_) { /* private window: keep it for this visit */ } };
@@ -62,6 +63,11 @@ async function boot() {
     const { scene, sun } = makeScene();
     const p = id === 'lobby' ? buildLobby(scene, K, audio) : BUILDERS[id](scene, K, audio, T);
     p.sun = sun; p.skyMat.uniforms.uSun.value.copy(SUN_DIR);
+    // a place can bring its own weather
+    if (p.sky) { const u = p.skyMat.uniforms; u.uZen.value.set(...p.sky.zen); u.uHor.value.set(...p.sky.hor); u.uLow.value.set(...p.sky.low); u.uGlow.value.set(...p.sky.glow); }
+    if (p.fogColor) scene.fog.color.copy(p.fogColor);
+    if (p.sunColor) sun.color.copy(p.sunColor);
+    if (p.sunIntensity) sun.intensity = p.sunIntensity;
     built[id] = p;
     return p;
   };
@@ -80,7 +86,7 @@ async function boot() {
   };
 
   const ctxFor = (p) => ({ colliders: p.colliders, audio, supports: p.supports, fx: p.fx, onRespawn: () => { p.resetBreakables(); cam.snap(hero); post.params.fade = 0; },
-    water: p.water ?? null, sinkY: p.sinkY, safeMinY: p.safeMinY, groundSurface: p.groundSurface, bubbles: p.bubbles ?? null });
+    water: p.water ?? null, sinkY: p.sinkY, safeMinY: p.safeMinY, groundSurface: p.groundSurface, bubbles: p.bubbles ?? null, slickAt: p.slickAt ?? null });
   const hero = new Hero(lobby.scene, K, ctxFor(lobby));
   const cam = new FollowCam(camera, lobby.colliders);
   let active = lobby;
@@ -317,7 +323,8 @@ async function boot() {
     if (!view) G.uWaterOn.value = 0;
     uw = damp(uw, view ? view.underwater : 0, 10, dt);
     audio.update(dt, { height01: clamp((hero.pos.y - 1) / 30, 0, 1), speed01: clamp(Math.hypot(hero.vel.x, hero.vel.z) / 7.4, 0, 1), inTube: cam.tubeBlend > 0.5, menu: active === lobby,
-      underwater: uw, depth01: view ? view.depth01 : 0, shore01: view ? view.shore01 : 0 });
+      underwater: uw, depth01: view && view.depth01 || 0, shore01: view && view.shore01 || 0, wind01: view && view.wind01 || 0 });
+    audio.sled?.(hero.sledding && hero.state === 'play', clamp(Math.hypot(hero.vel.x, hero.vel.z) / 14, 0, 1), hero.carve || 0);
     post.render(active.scene, camera, time);
 
     // keep the frame rate: trade resolution for time. Building a stage hitches, so ignore that;

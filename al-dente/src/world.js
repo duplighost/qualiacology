@@ -302,18 +302,17 @@ export function addSeaSky(scene, K, { sea: withSea = true } = {}) {
   // sky
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { uSun: { value: new THREE.Vector3(0, 1, 0) } },
+    uniforms: { uSun: { value: new THREE.Vector3(0, 1, 0) }, uZen: { value: new THREE.Vector3(0.16, 0.33, 0.72).multiplyScalar(1.15) },
+      uHor: { value: new THREE.Vector3(1.0, 0.8, 0.58).multiplyScalar(1.1) }, uLow: { value: new THREE.Vector3(0.95, 0.74, 0.5).multiplyScalar(1.1) }, uGlow: { value: new THREE.Vector3(1.0, 0.82, 0.55) } },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
-    fragmentShader: `varying vec3 vDir; uniform vec3 uSun;
+    fragmentShader: `varying vec3 vDir; uniform vec3 uSun, uZen, uHor, uLow, uGlow;
       void main(){
         vec3 d = normalize(vDir);
         float h = d.y;
-        vec3 zen = vec3(0.16, 0.33, 0.72) * 1.15;
-        vec3 hor = vec3(1.0, 0.8, 0.58) * 1.1;
-        vec3 low = vec3(0.95, 0.74, 0.5) * 1.1;
+        vec3 zen = uZen, hor = uHor, low = uLow;
         vec3 c = h > 0.0 ? mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.38)) : mix(hor, low, clamp(-h * 4.0, 0.0, 1.0));
         float s = max(dot(d, uSun), 0.0);
-        c += vec3(1.0, 0.82, 0.55) * (pow(s, 7.0) * 0.55 + pow(s, 60.0) * 1.4) + vec3(1.0, 0.9, 0.7) * pow(s, 900.0) * 30.0;
+        c += uGlow * (pow(s, 7.0) * 0.55 + pow(s, 60.0) * 1.4) + vec3(1.0, 0.9, 0.7) * pow(s, 900.0) * 30.0;
         gl_FragColor = vec4(c, 1.0);
       }`,
   });
