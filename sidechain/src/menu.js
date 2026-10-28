@@ -430,6 +430,7 @@ export class Screens {
   // keys while a screen is up; returns true if it used the key
   key(e) {
     if (!this.active) return false;
+    if (e.target.closest?.('.privacy-link')) return true;
     const k = e.code;
     // the title: any key but the ones that belong to the browser
     if (this.active === 'intro') {
