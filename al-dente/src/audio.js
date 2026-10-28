@@ -20,6 +20,9 @@
 //   opening screen  pulled noodles: a wet, creaky tension loop, a wet thwip when one snaps, a jiggle
 //   the bay       starchy water: plops and spray, swim strokes and bubbles, the shell's gush, a
 //                 squid; under water the game mix is muffled and a low, slow bed comes up
+//   the mountain  orzo snow: a soft squeaky crunch, a whumpf into a drift, clumps off the pines;
+//                 the wet lasagna bobsled run: hiss, rumble, scrape and a rubbery squeal; cold
+//                 wind with slow gusts in place of the summer air
 //   tone          only where it's needed: a muted plucked strand (spring), a soft cadence (star)
 //
 // Levels: LV is the loudness of each event at full intensity (dB, loudest 30 ms, before the
@@ -41,13 +44,16 @@ const surf = (x) => {
   if (s === 'dry') return 'dry';
   if (s === 'grain' || s === 'pastina') return 'grain';
   if (s === 'sand') return 'sand';
+  if (s === 'snow') return 'snow';
+  if (s === 'slick') return 'slick';
   return 'cooked';
 };
 // BiquadFilter Q is in dB for lowpass/highpass and linear for the rest.
 const qv = (type, q) => (type === 'lowpass' || type === 'highpass' ? 20 * Math.log10(Math.max(q, 0.05)) : q);
 
 // Loudness at full intensity: dB of the loudest 30 ms, before the master volume (0.7 = -3 dB).
-// (slide, stretch, wind, air and room are raw gains on their loops; simmer on its bubbles.)
+// (slide, stretch, wind, air, room, uwBed, shore, sled and mtn are raw gains on their loops;
+// simmer on its bubbles.)
 const LV = {
   step_cooked: -33, step_dry: -34, step_grain: -34, jump: -38,
   land_cooked: -22, land_dry: -22, land_grain: -22, stick: -23, leap: -26, creak: -27,
@@ -55,8 +61,11 @@ const LV = {
   strandSnap: -26, wobble: -33, roll: -33, shatter: -20, enter: -25,
   step_sand: -34, land_sand: -22, splash: -20, emerge: -26, paddle: -37, bubble: -41, burst: -23,
   squid_pulse: -33, squid_bonk: -23, squid_ink: -31,
+  step_snow: -34, land_snow: -22.5, step_slick: -34, land_slick: -22, launch: -29, thump: -27,
   slide: -17.5, stretch: -23, wind: -30, air: -49, simmer: -38, room: -36, uwBed: -32.5, shore: -24,
+  sled: -23.5, mtn: -32,
 };
+const WHISTLE = 5.5; // the summit whistle's narrow bands, relative to the mountain wind's body
 
 // Event families. slot: seconds per rendered variant; ps: intensities rendered; n: variants per
 // intensity; ch: channels; v: live builder; cal: builder's own loudness (dB), for the live path;
@@ -92,11 +101,19 @@ const FAM = {
   squid_pulse: { slot: 0.6, ps: [1], n: 5, ch: 1, v: '_vSquidPulse', cal: -12.7, bus: 'w', j: { r: 0.06, g: 1, p: 0.2, t: 0, lp: [1200, 2500] } },
   squid_bonk: { slot: 0.6, ps: [1], n: 5, ch: 1, v: '_vSquidBonk', cal: -13.5, bus: 'w', j: { r: 0.06, g: 1, p: 0.15, t: 0, lp: [3000, 7000] } },
   squid_ink: { slot: 0.9, ps: [1], n: 4, ch: 1, v: '_vSquidInk', cal: -12.8, bus: 'w', j: { r: 0.05, g: 1, p: 0.2, t: 0, lp: [1200, 2400] } },
+  // The mountain.
+  step_snow: { slot: 0.24, ps: [0.35, 1], n: 8, ch: 1, v: '_vStepSnow', cal: -24, j: { r: 0.06, g: 1.5, p: 0.08, t: 0.005, lp: [6000, 12000] } },
+  land_snow: { slot: 0.6, ps: [0.2, 0.55, 1], n: 3, ch: 1, v: '_vLandSnow', cal: -22.3, j: { r: 0.04, g: 1, p: 0.1, t: 0, lp: [5000, 12000] } },
+  step_slick: { slot: 0.16, ps: [0.35, 1], n: 8, ch: 1, v: '_vStepSlick', cal: -26.5, j: { r: 0.06, g: 1.5, p: 0.08, t: 0.005, lp: [6000, 14000] } },
+  land_slick: { slot: 0.5, ps: [0.2, 0.55, 1], n: 3, ch: 1, v: '_vLandSlick', cal: -21.3, j: { r: 0.04, g: 1, p: 0.1, t: 0, lp: [7000, 16000] } },
+  launch: { slot: 0.85, ps: [0.4, 1], n: 4, ch: 1, v: '_vLaunch', cal: -16, j: { r: 0.05, g: 1, p: 0.1, t: 0, lp: [8000, 16000] } },
+  thump: { slot: 1.1, ps: [0.4, 1], n: 3, ch: 1, v: '_vThump', cal: -24.7, j: { r: 0.05, g: 1, p: 0.3, t: 0, lp: [6000, 12000] } },
 };
 // Render order after unlock: the opening screen's sounds first, the later stages' last.
 const ORDER = ['wobble', 'strandSnap', 'enter', 'step_cooked', 'step_dry', 'step_grain', 'jump', 'land_cooked', 'land_dry',
   'land_grain', 'stick', 'leap', 'bonk', 'snap', 'sink', 'respawn', 'creak', 'spring', 'star', 'shatter',
-  'step_sand', 'land_sand', 'splash', 'paddle', 'emerge', 'squid_pulse', 'squid_bonk', 'squid_ink', 'burst'];
+  'step_sand', 'land_sand', 'splash', 'paddle', 'emerge', 'squid_pulse', 'squid_bonk', 'squid_ink', 'burst',
+  'step_snow', 'land_snow', 'step_slick', 'land_slick', 'launch', 'thump'];
 
 const MAXV = 48; // live-builder voices before low-priority events are dropped
 const STRIPS = 12; // pooled playback strips made at unlock; grows on demand up to 24 (32 for important events)
@@ -467,6 +484,35 @@ function* gBlips(ctx, N) {
   }
   return out;
 }
+// Stick-slip squeal: wet pasta rubbing on wet pasta. A pulse train at a wandering rate (the
+// squeal's pitch, 220-520 Hz) that chatters in and out, through a few damped resonances. The
+// bobsled's carve, and the little squeaks on the run and in cold snow. Seamless, like gStarch.
+function* gSqueal(ctx, sec) {
+  const sr = ctx.sampleRate, b = mkbuf(ctx, sec), d = b.getChannelData(0), n = d.length, x = new Float32Array(n);
+  const rate = cyc(Array.from({ length: Math.round(sec * 6) }, () => R())), chat = cyc(Array.from({ length: Math.round(sec * 20) }, () => R()));
+  let mean = 0;
+  for (let pos = 0; pos < n;) {
+    const u = pos / n, c = clamp(chat(u), 0, 1), a = (0.15 + 0.85 * c * c) * rr(0.75, 1);
+    x[pos] += a;
+    mean += a;
+    pos += Math.max(16, Math.round((sr / (220 + 300 * clamp(rate(u), 0, 1))) * rr(0.9, 1.1)));
+  }
+  mean /= n;
+  for (let i = 0; i < n; i++) x[i] -= mean;
+  yield;
+  for (const [f, t60, gain] of [[rr(1000, 1250), 0.012, 1], [rr(2050, 2450), 0.008, 0.55], [rr(3300, 3900), 0.005, 0.25]]) {
+    const w = (TAU * f) / sr, r = Math.pow(0.001, 1 / (t60 * sr)), c = 2 * r * Math.cos(w), r2 = r * r, s = Math.sin(w) * gain;
+    let y1 = 0, y2 = 0;
+    for (let k = 0; k < 2 * n; k++) {
+      const y = s * x[k < n ? k : k - n] + c * y1 - r2 * y2;
+      y2 = y1; y1 = y;
+      if (k >= n) d[k - n] += y;
+      if ((k & 32767) === 32767) yield;
+    }
+  }
+  normRms(d, 0.2);
+  return b;
+}
 // Final safety: linear to 0.6, then a smooth tanh knee that never exceeds 0.95.
 // The shaper is fed x/2, so the curve covers +/-2 (6 dB over full scale) before it flattens.
 function softClipCurve() {
@@ -523,6 +569,11 @@ export class PastaAudio {
     this._nextCreak = 0;
     this._nextTrickle = 0;
     this._nextLap = 0;
+    this._sd = null; // bobsled loop
+    this._wind = 0; // on the mountain 0..1 (0 = not on it, 1 = the summit)
+    this._windSent = 0;
+    this._gst = { on: false, t0: 0, rise: 1, hold: 0, fall: 1, peak: 0, fl: 0.5 }; // the current gust
+    this._nextGust = 0;
     this._lastUpd = undefined;
     this._h = 0;
     this._sp = 0;
@@ -689,6 +740,7 @@ export class PastaAudio {
     T.push(function* bubbles() { if (!b.bub) b.bub = yield* gBubbles(c, 32); });
     T.push(function* roll() { if (!b.roll) { const r = yield* gRoll(c, 12); b.rollN = norm1(r); b.roll = r; } });
     T.push(function* blips() { if (!b.blip) { const x = yield* gBlips(c, 24); b.blipN = norm1(x); b.blip = x; } });
+    T.push(function* squeal() { if (!b.squeal) b.squeal = yield* gSqueal(c, 3.7); });
     for (const name of ORDER) {
       if (name === 'creak') T.push(function* creaks() { if (!b.creak) b.creak = yield* gCreaks(c, 3); });
       if (name === 'spring') T.push(function* twang() { if (!b.twang) b.twang = yield* gPluck(c, 110, 1.0, 0.6, 0.55, 0.22, 0.5); });
@@ -923,20 +975,26 @@ export class PastaAudio {
         this._uw = c01(s.underwater, 0);
         this._depth = c01(s.depth01, 0);
         this._shore = c01(s.shore01, 0);
+        this._wind = c01(s.wind01, 0);
       }
       const t = this._now();
       if (this._lastUpd === undefined) this._lastUpd = t;
       const el = t - this._lastUpd;
-      if (el < 0.15 && el >= 0 && this._tube === this._tubeSent && this._menu === this._menuSent && Math.abs(this._uw - this._uwSent) < 0.02) return;
+      if (el < 0.15 && el >= 0 && this._tube === this._tubeSent && this._menu === this._menuSent && Math.abs(this._uw - this._uwSent) < 0.02 &&
+        Math.abs(this._wind - this._windSent) < 0.02) return;
       const step = clamp(el, 0.016, 0.5);
       this._lastUpd = t;
       const sl = this._sl;
       if (sl && !sl.on && t - sl.offT > 0.8) this._slideStop(t);
       const st = this._st;
       if (st && !st.on && t - st.offT > 1) this._stretchStop(t);
+      const sd = this._sd;
+      if (sd && sd.on && t - sd.lt > 0.35) { sd.out.gain.setTargetAtTime(0, t, 0.07); sd.on = false; sd.offT = t; } // sled() stopped being called
+      else if (sd && !sd.on && t - sd.offT > 0.8) this._sledStop(t);
       if (this._tube !== this._tubeSent) this._applyTube(t);
       if (this._menu !== this._menuSent) this._applyMenu(t);
       if (this._uw || this._uwSent || this._shore || this._shoreSent) this._applyWater(t, el >= 0.15);
+      if (this._wind || this._windSent) this._applyMountain(t, el >= 0.15);
       const A = this._A;
       if (!A) return;
       const W = this._walk, k = Math.sqrt(step / 0.15);
@@ -951,7 +1009,7 @@ export class PastaAudio {
       A.lp.frequency.setTargetAtTime((330 + 380 * W.lp) * (1 + 0.3 * h) + 100 * sp, t, 1.0);
       A.gA.gain.setTargetAtTime(wo * dB(LV.air) * (0.3 + 1.3 * W.gust * W.gust) * (1 + 1.2 * h) * (1 + 0.4 * sp), t, 0.8);
       A.howl.frequency.setTargetAtTime(260 + 380 * W.howl + 120 * h, t, 1.5);
-      A.gS.gain.setTargetAtTime(this._simmerOn ? dB(LV.simmer) * (0.7 + 0.6 * W.sim) : 0, t, 1.2);
+      A.gS.gain.setTargetAtTime(this._simmerOn ? dB(LV.simmer) * (0.7 + 0.6 * W.sim) * (1 - 0.85 * this._mtnPres()) : 0, t, 1.2);
       A.s1.playbackRate.setTargetAtTime(0.94 + 0.12 * W.rate, t, 2);
       if (this._b.bub && this._simmerOn && (this._offline || this._ctx.state === 'running')) this._bubbles(t, step, Math.min(1, W.sim + 0.08 * this._menu));
     } catch (e) {}
@@ -1008,7 +1066,12 @@ export class PastaAudio {
 
   _outdoorTarget() {
     const A = this._A, m = this._menu;
-    return (A && A.room ? 1 - 0.9 * m : 1) * (1 - 0.85 * this._uw * (1 - m));
+    return (A && A.room ? 1 - 0.9 * m : 1) * (1 - 0.85 * this._uw * (1 - m)) * (1 - this._mtnPres());
+  }
+
+  // How fully the mountain's wind has taken the summer air's place (0 off the mountain).
+  _mtnPres() {
+    return this._A && this._A.mtn ? clamp(this._wind / 0.08, 0, 1) * (1 - this._menu) : 0;
   }
 
   // A slow sine at a random phase added onto an AudioParam.
@@ -1169,6 +1232,112 @@ export class PastaAudio {
     s.onended = () => { for (const x of [s, f, g, s2, f2, g2]) { try { x.disconnect(); } catch (e) {} } };
     s.start(t, R() * b.pink.duration * 0.8); s.stop(end);
     s2.start(t2, R() * b.wet.duration * 0.8); s2.stop(end);
+  }
+
+  // The mountain (update() with wind01 above 0): cold wind takes the summer air's place. An open,
+  // airy rush with a soft moan in it; slow gusts swell, brighten and die away; near the summit a
+  // faint whistle rises with them. Lower on the mountain it is calmer: quieter, darker, fewer
+  // and weaker gusts. Built the first time it is needed; every change is a ramp.
+  _applyMountain(t, full) {
+    const A = this._A, w = this._wind;
+    this._windSent = w;
+    if (!A) return;
+    if (w > 0.001 && !A.mtn) this._buildMountain(t);
+    const M = A.mtn;
+    if (!M) return;
+    const p = this._mtnPres(), wl = w > 0.55 ? WHISTLE * Math.pow((w - 0.55) / 0.45, 1.5) : 0;
+    if (Math.abs(p - M.p) > 0.001) {
+      // coming onto the mountain the wind comes up a little faster than the summer air leaves,
+      // and the other way round going off it, so the crossfade has no hole in it
+      const up = p > M.p;
+      M.p = p;
+      A.outdoor.gain.setTargetAtTime(this._outdoorTarget(), t, up ? 1.0 : 0.55);
+      M.lvl.gain.setTargetAtTime(dB(LV.mtn) * this._windOn * p, t, up ? 0.55 : 1.0);
+    }
+    M.gst.gain.setTargetAtTime(0.68 + 0.14 * w, t, 1);
+    M.lp.frequency.setTargetAtTime(450 + 1000 * w, t, 1);
+    M.gw.gain.setTargetAtTime(0.12 * wl, t, 1);
+    if (!M.gust) return;
+    M.dW.gain.setTargetAtTime(wl, t, 1);
+    M.dLP.gain.setTargetAtTime(800 + 1000 * w, t, 1);
+    // Now and then a gust swells over 1-2 s, holds, and dies away over 2-4 s; higher up they
+    // come more often and blow harder. A little flutter rides on top.
+    const G = this._gst, ease = (x) => x * x * (3 - 2 * x);
+    if (full && p > 0.01 && !G.on && t >= this._nextGust) {
+      G.on = true; G.t0 = t; G.rise = rr(0.8, 2); G.hold = rr(0.2, 1.2); G.fall = rr(1.8, 4.5); G.peak = rr(0.45, 1) * (0.35 + 0.65 * w);
+    }
+    let g = 0;
+    if (G.on) {
+      const u = t - G.t0;
+      if (u < G.rise) g = G.peak * ease(u / G.rise);
+      else if (u < G.rise + G.hold) g = G.peak;
+      else if (u < G.rise + G.hold + G.fall) g = G.peak * (1 - ease((u - G.rise - G.hold) / G.fall));
+      else { G.on = false; this._nextGust = t + rr(1, 6) * (1.6 - 0.8 * w); }
+    }
+    if (full) {
+      G.fl = clamp(G.fl + (0.5 - G.fl) * 0.05 + (R() * 2 - 1) * 0.12, 0, 1);
+      // the noise loops' speeds wander, so the 6 s buffer never comes round the same way twice
+      G.r1 = clamp(fin(G.r1, 0.5) + (0.5 - fin(G.r1, 0.5)) * 0.02 + (R() * 2 - 1) * 0.08, 0, 1);
+      G.r2 = clamp(fin(G.r2, 0.5) + (0.5 - fin(G.r2, 0.5)) * 0.02 + (R() * 2 - 1) * 0.08, 0, 1);
+      M.s1.playbackRate.setTargetAtTime(0.88 + 0.14 * G.r1, t, 2);
+      M.s2.playbackRate.setTargetAtTime(0.93 + 0.14 * G.r2, t, 2);
+    }
+    M.gust.offset.setTargetAtTime(p > 0.01 ? Math.max(0, g + 0.12 * w * (G.fl - 0.5)) : 0, t, 0.35);
+  }
+
+  _buildMountain(t) {
+    const c = this._ctx, b = this._b, A = this._A;
+    if (!b.wind) return;
+    const G = (v) => { const g = c.createGain(); g.gain.value = v; return g; };
+    const F = (type, f, q) => { const x = c.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = qv(type, q); return x; };
+    const S = (rate) => { const s = c.createBufferSource(); s.buffer = b.wind; s.loop = true; s.playbackRate.value = rate; s.start(t, R() * b.wind.duration * 0.9); return s; };
+    const M = {}, w = this._wind;
+    M.lvl = G(0);
+    M.lvl.connect(A.lvl);
+    M.gst = G(0.68 + 0.14 * w);
+    M.gst.connect(M.lvl);
+    // The rush: open and airy, brighter in the gusts. Two passes over the noise at different
+    // speeds, so its loop never comes round the same way.
+    const s1 = (M.s1 = S(rr(0.92, 1.0))), s1b = S(rr(0.76, 0.82)), hp = F('highpass', 110, 0.6), half = G(Math.SQRT1_2), halfb = G(Math.SQRT1_2);
+    M.lp = F('lowpass', 450 + 1000 * w, 0.6);
+    s1.connect(half); s1b.connect(halfb); half.connect(hp); halfb.connect(hp); hp.connect(M.lp); M.lp.connect(M.gst);
+    this._lfo(rr(0.021, 0.027), 0.03, s1b.playbackRate, t);
+    // A soft moan inside it.
+    M.moan = F('bandpass', 340, 4);
+    const gm = G(0.6);
+    hp.connect(M.moan); M.moan.connect(gm); gm.connect(M.gst);
+    // Near the summit: a faint whistle over the ridge, two narrow bands that rise in the gusts.
+    const s2 = (M.s2 = S(rr(0.95, 1.05))), f1 = rr(1150, 1450);
+    M.w1 = F('bandpass', f1, 50);
+    M.w2 = F('bandpass', f1 * rr(1.46, 1.58), 56);
+    M.gw = G(0);
+    const g2 = G(0.6);
+    s2.connect(M.w1); s2.connect(M.w2); M.w1.connect(M.gw); M.w2.connect(g2); g2.connect(M.gw);
+    M.gw.connect(M.lvl);
+    // Slow drifts, so it moves even between gusts and the loops never line up the same way.
+    this._lfo(rr(0.05, 0.07), 90, M.lp.frequency, t);
+    this._lfo(rr(0.11, 0.14), 0.06, M.gst.gain, t);
+    this._lfo(rr(0.07, 0.09), 40, M.moan.frequency, t);
+    this._lfo(rr(0.08, 0.1), f1 * 0.02, M.w1.frequency, t);
+    this._lfo(rr(0.012, 0.016), 0.03, s1.playbackRate, t);
+    this._lfo(rr(0.033, 0.041), 0.02, s1.playbackRate, t);
+    this._lfo(rr(0.017, 0.021), 0.03, s2.playbackRate, t);
+    // Gusts: one control signal moves the level, the brightness, the moan and the whistle together.
+    if (c.createConstantSource) {
+      M.gust = c.createConstantSource();
+      M.gust.offset.value = 0;
+      const to = (depth, param) => { const g = G(depth); M.gust.connect(g); g.connect(param); return g; };
+      to(0.9, M.gst.gain);
+      M.dLP = to(1200, M.lp.frequency);
+      to(180, M.moan.frequency);
+      to(f1 * 0.12, M.w1.frequency);
+      to(f1 * 0.18, M.w2.frequency);
+      M.dW = to(0, M.gw.gain);
+      M.gust.start(t);
+    }
+    M.p = 0;
+    A.mtn = M;
+    this._nextGust = t + rr(0.5, 2);
   }
 
   // ----- playback ------------------------------------------------------------------------------
@@ -1896,6 +2065,87 @@ export class PastaAudio {
     return Math.max(e, t + 0.72);
   }
 
+  // Walking in orzo snow: a soft packing crunch that squeaks a little in the cold, a soft low
+  // press under it, loose grains shifting after.
+  _vStepSnow(v, t, s) {
+    const a = rr(0.012, 0.024);
+    let e = this._nb(v, t, { buf: 'white', type: 'lowpass', f: rr(170, 240), q: 0.7, a: rr(0.006, 0.012), t60: rr(0.06, 0.09), g: 0.7 });
+    e = Math.max(e, this._nb(v, t, { buf: 'pink', type: 'bandpass', f: rr(500, 800), q: 0.8, a, t60: rr(0.07, 0.1), g: 0.45 }));
+    e = Math.max(e, this._nb(v, t, { buf: 'crackle', rate: rr(0.5, 0.7), type: 'bandpass', f: rr(900, 1400), q: 0.6, type2: 'lowpass', ff: 4200, a, t60: rr(0.08, 0.11) + 0.03 * s, g: 0.9 }));
+    e = Math.max(e, this._nb(v, t + rr(0.006, 0.016), { buf: 'squeal', rate: rr(1.3, 1.6), type: 'bandpass', f: rr(1600, 2200), q: 2, a: rr(0.015, 0.03), t60: rr(0.05, 0.08), g: (0.3 + 0.2 * s) * rr(0.6, 1) }));
+    e = Math.max(e, this._nb(v, t + rr(0.03, 0.05), { buf: 'crackle', rate: rr(1, 1.4), type: 'bandpass', f: rr(2600, 3600), q: 0.8, a: 0.015, t60: rr(0.08, 0.13), g: 0.16 }));
+    return e;
+  }
+
+  // Into a drift: a muffled whumpf, a puff of air pushed out, a packed crunch, grains settling.
+  _vLandSnow(v, t, i) {
+    let e = this._nb(v, t, { buf: 'white', type: 'lowpass', f: (130 + 90 * i) * rr(0.9, 1.1), q: 0.8, a: 0.008 + 0.006 * i, t60: 0.14 + 0.16 * i, g: 1 });
+    e = Math.max(e, this._nb(v, t + 0.004, { buf: 'pink', type: 'bandpass', f: rr(380, 520), q: 0.9, a: 0.015, t60: 0.12 + 0.12 * i, g: 0.35 + 0.15 * i }));
+    e = Math.max(e, this._nb(v, t + 0.006, { buf: 'crackle', rate: rr(0.45, 0.6), type: 'bandpass', f: rr(900, 1400), q: 0.7, type2: 'lowpass', ff: 3000, a: 0.02, t60: 0.12 + 0.12 * i, g: 0.55 }));
+    e = Math.max(e, this._nb(v, t + 0.05 + 0.03 * i, { buf: 'crackle', rate: rr(0.9, 1.3), type: 'bandpass', f: rr(2200, 3200), q: 0.8, a: 0.04, t60: 0.18 + 0.2 * i, g: 0.12 + 0.08 * i }));
+    return e;
+  }
+
+  // On the wet lasagna run: a flat wet slap and, as the strands slip, a little rubbery squeak.
+  _vStepSlick(v, t, s) {
+    const src = this._s(v, this._b.white, t, 0.1, 1);
+    let e = this._nb(v, t, { src, type: 'bandpass', f: rr(1300, 1900), q: 0.8, a: 0.0007, t60: rr(0.018, 0.028), g: 0.5 + 0.2 * s });
+    e = Math.max(e, this._nb(v, t, { src, type: 'lowpass', f: rr(280, 360), q: 0.8, a: 0.0015, t60: rr(0.04, 0.06), g: 0.7 }));
+    e = Math.max(e, this._nb(v, t + 0.002, { buf: 'wet', rate: rr(0.9, 1.2), type: 'bandpass', f: rr(800, 1200), q: 1.2, a: 0.003, t60: rr(0.04, 0.06), g: 0.45 }));
+    if (R() < 0.45 + 0.4 * s) e = Math.max(e, this._nb(v, t + rr(0.01, 0.03), { buf: 'squeal', rate: rr(0.9, 1.15), type: 'bandpass', f: rr(1000, 1500), q: 1.5, a: rr(0.008, 0.015), t60: rr(0.04, 0.07), g: 0.3 * rr(0.6, 1) }));
+    return e;
+  }
+
+  // Onto the wet run: a flat slap, a squelch that sinks, a rubbery squeak as it skids.
+  _vLandSlick(v, t, i) {
+    const b = this._b, src = this._s(v, b.white, t, 0.3, 1);
+    let e = this._nb(v, t, { src, type: 'bandpass', f: rr(1200, 1800), q: 0.7, a: 0.0008, t60: 0.03 + 0.02 * i, g: 0.6 + 0.3 * i });
+    e = Math.max(e, this._nb(v, t, { src, type: 'lowpass', f: 200 + 140 * i, q: 0.8, a: 0.002, t60: 0.07 + 0.1 * i, g: 0.8 }));
+    e = Math.max(e, this._nb(v, t + 0.003, { buf: 'wet', rate: rr(0.9, 1.15), type: 'bandpass', f: 1400, f2: 500, sw: 0.1 + 0.08 * i, q: 1.6, a: 0.003, t60: 0.1 + 0.15 * i, g: 0.35 + 0.35 * i }));
+    e = Math.max(e, this._nb(v, t + rr(0.02, 0.04), { buf: 'squeal', rate: rr(0.85, 1.1), type: 'bandpass', f: rr(1000, 1400), q: 1.4, a: 0.01, t60: 0.08 + 0.08 * i, g: 0.25 + 0.15 * i }));
+    if (i > 0.45) {
+      for (let k = 0, n = ri(1, 1 + Math.round(3 * i)); k < n; k++) {
+        e = Math.max(e, this._tk(v, t + rr(0.03, 0.18), pick(b.drops || []), rr(0.8, 1.25), 0.1 * rr(0.5, 1), rr(-0.4, 0.4)));
+      }
+    }
+    return e;
+  }
+
+  // Off the kicker: the strands tear free of the wet run, then a short, airy whoosh that swells
+  // and falls away. Faster is brighter and longer.
+  _vLaunch(v, t, s) {
+    const b = this._b, up = 0.07 + 0.05 * s, dur = 0.3 + 0.2 * s;
+    let e = this._nb(v, t, { buf: 'crackle', rate: rr(0.7, 0.9), type: 'bandpass', f: rr(1300, 1800), q: 1, a: 0.004, t60: 0.04, g: 0.35 });
+    e = Math.max(e, this._nb(v, t, { buf: 'wet', rate: rr(0.9, 1.1), type: 'bandpass', f: rr(900, 1200), q: 1.2, a: 0.004, t60: 0.05, g: 0.3 }));
+    const src = this._s(v, b.wind || b.pink || b.white, t, up + dur + 0.05, rr(0.9, 1.1));
+    const bp = this._f(v, 'bandpass', 500, 0.9);
+    bp.frequency.setValueAtTime(rr(420, 550), t);
+    bp.frequency.exponentialRampToValueAtTime(rr(900, 1150) + 450 * s, t + up);
+    bp.frequency.exponentialRampToValueAtTime(rr(450, 600), t + up + dur);
+    const g = this._g(v, 0), p = g.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.9, t + up);
+    p.exponentialRampToValueAtTime(0.01, t + up + dur);
+    p.linearRampToValueAtTime(0, t + up + dur + 0.03);
+    src.connect(bp); bp.connect(g); this._to(v, g, 0);
+    e = Math.max(e, this._nb(v, t + 0.02, { buf: 'white', type: 'bandpass', f: rr(2200, 3000), q: 0.8, a: up * 0.8, t60: dur * 0.8, g: 0.14 + 0.1 * s }));
+    return Math.max(e, t + up + dur + 0.04);
+  }
+
+  // A clump of orzo snow sliding off a pine tier: a short granular slide, a beat of falling, a
+  // soft whumpf into the snow below, a scatter of grains.
+  _vThump(v, t, s) {
+    const b = this._b, sl = 0.1 + 0.08 * s, tf = t + sl + rr(0.12, 0.22) + 0.06 * s;
+    let e = this._nb(v, t, { buf: 'crackle', rate: rr(0.5, 0.65), type: 'bandpass', f: rr(1300, 2000), q: 0.8, type2: 'lowpass', ff: 3500, a: sl * 0.6, t60: sl + 0.06, g: 0.3 });
+    e = Math.max(e, this._nb(v, t, { buf: 'pink', type: 'bandpass', f: rr(1500, 2300), q: 0.8, a: sl * 0.7, t60: sl, g: 0.12 }));
+    e = Math.max(e, this._nb(v, tf, { buf: 'white', type: 'lowpass', f: rr(140, 200) - 30 * s, q: 0.8, a: 0.01, t60: 0.15 + 0.15 * s, g: 1 }));
+    e = Math.max(e, this._nb(v, tf + 0.003, { buf: 'pink', type: 'bandpass', f: rr(400, 600), q: 0.9, a: 0.014, t60: 0.12 + 0.1 * s, g: 0.35 }));
+    e = Math.max(e, this._nb(v, tf + 0.005, { buf: 'crackle', rate: rr(0.45, 0.6), type: 'bandpass', f: rr(900, 1400), q: 0.7, type2: 'lowpass', ff: 3000, a: 0.015, t60: 0.1 + 0.12 * s, g: 0.5 }));
+    const tk = b.ticks;
+    if (tk) for (let k = 0, n = 2 + Math.round(4 * s); k < n; k++) e = Math.max(e, this._tk(v, tf + rr(0.02, 0.25), tk[ri(8, 11)], rr(1.1, 1.5), 0.05 * rr(0.4, 1), rr(-0.4, 0.4)));
+    return e;
+  }
+
   // ----- the API -------------------------------------------------------------------------------
 
   step(speed01, surface) {
@@ -2035,6 +2285,120 @@ export class PastaAudio {
       if (kind === 'pulse') this._ev('squid_pulse', 1, 'squid_pulse', 0.15, 1, 1);
       else if (kind === 'bonk') this._ev('squid_bonk', 1, 'squid_bonk', 0.12, 2, 1);
       else if (kind === 'ink') this._ev('squid_ink', 1, 'squid_ink', 0.3, 1, 1);
+    } catch (e) {}
+  }
+
+  // ----- the mountain -----
+  // (step and land also take 'snow' and 'slick'; update() takes wind01.)
+
+  // Leaving the kicker into the air.
+  launch(speed01) {
+    try { const s = c01(speed01, 0.8); this._ev('launch', s, 'launch', 0.3, 2, dB(-8 * (1 - s))); } catch (e) {}
+  }
+
+  // A clump of orzo snow sliding off a pine tier when the hero bumps the tree.
+  thump(size01) {
+    try { const s = c01(size01, 0.7); this._ev('thump', s, 'thump', 0.15, 1, dB(-8 * (1 - s))); } catch (e) {}
+  }
+
+  // The bobsled run, while the hero slides down the wet lasagna channel. Call every frame;
+  // on=false fades it out cleanly (like slide()). A wide, smooth wet hiss that rises with speed,
+  // a low rumble when fast, and a scrape and a rubbery squeal that come up with carve01 (hard
+  // turns, riding up a bank). Every change is a ramp; slow drifts keep a long ride from sitting
+  // still.
+  sled(on, speed01, carve01) {
+    try {
+      if (!this._ok) return;
+      const t = this._now();
+      if (on && !this._muted && (this._offline || this._ctx.state === 'running')) {
+        if (!this._sd) {
+          const b = this._b;
+          if (!b.wind || !b.wet || !b.pink || !b.squeal) return; // textures are made a moment after unlock
+          this._sledStart(t);
+        }
+        const S = this._sd, s = c01(speed01, 0.5), k = c01(carve01, 0);
+        const ds = !S.on || Math.abs(s - S.s) > 0.02, dk = ds || Math.abs(k - S.k) > 0.02;
+        if (ds) {
+          S.out.gain.setTargetAtTime(dB(LV.sled) * (0.4 + 0.6 * Math.pow(s, 1.2)), t, S.on ? 0.12 : 0.05);
+          S.bpH.frequency.setTargetAtTime(650 + 1500 * s, t, 0.15);
+          S.lpH.frequency.setTargetAtTime(2600 + 5000 * s, t, 0.15);
+          S.sW.playbackRate.setTargetAtTime(0.8 + 0.6 * s, t, 0.15);
+          S.gR.gain.setTargetAtTime(s > 0.45 ? 0.5 * Math.pow((s - 0.45) / 0.55, 1.5) : 0, t, 0.2);
+          S.sK.playbackRate.setTargetAtTime(0.5 + 0.4 * s, t, 0.15);
+          S.s = s;
+        }
+        if (dk) {
+          const tk = S.on ? 0.07 : 0.05, q = k > 0.05 ? Math.pow((k - 0.05) / 0.95, 0.9) : 0;
+          S.gK.gain.setTargetAtTime(1.8 * Math.pow(k, 0.6) * (0.3 + 0.7 * s), t, tk);
+          S.bpK.frequency.setTargetAtTime(1100 + 900 * k + 300 * s, t, tk);
+          S.gQ.gain.setTargetAtTime(1.1 * q * (0.3 + 0.7 * s), t, tk);
+          S.sQ.playbackRate.setTargetAtTime(0.85 + 0.25 * s + 0.12 * k, t, 0.1);
+          S.k = k;
+        }
+        if (ds || t - S.wt > 0.15) {
+          // the hiss's loop speed follows the speed and wanders a little, so a long steady
+          // stretch never comes round the same way twice
+          S.wt = t;
+          S.wr = clamp(S.wr + (0.5 - S.wr) * 0.03 + (R() * 2 - 1) * 0.1, 0, 1);
+          S.sH.playbackRate.setTargetAtTime(0.85 + 0.25 * S.s + 0.1 * (S.wr - 0.5), t, 0.6);
+        }
+        S.on = true;
+        S.lt = t;
+      } else if (this._sd) {
+        const S = this._sd;
+        if (S.on) { S.out.gain.setTargetAtTime(0, t, 0.07); S.on = false; S.offT = t; }
+        else if (t - S.offT > 0.8) this._sledStop(t);
+      }
+    } catch (e) {}
+  }
+
+  _sledStart(t) {
+    const c = this._ctx, b = this._b, n = [], srcs = [];
+    const G = (v) => { const g = c.createGain(); g.gain.value = v; n.push(g); return g; };
+    const F = (type, f, q) => { const x = c.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = qv(type, q); n.push(x); return x; };
+    const L = (buf, rate) => { const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = rate; s.start(t, R() * buf.duration * 0.9); n.push(s); srcs.push(s); return s; };
+    const lfo = (f, depth, param) => {
+      const o = c.createOscillator(), g = G(depth), ph = R() * TAU;
+      try { o.setPeriodicWave(c.createPeriodicWave(new Float32Array([0, Math.sin(ph)]), new Float32Array([0, Math.cos(ph)]), { disableNormalization: true })); } catch (e) {}
+      o.frequency.value = f;
+      o.connect(g); g.connect(param); o.start(t);
+      n.push(o); srcs.push(o);
+    };
+    const out = G(0);
+    out.connect(this._sfx);
+    // The hiss: wide, wet air off the run.
+    const sH = L(b.wind, rr(0.9, 1)), hpH = F('highpass', 250, 0.6), bpH = F('bandpass', 1000, 0.6), lpH = F('lowpass', 4000, 0.6);
+    sH.connect(hpH); hpH.connect(bpH); bpH.connect(lpH); lpH.connect(out);
+    // A fizz in it: the wet run's micro-bubbles.
+    const sW = L(b.wet, 1), bpW = F('bandpass', 1300, 0.8), gWt = G(0.45);
+    sW.connect(bpW); bpW.connect(gWt); gWt.connect(out);
+    // The rumble, when fast.
+    const sR = L(b.pink, rr(0.45, 0.55)), lpR = F('lowpass', 120, 0.8), gR = G(0);
+    sR.connect(lpR); lpR.connect(gR); gR.connect(out);
+    // Scrape and squeal, on hard turns and up the banks.
+    const sK = L(b.crackle, 0.6), bpK = F('bandpass', 1400, 2), gK = G(0);
+    sK.connect(bpK); bpK.connect(gK); gK.connect(out);
+    const sQ = L(b.squeal, 1), bpQ = F('bandpass', 1400, 1.2), gQ = G(0);
+    sQ.connect(bpQ); bpQ.connect(gQ); gQ.connect(out);
+    // Slow drifts, so a long ride never sits still.
+    lfo(rr(0.06, 0.09), 140, bpH.frequency);
+    lfo(rr(0.012, 0.016), 0.03, sH.playbackRate);
+    lfo(rr(0.031, 0.039), 0.02, sH.playbackRate);
+    lfo(rr(0.1, 0.14), 0.12, gWt.gain);
+    lfo(rr(0.017, 0.022), 0.04, sW.playbackRate);
+    lfo(rr(0.08, 0.11), 120, bpQ.frequency);
+    this._sd = { out, sH, bpH, lpH, sW, gR, sK, bpK, gK, sQ, gQ, n, srcs, on: false, s: 0, k: 0, offT: t, wt: t, wr: 0.5, lt: t };
+  }
+
+  _sledStop(t) {
+    const S = this._sd;
+    if (!S) return;
+    this._sd = null;
+    try {
+      S.out.gain.cancelScheduledValues(t);
+      S.out.gain.setTargetAtTime(0, t, 0.02);
+      S.srcs[0].onended = () => { for (const x of S.n) { try { x.disconnect(); } catch (e) {} } };
+      for (const s of S.srcs) s.stop(t + 0.15);
     } catch (e) {}
   }
 

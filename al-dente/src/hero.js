@@ -39,6 +39,7 @@ export class Hero {
     this.lastWall = null; this.lastWallN = new THREE.Vector3(); this.wallCount = 0; this.wallCooldown = 0; this.awayT = 0;
     this.stun = 0; this.airT = 0; this.sinkT = 0; this.state = 'play'; this.hopT = 0; this.settleT = 0;
     this.inWater = false; this.sub = 0; this.strokeT = 0; this.bubbleT = 0;
+    this.sledding = false; this.sledVy = 0; this.carve = 0;
     this.facing = facing; this.spin = 0;
     this.sq = 1; this.sqv = 0; this.sqAxis = new THREE.Vector3(0, 1, 0); this.sqAxisT = new THREE.Vector3(0, 1, 0);
     this.lean = new THREE.Vector2();
@@ -267,7 +268,7 @@ export class Hero {
     const sp = Math.hypot(this.vel.x, this.vel.z);
     const fx = Math.sin(this.facing), fz = Math.cos(this.facing);
     const sx = fz, sz = -fx; // right
-    if (!this.grounded || this.stuck) { for (const f of this.feet) f.planted = false; return; }
+    if (!this.grounded || this.stuck || this.sledding) { for (const f of this.feet) f.planted = false; return; }
     const stride = 0.22 + sp * 0.075;
     const dur = clamp(0.2 - sp * 0.014, 0.08, 0.2);
     let stepping = this.feet.some(f => f.t < 1);
@@ -296,7 +297,7 @@ export class Hero {
 
   surface() {
     const c = this.groundC;
-    if (!c || c === 'ground') return this.ctx.groundSurface || 'cooked';
+    if (!c || c === 'ground') { const gs = this.ctx.groundSurface; return typeof gs === 'function' ? gs(this.pos.x, this.pos.z) : (gs || 'cooked'); }
     return c.surface || 'cooked';
   }
 
@@ -326,10 +327,13 @@ export class Hero {
     this.inWater = this.state === 'play' && (wasIn ? sub > 0.3 : sub > 0.5);
     if (this.inWater && !wasIn) this.enterWater();
     if (this.stuck && this.inWater) this.unstick();
+    this.sledding = false;
     if (this.stuck) {
       this.stickUpdate(dt, wx, wz, inLen, input);
     } else if (this.inWater) {
       this.swim(dt, wx, wz, inLen, input, ctrl);
+    } else if (this.grounded && this.onSlick()) {
+      this.sled(dt, wx, wz, inLen, input, ctrl);
     } else if (this.grounded) {
       // just climbed over a lip: plant for a beat before running on
       const mv = this.settleT > 0 ? 0 : 1; this.settleT = Math.max(0, this.settleT - dt);
@@ -380,6 +384,11 @@ export class Hero {
       if (k.c && k.c.onTouch) k.c.onTouch(this, k);
     }
     this.grounded = !!ground && !this.stuck && this.vel.y <= 0.5;
+    // off the end of a lip on the run: leave at the run's own angle
+    if (this.sledding && wasGrounded && !this.grounded && this.sledVy > 0.4 && this.vel.y < this.sledVy) {
+      this.vel.y = this.sledVy;
+      this.ctx.audio?.launch?.(clamp(Math.hypot(this.vel.x, this.vel.z) / 14, 0, 1));
+    }
     this.groundC = ground ? ground.c : null;
     if (ground) this.groundN.set(ground.nx, ground.ny, ground.nz);
     if (this.grounded) {
@@ -480,6 +489,30 @@ export class Hero {
       au?.paddle?.(0.4 + 0.6 * inLen);
       this.puff(3);
     }
+  }
+  // ------------------------------------------------------------------ the run
+  // Wet cooked lasagna: no grip. The slope pulls you down it; the keys steer and brake but can't stop you.
+  onSlick() { return this.groundC === 'ground' && !!this.ctx.slickAt && this.ctx.slickAt(this.pos.x, this.pos.z); }
+  sled(dt, wx, wz, inLen, input, ctrl) {
+    const n = this.groundN, G = TUNE.gravity;
+    this.sledding = true;
+    this.vel.x += G * n.y * n.x * dt; this.vel.z += G * n.y * n.z * dt;
+    const sp = Math.hypot(this.vel.x, this.vel.z);
+    let carve = 0;
+    if (sp > 0.6) {
+      const fx = this.vel.x / sp, fz = this.vel.z / sp, lx = -fz, lz = fx;
+      const lat = wx * lx + wz * lz, fwd = wx * fx + wz * fz;
+      this.vel.x += lx * lat * 12 * dt; this.vel.z += lz * lat * 12 * dt;
+      if (fwd < -0.3) { const k = Math.exp(1.5 * dt * fwd); this.vel.x *= k; this.vel.z *= k; }
+      carve = Math.abs(lat) * clamp(sp / 8, 0, 1);
+    } else { this.vel.x += wx * 6 * dt; this.vel.z += wz * 6 * dt; }
+    const k = Math.exp(-(0.08 + sp * 0.02) * dt);
+    this.vel.x *= k; this.vel.z *= k;
+    this.vel.y = Math.min(this.vel.y, 0);
+    this.sledVy = -(n.x * this.vel.x + n.z * this.vel.z) / Math.max(n.y, 0.3);
+    const want = clamp(Math.max(carve, (1 - n.y) * 3), 0, 1);
+    this.carve += (want - this.carve) * Math.min(1, dt * 8);
+    if (this.buffer > 0 && ctrl) this.jump();
   }
   enterWater() {
     const vy = this.prevVel.y;

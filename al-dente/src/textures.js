@@ -197,6 +197,75 @@ function makePastina(size, seed) {
   return { albedo, normal };
 }
 
+// Snow of orzo: rice-shaped pasta piled deep, pale and dry, with a height-derived normal map.
+function makeOrzo(size, seed) {
+  const rnd = mulberry32(seed);
+  const cA = document.createElement('canvas'); cA.width = cA.height = size;
+  const cH = document.createElement('canvas'); cH.width = cH.height = size;
+  const a = cA.getContext('2d'), h = cH.getContext('2d', { willReadFrequently: true });
+  a.fillStyle = '#b9ae98'; a.fillRect(0, 0, size, size);
+  h.fillStyle = '#000'; h.fillRect(0, 0, size, size);
+  a.imageSmoothingQuality = h.imageSmoothingQuality = 'high';
+  // a grain of orzo: a fat lens, pointed at both ends
+  const grain = (ctx, s) => { ctx.beginPath(); ctx.moveTo(-s, 0); ctx.quadraticCurveTo(0, -s * 0.62, s, 0); ctx.quadraticCurveTo(0, s * 0.62, -s, 0); ctx.closePath(); };
+  const k2 = (size / 1024) ** 2;   // a smaller piece keeps the same grain size and density
+  const layers = [ { n: Math.round(5200 * k2), shade: 0.7, hv: 80 }, { n: Math.round(4800 * k2), shade: 0.86, hv: 160 }, { n: Math.round(3600 * k2), shade: 1.0, hv: 235 } ];
+  // Every grain is stamped from a sprite drawn once per layer (three tints for the colour) rather than built from a path
+  // and gradients each time, which is several times faster. A sprite holds one grain of s = R, with room for its shadow.
+  const R = 24, OX = 1.25 * R, OY = 0.6 * R;
+  const sprite = (paint) => { const c = document.createElement('canvas'); c.width = Math.ceil(2.6 * R); c.height = Math.ceil(1.4 * R); const x = c.getContext('2d'); x.translate(OX, OY); paint(x); return c; };
+  const TINTS = [0.96, 0.99, 1.02];
+  const colorSprite = (shade, w) => sprite((x) => {
+    const r = Math.round(250 * shade * w), g = Math.round(243 * shade * w), b = Math.round(222 * shade * w * 0.99);
+    x.save(); x.translate(R * 0.14, R * 0.2); grain(x, R * 1.06); x.fillStyle = 'rgba(70,60,48,0.32)'; x.fill(); x.restore();
+    grain(x, R); x.fillStyle = `rgb(${r},${g},${b})`; x.fill();
+    const grd = x.createLinearGradient(0, -R * 0.5, 0, R * 0.5);
+    grd.addColorStop(0, 'rgba(255,255,250,0.38)'); grd.addColorStop(1, 'rgba(90,80,60,0.22)');
+    x.fillStyle = grd; x.fill();
+  });
+  const heightSprite = (hv) => sprite((x) => {
+    grain(x, R);
+    const lo = hv * 0.6 | 0, hg = x.createLinearGradient(0, -R * 0.5, 0, R * 0.5);
+    hg.addColorStop(0, `rgb(${lo},${lo},${lo})`); hg.addColorStop(0.5, `rgb(${hv},${hv},${hv})`); hg.addColorStop(1, `rgb(${lo},${lo},${lo})`);
+    x.fillStyle = hg; x.fill();
+  });
+  for (const L of layers) {
+    const cs = TINTS.map((w) => colorSprite(L.shade, w)), hs = heightSprite(L.hv);
+    for (let i = 0; i < L.n; i++) {
+      const x = rnd() * size, y = rnd() * size, rot = rnd() * Math.PI * 2;
+      const s = 7.2 * (0.78 + rnd() * 0.45);
+      const w = 0.95 + rnd() * 0.08; rnd();   // this draw once set each grain's blue; kept so every grain stays where it was
+      const spr = cs[w < 0.975 ? 0 : w < 1.005 ? 1 : 2], k = s / R, c = Math.cos(rot) * k, sn = Math.sin(rot) * k;
+      for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+        const px = x + ox, py = y + oy;
+        if (px < -20 || py < -20 || px > size + 20 || py > size + 20) continue;
+        a.setTransform(c, sn, -sn, c, px, py); a.drawImage(spr, -OX, -OY);
+        h.setTransform(c, sn, -sn, c, px, py); h.drawImage(hs, -OX, -OY);
+      }
+    }
+  }
+  a.setTransform(1, 0, 0, 1, 0, 0); h.setTransform(1, 0, 0, 1, 0, 0);
+  const albedo = new THREE.CanvasTexture(cA);
+  albedo.colorSpace = THREE.SRGBColorSpace;
+  albedo.wrapS = albedo.wrapT = THREE.RepeatWrapping;
+  albedo.anisotropy = 8;
+  const hd = h.getImageData(0, 0, size, size).data;
+  const nd = new Uint8Array(size * size * 4);
+  const H = (x, y) => hd[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
+  const k = 2.0;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = (H(x + 1, y) - H(x - 1, y)) * k, dy = (H(x, y + 1) - H(x, y - 1)) * k;
+    const l = Math.hypot(dx, dy, 1);
+    const i = ((size - 1 - y) * size + x) * 4;
+    nd[i] = (-dx / l * 0.5 + 0.5) * 255; nd[i + 1] = (dy / l * 0.5 + 0.5) * 255; nd[i + 2] = (1 / l * 0.5 + 0.5) * 255; nd[i + 3] = 255;
+  }
+  const normal = new THREE.DataTexture(nd, size, size, THREE.RGBAFormat);
+  normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
+  normal.minFilter = THREE.LinearMipmapLinearFilter; normal.magFilter = THREE.LinearFilter; normal.generateMipmaps = true;
+  normal.anisotropy = 8; normal.flipY = false; normal.needsUpdate = true;
+  return { albedo, normal };
+}
+
 // A bed of tangled cooked spaghetti: strands drawn as shaded tubes in layers, with a height-derived normal map.
 function makeTangle(size, seed) {
   const rnd = mulberry32(seed);
@@ -270,6 +339,14 @@ export function makeTextures(renderer) {
   T.pastina = p.albedo; T.pastinaN = p.normal;
   const tg = makeTangle(1024, 23);
   T.tangle = tg.albedo; T.tangleN = tg.normal;
+  // The mountain's snow is drawn the first time something asks for it (the mountain's build, on black),
+  // not at boot. The island's patch of it gets a quarter-size piece now, at the same grain size.
+  let oz = null;
+  const orzo = () => oz || (oz = makeOrzo(1024, 29));
+  Object.defineProperty(T, 'orzo', { get: () => orzo().albedo });
+  Object.defineProperty(T, 'orzoN', { get: () => orzo().normal });
+  const ozs = makeOrzo(512, 31);
+  T.orzoSmall = ozs.albedo; T.orzoSmallN = ozs.normal;
   const cache = new Map();
   // Same image, own repeat. Clones share the GPU upload.
   T.at = (name, repeat) => {

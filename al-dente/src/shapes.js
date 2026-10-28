@@ -703,3 +703,41 @@ export function squidMantle({ length = 2.1, radius = 0.46 } = {}) {
   mv.computeVertexNormals();
   return done(mv);
 }
+
+// ------------------------------------------------------------------ 22. pine of spinach lasagna: drooping tiers, orzo snow on top of each
+// Vertex colors: spinach green on the skirts, cream-white where snow lies. Origin at the base of the trunk.
+export function pineTiers({ height = 5.5, radius = 2.1, tiers = 5, segs = 28, seed = 1 } = {}) {
+  const rnd = mulberry32(seed);
+  const pos = [], col = [], idx = [];
+  const green = new THREE.Color('#5d8636'), deep = new THREE.Color('#3f6a2a'), snow = new THREE.Color('#fbf5e6');
+  for (let t = 0; t < tiers; t++) {
+    const f = t / tiers;
+    const y0 = height * (0.18 + f * 0.7), r0 = radius * (1 - f * 0.78) * (0.92 + rnd() * 0.12);
+    const drop = r0 * 0.62, ph = rnd() * 9;
+    const rings = 6, base = pos.length / 3;
+    for (let i = 0; i <= rings; i++) {
+      const u = i / rings;                                   // 0 at the trunk, 1 at the hem
+      for (let j = 0; j <= segs; j++) {
+        const a = (j / segs) * TAU;
+        const hem = Math.sin(a * 7 + ph) * 0.09 * r0 * u * u;   // the ruffled hem of the sheet
+        const r = r0 * u * (1 + 0.06 * Math.sin(a * 3 + ph)) + Math.max(0, hem) * 0.4;
+        const y = y0 + drop * (1 - u) * 0.55 - drop * u * u * 0.6 + hem * 0.6;
+        pos.push(Math.cos(a) * r, y, Math.sin(a) * r);
+        // snow sits on the flatter, inner part of each tier's top; the drooping hem stays green
+        const c = green.clone().lerp(deep, u * 0.6 + rnd() * 0.1);
+        const s = (1 - smoothstep(0.45, 0.85, u)) * (0.85 + 0.15 * Math.sin(a * 5 + ph * 2));
+        c.lerp(snow, clamp(s, 0, 1));
+        col.push(c.r, c.g, c.b);
+      }
+    }
+    const C = segs + 1;
+    for (let i = 0; i < rings; i++) for (let j = 0; j < segs; j++) { const a = base + i * C + j, b = a + 1, c = a + C, d = c + 1; idx.push(a, c, b, b, c, d); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3 * 2).map((_, i) => i % 2 ? pos[(i >> 1) * 3 + 1] : Math.atan2(pos[(i >> 1) * 3 + 2], pos[(i >> 1) * 3]) * radius), 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return done(g);
+}

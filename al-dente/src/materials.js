@@ -457,6 +457,28 @@ export function makeKit(T) {
     normalMap: tex('nPores', 0.08), normalScale: 0.4, sss: { ...COOKED_SSS, scale: 1.4 } });
   K.pupil = pastaMaterial({ color: '#141214', roughness: 0.22, clearcoat: 1.0, clearcoatRoughness: 0.06,
     sss: { ...COOKED_SSS, color: '#30283a', scale: 0.2 } });
+  // ---- the mountain
+  // Its orzo texture is drawn on first use, so the snow and the drifts are made the first time the mountain asks.
+  const rep = (t, r) => { const c = t.clone(); c.repeat.set(r, r); c.needsUpdate = true; return c; };
+  // snow: drifts of orzo
+  const snowOf = (map, normalMap) => pastaMaterial({ color: '#ffffff', roughness: 0.8, clearcoat: 0.06, clearcoatRoughness: 0.5, sheen: 0.45, sheenColor: '#fffaf0',
+    map, normalMap, normalScale: 1.2, sss: { ...DRY_SSS, color: '#fff1d2', scale: 0.6, wrap: 0.6, wrapAmt: 0.5 }, macro: 0.25, vertexColors: true });
+  let snow = null, drift = null;
+  Object.defineProperty(K, 'snow', { get: () => snow || (snow = snowOf(rep(T.orzo, 1 / 1.5), rep(T.orzoN, 1 / 1.5))) });
+  // the island's patch of it: a quarter-size piece of orzo, repeated twice as often
+  K.snowPatch = snowOf(rep(T.orzoSmall, 1 / 0.75), rep(T.orzoSmallN, 1 / 0.75));
+  // the plain of deep drifts round the mountain (no vertex colors: one big flat plane)
+  Object.defineProperty(K, 'drift', { get: () => drift || (drift = pastaMaterial({ color: '#f6f1e6', roughness: 0.85, sheen: 0.45, sheenColor: '#fffaf0',
+    map: rep(T.orzo, 1 / 2.6), normalMap: rep(T.orzoN, 1 / 2.6), normalScale: 1.0, sss: { ...DRY_SSS, color: '#fff1d2', scale: 0.6 }, macro: 0.35 })) });
+  // the run: one long ribbon of cooked lasagna, wet and slick
+  K.run = pastaMaterial({ color: '#f3d283', roughness: 0.24, clearcoat: 0.85, clearcoatRoughness: 0.07, sheen: 0.15,
+    normalMap: tex('nPores', 0.6), normalScale: 0.5, roughnessMap: tex('rough', 1.2), map: tex('albedo', 1.6),
+    sss: { ...SHEET_SSS, scale: 0.9 }, vertexColors: true, side: THREE.DoubleSide });
+  // pine tiers of spinach lasagna, their tops white with orzo (vertex colors carry both)
+  K.pine = pastaMaterial({ color: '#ffffff', roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.25, sheen: 0.2,
+    normalMap: tex('nPores', 0.4), normalScale: 0.6, sss: { ...COOKED_SSS, color: '#d4ff7a', scale: 1.3 }, vertexColors: true, side: THREE.DoubleSide });
+  // falling stelline
+  K.flake = pastaMaterial({ color: '#fbf3df', roughness: 0.55, clearcoat: 0.1, sheen: 0.4, sss: { ...DRY_SSS, scale: 1.2 }, side: THREE.DoubleSide });
   // ---- the bay
   const sa = T.pastina.clone(); sa.repeat.set(1 / 1.7, 1 / 1.7); sa.needsUpdate = true;
   const sn = T.pastinaN.clone(); sn.repeat.set(1 / 1.7, 1 / 1.7); sn.needsUpdate = true;
