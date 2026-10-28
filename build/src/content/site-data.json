@@ -94,16 +94,16 @@
     {
       "slug": "spaghetti-sunshine",
       "title": "SPAGHETTI SUNSHINE",
-      "descriptor": "Three courses made of pasta",
+      "descriptor": "Five courses made of pasta",
       "group": "action",
       "featured": false,
-      "image": "/assets/games/spaghetti-sunshine-card-v20261028b.jpg",
-      "alt": "Three miniature courses made of pasta on a table woven from spaghetti: Bianco Hills with its windmill, Ricco Harbor with its cargo ship and cranes, and Gelato Beach with palms, the Shine Tower and a sand gate",
-      "summary": "The first Shine in Bianco Hills, Ricco Harbor and Gelato Beach. All spaghetti. Even Mario. Clear the road to the windmill, pull Gooper Blooper out of the crates, then find the Dune Bud and cross the crumbling sand castle without FLUDD. Three courses in the same game, with a Shine saved for each. Keyboard and mouse.",
-      "metaDescription": "The first Shine in Bianco Hills, Ricco Harbor and Gelato Beach, reconstructed in pasta. Three courses, separate saved Shines, spray and hover nozzles, Gooper Blooper, and the Dune Bud Sand Castle Secret. Keyboard and mouse.",
-      "controls": "WASD or arrows move · mouse looks · Space jumps · J or click sprays · Shift hovers · Q changes nozzle · hold E to grab, pull back, release to let go · L courses · Esc pause",
+      "image": "/assets/games/spaghetti-sunshine-card-v20261028c.jpg",
+      "alt": "Five miniature courses made of pasta on a spaghetti table: Bianco Hills, Ricco Harbor, Gelato Beach, Pinna Park with its Ferris wheel and coaster, and Sirena Beach with its hotel and pools",
+      "summary": "The first Shine in Bianco Hills, Ricco Harbor, Gelato Beach, Pinna Park and Sirena Beach. All spaghetti. Even Mario. Clear the road to the windmill, pull Gooper Blooper out of the crates, cross the sand castle without FLUDD, fight Mecha-Bowser from the coaster, and clear the manta storm. Five courses in the same game, with a Shine saved for each. Keyboard and mouse.",
+      "metaDescription": "Five first Shines reconstructed in pasta: Bianco Hills, Ricco Harbor, Gelato Beach, Pinna Park and Sirena Beach. Course select, separate saved Shines, Mecha-Bowser and the Manta Storm. Keyboard and mouse.",
+      "controls": "WASD or arrows move · mouse looks · Space jumps · J or click sprays or fires a rocket · Shift hovers · Q changes nozzle · E talks, grabs or throws · C centers the camera · L courses · Esc pause",
       "actionLabel": "Play",
-      "duration": "Three first Shines"
+      "duration": "Five first Shines"
     },
     {
       "slug": "spaghetti",
