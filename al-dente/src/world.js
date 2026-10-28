@@ -286,9 +286,10 @@ function buildMeadowSheets(scene, K) {
 
 
 // The pastina sea and the sky dome every stage stands in.
-export function addSeaSky(scene, K) {
+export function addSeaSky(scene, K, { sea: withSea = true } = {}) {
   const W = {};
   // sea of pastina
+  if (withSea) {
   const sg = new THREE.PlaneGeometry(1400, 1400, 1, 1); sg.rotateX(-Math.PI / 2);
   const suv = sg.getAttribute('uv'), sp = sg.getAttribute('position');
   for (let i = 0; i < sp.count; i++) suv.setXY(i, sp.getX(i), sp.getZ(i));
@@ -296,6 +297,7 @@ export function addSeaSky(scene, K) {
   sea.position.y = SEA; sea.receiveShadow = true;
   scene.add(sea);
   W.sea = sea;
+  }
 
   // sky
   const skyMat = new THREE.ShaderMaterial({

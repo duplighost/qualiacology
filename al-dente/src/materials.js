@@ -11,17 +11,72 @@ export const G = {
   uHeroDent: { value: 0 },
   uWind: { value: 1 },
   uMacroTex: { value: null },
+  // water (the bay): off everywhere else, so other stages pay one uniform test
+  uWaterOn: { value: 0 },
+  uWaterY: { value: 0 },
+  uWaterCol: { value: new THREE.Color(0.64, 0.56, 0.31) },    // light scattered back by starchy water
+  uWaterView: { value: new THREE.Vector3(0.064, 0.06, 0.074) }, // how fast you lose sight of things, per meter
+  uWaterLight: { value: new THREE.Vector3(0.05, 0.047, 0.062) }, // how fast sunlight dies going down
+  uWaterSun: { value: new THREE.Vector3(-0.72, 0.58, 0.32).normalize() },
+  uCaustTex: { value: null },
 };
 
+// Caustics are drawn once into a tileable texture; underwater, two drifting copies cross.
+function makeCausticTexture(N = 256) {
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const px = (x / N) * Math.PI * 2 - 250, py = (y / N) * Math.PI * 2 - 250;
+    let ix = px, iy = py, c = 1;
+    for (let n = 0; n < 4; n++) {
+      const tt = 1.7 * (1 - 3.5 / (n + 1));
+      const nx = px + Math.cos(tt - ix) + Math.sin(tt + iy), ny = py + Math.sin(tt - iy) + Math.cos(tt + ix);
+      ix = nx; iy = ny;
+      c += 1 / Math.hypot(px / (Math.sin(ix + tt) / 0.005), py / (Math.cos(iy + tt) / 0.005));
+    }
+    c /= 4; c = 1.17 - Math.pow(c, 1.4);
+    const v = Math.min(255, Math.round(Math.pow(Math.abs(c), 7) * 255));
+    const i = (y * N + x) * 4; data[i] = data[i + 1] = data[i + 2] = v; data[i + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true;
+  return t;
+}
+
+// Shared with the water surface shader: value noise, the floating pastina rafts, caustics, the sky.
+export const WATER_GLSL = /* glsl */`
+float pwHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+float pwVN( vec2 p ) { vec2 i = floor( p ), f = fract( p ); vec2 u = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( pwHash( i ), pwHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( pwHash( i + vec2( 0.0, 1.0 ) ), pwHash( i + vec2( 1.0, 1.0 ) ), u.x ), u.y ); }
+// islands of pastina drifting on the surface: 1 inside a raft
+float pastaRaftN( vec2 p, float t ) {
+	vec2 q = p * 0.05 + vec2( t * 0.006, t * 0.0035 );
+	return pwVN( q ) * 0.58 + pwVN( q * 2.7 + 3.1 ) * 0.3 + pwVN( q * 8.1 - 1.7 ) * 0.12;
+}
+float pastaRaft( vec2 p, float t ) { return smoothstep( 0.6, 0.64, pastaRaftN( p, t ) ); }
+// tileable water caustics (after joltz0r / Dave Hoskins), three iterations
+float pastaCaust( vec2 p, float t ) {
+	vec2 q = mod( p * 6.28318, 6.28318 ) - 250.0;
+	vec2 i = q; float c = 1.0;
+	for ( int n = 0; n < 3; n++ ) {
+		float tt = t * ( 1.0 - ( 3.5 / float( n + 1 ) ) );
+		i = q + vec2( cos( tt - i.x ) + sin( tt + i.y ), sin( tt - i.y ) + cos( tt + i.x ) );
+		c += 1.0 / length( vec2( q.x / ( sin( i.x + tt ) / 0.005 ), q.y / ( cos( i.y + tt ) / 0.005 ) ) );
+	}
+	c /= 3.0; c = 1.17 - pow( c, 1.4 );
+	return pow( abs( c ), 8.0 );
+}
+`;
+
 const SSS = /* glsl */`
+	vec3 pastaUL = pastaUnderLight();
 	{
 		vec3 sssH = normalize( directLight.direction + geometryNormal * pastaSSSDistort );
 		float sssBack = pow( saturate( dot( geometryViewDir, -sssH ) ), pastaSSSPower ) * pastaSSSScale;
 		float sssNL = dot( geometryNormal, directLight.direction );
 		float sssWrap = max( 0.0, ( sssNL + pastaWrap ) / ( 1.0 + pastaWrap ) ) - saturate( sssNL );
-		reflectedLight.directDiffuse += directLight.color * material.diffuseColor * pastaSSSColor * ( sssBack + sssWrap * pastaWrapAmt ) * RECIPROCAL_PI;
+		reflectedLight.directDiffuse += directLight.color * pastaUL * material.diffuseColor * pastaSSSColor * ( sssBack + sssWrap * pastaWrapAmt ) * RECIPROCAL_PI;
 	}
-	vec3 irradiance = dotNL * directLight.color;`;
+	vec3 irradiance = dotNL * directLight.color * pastaUL;`;
 
 const VERT_PARS = /* glsl */`
 #include <common>
@@ -41,10 +96,12 @@ uniform vec4 pastaSway;
 #endif
 #ifdef PASTA_FLAP
 attribute float aWing;
+uniform float pastaFlapRate;
 #endif
 #ifdef PASTA_WORLD
 varying vec3 vPastaWorld;
 #endif
+varying vec3 vPastaWater;
 `;
 
 const VERT_BODY = /* glsl */`
@@ -55,7 +112,7 @@ vPastaShade = aShade;
 #ifdef PASTA_FLAP
 {
 	float ph = float( gl_InstanceID ) * 1.37;
-	float fa = 0.3 + 0.62 * sin( uTime * 12.0 + ph ) + 0.15 * sin( uTime * 3.1 + ph * 2.0 );
+	float fa = 0.3 + 0.62 * sin( uTime * 12.0 * pastaFlapRate + ph ) + 0.15 * sin( uTime * 3.1 * pastaFlapRate + ph * 2.0 );
 	float aa = fa * clamp( abs( aWing ) * 1.4 - 0.1, 0.0, 1.0 );
 	float wx = transformed.x;
 	transformed.x = wx * cos( aa );
@@ -107,6 +164,13 @@ vPastaShade = aShade;
 	vPastaWorld = ( pm * vec4( transformed, 1.0 ) ).xyz;
 }
 #endif
+{
+	mat4 pwm = modelMatrix;
+	#ifdef USE_INSTANCING
+	pwm = modelMatrix * instanceMatrix;
+	#endif
+	vPastaWater = ( pwm * vec4( transformed, 1.0 ) ).xyz;
+}
 `;
 
 const FRAG_PARS = /* glsl */`
@@ -138,6 +202,31 @@ float pastaVN( vec2 p ) { vec2 i = floor( p ), f = fract( p ); vec2 u = f * f * 
 	return mix( mix( pastaHash( i ), pastaHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( pastaHash( i + vec2( 0.0, 1.0 ) ), pastaHash( i + vec2( 1.0, 1.0 ) ), u.x ), u.y ); }
 float tangleMaskAt( vec2 p ) { float n = pastaVN( p * 0.05 ) * 0.62 + pastaVN( p * 0.17 + 7.0 ) * 0.38 + tangleBias; return smoothstep( 0.4, 0.53, n ); }
 #endif
+uniform float uTime;
+uniform float uWaterOn;
+uniform float uWaterY;
+uniform vec3 uWaterCol;
+uniform vec3 uWaterView;
+uniform vec3 uWaterLight;
+uniform vec3 uWaterSun;
+uniform sampler2D uCaustTex;
+varying vec3 vPastaWater;
+` + WATER_GLSL + /* glsl */`
+// sunlight reaching this point through the water: dimmer with depth, rippled by caustics,
+// shaded where pastina floats overhead
+vec3 pastaUnderLight() {
+	if ( uWaterOn < 0.5 ) return vec3( 1.0 );
+	float d = uWaterY - vPastaWater.y;
+	if ( d <= 0.0 ) return vec3( 1.0 );
+	float sy = max( uWaterSun.y, 0.25 );
+	vec2 sp = vPastaWater.xz + uWaterSun.xz / sy * d;
+	vec2 cu = sp * 0.1;
+	float c = min( texture2D( uCaustTex, cu + vec2( uTime * 0.021, uTime * 0.013 ) ).r,
+	               texture2D( uCaustTex, cu * 1.31 + vec2( 0.37 - uTime * 0.017, uTime * 0.019 ) ).r ) * 1.7;
+	float k = mix( 0.45 + 2.4 * c, 1.0, smoothstep( 3.0, 20.0, d ) * 0.65 );
+	float shade = 1.0 - 0.8 * pastaRaft( sp, uTime );
+	return mix( vec3( 1.0 ), exp( -uWaterLight * d / sy ) * k * shade, smoothstep( 0.0, 0.3, d ) );
+}
 `;
 
 const FRAG_COLOR = /* glsl */`
@@ -165,7 +254,26 @@ diffuseColor.rgb = mix( diffuseColor.rgb, tAlb * tangleTint, tMask );
 const PHYS_PARS = THREE.ShaderChunk.lights_physical_pars_fragment;
 const HAS_HOOK = PHYS_PARS.includes('vec3 irradiance = dotNL * directLight.color;');
 if (!HAS_HOOK) console.warn('pasta: translucency hook not found in this three.js version');
-const PHYS_PARS_SSS = PHYS_PARS.replace('vec3 irradiance = dotNL * directLight.color;', SSS);
+const PHYS_PARS_SSS = PHYS_PARS.replace('vec3 irradiance = dotNL * directLight.color;', SSS)
+  .replace('vec3 ccIrradiance = dotNLcc * directLight.color;', 'vec3 ccIrradiance = dotNLcc * directLight.color * pastaUL;');
+
+// Looking through water: the part of the sight line under the surface fades to the water's own color.
+const WATER_FOG = /* glsl */`
+if ( uWaterOn > 0.5 ) {
+	vec3 P = vPastaWater, C = cameraPosition;
+	float W = uWaterY, len = distance( P, C ), Lw = 0.0;
+	if ( P.y < W && C.y < W ) Lw = len;
+	else if ( P.y < W ) Lw = len * ( W - P.y ) / max( C.y - P.y, 1e-4 );
+	else if ( C.y < W ) Lw = len * ( W - C.y ) / max( P.y - C.y, 1e-4 );
+	float dP = max( W - P.y, 0.0 ), dC = max( W - C.y, 0.0 );
+	gl_FragColor.rgb *= exp( -0.022 * dP );                        // less sky light reaches the deep
+	if ( Lw > 0.0 ) {
+		vec3 scat = uWaterCol * exp( -uWaterLight * ( dP + dC ) * 0.34 );
+		vec3 tr = exp( -uWaterView * Lw );
+		gl_FragColor.rgb = gl_FragColor.rgb * tr + scat * ( 1.0 - tr );
+	}
+}
+#include <fog_fragment>`;
 
 const FRAG_ROUGH = /* glsl */`
 #include <roughnessmap_fragment>
@@ -194,7 +302,8 @@ function onBeforeCompile(shader) {
     .replace('#include <color_fragment>', FRAG_COLOR)
     .replace('#include <roughnessmap_fragment>', FRAG_ROUGH)
     .replace('#include <normal_fragment_maps>', FRAG_NORMAL)
-    .replace('#include <lights_physical_pars_fragment>', PHYS_PARS_SSS);
+    .replace('#include <lights_physical_pars_fragment>', PHYS_PARS_SSS)
+    .replace('#include <fog_fragment>', WATER_FOG);
 }
 
 /**
@@ -235,6 +344,7 @@ export function pastaMaterial(o = {}) {
     pastaShadeHi: { value: new THREE.Color(o.shade?.[1] ?? '#ffffff') },
     pastaSway: { value: new THREE.Vector4(...(o.sway ?? [0, 1, 0, 1])) },
     pastaMacro: { value: o.macro ?? 0 },
+    pastaFlapRate: { value: o.flapRate ?? 1 },
   };
   m.defines = m.defines || {};
   if (o.shade) m.defines.PASTA_SHADE = '';
@@ -254,6 +364,7 @@ export function pastaMaterial(o = {}) {
 // The shared kit. Every surface in the world draws from these roles.
 export function makeKit(T) {
   G.uMacroTex.value = T.albedo;
+  G.uCaustTex.value = makeCausticTexture();
   const tex = (n, tile) => T.at(n, 1 / tile); // UVs are in meters; tile = meters per texture repeat
   const COOKED_SSS = { color: '#ffae4a', scale: 1.7, power: 2.6, distort: 0.25, wrap: 0.6, wrapAmt: 0.55 };
   const DRY_SSS = { color: '#ffb04a', scale: 1.6, power: 3.2, distort: 0.2, wrap: 0.3, wrapAmt: 0.3 };
@@ -346,6 +457,23 @@ export function makeKit(T) {
     normalMap: tex('nPores', 0.08), normalScale: 0.4, sss: { ...COOKED_SSS, scale: 1.4 } });
   K.pupil = pastaMaterial({ color: '#141214', roughness: 0.22, clearcoat: 1.0, clearcoatRoughness: 0.06,
     sss: { ...COOKED_SSS, color: '#30283a', scale: 0.2 } });
+  // ---- the bay
+  const sa = T.pastina.clone(); sa.repeat.set(1 / 1.7, 1 / 1.7); sa.needsUpdate = true;
+  const sn = T.pastinaN.clone(); sn.repeat.set(1 / 1.7, 1 / 1.7); sn.needsUpdate = true;
+  // sand of pastina: wet and darker below the waterline (vertex colors)
+  K.sand = pastaMaterial({ color: '#ffffff', roughness: 0.72, clearcoat: 0.08, clearcoatRoughness: 0.5, sheen: 0.25,
+    map: sa, normalMap: sn, normalScale: 1.1, sss: { ...DRY_SSS, scale: 0.35 }, macro: 0.55, vertexColors: true });
+  // mafaldine kelp: long ruffled ribbons of cooked pasta, colored per instance
+  K.kelp = pastaMaterial({ color: '#ffffff', roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.2, sheen: 0.15,
+    normalMap: tex('nPores', 0.25), normalScale: 0.4, sss: { ...COOKED_SSS, color: '#e2ff8a', scale: 2.0 },
+    sway: [1.15, 1.9, 1.35, 0.32], side: THREE.DoubleSide });
+  // a giant cooked conchiglione
+  K.shell = pastaMaterial({ color: '#f2d08a', roughness: 0.4, clearcoat: 0.55, clearcoatRoughness: 0.18, sheen: 0.18,
+    normalMap: tex('nPores', 0.5), normalScale: 0.7, roughnessMap: tex('rough', 0.9), map: tex('albedo', 1.4),
+    sss: { ...COOKED_SSS, scale: 1.4 }, side: THREE.DoubleSide });
+  // farfalle swimming like rays: slow wingbeats
+  K.ray = pastaMaterial({ color: '#ffffff', roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.25, sheen: 0.25,
+    normalMap: tex('nStriate', 0.1), normalScale: 0.6, sss: { ...COOKED_SSS, scale: 2.2 }, side: THREE.DoubleSide, flap: true, flapRate: 0.3 });
   // Pastina sea.
   const pa = T.pastina.clone(); pa.repeat.set(1 / 5.2, 1 / 5.2); pa.needsUpdate = true;
   const pn = T.pastinaN.clone(); pn.repeat.set(1 / 5.2, 1 / 5.2); pn.needsUpdate = true;

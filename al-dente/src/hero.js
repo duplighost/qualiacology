@@ -38,6 +38,7 @@ export class Hero {
     this.stuck = false; this.stuckN = new THREE.Vector3(); this.stuckC = null; this.stickT = 0;
     this.lastWall = null; this.lastWallN = new THREE.Vector3(); this.wallCount = 0; this.wallCooldown = 0; this.awayT = 0;
     this.stun = 0; this.airT = 0; this.sinkT = 0; this.state = 'play'; this.hopT = 0; this.settleT = 0;
+    this.inWater = false; this.sub = 0; this.strokeT = 0; this.bubbleT = 0;
     this.facing = facing; this.spin = 0;
     this.sq = 1; this.sqv = 0; this.sqAxis = new THREE.Vector3(0, 1, 0); this.sqAxisT = new THREE.Vector3(0, 1, 0);
     this.lean = new THREE.Vector2();
@@ -186,16 +187,18 @@ export class Hero {
     this._pc.copy(c);
     this.computeTargets();
     const g = 15 * dt * dt;
-    const kBody = this.stuck ? 0.32 : 0.26;
+    const kBody = (this.stuck ? 0.32 : 0.26) * (this.inWater ? 0.72 : 1);
+    const wy = this.ctx.water ? this.ctx.water.y : -1e9;
     for (let i = 0; i < this.N; i++) {
       const o = i * 3, k = kind[i];
       if (k === 3) continue; // feet are integrated below
       if (k === 0 || k === 2) { X[o] += dx; X[o + 1] += dy; X[o + 2] += dz; PX[o] += dx; PX[o + 1] += dy; PX[o + 2] += dz; }
       if (k === 2) { X[o] = TG[o]; X[o + 1] = TG[o + 1]; X[o + 2] = TG[o + 2]; PX[o] = X[o]; PX[o + 1] = X[o + 1]; PX[o + 2] = X[o + 2]; continue; }
-      const damp = k === 0 ? 0.9 : 0.975;
+      const under = X[o + 1] < wy;                                    // in water a noodle nearly floats
+      const damp = (k === 0 ? 0.9 : 0.975) * (under ? 0.95 : 1);
       const vx = (X[o] - PX[o]) * damp, vy = (X[o + 1] - PX[o + 1]) * damp, vz = (X[o + 2] - PX[o + 2]) * damp;
       PX[o] = X[o]; PX[o + 1] = X[o + 1]; PX[o + 2] = X[o + 2];
-      X[o] += vx; X[o + 1] += vy - (k === 0 ? g * 0.15 : g); X[o + 2] += vz;
+      X[o] += vx; X[o + 1] += vy - (k === 0 ? g * 0.15 : g) * (under ? 0.07 : 1); X[o + 2] += vz;
       const kp = (this.grab && this.grab.idx === i) ? 0 : k === 0 ? kBody : k === 1 ? 0.028 : 0;
       if (kp) { X[o] += (TG[o] - X[o]) * kp; X[o + 1] += (TG[o + 1] - X[o + 1]) * kp; X[o + 2] += (TG[o + 2] - X[o + 2]) * kp; }
     }
@@ -209,9 +212,10 @@ export class Hero {
         if (f.t < 1) { const t = f.t; px = lerp(f.from.x, f.to.x, t); pz = lerp(f.from.z, f.to.z, t); py = lerp(f.from.y, f.to.y, t) + Math.sin(t * Math.PI) * 0.13; }
         X[o] = px; X[o + 1] = py; X[o + 2] = pz; PX[o] = px; PX[o + 1] = py; PX[o + 2] = pz;
       } else {
-        const vx = (X[o] - PX[o]) * 0.97, vy = (X[o + 1] - PX[o + 1]) * 0.97, vz = (X[o + 2] - PX[o + 2]) * 0.97;
+        const under = X[o + 1] < wy, fd = under ? 0.93 : 0.97;
+        const vx = (X[o] - PX[o]) * fd, vy = (X[o + 1] - PX[o + 1]) * fd, vz = (X[o + 2] - PX[o + 2]) * fd;
         PX[o] = X[o]; PX[o + 1] = X[o + 1]; PX[o + 2] = X[o + 2];
-        X[o] += vx; X[o + 1] += vy - g; X[o + 2] += vz;
+        X[o] += vx; X[o + 1] += vy - g * (under ? 0.1 : 1); X[o + 2] += vz;
       }
     }
     if (this.grab) this.applyGrab(0.55);
@@ -292,7 +296,7 @@ export class Hero {
 
   surface() {
     const c = this.groundC;
-    if (!c || c === 'ground') return 'cooked';
+    if (!c || c === 'ground') return this.ctx.groundSurface || 'cooked';
     return c.surface || 'cooked';
   }
 
@@ -314,8 +318,18 @@ export class Hero {
     if (input.jumpPressed && ctrl) this.buffer = T.buffer;
     else this.buffer = Math.max(0, this.buffer - dt);
 
+    // water: in when mostly under, out when mostly clear (a little hysteresis keeps the surface calm)
+    const Wt = this.ctx.water;
+    const sub = Wt ? clamp((Wt.y - (this.pos.y - R)) / (2 * R), 0, 1) : 0;
+    this.sub = sub;
+    const wasIn = this.inWater;
+    this.inWater = this.state === 'play' && (wasIn ? sub > 0.3 : sub > 0.5);
+    if (this.inWater && !wasIn) this.enterWater();
+    if (this.stuck && this.inWater) this.unstick();
     if (this.stuck) {
       this.stickUpdate(dt, wx, wz, inLen, input);
+    } else if (this.inWater) {
+      this.swim(dt, wx, wz, inLen, input, ctrl);
     } else if (this.grounded) {
       // just climbed over a lip: plant for a beat before running on
       const mv = this.settleT > 0 ? 0 : 1; this.settleT = Math.max(0, this.settleT - dt);
@@ -351,12 +365,13 @@ export class Hero {
     let ground = null, gy = 0.55;
     for (const k of contacts) if (k.ny > gy) { gy = k.ny; ground = k; }
     if (!ground && wasGrounded && this.vel.y <= 0.01 && !this.stuck) {
-      const y0 = this.pos.y;
+      const y0 = this.pos.y, x0 = this.pos.x, z0 = this.pos.z;
       this.pos.y -= 0.32;
       const extra = this.ctx.colliders.resolve(this.pos, R, []);
       let g2 = null; for (const k of extra) if (k.ny > 0.55) g2 = k;
       if (!g2) for (const s of this.ctx.supports) { const k = s.support(this.pos, R, this.vel, dt); if (k) g2 = k; }
-      if (g2) { ground = g2; contacts.push(g2); } else this.pos.y = y0;
+      // a snap only ever moves you down: if it would shove you sideways (into something buried), skip it
+      if (g2 && Math.hypot(this.pos.x - x0, this.pos.z - z0) < 0.02) { ground = g2; contacts.push(g2); } else this.pos.set(x0, y0, z0);
     }
     // velocity response
     for (const k of contacts) {
@@ -379,7 +394,7 @@ export class Hero {
     } else this.airT += dt;
 
     // walls: stick to cooked surfaces while airborne
-    if (!this.grounded && !this.stuck && this.state === 'play') {
+    if (!this.grounded && !this.stuck && !this.inWater && this.state === 'play') {
       for (const k of contacts) {
         if (Math.abs(k.ny) > 0.5 || !k.c || k.c === 'ground' || !k.c.sticky) continue;
         const hl = Math.hypot(k.nx, k.nz); const nx = k.nx / hl, nz = k.nz / hl;
@@ -414,7 +429,75 @@ export class Hero {
     this.stepStrands(dt);
     this.checkpoint(dt);
 
-    if (this.pos.y < SEA + 0.1) this.startSink();
+    if (this.inWater) { this.bubbleT -= dt; if (this.bubbleT <= 0) { this.bubbleT = 0.35 + Math.random() * 0.9; this.puff(1); } }
+    if (this.pos.y < (this.ctx.sinkY ?? SEA + 0.1)) this.startSink();
+  }
+
+  // ------------------------------------------------------------------ water
+  // Cooked pasta sinks. You settle and walk the bottom in slow motion; Space is a stroke up
+  // (hold to keep stroking); a tap at the surface hops you out.
+  swim(dt, wx, wz, inLen, input, ctrl) {
+    const W = this.ctx.water, au = this.ctx.audio;
+    const nearTop = this.pos.y > W.y - 0.62;
+    this.strokeT = Math.max(0, this.strokeT - dt);
+    if (input.jumpPressed && ctrl && nearTop && !this.grounded) {
+      this.vel.y = 9.6; this.vel.x += wx * 2; this.vel.z += wz * 2;
+      this.buffer = 0; this.cut = true; this.strokeT = 0.35;
+      this.sqAxisT.set(0, 1, 0); this.sq = 1.25; this.sqv = 2;
+      for (const f of this.feet) f.planted = false;
+      this.kickStrands(0, -2.4, 0, 0.5);
+      au?.emerge?.(0.75);
+      this.ctx.fx?.splash?.(this.pos, 0.35);
+      return;
+    }
+    if (this.grounded) {
+      const max = 3.1, rate = (inLen > 0.1 ? 14 : 9) * dt;
+      const dvx = wx * max - this.vel.x, dvz = wz * max - this.vel.z, dvl = Math.hypot(dvx, dvz);
+      if (dvl > 0) { const k = Math.min(1, rate / dvl); this.vel.x += dvx * k; this.vel.z += dvz * k; }
+      this.vel.y = Math.min(this.vel.y, 0);
+      if (this.buffer > 0 && ctrl) {                   // push off the bottom
+        this.buffer = 0; this.vel.y = 4.4; this.grounded = false; this.strokeT = 0.3;
+        this.vel.x += wx * 1.2; this.vel.z += wz * 1.2;
+        for (const f of this.feet) f.planted = false;
+        this.sq = 1.18; this.sqv = 1.4;
+        au?.paddle?.(0.85); this.puff(6);
+      }
+      return;
+    }
+    const drag = Math.exp(-2.1 * dt);
+    this.vel.x *= drag; this.vel.z *= drag; this.vel.y *= Math.exp(-1.6 * dt);
+    this.vel.y -= 5.0 * dt;
+    this.vel.x += wx * 12 * dt; this.vel.z += wz * 12 * dt;
+    const hs = Math.hypot(this.vel.x, this.vel.z);
+    if (hs > 3.9) { this.vel.x *= 3.9 / hs; this.vel.z *= 3.9 / hs; }
+    if (ctrl && this.strokeT <= 0 && (this.buffer > 0 || input.jumpHeld)) {
+      this.buffer = 0; this.strokeT = 0.3;
+      const top = nearTop ? 0.3 : 1;                  // at the surface a stroke only treads water
+      this.vel.y = Math.min(Math.max(this.vel.y, 0) + 3.4 * top, 4.6);
+      this.vel.x += wx * 1.4; this.vel.z += wz * 1.4;
+      this.sq = 1.16; this.sqv = 1.2;
+      this.kickStrands(-wx * 1.5, -2.2, -wz * 1.5, 0.5);
+      au?.paddle?.(0.4 + 0.6 * inLen);
+      this.puff(3);
+    }
+  }
+  enterWater() {
+    const vy = this.prevVel.y;
+    if (vy < -2.2) {
+      const k = clamp(-vy / 16, 0, 1);
+      this.ctx.audio?.splash?.(k);
+      this.ctx.fx?.splash?.(this.pos, 0.35 + k * 0.6);
+      this.puff(4 + Math.round(k * 10));
+    }
+    this.vel.y *= 0.35; this.vel.x *= 0.7; this.vel.z *= 0.7;
+    this.unstick();
+  }
+  puff(n) {
+    const B = this.ctx.bubbles; if (!B) return;
+    for (let i = 0; i < n; i++) {
+      const j = Math.floor(Math.random() * this.N) * 3;
+      B.emit(this._v.set(this.X[j], this.X[j + 1], this.X[j + 2]), 0.035 + Math.random() * 0.035, 0.12, 0.6);
+    }
   }
 
   jump() {
@@ -528,7 +611,7 @@ export class Hero {
     this.safeT = 0;
     const c = this.groundC;
     if (c && c !== 'ground' && !c.safe) return;
-    if (this.pos.y < SEA + 1.0) return;
+    if (this.inWater || this.pos.y < (this.ctx.safeMinY ?? SEA + 1.0)) return;
     const col = this.ctx.colliders, y = this.pos.y - R;
     for (const [ox, oz] of [[0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]]) {
       const f = col.floorBelow(this.pos.x + ox, this.pos.y, this.pos.z + oz, 2);
