@@ -4,8 +4,7 @@
 // canvas. This clicks the real start button (no ?test), waits for the game to be playing,
 // throws the swift with a real mouse press/release and a real right click, screenshots the
 // composited page and decodes it on a 2D canvas to measure brightness, colour spread and
-// the amber of the rail. Also: the home pill is on top on the title card and hidden while
-// playing, and nothing is fetched off-site.
+// the amber of the rail. Also: nothing is fetched off-site.
 //
 // Usage: node build/qa/arc-boot-check.mjs http://localhost:4173/arc/
 import assert from 'node:assert/strict';
@@ -30,19 +29,10 @@ await page.goto(target, { waitUntil: 'load' });
 await page.waitForFunction(() => document.body.dataset.gameReady === 'true', null, { timeout: 120000 });
 assert.notEqual(await page.evaluate(() => document.body.dataset.state), 'fatal', 'the game reported a fatal boot');
 
-const pill = await page.evaluate(() => {
-  const el = document.querySelector('.home-link'); if (!el) return null;
-  const r = el.getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-  return { href: el.getAttribute('href'), onTop: !!top && (top === el || el.contains(top)), opacity: getComputedStyle(el).opacity };
-});
-assert.ok(pill, 'the home pill is missing'); assert.equal(pill.href, '/'); assert.equal(pill.onTop, true, 'the home pill is buried');
-
 // real start click, then a real throw and a real call
 await page.click('#start');
 await page.waitForFunction(() => document.body.dataset.state === 'playing', null, { timeout: 20000 });
 await page.waitForTimeout(800);
-const hidden = await page.evaluate(() => getComputedStyle(document.querySelector('.home-link')).opacity);
-assert.equal(Number(hidden), 0, 'the home pill should hide while playing');
 await page.mouse.move(640, 360);
 await page.mouse.down({ button: 'left' }); await page.waitForTimeout(600); await page.mouse.up({ button: 'left' });
 await page.waitForTimeout(2600);

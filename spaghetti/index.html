@@ -41,15 +41,7 @@
 <canvas id="c"></canvas>
 <div id="veil"></div>
 <div id="err"></div>
-<a class="home-link" href="/">Qualiacology</a><script>/* The home link shows on the opening screen; the first key or click on the game takes it away. */(()=>{const a=document.currentScript.previousElementSibling;if(!a)return;const o={capture:true},k=["keydown","click"],go=e=>{if(!e.isTrusted||e.key==="Tab"||e.ctrlKey||e.altKey||e.metaKey||(e.target instanceof Node&&a.contains(e.target)))return;a.style.setProperty("display","none","important");for(const t of k)removeEventListener(t,go,o);document.removeEventListener("pointerlockchange",go,o)};for(const t of k)addEventListener(t,go,o);document.addEventListener("pointerlockchange",go,o)})()</script>
 <script>window.SPAG_SITE = true;   // on qualiacology.com: the other game on the table is at /al-dente/</script>
-<script>
-  (() => {   // the home link comes up while the mouse moves and goes again when it rests
-    let t = 0;
-    const show = () => { document.body.classList.add('pointer'); clearTimeout(t); t = setTimeout(() => document.body.classList.remove('pointer'), 2500); };
-    addEventListener('pointermove', show, { passive: true });
-  })();
-</script>
 <script>
 'use strict';
 // ---- 00-util.js ----

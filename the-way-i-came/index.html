@@ -49,7 +49,6 @@
 <div id="end"></div>
 <div id="veil"><div id="title">THE WAY I CAME</div><div id="sub">click</div></div>
 <div id="err"></div>
-<a class="home-link" href="/">Qualiacology</a><script>/* The home link shows on the opening screen; the first key or click on the game takes it away. */(()=>{const a=document.currentScript.previousElementSibling;if(!a)return;const o={capture:true},k=["keydown","click"],go=e=>{if(!e.isTrusted||e.key==="Tab"||e.ctrlKey||e.altKey||e.metaKey||(e.target instanceof Node&&a.contains(e.target)))return;a.style.setProperty("display","none","important");for(const t of k)removeEventListener(t,go,o);document.removeEventListener("pointerlockchange",go,o)};for(const t of k)addEventListener(t,go,o);document.addEventListener("pointerlockchange",go,o)})()</script>
 <script>
   window.WAY_HOSTED = true; // the site copy takes no test switches
   document.addEventListener('pointerlockchange', () => document.body.classList.toggle('swimming', !!document.pointerLockElement));

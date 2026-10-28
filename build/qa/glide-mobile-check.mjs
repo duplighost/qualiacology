@@ -44,7 +44,6 @@ const check = (condition, message, details = undefined) => {
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const round = (value, digits = 3) => Number.isFinite(value) ? Number(value.toFixed(digits)) : value;
-const overlaps = (a, b) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
 
 let browser;
 let context;
@@ -339,10 +338,8 @@ try {
     const veil = document.querySelector("#veil");
     const title = document.querySelector("#glide-title");
     const art = document.querySelector("#veil .title-art");
-    const home = document.querySelector(".home-link");
     const style = getComputedStyle(veil);
     const rect = title.getBoundingClientRect();
-    const homeRect = home.getBoundingClientRect();
     return {
       text: title.textContent,
       viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
@@ -353,7 +350,6 @@ try {
         ariaHidden: veil.getAttribute("aria-hidden"),
       },
       titleRect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
-      homeRect: { left: homeRect.left, top: homeRect.top, right: homeRect.right, bottom: homeRect.bottom, width: homeRect.width, height: homeRect.height },
       art: {
         complete: art.complete,
         naturalWidth: art.naturalWidth,
@@ -381,7 +377,6 @@ try {
   "mobile title stays wholly inside the viewport", titleState.titleRect);
   check(Math.abs((titleState.titleRect.left + titleState.titleRect.right) / 2 - titleState.viewport.width / 2) <= 3,
     "mobile title is horizontally centered", titleState.titleRect);
-  check(!overlaps(titleState.titleRect, titleState.homeRect), "mobile title does not overlap the Qualiacology home control");
 
   const leftStart = point(11, 78, 720);
   const leftForward = point(11, 78, 632);

@@ -129,7 +129,6 @@ used by this release. No commercial-game image is a playable asset.
 body.playing .qualiacology-home{display:none}
 </style>
 </head><body>
-<a class="qualiacology-home" href="/">Qualiacology</a><script>/* The home link shows on the opening screen; the first key or click on the game takes it away. */(()=>{const a=document.currentScript.previousElementSibling;if(!a)return;const o={capture:true},k=["keydown","click"],go=e=>{if(!e.isTrusted||e.key==="Tab"||e.ctrlKey||e.altKey||e.metaKey||(e.target instanceof Node&&a.contains(e.target)))return;a.style.setProperty("display","none","important");for(const t of k)removeEventListener(t,go,o);document.removeEventListener("pointerlockchange",go,o)};for(const t of k)addEventListener(t,go,o);document.addEventListener("pointerlockchange",go,o)})()</script>
 <canvas tabindex="0" id="game" aria-label="Iron Psalm 3D game"></canvas>
 <div id="loading"><div class="wordmark">IRON PSALM</div><p>CASTING IRON · OPENING THE GALLERY</p><div class="rule"></div></div>
 <div id="error"><h2>The gallery could not open.</h2><p>This game needs a browser with hardware-accelerated WebGL 2. Open the HTML in a current desktop browser, rather than an attachment preview.</p><pre id="errorDetail"></pre></div>
