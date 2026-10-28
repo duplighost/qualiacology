@@ -1,0 +1,45 @@
+{
+ "marble012": {
+  "size": [
+   1024,
+   1024
+  ],
+  "alpha": false,
+  "wrap": true,
+  "files": {
+   "albedo": "marble012.albedo.dds",
+   "normal": "marble012.normal.ktx2",
+   "orm": "marble012.orm.dds"
+  },
+  "bytes": {
+   "albedo": 699192,
+   "normal": 350016,
+   "orm": 43832
+  },
+  "psnr": {
+   "albedo": 37.62,
+   "normalXY": 88.53,
+   "orm": {
+    "ao": 99.0,
+    "rough": 45.3,
+    "metal": 99.0
+   }
+  },
+  "sources": {
+   "albedo": "albedo.png",
+   "normal": "normal_gl.png",
+   "rough": "rough.png"
+  },
+  "format": {
+   "albedo": "DXT1",
+   "normal": "BC5_UNORM",
+   "orm": "DXT1"
+  },
+  "normalErrorDeg": {
+   "mean": 0.001,
+   "p99": 0.0
+  },
+  "specAA": false,
+  "seconds": 4.5
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "tool": "meshoptimizer 1.1.1 simplifyWithAttributes",
+ "levels": [
+  {
+   "offset": 0,
+   "count": 23997
+  },
+  {
+   "offset": 95988,
+   "count": 11997
+  },
+  {
+   "offset": 143976,
+   "count": 5397
+  }
+ ]
+}
