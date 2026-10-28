@@ -4,7 +4,7 @@
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const COLLECT = { duck: 'DUCKS', key: 'KEYS', lily: 'LILIES', corn: 'CANDY CORN', chip: 'CHIPS', pick: 'PICKS', star: 'STARS', coin: 'COINS', quill: 'QUILLS', flake: 'SNOWFLAKES', apple: 'APPLES', bulb: 'LIGHTS', like: 'LIKES', ember: 'EMBERS', pearl: 'PEARLS', lips: 'KISSES', shell: 'SHELLS', candy: 'CANDIES', perfume: 'PERFUMES', donut: 'DONUTS', cuffs: 'CUFFS', coffee: 'COFFEES', crown: 'CROWNS', popsicle: 'ICE POPS', drink: 'DRINKS', pin: 'PINS', heart: 'HEARTS', polaroid: 'PHOTOS', whistle: 'WHISTLES', cup: 'CUPS', tab: 'TABS', w: "W'S" };
+const COLLECT = { duck: 'DUCKS', key: 'KEYS', lily: 'LILIES', corn: 'CANDY CORN', chip: 'CHIPS', pick: 'PICKS', star: 'STARS', coin: 'COINS', quill: 'QUILLS', flake: 'SNOWFLAKES', apple: 'APPLES', bulb: 'LIGHTS', like: 'LIKES', ember: 'EMBERS', pearl: 'PEARLS', lips: 'KISSES', shell: 'SHELLS', candy: 'CANDIES', perfume: 'PERFUMES', donut: 'DONUTS', cuffs: 'CUFFS', coffee: 'COFFEES', crown: 'CROWNS', popsicle: 'ICE POPS', drink: 'DRINKS', pin: 'PINS', heart: 'HEARTS', polaroid: 'PHOTOS', whistle: 'WHISTLES', cup: 'CUPS', tab: 'TABS', w: "W'S", tealight: 'CANDLES', pill: 'PILLS', tag: 'DOG TAGS' };
 export const collectName = (k) => COLLECT[k] || 'DIAMONDS';
 // the course's parts, coloured as the ride's own songbar has them
 const KIND_COLOR = ['#8a7aa8', '#b78bd6', '#ff9ec9', '#ff5fa2', '#ff7fbf', '#7fd8ff', '#ffffff', '#ff3d8b', '#8a7aa8', '#5cffa8'];
