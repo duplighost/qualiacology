@@ -94,16 +94,16 @@
     {
       "slug": "spaghetti-sunshine",
       "title": "SPAGHETTI SUNSHINE",
-      "descriptor": "Ten areas and a playable Plaza",
+      "descriptor": "Seventeen Shines and a playable Plaza",
       "group": "action",
       "featured": false,
       "image": "/assets/games/spaghetti-sunshine-card-v20261028e.jpg",
       "alt": "Delfino Plaza reconstructed from pasta, seen from its rooftops with the canal, bell towers, palms and waterfront below",
-      "summary": "The first Shine in Bianco Hills, Ricco Harbor, Gelato Beach, Pinna Park, Sirena Beach, Noki Bay and Pianta Village. Plus Delfino Airstrip, the sand Shine in Delfino Plaza, and the Corona Mountain finale. All spaghetti. Even Mario. A playable Delfino Plaza connects them through its painted portals, pipes, cannon, sun marker, ferry and mountain cave. Streets, rooftops, canals, sewers and extra Plaza Shines. Keyboard and mouse.",
-      "metaDescription": "Ten areas reconstructed in pasta, connected by a playable Delfino Plaza. Explore its rooftops, canals and sewers, enter the courses and return to their entrances. Saved Shines. Keyboard and mouse.",
+      "summary": "The first and second Shines in Bianco Hills, Ricco Harbor, Gelato Beach, Pinna Park, Sirena Beach, Noki Bay and Pianta Village. Plus Delfino Airstrip, the sand Shine in Delfino Plaza, and the Corona Mountain finale. All spaghetti. Even Mario. Enter a course from the playable Plaza and choose an episode. Streets, rooftops, canals, sewers and extra Plaza Shines. Keyboard and mouse.",
+      "metaDescription": "Seventeen pasta missions connected by a playable Delfino Plaza. Choose the first or second Shine in all seven main courses. Saved progress. Keyboard and mouse.",
       "controls": "WASD or arrows move · mouse looks · Space jumps · J or click uses the nozzle · hold J charges the rocket · Shift hovers · Q changes nozzle · E talks, grabs or throws · Ctrl ground pounds · C centers the camera · H returns to Plaza · L courses · Esc pause",
       "actionLabel": "Play",
-      "duration": "Ten missions + Plaza"
+      "duration": "17 missions + Plaza"
     },
     {
       "slug": "spaghetti",
