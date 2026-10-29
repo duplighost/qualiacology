@@ -149,4 +149,6 @@
 
 # --- AL DENTE ---
 /al-dente.html  /al-dente/  301!
-/pasta  /spaghetti/  302
+
+# --- PASTA COLLECTION ---
+/pasta.html  /pasta/  301!

@@ -1,0 +1,430 @@
+{
+  "note": "Palette guidance from source geometry; all original texture pixels replaced with pasta artwork.",
+  "materials": {
+    "spooky_09008800": {
+      "pasta": "toasted",
+      "color": "#c3a37b",
+      "triangles": 294,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_070075A8",
+        "bbh_seg7_dl_0700AFF0",
+        "bbh_seg7_dl_0700D080",
+        "bbh_seg7_dl_07012220",
+        "bbh_seg7_dl_0700F510",
+        "bbh_seg7_dl_07011120",
+        "bbh_seg7_dl_070139A8",
+        "bbh_seg7_dl_07014FD8",
+        "bbh_seg7_dl_07017378",
+        "bbh_seg7_dl_0701A850",
+        "bbh_seg7_dl_0701B6D0",
+        "bbh_seg7_dl_0701E4E0"
+      ],
+      "role": "Floorboards, ceilings and horizontal architectural trim",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_09004800": {
+      "pasta": "egg",
+      "color": "#d0b583",
+      "triangles": 48,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_070075A8",
+        "bbh_seg7_dl_0700D080",
+        "bbh_seg7_dl_070139A8",
+        "bbh_seg7_dl_07014FD8",
+        "bbh_seg7_dl_07017378",
+        "bbh_seg7_dl_0701B6D0",
+        "bbh_seg7_dl_0701E4E0"
+      ],
+      "role": "Inset architectural detail",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_0900A000": {
+      "pasta": "spinach",
+      "color": "#747861",
+      "triangles": 71,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_070075A8",
+        "bbh_seg7_dl_07012220",
+        "bbh_seg7_dl_070139A8",
+        "bbh_seg7_dl_07014FD8",
+        "bbh_seg7_dl_07019EF8",
+        "bbh_seg7_dl_0701A850",
+        "bbh_seg7_dl_0701E4E0"
+      ],
+      "role": "Exterior ground and stone floor regions",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_09003800": {
+      "pasta": "ink",
+      "color": "#656270",
+      "triangles": 541,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_070075A8",
+        "bbh_seg7_dl_0700AFF0",
+        "bbh_seg7_dl_0700D080",
+        "bbh_seg7_dl_07012220",
+        "bbh_seg7_dl_0700F510",
+        "bbh_seg7_dl_07011120",
+        "bbh_seg7_dl_070139A8",
+        "bbh_seg7_dl_07014FD8",
+        "bbh_seg7_dl_07019EF8",
+        "bbh_seg7_dl_0701A850",
+        "bbh_seg7_dl_0701B6D0",
+        "bbh_seg7_dl_0701E4E0"
+      ],
+      "role": "Main masonry, structural walls and roof surfaces",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_09001800": {
+      "pasta": "toasted",
+      "color": "#a88b66",
+      "triangles": 120,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_070075A8",
+        "bbh_seg7_dl_0700AFF0",
+        "bbh_seg7_dl_0700F510",
+        "bbh_seg7_dl_070139A8",
+        "bbh_seg7_dl_07019EF8"
+      ],
+      "role": "Interior wall panels",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "bbh_seg7_texture_07000000": {
+      "pasta": "toasted",
+      "color": "#ae9878",
+      "triangles": 176,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_070075A8",
+        "bbh_seg7_dl_0700AFF0",
+        "bbh_seg7_dl_0700D080",
+        "bbh_seg7_dl_07012510",
+        "bbh_seg7_dl_07011120",
+        "bbh_seg7_dl_070139A8",
+        "bbh_seg7_dl_07017378",
+        "bbh_seg7_dl_07019EF8",
+        "bbh_seg7_dl_0701E4E0"
+      ],
+      "role": "Architectural accents and structural paneling",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_09009000": {
+      "pasta": "egg",
+      "color": "#c4b18b",
+      "triangles": 90,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_070075A8",
+        "bbh_seg7_dl_0700AFF0",
+        "bbh_seg7_dl_0700D080",
+        "bbh_seg7_dl_07012220",
+        "bbh_seg7_dl_07011120",
+        "bbh_seg7_dl_07017378",
+        "bbh_seg7_dl_07019EF8",
+        "bbh_seg7_dl_0701B6D0",
+        "bbh_seg7_dl_0701E4E0"
+      ],
+      "role": "Floors and threshold surfaces",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_09008000": {
+      "pasta": "ink",
+      "color": "#4b4755",
+      "triangles": 36,
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07007940",
+        "bbh_seg7_dl_0700D2E0",
+        "bbh_seg7_dl_0700F848"
+      ],
+      "role": "Open balcony, stair and tumbling-bridge railings",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": true
+    },
+    "spooky_09006000": {
+      "pasta": "blue",
+      "color": "#667b91",
+      "triangles": 40,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07007B90",
+        "bbh_seg7_dl_0700B1C8",
+        "bbh_seg7_dl_0700D490",
+        "bbh_seg7_dl_07017570",
+        "bbh_seg7_dl_0701ED18"
+      ],
+      "role": "Physical window pane surfaces",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "bbh_seg7_texture_07001000": {
+      "pasta": "rice",
+      "color": "#dfcfac",
+      "triangles": 14,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07007B90",
+        "bbh_seg7_dl_07019EF8"
+      ],
+      "role": "Decorative wall pictures in hall and merry-go-round cellar",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_0900B800": {
+      "pasta": "egg",
+      "color": "#ffe9a0",
+      "triangles": 34,
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07007FD0",
+        "bbh_seg7_dl_0700B418",
+        "bbh_seg7_dl_0701EEC8"
+      ],
+      "role": "Baked door illumination overlay (yellow/orange vertex colors, alpha154)",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": true,
+      "openLattice": false
+    },
+    "spooky_09006800": {
+      "pasta": "toasted",
+      "color": "#9f835e",
+      "triangles": 126,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07008B58",
+        "bbh_seg7_dl_0700B9E0",
+        "bbh_seg7_dl_07015A20",
+        "bbh_seg7_dl_0701F070"
+      ],
+      "role": "Window frames and architectural edging",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_0900B000": {
+      "pasta": "egg",
+      "color": "#ffe9a0",
+      "triangles": 88,
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07008EA8",
+        "bbh_seg7_dl_0700BBF8",
+        "bbh_seg7_dl_0700D7E0",
+        "bbh_seg7_dl_070126E8",
+        "bbh_seg7_dl_07017788"
+      ],
+      "role": "Baked window light beams (yellow vertex colors, alpha80)",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": true,
+      "openLattice": false
+    },
+    "spooky_09005000": {
+      "pasta": "ink",
+      "color": "#575766",
+      "triangles": 332,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_0700AFF0",
+        "bbh_seg7_dl_07012220",
+        "bbh_seg7_dl_0700F510",
+        "bbh_seg7_dl_07011120",
+        "bbh_seg7_dl_07014FD8",
+        "bbh_seg7_dl_07017378",
+        "bbh_seg7_dl_07019EF8",
+        "bbh_seg7_dl_0701B6D0",
+        "bbh_seg7_dl_0701E4E0"
+      ],
+      "role": "Broad interior wall surfaces",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_09002800": {
+      "pasta": "toasted",
+      "color": "#b2996f",
+      "triangles": 28,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_0700AFF0",
+        "bbh_seg7_dl_0700D080",
+        "bbh_seg7_dl_07012220",
+        "bbh_seg7_dl_07011120"
+      ],
+      "role": "Bookshelves and inset furniture panels",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_09000800": {
+      "pasta": "ink",
+      "color": "#76716e",
+      "triangles": 96,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07011120",
+        "bbh_seg7_dl_07017378",
+        "bbh_seg7_dl_07019EF8"
+      ],
+      "role": "Interior wall and ceiling trim",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "bbh_seg7_texture_07002000": {
+      "pasta": "blue",
+      "color": "#506b92",
+      "triangles": 8,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07011120",
+        "bbh_seg7_dl_07017378"
+      ],
+      "role": "Boo portraits, library and attic; replace image with noodle portrait",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "spooky_0900A800": {
+      "pasta": "egg",
+      "color": "#e8bd6f",
+      "triangles": 28,
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07013BE8",
+        "bbh_seg7_dl_070156E0",
+        "bbh_seg7_dl_0701EEC8"
+      ],
+      "role": "Baked window light overlays (including red exterior window glow)",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": true,
+      "openLattice": false
+    },
+    "spooky_09000000": {
+      "pasta": "ink",
+      "color": "#5a5963",
+      "triangles": 28,
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07015398",
+        "bbh_seg7_dl_0701A080"
+      ],
+      "role": "Open upper Mr. I room mesh floor and cellar grate",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": true
+    },
+    "spooky_09007000": {
+      "pasta": "toasted",
+      "color": "#9b8065",
+      "triangles": 136,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_07017378",
+        "bbh_seg7_dl_0701A850",
+        "bbh_seg7_dl_0701E4E0"
+      ],
+      "role": "Mansion roof and exterior structure",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": false
+    },
+    "bbh_seg7_texture_07001800": {
+      "pasta": "ink",
+      "color": "#494755",
+      "triangles": 16,
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "displayLists": [
+        "bbh_seg7_dl_0701E8D8"
+      ],
+      "role": "Eight tall open perimeter fence panels",
+      "roleBasis": "Source geometry, vertex colors, layer and texture format; pasta color is authored.",
+      "omitBakedShadow": false,
+      "omitBakedLighting": false,
+      "openLattice": true
+    }
+  }
+}

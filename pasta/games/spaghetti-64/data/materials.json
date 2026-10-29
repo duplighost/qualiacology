@@ -1,0 +1,98 @@
+{
+  "materials": {
+    "generic_09005800": {
+      "original": "grass",
+      "pasta": "spinach spaghetti",
+      "color": "#869149"
+    },
+    "generic_09009800": {
+      "original": "brown cobbled path with grassy edges",
+      "pasta": "golden coiled spaghetti path",
+      "color": "#cf9a4d"
+    },
+    "generic_09009000": {
+      "original": "orange brown rock / cliff",
+      "pasta": "layers of toasted spaghetti bundles",
+      "color": "#9d6636"
+    },
+    "generic_09006000": {
+      "original": "wood grain; bridge planks and posts",
+      "pasta": "parallel long spaghetti bundles",
+      "color": "#d8a65a"
+    },
+    "generic_09001800": {
+      "original": "dark green marble",
+      "pasta": "spinach pasta",
+      "color": "#687c32"
+    },
+    "generic_09002000": {
+      "original": "gray stone block",
+      "pasta": "whole wheat spaghetti coils",
+      "color": "#bc9b63"
+    },
+    "generic_09003000": {
+      "original": "gray cobbled rock",
+      "pasta": "whole wheat nested spaghetti",
+      "color": "#b08b57"
+    },
+    "generic_09003800": {
+      "original": "pale blue pebbles at start cannon mound",
+      "pasta": "pale pasta shells",
+      "color": "#dbc38e"
+    },
+    "generic_09004800": {
+      "original": "cream marble slope",
+      "pasta": "pale ivory spaghetti",
+      "color": "#e6c98e"
+    },
+    "generic_09005000": {
+      "original": "tan coarse stone",
+      "pasta": "toasted spaghetti coils",
+      "color": "#c39b57"
+    },
+    "generic_09008800": {
+      "original": "transparent metal grille",
+      "pasta": "spaghetti cage bars",
+      "color": "#9d834d",
+      "transparentGeometry": true
+    },
+    "generic_0900A000": {
+      "original": "brown cobbles without grass edges",
+      "pasta": "golden spaghetti path",
+      "color": "#cb9d52"
+    },
+    "generic_0900B000": {
+      "original": "ground shadow decal, not physical terrain",
+      "pasta": "omit; replace with realtime object shadows",
+      "omit": true
+    },
+    "bob_seg7_texture_07000000": {
+      "original": "transparent barbed wire fence with wood post",
+      "pasta": "spaghetti rail and rigatoni post",
+      "color": "#bb904c",
+      "transparentGeometry": true
+    },
+    "bob_seg7_texture_07000800": {
+      "original": "right arrow on tan sign",
+      "pasta": "pasta plate with beet pasta arrow",
+      "color": "#e1b963"
+    },
+    "bob_seg7_texture_07001000": {
+      "original": "flower bed top",
+      "pasta": "farfalle and small pasta rosettes",
+      "color": "#c5b25e"
+    },
+    "bob_seg7_texture_07001800": {
+      "original": "flower bed sides/stems",
+      "pasta": "upright spinach spaghetti stems",
+      "color": "#9a9c41"
+    },
+    "bob_seg7_texture_07002000": {
+      "original": "circular mechanism on wooden board beside elevator",
+      "pasta": "coiled pasta mechanism",
+      "color": "#d6af6c"
+    }
+  },
+  "identificationSource": "https://github.com/pokeheadroom/RENDER96-HD-TEXTURE-PACK",
+  "note": "Labels visually cross-checked against equivalent Render96 texture IDs. No original or Render96 texture pixels are used in the game."
+}

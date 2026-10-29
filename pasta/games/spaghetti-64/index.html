@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="theme-color" content="#2b1c10"/>
+  <meta name="description" content="The complete pasta kingdom: castle, grounds, twenty-four courses, secret cap stages, and three Bowser arenas. Pull and stretch spaghetti Mario's face, then collect the first stars in Bob-omb Battlefield, Whomp's Fortress, Jolly Roger Bay, Cool, Cool Mountain, Big Boo's Haunt, Hazy Maze Cave, Lethal Lava Land, Shifting Sand Land, Dire, Dire Docks, Snowman’s Land, Wet-Dry World, Tall, Tall Mountain, Tiny-Huge Island, Tick Tock Clock, Rainbow Ride, and the three Bowser bonus stages."/>
+  <title>Spaghetti 64 | Qualiacology</title>
+  <link rel="stylesheet" href="./hub.css"/>
+  <link rel="stylesheet" href="./pasta-ui.css"/>
+<link rel="canonical" href="https://qualiacology.com/pasta/games/spaghetti-64/"><link rel="icon" href="/assets/favicon.svg"><meta property="og:title" content="Spaghetti 64 | Qualiacology"><meta property="og:type" content="website"><meta property="og:url" content="https://qualiacology.com/pasta/games/spaghetti-64/"><meta property="og:image" content="https://qualiacology.com/assets/games/pasta-card-v20261028.jpg"><meta name="twitter:card" content="summary_large_image"></head>
+<body>
+  <main id="hub">
+    <canvas id="face-canvas" tabindex="0" aria-label="Interactive spaghetti Mario face. Drag the nose, ears, cheeks, moustache, or cap to stretch the noodles. Release to watch them spring back."></canvas>
+    <div class="shade" aria-hidden="true"></div>
+    <header class="masthead"><a id="brand" href="#title" aria-label="Opening screen">SPAGHETTI <b>64</b></a><span class="collection" aria-label="Collected stars"><span class="star-symbol" aria-hidden="true">★</span><b id="star-total">0 / 30</b></span></header>
+    <section id="title-screen" aria-label="Opening screen">
+      <div class="title-copy"><span class="eyebrow">EVERY SINGLE THING. PASTA.</span><h1>Go on.<br/> Pull his nose.</h1><p>Same face.<br/> Questionable structural integrity.</p></div>
+      <div id="face-tip" role="status">Drag the nose, ears, moustache, or cap.</div>
+      <div class="start-block"><button id="start" class="pasta-button" disabled><span id="start-label">Rolling the noodles…</span><span aria-hidden="true">↗</span></button><a id="title-castle" class="title-castle" href="./play.html?course=castle&entry=resume">Enter the pasta kingdom <span>↗</span></a><span class="start-hint">ENTER / START · THE CASTLE · TWENTY-FOUR COURSES</span></div>
+      <div class="face-settings"><button id="reset-face" class="text-button">Reset face</button><label for="face-softness">NOODLE SOFTNESS</label><input id="face-softness" type="range" min="0" max="1" step="0.05" value="0.65" aria-label="Face noodle softness"/><span id="face-softness-label">Tender</span></div>
+      <div class="face-tools" aria-label="Keyboard face interaction"><button id="pull-nose" aria-label="Pull Mario's nose">Pull nose</button><button id="pull-ear" aria-label="Pull Mario's ear">Pull ear</button><span>Or just grab a strand.</span></div>
+    </section>
+    <section id="course-select" class="hidden" aria-label="Level select">
+      <div class="course-heading"><span class="eyebrow">CHOOSE YOUR COURSE</span><h2>The Pasta Kingdom.</h2><p>The castle, its secrets, and every course. All connected. All pasta.</p></div>
+      <section class="kingdom-banner" aria-label="Explore the castle">
+        <a id="enter-castle" href="./play.html?course=castle&entry=resume"><div><span class="eyebrow">THE WHOLE KINGDOM</span><h3>Start at the castle.</h3><p>Cross the grounds. Explore every floor. Jump into a painting.</p><span class="kingdom-cta">Continue exploring <b>↗</b></span></div><div class="castle-pasta-mark" aria-hidden="true"><i></i><i></i><i></i><b></b></div></a>
+        <div class="kingdom-record"><span id="kingdom-progress">30 stars to discover</span><div><span id="key-record">0 / 2 keys</span><span id="cap-record">0 / 3 cap switches</span><span id="ending-record">The Grand Star awaits</span></div></div>
+      </section>
+      <nav class="course-filters" aria-label="Course categories"><button data-filter="all" aria-pressed="true">All courses</button><button data-filter="main" aria-pressed="false">Main courses</button><button data-filter="bonus" aria-pressed="false">Bowser paths</button><button data-filter="secret" aria-pressed="false">Castle secrets</button></nav>
+      <div class="course-grid">
+        <a class="course-card" id="course-bob" href="./play.html?course=bob" aria-label="Enter Bob-omb Battlefield, first star: Big Bob-omb on the Summit">
+          <div class="course-picture"><canvas id="preview-bob" width="580" height="340" aria-label="Pasta Bob-omb Battlefield preview"></canvas><span class="course-number">01</span><span class="course-star" id="bob-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">BOB-OMB BATTLEFIELD</span><h3>Big Bob-omb<br/> on the Summit</h3><p>A winding climb. A noodle king.<br/> Three very undignified throws.</p><div class="card-foot"><span id="bob-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card" id="course-wf" href="./play.html?course=wf" aria-label="Enter Whomp's Fortress, first star: Chip Off Whomp's Block">
+          <div class="course-picture"><canvas id="preview-wf" width="580" height="340" aria-label="Pasta Whomp's Fortress preview"></canvas><span class="course-number">02</span><span class="course-star" id="wf-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">WHOMP’S FORTRESS</span><h3>Chip Off<br/> Whomp’s Block</h3><p>Moving platforms. Falling pasta.<br/> One king who needs flattening.</p><div class="card-foot"><span id="wf-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card bay-card" id="course-jrb" href="./play.html?course=jrb" aria-label="Enter Jolly Roger Bay, first star: Plunder in the Sunken Ship">
+          <div class="course-picture"><canvas id="preview-jrb" width="580" height="340" aria-label="Pasta Jolly Roger Bay preview"></canvas><span class="course-number">03</span><span class="course-star" id="jrb-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">JOLLY ROGER BAY</span><h3>Plunder in<br/> the Sunken Ship</h3><p>A glass-noodle sea. A sunken ship.<br/> An eel with no respect for dinner.</p><div class="card-foot"><span id="jrb-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card mountain-card" id="course-ccm" href="./play.html?course=ccm" aria-label="Enter Cool, Cool Mountain, first star: Slip Slidin' Away">
+          <div class="course-picture"><canvas id="preview-ccm" width="580" height="340" aria-label="Pasta Cool, Cool Mountain preview"></canvas><span class="course-number">04</span><span class="course-star" id="ccm-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">COOL, COOL MOUNTAIN</span><h3>Slip Slidin’<br/> Away</h3><p>A white-noodle mountain.<br/> A spectacular loss of traction.</p><div class="card-foot"><span id="ccm-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card haunt-card" id="course-bbh" href="./play.html?course=bbh" aria-label="Enter Big Boo's Haunt, first star: Go on a Ghost Hunt">
+          <div class="course-picture"><canvas id="preview-bbh" width="580" height="340" aria-label="Pasta Big Boo's Haunt preview"></canvas><span class="course-number">05</span><span class="course-star" id="bbh-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">BIG BOO’S HAUNT</span><h3>Go on a<br/> Ghost Hunt</h3><p>Five little ghosts. One big appetite.<br/> Even the haunting is pasta.</p><div class="card-foot"><span id="bbh-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card cave-card" id="course-hmc" href="./play.html?course=hmc" aria-label="Enter Hazy Maze Cave, first star: Swimming Beast in the Cavern">
+          <div class="course-picture"><canvas id="preview-hmc" width="580" height="340" aria-label="Pasta Hazy Maze Cave preview"></canvas><span class="course-number">06</span><span class="course-star" id="hmc-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">HAZY MAZE CAVE</span><h3>Swimming Beast<br/> in the Cavern</h3><p>A hidden lake. A noodle with flippers.<br/> Your ride is here.</p><div class="card-foot"><span id="hmc-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card lava-card" id="course-lll" href="./play.html?course=lll" aria-label="Enter Lethal Lava Land, first star: Boil the Big Bully">
+          <div class="course-picture"><canvas id="preview-lll" width="580" height="340" aria-label="Pasta Lethal Lava Land preview"></canvas><span class="course-number">07</span><span class="course-star" id="lll-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">LETHAL LAVA LAND</span><h3>Boil the<br/> Big Bully</h3><p>Boiling noodles. Terrible manners.<br/> Give him a push.</p><div class="card-foot"><span id="lll-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card desert-card" id="course-ssl" href="./play.html?course=ssl" aria-label="Enter Shifting Sand Land, first star: In the Talons of the Big Bird">
+          <div class="course-picture"><canvas id="preview-ssl" width="580" height="340" aria-label="Pasta Shifting Sand Land preview"></canvas><span class="course-number">08</span><span class="course-star" id="ssl-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">SHIFTING SAND LAND</span><h3>In the Talons<br/> of the Big Bird</h3><p>Golden dunes. One sticky-fingered bird.<br/> Dinner has taken flight.</p><div class="card-foot"><span id="ssl-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card docks-card" id="course-ddd" href="./play.html?course=ddd" aria-label="Enter Dire, Dire Docks, first star: Board Bowser’s Sub">
+          <div class="course-picture"><canvas id="preview-ddd" width="580" height="340" aria-label="Pasta Dire, Dire Docks preview"></canvas><span class="course-number">09</span><span class="course-star" id="ddd-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">DIRE, DIRE DOCKS</span><h3>Board<br/> Bowser’s Sub</h3><p>A deep dive. A submerged supper.<br/> All aboard the pasta submarine.</p><div class="card-foot"><span id="ddd-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card mountain-card" id="course-sl" href="./play.html?course=sl" aria-label="Enter Snowman’s Land, first star: Snowman’s Big Head">
+          <div class="course-picture"><canvas id="preview-sl" width="580" height="340" aria-label="Pasta Snowman’s Land preview"></canvas><span class="course-number">10</span><span class="course-star" id="sl-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">SNOWMAN’S LAND</span><h3>Snowman’s<br/> Big Head</h3><p>A giant of ivory noodles.<br/> A penguin against the wind.</p><div class="card-foot"><span id="sl-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card waterworks-card" id="course-wdw" href="./play.html?course=wdw" aria-label="Enter Wet-Dry World, first star: Shocking Arrow Lifts!">
+          <div class="course-picture"><canvas id="preview-wdw" width="580" height="340" aria-label="Pasta Wet-Dry World preview"></canvas><span class="course-number">11</span><span class="course-star" id="wdw-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">WET-DRY WORLD</span><h3>Shocking<br/> Arrow Lifts!</h3><p>Changing tides. Moving lifts.<br/> A thoroughly soggy city.</p><div class="card-foot"><span id="wdw-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card highland-card" id="course-ttm" href="./play.html?course=ttm" aria-label="Enter Tall, Tall Mountain, first star: Scale the Mountain">
+          <div class="course-picture"><canvas id="preview-ttm" width="580" height="340" aria-label="Pasta Tall, Tall Mountain preview"></canvas><span class="course-number">12</span><span class="course-star" id="ttm-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">TALL, TALL MOUNTAIN</span><h3>Scale the<br/> Mountain</h3><p>A winding ascent. A rolling log.<br/> The summit is served.</p><div class="card-foot"><span id="ttm-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card island-card" id="course-thi" href="./play.html?course=thi" aria-label="Enter Tiny-Huge Island, first star: Pluck the Piranha Flower">
+          <div class="course-picture"><canvas id="preview-thi" width="580" height="340" aria-label="Pasta Tiny-Huge Island preview"></canvas><span class="course-number">13</span><span class="course-star" id="thi-star" aria-label="Star not collected">☆</span></div>
+          <div class="course-info"><span class="eyebrow">TINY-HUGE ISLAND</span><h3>Pluck the<br/> Piranha Flower</h3><p>Two scales. Five giant flowers.<br/> An enormous appetite.</p><div class="card-foot"><span id="thi-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card clock-card" id="course-ttc" href="./play.html?course=ttc" aria-label="Enter Tick Tock Clock, Roll into the Cage">
+          <div class="course-picture"><canvas id="preview-ttc" width="580" height="340" aria-label="Pasta Tick Tock Clock preview"></canvas><span class="course-number">14</span><span class="course-star" id="ttc-star" aria-label="Star not collected">☆</span><span class="course-new">NEW COURSE</span></div>
+          <div class="course-info"><span class="eyebrow">TICK TOCK CLOCK</span><h3>Roll into<br/> the Cage</h3><p>Dry rigatoni clockwork.<br/> Every second is pasta.</p><div class="card-foot"><span id="ttc-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card rainbow-card" id="course-rr" href="./play.html?course=rr" aria-label="Enter Rainbow Ride, Cruiser Crossing the Rainbow">
+          <div class="course-picture"><canvas id="preview-rr" width="580" height="340" aria-label="Pasta Rainbow Ride preview"></canvas><span class="course-number">15</span><span class="course-star" id="rr-star" aria-label="Star not collected">☆</span><span class="course-new">NEW COURSE</span></div>
+          <div class="course-info"><span class="eyebrow">RAINBOW RIDE</span><h3>Cruiser Crossing<br/> the Rainbow</h3><p>Four flying ribbon carpets.<br/> A ship in the pasta sky.</p><div class="card-foot"><span id="rr-progress">FIRST STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card haunt-card" id="course-bitdw" href="./play.html?course=bitdw" aria-label="Enter Bowser in the Dark World, Eight Red Coins">
+          <div class="course-picture"><canvas id="preview-bitdw" width="580" height="340" aria-label="Pasta Bowser in the Dark World preview"></canvas><span class="course-number">16</span><span class="course-star" id="bitdw-star" aria-label="Star not collected">☆</span><span class="course-new">NEW BONUS STAGE</span></div>
+          <div class="course-info"><span class="eyebrow">BOWSER IN THE DARK WORLD</span><h3>Eight<br/> Red Coins</h3><p>Timed blocks. Tilting paths.<br/> Eight coins in the darkness.</p><div class="card-foot"><span id="bitdw-progress">BONUS STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card lava-card" id="course-bitfs" href="./play.html?course=bitfs" aria-label="Enter Bowser in the Fire Sea, Eight Red Coins">
+          <div class="course-picture"><canvas id="preview-bitfs" width="580" height="340" aria-label="Pasta Bowser in the Fire Sea preview"></canvas><span class="course-number">17</span><span class="course-star" id="bitfs-star" aria-label="Star not collected">☆</span><span class="course-new">NEW BONUS STAGE</span></div>
+          <div class="course-info"><span class="eyebrow">BOWSER IN THE FIRE SEA</span><h3>Eight<br/> Red Coins</h3><p>Sinking platforms. Tall poles.<br/> A dangerously hot climb.</p><div class="card-foot"><span id="bitfs-progress">BONUS STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card sky-card" id="course-bits" href="./play.html?course=bits" aria-label="Enter Bowser in the Sky, Eight Red Coins">
+          <div class="course-picture"><canvas id="preview-bits" width="580" height="340" aria-label="Pasta Bowser in the Sky preview"></canvas><span class="course-number">18</span><span class="course-star" id="bits-star" aria-label="Star not collected">☆</span><span class="course-new">NEW BONUS STAGE</span></div>
+          <div class="course-info"><span class="eyebrow">BOWSER IN THE SKY</span><h3>Eight<br/> Red Coins</h3><p>A tower above the noodles.<br/> One final red-coin trail.</p><div class="card-foot"><span id="bits-progress">BONUS STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card gold-card" id="course-pss" href="./play.html?course=pss" aria-label="Enter The Princess’S Secret Slide">
+          <div class="course-picture"><canvas id="preview-pss" width="580" height="340" aria-label="Pasta The Princess’S Secret Slide preview"></canvas><span class="course-number">19</span><span class="course-star" id="pss-star" aria-label="Star not collected">☆</span><span class="course-new">CASTLE SECRET</span></div>
+          <div class="course-info"><span class="eyebrow">THE PRINCESS’S SECRET SLIDE</span><h3>The Princess’s<br/> Secret Slide</h3><p>A secret chute. Two stars.<br/> One very quick helping.</p><div class="card-foot"><span id="pss-progress">SECRET STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card cave-card" id="course-cotmc" href="./play.html?course=cotmc" aria-label="Enter Cavern Of The Metal Cap">
+          <div class="course-picture"><canvas id="preview-cotmc" width="580" height="340" aria-label="Pasta Cavern Of The Metal Cap preview"></canvas><span class="course-number">20</span><span class="course-star" id="cotmc-star" aria-label="Star not collected">☆</span><span class="course-new">CASTLE SECRET</span></div>
+          <div class="course-info"><span class="eyebrow">CAVERN OF THE METAL CAP</span><h3>Eight Red<br/> Coins</h3><p>Walk the riverbed.<br/> Wake the green cap switch.</p><div class="card-foot"><span id="cotmc-progress">SECRET STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card rainbow-card" id="course-totwc" href="./play.html?course=totwc" aria-label="Enter Tower Of The Wing Cap">
+          <div class="course-picture"><canvas id="preview-totwc" width="580" height="340" aria-label="Pasta Tower Of The Wing Cap preview"></canvas><span class="course-number">21</span><span class="course-star" id="totwc-star" aria-label="Star not collected">☆</span><span class="course-new">CASTLE SECRET</span></div>
+          <div class="course-info"><span class="eyebrow">TOWER OF THE WING CAP</span><h3>Eight Red<br/> Coins</h3><p>Spread your pasta wings.<br/> Circle the hidden tower.</p><div class="card-foot"><span id="totwc-progress">SECRET STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card sky-card" id="course-vcutm" href="./play.html?course=vcutm" aria-label="Enter Vanish Cap Under The Moat">
+          <div class="course-picture"><canvas id="preview-vcutm" width="580" height="340" aria-label="Pasta Vanish Cap Under The Moat preview"></canvas><span class="course-number">22</span><span class="course-star" id="vcutm-star" aria-label="Star not collected">☆</span><span class="course-new">CASTLE SECRET</span></div>
+          <div class="course-info"><span class="eyebrow">VANISH CAP UNDER THE MOAT</span><h3>Eight Red<br/> Coins</h3><p>Below the drained moat.<br/> Beyond the pasta grate.</p><div class="card-foot"><span id="vcutm-progress">SECRET STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card rainbow-card" id="course-wmotr" href="./play.html?course=wmotr" aria-label="Enter Wing Mario Over The Rainbow">
+          <div class="course-picture"><canvas id="preview-wmotr" width="580" height="340" aria-label="Pasta Wing Mario Over The Rainbow preview"></canvas><span class="course-number">23</span><span class="course-star" id="wmotr-star" aria-label="Star not collected">☆</span><span class="course-new">CASTLE SECRET</span></div>
+          <div class="course-info"><span class="eyebrow">WING MARIO OVER THE RAINBOW</span><h3>Eight Red<br/> Coins</h3><p>Cloud islands. Pasta cannons.<br/> A much higher supper.</p><div class="card-foot"><span id="wmotr-progress">SECRET STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+        <a class="course-card docks-card" id="course-sa" href="./play.html?course=sa" aria-label="Enter The Secret Aquarium">
+          <div class="course-picture"><canvas id="preview-sa" width="580" height="340" aria-label="Pasta The Secret Aquarium preview"></canvas><span class="course-number">24</span><span class="course-star" id="sa-star" aria-label="Star not collected">☆</span><span class="course-new">CASTLE SECRET</span></div>
+          <div class="course-info"><span class="eyebrow">THE SECRET AQUARIUM</span><h3>Eight Red<br/> Coins</h3><p>Eight red noodles.<br/> One hidden aquarium.</p><div class="card-foot"><span id="sa-progress">SECRET STAR · READY TO PLAY</span><b aria-hidden="true">↗</b></div></div>
+        </a>
+      </div>
+      <section class="arena-select" aria-label="Bowser arenas"><div><span class="eyebrow">THE THREE SHOWDOWNS</span><h3>A king with a loose end.</h3><p>Reach these arenas through the Bowser courses, or enter a fight here.</p></div><a id="arena-bowser_1" href="./play.html?course=bowser_1">The first key <span>↗</span></a><a id="arena-bowser_2" href="./play.html?course=bowser_2">The second key <span>↗</span></a><a id="arena-bowser_3" href="./play.html?course=bowser_3">The Grand Star <span>↗</span></a></section>
+      <footer class="select-footer"><button id="back-face" class="text-button">← Back to the face</button><span>KEYBOARD · TOUCH · GAMEPAD</span></footer>
+    </section>
+    <div id="hub-error" class="hidden" role="alert"><h2>The pasta needs another minute.</h2><p id="hub-error-text"></p><button onclick="location.reload()" class="pasta-button">Try again</button><a href="./play.html?course=bob">Open Bob-omb Battlefield</a><a href="./play.html?course=wf">Open Whomp’s Fortress</a><a href="./play.html?course=jrb">Open Jolly Roger Bay</a><a href="./play.html?course=ccm">Open Cool, Cool Mountain</a><a href="./play.html?course=bbh">Open Big Boo’s Haunt</a><a href="./play.html?course=hmc">Open Hazy Maze Cave</a><a href="./play.html?course=lll">Open Lethal Lava Land</a><a href="./play.html?course=ssl">Open Shifting Sand Land</a><a href="./play.html?course=ddd">Open Dire, Dire Docks</a><a href="./play.html?course=sl">Open Snowman’s Land</a><a href="./play.html?course=wdw">Open Wet-Dry World</a><a href="./play.html?course=ttm">Open Tall, Tall Mountain</a><a href="./play.html?course=thi">Open Tiny-Huge Island</a><a href="./play.html?course=ttc">Open Tick Tock Clock</a><a href="./play.html?course=rr">Open Rainbow Ride</a><a href="./play.html?course=bitdw">Open Bowser in the Dark World</a><a href="./play.html?course=bitfs">Open Bowser in the Fire Sea</a><a href="./play.html?course=bits">Open Bowser in the Sky</a></div>
+    <output id="face-status" class="sr-only" aria-live="polite">Preparing the spaghetti face.</output>
+  </main>
+  <script type="module" src="./hub.js"></script>
+</body>
+</html>

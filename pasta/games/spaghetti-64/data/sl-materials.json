@@ -1,0 +1,153 @@
+{
+  "course": "sl",
+  "source": "https://github.com/n64decomp/sm64/tree/master/levels/sl/areas/1",
+  "scale": 0.01,
+  "materials": [
+    {
+      "sourceTexture": "sl_seg7_texture_07000000",
+      "sourceTriangleCount": 2,
+      "pasta": "ivory capellini",
+      "asset": "capellini-pasta-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "sl_seg7_texture_07000800",
+      "sourceTriangleCount": 4,
+      "pasta": "ivory capellini",
+      "asset": "capellini-pasta-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "sl_seg7_texture_07001800",
+      "sourceTriangleCount": 4,
+      "pasta": "ivory capellini",
+      "asset": "capellini-pasta-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "sl_seg7_texture_07002000",
+      "sourceTriangleCount": 34,
+      "pasta": "ivory capellini",
+      "asset": "capellini-pasta-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09000800",
+      "sourceTriangleCount": 102,
+      "pasta": "ivory capellini",
+      "asset": "capellini-pasta-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09001000",
+      "sourceTriangleCount": 16,
+      "pasta": "ivory capellini",
+      "asset": "capellini-pasta-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09002000",
+      "sourceTriangleCount": 104,
+      "pasta": "pressed rice vermicelli",
+      "asset": "rice-noodle-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09003000",
+      "sourceTriangleCount": 64,
+      "pasta": "pressed rice vermicelli",
+      "asset": "rice-noodle-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09005000",
+      "sourceTriangleCount": 16,
+      "pasta": "pressed rice vermicelli",
+      "asset": "rice-noodle-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09005800",
+      "sourceTriangleCount": 10,
+      "pasta": "pressed rice vermicelli",
+      "asset": "rice-noodle-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09006000",
+      "sourceTriangleCount": 18,
+      "pasta": "pressed rice vermicelli",
+      "asset": "rice-noodle-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09007000",
+      "sourceTriangleCount": 12,
+      "pasta": "toasted tagliatelle",
+      "asset": "tagliatelle-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09008000",
+      "sourceTriangleCount": 60,
+      "pasta": "toasted tagliatelle",
+      "asset": "tagliatelle-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09008800",
+      "sourceTriangleCount": 324,
+      "pasta": "ivory capellini",
+      "asset": "capellini-pasta-surface.png",
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09009000",
+      "sourceTriangleCount": 2,
+      "pasta": "baked shadow omitted",
+      "asset": null,
+      "originalImagePixelsUsed": false
+    },
+    {
+      "sourceTexture": "snow_09009800",
+      "sourceTriangleCount": 19,
+      "pasta": "baked shadow omitted",
+      "asset": null,
+      "originalImagePixelsUsed": false
+    }
+  ],
+  "water": {
+    "pasta": "translucent glass vermicelli",
+    "asset": "glass-noodle-surface.png",
+    "sourceWaterBoxes": 2,
+    "sourceHeight": 9.73
+  },
+  "face": "Ink spaghetti coils, fitted to original snowman eye and mouth planes",
+  "detail": {
+    "terrainStrands": "Approximately 4200 individual capellini curves, distributed by source triangle area",
+    "penguin": "Concentric ink/rice noodle coils and six position-constrained loose strands",
+    "particles": "Curved capellini fragments; gravity/drag, surface contact and settling",
+    "collision": "Original unmodified exterior triangles, original scaled penguin collider, source snow-wave wedge colliders"
+  },
+  "physicalParameters": {
+    "metalness": 0,
+    "ior": 1.46,
+    "snowRoughness": 0.33,
+    "iceRoughness": 0.18,
+    "snowClearcoat": 0.66,
+    "iceClearcoat": 0.92
+  },
+  "limitations": [
+    "Photographic texture inputs and physical shading are approximations, not measured photorealistic renderings.",
+    "The terrain uses a static source collision mesh with visual compression; only selected strands and actor bodies are deformable.",
+    "No claim of original-engine or continuum pasta simulation."
+  ],
+  "sharedHeroAndActorMaterials": {
+    "white": "capellini-pasta-surface.png",
+    "ink": "ink-noodle-surface.png",
+    "dark": "ink-noodle-surface.png",
+    "toasted": "tagliatelle-surface.png",
+    "otherColors": "spaghetti-surface.png",
+    "bumpScale": 0.012
+  }
+}

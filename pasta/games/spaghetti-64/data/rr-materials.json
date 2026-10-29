@@ -1,0 +1,191 @@
+{
+  "course": "rr",
+  "sourceTextureMapping": {
+    "pasta_carpet": {
+      "pasta": "Braided multicolored pasta ribbons",
+      "texture": "tricolor-pasta-surface.png",
+      "color": "#fff4db",
+      "staticSourceTriangles": 0,
+      "dynamicSourceTriangles": 96
+    },
+    "rr_seg7_texture_07001800": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 48,
+      "dynamicSourceTriangles": 0
+    },
+    "sky_09000000": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 34,
+      "dynamicSourceTriangles": 0
+    },
+    "sky_09000800": {
+      "pasta": "Braided multicolored pasta ribbons",
+      "texture": "tricolor-pasta-surface.png",
+      "color": "#fff4db",
+      "staticSourceTriangles": 103,
+      "dynamicSourceTriangles": 786
+    },
+    "sky_09001000": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 78,
+      "dynamicSourceTriangles": 20
+    },
+    "sky_09001800": {
+      "pasta": "Layered toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#dfbd83",
+      "staticSourceTriangles": 479,
+      "dynamicSourceTriangles": 156
+    },
+    "sky_09002000": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 0,
+      "dynamicSourceTriangles": 72
+    },
+    "sky_09003000": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 10,
+      "dynamicSourceTriangles": 20
+    },
+    "sky_09003800": {
+      "pasta": "Braided multicolored pasta ribbons",
+      "texture": "tricolor-pasta-surface.png",
+      "color": "#fff4db",
+      "staticSourceTriangles": 56,
+      "dynamicSourceTriangles": 0
+    },
+    "sky_09004800": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 143,
+      "dynamicSourceTriangles": 0
+    },
+    "sky_09005800": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 292,
+      "dynamicSourceTriangles": 0
+    },
+    "sky_09006000": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 8,
+      "dynamicSourceTriangles": 0
+    },
+    "sky_09007000": {
+      "pasta": "Layered toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#dfbd83",
+      "staticSourceTriangles": 879,
+      "dynamicSourceTriangles": 92
+    },
+    "sky_09007800": {
+      "pasta": "Golden spaghetti bundles",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9ce94",
+      "staticSourceTriangles": 0,
+      "dynamicSourceTriangles": 10
+    },
+    "sky_09008000": {
+      "pasta": "Ivory rice noodles",
+      "texture": "rice-noodle-surface.png",
+      "color": "#f3e6c5",
+      "staticSourceTriangles": 90,
+      "dynamicSourceTriangles": 0
+    },
+    "texture_metal_hole": {
+      "pasta": "Knotted ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#655844",
+      "staticSourceTriangles": 20,
+      "dynamicSourceTriangles": 124
+    }
+  },
+  "sharedPaletteGroups": {
+    "eggTomatoSaffronPinkBlue": "spaghetti-surface.png",
+    "toasted": "tagliatelle-surface.png",
+    "spinach": "fusilli-pasta-surface.png",
+    "white": "capellini-pasta-surface.png",
+    "inkDark": "ink-noodle-surface.png"
+  },
+  "actors": {
+    "Mario": "Existing deformable spaghetti rig with photographic pasta maps",
+    "carpets": "Original 21-vertex grid and flat collision, tricolor photographic pasta skin, 43 individual long spaghetti strands, two braided edge cords and 18 simulated loose fringe strands per carpet",
+    "cruiser": "All placed source ship and deck meshes covered in toasted tagliatelle; six source wing meshes with source oscillation",
+    "fallingTiles": "31 original donut-platform meshes and collision, accented by individual cooked pasta rings",
+    "rotatingPlatforms": "Source octagonal and bridge meshes with live rotating collision and rider carrying",
+    "poles": "Source placed geometry, graspable at the six source object positions and heights",
+    "enemies": "Coiled pasta bodies, capellini eyes and noodles, no sprite or pixel assets from the game",
+    "flames": "Tomato and saffron pasta strands; timed source cone interaction",
+    "coinsAndStar": "Golden saffron spaghetti",
+    "optionalBlueCoins": "Butterfly-pea colored pasta; original ground-pound switch collider and six eight-second pickups"
+  },
+  "physicalAppearance": {
+    "metalness": 0,
+    "roughness": {
+      "ribbons": 0.28,
+      "terrain": 0.34
+    },
+    "clearcoat": 0.72,
+    "clearcoatRoughness": 0.19,
+    "ior": 1.46,
+    "sheen": 0.2,
+    "terrainBumpScale": 0.034,
+    "sharedMaterialBumpScale": 0.014,
+    "visualFootPressureDepression": 0.025,
+    "carpetSourceRippleAmplitude": 0.2,
+    "carpetSourceRipplePeriodSeconds": 2.1333333333333333,
+    "fringe": "Seven-point damped Verlet strands, five length-constraint iterations, acceleration inertia from carpet motion",
+    "carpetRiderPressureSag": 0.08
+  },
+  "geometry": {
+    "staticSource": [
+      1606,
+      2240
+    ],
+    "sourceCollision": [
+      1108,
+      1582
+    ],
+    "dynamicCounts": {
+      "sliding": 2,
+      "carpet": 4,
+      "octagon": 4,
+      "rotating_bridge": 1,
+      "seesaw": 2,
+      "swing": 2,
+      "elevator": 1,
+      "triangles": 1,
+      "switch": 1,
+      "donut": 31
+    },
+    "staticPlacementModels": 22,
+    "sourceWingMeshes": 6,
+    "sourceCarpetWaypoints": {
+      "0": 16,
+      "1": 27,
+      "7": 40,
+      "8": 42
+    },
+    "webglCourseFaceMaximumEdge": 5.8,
+    "canvasAlternateMaximumEdge": 12,
+    "collisionUnchanged": true,
+    "note": "Canvas alternate subdivides the same original source faces more coarsely; boundaries, source topology and collision remain unchanged.",
+    "optionalGuidePoints": 101,
+    "finiteSceneVerticesBeforeHeroAndAtmosphere": 393087
+  },
+  "limits": "Photographic generated pasta maps, physical materials, visible strands and constrained fringe approximate cooked pasta. Terrain and platform collision remains firm; the browser simulation is not a full continuum or per-strand contact simulation. Moving-platform behavior follows source timing and paths while enemies use simplified local browser AI."
+}

@@ -1,0 +1,143 @@
+{
+  "materials": {
+    "water_09000000": {
+      "original": "blue mottled course surface",
+      "pasta": "pale blue rice-pasta coils",
+      "color": "#a8bcc0"
+    },
+    "water_09000800": {
+      "original": "blue wooden planks",
+      "pasta": "parallel blue and toasted spaghetti planks",
+      "color": "#a8ac91"
+    },
+    "water_09001800": {
+      "original": "grey stone mosaic",
+      "pasta": "pale whole-wheat spaghetti nests",
+      "color": "#d0bd94"
+    },
+    "water_09002800": {
+      "original": "rippling pale sand",
+      "pasta": "fine egg-spaghetti dunes",
+      "color": "#d7c18a"
+    },
+    "water_09003800": {
+      "original": "blue and white mottled rock",
+      "pasta": "pale butterfly-pea spaghetti cliffs",
+      "color": "#a8b3ae"
+    },
+    "water_09004800": {
+      "original": "mossy blue cliff surface",
+      "pasta": "blue rice and spinach spaghetti layers",
+      "color": "#8fa99a"
+    },
+    "water_09005800": {
+      "original": "square framed blue window",
+      "pasta": "spaghetti frame around woven blue noodle panes",
+      "color": "#b7b7a1"
+    },
+    "water_09006000": {
+      "original": "hanging seaweed with transparency",
+      "pasta": "dangling spinach spaghetti",
+      "color": "#6f8e52",
+      "transparentGeometry": true
+    },
+    "water_09006800": {
+      "original": "blue cliff and masonry boundary",
+      "pasta": "blue and toasted spaghetti bundles",
+      "color": "#a7af9e"
+    },
+    "water_09007800": {
+      "original": "riveted brass metal plates",
+      "pasta": "golden pasta sheets with coiled pasta rivets",
+      "color": "#c2ad65"
+    },
+    "water_09008800": {
+      "original": "ribbed dark interior hull surface",
+      "pasta": "curved toasted spaghetti hull ribs",
+      "color": "#ac8056"
+    },
+    "water_09009000": {
+      "original": "masonry and illuminated doorway",
+      "pasta": "whole-wheat and saffron pasta doorway",
+      "color": "#af9b69"
+    },
+    "water_0900A000": {
+      "original": "dark wooden planks",
+      "pasta": "parallel toasted spaghetti bundles",
+      "color": "#a58b51"
+    },
+    "water_0900A800": {
+      "original": "multicolored masonry wall",
+      "pasta": "egg, spinach and toasted spaghetti blocks",
+      "color": "#b1a884"
+    },
+    "water_0900B800": {
+      "original": "jagged rock edge against transparent space",
+      "pasta": "irregular tall pasta bundles",
+      "color": "#a4a57c",
+      "transparentGeometry": true
+    },
+    "jrb_seg7_texture_07000000": {
+      "original": "red open square grate",
+      "pasta": "beet spaghetti lattice",
+      "color": "#aa6d40",
+      "transparentGeometry": true
+    },
+    "jrb_seg7_texture_07000800": {
+      "original": "seaweed with transparent background",
+      "pasta": "spinach spaghetti fronds",
+      "color": "#72964c",
+      "transparentGeometry": true
+    },
+    "jrb_seg7_texture_07001000": {
+      "original": "wooden crate with skull emblem",
+      "pasta": "toasted spaghetti crate and ivory noodle skull",
+      "color": "#ba9458"
+    },
+    "jrb_seg7_texture_07001800": {
+      "original": "plain wooden crate",
+      "pasta": "toasted spaghetti crate",
+      "color": "#ba9458"
+    },
+    "pasta_water": {
+      "original": "moving water surface and submerged medium",
+      "pasta": "loose suspended spaghetti with subtle blue pasta tint",
+      "color": "#9cae8f",
+      "note": "A pasta interpretation of swimming water; no original water texture pixels."
+    },
+    "pasta_mist": {
+      "original": "harmless first-mission bay mist id51",
+      "pasta": "wisps of pale pasta strands",
+      "color": "#dbd3b7"
+    }
+  },
+  "texturesByArea": {
+    "1": {
+      "water_09006000": 18,
+      "water_0900B800": 37,
+      "water_09003800": 194,
+      "water_09001800": 794,
+      "water_09002800": 61,
+      "water_09004800": 98,
+      "water_0900A000": 12,
+      "jrb_seg7_texture_07000000": 2,
+      "jrb_seg7_texture_07000800": 2,
+      "water_09005800": 38,
+      "water_09000000": 48,
+      "water_09000800": 82,
+      "water_0900A800": 8
+    },
+    "2": {
+      "water_09005800": 46,
+      "water_0900A000": 13,
+      "water_09000800": 85,
+      "water_0900A800": 34,
+      "water_09002800": 19,
+      "water_09006000": 80,
+      "water_09008800": 44
+    }
+  },
+  "identificationSource": "https://github.com/pokeheadroom/RENDER96-HD-TEXTURE-PACK/tree/master/gfx/textures/water",
+  "sourceSymbols": "https://github.com/n64decomp/sm64/blob/master/bin/water.c",
+  "note": "Equivalent texture identifiers were inspected only to identify source materials. No original or Render96 texture pixels are used in the game."
+}

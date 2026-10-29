@@ -1,0 +1,109 @@
+{
+  "course": "wdw",
+  "sourceTextureMapping": {
+    "grass_09008000": {
+      "pasta": "Layered tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#d1b98b"
+    },
+    "grass_09007000": {
+      "pasta": "Roasted spaghetti",
+      "texture": "roasted-noodle-surface.png",
+      "color": "#b6a58d"
+    },
+    "grass_09000800": {
+      "pasta": "Cooked durum fusilli",
+      "texture": "fusilli-pasta-surface.png",
+      "color": "#c8bc9c"
+    },
+    "grass_09001000": {
+      "pasta": "Rice noodles",
+      "texture": "rice-noodle-surface.png",
+      "color": "#d3cab1"
+    },
+    "grass_0900A000": {
+      "pasta": "Squid-ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#768b89"
+    },
+    "grass_09008800": {
+      "pasta": "Layered tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#bcbaa1"
+    },
+    "wdw_seg7_texture_07000800": {
+      "pasta": "Rice noodles",
+      "texture": "rice-noodle-surface.png",
+      "color": "#e0d3a8"
+    },
+    "grass_09009800": {
+      "pasta": "Squid-ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#718482"
+    },
+    "grass_09009000": {
+      "pasta": "Roasted spaghetti",
+      "texture": "roasted-noodle-surface.png",
+      "color": "#ab9277"
+    },
+    "grass_09000000": {
+      "pasta": "Cooked durum fusilli",
+      "texture": "fusilli-pasta-surface.png",
+      "color": "#c7ba8d"
+    },
+    "grass_09004000": {
+      "pasta": "Squid-ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#7c8172"
+    },
+    "grass_09007800": {
+      "pasta": "Layered tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#b5a58c"
+    },
+    "grass_09003800": {
+      "pasta": "Rice noodles",
+      "texture": "rice-noodle-surface.png",
+      "color": "#d4d4bd"
+    },
+    "grass_09006800": {
+      "pasta": "Layered tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#b3aa8a"
+    }
+  },
+  "dynamicFallback": {
+    "pasta": "Woven tagliatelle",
+    "texture": "tagliatelle-surface.png",
+    "color": "#cdb88a"
+  },
+  "water": {
+    "pasta": "Translucent glass noodles",
+    "texture": "glass-noodle-surface.png",
+    "opacity": 0.28,
+    "ior": 1.46,
+    "roughness": 0.17,
+    "individualStrands": 1050
+  },
+  "actors": {
+    "Mario": "Shared strand rig with photographic spaghetti, rice and ink maps",
+    "Amp": "Coiled squid-ink spaghetti with saffron pasta lightning",
+    "Heave-Ho": "Roasted pasta body, ink-noodle treads and spaghetti scoop",
+    "Skeeter": "Blue pasta with long spaghetti legs",
+    "starBox": "Woven saffron spaghetti with rice-pasta exclamation marks",
+    "switch": "Purple beet-colored spaghetti",
+    "diamonds": "Original diamond geometry covered in photographic pasta and individual strands",
+    "fire": "Curled hot tomato spaghetti",
+    "coinsAndStar": "Golden saffron spaghetti"
+  },
+  "physicalAppearance": {
+    "metalness": 0,
+    "clearcoat": 0.82,
+    "roughness": 0.32,
+    "bumpScale": 0.035,
+    "ior": 1.46,
+    "pressureDepression": 0.035
+  },
+  "geometry": "Original main-area source geometry and dynamic platform meshes; visual subdivision max edge 5 m; added individual strands and open woven pasta grilles. Shared character materials also receive photographic pasta maps.",
+  "limits": "Strand response, buoyancy, drag and contact deformation are artistic approximations, not a full physical simulation of cooked pasta."
+}

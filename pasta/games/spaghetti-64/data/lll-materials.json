@@ -1,0 +1,123 @@
+{
+  "fire_09001800": {
+    "faces": 80,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09007800": {
+    "faces": 200,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09006000": {
+    "faces": 24,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09004800": {
+    "faces": 10,
+    "replacement": "Golden toasted tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09008000": {
+    "faces": 70,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09002800": {
+    "faces": 32,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09006800": {
+    "faces": 102,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_0900B800": {
+    "faces": 28,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09005000": {
+    "faces": 12,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09001000": {
+    "faces": 16,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09003800": {
+    "faces": 6,
+    "replacement": "Golden toasted tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09005800": {
+    "faces": 6,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09000000": {
+    "faces": 4,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09000800": {
+    "faces": 34,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_0900A800": {
+    "faces": 6,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09007000": {
+    "faces": 20,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "lll_seg7_texture_07002800": {
+    "faces": 6,
+    "replacement": "Golden toasted tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "lll_seg7_texture_07004800": {
+    "faces": 6,
+    "replacement": "Golden toasted tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09003000": {
+    "faces": 24,
+    "replacement": "Golden toasted tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09009000": {
+    "faces": 4,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09009800": {
+    "faces": 12,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "lll_seg7_texture_07002000": {
+    "faces": 40,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "fire_09008800": {
+    "faces": 2,
+    "replacement": "Dense squid-ink tagliatelle",
+    "originalTexturePixelsShipped": false
+  },
+  "_lava": {
+    "source": "SURFACE_BURNING horizontal source collision faces at y0",
+    "replacement": "Generated photographic macro of roasted tomato/saffron pasta; individual noodle geometry; physical emissive material",
+    "visualTessellationMaxEdge": 5.5,
+    "collisionUnchanged": true
+  }
+}

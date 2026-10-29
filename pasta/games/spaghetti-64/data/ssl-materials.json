@@ -1,0 +1,40 @@
+{
+  "course": "ssl",
+  "visualMapping": {
+    "dunes": "orzo-pasta-surface.png",
+    "pyramidAndPillars": "tagliatelle-surface.png",
+    "solidPlatformSurfaces": "tagliatelle-surface.png",
+    "oasis": "rice-noodle-surface.png",
+    "lethalQuicksand": "source collision INSTANT_QUICKSAND or INSTANT_MOVING_QUICKSAND, dark orzo overlay",
+    "otherQuicksand": "source collision non-instant QUICKSAND variants, warm orzo overlay"
+  },
+  "sourceGeometry": {
+    "collisionVertices": 574,
+    "collisionTriangles": 962,
+    "renderVertices": 475,
+    "renderTriangles": 746
+  },
+  "runtimePhysicalMaterial": {
+    "metalness": 0,
+    "ior": 1.46,
+    "roughness": [
+      0.28,
+      0.37
+    ],
+    "clearcoat": [
+      0.48,
+      0.78
+    ],
+    "bumpScale": [
+      0.024,
+      0.045
+    ]
+  },
+  "deformation": {
+    "terrainFootDepression": ".025 + .08 * quicksandDepth, exponentially localized; visual only",
+    "quicksandUndulationAmplitude": 0.018,
+    "klepto": "damped impact compression, articulated pasta wings, 5 constrained Verlet loose ends",
+    "pokey": "lower segments disappear when attacked; remaining noodle coils settle downward"
+  },
+  "limits": "Source collision is rigid. Dune grains are instanced decorative geometry, not full granular material simulation. Canvas fallback omits physical lighting and shader deformation."
+}

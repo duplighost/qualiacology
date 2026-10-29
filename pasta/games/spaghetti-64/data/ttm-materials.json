@@ -1,0 +1,161 @@
+{
+  "course": "ttm",
+  "sourceTextureMapping": {
+    "mountain_09004000": {
+      "pasta": "Layered toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c0a179",
+      "sourceTriangles": 526
+    },
+    "mountain_09005000": {
+      "pasta": "Spinach-tinted cooked fusilli",
+      "texture": "fusilli-pasta-surface.png",
+      "color": "#9dac68",
+      "sourceTriangles": 42
+    },
+    "mountain_09003800": {
+      "pasta": "Layered toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c0a179",
+      "sourceTriangles": 164
+    },
+    "ttm_seg7_texture_07002800": {
+      "pasta": "Tomato-tinted spaghetti mushroom caps",
+      "texture": "spaghetti-surface.png",
+      "color": "#c6754b",
+      "sourceTriangles": 17
+    },
+    "mountain_09004800": {
+      "pasta": "Spinach-tinted cooked fusilli",
+      "texture": "fusilli-pasta-surface.png",
+      "color": "#9dac68",
+      "sourceTriangles": 390
+    },
+    "ttm_seg7_texture_07000800": {
+      "pasta": "Tomato-tinted spaghetti mushroom caps",
+      "texture": "spaghetti-surface.png",
+      "color": "#c6754b",
+      "sourceTriangles": 24
+    },
+    "ttm_seg7_texture_07000000": {
+      "pasta": "Golden spaghetti trail",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9d4a0",
+      "sourceTriangles": 108
+    },
+    "mountain_09000000": {
+      "pasta": "Golden spaghetti trail",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9d4a0",
+      "sourceTriangles": 16
+    },
+    "ttm_seg7_texture_07001800": {
+      "pasta": "Tomato-tinted spaghetti mushroom caps",
+      "texture": "spaghetti-surface.png",
+      "color": "#c6754b",
+      "sourceTriangles": 13
+    },
+    "mountain_09008000": {
+      "pasta": "Golden spaghetti trail",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9d4a0",
+      "sourceTriangles": 8
+    },
+    "ttm_seg7_texture_07001000": {
+      "pasta": "Golden spaghetti trail",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9d4a0",
+      "sourceTriangles": 16
+    },
+    "mountain_0900A000": {
+      "pasta": "Golden spaghetti trail",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9d4a0",
+      "sourceTriangles": 24
+    },
+    "mountain_0900A800": {
+      "pasta": "Golden spaghetti trail",
+      "texture": "spaghetti-surface.png",
+      "color": "#e9d4a0",
+      "sourceTriangles": 20
+    }
+  },
+  "waterfalls": {
+    "sourceMeshes": 5,
+    "sourceVertices": 28,
+    "sourceTriangles": 18,
+    "pasta": "Translucent rice noodles",
+    "texture": "rice-noodle-surface.png",
+    "color": "#aac7b4",
+    "opacity": 0.63,
+    "roughness": 0.15,
+    "bumpScale": 0.018,
+    "ior": 1.46,
+    "textureScrollYPerSecond": -0.22,
+    "shaderLateralAmplitude": 0.035,
+    "individualFlowStrands": 52
+  },
+  "pools": {
+    "sourceWaterBoxes": 4,
+    "pasta": "Translucent rice noodles",
+    "texture": "rice-noodle-surface.png",
+    "opacity": 0.27,
+    "sourceHeights": [
+      -44.02,
+      -38.39,
+      -40.95,
+      -16.37
+    ]
+  },
+  "sharedPaletteGroups": {
+    "yellowRedCream": "spaghetti-surface.png",
+    "orange": "tagliatelle-surface.png",
+    "green": "fusilli-pasta-surface.png",
+    "dark": "ink-noodle-surface.png",
+    "white": "capellini-pasta-surface.png"
+  },
+  "actors": {
+    "Mario": "Shared spaghetti strand rig with photographic pasta maps",
+    "rollingLog": "Source octagonal cylinder covered with 88 long braided toasted spaghetti strands",
+    "Fwoosh": "Tangled ivory capellini-shaped coils and fine noodle gust strands",
+    "Goombas": "Toasted pasta bodies with rice-colored and ink-pasta details",
+    "MontyMolesAndUkiki": "Roasted pasta bodies and golden noodle limbs",
+    "fireFlyGuy": "Tomato spaghetti body, rice-pasta mask and saffron-pasta propeller",
+    "rollingBalls": "Large coiled toasted-pasta balls",
+    "coinsAndStar": "Golden saffron spaghetti"
+  },
+  "physicalAppearance": {
+    "metalness": 0,
+    "terrainRoughness": 0.31,
+    "clearcoat": 0.68,
+    "clearcoatRoughness": 0.22,
+    "terrainBumpScale": 0.037,
+    "ior": 1.46,
+    "sheen": 0.2,
+    "visualPressureDepression": 0.025
+  },
+  "geometry": {
+    "staticSource": [
+      947,
+      1368
+    ],
+    "sourceCollision": [
+      879,
+      1392
+    ],
+    "rollingLogCollision": [
+      16,
+      28
+    ],
+    "rollingLogVisible": [
+      16,
+      28
+    ],
+    "webglHelperMaximumEdge": 5.8,
+    "webglCourseFaceMaximumEdge": 5.5,
+    "canvasAlternateMaximumEdge": 12,
+    "collisionUnchanged": true,
+    "note": "The Canvas alternate subdivides the same source faces more coarsely. It does not simplify source boundaries or modify collision."
+  },
+  "limits": "Generated photographic textures and shader/strand response approximate cooked pasta; terrain collision remains firm, and there is no complete per-strand fluid/contact simulation."
+}

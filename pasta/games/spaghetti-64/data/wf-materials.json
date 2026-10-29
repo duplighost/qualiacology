@@ -1,0 +1,188 @@
+{
+  "materials": {
+    "grass_09000000": {
+      "original": "transparent wire grid fence",
+      "pasta": "woven toasted spaghetti bars",
+      "color": "#a27842",
+      "transparentGeometry": true
+    },
+    "grass_09000800": {
+      "original": "brown rectangular brick wall",
+      "pasta": "stacked toasted spaghetti bundles",
+      "color": "#b6894d"
+    },
+    "grass_09001000": {
+      "original": "brown inset rectangular block top",
+      "pasta": "dense golden whole-wheat spaghetti coils",
+      "color": "#c6a165"
+    },
+    "grass_09001800": {
+      "original": "speckled stone edge with shadow",
+      "pasta": "toasted spaghetti rim",
+      "color": "#b38b55"
+    },
+    "grass_09002000": {
+      "original": "flower bed top",
+      "pasta": "yellow egg-pasta rosettes with beet-pasta flowers",
+      "color": "#c9ba55"
+    },
+    "grass_09002800": {
+      "original": "flower bed side and green stems",
+      "pasta": "upright spinach-spaghetti stems",
+      "color": "#7f9146"
+    },
+    "grass_09003000": {
+      "original": "rough brown stone rubble",
+      "pasta": "whole-wheat pasta curls",
+      "color": "#b49365"
+    },
+    "grass_09003800": {
+      "original": "rough pale stone rubble",
+      "pasta": "pale whole-wheat pasta curls",
+      "color": "#c4ae83"
+    },
+    "grass_09004000": {
+      "original": "pale grey square tiles",
+      "pasta": "ivory spaghetti in square bundles",
+      "color": "#e0c997"
+    },
+    "grass_09004800": {
+      "original": "bare brown dirt",
+      "pasta": "toasted spaghetti curls",
+      "color": "#a4753f"
+    },
+    "grass_09005000": {
+      "original": "brown dirt capped with a green grass edge",
+      "pasta": "toasted spaghetti layers with spinach-spaghetti edging",
+      "color": "#ad8e44"
+    },
+    "grass_09005800": {
+      "original": "grass",
+      "pasta": "short spinach spaghetti loops",
+      "color": "#809245"
+    },
+    "grass_09006000": {
+      "original": "shadowed stone rim and recess",
+      "pasta": "whole-wheat pasta rim",
+      "color": "#b49360"
+    },
+    "grass_09006800": {
+      "original": "wooden planks",
+      "pasta": "parallel toasted spaghetti bundles",
+      "color": "#c49a59"
+    },
+    "grass_09007000": {
+      "original": "pale stone blocks",
+      "pasta": "egg-pasta bundles",
+      "color": "#ddc48e"
+    },
+    "grass_09007800": {
+      "original": "riveted grey metal plate",
+      "pasta": "pale spaghetti sheets with small pasta-coil rivets",
+      "color": "#d3c398"
+    },
+    "grass_09008000": {
+      "original": "light irregular stone mosaic",
+      "pasta": "pale spaghetti nests",
+      "color": "#d9c69a"
+    },
+    "grass_09008800": {
+      "original": "grey masonry bricks",
+      "pasta": "whole-wheat spaghetti blocks",
+      "color": "#c6b58d"
+    },
+    "grass_09009000": {
+      "original": "red brick wall",
+      "pasta": "beet spaghetti blocks",
+      "color": "#bb7850"
+    },
+    "grass_09009800": {
+      "original": "dark stone mosaic",
+      "pasta": "deep toasted spaghetti nests",
+      "color": "#a27d4d"
+    },
+    "grass_0900A000": {
+      "original": "transparent wooden rail fence",
+      "pasta": "thick toasted spaghetti rails",
+      "color": "#bf9656",
+      "transparentGeometry": true
+    },
+    "grass_0900A800": {
+      "original": "cloud",
+      "pasta": "pale soft spaghetti coils",
+      "color": "#e5d6ad"
+    },
+    "grass_0900B000": {
+      "original": "ground shadow decal",
+      "pasta": "omit; use realtime object shadows",
+      "color": "#000000",
+      "omit": true
+    },
+    "grass_0900B800": {
+      "original": "faded cloud shadow",
+      "pasta": "omit; use lighting",
+      "color": "#000000",
+      "omit": true
+    },
+    "wf_seg7_texture_07000000": {
+      "original": "grey cannon block with circular opening",
+      "pasta": "ivory spaghetti block with a pasta-lined circular opening",
+      "color": "#d8c9a4"
+    },
+    "wf_seg7_texture_07000800": {
+      "original": "red/rust square masonry panel",
+      "pasta": "toasted beet spaghetti brick bundles",
+      "color": "#b67c47"
+    },
+    "wf_seg7_texture_07001000": {
+      "original": "grey block stone",
+      "pasta": "whole-wheat spaghetti blocks",
+      "color": "#c9b78e"
+    },
+    "wf_seg7_texture_07001800": {
+      "original": "tower brick window, ACT2+",
+      "pasta": "toasted spaghetti window frame",
+      "color": "#ac824c"
+    },
+    "wf_seg7_texture_07002000": {
+      "original": "stone face with eyes",
+      "pasta": "spaghetti face with white and squid-ink pasta eyes",
+      "color": "#d5c194"
+    },
+    "wf_seg7_texture_07002800": {
+      "original": "shadow alpha",
+      "pasta": "omit; use realtime shadows",
+      "color": "#000000",
+      "omit": true
+    },
+    "checkerboard_pasta": {
+      "original": "checkerboard elevator",
+      "pasta": "alternating toasted and ivory spaghetti bundles",
+      "color": "#dbc596"
+    }
+  },
+  "textures": {
+    "grass_09004800": 32,
+    "grass_09007800": 25,
+    "grass_09001000": 50,
+    "grass_09000800": 159,
+    "grass_09009800": 42,
+    "grass_09004000": 22,
+    "grass_09005000": 35,
+    "grass_09008800": 19,
+    "grass_09008000": 86,
+    "grass_09006800": 20,
+    "wf_seg7_texture_07000000": 4,
+    "wf_seg7_texture_07001000": 2,
+    "grass_09005800": 15,
+    "wf_seg7_texture_07000800": 18,
+    "grass_09000000": 44,
+    "grass_0900A000": 16,
+    "grass_09002800": 64,
+    "grass_09002000": 24,
+    "grass_0900B000": 2
+  },
+  "identificationSource": "https://github.com/pokeheadroom/RENDER96-HD-TEXTURE-PACK/tree/master/gfx/textures/grass",
+  "sourceSymbols": "https://github.com/n64decomp/sm64/blob/master/bin/grass.c",
+  "note": "Labels visually cross-checked against corresponding Render96 identifiers. No original or Render96 pixels are used in the game."
+}

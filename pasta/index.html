@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#21180f">
+  <title>Pasta | Qualiacology</title>
+  <meta name="description" content="Six spaghetti games in one collection. Spaghetti Mario, Spaghetti 64, both Sunshine games, SPAGHETTI and AL DENTE.">
+  <link rel="canonical" href="https://qualiacology.com/pasta/">
+  <meta property="og:title" content="Pasta | Qualiacology">
+  <meta property="og:description" content="Six spaghetti games. One opening screen.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://qualiacology.com/pasta/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/pasta-card-v20261028.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/pasta-card-v20261028.jpg">
+  <link rel="icon" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="collection.css?v=1">
+</head>
+<body>
+  <main id="collection">
+    <header class="masthead"><div><p class="eyebrow">THE COLLECTION</p><h1>PASTA</h1></div><p class="intro">All spaghetti.<br><span>Six games. Pick one.</span></p></header>
+    <nav id="games" aria-label="Choose a pasta game"></nav>
+    <footer><span><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> choose <b>·</b> <kbd>Enter</kbd> play</span><span id="last-played" aria-live="polite"></span></footer>
+    <noscript>Enable JavaScript to open the collection. <a href="/spaghetti-sunshine/">Spaghetti Sunshine</a> · <a href="/spaghetti/">SPAGHETTI and AL DENTE</a></noscript>
+  </main>
+  <section id="player" hidden aria-label="Selected game">
+    <div class="collection-bar"><button id="back" type="button">← Collection <kbd>F8</kbd></button><span id="playing-title"></span><button id="fullscreen" type="button" aria-label="Toggle collection fullscreen">Fullscreen <span aria-hidden="true">⛶</span></button></div>
+    <div id="screen"></div>
+    <div id="loading" role="status" hidden>Opening the game…</div>
+  </section>
+  <script type="module" src="collection.js?v=1"></script>
+</body>
+</html>

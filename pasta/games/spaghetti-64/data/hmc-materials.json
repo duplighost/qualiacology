@@ -1,0 +1,315 @@
+{
+  "note": "Authored pasta materials mapped to source texture identifiers; no original texture pixels are included. Material roles are inferred from source geometry and render layers.",
+  "materials": {
+    "cave_09000000": {
+      "pasta": "ink",
+      "color": "#9faeb0",
+      "triangles": 421,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_07013CA8",
+        "hmc_seg7_dl_0701E820"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_09001000": {
+      "pasta": "toasted",
+      "color": "#c1ac83",
+      "triangles": 128,
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_0700EF00",
+        "hmc_seg7_dl_07017C98",
+        "hmc_seg7_dl_0701A400",
+        "hmc_seg7_dl_0701F1B0"
+      ],
+      "openLattice": true,
+      "replaceLightingOverlay": false
+    },
+    "cave_09001800": {
+      "pasta": "toasted",
+      "color": "#cab591",
+      "triangles": 190,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070078B0",
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_07013CA8",
+        "hmc_seg7_dl_0701E820"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_09003000": {
+      "pasta": "ink",
+      "color": "#a6b8b2",
+      "triangles": 64,
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_07007B50",
+        "hmc_seg7_dl_0700EF00",
+        "hmc_seg7_dl_07013E80",
+        "hmc_seg7_dl_07017C98",
+        "hmc_seg7_dl_0701F1B0"
+      ],
+      "openLattice": true,
+      "replaceLightingOverlay": false
+    },
+    "cave_09003800": {
+      "pasta": "spinach",
+      "color": "#a1b298",
+      "triangles": 216,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_07013CA8",
+        "hmc_seg7_dl_0701E820"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_09004800": {
+      "pasta": "toasted",
+      "color": "#bda78a",
+      "triangles": 150,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070078B0",
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_0701E820",
+        "hmc_seg7_dl_07020FD0"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_09005800": {
+      "pasta": "toasted",
+      "color": "#c1b099",
+      "triangles": 142,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070173A8"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_09006800": {
+      "pasta": "toasted",
+      "color": "#cbb99d",
+      "triangles": 314,
+      "layers": [
+        "LAYER_OPAQUE",
+        "LAYER_OPAQUE_DECAL"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070078B0",
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_07010070",
+        "hmc_seg7_dl_07013CA8",
+        "hmc_seg7_dl_070173A8",
+        "hmc_seg7_dl_0701E820",
+        "hmc_seg7_dl_07020FD0"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_09007800": {
+      "pasta": "ink",
+      "color": "#a4b2b3",
+      "triangles": 346,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070078B0",
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_07013CA8",
+        "hmc_seg7_dl_070173A8",
+        "hmc_seg7_dl_0701A080",
+        "hmc_seg7_dl_0701E820",
+        "hmc_seg7_dl_07020FD0",
+        "hmc_seg7_dl_07021760"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_09008800": {
+      "pasta": "toasted",
+      "color": "#c3b197",
+      "triangles": 177,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_07013CA8",
+        "hmc_seg7_dl_070173A8",
+        "hmc_seg7_dl_0701E820",
+        "hmc_seg7_dl_07020FD0"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_09009800": {
+      "pasta": "toasted",
+      "color": "#d5bd94",
+      "triangles": 186,
+      "layers": [
+        "LAYER_OPAQUE",
+        "LAYER_TRANSPARENT"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070078B0",
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_07013CA8",
+        "hmc_seg7_dl_070173A8",
+        "hmc_seg7_dl_07019368",
+        "hmc_seg7_dl_0701A080",
+        "hmc_seg7_dl_0701E820",
+        "hmc_seg7_dl_07020FD0",
+        "hmc_seg7_dl_07021760"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_0900A000": {
+      "pasta": "ink",
+      "color": "#9eafb3",
+      "triangles": 374,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070093F0",
+        "hmc_seg7_dl_0700FA40",
+        "hmc_seg7_dl_07019248",
+        "hmc_seg7_dl_0701FD58",
+        "hmc_seg7_dl_070228A0"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_0900A800": {
+      "pasta": "spinach",
+      "color": "#b1b69b",
+      "triangles": 36,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_07013CA8",
+        "hmc_seg7_dl_0701A080"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "hmc_seg7_texture_07000000": {
+      "pasta": "egg",
+      "color": "#ead6a5",
+      "triangles": 10,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070078B0",
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_070173A8",
+        "hmc_seg7_dl_0701E820"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "hmc_seg7_texture_07001000": {
+      "pasta": "ink",
+      "color": "#babdc1",
+      "triangles": 10,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070078B0",
+        "hmc_seg7_dl_0700E448",
+        "hmc_seg7_dl_070173A8",
+        "hmc_seg7_dl_0701E820"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "hmc_seg7_texture_07002000": {
+      "pasta": "egg",
+      "color": "#ead6a5",
+      "triangles": 2,
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_07014C00"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": false
+    },
+    "cave_0900C000": {
+      "pasta": "toasted",
+      "color": "#c1b198",
+      "triangles": 132,
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_070080E8",
+        "hmc_seg7_dl_0700F3E8",
+        "hmc_seg7_dl_07014300",
+        "hmc_seg7_dl_07014E48",
+        "hmc_seg7_dl_07018200",
+        "hmc_seg7_dl_0701F818",
+        "hmc_seg7_dl_07021BA0"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": true
+    },
+    "cave_0900B800": {
+      "pasta": "toasted",
+      "color": "#c1b198",
+      "triangles": 32,
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_0701F690"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": true
+    },
+    "cave_09007000": {
+      "pasta": "toasted",
+      "color": "#c1b198",
+      "triangles": 68,
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "displayLists": [
+        "hmc_seg7_dl_0700FEF0",
+        "hmc_seg7_dl_07014B08"
+      ],
+      "openLattice": false,
+      "replaceLightingOverlay": true
+    }
+  },
+  "visualSubdivisionMaximumEdge": 6
+}
