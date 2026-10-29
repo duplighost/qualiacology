@@ -1,0 +1,92 @@
+{
+  "course": "thi",
+  "sourceTextureMapping": {
+    "grass_09003000": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c5a06f"
+    },
+    "grass_09003800": {
+      "pasta": "Cooked spinach spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#91a768"
+    },
+    "grass_09004800": {
+      "pasta": "Cooked spinach spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#91a768"
+    },
+    "grass_09005000": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c5a06f"
+    },
+    "grass_09005800": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c5a06f"
+    },
+    "grass_09006800": {
+      "pasta": "Cooked spinach spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#91a768"
+    },
+    "grass_09008000": {
+      "pasta": "Cooked spinach spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#91a768"
+    },
+    "grass_0900A000": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c5a06f"
+    },
+    "grass_0900A800": {
+      "pasta": "White rice noodles",
+      "texture": "rice-noodle-surface.png",
+      "color": "#eed8a6"
+    },
+    "grass_0900B000": {
+      "pasta": "Golden cooked fusilli",
+      "texture": "fusilli-pasta-surface.png",
+      "color": "#eed8a6"
+    },
+    "grass_0900B800": {
+      "pasta": "White rice noodles",
+      "texture": "rice-noodle-surface.png",
+      "color": "#eed8a6"
+    },
+    "thi_seg7_texture_07000800": {
+      "pasta": "Golden cooked fusilli",
+      "texture": "fusilli-pasta-surface.png",
+      "color": "#eed8a6"
+    },
+    "warp_pipe_seg3_texture_03007E40": {
+      "pasta": "Cooked spinach spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#91a768"
+    },
+    "warp_pipe_seg3_texture_03009168": {
+      "pasta": "Cooked spinach spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#91a768"
+    }
+  },
+  "water": {
+    "pasta": "Translucent glass noodles",
+    "texture": "glass-noodle-surface.png",
+    "fallback": "rice-noodle-surface.png",
+    "opacity": 0.22,
+    "ior": 1.46,
+    "roughness": 0.16
+  },
+  "characters": {
+    "Piranha Plants": "Braided spinach stems and leaves; coiled tomato spaghetti jaws; rice-noodle teeth and flecks; constrained loose leaf strands",
+    "Goombas": "Toasted spaghetti caps, egg-pasta bodies, ink-pasta feet",
+    "Bubba": "Tomato spaghetti, saffron pasta fins, rice pasta eyes",
+    "fish": "Butterfly-pea spaghetti and saffron fins",
+    "pipes": "Hollow braided-spinach pipes over original pipe mesh and collision",
+    "switch and boxes": "Woven beet pasta and toasted spaghetti"
+  },
+  "geometry": "Original source collision and visible vertex coordinates, with a 19660/65536 landscape scale for Tiny Island. Render faces subdivided at 5.5 world units. Thousands of authored pasta strands, .025-unit local pressure displacement, damped plant recoil and constrained loose ends. No terrain collision deformation."
+}

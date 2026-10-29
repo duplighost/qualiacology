@@ -1,0 +1,214 @@
+{
+  "course": "ttc",
+  "sourceTextureMapping": {
+    "machine_09000000:LAYER_ALPHA": {
+      "pasta": "Open woven photographic tagliatelle strands",
+      "texture": "tagliatelle-surface.png",
+      "color": "shared toasted pasta",
+      "staticSourceTriangles": 238,
+      "placedSourceTriangles": 0
+    },
+    "machine_09000800:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#d1b980",
+      "staticSourceTriangles": 0,
+      "placedSourceTriangles": 48
+    },
+    "machine_09001000:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#ccb27c",
+      "staticSourceTriangles": 104,
+      "placedSourceTriangles": 132
+    },
+    "machine_09001800:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#d1b980",
+      "staticSourceTriangles": 0,
+      "placedSourceTriangles": 80
+    },
+    "machine_09002000:LAYER_OPAQUE": {
+      "pasta": "Cooked spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#d4b67c",
+      "staticSourceTriangles": 24,
+      "placedSourceTriangles": 0
+    },
+    "machine_09002800:LAYER_OPAQUE": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c5ac7a",
+      "staticSourceTriangles": 82,
+      "placedSourceTriangles": 0
+    },
+    "machine_09002800:LAYER_TRANSPARENT": {
+      "pasta": "Original translucent light overlay omitted; underlying complete pasta geometry retained",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c5ac7a",
+      "staticSourceTriangles": 16,
+      "placedSourceTriangles": 0
+    },
+    "machine_09003000:LAYER_OPAQUE": {
+      "pasta": "Squid-ink noodles",
+      "texture": "ink-noodle-surface.png",
+      "color": "#a89471",
+      "staticSourceTriangles": 86,
+      "placedSourceTriangles": 32
+    },
+    "machine_09003800:LAYER_OPAQUE": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#b29362",
+      "staticSourceTriangles": 166,
+      "placedSourceTriangles": 232
+    },
+    "machine_09004000:LAYER_ALPHA": {
+      "pasta": "Open woven photographic tagliatelle strands",
+      "texture": "tagliatelle-surface.png",
+      "color": "shared toasted pasta",
+      "staticSourceTriangles": 88,
+      "placedSourceTriangles": 0
+    },
+    "machine_09005000:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#d1b980",
+      "staticSourceTriangles": 0,
+      "placedSourceTriangles": 168
+    },
+    "machine_09005800:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#d1b980",
+      "staticSourceTriangles": 0,
+      "placedSourceTriangles": 28
+    },
+    "machine_09006000:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#d1b980",
+      "staticSourceTriangles": 0,
+      "placedSourceTriangles": 98
+    },
+    "machine_09006800:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#d2c194",
+      "staticSourceTriangles": 36,
+      "placedSourceTriangles": 476
+    },
+    "machine_09007000:LAYER_OPAQUE": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#b9a47d",
+      "staticSourceTriangles": 125,
+      "placedSourceTriangles": 4
+    },
+    "machine_09007800:LAYER_OPAQUE": {
+      "pasta": "Squid-ink noodles",
+      "texture": "ink-noodle-surface.png",
+      "color": "#9b957e",
+      "staticSourceTriangles": 24,
+      "placedSourceTriangles": 0
+    },
+    "machine_09008000:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#caab6e",
+      "staticSourceTriangles": 164,
+      "placedSourceTriangles": 0
+    },
+    "machine_09008400:LAYER_OPAQUE": {
+      "pasta": "Rice-noodle pasta",
+      "texture": "rice-noodle-surface.png",
+      "color": "#cad0b7",
+      "staticSourceTriangles": 50,
+      "placedSourceTriangles": 0
+    },
+    "pasta_conveyor:LAYER_OPAQUE": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#dab363",
+      "staticSourceTriangles": 0,
+      "placedSourceTriangles": 70
+    },
+    "ttc_seg7_texture_07000000:LAYER_ALPHA": {
+      "pasta": "Open wagon-wheel spaghetti gear, replacing an original alpha sprite",
+      "texture": "tagliatelle-surface.png",
+      "color": "shared toasted pasta",
+      "staticSourceTriangles": 0,
+      "placedSourceTriangles": 12
+    },
+    "ttc_seg7_texture_07000800:LAYER_OPAQUE": {
+      "pasta": "Ridged dry rigatoni clockwork",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#dfc98e",
+      "staticSourceTriangles": 84,
+      "placedSourceTriangles": 32
+    }
+  },
+  "sharedPaletteGroups": {
+    "yellowRedCreamGreen": "spaghetti-surface.png",
+    "toasted": "tagliatelle-surface.png",
+    "dark": "ink-noodle-surface.png",
+    "white": "rice-noodle-surface.png"
+  },
+  "actors": {
+    "Mario": "Shared spaghetti strand rig with photographic pasta maps",
+    "gears": "Open wound dry spaghetti rings with 12 spokes and a ridged wagon-wheel silhouette",
+    "pendulums": "Original solid source mesh with photographic pasta, loose edge noodles and damped Verlet strands",
+    "Thwomp": "Source 20-vertex, 36-triangle collision silhouette at its source 1.4 scale, dressed in ink noodles",
+    "amp": "Ink-pasta coil and loose saffron spaghetti sparks",
+    "Bobomb": "Tangled spaghetti body and noodle fuse",
+    "fireSpitter": "Roasted pasta coil with tomato noodle projectiles",
+    "HeaveHo": "Toasted pasta body, ink noodle treads and a bending spaghetti scoop",
+    "coinsAndStar": "Saffron spaghetti"
+  },
+  "physicalAppearance": {
+    "metalness": 0,
+    "dryRigatoniRoughness": 0.44,
+    "cookedPastaRoughness": 0.32,
+    "clearcoat": 0.52,
+    "clearcoatRoughness": 0.25,
+    "bumpScale": 0.035,
+    "ior": 1.46,
+    "sheen": 0.16,
+    "terrainPressureDepression": 0.012
+  },
+  "geometry": {
+    "staticVisible": [
+      1019,
+      1287
+    ],
+    "staticCollision": [
+      730,
+      1150
+    ],
+    "mechanisms": 64,
+    "sourceObjects": 120,
+    "finiteRenderVerticesIncluding38GuideMarkers": 363119,
+    "opaqueMaximumEdge": 5.4,
+    "canvasAlternateMaximumEdge": 12,
+    "sourceCollisionUnchanged": true,
+    "alphaReplacement": "Open strands follow the actual source fence face planes; original alpha texture pixels are not used."
+  },
+  "clock": {
+    "sourceUpdatesPerSecond": 30,
+    "initialMode": "slow",
+    "entryHours": {
+      "stopped": 12,
+      "slow": 3,
+      "random": 6,
+      "fast": 9
+    },
+    "beltSpeedMetresPerSecond": {
+      "slow": 1.26,
+      "fast": 2.52,
+      "stopped": 0
+    },
+    "randomBelts": "One shared master controls every belt; deterministic reset seed for repeatable browser runs"
+  },
+  "limits": "Photographic pasta surfaces, bending strands and rigid carrying clockwork approximate a pasta environment. Terrain and platforms remain firm; this is not a complete strand-level cooked-pasta or fracture simulation."
+}

@@ -1,0 +1,377 @@
+{
+  "note": "Palette guidance; all geometry receives pasta materials. No original texture image pixels are included.",
+  "materials": {
+    "snow_09008800": {
+      "pasta": "white",
+      "color": "#e4dfc9",
+      "role": "Packed snow paths and finish-room platform",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1,
+        2
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 173,
+      "omitBakedShadow": false
+    },
+    "snow_09006000": {
+      "pasta": "toasted",
+      "color": "#bca479",
+      "role": "Mountain retaining surfaces",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 40,
+      "omitBakedShadow": false
+    },
+    "snow_09002000": {
+      "pasta": "toasted",
+      "color": "#ad9a75",
+      "role": "Cliff faces",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 99,
+      "omitBakedShadow": false
+    },
+    "snow_09003000": {
+      "pasta": "white",
+      "color": "#eef0db",
+      "role": "Mountain snow mantle",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 254,
+      "omitBakedShadow": false
+    },
+    "snow_09002800": {
+      "pasta": "blue",
+      "color": "#b8d6dd",
+      "role": "Ice cave and slide enclosure",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1,
+        2
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 631,
+      "omitBakedShadow": false
+    },
+    "snow_09004800": {
+      "pasta": "toasted",
+      "color": "#b49b6b",
+      "role": "Ropeway supports",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 128,
+      "omitBakedShadow": false
+    },
+    "snow_09008000": {
+      "pasta": "egg",
+      "color": "#d5bd84",
+      "role": "Trim, roof edges, and platform surfaces",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1,
+        2
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 97,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07000800": {
+      "pasta": "toasted",
+      "color": "#c1a66d",
+      "role": "Ropeway support detail",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 8,
+      "omitBakedShadow": false
+    },
+    "snow_09001000": {
+      "pasta": "blue",
+      "color": "#8eaab6",
+      "role": "Mountain sides and slide enclosure backdrops",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1,
+        2
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 82,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07000900": {
+      "pasta": "white",
+      "color": "#e5e2d0",
+      "role": "Exterior detail",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "triangles": 16,
+      "omitBakedShadow": false
+    },
+    "snow_09005800": {
+      "pasta": "egg",
+      "color": "#d9c695",
+      "role": "Exterior trim",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "triangles": 22,
+      "omitBakedShadow": false
+    },
+    "snow_09000000": {
+      "pasta": "toasted",
+      "color": "#ac875c",
+      "role": "Cabin and exterior architectural detail",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "triangles": 20,
+      "omitBakedShadow": false
+    },
+    "snow_09006800": {
+      "pasta": "white",
+      "color": "#e7e5cc",
+      "role": "Snow edge details",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "triangles": 40,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07000000": {
+      "pasta": "toasted",
+      "color": "#b79b6e",
+      "role": "Exterior detail",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "triangles": 8,
+      "omitBakedShadow": false
+    },
+    "snow_09007000": {
+      "pasta": "white",
+      "color": "#d6e5d9",
+      "role": "Fences and slide railings",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1,
+        2
+      ],
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "triangles": 150,
+      "omitBakedShadow": false
+    },
+    "snow_09009800": {
+      "pasta": "ink",
+      "color": "#57605c",
+      "role": "Baked tree-shadow decal; omit in favor of pasta geometry shadows",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_TRANSPARENT_DECAL"
+      ],
+      "triangles": 26,
+      "omitBakedShadow": true
+    },
+    "snow_09009000": {
+      "pasta": "ink",
+      "color": "#57605c",
+      "role": "Baked support/bridge-shadow decal; omit in favor of pasta geometry shadows",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_TRANSPARENT_DECAL"
+      ],
+      "triangles": 18,
+      "omitBakedShadow": true
+    },
+    "snow_09005000": {
+      "pasta": "toasted",
+      "color": "#b99a65",
+      "role": "Cabin walls, roofs, and interior rooms",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1,
+        2
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 184,
+      "omitBakedShadow": false
+    },
+    "snow_09004000": {
+      "pasta": "egg",
+      "color": "#dfc991",
+      "role": "Cabin window lattice (alpha cutout; not a shadow)",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1,
+        2
+      ],
+      "layers": [
+        "LAYER_ALPHA"
+      ],
+      "triangles": 4,
+      "omitBakedShadow": false
+    },
+    "snow_09000800": {
+      "pasta": "blue",
+      "color": "#a4d4d8",
+      "role": "Translucent cabin window pane",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1,
+        2
+      ],
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "triangles": 16,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07001900": {
+      "pasta": "white",
+      "color": "#ebe9d5",
+      "role": "Snowman platform detail",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        1
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 24,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07003100": {
+      "pasta": "white",
+      "color": "#dbe9df",
+      "role": "Main slide surface",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        2
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 180,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07004300": {
+      "pasta": "blue",
+      "color": "#a8bfca",
+      "role": "Wall beyond the slide exit",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        2
+      ],
+      "layers": [
+        "LAYER_OPAQUE"
+      ],
+      "triangles": 2,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07004B00": {
+      "pasta": "ink",
+      "color": "#7d9695",
+      "role": "Slide finish-line decal",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        2
+      ],
+      "layers": [
+        "LAYER_OPAQUE_DECAL"
+      ],
+      "triangles": 2,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07003900": {
+      "pasta": "blue",
+      "color": "#afc2cb",
+      "role": "Large atmospheric edge-fade plane",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        2
+      ],
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "triangles": 4,
+      "omitBakedShadow": false
+    },
+    "ccm_seg7_texture_07003B00": {
+      "pasta": "blue",
+      "color": "#badcdf",
+      "role": "Translucent final ice-chute detail",
+      "roleBasis": "Source geometry and display-list layer; palette is authored pasta replacement.",
+      "areas": [
+        2
+      ],
+      "layers": [
+        "LAYER_TRANSPARENT"
+      ],
+      "triangles": 52,
+      "omitBakedShadow": false
+    }
+  }
+}

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="theme-color" content="#2b2014"/>
+  <meta name="description" content="Bob-omb Battlefield, rebuilt from noodles. Climb the mountain, throw the pasta king, and collect the first star in this playable 3D spaghetti world."/>
+  <title>Spaghetti 64 | Qualiacology</title>
+  <link rel="stylesheet" href="./style.css"/>
+  <link rel="stylesheet" href="./pasta-ui.css"/>
+<link rel="canonical" href="https://qualiacology.com/pasta/games/spaghetti-64/play.html"><link rel="icon" href="/assets/favicon.svg"><meta property="og:title" content="Spaghetti 64 | Qualiacology"><meta property="og:type" content="website"><meta property="og:url" content="https://qualiacology.com/pasta/games/spaghetti-64/play.html"><meta property="og:image" content="https://qualiacology.com/assets/games/pasta-card-v20261028.jpg"><meta name="twitter:card" content="summary_large_image"></head>
+<body>
+  <main id="game" aria-label="Spaghetti 64 game">
+    <canvas id="scene" aria-label="3D pasta battlefield. Move with WASD or arrow keys, jump with Space, grab and throw with E." tabindex="0"></canvas>
+    <div id="vignette" aria-hidden="true"></div><div id="underwater-overlay" aria-hidden="true"></div><div id="area-transition" aria-live="polite"></div>
+    <header id="hud" class="hud hidden">
+      <div class="course-label"><span class="eyebrow">COURSE 01</span><strong>BOB-OMB BATTLEFIELD</strong><span id="objective">Reach the summit</span></div>
+      <div class="counters"><span class="counter" title="Pasta coins"><svg viewBox="0 0 32 32" aria-hidden="true"><ellipse cx="16" cy="16" rx="10" ry="13"/><ellipse cx="16" cy="16" rx="5" ry="9"/></svg><b id="coins">00</b></span><span class="counter" title="Mission stars"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 20 12 30 13 22 20 25 30 16 25 7 30 10 20 2 13 12 12Z"/></svg><b id="stars">0 / 1</b></span><button id="pause-button" class="icon-button" aria-label="Pause and settings">Ⅱ</button></div>
+    </header>
+    <div id="power" class="hidden"><span class="eyebrow">PASTA POWER</span><div id="health" aria-label="Health"></div></div>
+    <div id="breath-hud" class="hidden" aria-label="Breath"><span>BREATH</span><div class="breath-track"><i id="breath-fill"></i></div><b id="breath-time">64s</b></div>
+    <div id="cap-hud" class="hidden" aria-label="Pasta cap timer"><span id="cap-label">WING CAP</span><div><i id="cap-fill"></i></div><b id="cap-time">60s</b></div>
+    <div id="voyage-hud" class="hidden"><span id="area-name" class="eyebrow">JOLLY ROGER BAY</span><span id="voyage-status">Dive to the sunken ship</span><div id="chest-progress" class="hidden" aria-label="0 of 4 treasure chests opened"><i></i><i></i><i></i><i></i></div><div id="slide-readout" class="hidden"><span><b id="slide-speed">0</b><small>m/s</small></span><div class="slide-meter"><div class="slide-track"><i id="slide-fill"></i></div><small id="slide-section">ON FOOT</small></div></div><div id="ghost-progress" class="hidden" aria-label="0 of 5 Boos defeated"><i></i><i></i><i></i><i></i><i></i><span id="ghost-count">0 / 5 BOOS</span></div><div id="course-meter" class="hidden"><span id="course-meter-label">PLATFORMS</span><div class="course-meter-track"><i id="course-meter-fill"></i></div><b id="course-meter-value"></b></div></div>
+    <div id="boss-hud" class="hidden"><span class="eyebrow">BIG BOB-OMB</span><strong>King of the noodle mountain</strong><div id="boss-health"><i></i><i></i><i></i></div><span id="boss-hint">Circle behind him. Grab. Throw.</span></div>
+    <div id="context" class="hidden" role="status"></div>
+    <div id="toast" role="status"></div>
+    <div id="map-wrap" class="hidden"><canvas id="map" width="240" height="240" aria-label="Course map"></canvas><span id="altitude">0 m</span></div>
+    <div id="desktop-help" class="hidden"><span><kbd>W A S D</kbd> move</span><span><kbd>SPACE</kbd> jump</span><span><kbd>E</kbd> grab / throw</span><span><kbd>DRAG</kbd> camera</span><span><kbd>H</kbd> help</span></div>
+    <section id="welcome" class="overlay">
+      <div class="intro">
+        <span class="eyebrow">EVERY SINGLE THING. PASTA.</span>
+        <h1>SPAGHETTI<span>64</span></h1>
+        <div class="mission-name"><span class="mission-number">01</span><div><small>BOB-OMB BATTLEFIELD</small><h2>Big Bob-omb on the Summit</h2></div></div>
+        <p>A familiar mountain. A deeply unreasonable amount of spaghetti.</p>
+        <p class="intro-detail">Climb the battlefield, get behind the king, and throw him three times. Your first star is waiting.</p>
+        <div id="clock-entry-setting" class="clock-entry-setting hidden"><label for="clock-entry">CLOCK ENTRY</label><select id="clock-entry" aria-label="Clock entry time"><option value="stopped">12 · Stopped</option><option value="slow" selected>3 · Slow</option><option value="random">6 · Irregular</option><option value="fast">9 · Fast</option></select><span>The hand position sets the machinery.</span></div>
+        <button id="play" class="primary" disabled><span id="play-label">Preparing the pasta…</span><span aria-hidden="true">↗</span></button>
+        <div class="load-line"><span id="load-progress"></span></div>
+        <div class="intro-footer"><span>FULL 3D COURSE</span><i></i><span>SOFT NOODLE PHYSICS</span><i></i><span>TOUCH + KEYBOARD</span></div>
+        <a id="castle-map-link" class="castle-return" href="./play.html?course=castle&entry=resume">Explore the castle</a><a class="course-return" href="./index.html#courses">← Course select</a>
+      </div>
+      <div class="intro-note"><span>100%</span>PASTA<br/>0% STRUCTURAL INTEGRITY</div>
+    </section>
+    <section id="pause" class="overlay hidden" aria-label="Paused">
+      <div class="sheet"><span class="eyebrow">TAKE IT AL DENTE</span><h2>On the back burner.</h2><p>The noodle mountain will wait.</p>
+        <div class="setting"><label for="softness">Pasta softness</label><input id="softness" type="range" min="0" max="1" step="0.05" value="0.55"/><span id="softness-label">Tender</span></div>
+        <div class="setting"><label for="quality">Detail</label><select id="quality"><option value="balanced">Balanced</option><option value="high">High</option><option value="low">Lightweight</option></select></div>
+        <div class="setting"><label for="sound">Sound</label><button id="sound" class="small-button" aria-pressed="true">On</button></div>
+        <div class="setting"><label for="route">Route guide</label><button id="route" class="small-button" aria-pressed="false">Off</button></div>
+        <button id="resume" class="primary">Back to the battlefield <span>↗</span></button>
+        <div class="secondary-actions"><button id="help-button">Controls & mission</button><button id="restart">Start over</button><button id="fullscreen">Fullscreen</button></div>
+        <a id="return-castle" class="castle-return" href="./play.html?course=castle&entry=return">Return to the castle</a><a class="course-return" href="./index.html#courses">← Course select · all twenty-four courses</a>
+      </div>
+    </section>
+    <section id="help" class="overlay hidden" aria-label="Controls and mission">
+      <div class="sheet help-sheet"><span class="eyebrow">A QUICK RECIPE</span><h2>How to spaghetti.</h2>
+        <dl><dt>Move</dt><dd>WASD / arrow keys · left stick</dd><dt>Jump</dt><dd>Space · A · JUMP</dd><dt>Run</dt><dd>Shift · push the stick all the way</dd><dt>Grab / throw / talk</dt><dd>E or J · X · GRAB</dd><dt>Crouch / ground pound</dt><dd>Ctrl or C · B · POUND</dd><dt>Long jump</dt><dd>Run + crouch + jump</dd><dt>Air dive</dt><dd>X key · Y button · AIR DIVE</dd><dt>Camera</dt><dd>Drag · Q / R turn · I / K look up / down · right stick</dd><dt>Pause</dt><dd>Esc · Start · Ⅱ</dd></dl>
+        <p><b>The mission:</b> Cross the first bridge, pass the Chomp, and follow the path around the mountain to the summit. Get behind Big Bob-omb and grab him. Throw him onto the summit three times. Throws over the edge do not count.</p>
+        <p class="small-copy">Soft pasta keeps its momentum. Give yourself room to brake. Jump again just after landing to chain higher jumps. On a phone, drag the right side to look around.</p>
+        <button id="close-help" class="primary">Got it <span>↗</span></button>
+      </div>
+    </section>
+    <section id="dialog" class="hidden" aria-label="Character dialogue"><span id="dialog-name" class="eyebrow"></span><p id="dialog-text"></p><button id="dialog-close">Continue <kbd>E</kbd></button></section>
+    <section id="victory" class="overlay hidden" aria-label="Mission complete"><div class="sheet victory-sheet"><span class="eyebrow">COURSE 01 · MISSION COMPLETE</span><h2>You got the star.</h2><div class="victory-star" aria-hidden="true">★</div><h3>Big Bob-omb on the Summit</h3><p>The king has been thoroughly overcooked.</p><div class="results"><div><span id="result-time">0:00</span><small>TIME</small></div><div><span id="result-coins">0</span><small>PASTA COINS</small></div><div><span id="result-total">1 / 30</span><small>TOTAL STARS</small></div></div><a id="next-course" class="primary" href="./play.html?course=wf">Next course <span>↗</span></a><button id="again" class="text-button">Another helping</button><button id="explore" class="text-button">Keep exploring</button><a id="victory-castle" class="castle-return" href="./play.html?course=castle&entry=return">Return to the castle</a><a class="course-return" href="./index.html#courses">← Course select</a></div></section>
+    <div id="touch-controls" class="hidden"><div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div><div id="touch-actions"><button id="touch-action" aria-label="Grab, throw or talk">GRAB</button><button id="touch-pound" aria-label="Crouch or ground pound">POUND</button><button id="touch-dive" aria-label="Air dive">AIR DIVE</button><button id="touch-jump" aria-label="Jump">JUMP</button></div></div>
+    <div id="error" class="hidden" role="alert"><h2>The pasta needs another minute.</h2><p id="error-message"></p><button onclick="location.reload()">Try again</button></div>
+  </main>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

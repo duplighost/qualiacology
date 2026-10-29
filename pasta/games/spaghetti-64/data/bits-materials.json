@@ -1,0 +1,295 @@
+{
+  "course": "bits",
+  "sourceCommit": "9921382a68bb0c865e5e45eb594d9c64db59b1af",
+  "sourceTextureMapping": {
+    "bits_seg7_texture_07000000": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 32,
+      "dynamicInitialTriangles": 0,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "bits_seg7_texture_07001000": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 62,
+      "dynamicInitialTriangles": 0,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "bits_seg7_texture_07002000": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#c99567",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 10,
+      "dynamicInitialTriangles": 12,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "metal_box_seg8_texture_08023998": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 0,
+      "dynamicInitialTriangles": 12,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "purple_switch_seg8_texture_0800C0A8": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 0,
+      "dynamicInitialTriangles": 8,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "purple_switch_seg8_texture_0800C128": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 0,
+      "dynamicInitialTriangles": 2,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09000800": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 98,
+      "dynamicInitialTriangles": 12,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09001000": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 74,
+      "dynamicInitialTriangles": 0,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09001800": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 778,
+      "dynamicInitialTriangles": 199,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09002000": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 4,
+      "dynamicInitialTriangles": 20,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09003000": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#c99567",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 22,
+      "dynamicInitialTriangles": 0,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09003800": {
+      "pasta": "Squid-ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#a5a3ad",
+      "roughness": 0.32,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 8,
+      "dynamicInitialTriangles": 0,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09005000": {
+      "pasta": "Spinach ribbon pasta",
+      "texture": "tricolor-pasta-surface.png",
+      "color": "#a4b580",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 20,
+      "dynamicInitialTriangles": 0,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09007000": {
+      "pasta": "Squid-ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#a5a3ad",
+      "roughness": 0.32,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 340,
+      "dynamicInitialTriangles": 58,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 10
+    },
+    "sky_09007800": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 30,
+      "dynamicInitialTriangles": 0,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "sky_09008000": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 74,
+      "dynamicInitialTriangles": 156,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 156
+    },
+    "texture_metal_hole": {
+      "pasta": "Toasted pasta lattice strands in source hole-material footprint",
+      "texture": "rigatoni-pasta-surface.png",
+      "color": "#a26c39",
+      "roughness": 0.38,
+      "clearcoat": 0.68,
+      "bumpScale": 0.014,
+      "staticTriangles": 6,
+      "dynamicInitialTriangles": 0,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0,
+      "clearcoatRoughness": 0.21,
+      "usesSharedActorMaterial": "toasted"
+    },
+    "warp_pipe_seg3_texture_03007E40": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 0,
+      "dynamicInitialTriangles": 32,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    },
+    "warp_pipe_seg3_texture_03009168": {
+      "pasta": "Golden rigatoni and spaghetti",
+      "texture": "spaghetti-surface.png",
+      "color": "#dec99b",
+      "roughness": 0.4,
+      "clearcoat": 0.46,
+      "bumpScale": 0.025,
+      "staticTriangles": 0,
+      "dynamicInitialTriangles": 18,
+      "poleAndMovingSurfaceTriangles": 0,
+      "allStairFrameTriangles": 0
+    }
+  },
+  "sourceGeometry": {
+    "collisionVertices": 981,
+    "collisionTriangles": 1410,
+    "renderVertices": 1063,
+    "renderTriangles": 1558,
+    "specialLevelGeometryPlacements": 21,
+    "objects": 101,
+    "dynamicObjects": 28,
+    "poleObjects": 2,
+    "dynamicCollisionVertices": 342,
+    "dynamicCollisionTriangles": 529,
+    "dynamicRenderVertices": 342,
+    "dynamicRenderTriangles": 529,
+    "movingSurfaceVertices": 0,
+    "movingSurfaceTriangles": 0
+  },
+  "sharedActorPalette": {
+    "default": "spaghetti-surface.png",
+    "toasted": "rigatoni-pasta-surface.png",
+    "inkAndDark": "ink-noodle-surface.png",
+    "tomato": "roasted-noodle-surface.png",
+    "white": "capellini-pasta-surface.png"
+  },
+  "physicalAppearance": {
+    "metalness": 0,
+    "ior": 1.46,
+    "terrainRoughness": [
+      0.22,
+      0.32,
+      0.4
+    ],
+    "terrainClearcoat": [
+      0.46,
+      0.85
+    ],
+    "clearcoatRoughness": 0.25,
+    "terrainBumpScale": [
+      0.025,
+      0.036
+    ],
+    "sharedActorBumpScale": 0.014,
+    "sheen": 0.16,
+    "sharedActorClearcoat": 0.68,
+    "sharedActorClearcoatRoughness": 0.21,
+    "sharedActorRoughnessRange": [
+      0.31,
+      0.43
+    ]
+  },
+  "actors": {
+    "Mario": "Shared spaghetti strand rig",
+    "coins": "Tomato spaghetti rings for red coins; saffron spaghetti for yellow coins",
+    "star": "Saffron spaghetti star",
+    "flames": "Hot tomato-pasta strands",
+    "enemies": "Source-position actors built from pasta coils",
+    "poles": "Braided spaghetti with source attachment volume",
+    "sky": "Pasta atmosphere and noodle wisps"
+  },
+  "limits": "Photographic pasta maps and strand/shader response approximate cooked pasta. Source collision remains firm; this is not a complete per-strand contact/fluid simulation or a frame-perfect port of every original action. Source-data extraction alone does not establish runtime completion."
+}

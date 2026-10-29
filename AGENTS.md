@@ -69,9 +69,10 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | sidechain (was last-chorus; `_redirects` sends that there) | `Projects\the music game` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | in-every-direction | `Projects\in-every-direction` | `node tools/build-site-copy.mjs <this repo>` there (it writes the card too); never hand-edit the site copy |
 | the-way-i-came | `Projects\the-way-i-came` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| spaghetti-sunshine | `D:/Projects/bianco-spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| spaghetti | `Projects\spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy. Its opening is the menu for SPAGHETTI and AL DENTE, which share its card (`SPAGHETTI and AL DENTE`); AL DENTE has no card of its own |
-| al-dente | `Projects\al-dente` | copy `src/` (and `vendor/` only if three.js changes) into `al-dente/`; keep the site's index.html shell (it self-hosts the fonts and three.js). Reached from the menu at /spaghetti/ and from /pasta |
+| pasta | `D:/Projects/pasta-collection` | `node tools/build-site-copy.mjs <this repo>` there. One PASTA catalog card and six-game menu; three GPT Pro runtimes live in `pasta/games/`. Keep the original three local games at their existing routes and preserve their saves. Read the collection AGENTS.md for source versions. Alex requested the combined collection on 28 Oct, superseding earlier separation notes. |
+| spaghetti-sunshine | `D:/Projects/bianco-spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy. Included in PASTA; keep its direct route, without adding a separate card. |
+| spaghetti | `Projects\spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy. Its original two-game opening remains available. PASTA opens its seven-level select directly. |
+| al-dente | `Projects\al-dente` | copy `src/` (and `vendor/` only if three.js changes) into `al-dente/`; keep the site's index.html shell (it self-hosts the fonts and three.js). Included in PASTA and still reachable from the original /spaghetti/ opening. |
 | rally, rocket-shoes, eaten-path | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
 | everything else | this repo | the site copy is the only source |
 

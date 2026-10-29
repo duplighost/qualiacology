@@ -1,0 +1,77 @@
+{
+  "course": "ddd",
+  "sourceTextureMapping": {
+    "water_09003800": {
+      "pasta": "Layered toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#b7b5a2"
+    },
+    "water_0900B800": {
+      "pasta": "White rice noodles",
+      "texture": "rice-noodle-surface.png",
+      "color": "#ced7c4"
+    },
+    "water_09007800": {
+      "pasta": "Squid-ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#a6bdc3"
+    },
+    "water_09004800": {
+      "pasta": "White rice noodles",
+      "texture": "rice-noodle-surface.png",
+      "color": "#d5d1ad"
+    },
+    "water_09009000": {
+      "pasta": "Squid-ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#acbec1"
+    },
+    "water_09006800": {
+      "pasta": "Layered toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#bdb196"
+    },
+    "water_0900A000": {
+      "pasta": "Toasted tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c3a476"
+    },
+    "ddd_seg7_texture_07001000": {
+      "pasta": "Layered tagliatelle",
+      "texture": "tagliatelle-surface.png",
+      "color": "#b5b5a6"
+    },
+    "ddd_seg7_texture_07002000": {
+      "pasta": "Squid-ink pasta",
+      "texture": "ink-noodle-surface.png",
+      "color": "#c2c7bb"
+    },
+    "ddd_seg7_texture_07001800": {
+      "pasta": "Braided saffron and toasted spaghetti",
+      "texture": "tagliatelle-surface.png",
+      "color": "#c6b18b"
+    },
+    "ddd_seg7_texture_07000000": {
+      "pasta": "Squid-ink spaghetti",
+      "texture": "ink-noodle-surface.png",
+      "color": "#bdd2ce"
+    }
+  },
+  "water": {
+    "pasta": "Translucent glass noodles",
+    "texture": "glass-noodle-surface.png",
+    "fallback": "rice-noodle-surface.png",
+    "opacity": 0.19,
+    "ior": 1.46,
+    "roughness": 0.15
+  },
+  "characters": {
+    "Sushi": "Braided butterfly-pea spaghetti with noodle fins and rice accents",
+    "fish": "Rice noodles",
+    "clams": "Pink pasta and rice noodles",
+    "seaweed": "Spinach fettuccine",
+    "switch": "Beet-colored pasta",
+    "steps": "Woven toasted tagliatelle"
+  },
+  "geometry": "Original collision and rendered model vertices; visual subdivision maximum edge 5 world units; source collision unchanged. Additional individual strands, visual pressure deformation, and loose-end dynamics are independently authored."
+}
