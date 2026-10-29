@@ -3,6 +3,9 @@
       "target": {
         "namespace": "android_app",
         "package_name": "com.qualiacology.lastchorus",
-        "sha256_cert_fingerprints": ["1D:4F:1F:AA:3B:8E:20:2E:7D:1B:76:DB:F9:B3:AE:B0:3F:D0:35:A9:3E:1F:09:14:B4:CB:7E:B7:6B:09:B3:BD"]
+        "sha256_cert_fingerprints": [
+          "1D:4F:1F:AA:3B:8E:20:2E:7D:1B:76:DB:F9:B3:AE:B0:3F:D0:35:A9:3E:1F:09:14:B4:CB:7E:B7:6B:09:B3:BD",
+          "D7:CA:36:F6:C9:CA:12:0C:01:75:6E:6B:84:5E:46:15:C6:D1:B3:76:A2:6B:74:6A:FD:0B:78:09:A5:4A:32:95"
+        ]
       }
     }]
