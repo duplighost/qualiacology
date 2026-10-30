@@ -187,7 +187,9 @@ async function boot() {
     if (game.mode === 'intro' && game.t > 0.4) { game.mode = 'play'; hero.state = 'play'; }
     if (game.mode === 'won' && game.winT > 1.5 && (code === 'Enter' || code === 'Space')) toLobby();
     if (code === 'Escape' && (game.mode === 'play' || game.mode === 'intro' || game.mode === 'won')) toLobby();
+    if (code === 'KeyM') { muted = !muted; audio.setMuted(muted); }
   };
+  let muted = false, musicNow, musicLive = false;
 
   // grabbing noodles on the opening screen
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(), hit = new THREE.Vector3();
@@ -325,6 +327,9 @@ async function boot() {
     audio.update(dt, { height01: clamp((hero.pos.y - 1) / 30, 0, 1), speed01: clamp(Math.hypot(hero.vel.x, hero.vel.z) / 7.4, 0, 1), inTube: cam.tubeBlend > 0.5, menu: active === lobby,
       underwater: uw, depth01: view && view.depth01 || 0, shore01: view && view.shore01 || 0, wind01: view && view.wind01 || 0 });
     audio.sled?.(hero.sledding && hero.state === 'play', clamp(Math.hypot(hero.vel.x, hero.vel.z) / 14, 0, 1), hero.carve || 0);
+    // the music for where you are: the face, the island, each stage, and the star
+    const mid = active === lobby ? (game.mode === 'title' ? 'title' : 'select') : game.mode === 'won' ? 'won' : active.id;
+    if (mid !== musicNow || (audio.ready && !musicLive)) { musicNow = mid; musicLive = audio.ready; audio.music?.(mid); }
     post.render(active.scene, camera, time);
 
     // keep the frame rate: trade resolution for time. Building a stage hitches, so ignore that;
