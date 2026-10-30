@@ -305,6 +305,27 @@ function albumCard(album, index, { eager = false } = {}) {
   </li>`;
 }
 
+// Halloween: the way into /spooky/ at the top of the homepage. A silent loop cut from the
+// Spooky Games trailer runs behind the title; site.js plays it only while it is on screen,
+// never under reduced motion, and stops it for good if the pause button is pressed.
+function spookyBanner() {
+  const names = ["olly-olly", "fetch", "starstruck", "curfew", "belfry"]
+    .map((slug) => games.find((game) => game.slug === slug)?.title)
+    .filter(Boolean);
+  return `<div class="spooky-banner">
+          <video class="spooky-banner-clip" muted loop playsinline preload="none" poster="${escapeHtml(versioned("/assets/visuals/spooky-loop-v1.webp"))}" aria-hidden="true" tabindex="-1" data-spooky-clip>
+            <source src="${escapeHtml(versioned("/assets/visuals/spooky-loop-v1.mp4"))}" type="video/mp4">
+          </video>
+          <a class="spooky-banner-link" href="/spooky/">
+            <span class="spooky-banner-title">Spooky Games <span class="spooky-banner-go" aria-hidden="true">→</span></span>
+            <span class="spooky-banner-names">${names.map(escapeHtml).join(" · ")}</span>
+          </a>
+          <button class="spooky-banner-pause" type="button" aria-label="Pause the clip" aria-pressed="false" data-spooky-pause hidden>
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path class="spooky-pause-bars" d="M4 3h3v10H4zM9 3h3v10H9z"/><path class="spooky-play-tri" d="M5 3l8 5-8 5z"/></svg>
+          </button>
+        </div>`;
+}
+
 function homepage() {
   const featuredGames = games.filter((item) => item.featured);
   const featuredAlbums = albums.filter((item) => item.featured);
@@ -330,6 +351,7 @@ function homepage() {
   const main = `<main id="main-content">
     <section class="hero">
       <div class="container">
+        ${spookyBanner()}
         <p class="role-line">${escapeHtml(site.role)}</p>
         <h1>${escapeHtml(site.thesis).replace(/\balive\b/, '<span class="alive-word">alive</span>')}</h1>
         ${site.thesisDeck ? `<p class="hero-deck">${escapeHtml(site.thesisDeck)}</p>` : ""}

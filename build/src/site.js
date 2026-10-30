@@ -261,6 +261,35 @@ if (audioButton) {
   renderAudioState();
 }
 
+// Halloween: the Spooky Games strip's silent clip plays only while it is on screen, never
+// under reduced motion, and stays stopped once someone presses its pause button.
+const spookyClip = document.querySelector("[data-spooky-clip]");
+
+if (spookyClip && "IntersectionObserver" in window) {
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const pauseButton = document.querySelector("[data-spooky-pause]");
+  let onScreen = false;
+  let stopped = false;
+
+  const sync = () => {
+    if (onScreen && !stopped && !still.matches) spookyClip.play().catch(() => {});
+    else spookyClip.pause();
+    if (pauseButton) pauseButton.hidden = still.matches;
+  };
+
+  new IntersectionObserver((entries) => {
+    onScreen = entries[0].isIntersecting;
+    sync();
+  }).observe(spookyClip);
+  still.addEventListener?.("change", sync);
+
+  pauseButton?.addEventListener("click", () => {
+    stopped = !stopped;
+    pauseButton.setAttribute("aria-pressed", String(stopped));
+    sync();
+  });
+}
+
 document.querySelectorAll("[data-current-year]").forEach((node) => {
   node.textContent = String(new Date().getFullYear());
 });
