@@ -151,7 +151,7 @@ const PREVIEW = {
   stopPreview() { sound.stopPreview(0.4); },
 };
 function openMenu(sel = menuSel) {
-  if (S) { sound.stop(); sound.charge(false); sound.siren(0); sound.skid(0); }
+  if (S) { sound.stop(); sound.charge(false); sound.siren(0); sound.skid(0); sound.crowdStop(); }
   paused = false; ui.hidePause(); ui.hideEnd();
   state = 'menu'; haptics.live(false);
   document.body.classList.remove('fever'); if (S) S.feverOn = false;
@@ -169,7 +169,7 @@ async function chooseSong(i) {
   if (state === 'loading') return;
   sound.stopPreview(0.3);
   ui.hideEnd(); ui.hidePause();
-  if (S) { sound.stop(); sound.charge(false); sound.siren(0); }
+  if (S) { sound.stop(); sound.charge(false); sound.siren(0); sound.crowdStop(); }
   ui.showLoading(card(i));
   try { await loadSong(i, (p) => ui.setLoading(p)); } catch (e) { console.error(e); }
   ui.hideLoading();
@@ -277,7 +277,7 @@ function build(S) {
     heartBeat: 0, heartLast: -1, heartDir: null, spikes: [], burstAt: new Set(), afterBeatT: 0, black: null, pyro: 0,
     countIn: null, went: false, crossed: false, resume: null, wdT: null, wdAt: 0, anchorAt: 0,
     // (the end of the last ride, forgotten: the same song ridden again starts its ending afresh)
-    ec: null, stopK: 0, outroK: 0, orbitA: undefined, cheer: 0 });
+    ec: null, stopK: 0, outroK: 0, orbitA: undefined, cheer: 0, applauded: false });
   applyLook(S, look.at(0));
   // the count-in: the four beats of the song's own grid before it starts. She waits on the
   // title a little before the start line and rolls up to it on them.
@@ -473,7 +473,7 @@ async function resumeRide() {
 function rideAgain() {
   ui.hideEnd(); ui.hidePause(); paused = false;
   sound.skid(0);
-  state = 'loading'; sound.stop(); sound.charge(false); sound.siren(0);
+  state = 'loading'; sound.stop(); sound.charge(false); sound.siren(0); sound.crowdStop();
   hud.hideAll();
   ui.showLoading(card(S.index)); ui.setLoading(0.85);
   prepare(S).then(() => { ui.hideLoading(); state = 'title'; showTitle(); startRide(); });
@@ -568,20 +568,15 @@ function frameBody(now) {
   S.tier = (S.tier || 0) + (tierT - (S.tier || 0)) * Math.min(1, dt * (tierT > (S.tier || 0) ? 6 : 2.5));
   S.feverK = (S.feverK || 0) + ((multNow >= 4 ? 1 : 0) - (S.feverK || 0)) * Math.min(1, dt * 4);
   if ((multNow >= 4) !== !!S.feverOn) { S.feverOn = multNow >= 4; document.body.classList.toggle('fever', S.feverOn); }
-  // Groovy: how far into the trip the picture is (in fast, out slow), its chime once when it's ready,
-  // the phaser over the song, and the song pumping on every beat as if sidechained to its kick
+  // Groovy: how far into the trip the picture is (in fast, out slow), and its chime once when it's
+  // ready (the song itself plays as it is)
   const gOn = state === 'ride' && rider.groovyOn;
   S.groovyK = (S.groovyK || 0) + ((gOn ? 1 : 0) - (S.groovyK || 0)) * Math.min(1, dt * (gOn ? 5 : 1.3));
   if (S.groovyK < 0.002 && !gOn) S.groovyK = 0;
   const gReady = state === 'ride' && !paused && rider.groovyReady;
   if (gReady && !S.groovyWas) { sound.groovyReady(); haptics.buzz([12, 50, 12], 2); }
   S.groovyWas = gReady;
-  const bi0 = Math.floor(bpos), spb = Math.max(0.2, course.timeOfBeat(bi0 + 1) - course.timeOfBeat(bi0));
-  sound.groovy(paused ? 0 : S.groovyK, spb);
-  if (gOn && !paused && sound.src) {
-    const nb = bi0 + 1;
-    if (nb !== S.pumpBeat && course.timeOfBeat(nb) - rider.t < 0.12) { S.pumpBeat = nb; sound.pump(sound.t0 + course.timeOfBeat(nb), 0.2, spb); }
-  }
+  const bi0 = Math.floor(bpos);
   // the chorus lift: its first beat hits, and the whole thing opens up while it lasts
   if (S.lift.update(S, dt, beatPulse, state === 'ride' && !paused)) {
     const ec = new THREE.Color(S.entry.lift?.flash ?? P.edge);
@@ -678,6 +673,7 @@ function frameBody(now) {
   S.muffle *= Math.exp(-dt * 2.5);
   sound.setFlow(S.mixFlow, S.muffle, rider.grounded ? 0 : clamp(rider.air / 1.2, 0, 1) * 0.5);
   sound.setMotion(rider.v, !rider.grounded, rider.press, state === 'ride' ? 1 : 0.4);
+  sound.crowd();
 
   if (S.look.animated) applyLook(S, S.look.at(rider.t));
   // fx
@@ -1230,7 +1226,7 @@ function stopFrame(S, dt) {
   S.stopClock += dt * r.stopVel / r.stopV0;
   r.advance(Math.max(r.t, S.stopClock), { press: false, steer: 0 });
   S.stopK = Math.min(1, (S.stopK || 0) + dt / 1.3);
-  if (r.stopVel < 2.5) S.view.cheering = true;
+  if (r.stopVel < 2.5) { S.view.cheering = true; applaud(S); }
   const k = r.stopVel / r.stopV0;
   sound.skid(paused ? 0 : Math.min(1, k * 1.3) * (r.stopVel > 0.5 ? 1 : 0));
   // spray off the front edge, the way the board was going
@@ -1243,6 +1239,14 @@ function stopFrame(S, dt) {
     S.sparks.emit(p, f.clone().multiplyScalar(4 + r.stopVel * 0.45).add(new THREE.Vector3(0, 2.6 + 2.5 * k, 0)), c, n, { spread: 2.6 + 3 * k, life: 0.55, size: 0.15, grav: 9, drag: 1.2, jitter: 1.4 });
     if (Math.random() < 0.5) S.sparks.emit(p, f.clone().multiplyScalar(3 + r.stopVel * 0.3).add(new THREE.Vector3(0, 1.5, 0)), new THREE.Color(1, 1, 1).multiplyScalar(1.2 * k + 0.4), 3, { spread: 2, life: 0.4, size: 0.22, grav: 7, drag: 2, jitter: 1.2 });
   }
+}
+
+// she's stopped and cheering, and so is a crowd: as big as the ride was good (its score against
+// the autopilot's, the grade near enough: an S is everyone, a D two or three people)
+function applaud(S) {
+  if (S.applauded) return;
+  S.applauded = true;
+  sound.applause(S.par > 0 ? clamp(S.rider.score.points / S.par / 0.75, 0.04, 1) : 0.5);
 }
 
 // moments a song asks for at exact times: a flash of lightning and its thunder, a knock
@@ -1342,6 +1346,7 @@ function endSong() {
   state = 'results';
   document.body.classList.remove('riding');
   sound.charge(false); sound.siren(0); sound.grind(false);
+  applaud(S);   // (if she never came to a stop)
   const st = S.rider.stats, points = S.rider.score.points;
   const inTime = st.judged ? Math.round(100 * st.hits / st.judged) : 0;
   const grade = gradeOf(points, S.par);
