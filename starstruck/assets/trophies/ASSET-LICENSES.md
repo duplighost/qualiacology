@@ -9,3 +9,8 @@ thumbnails are cropped and resized from that collection's renders.
 `gold-boot`, `gold-clapper`, `stunt-buckle`, `silver-rose` and `star-brooch`
 (models and thumbnails) were made for STARSTRUCK from turned and cut shapes in
 three.js by `work/lot-trophies.js`: original geometry, no third-party assets.
+
+`gold-microphone`, `gold-cigarette-case`, `diamond-cufflinks`, `golden-wand`,
+`crystal-ball` and `walk-star` (models and thumbnails) were made the same way,
+in three.js by `work/lot-trophies.js` on 29 Oct 2026: original geometry, no
+third-party assets.
