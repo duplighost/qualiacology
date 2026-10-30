@@ -396,9 +396,13 @@ export function makeKit(T) {
   // Dry durum: amber, bronze-die streaks, glassy translucency.
   K.dry = pastaMaterial({ color: '#efcb7c', roughness: 0.6, clearcoat: 0.16, clearcoatRoughness: 0.4, sheen: 0.25, sheenColor: '#fff6dc',
     normalMap: tex('nStriate', 0.18), normalScale: 0.7, roughnessMap: tex('rough', 0.35), sss: DRY_SSS });
-  K.dryShade = pastaMaterial({ color: '#efcb7c', roughness: 0.6, clearcoat: 0.16, clearcoatRoughness: 0.4, sheen: 0.25,
+  const DRY_SHADE = { color: '#efcb7c', roughness: 0.6, clearcoat: 0.16, clearcoatRoughness: 0.4, sheen: 0.25,
     normalMap: tex('nStriate', 0.18), normalScale: 0.7, roughnessMap: tex('rough', 0.35), sss: DRY_SSS,
-    shade: ['#e2ae55', '#fff0c0'] });
+    shade: ['#e2ae55', '#fff0c0'] };
+  K.dryShade = pastaMaterial(DRY_SHADE);
+  // the same, see-through: the rests in the meadow's rigatoni while they're above you, so the camera
+  // looking down the tube sees you through them. One each, since each fades on its own.
+  K.dryGhost = () => Object.assign(pastaMaterial(DRY_SHADE), { transparent: true, opacity: 0.35, depthWrite: false });
   K.dryBig = pastaMaterial({ color: '#edc679', roughness: 0.58, clearcoat: 0.14, clearcoatRoughness: 0.4, sheen: 0.25,
     normalMap: tex('nStriate', 0.6), normalScale: 0.8, roughnessMap: tex('rough', 0.9), map: tex('albedo', 1.2), sss: { ...DRY_SSS, scale: 0.9 } });
   // Whole-wheat dry rods (tree trunks, pillars).

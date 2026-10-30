@@ -565,10 +565,15 @@ export function buildProps(scene, K, W, audio) {
   col.add({ type: 'tube', x: tower.x, z: tower.z, r0: tower.r0, r1: tower.r1, y0: tower.y0, y1: tower.y0 + tower.h, notch: tower.notch, sticky: true, surface: 'cooked', safe: true });
   P.tube = { x: tower.x, z: tower.z, r0: tower.r0, r1: tower.r1, y0: tower.y0, y1: tower.y0 + tower.h, notch: tower.notch };
   // perches inside: dry bundles across the tube (they snap too)
-  // short dry bundles jutting out of the wall: rests, not ceilings
+  // short dry bundles jutting out of the wall: rests, not ceilings. See-through while above you (the camera
+  // looks down the tube from over your head), solid once you're on or over them.
+  P.tubeRests = [];
   [[22.6, 0.6], [25.4, 3.6], [28.1, 2.1]].forEach(([y, th], i) => {
     const rr = tower.r0 - 0.6;
-    P.planks.push(new Plank(scene, K, col, fx, audio, { x: tower.x + Math.cos(th) * rr, y, z: tower.z + Math.sin(th) * rr, len: 1.3, rods: 6, rot: -th, crack: 0.25, brk: 0.9, seed: 60 + i }));
+    const rest = new Plank(scene, K, col, fx, audio, { x: tower.x + Math.cos(th) * rr, y, z: tower.z + Math.sin(th) * rr, len: 1.3, rods: 6, rot: -th, crack: 0.25, brk: 0.9, seed: 60 + i });
+    rest.ghost = K.dryGhost ? K.dryGhost() : null;
+    if (rest.ghost) rest.mesh.material = rest.ghost;
+    P.planks.push(rest); P.tubeRests.push(rest);
   });
 
   // star column: an upright bundle of dry whole-wheat spaghetti, a nest on top, the stellina in it
@@ -611,6 +616,13 @@ export function buildProps(scene, K, W, audio) {
     const onBridge = hero.pos.z < -2.5 && hero.pos.z > -20 && Math.abs(hero.pos.x) < 3 && hero.pos.y > 8;
     const inTube = Math.hypot(hero.pos.x - tower.x, hero.pos.z - tower.z) < 3 && hero.pos.y > 22;
     P.planks.forEach((p, i) => p.update(dt, i < 10 ? onBridge : inTube));
+    for (const r of P.tubeRests) {
+      if (!r.ghost) continue;
+      // solid under you; above you see-through, and fainter still the nearer it hangs to the camera over your head
+      const dh = r.mesh.position.y - hero.pos.y;
+      r.mesh.material = dh > -0.3 ? r.ghost : K.dryShade;
+      r.ghost.opacity = 0.35 - 0.23 * clamp((dh - 2.5) / 2, 0, 1);
+    }
     for (const s of P.springs) s.update(dt);
     for (const s of P.snails) s.update(dt, ribbon);
     ribbon.updateMesh(time);
