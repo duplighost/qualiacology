@@ -4,7 +4,6 @@
 (() => {
   "use strict";
 
-  const root = document.documentElement;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const TAU = Math.PI * 2;
@@ -50,12 +49,6 @@
     x.fillRect(0, 0, 64, 64);
     return c;
   }
-
-  // Hold the title until Archivo Black is in, so it never shows in a stand-in face.
-  const titleFont = document.fonts && document.fonts.load
-    ? Promise.race([document.fonts.load('280px "Archivo Black"'), new Promise((r) => setTimeout(r, 2200))])
-    : Promise.resolve();
-  titleFont.then(() => root.classList.add("fonts-ready"), () => root.classList.add("fonts-ready"));
 
   /* ---------------- pointer ---------------- */
 
@@ -162,88 +155,137 @@
   addEventListener("resize", readZone);
   readZone();
 
-  /* ================= HERO ================= */
+  /* ================= THE SONG ================= */
+
+  /* One More House, quietly. Browsers keep a page silent until it is touched, so it starts
+     on the first click or key, fades in low, and the corner button turns it off for good. */
+  {
+    const button = document.querySelector(".sound");
+    const label = button && button.querySelector(".sound-label");
+    if (button && label) {
+      const VOLUME = 0.28;
+      let audio = null;
+      let playing = false;
+      let fade = 0;
+      let wanted = true;
+      try {
+        wanted = localStorage.getItem("spooky-sound") !== "off";
+      } catch {
+        wanted = true;
+      }
+
+      const show = () => {
+        button.setAttribute("aria-pressed", String(playing));
+        button.classList.toggle("is-on", playing);
+        label.textContent = playing ? "Sound on" : "Sound off";
+      };
+      const fadeTo = (target, ms, done) => {
+        cancelAnimationFrame(fade);
+        const from = audio.volume;
+        const t0 = performance.now();
+        const step = (now) => {
+          const k = Math.min(1, (now - t0) / ms);
+          audio.volume = clamp(from + (target - from) * k, 0, 1);
+          if (k < 1) fade = requestAnimationFrame(step);
+          else if (done) done();
+        };
+        fade = requestAnimationFrame(step);
+      };
+      const play = () => {
+        if (!audio) {
+          audio = new Audio("/spooky/audio/one-more-house.mp3");
+          audio.loop = true;
+          audio.volume = 0;
+        }
+        playing = true;
+        show();
+        const p = audio.play();
+        if (p && p.catch) p.catch(() => {
+          playing = false;
+          show();
+        });
+        fadeTo(VOLUME, 2800);
+      };
+      const pause = () => {
+        playing = false;
+        show();
+        if (audio) fadeTo(0, 600, () => audio.pause());
+      };
+
+      button.hidden = false;
+      show();
+      button.addEventListener("click", () => {
+        wanted = !playing;
+        try {
+          localStorage.setItem("spooky-sound", wanted ? "on" : "off");
+        } catch {
+          /* private window: the choice lasts this visit */
+        }
+        if (wanted) play();
+        else pause();
+      });
+
+      const first = (e) => {
+        if (e.type === "keydown" && (e.key === "Tab" || e.key === "Shift" || e.key === "Escape" || e.metaKey || e.ctrlKey || e.altKey)) return;
+        removeEventListener("pointerdown", first, true);
+        removeEventListener("keydown", first, true);
+        if (e.target && e.target.closest && e.target.closest(".sound")) return; // the button decides for itself
+        if (wanted && !playing) play();
+      };
+      addEventListener("pointerdown", first, true);
+      addEventListener("keydown", first, true);
+
+      document.addEventListener("visibilitychange", () => {
+        if (!audio) return;
+        if (document.hidden) audio.pause();
+        else if (playing) audio.play().catch(() => {});
+      });
+    }
+  }
+
+  if (reduce) return; // the still version: Alex's paintings, the words and the links. Nothing moves.
+
+  /* ================= HERO: the painted graveyard, kept alive ================= */
 
   const hero = document.querySelector(".hero");
-  const skyBack = hero.querySelector(".sky-back");
+  const heroStage = hero.querySelector(".hero-stage");
   const skyFront = hero.querySelector(".sky-front");
-  const landCanvas = hero.querySelector(".land");
-  const moon = { x: 0, y: 0, r: 0, img: null };
+  const tallArt = matchMedia("(max-aspect-ratio: 3/4)");
+
+  // Where things are in the two paintings, in percent of the picture (the moon's radius in percent of its width).
+  const ART = {
+    wide: {
+      moon: [82.5, 16.8, 7.3],
+      belfry: [93.8, 34.8],
+      drips: [[26.8, 33], [32.4, 31], [44, 32], [54.5, 33], [67.3, 32.5], [73.6, 33.5], [33.3, 54.5], [37.2, 53.5], [44.2, 54.5], [46.7, 53.5], [51, 54], [58.8, 56.5]],
+      sky: [[2, 1.5, 98, 9], [80, 29, 98, 45], [2, 9, 19, 40]],
+      shoot: [5, 1.5, 60, 7],
+    },
+    tall: {
+      moon: [79.3, 10.4, 15.6],
+      belfry: [91.9, 51.3],
+      drips: [[26.7, 30.7], [43, 31.5], [57, 31.3], [75.9, 30.8], [84.9, 31.3], [23.7, 44], [42.2, 43.3], [59.3, 43.2], [64.7, 45.4]],
+      sky: [[2, 1, 62, 16], [2, 44, 80, 54], [86, 20, 98, 45]],
+      shoot: [5, 1, 55, 12],
+    },
+  };
+
+  const moon = { x: 0, y: 0, r: 0 };
   const belfry = { x: 0, y: 0 };
+  const heroGlow = sprite(255, 150, 50);
+  const starGlow = sprite(225, 232, 255);
+  let art = ART.wide;
+  let stage = { x: 0, y: 0, w: 1, h: 1 };
   let heroW = 0;
-  let heroH = 0;
-  let stars = [];
-  let clouds = [];
   let bats = [];
+  let twinkles = [];
+  let wax = [];
+  let cloud = null;
   let shooting = null;
-  let nextShooting = 3;
-  let backView = null;
-  let frontView = null;
+  let nextShooting = 4;
+  let view = null;
 
-  function renderMoon(r) {
-    const pad = r * 3.2;
-    const size = Math.ceil((r + pad) * 2);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const c = document.createElement("canvas");
-    c.width = c.height = Math.ceil(size * dpr);
-    const g = c.getContext("2d");
-    g.scale(dpr, dpr);
-    const cx = size / 2;
-    const cy = size / 2;
-
-    let grad = g.createRadialGradient(cx, cy, r * 0.92, cx, cy, r + pad);
-    grad.addColorStop(0, "rgba(230,236,255,0.42)");
-    grad.addColorStop(0.1, "rgba(200,212,255,0.17)");
-    grad.addColorStop(0.42, "rgba(150,170,255,0.05)");
-    grad.addColorStop(1, "rgba(150,170,255,0)");
-    g.fillStyle = grad;
-    g.fillRect(0, 0, size, size);
-
-    g.save();
-    g.beginPath();
-    g.arc(cx, cy, r, 0, TAU);
-    g.clip();
-    grad = g.createRadialGradient(cx - r * 0.28, cy - r * 0.3, r * 0.08, cx, cy, r * 1.05);
-    grad.addColorStop(0, "#fffef6");
-    grad.addColorStop(0.55, "#f2ecd9");
-    grad.addColorStop(1, "#cbc2a8");
-    g.fillStyle = grad;
-    g.fillRect(cx - r, cy - r, r * 2, r * 2);
-    const rnd = seeded(11);
-    for (let i = 0; i < 9; i++) {
-      const a = rnd() * TAU;
-      const d = rnd() * r * 0.62;
-      const mr = r * (0.16 + rnd() * 0.3);
-      const mx = cx + Math.cos(a) * d;
-      const my = cy + Math.sin(a) * d;
-      const mg = g.createRadialGradient(mx, my, 0, mx, my, mr);
-      mg.addColorStop(0, "rgba(128,126,118,0.3)");
-      mg.addColorStop(1, "rgba(128,126,118,0)");
-      g.fillStyle = mg;
-      g.fillRect(mx - mr, my - mr, mr * 2, mr * 2);
-    }
-    for (let i = 0; i < 12; i++) {
-      const a = rnd() * TAU;
-      const d = Math.sqrt(rnd()) * r * 0.86;
-      const cr = r * (0.02 + rnd() * 0.05);
-      const x = cx + Math.cos(a) * d;
-      const y = cy + Math.sin(a) * d;
-      const cg = g.createRadialGradient(x + cr * 0.2, y + cr * 0.2, 0, x, y, cr);
-      cg.addColorStop(0, "rgba(105,100,92,0.22)");
-      cg.addColorStop(1, "rgba(105,100,92,0)");
-      g.fillStyle = cg;
-      g.beginPath();
-      g.arc(x, y, cr, 0, TAU);
-      g.fill();
-    }
-    grad = g.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
-    grad.addColorStop(0, "rgba(60,55,72,0)");
-    grad.addColorStop(1, "rgba(60,55,72,0.38)");
-    g.fillStyle = grad;
-    g.fillRect(cx - r, cy - r, r * 2, r * 2);
-    g.restore();
-    return { canvas: c, size };
-  }
+  const at = (px, py) => ({ x: stage.x + (stage.w * px) / 100, y: stage.y + (stage.h * py) / 100 });
 
   function makeCloud(w, h, seed) {
     const c = document.createElement("canvas");
@@ -260,9 +302,9 @@
       g.translate(x, y);
       g.scale(1, ry / rx);
       const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
-      gr.addColorStop(0, "rgba(26,30,56,0.62)");
-      gr.addColorStop(0.6, "rgba(26,30,56,0.24)");
-      gr.addColorStop(1, "rgba(26,30,56,0)");
+      gr.addColorStop(0, "rgba(30,34,62,0.7)");
+      gr.addColorStop(0.6, "rgba(30,34,62,0.28)");
+      gr.addColorStop(1, "rgba(30,34,62,0)");
       g.fillStyle = gr;
       g.beginPath();
       g.arc(0, 0, rx, 0, TAU);
@@ -271,237 +313,52 @@
     }
     g.globalCompositeOperation = "source-atop";
     const lit = g.createLinearGradient(0, h * 0.2, 0, h * 0.62);
-    lit.addColorStop(0, "rgba(170,182,230,0.55)");
-    lit.addColorStop(1, "rgba(170,182,230,0)");
+    lit.addColorStop(0, "rgba(190,200,240,0.6)");
+    lit.addColorStop(1, "rgba(190,200,240,0)");
     g.fillStyle = lit;
     g.fillRect(0, 0, w, h);
     return c;
   }
 
   function layoutHero() {
-    heroW = hero.clientWidth;
-    heroH = hero.clientHeight;
-    const narrow = heroW < 760;
-    moon.r = narrow ? Math.min(heroW * 0.14, 64) : Math.min(heroW * 0.082, heroH * 0.135, 150);
-    moon.x = narrow ? heroW * 0.8 : heroW * 0.79;
-    moon.y = narrow ? heroH * 0.075 + moon.r : heroH * 0.235;
-    moon.img = renderMoon(moon.r);
+    art = tallArt.matches ? ART.tall : ART.wide;
+    const hr = hero.getBoundingClientRect();
+    const sr = heroStage.getBoundingClientRect();
+    heroW = hr.width;
+    stage = { x: sr.left - hr.left, y: sr.top - hr.top, w: sr.width, h: sr.height };
+    const m = at(art.moon[0], art.moon[1]);
+    moon.x = m.x;
+    moon.y = m.y;
+    moon.r = (stage.w * art.moon[2]) / 100;
+    const b = at(art.belfry[0], art.belfry[1]);
+    belfry.x = b.x;
+    belfry.y = b.y;
 
-    const rnd = seeded(7);
-    const count = Math.round(clamp((heroW * heroH) / 2600, 120, 460));
-    stars = Array.from({ length: count }, () => ({
-      x: rnd(),
-      y: Math.pow(rnd(), 1.5) * 0.8,
-      r: rnd() < 0.08 ? 1.2 + rnd() * 0.6 : 0.4 + rnd() * 0.7,
-      a: 0.35 + rnd() * 0.65,
-      tw: 0.5 + rnd() * 2.2,
-      ph: rnd() * TAU,
-    }));
+    const rnd = seeded(21);
+    twinkles = [];
+    for (const [x0, y0, x1, y1] of art.sky) {
+      const n = Math.round(((x1 - x0) * (y1 - y0)) / 34);
+      for (let i = 0; i < n; i++) {
+        const p = at(x0 + rnd() * (x1 - x0), y0 + rnd() * (y1 - y0));
+        if (Math.hypot(p.x - moon.x, p.y - moon.y) < moon.r * 1.35) continue;
+        twinkles.push({ x: p.x, y: p.y, s: 1 + rnd() * 2.2, tw: 0.35 + rnd() * 1.4, ph: rnd() * TAU });
+      }
+    }
 
-    clouds = [0, 1, 2, 3].map((i) => {
-      const w = (narrow ? 260 : 520) * (0.7 + i * 0.18);
-      const h = w * 0.36;
-      return {
-        img: makeCloud(w, h, 40 + i),
-        w,
-        h,
-        x: rnd() * heroW - w * 0.5,
-        y: i < 2 ? moon.y - h * (0.7 - i * 0.35) : heroH * (0.02 + i * 0.03),
-        v: 5 + i * 2.5,
-        a: i < 2 ? 0.9 : 0.28,
-      };
+    const bead = Math.max(1.6, stage.w * 0.0028);
+    wax = art.drips.map(([px, py]) => {
+      const p = at(px, py);
+      return { x: p.x, y: p.y, r: bead, grow: rand(0.22, 0.55), wait: rand(0.4, 7), size: 0, drop: null };
     });
 
-    drawLand();
-    backView = sizeCanvas(skyBack, 1.5);
-    frontView = sizeCanvas(skyFront, 2);
-  }
+    if (!cloud) cloud = { img: makeCloud(520, 190, 44), x: null, v: 0 };
+    cloud.w = moon.r * 4.6;
+    cloud.h = cloud.w * 0.36;
+    cloud.y = moon.y - cloud.h * 0.45;
+    cloud.v = moon.r * 0.09;
+    if (cloud.x === null) cloud.x = moon.x - moon.r * 1.2 - cloud.w * 0.5;
 
-  /* ---- the land: drawn once per size ---- */
-
-  function drawLand() {
-    const { ctx: g, w, h } = sizeCanvas(landCanvas, 2);
-    g.clearRect(0, 0, w, h);
-    const narrow = w < 760;
-    const rnd = seeded(31);
-
-    // far hills, with a pine line on the farthest
-    const hill = (base, amp, waves, color, pines) => {
-      const ph = [rnd() * TAU, rnd() * TAU, rnd() * TAU];
-      const y = (x) => {
-        const u = x / w;
-        return base - amp * (Math.sin(u * waves + ph[0]) * 0.6 + Math.sin(u * waves * 2.3 + ph[1]) * 0.3 + Math.sin(u * waves * 5.1 + ph[2]) * 0.1);
-      };
-      g.fillStyle = color;
-      g.beginPath();
-      g.moveTo(0, h);
-      for (let x = 0; x <= w + 8; x += 8) g.lineTo(x, y(x));
-      g.lineTo(w, h);
-      g.closePath();
-      g.fill();
-      if (pines) {
-        for (let x = 0; x < w; x += 3 + rnd() * 9) {
-          if (rnd() < 0.35) continue;
-          const ph2 = (5 + rnd() * 14) * pines;
-          const pw = ph2 * (0.28 + rnd() * 0.1);
-          const by = y(x) + 2;
-          g.beginPath();
-          g.moveTo(x - pw, by);
-          g.lineTo(x, by - ph2);
-          g.lineTo(x + pw, by);
-          g.fill();
-        }
-      }
-      return y;
-    };
-    hill(h * 0.79, h * 0.035, 3.2, "#100e25", narrow ? 0.7 : 1);
-    // a few far windows still lit
-    for (let i = 0; i < 7; i++) {
-      const x = w * (0.08 + rnd() * 0.84);
-      const yy = h * (0.775 + rnd() * 0.03);
-      const gr = g.createRadialGradient(x, yy, 0, x, yy, 7);
-      gr.addColorStop(0, "rgba(255,200,120,0.85)");
-      gr.addColorStop(1, "rgba(255,160,60,0)");
-      g.fillStyle = gr;
-      g.fillRect(x - 7, yy - 7, 14, 14);
-    }
-    hill(h * 0.855, h * 0.03, 4.4, "#0a0918", 0);
-
-    // the church with the belfry, on the right
-    {
-      const s = narrow ? h * 0.3 : Math.min(h * 0.44, w * 0.28);
-      const tx = w * (narrow ? 0.9 : 0.885);
-      const base = h * 0.9;
-      const tw = s * 0.21;
-      g.fillStyle = "#07060e";
-      const naveW = s * 0.5;
-      const naveH = s * 0.3;
-      const nx = tx - tw * 0.5 - naveW;
-      g.fillRect(nx, base - naveH, naveW + 2, naveH);
-      g.beginPath();
-      g.moveTo(nx - s * 0.02, base - naveH);
-      g.lineTo(nx + naveW * 0.5, base - naveH - s * 0.17);
-      g.lineTo(nx + naveW + 2, base - naveH);
-      g.fill();
-      g.fillRect(tx - tw / 2, base - s * 0.8, tw, s * 0.8);
-      g.fillRect(tx - tw * 0.62, base - s * 0.81, tw * 1.24, s * 0.04);
-      g.beginPath();
-      g.moveTo(tx - tw * 0.56, base - s * 0.8);
-      g.lineTo(tx, base - s * 1.22);
-      g.lineTo(tx + tw * 0.56, base - s * 0.8);
-      g.fill();
-      g.fillRect(tx - 1.2, base - s * 1.3, 2.4, s * 0.1);
-      g.fillRect(tx - s * 0.026, base - s * 1.27, s * 0.052, 2.4);
-      // the belfry opening, faintly lit, with its bell
-      const bw = tw * 0.5;
-      const bh = s * 0.14;
-      const bx = tx - bw / 2;
-      const by = base - s * 0.7;
-      const glow = g.createRadialGradient(tx, by + bh * 0.55, 0, tx, by + bh * 0.55, bh * 1.6);
-      glow.addColorStop(0, "rgba(255,170,80,0.32)");
-      glow.addColorStop(1, "rgba(255,140,60,0)");
-      g.fillStyle = glow;
-      g.fillRect(tx - bh * 1.6, by - bh, bh * 3.2, bh * 3.2);
-      g.fillStyle = "#3a2318";
-      g.beginPath();
-      g.moveTo(bx, by + bh);
-      g.lineTo(bx, by + bw * 0.5);
-      g.arc(tx, by + bw * 0.5, bw / 2, Math.PI, 0);
-      g.lineTo(bx + bw, by + bh);
-      g.fill();
-      g.fillStyle = "#07060e";
-      g.beginPath();
-      g.moveTo(tx - bw * 0.3, by + bh * 0.9);
-      g.quadraticCurveTo(tx - bw * 0.26, by + bh * 0.35, tx, by + bh * 0.32);
-      g.quadraticCurveTo(tx + bw * 0.26, by + bh * 0.35, tx + bw * 0.3, by + bh * 0.9);
-      g.fill();
-      belfry.x = tx;
-      belfry.y = by + bh * 0.5;
-      // lit nave windows
-      for (let i = 0; i < 3; i++) {
-        const wx = nx + naveW * (0.22 + i * 0.28);
-        const wy = base - naveH * 0.7;
-        const ww = s * 0.028;
-        const wh = s * 0.075;
-        g.fillStyle = "rgba(255,160,80,0.42)";
-        g.beginPath();
-        g.moveTo(wx - ww / 2, wy + wh);
-        g.lineTo(wx - ww / 2, wy + ww / 2);
-        g.arc(wx, wy + ww / 2, ww / 2, Math.PI, 0);
-        g.lineTo(wx + ww / 2, wy + wh);
-        g.fill();
-      }
-    }
-
-    // the dead tree on the left
-    {
-      const trnd = seeded(5);
-      const x0 = w * (narrow ? 0.03 : 0.06);
-      const y0 = h * 0.93;
-      const len = narrow ? h * 0.12 : Math.min(h * 0.2, w * 0.13);
-      g.strokeStyle = "#05040b";
-      g.lineCap = "round";
-      const branch = (x, y, a, l, width, depth) => {
-        const x2 = x + Math.cos(a) * l;
-        const y2 = y + Math.sin(a) * l;
-        const mx = (x + x2) / 2 + (trnd() - 0.5) * l * 0.3;
-        const my = (y + y2) / 2 + (trnd() - 0.5) * l * 0.3;
-        g.lineWidth = width;
-        g.beginPath();
-        g.moveTo(x, y);
-        g.quadraticCurveTo(mx, my, x2, y2);
-        g.stroke();
-        if (depth > 7 || l < 5) return;
-        const n = depth < 2 ? 2 : trnd() < 0.7 ? 2 : 3;
-        for (let i = 0; i < n; i++) {
-          const spread = (trnd() - 0.5) * 0.9 + (i - (n - 1) / 2) * 0.62;
-          branch(x2, y2, a + spread + 0.1, l * (0.68 + trnd() * 0.14), width * 0.66, depth + 1);
-        }
-      };
-      branch(x0, y0, -Math.PI / 2 + 0.16, len, Math.max(8, len * 0.13), 0);
-    }
-
-    // iron railings between the graves and the church
-    if (!narrow) {
-      g.fillStyle = "#06050c";
-      const fx0 = w * 0.72;
-      const fx1 = w * 0.83;
-      const fy = h * 0.905;
-      const fh = h * 0.06;
-      g.fillRect(fx0, fy - fh * 0.82, fx1 - fx0, 2);
-      g.fillRect(fx0, fy - fh * 0.25, fx1 - fx0, 2);
-      for (let x = fx0; x <= fx1; x += 9) {
-        g.fillRect(x, fy - fh, 1.8, fh);
-        g.beginPath();
-        g.moveTo(x - 2.4, fy - fh);
-        g.lineTo(x + 0.9, fy - fh - 6);
-        g.lineTo(x + 4.2, fy - fh);
-        g.fill();
-      }
-    }
-
-    // near ground and its grass
-    const groundY = (x) => {
-      const u = x / w;
-      return h * 0.905 - Math.sin(u * 3.3 + 1) * h * 0.016 - Math.sin(u * 9 + 2) * h * 0.005;
-    };
-    g.fillStyle = "#040308";
-    g.beginPath();
-    g.moveTo(0, h);
-    for (let x = 0; x <= w + 6; x += 6) g.lineTo(x, groundY(x));
-    g.lineTo(w, h);
-    g.closePath();
-    g.fill();
-    g.strokeStyle = "#040308";
-    g.lineWidth = 1.3;
-    for (let x = 0; x < w; x += 2.5) {
-      const y = groundY(x);
-      const gl = 3 + rnd() * 11;
-      g.beginPath();
-      g.moveTo(x, y + 2);
-      g.quadraticCurveTo(x + (rnd() - 0.5) * 6, y - gl * 0.6, x + (rnd() - 0.5) * 8, y - gl);
-      g.stroke();
-    }
+    view = sizeCanvas(skyFront, 2);
   }
 
   /* ---- fog: a tileable texture, drifted by CSS ---- */
@@ -521,8 +378,8 @@
       const a = 0.05 + rnd() * 0.09;
       for (const ox of [-W, 0, W]) {
         const gr = g.createRadialGradient(x + ox, y, 0, x + ox, y, r);
-        gr.addColorStop(0, `rgba(196,206,236,${a})`);
-        gr.addColorStop(1, "rgba(196,206,236,0)");
+        gr.addColorStop(0, `rgba(206,206,226,${a})`);
+        gr.addColorStop(1, "rgba(206,206,226,0)");
         g.fillStyle = gr;
         g.fillRect(x + ox - r, y - r, r * 2, r * 2);
       }
@@ -539,27 +396,27 @@
   hero.style.setProperty("--fog-a", fogTexture(3));
   hero.style.setProperty("--fog-b", fogTexture(8));
 
-  /* ---- bats: out of the belfry, round the moon, away from your hand ---- */
+  /* ---- bats: out of the painted belfry, round the painted moon, away from your hand ---- */
 
   function makeBats() {
     const narrow = heroW < 760;
-    const n = narrow ? 12 : 24;
+    const n = narrow ? 12 : 22;
     const now = performance.now() / 1000;
     bats = Array.from({ length: n }, (_, i) => ({
       x: belfry.x,
       y: belfry.y,
       vx: rand(-60, 60),
       vy: rand(-140, -60),
-      s: rand(9, 16) * (narrow ? 0.75 : 1) * (i % 6 === 0 ? 1.6 : 1),
+      s: rand(9, 16) * (narrow ? 0.7 : 1) * (i % 6 === 0 ? 1.5 : 1),
       ph: rand(0, TAU),
       fs: rand(3.6, 5.6),
-      orbit: rand(moon.r * 1.3, moon.r * 3),
+      orbit: rand(1.3, 3),
       ecc: rand(0.42, 0.75),
       w: rand(0.18, 0.5) * (Math.random() < 0.5 ? -1 : 1),
       a0: rand(0, TAU),
       wob: rand(0.4, 1.4),
       seed: rand(0, 100),
-      release: now + 0.6 + i * rand(0.12, 0.3),
+      release: now + 0.8 + i * rand(0.14, 0.32),
       scare: 0,
     }));
   }
@@ -608,40 +465,93 @@
     }
   });
 
+  /* ---- wax: a bead swells on a painted drip and lets go ---- */
+
+  function tickWax(g, dt) {
+    for (const d of wax) {
+      if (d.drop) {
+        d.drop.v += 760 * dt;
+        d.drop.y += d.drop.v * dt;
+        d.drop.a -= dt * 1.25;
+        if (d.drop.a <= 0) d.drop = null;
+      }
+      if (d.wait > 0) d.wait -= dt;
+      else {
+        d.size += dt * d.grow;
+        if (d.size >= 1) {
+          d.drop = { y: d.y + d.r * 1.2, v: 40, a: 1 };
+          d.size = 0;
+          d.wait = rand(2.5, 9);
+          d.grow = rand(0.22, 0.55);
+        }
+      }
+      const r = d.r;
+      if (d.size > 0.02) {
+        const k = d.size;
+        const by = d.y + r * 0.8 * k;
+        g.globalCompositeOperation = "lighter";
+        g.globalAlpha = 0.45 * k;
+        g.drawImage(heroGlow, d.x - r * 4, by - r * 4, r * 8, r * 8);
+        g.globalCompositeOperation = "source-over";
+        g.globalAlpha = Math.min(1, k * 1.6);
+        g.fillStyle = "#ff7a1e";
+        g.beginPath();
+        g.ellipse(d.x, by, r * (0.45 + 0.55 * k), r * (0.55 + 0.75 * k), 0, 0, TAU);
+        g.fill();
+        g.fillStyle = "rgba(255,226,170,0.85)";
+        g.beginPath();
+        g.arc(d.x - r * 0.3 * k, by - r * 0.35 * k, r * 0.28 * k, 0, TAU);
+        g.fill();
+      }
+      if (d.drop) {
+        const a = Math.max(0, d.drop.a);
+        const stretch = Math.min(2.4, 1 + d.drop.v * 0.003);
+        g.globalCompositeOperation = "lighter";
+        g.globalAlpha = 0.4 * a;
+        g.drawImage(heroGlow, d.x - r * 4, d.drop.y - r * 4, r * 8, r * 8);
+        g.globalCompositeOperation = "source-over";
+        g.globalAlpha = a;
+        g.fillStyle = "#ff6f16";
+        g.beginPath();
+        g.ellipse(d.x, d.drop.y, r * 0.8, r * 0.8 * stretch, 0, 0, TAU);
+        g.fill();
+      }
+    }
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = "source-over";
+  }
+
   const heroFrame = {
     wake() {
-      backView = sizeCanvas(skyBack, 1.5);
-      frontView = sizeCanvas(skyFront, 2);
+      view = sizeCanvas(skyFront, 2);
     },
     tick(t, dt) {
       const r = hero.getBoundingClientRect();
-      if (r.bottom < 0) return;
-      // ---- back: stars, a shooting star now and then, the moon, clouds
-      const g = backView.ctx;
-      const w = backView.w;
-      const h = backView.h;
-      g.clearRect(0, 0, w, h);
-      g.fillStyle = "#eef1ff";
-      for (const s of stars) {
-        const x = s.x * w;
-        const y = s.y * h;
-        const dm = Math.hypot(x - moon.x, y - moon.y);
-        if (dm < moon.r * 1.2) continue;
-        g.globalAlpha = s.a * (0.5 + 0.5 * Math.sin(t * s.tw + s.ph)) * clamp(dm / (moon.r * 3.2), 0.2, 1);
-        if (s.r > 1) {
-          g.beginPath();
-          g.arc(x, y, s.r, 0, TAU);
-          g.fill();
-        } else {
-          g.fillRect(x, y, s.r * 1.6, s.r * 1.6);
-        }
+      if (r.bottom < 0 || !view) return;
+      const g = view.ctx;
+      g.clearRect(0, 0, view.w, view.h);
+
+      // stars that still twinkle in the painted sky
+      for (const s of twinkles) {
+        const a = Math.sin(t * s.tw + s.ph);
+        if (a < 0.05) continue;
+        const k = s.s * a;
+        g.globalAlpha = a * 0.55;
+        g.fillStyle = "#f3f6ff";
+        g.fillRect(s.x - k, s.y - 0.4, k * 2, 0.8);
+        g.fillRect(s.x - 0.4, s.y - k, 0.8, k * 2);
+        g.globalAlpha = a * 0.8;
+        g.drawImage(starGlow, s.x - 4, s.y - 4, 8, 8);
       }
       g.globalAlpha = 1;
 
+      // now and then a shooting star, kept to the open sky
       nextShooting -= dt;
       if (!shooting && nextShooting <= 0) {
-        shooting = { x: rand(w * 0.15, w * 0.7), y: rand(h * 0.04, h * 0.26), vx: rand(-900, -600), vy: rand(220, 360), life: 0, max: rand(0.6, 0.95) };
-        nextShooting = rand(7, 15);
+        const [x0, y0, x1, y1] = art.shoot;
+        const p = at(rand(x0 + (x1 - x0) * 0.4, x1), rand(y0, y1));
+        shooting = { x: p.x, y: p.y, vx: -rand(520, 760), vy: rand(60, 120), life: 0, max: rand(0.5, 0.8) };
+        nextShooting = rand(8, 16);
       }
       if (shooting) {
         shooting.life += dt;
@@ -663,29 +573,30 @@
         if (k >= 1) shooting = null;
       }
 
-      const m = moon.img;
-      g.drawImage(m.canvas, moon.x - m.size / 2, moon.y - m.size / 2, m.size, m.size);
-      for (const c of clouds) {
-        c.x += c.v * dt;
-        if (c.x > w + 40) c.x = -c.w - 40;
-        g.globalAlpha = c.a;
-        g.drawImage(c.img, c.x, c.y, c.w, c.h);
-      }
+      // a cloud slides across the painted moon
+      cloud.x += cloud.v * dt;
+      if (cloud.x > moon.x + moon.r * 1.3) cloud.x = moon.x - moon.r * 1.3 - cloud.w;
+      g.save();
+      g.beginPath();
+      g.arc(moon.x, moon.y, moon.r * 1.02, 0, TAU);
+      g.clip();
+      g.globalAlpha = 0.6;
+      g.drawImage(cloud.img, cloud.x, cloud.y, cloud.w, cloud.h);
+      g.restore();
       g.globalAlpha = 1;
 
-      // ---- front: the bats
-      const f = frontView.ctx;
-      f.clearRect(0, 0, frontView.w, frontView.h);
-      f.fillStyle = "#040309";
-      f.strokeStyle = "rgba(150,160,215,0.16)";
-      f.lineWidth = 0.7;
+      // the bats
+      g.fillStyle = "#050409";
+      g.strokeStyle = "rgba(150,160,215,0.18)";
+      g.lineWidth = 0.7;
       const px = pointer.x - r.left;
       const py = pointer.y - r.top;
       for (const b of bats) {
         if (t < b.release) continue;
         const ang = b.a0 + t * b.w;
-        const tx = moon.x + Math.cos(ang) * b.orbit + Math.sin(t * b.wob + b.seed) * 34;
-        const ty = moon.y + Math.sin(ang) * b.orbit * b.ecc + Math.cos(t * b.wob * 1.3 + b.seed) * 24;
+        const orbit = b.orbit * moon.r;
+        const tx = moon.x + Math.cos(ang) * orbit + Math.sin(t * b.wob + b.seed) * 34;
+        const ty = moon.y + Math.sin(ang) * orbit * b.ecc + Math.cos(t * b.wob * 1.3 + b.seed) * 24;
         let ax = (tx - b.x) * 1.5 - b.vx * 0.85;
         let ay = (ty - b.y) * 1.5 - b.vy * 0.85;
         const dx = b.x - px;
@@ -710,150 +621,18 @@
         b.x += b.vx * dt;
         b.y += b.vy * dt;
         b.ph += dt * TAU * b.fs * (1 + b.scare * 0.9);
-        drawBat(f, b);
+        drawBat(g, b);
       }
 
-      // ---- the title's wax keeps running
-      tickDrips(t, dt);
+      // the painted wax keeps running
+      tickWax(g, dt);
     },
   };
-
-  /* ---- the title drips ---- */
-
-  const drips = [];
-  function setupDrips() {
-    const face = document.querySelector(".title-face");
-    const group = face && face.querySelector(".drips");
-    if (!group) return;
-    const texts = face.querySelectorAll("g[filter] text");
-    const spots = { S: [0.5], P: [0.2], O: [0.5], K: [0.15, 0.86], Y: [0.5], G: [0.62], A: [0.12, 0.88], M: [0.1, 0.9], E: [0.3, 0.72] };
-    const rnd = seeded(13);
-    const ns = "http://www.w3.org/2000/svg";
-    texts.forEach((text) => {
-      const str = text.textContent;
-      const baseline = Number(text.getAttribute("y"));
-      for (let i = 0; i < str.length; i++) {
-        let box;
-        try {
-          box = text.getExtentOfChar(i);
-        } catch {
-          continue;
-        }
-        for (const f of spots[str[i]] || []) {
-          if (rnd() > 0.5) continue;
-          const body = document.createElementNS(ns, "path");
-          const shine = document.createElementNS(ns, "path");
-          const drop = document.createElementNS(ns, "ellipse");
-          shine.setAttribute("fill", "none");
-          shine.setAttribute("stroke", "rgba(255,236,190,0.5)");
-          shine.setAttribute("stroke-linecap", "round");
-          group.append(body, shine, drop);
-          const wdt = 8 + rnd() * 9;
-          drips.push({
-            x: box.x + box.width * f,
-            y: baseline - 7,
-            w: wdt,
-            len: 14,
-            max: rnd() < 0.35 ? 18 + rnd() * 14 : 36 + rnd() * 58,
-            shine,
-            speed: 3 + rnd() * 7,
-            state: "grow",
-            hold: 0,
-            body,
-            drop,
-            dropY: 0,
-            dropV: 0,
-            dropA: 0,
-            delay: rnd() * 3,
-          });
-        }
-      }
-    });
-  }
-
-  function dripPath(d) {
-    const { x, y, w } = d;
-    const r = w / 2;
-    const bulb = r * 1.2;
-    const len = Math.max(d.len, bulb * 1.6);
-    const end = y + len;
-    const f = (n) => n.toFixed(1);
-    return `M${f(x - r * 1.9)} ${f(y)}Q${f(x - r)} ${f(y + 2)} ${f(x - r * 0.88)} ${f(y + len * 0.25)}` +
-      `Q${f(x - r * 0.62)} ${f(y + len * 0.6)} ${f(x - r * 0.8)} ${f(end - bulb)}` +
-      `C${f(x - bulb * 1.2)} ${f(end - bulb * 0.15)} ${f(x - bulb * 0.92)} ${f(end + bulb)} ${f(x)} ${f(end + bulb)}` +
-      `C${f(x + bulb * 0.92)} ${f(end + bulb)} ${f(x + bulb * 1.2)} ${f(end - bulb * 0.15)} ${f(x + r * 0.8)} ${f(end - bulb)}` +
-      `Q${f(x + r * 0.62)} ${f(y + len * 0.6)} ${f(x + r * 0.88)} ${f(y + len * 0.25)}` +
-      `Q${f(x + r)} ${f(y + 2)} ${f(x + r * 1.9)} ${f(y)}Z`;
-  }
-  function shinePath(d) {
-    const r = d.w / 2;
-    const len = Math.max(d.len, r * 2);
-    return `M${(d.x - r * 0.42).toFixed(1)} ${(d.y + len * 0.18).toFixed(1)}L${(d.x - r * 0.5).toFixed(1)} ${(d.y + len - r * 0.2).toFixed(1)}`;
-  }
-
-  function tickDrips(t, dt) {
-    for (const d of drips) {
-      if (d.delay > 0) {
-        d.delay -= dt;
-        continue;
-      }
-      if (d.state === "grow") {
-        d.len += (d.max - d.len) * Math.min(1, dt * d.speed * 0.08) + dt * 1.5;
-        if (d.len >= d.max - 1) {
-          d.state = "hold";
-          d.hold = rand(0.6, 2.2);
-        }
-      } else if (d.state === "hold") {
-        d.hold -= dt;
-        if (d.hold <= 0) {
-          d.state = "grow";
-          d.dropY = d.y + d.len + d.w * 0.6;
-          d.dropV = 20;
-          d.dropA = 1;
-          d.len *= 0.62;
-          d.max = d.len + 18 + Math.random() * 50;
-          if (d.max > 120) d.max = 30 + Math.random() * 30;
-        }
-      }
-      d.body.setAttribute("d", dripPath(d));
-      d.shine.setAttribute("d", shinePath(d));
-      d.shine.setAttribute("stroke-width", (d.w * 0.16).toFixed(1));
-      if (d.dropA > 0) {
-        d.dropV += 900 * dt;
-        d.dropY += d.dropV * dt;
-        d.dropA -= dt * 0.9;
-        d.drop.setAttribute("cx", d.x.toFixed(1));
-        d.drop.setAttribute("cy", d.dropY.toFixed(1));
-        d.drop.setAttribute("rx", (d.w * 0.42).toFixed(1));
-        d.drop.setAttribute("ry", (d.w * 0.42 + Math.min(10, d.dropV * 0.012)).toFixed(1));
-        d.drop.setAttribute("opacity", Math.max(0, d.dropA).toFixed(2));
-      } else {
-        d.drop.setAttribute("opacity", "0");
-      }
-    }
-  }
-
-  if (reduce) {
-    // The still version: the moon, the stars, the land and the fog, the bats where they are. Nothing moves.
-    const still = () => {
-      layoutHero();
-      makeBats();
-      for (const b of bats) {
-        b.x = moon.x + Math.cos(b.a0) * b.orbit;
-        b.y = moon.y + Math.sin(b.a0) * b.orbit * b.ecc;
-        b.release = 0;
-        b.vx = b.vy = 0;
-      }
-      heroFrame.tick(0, 0);
-    };
-    still();
-    addEventListener("resize", () => {
-      clearTimeout(still.timer);
-      still.timer = setTimeout(still, 150);
-    });
-    return;
-  }
   system(hero, heroFrame);
+  tallArt.addEventListener("change", () => {
+    layoutHero();
+    makeBats();
+  });
 
   /* ================= WEATHER (one canvas over the whole page) ================= */
 
@@ -1441,6 +1220,5 @@
 
   layoutHero();
   makeBats();
-  titleFont.then(setupDrips);
   start();
 })();

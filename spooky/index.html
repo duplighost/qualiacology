@@ -16,13 +16,11 @@
   <meta property="og:image" content="https://qualiacology.com/assets/og/spooky-og-v1.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Spooky Games, lit like a jack-o’-lantern under a full moon, bats circling and five gravestones in the fog">
+  <meta property="og:image:alt" content="Spooky Games in glowing orange letters over a moonlit graveyard: five gravestones for OLLY OLLY, FETCH, STARSTRUCK, We Were Promised Morning and BELFRY, with candles, jack-o’-lanterns and a church under a full moon">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Spooky Games">
   <meta name="twitter:description" content="OLLY OLLY, FETCH, STARSTRUCK, We Were Promised Morning and BELFRY. Five Halloween games that play in your browser.">
   <meta name="twitter:image" content="https://qualiacology.com/assets/og/spooky-og-v1.jpg">
-  <link rel="preload" href="/assets/fonts/archivo-black-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/assets/fonts/fraunces-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/spooky/spooky.css?v=1">
   <script>document.documentElement.classList.replace("no-js", "js");</script>
   <script src="/spooky/spooky.js?v=1" defer></script>
@@ -35,85 +33,58 @@
   <div class="grain" aria-hidden="true"></div>
 
   <header class="hero" id="top" data-zone="hero">
-    <canvas class="sky-back" aria-hidden="true"></canvas>
-    <canvas class="land" aria-hidden="true"></canvas>
+    <h1 class="sr-only">Spooky Games</h1>
+    <div class="hero-stage">
+      <picture>
+        <source media="(max-aspect-ratio: 3/4)" type="image/avif" srcset="/spooky/art/hero-tall.avif">
+        <source media="(max-aspect-ratio: 3/4)" type="image/webp" srcset="/spooky/art/hero-tall.webp">
+        <source type="image/avif" srcset="/spooky/art/hero-wide.avif">
+        <img src="/spooky/art/hero-wide.webp" width="1672" height="941" alt="" fetchpriority="high" decoding="async">
+      </picture>
+      <div class="hero-fx" aria-hidden="true">
+        <i class="title-light"></i>
+        <i class="glow moon w" style="--x:82.5; --y:16.8; --r:10;"></i>
+        <i class="glow warm w" style="--x:6.25; --y:88.6; --r:1.5;"></i>
+        <i class="glow warm w" style="--x:24; --y:80.7; --r:1.4;"></i>
+        <i class="glow warm w" style="--x:43.9; --y:81.5; --r:1.4;"></i>
+        <i class="glow warm w" style="--x:60.2; --y:78.5; --r:1.4;"></i>
+        <i class="glow warm w" style="--x:75.7; --y:81.2; --r:1.4;"></i>
+        <i class="glow warm w" style="--x:86.9; --y:85.6; --r:1.4;"></i>
+        <i class="glow warm w" style="--x:93.8; --y:76.7; --r:1.4;"></i>
+        <i class="glow warm w" style="--x:97.3; --y:74.8; --r:1.8;"></i>
+        <i class="glow warm w" style="--x:3.3; --y:72.6; --r:1.8;"></i>
+        <i class="glow warm w" style="--x:8.3; --y:84.4; --r:4.4;"></i>
+        <i class="glow warm w" style="--x:93.3; --y:85.6; --r:4.2;"></i>
+        <i class="glow warm w" style="--x:10.8; --y:62.2; --r:1.6;"></i>
+        <i class="glow warm w" style="--x:75.4; --y:66.7; --r:1.4;"></i>
+        <i class="glow warm w" style="--x:95.7; --y:65.2; --r:1.4;"></i>
+        <i class="glow warm steady w" style="--x:92.3; --y:35.6; --r:1.7;"></i>
+        <i class="glow warm steady w" style="--x:95.4; --y:35.6; --r:1.7;"></i>
+        <i class="glow warm steady w" style="--x:88.2; --y:53.3; --r:2.6;"></i>
+        <i class="glow moon t" style="--x:79.3; --y:10.4; --r:21;"></i>
+        <i class="glow warm t" style="--x:6.7; --y:66.7; --r:2.4;"></i>
+        <i class="glow warm t" style="--x:5.2; --y:79.6; --r:2.8;"></i>
+        <i class="glow warm t" style="--x:97; --y:78.8; --r:2.8;"></i>
+        <i class="glow warm t" style="--x:14.1; --y:82.1; --r:7;"></i>
+        <i class="glow warm t" style="--x:94.1; --y:81.7; --r:6.5;"></i>
+        <i class="glow warm t" style="--x:93; --y:93.8; --r:10;"></i>
+        <i class="glow warm t" style="--x:21.9; --y:67.9; --r:3;"></i>
+        <i class="glow warm steady t" style="--x:91.9; --y:51.3; --r:3.2;"></i>
+        <i class="glow warm steady t" style="--x:92.1; --y:56.7; --r:2.6;"></i>
+        <i class="glow warm steady t" style="--x:75.6; --y:62.5; --r:3;"></i>
+        <i class="glow warm steady t" style="--x:80.7; --y:63.2; --r:2.4;"></i>
+      </div>
+      <nav class="graveyard" aria-label="The games">
+        <a class="grave" href="#olly-olly" style="--wx:9; --wy:61; --ww:14.2; --wh:25.2; --tx:3.3; --ty:68.2; --tw:16.7; --th:12.3;"><span class="sr-only">OLLY OLLY</span></a>
+        <a class="grave" href="#fetch" style="--wx:25.6; --wy:62.2; --ww:13.6; --wh:23.7; --tx:22.2; --ty:69.8; --tw:16.6; --th:10.6;"><span class="sr-only">FETCH</span></a>
+        <a class="grave" href="#starstruck" style="--wx:41.7; --wy:55.6; --ww:15.8; --wh:30.7; --tx:40.3; --ty:64.6; --tw:19.3; --th:15.8;"><span class="sr-only">STARSTRUCK</span></a>
+        <a class="grave" href="#curfew" style="--wx:60.4; --wy:61.5; --ww:13.8; --wh:24.7; --tx:60.4; --ty:69.6; --tw:18.4; --th:10.8;"><span class="sr-only">We Were Promised Morning</span></a>
+        <a class="grave" href="#belfry" style="--wx:77.5; --wy:61; --ww:14.2; --wh:25.2; --tx:80.3; --ty:69.2; --tw:16.7; --th:11.2;"><span class="sr-only">BELFRY</span></a>
+      </nav>
+    </div>
     <canvas class="sky-front" aria-hidden="true"></canvas>
     <div class="fog fog-back" aria-hidden="true"></div>
-
-    <h1 class="title">
-      <span class="sr-only">Spooky Games</span>
-      <svg class="title-glow" viewBox="0 0 1000 560" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id="fire" x1="0" y1="20" x2="0" y2="560" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#ffd877"/>
-            <stop offset=".3" stop-color="#ffaa2c"/>
-            <stop offset=".62" stop-color="#ff7313"/>
-            <stop offset=".86" stop-color="#d33e0a"/>
-            <stop offset="1" stop-color="#8f1d06"/>
-          </linearGradient>
-          <filter id="carve" x="-4%" y="-6%" width="108%" height="112%">
-            <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="4" result="n"/>
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G"/>
-          </filter>
-          <filter id="core" x="-4%" y="-6%" width="108%" height="112%">
-            <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="4" result="n"/>
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G" result="cut"/>
-            <feMorphology in="cut" operator="erode" radius="10" result="thin"/>
-            <feGaussianBlur in="thin" stdDeviation="6" result="soft"/>
-            <feComposite in="soft" in2="cut" operator="in"/>
-          </filter>
-          <filter id="halo" x="-20%" y="-30%" width="140%" height="160%">
-            <feGaussianBlur stdDeviation="16"/>
-          </filter>
-        </defs>
-        <g filter="url(#halo)" fill="#ff6400">
-          <text x="10" y="248" textLength="980" lengthAdjust="spacingAndGlyphs">SPOOKY</text>
-          <text x="96" y="520" textLength="808" lengthAdjust="spacingAndGlyphs">GAMES</text>
-        </g>
-      </svg>
-      <svg class="title-face" viewBox="0 0 1000 560" aria-hidden="true" focusable="false">
-        <g class="drips" fill="url(#fire)"></g>
-        <g filter="url(#carve)" fill="url(#fire)" stroke="#2b0b03" stroke-width="3.5" paint-order="stroke">
-          <text x="10" y="248" textLength="980" lengthAdjust="spacingAndGlyphs">SPOOKY</text>
-          <text x="96" y="520" textLength="808" lengthAdjust="spacingAndGlyphs">GAMES</text>
-        </g>
-      </svg>
-      <svg class="title-core" viewBox="0 0 1000 560" aria-hidden="true" focusable="false">
-        <g filter="url(#core)" fill="#ffe7a1">
-          <text x="10" y="248" textLength="980" lengthAdjust="spacingAndGlyphs">SPOOKY</text>
-          <text x="96" y="520" textLength="808" lengthAdjust="spacingAndGlyphs">GAMES</text>
-        </g>
-      </svg>
-    </h1>
-
-    <nav class="graveyard" aria-label="The games">
-      <a class="stone stone-1" href="#olly-olly">
-        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 3c-6 0-9.5 5-9.5 11v13.5l3-2.4 3 2.4 3.5-2.6 3.5 2.6 3-2.4 3 2.4V14C25.5 8 22 3 16 3Z"/><ellipse class="cut" cx="12.6" cy="13.5" rx="1.9" ry="2.6"/><ellipse class="cut" cx="19.4" cy="13.5" rx="1.9" ry="2.6"/></svg>
-          <span class="name">OLLY OLLY</span></span>
-      </a>
-      <a class="stone stone-2" href="#fetch">
-        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 3.5C9.4 3.5 5.5 8.4 5.5 14c0 3.6 1.7 6.2 4 7.5V26c0 1.4 1 2.5 2.4 2.5h8.2c1.4 0 2.4-1.1 2.4-2.5v-4.5c2.3-1.3 4-3.9 4-7.5 0-5.6-3.9-10.5-10.5-10.5Z"/><ellipse class="cut" cx="11.6" cy="14.6" rx="2.9" ry="3.3"/><ellipse class="cut" cx="20.4" cy="14.6" rx="2.9" ry="3.3"/><path class="cut" d="M16 18.6l-1.7 3.4h3.4z"/></svg>
-          <span class="name">FETCH</span></span>
-      </a>
-      <a class="stone stone-3" href="#starstruck">
-        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 2.8l3.9 8.1 8.9 1.2-6.5 6.2 1.6 8.8L16 22.9l-7.9 4.2 1.6-8.8-6.5-6.2 8.9-1.2z"/></svg>
-          <span class="name">STARSTRUCK</span></span>
-      </a>
-      <a class="stone stone-4" href="#curfew">
-        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M6 22a10 10 0 0 1 20 0z"/><path d="M15 4h2v5h-2zM5.6 8.4l1.4-1.4 3.5 3.5-1.4 1.4zM21.5 10.5l3.5-3.5 1.4 1.4-3.5 3.5zM2 21h3v2H2zM27 21h3v2h-3zM2 25h28v2H2z"/></svg>
-          <span class="name">We Were Promised Morning</span></span>
-      </a>
-      <a class="stone stone-5" href="#belfry">
-        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 12.2l-1.6-3.3-.9 2.6c-2.4.1-4 1.1-5 2.7-1.6-1.3-3.7-1.9-6.5-1.6 1.5 1.3 2.2 2.8 2.1 4.6 1.4-.6 2.9-.5 4.1.4.5 1.6.3 3.2-.6 4.7 2.5-.5 4.6-1.6 6-3.1.4 1 .9 1.9 2.4 3.3 1.5-1.4 2-2.3 2.4-3.3 1.4 1.5 3.5 2.6 6 3.1-.9-1.5-1.1-3.1-.6-4.7 1.2-.9 2.7-1 4.1-.4-.1-1.8.6-3.3 2.1-4.6-2.8-.3-4.9.3-6.5 1.6-1-1.6-2.6-2.6-5-2.7l-.9-2.6Z"/></svg>
-          <span class="name">BELFRY</span></span>
-      </a>
-    </nav>
-
-    <div class="pumpkin pumpkin-1" aria-hidden="true"></div>
-    <div class="pumpkin pumpkin-2" aria-hidden="true"></div>
-    <div class="pumpkin pumpkin-3" aria-hidden="true"></div>
     <div class="fog fog-front" aria-hidden="true"></div>
-    <div class="ground" aria-hidden="true"></div>
   </header>
 
   <main>
@@ -239,5 +210,10 @@
     <a href="/">Qualiacology</a>
     <a href="/games/">All the games</a>
   </footer>
+
+  <button class="sound" type="button" aria-pressed="false" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 9.2v5.6h3.9l5.1 4.2V5L7.4 9.2z"/><path class="wave" d="M15.6 8.7a4.6 4.6 0 0 1 0 6.6M18.4 6a8.4 8.4 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span class="sound-label">Sound off</span>
+  </button>
 </body>
 </html>
