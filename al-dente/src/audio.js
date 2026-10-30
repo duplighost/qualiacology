@@ -63,7 +63,7 @@ const LV = {
   squid_pulse: -33, squid_bonk: -23, squid_ink: -31,
   step_snow: -34, land_snow: -22.5, step_slick: -34, land_slick: -22, launch: -29, thump: -27,
   slide: -17.5, stretch: -23, wind: -30, air: -49, simmer: -38, room: -36, uwBed: -32.5, shore: -24,
-  sled: -23.5, mtn: -32,
+  sled: -23.5, mtn: -32, music: -30.5,
 };
 const WHISTLE = 5.5; // the summit whistle's narrow bands, relative to the mountain wind's body
 
@@ -513,6 +513,333 @@ function* gSqueal(ctx, sec) {
   normRms(d, 0.2);
   return b;
 }
+// ---------------------------------------------------------------------------------------------
+// Music: instruments, made after unlock like the textures above.
+
+// RBJ biquad run over a buffer in place: 'lp', 'hp' or 'bp' (band-pass, 0 dB at the centre).
+function biq(d, type, f, q, sr) {
+  const w = (TAU * f) / sr, cs = Math.cos(w), al = Math.sin(w) / (2 * q), a0 = 1 + al, a1 = -2 * cs, a2 = 1 - al;
+  let b0, b1, b2;
+  if (type === 'lp') { b0 = (1 - cs) / 2; b1 = 1 - cs; b2 = b0; } else if (type === 'hp') { b0 = (1 + cs) / 2; b1 = -(1 + cs); b2 = b0; } else { b0 = al; b1 = 0; b2 = -al; }
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < d.length; i++) { const x = d[i], y = (b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0; x2 = x1; x1 = x; y2 = y1; y1 = y; d[i] = y; }
+}
+// The "pasta marimba": tuned bars (modes near 1 : 4 : 9.2, like a marimba's) with a soft mallet
+// click, one per pitch in mids; the music plays each within two semitones of its own.
+function* gMallet(ctx, mids) {
+  const sr = ctx.sampleRate, out = [];
+  for (const m of mids) {
+    const f = 440 * Math.pow(2, (m - 69) / 12), T = clamp(1.6 * Math.pow(262 / f, 0.55), 0.3, 2.4);
+    const len = Math.ceil(sr * Math.min(2.6, T + 0.08)), b = ctx.createBuffer(1, len, sr), d = b.getChannelData(0);
+    addMode(d, len, f, 1, T, sr);
+    yield;
+    addMode(d, len, f * 3.93, 0.11, T * 0.22, sr);
+    addMode(d, len, f * 9.15, 0.035, T * 0.08, sr);
+    addClick(d, sr, 0.0016, 0.12);
+    const fi = Math.ceil(sr * 0.0012);
+    for (let k = 0; k < fi; k++) d[k] *= k / fi;
+    fadeTail(d, Math.ceil(sr * 0.02)); normPeak(d, 0.9);
+    out.push(b);
+    yield;
+  }
+  return out;
+}
+// Brushes (swishes and taps), a soft felt kick, sleigh-bell shakes.
+function* gMusPerc(ctx) {
+  const sr = ctx.sampleRate, out = { swish: [], tap: [], kick: [], bell: [] };
+  for (let v = 0; v < 3; v++) {
+    const b = mkbuf(ctx, 0.34), d = b.getChannelData(0), a = rr(0.03, 0.055), tau = rr(0.06, 0.09);
+    for (let i = 0; i < d.length; i++) { const t = i / sr; d[i] = nr() * (t < a ? t / a : Math.exp(-(t - a) / tau)); }
+    biq(d, 'hp', rr(900, 1300), 0.7, sr); biq(d, 'lp', rr(5500, 7500), 0.7, sr);
+    fadeTail(d, Math.ceil(sr * 0.02)); normPeak(d, 0.9);
+    out.swish.push(b);
+    yield;
+  }
+  for (let v = 0; v < 4; v++) {
+    const b = mkbuf(ctx, 0.16), d = b.getChannelData(0), n = d.length, tau = rr(0.016, 0.026), tw = rr(0.035, 0.05), x = new Float32Array(n), on = sr * 0.0008;
+    for (let i = 0; i < n; i++) { const t = i / sr; d[i] = nr() * Math.exp(-t / tau) * Math.min(1, i / on); x[i] = nr() * Math.exp(-t / tw) * 0.35; }
+    biq(d, 'bp', rr(3200, 4400), 0.9, sr); biq(x, 'bp', rr(5000, 6500), 1.2, sr);
+    for (let i = 0; i < n; i++) d[i] += x[i];
+    fadeTail(d, Math.ceil(sr * 0.01)); normPeak(d, 0.9);
+    out.tap.push(b);
+    yield;
+  }
+  for (let v = 0; v < 2; v++) {
+    const b = mkbuf(ctx, 0.36), d = b.getChannelData(0), f0 = rr(46, 52), f1 = rr(95, 115);
+    let ph = 0;
+    for (let i = 0; i < d.length; i++) { const t = i / sr; ph += (f0 + (f1 - f0) * Math.exp(-t / 0.03)) / sr; d[i] = Math.sin(TAU * ph) * Math.min(1, t / 0.002) * Math.exp(-t / 0.07); }
+    addClick(d, sr, 0.0015, 0.08); biq(d, 'lp', 2500, 0.7, sr);
+    fadeTail(d, Math.ceil(sr * 0.02)); normPeak(d, 0.9);
+    out.kick.push(b);
+    yield;
+  }
+  for (let v = 0; v < 4; v++) {
+    const b = mkbuf(ctx, 0.42), d = b.getChannelData(0), n = d.length;
+    for (let j = 0, J = v < 2 ? ri(12, 16) : ri(7, 10); j < J; j++) {
+      const at = Math.floor(sr * Math.pow(R(), 1.6) * 0.05), f = rr(4600, 7600), amp = rr(0.35, 1), tau = rr(0.012, 0.03) * sr;
+      ring(d, n, at, f, amp, tau, sr, false);
+      ring(d, n, at, f * 1.47, amp * 0.55, tau * 0.8, sr, false);
+      ring(d, n, at, f * 2.09, amp * 0.3, tau * 0.6, sr, false);
+      if (j % 4 === 3) yield;
+    }
+    biq(d, 'hp', 2500, 0.7, sr);
+    fadeTail(d, Math.ceil(sr * 0.03)); normPeak(d, 0.9);
+    out.bell.push(b);
+    yield;
+  }
+  return out;
+}
+// A small warm room for the music: decaying noise, darker as it fades, a few early reflections,
+// different in each ear.
+function* gIR(ctx, sec) {
+  const sr = ctx.sampleRate, b = mkbuf(ctx, sec, 2), n = b.length, pre = Math.floor(sr * 0.012), tau = (1.25 / 6.91) * sr;
+  for (let ch = 0; ch < 2; ch++) {
+    const d = b.getChannelData(ch);
+    let lp = 0;
+    for (let i0 = pre; i0 < n; i0 += 16384) {
+      for (let i = i0, e = Math.min(n, i0 + 16384); i < e; i++) {
+        const u = (i - pre) / (n - pre), a = 1 - Math.exp((-TAU * 8000 * Math.pow(0.22, u)) / sr);
+        lp += a * (nr() - lp);
+        d[i] = lp * Math.exp(-(i - pre) / tau);
+      }
+      yield;
+    }
+    for (let k = 0; k < 9; k++) { const i = pre + Math.floor(sr * rr(0.004, 0.05)); if (i < n) d[i] += rr(-0.6, 0.6); }
+    fadeTail(d, Math.floor(sr * 0.05));
+  }
+  return b;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Music: the score. One AL DENTE theme, arranged for each place. A1 and A2 are the tune (A2
+// ends home), B the bridge in D minor: eight bars each of 4/4 in F major with swung eighths.
+// A note is [beat in its bar, length in beats, MIDI]; a bar has one chord, or two.
+const TH = {
+  A1: {
+    ch: ['F', 'F6', 'Gm7', 'C7', 'Am7', 'D7', 'Gm7', 'C7'],
+    mel: [
+      [[0, 1, 69], [1, 0.5, 67], [1.5, 0.5, 60], [2, 1, 72], [3, 1, 70]],
+      [[0, 0.5, 69], [0.5, 0.5, 67], [1, 0.5, 65], [1.5, 0.5, 69], [2, 1.5, 72], [3.5, 0.5, 74]],
+      [[0, 1, 74], [1, 0.5, 72], [1.5, 0.5, 70], [2, 1, 67], [3, 0.5, 65], [3.5, 0.5, 67]],
+      [[0, 1.5, 70], [1.5, 0.5, 69], [2, 1.5, 67], [3.5, 0.5, 64]],
+      [[0, 1, 72], [1, 0.5, 71], [1.5, 0.5, 64], [2, 1, 76], [3, 0.5, 74], [3.5, 0.5, 72]],
+      [[0, 0.5, 74], [0.5, 0.5, 72], [1, 0.5, 69], [1.5, 0.5, 66], [2, 1.5, 69], [3.5, 0.5, 72]],
+      [[0, 1.5, 70], [1.5, 0.5, 69], [2, 0.5, 67], [2.5, 0.5, 65], [3, 0.5, 67], [3.5, 0.5, 69]],
+      [[0, 1, 70], [1, 1, 67], [2, 1.5, 64]],
+    ],
+  },
+  A2: {
+    ch: ['F', 'F7', 'Bb', 'Bbm6', 'F/C', 'D7', ['Gm7', 'C7'], 'F'],
+    mel: [
+      [[0, 1, 69], [1, 0.5, 67], [1.5, 0.5, 60], [2, 1, 72], [3, 1, 70]],
+      [[0, 0.5, 69], [0.5, 0.5, 67], [1, 0.5, 65], [1.5, 0.5, 69], [2, 1, 72], [3, 1, 75]],
+      [[0, 1.5, 74], [1.5, 0.5, 72], [2, 0.5, 70], [2.5, 0.5, 72], [3, 0.5, 74], [3.5, 0.5, 77]],
+      [[0, 1, 79], [1, 0.5, 77], [1.5, 0.5, 73], [2, 2, 72]],
+      [[0, 1, 69], [1, 0.5, 72], [1.5, 0.5, 77], [2, 1, 76], [3, 0.5, 74], [3.5, 0.5, 72]],
+      [[0, 1, 72], [1, 0.5, 69], [1.5, 0.5, 66], [2, 0.5, 67], [2.5, 0.5, 69], [3, 0.5, 70], [3.5, 0.5, 71]],
+      [[0, 1, 72], [1, 0.5, 70], [1.5, 0.5, 69], [2, 0.5, 67], [2.5, 0.5, 64], [3, 0.5, 67], [3.5, 0.5, 70]],
+      [[0, 1, 69], [1, 0.5, 67], [1.5, 2, 65]],
+    ],
+  },
+  B: {
+    ch: ['Dm', 'Dm/C#', 'Dm7/C', 'G7/B', 'Bbmaj7', 'A7', 'Dm', 'C7'],
+    mel: [
+      [[0, 1.5, 77], [1.5, 0.5, 76], [2, 1, 74], [3, 1, 69]],
+      [[0, 1.5, 69], [1.5, 0.5, 67], [2, 1, 69], [3, 1, 64]],
+      [[0, 1.5, 65], [1.5, 0.5, 67], [2, 1, 69], [3, 1, 74]],
+      [[0, 2, 77], [2, 1, 74], [3, 1, 71]],
+      [[0, 3, 74], [3, 0.5, 72], [3.5, 0.5, 70]],
+      [[0, 2, 73], [2, 1, 76], [3, 1, 79]],
+      [[0, 1.5, 77], [1.5, 0.5, 76], [2, 2, 74]],
+      [[0, 1, 72], [1, 1, 70], [2, 1, 67], [3, 0.5, 64]],
+    ],
+  },
+};
+const LIFT = 1; // an event that only plays while the sled is flying
+// Each place: tempo, swing (0.5 straight, 2/3 a full triplet lilt), key (semitones from F), the
+// intro's chords, the form, and who plays what in each section of each of the two passes.
+const STY = {
+  // the face screen: the theme's first statement, sparse and playful, on the marimba
+  title: { bpm: 92, sw: 0.58, key: 0, intro: ['F'], form: ['A1', 'A2'], send: 0.26, lvl: 1.1,
+    introFx: (E) => { [65, 69, 72].forEach((m, i) => E(i * 0.05, 1.5, 'mar', m, 0.42, -0.18)); },
+    mel: (s, p) => (p === 0 ? [['mar', 0, 0.85]] : s === 'A1' ? [['mar', 12, 0.62]] : [['plk', 0, 0.8]]),
+    bass: (s, p) => (p === 0 && s === 'A1' ? 'root' : 'two'),
+    comp: (s, p) => (p === 0 && s === 'A1' ? null : 'chuck'),
+    pad: (s, p) => (p === 1 && s === 'A2' ? 0.4 : 0),
+    perc: () => 'ticks',
+    ctr: (s, p) => (p === 1 && s === 'A2' ? ['mar', 0.36] : null) },
+  // the nest island: the theme, relaxed, in B flat
+  select: { bpm: 100, sw: 0.6, key: -7, intro: ['F', 'F'], form: ['A1', 'A2', 'B'], send: 0.3, lvl: 1, introPad: 0.45,
+    mel: (s, p) => (p === 0 ? (s === 'B' ? [['lead', 0, 0.7]] : [['plk', 0, 0.85]]) : s === 'A1' ? [['lead', 0, 0.7]] : s === 'A2' ? [['mar', 12, 0.62]] : [['plk', 0, 0.85]]),
+    bass: () => 'two',
+    comp: (s, p) => ((p === 0 && s !== 'B') || (p === 1 && s === 'B') ? 'arp8' : 'chuck'),
+    pad: () => 0.45,
+    perc: (s, p) => (p === 0 ? 'brushlite' : 'brush') },
+  // the meadow: the whole theme, bright and pastoral, with a band
+  meadow: { bpm: 116, sw: 0.62, key: 0, intro: ['F6', 'F6'], form: ['A1', 'A2', 'B', 'A2'], send: 0.22, lvl: 1,
+    mel: (s, p, si) => (p === 0 ? (s === 'B' ? [['plk', 0, 0.85], ['mar', 12, 0.42]] : si === 3 ? [['lead', 0, 0.8], ['mar', 12, 0.36]] : [['lead', 0, 0.8]])
+      : s === 'A1' ? [['mar', 12, 0.7], ['plk', 0, 0.55]] : [['lead', 0, 0.8]]),
+    bass: (s, p) => (s === 'B' || p === 1 ? 'walk' : 'two'),
+    comp: (s, p) => (s === 'B' ? (p === 0 ? null : 'arp8') : 'chuck'),
+    pad: (s, p) => (s === 'A1' && p === 0 ? 0 : 0.42),
+    perc: () => 'brush',
+    ctr: (s, p, si) => (p === 1 && si === 3 ? ['flute', 0.5] : null) },
+  // the dry fortress: a light march in C, the tune on a dry-pasta xylophone
+  fortress: { bpm: 120, sw: 0.5, key: -5, intro: ['F', 'F'], form: ['A1', 'A2', 'B', 'A2'], send: 0.12, lvl: 0.98,
+    mel: (s, p, si) => (s === 'B' ? [['lead', 0, 0.75]] : p === 0 ? (si === 0 ? [['xyl', 12, 0.8]] : [['xyl', 12, 0.75], ['lead', 0, 0.5]])
+      : si === 0 ? [['lead', 0, 0.75], ['xyl', 12, 0.4]] : [['xyl', 12, 0.8], ['plk', 0, 0.45]]),
+    bass: () => 'oompah',
+    comp: (s) => (s === 'B' ? 'chuck' : 'pah'),
+    pad: (s) => (s === 'B' ? 0.38 : 0),
+    perc: () => 'march' },
+  // the bay: slow, dreamy and wide, in D flat; a harp under a low flute
+  bay: { bpm: 72, sw: 0.5, key: -4, intro: ['F', 'F'], form: ['A1', 'A2', 'B'], send: 0.5, lvl: 1.1, introPad: 0.5,
+    mel: (s, p) => (p === 0 ? (s === 'B' ? [['plk', 12, 0.66]] : [['flute', 0, 0.75]]) : s === 'A1' ? [['mar', 0, 0.62]] : [['flute', 0, 0.75]]),
+    bass: () => 'long',
+    comp: () => 'harp',
+    pad: () => 0.5,
+    perc: () => 'wave' },
+  // the mountain: crisp and brisk, in G, a sleigh-ride lilt; with the sled flying, more bells
+  // and the tune doubled an octave up
+  mountain: { bpm: 96, sw: 2 / 3, key: 2, intro: ['F', 'F'], form: ['A1', 'A2', 'B', 'A2'], send: 0.18, lvl: 1.2,
+    mel: (s, p, si) => (s === 'B' ? [['lead', 0, 0.72]] : p === 0 || si === 3 ? [['mar', 0, 0.75], ['plk', 0, 0.48], ['mar', 12, 0.3, LIFT]]
+      : [['lead', 0, 0.72], ['mar', 12, 0.3, LIFT]]),
+    bass: () => 'gallop',
+    comp: () => 'trip',
+    pad: (s) => (s === 'B' ? 0.4 : 0),
+    perc: () => 'bells' },
+};
+const MUSIC_IDS = ['title', 'select', 'meadow', 'fortress', 'bay', 'mountain', 'won'];
+const PCN = { C: 0, 'C#': 1, Db: 1, D: 2, Eb: 3, E: 4, F: 5, 'F#': 6, G: 7, Ab: 8, A: 9, Bb: 10, B: 11 };
+const QLT = { '': [0, 4, 7], 6: [0, 4, 7, 9], 7: [0, 4, 7, 10], maj7: [0, 4, 7, 11], m: [0, 3, 7], m6: [0, 3, 7, 9], m7: [0, 3, 7, 10] };
+const md12 = (x) => ((x % 12) + 12) % 12;
+const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+const bnote = (pc) => 36 + md12(pc - 36); // a bass root between C2 and B2
+function chordOf(sym, key) {
+  const m = /^([A-G][b#]?)([^/]*)(?:\/([A-G][b#]?))?$/.exec(sym), r = md12(PCN[m[1]] + key), iv = QLT[m[2]] || QLT[''];
+  return { r, iv, pcs: iv.map((i) => md12(r + i)), b: m[3] ? md12(PCN[m[3]] + key) : r };
+}
+// A close voicing of the chord between lo and hi (four-note chords lose their root when n is 3),
+// the one that moves least from the previous voicing.
+function voice(c, lo, hi, prev, n) {
+  const pcs = n === 3 && c.pcs.length === 4 ? c.pcs.slice(1) : c.pcs;
+  let best = null, bs = Infinity;
+  for (let k = 0; k < pcs.length; k++) {
+    for (let o = 0; o < 2; o++) {
+      const v = [lo + md12(pcs[k] - lo) + 12 * o];
+      for (let j = 1; j < pcs.length; j++) { const d = md12(pcs[(k + j) % pcs.length] - v[j - 1]); v.push(v[j - 1] + (d || 12)); }
+      if (v[v.length - 1] > hi) continue;
+      let s = 0;
+      if (prev && prev.length === v.length) for (let j = 0; j < v.length; j++) s += Math.abs(v[j] - prev[j]);
+      else s = Math.abs(v[0] + v[v.length - 1] - lo - hi);
+      if (s < bs) { bs = s; best = v; }
+    }
+  }
+  return best || [lo + md12(pcs[0] - lo)];
+}
+// Turn the score into one place's music: an intro, then two passes of the form that loop. An
+// event is [time s, instrument, MIDI, length s, velocity, pan, flags].
+function* gArrange(id) {
+  const S = STY[id], key = S.key, nI = S.intro.length, intro = [], cyc = [], bars = [];
+  S.intro.forEach((c) => bars.push({ sec: S.form[0], si: 0, bi: -1, pass: -1, ch: [c], mel: [] }));
+  for (let pass = 0; pass < 2; pass++) S.form.forEach((sec, si) => TH[sec].ch.forEach((c, bi) => bars.push({ sec, si, bi, pass, ch: Array.isArray(c) ? c : [c], mel: TH[sec].mel[bi] })));
+  let pC = null, pP = null, pK = 64 + key;
+  for (let k = 0; k < bars.length; k++) {
+    if (k % 8 === 7) yield;
+    const bar = bars[k], nx = bars[k + 1] || bars[nI], live = bar.pass >= 0, L = live ? cyc : intro, sec = bar.sec, ps = Math.max(0, bar.pass);
+    const B = (live ? k - nI : k) * 4, end = bar.bi === 7 || (!live && k === nI - 1);
+    const E = (b, d, inst, m, v, pan, fl) => L.push([B + b, d, inst, m, v, pan || 0, fl || 0]);
+    const segs = bar.ch.map((sym, j, a) => ({ c: chordOf(sym, key), b0: j * (4 / a.length), len: 4 / a.length }));
+    const nroot = chordOf(nx.ch[0], key).b;
+    // the tune, and its pickup into an A section (played by whoever has the next tune)
+    const mel = (n, list) => {
+      for (const [inst, oct, v, fl] of list) {
+        const [b, d, m] = n;
+        E(b, inst === 'xyl' ? Math.min(d, 0.45) : d, inst, m + key + oct, v * (b % 1 ? 0.84 : b % 2 ? 0.93 : 1), inst === 'mar' || inst === 'xyl' ? -0.18 : inst === 'plk' ? 0.12 : -0.04, fl);
+      }
+    };
+    if (live) for (const n of bar.mel) mel(n, S.mel(sec, ps, bar.si));
+    if (end && nx.bi === 0 && nx.sec[0] === 'A') mel([3.5, 0.5, 60], S.mel(nx.sec, Math.max(0, nx.pass), nx.si));
+    if (!live && S.introFx) S.introFx(E, key);
+    // bass
+    const bs = S.bass(sec, ps);
+    segs.forEach((g, j) => {
+      const r = bnote(g.c.b), f5 = r + 7 > 52 ? r - 5 : r + 7, nr = bnote(j < segs.length - 1 ? segs[j + 1].c.b : nroot), ap = nr > r ? nr - 1 : nr + 1, b0 = g.b0;
+      const t3 = r + md12(g.c.pcs[1] - r), t5 = r + md12(g.c.pcs[2] - r);
+      if (bs === 'root') E(b0, Math.min(2, g.len), 'bas', r, 0.72);
+      else if (bs === 'two') { E(b0, Math.min(1.5, g.len - 0.1), 'bas', r, 0.8); if (g.len === 4) { E(2, 1.4, 'bas', f5, 0.7); if (nr !== r && k % 2) E(3.5, 0.45, 'bas', ap, 0.5); } }
+      else if (bs === 'walk') { if (g.len === 4) { E(0, 0.9, 'bas', r, 0.8); E(1, 0.9, 'bas', t3, 0.62); E(2, 0.9, 'bas', t5, 0.7); E(3, 0.9, 'bas', ap, 0.6); } else { E(b0, 0.9, 'bas', r, 0.8); E(b0 + 1, 0.9, 'bas', ap, 0.6); } }
+      else if (bs === 'oompah') { E(b0, 0.45, 'bas', r, 0.85); if (g.len === 4) E(2, 0.45, 'bas', f5, 0.75); }
+      else if (bs === 'gallop') { E(b0, 0.9, 'bas', r, 0.85); E(b0 + 1.5, 0.4, 'bas', r, 0.4); if (g.len === 4) { E(2, 0.9, 'bas', f5, 0.72); E(3.5, 0.4, 'bas', ap, 0.45); } }
+      else if (bs === 'long') { E(b0, g.len - 0.25, 'bas', r, 0.62); if (g.len === 4 && sec === 'B') E(2, 1.6, 'bas', f5, 0.45); }
+    });
+    // chords on plucked strings or the marimba
+    const cs = S.comp(sec, ps);
+    segs.forEach((g) => {
+      const vo = voice(g.c, 55, 68, pC, 3), b0 = g.b0, inSeg = (b) => b >= b0 && b < b0 + g.len;
+      pC = vo;
+      if (cs === 'chuck' || cs === 'pah') for (const b of [1, 3]) if (inSeg(b)) vo.forEach((m, i) => E(b + i * 0.02, cs === 'pah' ? 0.3 : 0.45, 'plk', m, (b === 1 ? 0.3 : 0.27) * (1 - 0.08 * i), 0.26));
+      if (cs === 'arp8') { const tn = [vo[0], vo[1], vo[2], vo[0] + 12], sq = [0, 1, 2, 3, 2, 1, 2, 1]; for (let e = 0; e < g.len * 2; e++) E(b0 + e * 0.5, 0.5, 'mar', tn[sq[e % 8]], e % 2 ? 0.26 : 0.32, -0.3 + 0.6 * ((e % 8) / 7)); }
+      if (cs === 'harp') {
+        const lo = bnote(g.c.r) + 12, tn = [];
+        for (let m = lo; m <= lo + 26; m++) if (g.c.pcs.includes(md12(m))) tn.push(m);
+        const sq = tn.concat(tn.slice(1, -1).reverse());
+        for (let e = 0; e < g.len * 2; e++) { const q = e % sq.length; E(b0 + e * 0.5, 1.6, 'plk', sq[q], e % 4 ? 0.26 : 0.32, -0.6 + 1.2 * (q / Math.max(1, sq.length - 1))); }
+      }
+      if (cs === 'trip') for (let b = b0; b < b0 + g.len; b++) vo.forEach((m, i) => (b % 2 === 0 ? E(b + i * 0.25, 0.35, 'plk', m, 0.3 - 0.03 * i, 0.22) : E(b + i * 0.015, 0.3, 'plk', m, 0.32, 0.22)));
+    });
+    // the reed pad, and on some repeats a slow counter-line on the 3rds and 7ths
+    const pv = live ? S.pad(sec, ps) : S.introPad || 0;
+    if (pv) segs.forEach((g) => { const vo = voice(g.c, 53, 67, pP, 3); pP = vo; vo.forEach((m, i) => E(g.b0, g.len - 0.06, 'reed', m, pv, [-0.32, 0.04, 0.34][i])); });
+    const ct = live && S.ctr ? S.ctr(sec, ps, bar.si) : null;
+    if (ct) segs.forEach((g) => {
+      let best = pK, bd = 99;
+      for (const pc of [g.c.pcs[1], g.c.pcs[g.c.pcs.length - 1]]) for (let m = 57; m <= 70; m++) if (md12(m) === pc && Math.abs(m - pK) < bd) { bd = Math.abs(m - pK); best = m; }
+      pK = best;
+      E(g.b0, g.len - 0.1, ct[0], best, ct[1], 0.32);
+    });
+    // percussion
+    const pc = S.perc(sec, ps);
+    if (pc === 'brush' || pc === 'brushlite') { E(1, 0.4, 'swish', 0, pc === 'brush' ? 0.3 : 0.22, -0.15); E(3, 0.4, 'swish', 0, pc === 'brush' ? 0.28 : 0.2, -0.15); }
+    if (pc === 'brush') { for (const b of [0, 0.5, 1.5, 2.5, 3.5]) E(b, 0.1, 'tap', 0, b === 3.5 ? 0.22 : b ? 0.15 : 0.1, 0.18); if (end) { E(3, 0.1, 'tap', 0, 0.2, 0.18); E(3.25, 0.1, 'tap', 0, 0.16, 0.18); } }
+    if (pc === 'march') {
+      E(0, 0.3, 'kick', 0, 0.55, 0); E(2, 0.3, 'kick', 0, 0.42, 0);
+      for (let e = 0; e < (end ? 4 : 8); e++) E(e * 0.5, 0.1, 'tap', 0, e === 2 || e === 6 ? 0.42 : 0.12, 0.12);
+      if (end) for (let e = 0; e < 8; e++) E(2 + e * 0.25, 0.08, 'tap', 0, 0.12 + 0.045 * e, 0.12);
+    }
+    if (pc === 'bells') for (let b = 0; b < 4; b++) { E(b, 0.3, 'bell', 0, b % 2 ? 0.24 : 0.34, 0.32); E(b + 0.5, 0.2, 'bell', 0, 0.11, 0.32); E(b + 0.25, 0.1, 'tick', 0, 0.12, -0.32); E(b + 0.25, 0.2, 'bell', 0, 0.15, 0.32, LIFT); }
+    if (pc === 'ticks' && bar.bi >= 0) { if (bar.bi % 2) E(3.5, 0.1, 'tick', 0, 0.2, 0.35); if (bar.bi % 4 === 2) E(1.5, 0.1, 'tick', 0, 0.14, -0.35); }
+    if (pc === 'wave' && bar.bi % 2 === 0) E(0, 2, 'swish', 0, 0.12, 0);
+  }
+  const spb = 60 / S.bpm, sw = S.sw, ts = (b) => { const w = Math.floor(b), f = b - w; return (w + (f < 0.5 ? f * 2 * sw : sw + (f - 0.5) * 2 * (1 - sw))) * spb; };
+  const conv = (L) => L.map((e) => [ts(e[0]), e[2], e[3], Math.max(0.04, ts(e[0] + e[1]) - ts(e[0])), e[4], e[5], e[6]]).sort((a, b) => a[0] - b[0]);
+  return { id, key, bpm: S.bpm, send: S.send, lvl: S.lvl, intro: conv(intro), cyc: conv(cyc), introSec: nI * 4 * spb, cycSec: (bars.length - nI) * 4 * spb };
+}
+// The star: IV, V7, I in the key of whatever was playing, the tune climbing home and a little
+// marimba sparkle on top. Plays once.
+function arrangeWon(key, bpm) {
+  const spb = 60 / clamp(bpm, 90, 116), ev = [], E = (b, d, inst, m, v, pan) => ev.push([b * spb, inst, m, d * spb, v, pan || 0, 0]);
+  let pv = null;
+  for (const [sym, b0, len] of [['Bb', 0, 2], ['C7', 2, 2], ['F', 4, 4]]) {
+    const c = chordOf(sym, key), vo = voice(c, 55, 68, pv, 3);
+    pv = vo;
+    E(b0, len === 4 ? 3.5 : 1.8, 'bas', bnote(c.b), 0.8);
+    vo.forEach((m, i) => { E(b0 + i * 0.04, len === 4 ? 3 : 1, 'plk', m, 0.45, 0.25); E(b0, len === 4 ? 3.6 : len - 0.05, 'reed', m, 0.45, [-0.3, 0.04, 0.32][i]); });
+  }
+  for (const [b, d, m] of [[0, 1, 74], [1, 0.5, 77], [1.5, 0.5, 74], [2, 1.5, 76], [3.5, 0.5, 79], [4, 3, 77]]) { E(b, d, 'lead', m + key, 0.8, -0.04); E(b, d, 'mar', m + key, 0.38, -0.18); }
+  [72, 77, 81, 84].forEach((m, i) => E(4.5 + i * 0.25, 1, 'mar', m + key, 0.34, 0.3 - 0.2 * i));
+  E(4, 0.4, 'swish', 0, 0.25, -0.15);
+  return { id: 'won', key, bpm, send: 0.3, lvl: 1, intro: ev.sort((a, b) => a[0] - b[0]), cyc: null, introSec: 8 * spb, cycSec: 0 };
+}
+// Live voices: harmonic recipes for the reed (accordion-like), the woodwind lead and the flute.
+const WV = {
+  reed: [1, 0.62, 0.5, 0.38, 0.33, 0.26, 0.22, 0.18, 0.15, 0.12, 0.1, 0.08, 0.065, 0.05, 0.04, 0.03],
+  lead: [1, 0.05, 0.55, 0.04, 0.34, 0.03, 0.22, 0.02, 0.13, 0.015, 0.08, 0.01, 0.05, 0.008, 0.03],
+  flute: [1, 0.22, 0.08, 0.035, 0.015],
+};
+// Each instrument's level in the music mix.
+const MG = { lead: 0.345, flute: 0.275, reed: 0.12, plk: 1.7, mar: 0.585, xyl: 0.64, bas: 1.3, swish: 0.96, tap: 1.3, kick: 0.55, bell: 1.3, tick: 3.5 };
+
 // Final safety: linear to 0.6, then a smooth tanh knee that never exceeds 0.95.
 // The shaper is fed x/2, so the curve covers +/-2 (6 dB over full scale) before it flattens.
 function softClipCurve() {
@@ -574,6 +901,19 @@ export class PastaAudio {
     this._windSent = 0;
     this._gst = { on: false, t0: 0, rise: 1, hold: 0, fall: 1, peak: 0, fl: 0.5 }; // the current gust
     this._nextGust = 0;
+    this._mOn = o.music !== false; // music: on/off, the place asked for, what plays, what fades
+    this._mWant = null;
+    this._mCur = null;
+    this._mRun = null;
+    this._mFade = [];
+    this._mPrev = null;
+    this._mWonT = -9;
+    this._mKey = 0;
+    this._mBus = null;
+    this._mLvlSent = -1;
+    this._mLpSent = -1;
+    this._lift = 0; // the sled's speed, for the mountain's music
+    this._liftT = 0;
     this._lastUpd = undefined;
     this._h = 0;
     this._sp = 0;
@@ -737,6 +1077,30 @@ export class PastaAudio {
     T.push(function* wood() { if (!b.wood) { const w = genWood(c, 3); b.woodN = norm1(w); b.wood = w; } });
     T.push(function* wind() { if (!b.wind) b.wind = yield* gWhite(c, 6.1, 2); });
     T.push(function* ambience() { if (amb) self._whenRunning(() => self._startAmbience()); });
+    // the music's instruments and score, early: the face screen's music waits for them
+    T.push(function* musMallet() { const M = (b.mus = b.mus || {}); if (!M.mar) M.mar = { m0: 53, step: 4, b: yield* gMallet(c, [53, 57, 61, 65, 69, 73, 77, 81, 85, 89]) }; });
+    T.push(function* musBass() {
+      const M = (b.mus = b.mus || {});
+      if (M.bas) return;
+      const L = [];
+      for (const m of [31, 35, 39, 43, 47, 51]) { const f = mtof(m), t60 = clamp(1.1 * Math.pow(65 / f, 0.3), 0.6, 1.4); L.push(yield* gPluck(c, f, t60 + 0.15, 0.62, t60, 0.28, 0.6)); }
+      M.bas = { m0: 31, step: 4, b: L };
+    });
+    T.push(function* musPluck() {
+      const M = (b.mus = b.mus || {});
+      if (M.plk) return;
+      const L = [];
+      for (const m of [52, 56, 60, 64, 68, 72, 76, 80, 84]) { const f = mtof(m), t60 = clamp(2.4 * Math.pow(165 / f, 0.55), 0.6, 2.6); L.push(yield* gPluck(c, f, Math.min(2.4, 0.9 * t60 + 0.2), 0.32, t60, 0.16, 0.42)); }
+      M.plk = { m0: 52, step: 4, b: L };
+    });
+    T.push(function* musPerc() { const M = (b.mus = b.mus || {}); if (!M.swish) Object.assign(M, yield* gMusPerc(c)); });
+    T.push(function* musRoom() { const M = (b.mus = b.mus || {}); if (!M.ir) M.ir = yield* gIR(c, 1.3); });
+    T.push(function* musScore() {
+      const M = (b.mus = b.mus || {});
+      if (!M.pieces) { const P = {}; for (const id of ['title', 'select', 'meadow', 'fortress', 'bay', 'mountain']) { P[id] = yield* gArrange(id); } M.pieces = P; }
+      M.ready = true;
+    });
+    T.push(function* musBus() { if (!self._offline && !self._mBus) yield* self._gBuild(); });
     T.push(function* bubbles() { if (!b.bub) b.bub = yield* gBubbles(c, 32); });
     T.push(function* roll() { if (!b.roll) { const r = yield* gRoll(c, 12); b.rollN = norm1(r); b.roll = r; } });
     T.push(function* blips() { if (!b.blip) { const x = yield* gBlips(c, 24); b.blipN = norm1(x); b.blip = x; } });
@@ -927,13 +1291,7 @@ export class PastaAudio {
     // Slow incommensurate LFOs keep the bed moving even if update() is never called; update()
     // adds random walks on top. The rate LFOs mean the noise loops never line up the same way.
     // Each LFO starts at a random phase, so no two sessions (or loop passes) begin alike.
-    const lfo = (f, depth, param) => {
-      const o = c.createOscillator(), ph = R() * TAU;
-      try { o.setPeriodicWave(c.createPeriodicWave(new Float32Array([0, Math.sin(ph)]), new Float32Array([0, Math.cos(ph)]), { disableNormalization: true })); } catch (e) {}
-      o.frequency.value = f;
-      const g = G(depth);
-      o.connect(g); g.connect(param); o.start(t);
-    };
+    const lfo = (f, depth, param) => this._lfoN(f, depth, param, t);
     lfo(rr(0.016, 0.021), wind * 0.3, A.gW.gain);
     lfo(rr(0.047, 0.055), wind * 0.18, A.gW.gain);
     lfo(rr(0.07, 0.09), 110, A.lp.frequency);
@@ -978,6 +1336,7 @@ export class PastaAudio {
         this._wind = c01(s.wind01, 0);
       }
       const t = this._now();
+      if (this._mRun || this._mFade.length || (this._mOn && this._mWant !== this._mCur)) this._musicTick(t);
       if (this._lastUpd === undefined) this._lastUpd = t;
       const el = t - this._lastUpd;
       if (el < 0.15 && el >= 0 && this._tube === this._tubeSent && this._menu === this._menuSent && Math.abs(this._uw - this._uwSent) < 0.02 &&
@@ -995,6 +1354,7 @@ export class PastaAudio {
       if (this._menu !== this._menuSent) this._applyMenu(t);
       if (this._uw || this._uwSent || this._shore || this._shoreSent) this._applyWater(t, el >= 0.15);
       if (this._wind || this._windSent) this._applyMountain(t, el >= 0.15);
+      if (this._mBus) this._musicState(t);
       const A = this._A;
       if (!A) return;
       const W = this._walk, k = Math.sqrt(step / 0.15);
@@ -1076,11 +1436,20 @@ export class PastaAudio {
 
   // A slow sine at a random phase added onto an AudioParam.
   _lfo(f, depth, param, t) {
-    const c = this._ctx, o = c.createOscillator(), g = c.createGain(), ph = R() * TAU;
-    try { o.setPeriodicWave(c.createPeriodicWave(new Float32Array([0, Math.sin(ph)]), new Float32Array([0, Math.cos(ph)]), { disableNormalization: true })); } catch (e) {}
-    o.frequency.value = f;
-    g.gain.value = depth;
+    this._lfoN(f, depth, param, t);
+  }
+
+  // The same, returning its nodes. A plain sine (no wave table to build, which costs a
+  // millisecond or more on the main thread) spun fast for its first 50 ms so its phase lands
+  // anywhere, while its depth rises from nothing over two seconds.
+  _lfoN(f, depth, param, t) {
+    const c = this._ctx, o = c.createOscillator(), g = c.createGain();
+    o.frequency.setValueAtTime(f + R() / 0.05, t);
+    o.frequency.setValueAtTime(f, t + 0.05);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(depth, t + 2);
     o.connect(g); g.connect(param); o.start(t);
+    return [o, g];
   }
 
   // Under water and at the shore (update() with underwater, depth01, shore01). Going under, the
@@ -1390,6 +1759,7 @@ export class PastaAudio {
   _ev(name, p, key, gap, prio, cg) {
     const t0 = this._gate(key, gap);
     if (t0 < 0) return;
+    if (prio >= 2 && this._mDk) this._mDuck(t0); // the music dips for the bigger sounds
     const F = FAM[name], j = F.j, t = t0 + (j.t ? R() * j.t : 0);
     const lvl = dB(LV[name]) * cg * (j.g ? dB(rr(-j.g, j.g)) : 1);
     const B = this._bank[name];
@@ -2192,8 +2562,13 @@ export class PastaAudio {
     try { this._ev('respawn', 1, 'respawn', 0.2, 2, 1); } catch (e) {}
   }
 
+  // With music playing, the star is the music's own cadence (music('won')); without, this sound.
   star() {
-    try { this._ev('star', 1, 'star', 1.2, 3, 1); } catch (e) {}
+    try {
+      if (this._mOn && this._mRun && this._mCur !== 'won') { this.music('won'); return; }
+      if (this._mCur === 'won' && this._now() - this._mWonT < 2) return;
+      this._ev('star', 1, 'star', 1.2, 3, 1);
+    } catch (e) {}
   }
 
   // A stretched cooked noodle snapping on the opening screen.
@@ -2308,6 +2683,7 @@ export class PastaAudio {
   // still.
   sled(on, speed01, carve01) {
     try {
+      this._liftT = on ? c01(speed01, 0.5) : 0;
       if (!this._ok) return;
       const t = this._now();
       if (on && !this._muted && (this._offline || this._ctx.state === 'running')) {
@@ -2357,13 +2733,7 @@ export class PastaAudio {
     const G = (v) => { const g = c.createGain(); g.gain.value = v; n.push(g); return g; };
     const F = (type, f, q) => { const x = c.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = qv(type, q); n.push(x); return x; };
     const L = (buf, rate) => { const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = rate; s.start(t, R() * buf.duration * 0.9); n.push(s); srcs.push(s); return s; };
-    const lfo = (f, depth, param) => {
-      const o = c.createOscillator(), g = G(depth), ph = R() * TAU;
-      try { o.setPeriodicWave(c.createPeriodicWave(new Float32Array([0, Math.sin(ph)]), new Float32Array([0, Math.cos(ph)]), { disableNormalization: true })); } catch (e) {}
-      o.frequency.value = f;
-      o.connect(g); g.connect(param); o.start(t);
-      n.push(o); srcs.push(o);
-    };
+    const lfo = (f, depth, param) => { const [o, g] = this._lfoN(f, depth, param, t); n.push(o, g); srcs.push(o); };
     const out = G(0);
     out.connect(this._sfx);
     // The hiss: wide, wet air off the run.
@@ -2558,5 +2928,257 @@ export class PastaAudio {
       S.s1.onended = () => { for (const x of S.n) { try { x.disconnect(); } catch (e) {} } };
       for (const s of [S.s1, S.s2, S.s3]) s.stop(t + 0.15);
     } catch (e) {}
+  }
+
+  // ----- music -------------------------------------------------------------------------------
+  // music(id): 'title', 'select', 'meadow', 'fortress', 'bay', 'mountain', 'won' or null. Call it
+  // whenever the place changes; the same id again changes nothing. Pieces crossfade. 'won' plays
+  // a short cadence in the key of whatever was playing, then rests. Safe before unlock: the
+  // music starts once the instruments are made, a moment after it.
+  music(id) {
+    try {
+      this._mWant = MUSIC_IDS.indexOf(id) >= 0 ? id : null;
+      if (this._ok) this._musicGo(this._now());
+    } catch (e) {}
+  }
+
+  // Music on or off (on by default). Off fades it out; the sound effects carry on.
+  setMusic(on) {
+    try {
+      this._mOn = !!on;
+      if (!this._ok) return;
+      const t = this._now();
+      if (this._mOn) this._musicGo(t);
+      else { this._mStopAll(t, 0.35); this._mCur = null; }
+    } catch (e) {}
+  }
+
+  _musicGo(t) {
+    if (!this._mOn || (!this._offline && this._ctx.state !== 'running')) return;
+    const M = this._b.mus, want = this._mWant;
+    if (!M || !M.ready || want === this._mCur) return;
+    if (!this._mBus) { if (!this._offline) return; run(this._gBuild()); } // live: built in the warm-up, in slices
+    if (want === 'won') {
+      const P = this._mRun && this._mRun.P;
+      this._mPrev = this._mCur;
+      this._mStopAll(t, 0.12);
+      this._mCur = 'won';
+      this._mWonT = t;
+      this._mStart(arrangeWon(P ? P.key : this._mKey, P ? P.bpm : 100), t + 0.03);
+      return;
+    }
+    // straight after the star the game leaves that stage: stay quiet until the next place
+    if (this._mCur === 'won' && want === this._mPrev) return;
+    this._mStopAll(t, this._mCur === 'won' ? 0.5 : 0.8);
+    this._mCur = want;
+    if (want) this._mStart(M.pieces[want], t + 0.05);
+  }
+
+  _mStart(P, t) {
+    const c = this._ctx, Q = { P, t0: t, i: 0, intro: P.intro.length > 0, inp: c.createGain(), g: c.createGain(), rs: c.createGain(), pan: new Map(), end: 0 };
+    Q.g.gain.value = P.lvl;
+    Q.rs.gain.value = P.send;
+    Q.inp.connect(Q.g); Q.g.connect(this._mBus); Q.g.connect(Q.rs); Q.rs.connect(this._mRev);
+    this._mRun = Q;
+    this._mKey = P.key;
+  }
+
+  _mStopAll(t, tau) {
+    const Q = this._mRun;
+    if (!Q) return;
+    this._mRun = null;
+    Q.g.gain.cancelScheduledValues(t);
+    Q.g.gain.setTargetAtTime(0, t, tau);
+    Q.end = t + tau * 7 + 3;
+    this._mFade.push(Q);
+  }
+
+  // Every frame: queue the next ~0.4 s of notes, a few at a time (a fraction of a millisecond
+  // a frame). Notes a short hitch made late are dropped; after a long one (a hidden tab) the
+  // music picks up where it was.
+  _musicTick(t) {
+    if (this._mOn && this._mWant !== this._mCur) this._musicGo(t);
+    const F = this._mFade;
+    for (let k = F.length - 1; k >= 0; k--) {
+      if (t <= F[k].end || this._offline) continue; // (offline, a script runs before the audio: leave it)
+      const Q = F[k];
+      F.splice(k, 1);
+      for (const x of [Q.inp, Q.g, Q.rs, ...Q.pan.values()]) { try { x.disconnect(); } catch (e) {} }
+    }
+    const Q = this._mRun;
+    if (!Q) return;
+    const P = Q.P, hor = t + 0.4, budget = this._offline ? Infinity : now() + 0.3;
+    for (let n = 0; n < 256 && now() < budget; n++) {
+      const L = Q.intro ? P.intro : P.cyc;
+      if (!L || Q.i >= L.length) {
+        if (!Q.intro) { Q.t0 += P.cycSec; Q.i = 0; continue; }
+        Q.t0 += P.introSec; Q.intro = false; Q.i = 0;
+        if (!P.cyc) { this._mRun = null; Q.end = Q.t0 + 4; F.push(Q); return; }
+        continue;
+      }
+      const e = L[Q.i];
+      let et = Q.t0 + e[0];
+      if (et < t - 1) { Q.t0 += t - et; et = t; }
+      if (et > hor) break;
+      Q.i++;
+      if (this._muted || et < t - 0.06 || (e[6] & LIFT && this._lift < 0.5)) continue;
+      this._mPlay(Q, et, e);
+    }
+  }
+
+  // The music's bus, in short steps (the warm-up runs it between frames).
+  *_gBuild() {
+    const c = this._ctx, M = this._b.mus, W = {};
+    const wv = (a) => { const re = new Float32Array(a.length + 1), im = new Float32Array(a.length + 1); a.forEach((x, i) => { im[i + 1] = x; }); return c.createPeriodicWave(re, im); };
+    for (const k of ['reed', 'lead', 'flute']) { W[k] = wv(WV[k]); yield; }
+    // pieces -> bus -> duck (the bigger effects dip it) -> state filter (muffled in a tube) ->
+    // level -> the game mix, so under water muffles it too
+    const bus = c.createGain(), dk = c.createGain(), lp = c.createBiquadFilter(), out = c.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = Math.min(18000, this._sr * 0.45); lp.Q.value = qv('lowpass', 0.6);
+    out.gain.value = 0;
+    bus.connect(dk); dk.connect(lp); lp.connect(out); out.connect(this._uwIn);
+    // The room: the impulse in M.ir, normalized the way a ConvolverNode normalizes (the Web Audio
+    // spec's equal-power scale), split into pieces of about 0.19 s, each on its own convolver
+    // behind the delay that puts it in place. Exactly the sound of one convolver; setting one
+    // long impulse costs ~20 ms of main thread at once, a piece a few.
+    const ir = M.ir, sr = ir.sampleRate, n = ir.length, nc = ir.numberOfChannels;
+    let pw = 0;
+    for (let k = 0; k < nc; k++) { const d = ir.getChannelData(k); for (let i = 0; i < n; i++) pw += d[i] * d[i]; }
+    pw = Math.sqrt(pw / (nc * n));
+    const scale = (1 / (Number.isFinite(pw) && pw >= 0.000125 ? pw : 0.000125)) * Math.pow(10, -58 / 20) * (44100 / sr);
+    const rin = c.createGain(), rg = c.createGain(), seg = Math.ceil(n / Math.ceil(n / Math.round(0.19 * sr)));
+    rg.gain.value = 0.7;
+    rg.connect(bus);
+    yield;
+    let feed = rin;
+    for (let a = 0; a < n; a += seg) {
+      const len = Math.min(seg, n - a), part = c.createBuffer(nc, len, sr);
+      for (let k = 0; k < nc; k++) { const s = ir.getChannelData(k), d = part.getChannelData(k); for (let i = 0; i < len; i++) d[i] = s[a + i] * scale; }
+      const cv = c.createConvolver();
+      cv.normalize = false;
+      cv.buffer = part;
+      if (a > 0) { const dl = c.createDelay(seg / sr + 0.01); dl.delayTime.value = seg / sr; feed.connect(dl); feed = dl; }
+      feed.connect(cv); cv.connect(rg);
+      yield;
+    }
+    this._mWv = W;
+    this._mRev = rin;
+    this._mDk = dk;
+    this._mLP = lp;
+    this._mOut = out;
+    this._mLvlSent = -1;
+    this._mLpSent = -1;
+    this._mBus = bus;
+    this._musicState(this._now());
+  }
+
+  // Shared panners, one per pan position a piece uses: a note needs no panner of its own, and
+  // a sum through one panner sounds exactly as each note through its own.
+  _mPanBus(Q, pan) {
+    const k = clamp(pan, -1, 1);
+    let p = Q.pan.get(k);
+    if (!p) {
+      const c = this._ctx;
+      if (c.createStereoPanner) { p = c.createStereoPanner(); p.pan.value = k; } else p = c.createGain();
+      p.connect(Q.inp);
+      Q.pan.set(k, p);
+    }
+    return p;
+  }
+
+  // Level and colour for the place: softer under water and in a tube (muffled, as if outside),
+  // a touch lower in strong wind, a touch brighter with the sled flying.
+  _musicState(t) {
+    this._lift += (this._liftT - this._lift) * 0.35;
+    const lvl = dB(LV.music) * (1 - 0.3 * this._uw) * (this._tube ? 0.72 : 1) * (1 - 0.18 * this._wind) * (1 + 0.15 * this._lift);
+    if (Math.abs(lvl - this._mLvlSent) > lvl * 0.02 + 1e-6) { this._mOut.gain.setTargetAtTime(lvl, t, this._mLvlSent < 0 ? 0.15 : 0.4); this._mLvlSent = lvl; }
+    const lp = this._tube ? 1800 : Math.min(18000, this._sr * 0.45);
+    if (lp !== this._mLpSent) { this._mLP.frequency.setTargetAtTime(lp, t, 0.25); this._mLpSent = lp; }
+  }
+
+  _mDuck(t) {
+    const p = this._mDk.gain;
+    p.cancelScheduledValues(t);
+    p.setTargetAtTime(0.62, t, 0.012);
+    p.setTargetAtTime(1, t + 0.12, 0.3);
+  }
+
+  _mPlay(Q, t, e) {
+    const inst = e[1], w = inst === 'lead' || inst === 'flute', tt = Math.max(0, t + (R() - 0.5) * (w ? 0.004 : 0.01)), v = e[4] * (0.95 + 0.1 * R());
+    if (w) this._mLead(Q, tt, e[2], e[3], v, e[5], inst);
+    else if (inst === 'reed') this._mReed(Q, tt, e[2], e[3], v, e[5]);
+    else this._mSmp(Q, tt, inst, e[2], e[3], v, e[5]);
+  }
+
+  // One note from a made instrument (or a drum): the nearest of its pitches, re-tuned.
+  _mSmp(Q, t, inst, m, d, v, pan) {
+    const c = this._ctx, M = this._b.mus;
+    let buf, rate = 1, damp = 0;
+    if (inst === 'plk' || inst === 'mar' || inst === 'xyl' || inst === 'bas') {
+      const S = inst === 'bas' ? M.bas : inst === 'plk' ? M.plk : M.mar, k = clamp(Math.round((m - S.m0) / S.step), 0, S.b.length - 1);
+      buf = S.b[k];
+      rate = Math.pow(2, (m - S.m0 - k * S.step) / 12);
+      damp = inst === 'xyl' ? 0.03 : inst === 'bas' ? 0.06 : inst === 'plk' && d < 0.5 ? 0.05 : 0;
+    } else if (inst === 'tick') { buf = this._b.ticks && this._b.ticks[ri(9, 11)]; rate = rr(1.2, 1.5); }
+    else { const L = M[inst]; buf = L && L[ri(0, L.length - 1)]; rate = rr(0.97, 1.03); }
+    if (!buf) return;
+    // (plucks and the bass thin out as they climb; a little lift keeps them even)
+    const s = c.createBufferSource(), g = c.createGain(), lv = Math.pow(v, 1.2) * MG[inst] * (inst === 'plk' ? dB(0.22 * (m - 64)) : inst === 'bas' ? dB(0.18 * (m - 42)) : 1);
+    s.buffer = buf;
+    s.playbackRate.value = rate;
+    g.gain.value = lv;
+    s.connect(g); g.connect(this._mPanBus(Q, pan));
+    let stop = t + buf.duration / rate;
+    if (damp) { g.gain.setValueAtTime(lv, t + d); g.gain.setTargetAtTime(0, t + d, damp); stop = Math.min(stop, t + d + damp * 8); }
+    s.onended = () => { try { s.disconnect(); g.disconnect(); } catch (e) {} };
+    s.start(t);
+    s.stop(stop);
+  }
+
+  // One reed voice: two reeds a few cents apart (the accordion's shimmer), a soft bellows swell.
+  _mReed(Q, t, m, d, v, pan) {
+    const c = this._ctx, f = mtof(m), W = this._mWv, o1 = c.createOscillator(), o2 = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
+    const pk = v * MG.reed, end = t + Math.max(0.25, d);
+    o1.setPeriodicWave(W.reed); o2.setPeriodicWave(W.reed);
+    o1.frequency.value = f; o2.frequency.value = f;
+    o1.detune.value = -4; o2.detune.value = 4.5;
+    lp.type = 'lowpass'; lp.frequency.value = Math.min(2600, f * 6.5); lp.Q.value = qv('lowpass', 0.5);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(pk, t + 0.14);
+    if (d > 0.5) g.gain.setTargetAtTime(pk * 0.8, t + 0.18, 0.5);
+    g.gain.setTargetAtTime(0, end, 0.11);
+    o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this._mPanBus(Q, pan));
+    o1.start(t); o2.start(t);
+    o1.stop(end + 0.8); o2.stop(end + 0.8);
+    o1.onended = () => { for (const x of [o1, o2, lp, g]) { try { x.disconnect(); } catch (e) {} } };
+  }
+
+  // One woodwind note (or flute): speaks with a breath, then a gentle vibrato on held notes.
+  _mLead(Q, t, m, d, v, pan, kind) {
+    const c = this._ctx, b = this._b, fl = kind === 'flute', f = mtof(m), o = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain(), lp = c.createBiquadFilter(), g = c.createGain(), p = this._mPanBus(Q, pan);
+    const pk = v * MG[kind], a = fl ? 0.05 : 0.03, end = t + Math.max(a + 0.03, d * 0.95), fc = Math.min(fl ? 2800 : 3600, f * (fl ? 4 : 5.5)), stop = end + 0.35;
+    o.setPeriodicWave(this._mWv[kind]);
+    o.frequency.value = f;
+    lfo.frequency.value = rr(4.8, 5.5);
+    lg.gain.setValueAtTime(0, t); lg.gain.setValueAtTime(0, t + 0.2); lg.gain.linearRampToValueAtTime(fl ? 11 : 8, t + 0.55);
+    lfo.connect(lg); lg.connect(o.detune);
+    lp.type = 'lowpass'; lp.Q.value = qv('lowpass', 0.6);
+    lp.frequency.setValueAtTime(fc * 0.55, t); lp.frequency.setTargetAtTime(fc, t, 0.04);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(pk, t + a);
+    g.gain.setTargetAtTime(pk * 0.85, t + a, 0.3);
+    g.gain.setTargetAtTime(0, end, fl ? 0.045 : 0.03);
+    o.connect(lp); lp.connect(g); g.connect(p);
+    const ns = c.createBufferSource(), bp = c.createBiquadFilter(), ng = c.createGain(), nd = fl ? end - t : 0.12;
+    ns.buffer = b.pink || b.white; ns.loop = true;
+    bp.type = 'bandpass'; bp.frequency.value = rr(1600, 2400); bp.Q.value = 0.8;
+    ng.gain.setValueAtTime(0, t);
+    ng.gain.linearRampToValueAtTime(pk * (fl ? 0.16 : 0.1), t + 0.012);
+    ng.gain.setTargetAtTime(fl ? pk * 0.05 : 0, t + 0.02, 0.04);
+    ng.gain.setTargetAtTime(0, t + nd, 0.04);
+    ns.connect(bp); bp.connect(ng); ng.connect(p);
+    o.start(t); lfo.start(t); o.stop(stop); lfo.stop(stop);
+    ns.start(t, R() * ns.buffer.duration * 0.8); ns.stop(Math.min(stop, t + nd + 0.3));
+    o.onended = () => { for (const x of [o, lfo, lg, lp, g, ns, bp, ng]) { try { x.disconnect(); } catch (e) {} } };
   }
 }
