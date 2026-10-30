@@ -27,14 +27,6 @@
   #veil { position: fixed; inset: 0; cursor: pointer; }
   #veil.gone { display: none; }
   #err { position: fixed; left: 20px; top: 20px; right: 20px; max-height: 90vh; overflow: auto; white-space: pre-wrap; font: 12px monospace; color: #f88; }
-  /* the way home to the site: on the opening and the pause when the mouse moves, otherwise out of the picture */
-  .home-link { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 200; color: rgba(246,236,214,.86);
-    text-decoration: none; font: 800 11px/1.2 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; padding: 8px 10px; border-radius: 999px;
-    background: rgba(22,14,8,.55); border: 1px solid rgba(246,236,214,.28); backdrop-filter: blur(8px); transition: opacity .3s ease;
-    opacity: 0; pointer-events: none; }
-  body.pointer:not(.play) .home-link, .home-link:focus-visible { opacity: 1; pointer-events: auto; }
-  .home-link:hover, .home-link:focus-visible { color: #fff; border-color: rgba(246,236,214,.65); outline: 0; }
-  @media (prefers-reduced-motion: reduce) { .home-link { transition: none; } }
 </style>
 </head>
 <body>
@@ -4442,6 +4434,7 @@ function audioInit() {
   const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 300;
   const g = ctx.createGain(); g.gain.value = 0.018;
   src.connect(f); f.connect(g); g.connect(master); src.start();
+  musicInit();   // the music (71-music.js) goes in under all of it, through the same master
 }
 
 function setMuted(m) { SFX.muted = m; if (SFX.master) SFX.master.gain.setTargetAtTime(m ? 0 : 0.9, SFX.ctx.currentTime, 0.02); }
@@ -4583,6 +4576,1277 @@ const SND = {
     tone({ t: 1.0, f: 392, dur: 2.6, gain: 0.014, att: 0.8 });
   },
 };
+
+// ---- 71-music.js ----
+// Music, made here like the sounds: one tune for the game, played nine ways (the opening, the nests, the seven
+// levels) by plucked strings, soft reeds, mallets and brushes. Notes go onto the audio clock a little ahead of
+// time; the plucked strings are drawn once, a slice per frame. It runs under the sounds, through the same master,
+// so M mutes it too. Every level ends the same way, at home in G, where the nest's own notes already are.
+
+const MUS = {
+  E: null, cur: null, old: [], jobs: [], queued: new Set(), sps: { ks: 1500, bar: 3000 }, level: 0.012,   // about -52 LUFS: under the effects, which run near -45
+  pend: false, ahead: 0.25, muffle: false, wasMuffled: false, fx: '',
+  stats: { frames: 0, ms: 0, max: 0, jobMs: 0, jobMax: 0, notes: 0, late: 0, lost: 0, missing: 0 },
+};
+
+// ---------- notes, lengths, chords ----------
+
+const MU_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const MU_ACC = { '#': 1, b: -1, '': 0 };
+const muPc = (m) => ((m % 12) + 12) % 12;
+const muHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+function muNote(s) {
+  const m = /^([A-G])(#|b)?(\d)$/.exec(s);
+  if (!m) throw new Error('music: note ' + s);
+  return 12 * (+m[3] + 1) + MU_PC[m[1]] + MU_ACC[m[2] || ''];
+}
+const MU_LEN = { w: 4, h: 2, q: 1, e: 0.5, s: 0.25, t: 1 / 3 };
+function muLen(s) {
+  let d = 0;
+  for (const p of s.split('+')) {
+    const v = MU_LEN[p[0]];
+    if (!v || p.length > 2 || (p.length === 2 && p[1] !== '.')) throw new Error('music: length ' + s);
+    d += p[1] === '.' ? v * 1.5 : v;
+  }
+  return d;
+}
+function muHash(...a) {
+  let h = 2166136261;
+  for (const x of a) { const s = String(x); for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); h = Math.imul(h ^ 47, 16777619); }
+  return h >>> 0;
+}
+
+// A written line, 'G4:s A4:q. | r:h ...', checked bar by bar. A note ending in ~ is held into the next.
+function muLine(str, beats) {
+  const notes = [];
+  let t = 0, inBar = 0, bars = 0;
+  for (const tok of str.replace(/\|/g, ' | ').trim().split(/\s+/)) {
+    if (tok === '|') {
+      if (Math.abs(inBar - beats) > 1e-6) throw new Error(`music: bar ${bars + 1} has ${+inBar.toFixed(3)} beats in "${str.slice(0, 60)}"`);
+      bars++; inBar = 0; continue;
+    }
+    const k = tok.indexOf(':');
+    let name = tok.slice(0, k);
+    const d = muLen(tok.slice(k + 1)), tie = name.endsWith('~');
+    if (tie) name = name.slice(0, -1);
+    if (name !== 'r') {
+      const m = muNote(name), last = notes[notes.length - 1];
+      if (last && last.tie && last.m === m && Math.abs(last.t + last.d - t) < 1e-6) { last.d += d; last.tie = tie; }
+      else notes.push({ t, d, m, tie });
+    }
+    t += d; inBar += d;
+  }
+  if (inBar > 1e-6) throw new Error('music: a line stops mid-bar: ' + str.slice(0, 60));
+  const idx = [];
+  for (let b = 0, j = 0; b <= bars; b++) { while (j < notes.length && notes[j].t < b * beats - 1e-6) j++; idx.push(j); }
+  return { notes, bars, idx };
+}
+
+const MU_Q = {
+  '': [0, 4, 7], m: [0, 3, 7], 7: [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], 6: [0, 4, 7, 9], m6: [0, 3, 7, 9],
+  dim7: [0, 3, 6, 9], m7b5: [0, 3, 6, 10], sus4: [0, 5, 7], '7sus4': [0, 5, 7, 10], '9sus4': [0, 5, 7, 10, 14],
+  69: [0, 4, 7, 9, 14], maj9: [0, 4, 7, 11, 14], 9: [0, 4, 7, 10, 14], 'maj7#11': [0, 4, 7, 11, 18],
+};
+function muChord(sym) {
+  const m = /^([A-G])(#|b)?([^/]*)(?:\/([A-G])(#|b)?)?$/.exec(sym), iv = m && MU_Q[m[3]];
+  if (!iv) throw new Error('music: chord ' + sym);
+  const root = (MU_PC[m[1]] + MU_ACC[m[2] || ''] + 12) % 12;
+  const bass = m[4] ? (MU_PC[m[4]] + MU_ACC[m[5] || ''] + 12) % 12 : root;
+  const ch = { sym, root, iv, bass, pcs: iv.map((x) => (root + x) % 12) };
+  ch.full = muTones(ch, true); ch.bare = muTones(ch, false);
+  return ch;
+}
+// The chord tones a player reaches for first: with the root, or (for pads and vibes) leaving it to the bass.
+function muTones(ch, withRoot) {
+  const iv = ch.iv, f = (...xs) => iv.find((x) => xs.includes(x));
+  const third = f(3, 4) ?? f(5, 2), sev = f(10, 11, 9), ninth = f(13, 14), fifth = f(6, 7, 8), ext = iv.filter((x) => x > 14);
+  const order = withRoot ? [0, third, sev, fifth, ninth, ...ext] : [third, sev, ninth, fifth, ...ext, 0];
+  const pcs = [];
+  for (const x of order) if (x !== undefined && !pcs.includes((ch.root + x) % 12)) pcs.push((ch.root + x) % 12);
+  return pcs;
+}
+// 'G | E7/G# | C:3 D7:1 |' → for each bar, its chords and the beat each comes in on
+function muChart(str, beats) {
+  return str.split('|').map((s) => s.trim()).filter(Boolean).map((s) => {
+    const toks = s.split(/\s+/), timed = toks[0].includes(':');
+    let t = 0;
+    const segs = toks.map((k) => { const [n, d] = k.split(':'); const x = t; t += timed ? +d : beats / toks.length; return [x, muChord(n)]; });
+    if (Math.abs(t - beats) > 1e-6) throw new Error('music: chord bar "' + s + '"');
+    return segs.map(([x, ch], i) => [x, ch, i + 1 < segs.length ? segs[i + 1][0] : beats]);
+  });
+}
+function muChordAt(sec, b, x) { const segs = sec.chart[b]; let k = 0; while (k + 1 < segs.length && segs[k + 1][0] <= x + 1e-6) k++; return segs[k]; }
+
+// A pattern for a bar: 'B:e 0:e d:q r:q' → tokens with their beat
+function muPat(S, str) {
+  const cache = S._pats || (S._pats = {});
+  if (cache[str]) return cache[str];
+  let t = 0;
+  const toks = str.trim().split(/\s+/).map((k) => { const i = k.lastIndexOf(':'); const tok = { x: t, d: muLen(k.slice(i + 1)), w: k.slice(0, i) }; t += tok.d; return tok; });
+  if (Math.abs(t - S.meter) > 1e-6) throw new Error('music: pattern "' + str + '"');
+  return (cache[str] = toks);
+}
+
+// Chord notes between lo and hi, as close to the last chord as the hands can keep them.
+function muVoice(pcs, n, lo, hi, prev, spread) {
+  const pick = [];
+  for (let i = 0; pick.length < n; i++) pick.push(pcs[i % pcs.length]);
+  let best = null, bc = 1e9;
+  for (let r = 0; r < n; r++) {
+    const ord = pick.slice(r).concat(pick.slice(0, r));
+    for (let b0 = lo + muPc(ord[0] - lo); b0 <= hi; b0 += 12) {
+      const v = [b0];
+      for (let k = 1; k < n; k++) { let x = v[k - 1] + 1; while (muPc(x) !== ord[k]) x++; v.push(x); }
+      if (spread && n >= 4) { v[n - 2] -= 12; v.sort((a, b) => a - b); }   // drop the second from the top: open, like a guitar
+      if (v[0] < lo || v[n - 1] > hi) continue;
+      let c = 0;
+      if (prev && prev.length === n) for (let k = 0; k < n; k++) c += Math.abs(v[k] - prev[k]);
+      else c = Math.abs(v.reduce((a, x) => a + x, 0) / n - (lo + hi) / 2) * 2;
+      for (let k = 1; k < n; k++) if (v[k] - v[k - 1] < 3 && v[k - 1] < 52) c += 8;   // no mud at the bottom
+      c += Math.abs(v[n - 1] - (hi - 4)) * 0.15;
+      if (c < bc) { bc = c; best = v; }
+    }
+  }
+  return best || pick.map((pc) => lo + muPc(pc - lo)).sort((a, b) => a - b);
+}
+function muLow(pc, near, lo, hi) {
+  let best = lo + muPc(pc - lo), bd = 1e9;
+  for (let m = lo + muPc(pc - lo); m <= hi; m += 12) { const d = Math.abs(m - near); if (d < bd) { bd = d; best = m; } }
+  return best;
+}
+
+// ---------- the engine: a bus under the sounds, a room, and a noise to make brushes and breath from ----------
+
+function muEngine(ctx, dest) {
+  const E = { ctx, sr: ctx.sampleRate, waves: new Map() };
+  E.mix = ctx.createGain();
+  E.lp = ctx.createBiquadFilter(); E.lp.type = 'lowpass'; E.lp.frequency.value = 18000; E.lp.Q.value = -3;   // closes when paused
+  E.shelf = ctx.createBiquadFilter(); E.shelf.type = 'highshelf'; E.shelf.frequency.value = 5000; E.shelf.gain.value = -3;   // the cracks and ticks keep the top
+  E.out = ctx.createGain(); E.out.gain.value = MUS.level;
+  E.mix.connect(E.lp); E.lp.connect(E.shelf); E.shelf.connect(E.out); E.out.connect(dest);
+  E.noise = ctx.createBuffer(1, Math.floor(E.sr * 1.5), E.sr);
+  E.noise.getChannelData(0).set(muNoise(E.noise.length, 20261029));
+  E.rev = muRoom(E);
+  return E;
+}
+
+// The room: a short pre-delay, a diffuser, and six delay lines fed back through each other (a Householder mix),
+// each through one small filter that both darkens it and lets it die. Plain nodes, so nothing is worked out up front.
+function muRoom(E) {
+  const c = E.ctx, inp = c.createGain(), pre = c.createDelay(0.1);
+  inp.channelCount = 1; inp.channelCountMode = 'explicit';
+  pre.delayTime.value = 0.018; inp.connect(pre);
+  const sum = c.createGain(), dl = c.createDelay(0.05), fb = c.createGain(), ff = c.createGain(), x = c.createGain();
+  dl.delayTime.value = 0.0079; fb.gain.value = 0.6; ff.gain.value = -0.6;
+  pre.connect(sum); sum.connect(dl); dl.connect(fb); fb.connect(sum); sum.connect(ff); ff.connect(x); dl.connect(x);
+  const N = 6, lens = [0.0347, 0.0419, 0.0487, 0.0559, 0.0631, 0.0709], T60 = 1.7, a = Math.exp((-TAU * 4200) / E.sr);
+  const all = c.createGain(), hh = c.createGain(), L = c.createGain(), R = c.createGain(), merge = c.createChannelMerger(2);
+  hh.gain.value = -2 / N; all.connect(hh);
+  L.connect(merge, 0, 0); R.connect(merge, 0, 1);
+  for (let i = 0; i < N; i++) {
+    const d = c.createDelay(0.1), g = Math.pow(10, (-3 * lens[i]) / T60), f = c.createIIRFilter([g * (1 - a)], [1, -a]);
+    d.channelCount = 1; d.channelCountMode = 'explicit'; d.delayTime.value = lens[i];
+    x.connect(d); hh.connect(d); d.connect(f); f.connect(d); f.connect(all); f.connect(i % 2 ? R : L);
+  }
+  const out = c.createGain(); out.gain.value = 0.5;
+  merge.connect(out); out.connect(E.mix);
+  return inp;
+}
+function muWave(E, h) {
+  const key = h.join(',');
+  if (!E.waves.has(key)) {
+    const re = new Float32Array(h.length + 1), im = new Float32Array(h.length + 1);
+    h.forEach((a, i) => { im[i + 1] = a; });
+    E.waves.set(key, E.ctx.createPeriodicWave(re, im));
+  }
+  return E.waves.get(key);
+}
+function muNz(P, t, dur) {   // noise from anywhere in the buffer, round and round for as long as it's wanted
+  const s = P.E.ctx.createBufferSource();
+  s.buffer = P.E.noise; s.loop = true; s.start(t, Math.random() * P.E.noise.duration); s.stop(t + dur);
+  return s;
+}
+
+// ---------- drawn sounds: plucked strings, struck bars and the kit, each worked out once in JS and kept ----------
+// Playing one is then a buffer and a gain, which is what keeps the audio thread light.
+
+// Plucked strings (Karplus-Strong). pos: where along the string it's plucked; soft: how much the first noise is
+// rounded off; loop: the extra darkening each trip; t60: how long it rings.
+const MU_KS = {
+  nylon: { pos: 0.19, soft: 0.55, loop: 0.14, t60: (f) => clamp(3.0 * Math.pow(147 / f, 0.5), 1.0, 4.2), keep: 0.8, max: 1.6, eq: [['pk', 150, 1, 2], ['hs', 3200, 0, -4]] },
+  harp: { pos: 0.3, soft: 0.6, loop: 0.06, t60: (f) => clamp(4.2 * Math.pow(262 / f, 0.55), 1.4, 6), keep: 0.7, max: 1.5, eq: [['hs', 4000, 0, -3]] },
+  bass: { pos: 0.23, soft: 0.82, loop: 0.42, t60: (f) => clamp(1.8 * Math.pow(55 / f, 0.25), 0.9, 2.4), keep: 0.72, max: 1.35, eq: [['lp', 2300, 0.707]] },
+};
+// Struck bars: sines at the bar's own overtones [ratio, level, how much sooner it dies], and the mallet's knock.
+const MU_BAR = {
+  marimba: { p: [[1, 1, 1], [3.98, 0.32, 0.17], [9.6, 0.09, 0.07]], tau: (f) => clamp(0.5 * Math.pow(262 / f, 0.6), 0.14, 0.95), max: 1.1, gain: 0.55, click: 0.25 },
+  vibes: { p: [[1, 1, 1], [4.0, 0.12, 0.22], [10.1, 0.035, 0.08]], tau: (f) => clamp(1.6 * Math.pow(392 / f, 0.5), 0.7, 2.6), max: 2.2, gain: 0.42, damp: 0.09, click: 0.08 },
+  glock: { p: [[1, 1, 1], [2.756, 0.32, 0.42], [5.404, 0.13, 0.22], [8.933, 0.045, 0.12]], tau: (f) => clamp(0.95 * Math.pow(1047 / f, 0.3), 0.35, 1.4), max: 0.95, gain: 0.2, click: 0.12 },
+  celesta: { p: [[1, 1, 1], [2.0, 0.05, 0.3], [4.06, 0.14, 0.16], [9.5, 0.025, 0.06]], tau: (f) => clamp(0.85 * Math.pow(523 / f, 0.45), 0.28, 1.5), max: 1.2, gain: 0.42, damp: 0.25, click: 0.06 },
+  ping: { p: [[1, 1, 1], [2.0, 0.18, 0.35], [3.01, 0.05, 0.2]], tau: () => 0.3, max: 0.9, gain: 0.22 },
+};
+// The kit [level, takes]: brushes, a felt kick, a tom, a shaker, a block, a triangle.
+const MU_KIT = { swish: [0.5, 2], sweep: [0.32, 2], tap: [0.7, 2], kick: [1, 2], tom: [1, 2], shaker: [0.35, 2], block: [1, 2], tri: [1, 1], breath: [1, 2] };
+// One drawing serves this many semitones, played a little faster; the low ones are drawn at half the rate.
+const MU_GRID = { nylon: 2, harp: 3, bass: 2, marimba: 2, vibes: 3, glock: 3, celesta: 3, ping: 3 };
+const MU_HALF = { bass: 1, marimba: 1, vibes: 1, ping: 1 };
+const MU_SR = 48000;   // drawn at this rate (the low ones at half), whatever the context runs at
+const MU_CACHE = new Map();   // 'nylon:56' → { buf, m, bytes }
+function muKey(kind, m) { const g = MU_GRID[kind]; return kind + ':' + (m - (((m % g) + g) % g)); }
+
+function muKsJob(key) {
+  const [kind, ms] = key.split(':'), m = +ms, spec = MU_KS[kind], sr = MU_SR / (MU_HALF[kind] ? 2 : 1), f0 = muHz(m), w = (TAU * f0) / sr, a = spec.loop;
+  // the loop's own delay at this pitch (the two-point average and the one-pole), then a fractional allpass for the rest
+  const dLoop = 0.5 + Math.atan2(a * Math.sin(w), 1 - a * Math.cos(w)) / w;
+  const per = sr / f0 - dLoop, N = Math.max(2, Math.floor(per - 0.3)), fr = per - N;
+  const C = Math.sin((w * (1 - fr)) / 2) / Math.sin((w * (1 + fr)) / 2);
+  // loss per trip so it dies in t60 at any pitch, with the filters' own loss at f0 taken back out
+  const T = spec.t60(f0), hav = Math.cos(w / 2), hone = (1 - a) / Math.sqrt(1 - 2 * a * Math.cos(w) + a * a);
+  const rho = Math.min(0.99995, Math.pow(0.001, 1 / (T * f0)) / (hav * hone));
+  const len = Math.floor(sr * Math.min(spec.max, T * spec.keep));
+  // the pluck: one period of softened noise, with a notch where the finger was
+  const exc = muNoise(N, muHash(key)), ex = new Float32Array(N), M = Math.max(1, Math.round(spec.pos * N));
+  let lpv = 0, mean = 0, pk = 0;
+  for (let i = 0; i < N; i++) { lpv = lpv * spec.soft + exc[i] * (1 - spec.soft); exc[i] = lpv; }
+  for (let i = 0; i < N; i++) { ex[i] = exc[i] - (i >= M ? exc[i - M] : 0); mean += ex[i]; }
+  mean /= N;
+  for (let i = 0; i < N; i++) { ex[i] -= mean; pk = Math.max(pk, Math.abs(ex[i])); }
+  for (let i = 0; i < N; i++) ex[i] /= pk || 1;
+  const st = { N, len, a, C, rho, ex, out: new Float32Array(len), dl: new Float32Array(N), i: 0, p: 0, x1: 0, l1: 0, ax: 0, ay: 0 };
+  let phase = 0;
+  return {
+    key, kind: 'ks', did: 0,
+    step(budget) {   // the string, then the body of the instrument a filter at a time, then its level
+      const eq = spec.eq || [];
+      if (phase === 0) { const i0 = st.i; const done = muKsRun(st, budget); this.did = st.i - i0; if (done) phase = 1; return false; }
+      this.did = 0;
+      if (phase <= eq.length) { const [type, f, q, db] = eq[phase - 1]; muBiq(st.out, sr, type, f, q, db); phase++; return false; }
+      muKeep(key, muNorm(st.out, 0.9), m, sr);
+      return true;
+    },
+  };
+}
+// the string itself, a slice at a time (one function for every string, so it's compiled once)
+function muKsRun(st, budget) {
+  const { N, len, a, C, rho, ex, out, dl } = st;
+  let { i, p, x1, l1, ax, ay } = st;
+  const n = Math.min(len, i + budget);
+  for (; i < n; i++) {
+    const v = dl[p], avg = 0.5 * (v + x1);
+    x1 = v; l1 = (1 - a) * avg + a * l1;
+    const ap = C * l1 + ax - C * ay;
+    ax = l1; ay = ap;
+    const y = (i < N ? ex[i] : 0) + rho * ap;
+    dl[p] = y; p = p + 1 === N ? 0 : p + 1;
+    out[i] = y;
+  }
+  Object.assign(st, { i, p, x1, l1, ax, ay });
+  return i >= len;
+}
+// a bar: each overtone a damped sine (a two-pole resonator), and a short knock of noise; drawn a slice at a time
+function muBarJob(key) {
+  const [kind, ms] = key.split(':'), m = +ms, s = MU_BAR[kind], sr = MU_SR / (MU_HALF[kind] ? 2 : 1), f = muHz(m), tau = s.tau(f);
+  const len = Math.floor(sr * Math.min(s.max, tau * 4.6 + 0.03)), out = new Float32Array(len);
+  const parts = s.p.filter(([ratio]) => f * ratio < sr * 0.45).map(([ratio, amp, k]) => {
+    const w = (TAU * f * ratio) / sr, rr = Math.exp(-1 / (sr * tau * k));
+    return { out, len, c2: 2 * rr * Math.cos(w), r2: rr * rr, y1: amp * rr * Math.sin(w), y2: 0, i: 1 };
+  });
+  let pi = 0;
+  return {
+    key, kind: 'bar', did: 0,
+    step(budget) {
+      const b0 = budget;
+      while (pi < parts.length && budget > 0) {
+        const q = parts[pi], i0 = q.i;
+        if (muBarRun(q, budget)) pi++;
+        budget -= q.i - i0;
+      }
+      this.did = b0 - budget;
+      if (pi < parts.length) return false;
+      if (s.click) muKnock(out, sr, f, s.click, muHash(kind, m));
+      muKeep(key, out, m, sr);
+      return true;
+    },
+  };
+}
+function muBarRun(q, budget) {
+  const { out, len, c2, r2 } = q;
+  let { i, y1, y2 } = q;
+  if (i === 1) { out[1] += y1; i = 2; }
+  const n = Math.min(len, i + budget);
+  for (; i < n; i++) { const y = c2 * y1 - r2 * y2; out[i] += y; y2 = y1; y1 = y; }
+  q.i = i; q.y1 = y1; q.y2 = y2;
+  return i >= len;
+}
+function muKnock(out, sr, f, amp, seed) {
+  const n = Math.min(out.length, Math.floor(sr * 0.02)), z = muNoise(n, seed), dec = Math.exp(-1 / (sr * 0.004)), c = Math.exp((-TAU * Math.min(9000, f * 3)) / sr);
+  let e = amp * 2, lp = 0;
+  for (let k = 0; k < n; k++) { lp = lp * c + z[k] * (1 - c); out[k] += lp * e; e *= dec; }
+}
+// the cookbook biquads, run over a buffer in place: bp, lp, hp, pk (a bump), hs (a high shelf)
+function muBiq(x, sr, type, f, q, db = 0) {
+  const w = (TAU * f) / sr, cs = Math.cos(w), sn = Math.sin(w), A = Math.pow(10, db / 40);
+  let b0, b1, b2, a0, a1, a2;
+  if (type === 'pk') { const al = sn / (2 * q); b0 = 1 + al * A; b1 = -2 * cs; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * cs; a2 = 1 - al / A; }
+  else if (type === 'hs') {
+    const r = Math.sqrt(2 * A) * sn;
+    b0 = A * (A + 1 + (A - 1) * cs + r); b1 = -2 * A * (A - 1 + (A + 1) * cs); b2 = A * (A + 1 + (A - 1) * cs - r);
+    a0 = A + 1 - (A - 1) * cs + r; a1 = 2 * (A - 1 - (A + 1) * cs); a2 = A + 1 - (A - 1) * cs - r;
+  } else {
+    const al = sn / (2 * q);
+    a0 = 1 + al; a1 = -2 * cs; a2 = 1 - al;
+    if (type === 'bp') { b0 = al; b1 = 0; b2 = -al; } else if (type === 'lp') { b0 = (1 - cs) / 2; b1 = 1 - cs; b2 = b0; } else { b0 = (1 + cs) / 2; b1 = -(1 + cs); b2 = b0; }
+  }
+  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < x.length; i++) { const y = b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x[i]; y2 = y1; y1 = y; x[i] = y; }
+  return x;
+}
+// the kit's parts: noise, a shape for it, a damped ring, a felt drum's falling sine
+function muEnv(a, sr, att, tau, amp) {
+  const na = Math.max(1, Math.floor(att * sr)), dec = Math.exp(-1 / (tau * sr));
+  let e = amp;
+  for (let i = 0; i < a.length; i++) a[i] *= i < na ? (amp * i) / na : (e *= dec);
+  return a;
+}
+// white noise from a seed (xorshift: one small function, quick from the first call)
+function muNoise(len, seed) {
+  const a = new Float32Array(len);
+  let x = seed >>> 0 || 1;
+  for (let i = 0; i < len; i++) { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; a[i] = (x >>> 0) / 2147483648 - 1; }
+  return a;
+}
+const MU_SIN = new Float32Array(4097).map((v, i) => Math.sin((TAU * i) / 4096));
+function muRing(len, sr, f, tau, amp) {
+  const a = new Float32Array(len), w = (TAU * f) / sr, rr = Math.exp(-1 / (sr * tau)), c2 = 2 * rr * Math.cos(w), r2 = rr * rr;
+  let y2 = 0, y1 = amp * rr * Math.sin(w);
+  a[1] = y1;
+  for (let i = 2; i < len; i++) { const y = c2 * y1 - r2 * y2; a[i] = y; y2 = y1; y1 = y; }
+  return a;
+}
+function muDrop(len, sr, f0, f1, glide, tau, amp, att) {
+  const a = new Float32Array(len), ng = Math.floor(glide * sr), k = Math.pow(f1 / f0, 1 / ng), na = Math.max(1, Math.floor(att * sr)), dec = Math.exp(-1 / (tau * sr));
+  let ph = 0, f = f0, e = amp;
+  for (let i = 0; i < len; i++) {
+    ph += (4096 * f) / sr; if (ph >= 4096) ph -= 4096;
+    if (i < ng) f *= k;
+    const j = ph | 0, s = MU_SIN[j] + (MU_SIN[j + 1] - MU_SIN[j]) * (ph - j);   // the sine, from a table
+    a[i] = s * (i < na ? (amp * i) / na : (e *= dec));
+  }
+  return a;
+}
+function muAdd(a, b) { for (let i = 0; i < Math.min(a.length, b.length); i++) a[i] += b[i]; return a; }
+function* muBrush(len, sr, seed, type, f, q, att, tau, amp) { const a = muNoise(Math.floor(len * sr), seed); yield; muBiq(a, sr, type, f, q); yield; return muEnv(a, sr, att, tau, amp); }
+// the kit, one part at a time
+function* muKitDraw(kind, take, sr) {
+  const r = muHash('kit', kind, take), n = (s) => Math.floor(s * sr);
+  switch (kind) {
+    case 'swish': return yield* muBrush(0.5, sr, r, 'bp', 3200 + 450 * take, 0.6, 0.03, 0.085, 1);
+    case 'sweep': return yield* muBrush(0.9, sr, r, 'bp', 2600 + 300 * take, 0.5, 0.13, 0.2, 1);
+    case 'tap': return yield* muBrush(0.12, sr, r, 'bp', 2250 + 200 * take, 1.1, 0.001, 0.022, 1);
+    case 'shaker': return yield* muBrush(0.15, sr, r, 'hp', 5000 + 400 * take, 0.7, 0.009, 0.032, 1);
+    case 'breath': return yield* muBrush(0.09, sr, r, 'bp', 2000 + 400 * take, 0.8, 0.004, 0.028, 1);
+    case 'kick': { const a = muDrop(n(0.7), sr, 96 - 3 * take, 47, 0.07, 0.12, 0.9, 0.003); yield; return muAdd(a, yield* muBrush(0.08, sr, r, 'lp', 420, 0.7, 0.001, 0.018, 0.3)); }
+    case 'tom': { const a = muDrop(n(1.2), sr, 118 - 4 * take, 84, 0.22, 0.26, 0.8, 0.004); yield; return muAdd(a, yield* muBrush(0.1, sr, r, 'lp', 750, 0.7, 0.001, 0.025, 0.25)); }
+    case 'block': { const a = muRing(n(0.2), sr, 1180 + 30 * take, 0.022, 0.35); yield; return muAdd(a, yield* muBrush(0.08, sr, r, 'bp', 1400, 6, 0.001, 0.018, 0.5)); }
+    case 'tri': { const a = muRing(n(1.8), sr, 3150, 1.1, 0.09); yield; muAdd(a, muRing(n(1.8), sr, 3150 * 2.73, 0.7, 0.045)); yield; return muAdd(a, muRing(n(1.8), sr, 3150 * 4.32, 0.5, 0.027)); }
+  }
+  return new Float32Array(1);
+}
+function muNorm(out, peak) {
+  let top = 0;
+  for (let k = 0; k < out.length; k++) top = Math.max(top, Math.abs(out[k]));
+  for (let k = 0; k < out.length; k++) out[k] *= peak / (top || 1);
+  for (let k = 0; k < 32 && k < out.length; k++) out[k] *= k / 32;
+  return out;
+}
+function muKeep(key, out, m, sr) {
+  const fade = Math.min(out.length >> 1, Math.floor(sr * 0.03));
+  for (let k = 0; k < fade; k++) out[out.length - 1 - k] *= k / fade;   // every drawing ends at nothing
+  const buf = new AudioBuffer({ numberOfChannels: 1, length: out.length, sampleRate: sr });
+  buf.getChannelData(0).set(out);
+  MU_CACHE.set(key, { buf, m, bytes: out.length * 4 });
+}
+// the work to draw one sound, a slice at a time
+function muJob(key) {
+  const [kind, a, b] = key.split(':');
+  if (kind === 'kit') { const it = muKitDraw(a, +b, MU_SR); return { key, kind: 'kit', step() { const r = it.next(); if (r.done) muKeep(key, r.value, 0, MU_SR); return r.done; } }; }
+  return MU_BAR[kind] ? muBarJob(key) : muKsJob(key);
+}
+function muSample(kind, m) {
+  if (kind.startsWith('kit:')) return MU_CACHE.get(kind) || null;
+  const hit = MU_CACHE.get(muKey(kind, m));
+  if (hit) return hit;
+  for (const d of [2, -2, 3, -3, 4, -4]) { const h = MU_CACHE.get(muKey(kind, m + d)); if (h) return h; }   // a neighbour, played off pitch a little
+  const key = muKey(kind, m);
+  if (!MUS.queued.has(key)) { MUS.queued.add(key); MUS.jobs.push(muJob(key)); }
+  return null;
+}
+function muSrc(P, smp, m, t, out) {
+  const src = P.E.ctx.createBufferSource();
+  src.buffer = smp.buf;
+  if (m !== smp.m) src.playbackRate.value = Math.pow(2, (m - smp.m) / 12);
+  src.connect(out); src.start(t);
+  return src;
+}
+function muGain(P, out, t, v, d, damp) {
+  const g = P.E.ctx.createGain();
+  g.gain.value = v;
+  if (damp) g.gain.setTargetAtTime(0, t + d, damp);
+  g.connect(out);
+  return g;
+}
+// one drawn sound at t: a string, a bar, a drum. Stopped early if it's damped.
+function muOne(P, out, kind, t, m, v, d, damp) {
+  const smp = muSample(kind, m);
+  if (!smp) { MUS.stats.missing++; return; }
+  const s = muSrc(P, smp, m, t, muGain(P, out, t, v, d, damp));
+  if (damp) s.stop(t + d + damp * 7);
+}
+
+// ---------- reeds: one voice each that moves from note to note, with breath, and vibrato on long notes ----------
+
+const MU_REED = {
+  clar: { h: [1, 0.03, 0.5, 0.04, 0.27, 0.05, 0.15, 0.03, 0.09, 0.02, 0.05, 0.015, 0.03], lp: [1200, 3200], att: 0.045, rel: 0.09, vib: [5, 7], breath: 0.05, gain: 0.3 },
+  bcl: { h: [1, 0.04, 0.55, 0.05, 0.3, 0.05, 0.17, 0.03, 0.1, 0.02, 0.05], lp: [650, 1700], att: 0.04, rel: 0.08, vib: [5, 5], breath: 0.06, gain: 0.36 },
+  flute: { h: [1, 0.2, 0.07, 0.025, 0.01], lp: [2600, 5200], att: 0.07, rel: 0.12, vib: [5, 11], breath: 0.13, gain: 0.32 },
+  bsn: { h: [0.55, 1, 0.7, 0.5, 0.33, 0.22, 0.15, 0.1, 0.06, 0.04], lp: [600, 1500], att: 0.05, rel: 0.1, vib: [5, 5], breath: 0.04, gain: 0.34 },
+};
+class MuReed {
+  constructor(P, out, kind) {
+    const c = P.E.ctx, s = MU_REED[kind];
+    this.P = P; this.out = out; this.s = s; this.held = false; this.relT = 0; this.last = 0;
+    this.osc = c.createOscillator(); this.osc.setPeriodicWave(muWave(P.E, s.h));
+    this.lp = c.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.Q.value = -2; this.lp.frequency.value = s.lp[0];
+    this.g = c.createGain(); this.g.gain.value = 0;
+    this.vd = c.createGain(); this.vd.gain.value = 0;
+    P.vibrato().connect(this.vd); this.vd.connect(this.osc.detune);
+    this.osc.connect(this.lp); this.lp.connect(this.g); this.g.connect(out);
+    this.osc.start(c.currentTime);
+  }
+  note(t, m, v, d, leg) {
+    const s = this.s, f = muHz(m), pk = v * s.gain, G = this.g.gain;
+    if (t < this.relT) { G.cancelScheduledValues(t); this.held = true; }   // the next note came early: carry on
+    const tied = this.held && t - this.last < 0.04;
+    if (tied) { this.osc.frequency.setTargetAtTime(f, t, 0.006); G.setTargetAtTime(pk, t, 0.02); }
+    else {
+      this.osc.frequency.setValueAtTime(f, t);
+      G.setTargetAtTime(pk, t, s.att / 3);
+      muOne(this.P, this.out, 'kit:breath:' + (m & 1), t, 0, pk * s.breath * 4, 0, 0);   // the breath that starts it
+    }
+    this.lp.frequency.setValueAtTime(s.lp[0] + (s.lp[1] - s.lp[0]) * v, t);   // a step, not a glide: a moving filter costs every sample
+    this.vd.gain.setTargetAtTime(0, t, 0.02);
+    if (d > 0.42) this.vd.gain.setTargetAtTime(s.vib[1], t + 0.2, 0.16);
+    const end = t + d;
+    if (!leg) { G.setTargetAtTime(0, end, s.rel / 3); this.relT = end; } else this.relT = 0;
+    this.held = leg; this.last = end;
+  }
+  cut(t) { this.g.gain.cancelScheduledValues(t); this.g.gain.setTargetAtTime(0, t, 0.04); this.held = false; this.relT = 0; this.last = t; }
+  idle(now) { return !this.held && now > this.last + 2.5; }
+  stop(t) { this.osc.stop(t); this.vd.disconnect(); }
+}
+
+// ---------- held chords: strings (detuned saws) and a little harmonium ----------
+
+const MU_PAD = {
+  strings: { wave: 'sawtooth', det: 6, lp: 1600, att: 0.55, rel: 0.75, gain: 0.07 },
+  organ: { h: [1, 0.55, 0.42, 0.28, 0.2, 0.13, 0.09, 0.06], det: 2.5, lp: 2000, att: 0.3, rel: 0.45, gain: 0.08 },
+};
+function muPad(P, out, ev, v) {
+  const c = P.E.ctx, s = MU_PAD[ev.inst], t = ev.t, end = t + ev.d, stop = end + s.rel * 2.4, n = ev.notes.length;
+  const f = c.createBiquadFilter(), g = c.createGain();
+  f.type = 'lowpass'; f.frequency.value = s.lp; f.Q.value = -3;
+  g.gain.value = 0; g.gain.setValueAtTime(0, t); g.gain.setTargetAtTime(v * s.gain * (n > 1 ? 1 : 1.6), t, s.att / 3); g.gain.setTargetAtTime(0, end, s.rel / 3);
+  f.connect(g); g.connect(out);
+  ev.notes.forEach((m, i) => {
+    for (const dt of i === 0 || i === n - 1 ? [-s.det, s.det] : [(Math.random() - 0.5) * 6]) {   // the outer notes doubled and a little apart: an ensemble
+      const o = c.createOscillator();
+      if (s.h) o.setPeriodicWave(muWave(P.E, s.h)); else o.type = s.wave;
+      o.frequency.value = muHz(m); o.detune.value = dt + (Math.random() - 0.5) * 4;
+      o.connect(f); o.start(t); o.stop(stop);
+    }
+  });
+  P.live.push({ g, end, stop });
+}
+
+// ---------- the kit: a drawn take each time, and a cymbal rubbed louder into the next downbeat ----------
+
+function muDrum(P, out, ev, v) {
+  if (ev.inst !== 'swell') { const [lvl, takes] = MU_KIT[ev.inst]; muOne(P, out, 'kit:' + ev.inst + ':' + Math.min(ev.take || 0, takes - 1), ev.t, 0, v * lvl); return; }
+  const c = P.E.ctx, t = ev.t, n = muNz(P, t, ev.d + 1.5), bp = c.createBiquadFilter(), g = c.createGain();
+  bp.type = 'bandpass'; bp.frequency.value = 7500; bp.Q.value = 0.5;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v * 0.18, t + ev.d); g.gain.setTargetAtTime(0, t + ev.d, 0.18);
+  n.connect(bp); bp.connect(g); g.connect(out);
+}
+const MU_KIND = { nylon: 'ks', harp: 'ks', bass: 'ks', marimba: 'mal', vibes: 'mal', glock: 'mal', celesta: 'mal', ping: 'mal', clar: 'reed', bcl: 'reed', flute: 'reed', bsn: 'reed', strings: 'pad', organ: 'pad' };
+
+// ---------- what each track plays in a bar ----------
+
+const muOpt = (v, s, p, b) => (typeof v === 'function' ? v(s, p, b) : v);
+function muIsTwirl(ns, i) {
+  const sh = (k) => ns[k] && ns[k].d <= 0.34;
+  if (sh(i)) return (sh(i - 1) && sh(i - 2)) || (sh(i + 1) && sh(i + 2)) || (sh(i - 1) && sh(i + 1));
+  return sh(i - 1) && sh(i - 2) && sh(i - 3);   // and the leap out of it
+}
+function muThird(sec, b, x, m, dir, scale) {
+  const ch = muChordAt(sec, b, x)[1], cs = dir < 0 ? [m - 3, m - 4] : [m + 3, m + 4];
+  return cs.find((q) => ch.pcs.includes(muPc(q))) ?? cs.find((q) => scale.includes(muPc(q))) ?? cs[0];
+}
+function muVel(base, x, m, rng) {
+  const beat = Math.abs(x - Math.round(x)) < 1e-6;
+  return clamp(base * (1 + (m - 72) * 0.006) * (beat ? (Math.round(x) === 0 ? 1.06 : 1.02) : 0.95) * (0.95 + rng() * 0.1), 0.05, 1);
+}
+
+const MU_GEN = {
+  // a written line: the tune, an answer, a counter-melody
+  line(P, tr, st, sec, b, t0, out, rng) {
+    const L = sec.lines[tr.line || 'lead'];
+    if (!L) return;
+    const bb = P.bb, b0 = b * bb, kind = MU_KIND[tr.inst];
+    for (let i = L.idx[b]; i < L.idx[b + 1]; i++) {
+      const n = L.notes[i], x = n.t - b0, nx = L.notes[i + 1];
+      if (tr.only === 'twirl' && !muIsTwirl(L.notes, i)) continue;
+      let m = n.m + 12 * (tr.oct || 0);
+      if (tr.harm) m = muThird(sec, b, x, n.m, tr.harm, P.S.scale) + 12 * (tr.oct || 0);
+      const even = n.d <= 0.26 && muIsTwirl(L.notes, i);   // a twirl is played even, swing or not
+      const t = P.at(t0, x, even) + (tr.late || 0.004) + (rng() - 0.5) * 0.008, tEnd = P.at(t0, x + n.d, even);
+      const leg = kind === 'reed' && !tr.only && nx && Math.abs(nx.t - (n.t + n.d)) < 1e-6 && (tr.art ?? 0.92) > 0.8 && n.d <= 0.5;
+      const d = leg ? tEnd - t : (tEnd - t) * (tr.only === 'twirl' ? 0.6 : tr.art ?? 0.92);
+      let v = muVel(tr.v ?? 0.7, x, n.m, rng);
+      if (n.d <= 0.26 && Math.abs(x - Math.round(x)) > 1e-6) v *= 0.88;
+      if (tr.roll && n.d >= tr.roll) {   // a long note on a marimba is rolled
+        const step = 1 / 13;
+        for (let k = 0, tt = t; tt < tEnd - 0.06; k++, tt += step) out.push({ t: tt, k: 'mal', inst: tr.inst, ch: tr.ch, m, v: v * (k ? (k % 2 ? 0.62 : 0.7) : 1), d: step * 2.5, dmp: 0.05 });
+        continue;
+      }
+      if (kind === 'pad') out.push({ t, k: 'pad', inst: tr.inst, ch: tr.ch, notes: [m], v, d });
+      else out.push({ t, k: kind, inst: tr.inst, ch: tr.ch, m, v, d, leg });
+    }
+  },
+  // chords in a rhythm: strums, chops, fingerpicking, arpeggios. B and b are the bass and its fifth.
+  comp(P, tr, st, sec, b, t0, out, rng) {
+    const pat = muPat(P.S, muOpt(tr.pat, sec.name, P.pass, b)), kind = MU_KIND[tr.inst];
+    for (const tok of pat) {
+      if (tok.w === 'r') continue;
+      const [x0, ch] = muChordAt(sec, b, tok.x), sk = b + ':' + x0;
+      const t = P.at(t0, tok.x) + (rng() - 0.5) * 0.008, d = P.at(t0, tok.x + tok.d) - t;
+      if (tok.w === 'B' || tok.w === 'b') {
+        const pc = tok.w === 'B' ? ch.bass : (ch.root + (ch.iv.find((q) => q >= 6 && q <= 8) ?? 7)) % 12;
+        const m = muLow(pc, st.lastB ?? (tr.blo + tr.bhi) / 2, tr.blo, tr.bhi);
+        st.lastB = m;
+        out.push({ t, k: kind, inst: tr.inst, ch: tr.ch, m, v: (tr.v ?? 0.6) * (tok.x === 0 ? 1.05 : 0.95) * (0.95 + rng() * 0.08), d: d * 1.6, dmp: tr.dmp });
+        continue;
+      }
+      if (st.sk !== sk) { st.sk = sk; st.vo = muVoice(tr.root === false ? ch.bare : ch.full, tr.n || 4, tr.lo, tr.hi, st.vo, tr.spread); }
+      const vo = st.vo;
+      if (/^\d$/.test(tok.w)) {
+        out.push({ t, k: kind, inst: tr.inst, ch: tr.ch, m: vo[Math.min(+tok.w, vo.length - 1)], v: (tr.v ?? 0.6) * (0.92 + rng() * 0.12), d: d * (tr.ring ?? 1.8), dmp: tr.dmp });
+        continue;
+      }
+      const up = tok.w === 'U' || tok.w === 'u', mute = tok.w === 'm';
+      const acc = tok.w === 'D' || tok.w === 'U' || tok.w === 'C' ? 1 : mute ? 0.78 : 0.82;
+      out.push({ t, k: 'strum', inst: tr.inst, ch: tr.ch, notes: up ? vo.slice(1).reverse() : vo, v: (tr.v ?? 0.6) * acc * (0.93 + rng() * 0.1),
+        d: mute ? Math.min(d, 0.11) : d * 0.98, spread: tok.w === 'C' ? (tr.roll ?? 0.004) : up ? 0.008 : 0.013, dmp: mute ? 0.018 : tr.dmp });
+    }
+  },
+  // one held chord for each chord change
+  pad(P, tr, st, sec, b, t0, out) {
+    for (const [x, ch, x2] of sec.chart[b]) {
+      st.vo = muVoice(tr.root === false ? ch.bare : ch.full, tr.n || 4, tr.lo, tr.hi, st.vo, tr.spread);
+      const t = P.at(t0, x);
+      out.push({ t, k: 'pad', inst: tr.inst, ch: tr.ch, notes: st.vo, v: tr.v ?? 0.6, d: P.at(t0, x2) - t });
+    }
+  },
+  // the bass: in two, walking, or a written figure (R root, 5, 3, 7, 8 an octave up, b the half step under the next root)
+  bass(P, tr, st, sec, b, t0, out, rng) {
+    const mode = muOpt(tr.mode, sec.name, P.pass, b), lo = tr.lo ?? 31, hi = tr.hi ?? 50, bb = P.bb, v0 = tr.v ?? 0.7;
+    const next = P.peekChord();
+    const near = (pc) => muLow(pc, st.last ?? 40, lo, hi);
+    const push = (x, m, dur, v) => { const t = P.at(t0, x) + (rng() - 0.5) * 0.006; st.last = m; out.push({ t, k: 'ks', inst: tr.inst, ch: tr.ch, m, v, d: (P.at(t0, x + dur) - t) * (tr.art ?? 0.9), dmp: 0.05 }); };
+    if (mode === 'two' || mode === 'walk') {
+      const segs = sec.chart[b];
+      for (let beat = 0; beat < bb; beat++) {
+        const seg = segs.find((s) => Math.abs(s[0] - beat) < 1e-6), [, ch] = muChordAt(sec, b, beat);
+        const nextCh = beat + 1 < bb ? segs.find((s) => Math.abs(s[0] - beat - 1) < 1e-6)?.[1] : next;
+        if (mode === 'two') {
+          if (seg) push(beat, near(ch.bass), Math.min(2, seg[2] - beat), v0 * (beat === 0 ? 1 : 0.92));
+          else if (beat % 2 === 0) push(beat, near((ch.root + 7) % 12), 1.5, v0 * 0.85);
+          if (beat === bb - 1 && next && rng() < 0.5) push(bb - 0.5, near(next.bass) - 1, 0.5, v0 * 0.7);   // a step up into the next bar
+          continue;
+        }
+        let m;
+        if (seg) m = near(ch.bass);
+        else if (nextCh) { const tg = near(nextCh.bass), r = rng(); m = r < 0.5 ? tg - 1 : r < 0.75 ? tg + 1 : tg + 7 <= hi ? tg + 7 : tg - 5; }
+        else { const cs = [ch.root + ch.iv[1], ch.root + ch.iv[2]].map((pc) => near(pc % 12)).filter((q) => q !== st.last); m = cs.length ? cs[Math.floor(rng() * cs.length)] : near(ch.root); }
+        push(beat, m, 1, v0 * (beat % 2 ? 0.85 : 1) * (0.94 + rng() * 0.1));
+      }
+      return;
+    }
+    for (const tok of muPat(P.S, mode)) {
+      if (tok.w === 'r') continue;
+      const [x0, ch] = muChordAt(sec, b, tok.x);
+      const root = Math.abs(tok.x - x0) < 1e-6 || st.root === undefined ? (st.root = near(ch.bass)) : st.root;
+      const iv = { R: 0, 3: ch.iv[1], 5: ch.iv.find((q) => q >= 6 && q <= 8) ?? 7, 7: ch.iv[3] ?? 12, 8: 12 }[tok.w];
+      let m = tok.w === 'b' ? (next ? near(next.bass) - 1 : root - 1) : root + iv;
+      if (m > hi + 2) m -= 12;
+      push(tok.x, m, tok.d, v0 * (tok.x === 0 ? 1 : 0.88) * (0.95 + rng() * 0.08));
+    }
+  },
+  // a counter-line: the third or seventh of each chord, whichever is nearest the last
+  guide(P, tr, st, sec, b, t0, out) {
+    for (const [x, ch, x2] of sec.chart[b]) {
+      const iv = ch.iv, want = [iv.find((q) => q === 3 || q === 4 || q === 5), iv.find((q) => q === 10 || q === 11 || q === 9), iv.find((q) => q >= 6 && q <= 8)].filter((q) => q !== undefined);
+      let best = null, bd = 1e9;
+      for (const q of want) for (let m = tr.lo + muPc(ch.root + q - tr.lo); m <= tr.hi; m += 12) { const dd = Math.abs(m - (st.last ?? (tr.lo + tr.hi) / 2)); if (dd < bd) { bd = dd; best = m; } }
+      if (best === null) continue;
+      st.last = best;
+      const t = P.at(t0, x) + 0.01, d = P.at(t0, x2) - t;
+      out.push({ t, k: MU_KIND[tr.inst], inst: tr.inst, ch: tr.ch, m: best, notes: [best], v: tr.v ?? 0.45, d: d * 0.97, leg: true });
+    }
+  },
+  // the kit, from a grid of sixteenths: - none, . ghost, o soft, x played, X hard
+  drums(P, tr, st, sec, b, t0, out, rng) {
+    const pats = muOpt(tr.pat, sec.name, P.pass, b) || {}, steps = Math.round(P.bb * 4);
+    for (const inst in pats) {
+      const s = pats[inst], off = (b % Math.max(1, s.length / steps)) * steps;
+      for (let k = 0; k < steps; k++) {
+        const c = s[off + k], v = { '.': 0.28, o: 0.5, x: 0.75, X: 1 }[c];
+        if (!v) continue;
+        const x = k / 4, t = P.at(t0, x) + (rng() - 0.5) * 0.008;
+        out.push({ t, k: 'drum', inst, ch: tr.ch, v: v * (tr.v ?? 1) * (0.9 + rng() * 0.15), d: inst === 'swell' ? P.at(t0, P.bb) - t : 0.2, take: rng() < 0.5 ? 0 : 1 });
+      }
+    }
+  },
+  // glints high up, now and then, from the chord: light through the gaps
+  pings(P, tr, st, sec, b, t0, out, rng) {
+    for (let k = 0; k < P.bb * 2; k++) {
+      if (rng() > (tr.p ?? 0.12)) continue;
+      const x = k / 2, ch = muChordAt(sec, b, x)[1], pc = ch.pcs[Math.floor(rng() * ch.pcs.length)];
+      const m = tr.lo + muPc(pc - tr.lo) + 12 * Math.floor(rng() * 2);
+      if (m > tr.hi) continue;
+      out.push({ t: P.at(t0, x), k: 'mal', inst: 'ping', ch: tr.ch, m, v: (tr.v ?? 0.4) * (0.6 + rng() * 0.4), d: 0.3 });
+    }
+  },
+};
+
+// ---------- the score: the tune (in G), and the nine ways it's played ----------
+
+const MT = {
+  // the tune: a twirl round a note, a leap of a sixth, and down again
+  a1: 'G4:s A4:s F#4:s G4:s E5:q. D5:e B4:e G4:e | D5:h C5:e B4:e G#4:q | A4:s B4:s G#4:s A4:s F#5:q. E5:e C5:e A4:e | C5:h B4:e A4:e F#4:q |',
+  a2: 'B4:s C5:s A#4:s B4:s G5:q. F#5:e D5:e B4:e | E5:q. D5:e Eb5:q. D5:e | D5:q. B4:e G#4:q B4:q | C5:q A4:e B4:e C5:e B4:e A4:q |',
+  a4: 'E5:s F#5:s D#5:s E5:s C6:q. B5:e G5:e E5:e | F#5:q. E5:e D5:q B4:q | E5:q. C5:e D5:e E5:e F#5:e A5:e | G5:h. r:q |',
+  b: 'r:q E5:e G5:e B5:h | A5:q. F#5:e D5:h | r:q C5:e E5:e G5:h | F#5:q. D5:e B4:h | r:q A4:e C5:e E5:h | D#5:q. F#5:e A5:h | G5:q. F#5:e E5:q C#5:q | C5:q E5:q D5:e C5:e A4:e F#4:e |',
+  c1: 'G | E7/G# | Am6 | D7 |',
+  c2: 'Gmaj7 | C Cm6 | G/D E7 | Am7 D7 |',
+  c4: 'Cmaj7 | Bm7 E7 | Am7 D7 | G6 |',
+  cb: 'Cmaj7 | Bm7 | Am7 | Gmaj7 | F#m7b5 | B7 | Em7 A7 | Am7 D7 |',
+  ans: 'r:w | r:e B4:e G#4:e E4:e r:h | r:w | r:e A4:e F#4:e D4:e r:h | r:w | r:w | r:w | r:h r:e G4:e A4:e B4:e |',
+  // how every level ends: the twirl at home in G, the leap, and down onto D, under the nest's own G and D
+  home: 'G4:s A4:s F#4:s G4:s E5:q D5:h | r:w |',
+};
+const MU_FIN3 = (s, p, b) => ['R:h R:h', 'R:w', 'r:w'][b];
+// Where things sit: each bus is [pan, how much goes to the room]; notes go straight into it. A channel is a level and a bus.
+const MU_BUS = { L: [-0.24, 0.24], C: [0, 0.07], R: [0.27, 0.2], W: [0.05, 0.42], V: [0.2, 0.32], P: [0.35, 0.3] };
+const MU_MX = {
+  bass: { g: 0.62, bus: 'C' }, dr: { g: 0.36, bus: 'C' },
+  gtr: { g: 0.36, bus: 'R' }, hrp: { g: 0.42, bus: 'R' }, clc: { g: 0.5, bus: 'R' }, glk: { g: 0.22, bus: 'R' },
+  cl: { g: 0.58, bus: 'L' }, bcl: { g: 0.62, bus: 'L' }, bsn: { g: 0.62, bus: 'L' }, fl: { g: 0.55, bus: 'L' }, mar: { g: 0.55, bus: 'L' }, cel: { g: 0.55, bus: 'L' },
+  vib: { g: 0.42, bus: 'V' }, str: { g: 0.55, bus: 'W' }, strl: { g: 0.6, bus: 'W' }, org: { g: 0.5, bus: 'W' }, png: { g: 0.3, bus: 'P' },
+};
+function muMix(names, over = {}) { const o = {}; for (const n of names.split(' ')) o[n] = Object.assign({}, MU_MX[n], over[n]); return o; }
+
+const MU_SCORE = {
+  // the opening, while the names stand: a guitar picked slowly, a celesta, a clarinet down low, a harmonium under
+  opening: {
+    bpm: 72, key: 'G', intro: ['in'], loop: ['A', 'A2', 'B'], passes: 2,
+    sec: {
+      in: { ch: 'Gmaj9 | D9sus4 D7 |' },
+      A: { ch: MT.c1 + MT.c2, lead: MT.a1 + MT.a2 },
+      A2: { ch: MT.c1 + MT.c4, lead: MT.a1 + MT.a4 },
+      B: { ch: MT.cb, lead: MT.b },
+    },
+    mix: muMix('gtr cel cl org', { gtr: { g: 0.5 }, cl: { g: 0.6 } }),
+    tracks: [
+      { gen: 'comp', inst: 'nylon', ch: 'gtr', pat: 'B:e 0:e 1:e 2:e b:e 1:e 0:e 1:e', n: 3, lo: 55, hi: 74, blo: 40, bhi: 52, v: 0.5, ring: 2.5 },
+      { gen: 'line', inst: 'celesta', ch: 'cel', v: 0.62, on: (s, p) => s !== 'in' && (s === 'B') === (p % 2 === 1) },
+      { gen: 'line', inst: 'clar', ch: 'cl', oct: -1, v: 0.6, on: (s, p) => s !== 'in' && (s === 'B') === (p % 2 === 0) },
+      { gen: 'pad', inst: 'organ', ch: 'org', n: 4, lo: 52, hi: 71, root: false, v: 0.6, on: (s, p) => s === 'B' || p % 2 === 1 },
+    ],
+  },
+  // the nests: strolling, in two, a marimba on the tune
+  nests: {
+    bpm: 100, swing: 0.6, key: 'G', intro: ['in'], loop: ['A', 'A2', 'B'], passes: 2,
+    sec: {
+      in: { ch: 'D9sus4 D7 |', lead: 'r:h r:e D4:e E4:e F#4:e |' },
+      A: { ch: MT.c1 + MT.c2, lead: MT.a1 + MT.a2 },
+      A2: { ch: MT.c1 + MT.c4, lead: MT.a1 + MT.a4 },
+      B: { ch: 'C6 | Cm6 | Bm7 | E7 | Am7 | D7 | Gmaj7 E7 | Am7 D7 |', lead: 'E5:q. G5:e A5:q G5:q | Eb5:q. G5:e A5:h | F#5:q. D5:e B4:q D5:q | E5:q. D5:e B4:q G#4:q | A4:q. C5:e E5:q G5:q | F#5:q. E5:e D5:q C5:q | B4:q D5:q G#4:q B4:q | C5:q E5:q D5:e C5:e A4:e F#4:e |' },
+      tag: { ch: 'G69 | G69 |', lead: MT.home },
+    },
+    mix: muMix('bass gtr mar cl vib glk dr'),
+    tracks: [
+      { gen: 'bass', inst: 'bass', ch: 'bass', mode: (s, p, b) => (s === 'tag' ? (b ? 'r:w' : 'R:w') : 'two'), v: 0.72 },
+      { gen: 'comp', inst: 'nylon', ch: 'gtr', pat: (s, p, b) => (s === 'in' || s === 'tag' ? (b ? 'r:w' : 'D:w') : 'r:q m:q r:q m:q'), n: 4, lo: 52, hi: 72, spread: true, v: 0.55 },
+      { gen: 'line', inst: 'marimba', ch: 'mar', v: 0.72, roll: 1.4, on: (s, p) => s === 'in' || s === 'tag' || (s !== 'B') === (p % 2 === 0) },
+      { gen: 'line', inst: 'clar', ch: 'cl', v: 0.6, on: (s, p) => (s === 'A' || s === 'A2' || s === 'B') && (s === 'B') === (p % 2 === 0) },
+      { gen: 'comp', inst: 'vibes', ch: 'vib', pat: (s, p, b) => (s === 'tag' ? (b ? 'r:w' : 'C:w') : 'C:h C:h'), n: 4, lo: 55, hi: 76, root: false, v: 0.5, roll: 0.012, on: (s) => s === 'B' || s === 'tag' },
+      { gen: 'line', inst: 'glock', ch: 'glk', oct: 1, only: 'twirl', v: 0.55, on: (s, p) => s === 'tag' || ((s === 'A' || s === 'A2') && p % 2 === 1) },
+      { gen: 'drums', ch: 'dr', pat: (s) => (s === 'in' ? { swell: 'x---------------' } : s === 'tag' ? null : { swish: '----x-------x---', tap: '------.---.---o-' }) },
+    ],
+  },
+  // 1, the table by day: the tune as it is, the whole band
+  1: {
+    bpm: 116, swing: 0.55, key: 'G', intro: ['in'], loop: ['A', 'A2', 'B', 'A3'], passes: 2,
+    sec: {
+      in: { ch: 'G6 | D7sus4 D7 |' },
+      A: { ch: MT.c1 + MT.c2, lead: MT.a1 + MT.a2, ans: 'r:w | r:e B4:e G#4:e E4:e r:h | r:w | r:e A4:e F#4:e D4:e r:h | r:w | r:h r:e G4:e Eb4:e C4:e | r:w | r:w |' },
+      A2: { ch: MT.c1 + MT.c4, lead: MT.a1 + MT.a4, ans: MT.ans },
+      B: { ch: MT.cb, lead: MT.b },
+      A3: { ch: MT.c1 + MT.c4, lead: MT.a1 + MT.a4, ans: MT.ans },
+      fin: { ch: 'C D9sus4 | G69 | G69 |', lead: 'E5:q. C5:e D5:q. A4:e | ' + MT.home },
+    },
+    mix: muMix('bass gtr cl clc mar vib glk str dr'),
+    tracks: [
+      { gen: 'bass', inst: 'bass', ch: 'bass', mode: (s, p, b) => (s === 'fin' ? MU_FIN3(s, p, b) : s === 'in' || (s === 'A' && p % 2 === 0) ? 'two' : 'walk'), v: 0.72 },
+      { gen: 'comp', inst: 'nylon', ch: 'gtr', pat: (s, p, b) => (s === 'fin' ? ['D:h D:h', 'D:w', 'r:w'][b] : 'd:q m:q d:e u:e m:q'), n: 4, lo: 52, hi: 72, spread: true, v: 0.5 },
+      { gen: 'line', inst: 'clar', ch: 'cl', v: 0.62, on: (s, p) => s === 'fin' || (s === 'B' ? p % 2 === 1 : s !== 'in' && p % 2 === 0) },
+      { gen: 'line', inst: 'marimba', ch: 'mar', v: 0.72, roll: 1.4, on: (s, p) => s[0] === 'A' && p % 2 === 1 },
+      { gen: 'line', inst: 'marimba', ch: 'mar', line: 'ans', v: 0.42, on: (s, p) => s[0] === 'A' && p % 2 === 0 },
+      { gen: 'line', inst: 'vibes', ch: 'vib', v: 0.62, on: (s, p) => s === 'B' && p % 2 === 0 },
+      { gen: 'line', inst: 'glock', ch: 'glk', oct: 1, only: 'twirl', v: 0.55, on: (s) => s === 'A2' || s === 'A3' || s === 'fin' },
+      { gen: 'guide', inst: 'clar', ch: 'clc', lo: 55, hi: 69, v: 0.42, on: (s, p) => s[0] === 'A' && p % 2 === 1 },
+      { gen: 'pad', inst: 'strings', ch: 'str', n: 4, lo: 55, hi: 76, root: false, v: 0.6, on: (s, p) => s === 'B' || s === 'fin' || (s === 'A3' && p % 2 === 1) },
+      { gen: 'drums', ch: 'dr', pat: (s, p, b) => (s === 'fin' ? (b ? null : { swish: '----x-------x---' }) : s === 'in' ? { tap: '--.---.---.---o-', kick: 'o-------o-------' }
+        : Object.assign({ swish: '----x-------x---', tap: '--.---.---.---o-', kick: 'o-------o-------' }, s === 'B' && p % 2 ? { shaker: '.-o-.-o-.-o-.-o-' } : null)) },
+    ],
+  },
+  // 2, under the ceiling: the tune in A minor, low and on tiptoe; glints of light, and their echoes
+  2: {
+    bpm: 104, key: 'Am', intro: ['in'], loop: ['A', 'A2', 'B'], passes: 2, delay: [0.75, 0.36, 2400, { P: 0.6, R: 0.15, L: 0.08, C: 0.1 }], trem: [4.6, 0.25],
+    sec: {
+      in: { ch: 'Am | E7 |' },
+      A: { ch: 'Am | E7/G# | Am | Dm6 E7 | Fmaj7 | Dm7 | Bm7b5 E7 | Am E7 |',
+        lead: 'A4:s B4:s G#4:s A4:s F5:q. E5:e C5:e A4:e | D5:h C5:e B4:e G#4:q | C5:s D5:s B4:s C5:s A5:q. G#5:e E5:e C5:e | D5:q. F5:e E5:q. D5:e | A4:s B4:s G#4:s A4:s F5:q. E5:e C5:e A4:e | D5:h F5:e E5:e D5:q | B4:q. D5:e G#4:q B4:q | C5:q A4:q B4:q G#4:q |' },
+      A2: { ch: 'Am | E7/G# | Am | Dm6 E7 | Fmaj7 | Dm7 G7 | Cmaj7 Am | Bm7b5 E7 |',
+        lead: 'A4:s B4:s G#4:s A4:s F5:q. E5:e C5:e A4:e | D5:h C5:e B4:e G#4:q | C5:s D5:s B4:s C5:s A5:q. G#5:e E5:e C5:e | D5:q. F5:e E5:q. D5:e | C5:s D5:s B4:s C5:s A5:q. G5:e F5:e C5:e | F5:q. E5:e D5:q. B4:e | E5:q. C5:e A4:q. C5:e | B4:h G#4:h |' },
+      B: { ch: 'Fmaj7 | Em7 | Dm7 | Cmaj7 | Bm7b5 | E7 | Am Am/G | F7 E7 |', lead: 'A3:h. C4:q | B3:h. G3:q | F3:h. A3:q | G3:h. E3:q | D3:q F3:q A3:q F3:q | B3:h G#3:h | A3:q E3:q C4:q A3:q | F3:q. Eb3:e E3:h |' },
+      fin: { ch: 'Am7 D9sus4 | G69 | G69 |', lead: 'C5:q. A4:e D5:q. A4:e | ' + MT.home },
+    },
+    mix: muMix('bass mar bcl vib png dr', { mar: { bus: 'R' } }),
+    tracks: [
+      { gen: 'bass', inst: 'bass', ch: 'bass', mode: (s, p, b) => (s === 'fin' ? MU_FIN3(s, p, b) : s === 'B' ? 'R:q. r:e 5:q r:q' : 'R:e r:e 5:e r:e R:e r:e b:e r:e'), art: 0.55, v: 0.75 },
+      { gen: 'comp', inst: 'marimba', ch: 'mar', pat: 'B:e 1:e 0:e 2:e b:e 1:e 0:e 2:e', n: 3, lo: 57, hi: 71, blo: 45, bhi: 57, v: 0.42, on: (s) => s !== 'B' && s !== 'fin' },
+      { gen: 'comp', inst: 'marimba', ch: 'mar', pat: '0:e 2:e 1:e 2:e 0:e 2:e 1:e 2:e', n: 3, lo: 69, hi: 83, v: 0.3, on: (s) => s === 'B' },
+      { gen: 'line', inst: 'bcl', ch: 'bcl', oct: -1, art: 0.5, v: 0.7, on: (s, p) => s[0] === 'A' && p % 2 === 0 },
+      { gen: 'line', inst: 'bcl', ch: 'bcl', v: 0.68, on: (s) => s === 'B' },
+      { gen: 'guide', inst: 'bcl', ch: 'bcl', lo: 50, hi: 62, v: 0.42, on: (s, p) => s[0] === 'A' && p % 2 === 1 },
+      { gen: 'line', inst: 'vibes', ch: 'vib', v: 0.62, art: 0.7, on: (s, p) => (s[0] === 'A' && p % 2 === 1) || s === 'fin' },
+      { gen: 'comp', inst: 'vibes', ch: 'vib', pat: (s, p, b) => (s === 'fin' ? ['C:h C:h', 'C:w', 'r:w'][b] : 'C:w'), n: 4, lo: 57, hi: 76, root: false, v: 0.4, roll: 0.02, on: (s) => s === 'B' || s === 'fin' },
+      { gen: 'pings', ch: 'png', lo: 84, hi: 98, p: 0.1, v: 0.45, on: (s) => s !== 'fin' && s !== 'in' },
+      { gen: 'drums', ch: 'dr', pat: (s) => (s === 'fin' ? null : s === 'B' ? { block: '------o-------o-', tom: 'o' + '-'.repeat(31) } : { block: '----o-------o-o-', tom: 'x' + '-'.repeat(31) }) },
+    ],
+  },
+  // 3, high up on the bundles: a waltz, harp and celesta, a flute in the air
+  3: {
+    bpm: 168, meter: 3, key: 'D', intro: ['in'], loop: ['A', 'A2', 'B'], passes: 2,
+    sec: {
+      in: { ch: 'D | D | Em7 | A7 |' },
+      A: { ch: 'D | D | B7/D# | B7/D# | Em6 | Em6 | A7 | A7 | Dmaj7 | Dmaj7 | G | Gm6 | D/A | B7 | Em7 | A7 |',
+        lead: 'D5:e E5:e C#5:e D5:e B5:q | A5:q. F#5:e D5:q | A5:h G5:q | F#5:q D#5:h | E5:e F#5:e D#5:e E5:e C#6:q | B5:q. G5:e E5:q | G5:h F#5:q | E5:q C#5:h | F#5:e G5:e E#5:e F#5:e D6:q | C#6:q. A5:e F#5:q | B5:h A5:q | Bb5:h A5:q | A5:h F#5:q | D#5:h F#5:q | G5:q E5:q F#5:q | G5:q F#5:q E5:q |' },
+      A2: { ch: 'D | D | B7/D# | B7/D# | Em6 | Em6 | A7 | A7 | Gmaj7 | Gmaj7 | F#m7 | B7 | Em7 | A7 | D6 | D6 |',
+        lead: 'D5:e E5:e C#5:e D5:e B5:q | A5:q. F#5:e D5:q | A5:h G5:q | F#5:q D#5:h | E5:e F#5:e D#5:e E5:e C#6:q | B5:q. G5:e E5:q | G5:h F#5:q | E5:q C#5:h | B5:e C#6:e A#5:e B5:e G6:q | F#6:q. D6:e B5:q | C#6:h B5:q | A5:q F#5:h | B5:h G5:q | A5:e B5:e C#6:q E6:q | D6:h. | r:h. |' },
+      B: { ch: 'G | G | Em | Em | C | C | D | D | Bm | Bm | E7 | E7 | A | A | A7 | A7 |',
+        lead: 'B5:h. | A5:q B5:q D6:q | G5:h. | F#5:q G5:q A5:q | E5:h. | D5:q E5:q G5:q | F#5:h. | E5:q F#5:q A5:q | D6:h. | C#6:q B5:q A5:q | G#5:h B5:q | E6:h. | C#6:h. | B5:q A5:q G5:q | E5:h. | C#5:q E5:q G5:q |' },
+      fin: { ch: 'D | D7 | G69 | G69 | G69 |', lead: 'A5:h. | C6:h A5:q | G5:e A5:e F#5:e G5:e E6:q | D6:h. | r:h. |' },
+    },
+    mix: muMix('hrp bass cel fl glk dr', { bass: { g: 0.5 } }),
+    tracks: [
+      { gen: 'comp', inst: 'harp', ch: 'hrp', pat: (s, p, b) => (s === 'fin' && b >= 2 ? (b === 2 ? 'C:h.' : 'r:h.') : 'B:q d:q d:q'), n: 3, lo: 62, hi: 81, blo: 43, bhi: 57, v: 0.5, roll: 0.03 },
+      { gen: 'bass', inst: 'bass', ch: 'bass', mode: (s, p, b) => (s === 'fin' && b > 2 ? 'r:h.' : 'R:q r:q r:q'), v: 0.55 },
+      { gen: 'line', inst: 'celesta', ch: 'cel', v: 0.62, on: (s, p) => (s === 'A' || s === 'A2') && p % 2 === 0 },
+      { gen: 'line', inst: 'flute', ch: 'fl', v: 0.6, on: (s, p) => s === 'B' || s === 'fin' || ((s === 'A' || s === 'A2') && p % 2 === 1) },
+      { gen: 'line', inst: 'glock', ch: 'glk', only: 'twirl', v: 0.5, on: (s, p) => (s === 'A' || s === 'A2') && p % 2 === 1 },
+      { gen: 'line', inst: 'celesta', ch: 'cel', oct: -1, v: 0.42, on: (s, p) => s === 'B' && p % 2 === 1 },
+      { gen: 'drums', ch: 'dr', pat: (s) => (s === 'fin' ? { tri: '-'.repeat(24) + 'x' + '-'.repeat(35) } : { tri: 'x' + '-'.repeat(47), swish: '----o---o---' }) },
+    ],
+  },
+  // 4, the fortress at dusk: a march in E minor, a bassoon; when the Knot wakes, the tune ties itself in a knot
+  4: {
+    bpm: 92, key: 'Em', intro: ['in'], loop: ['A', 'A2', 'B'], passes: 2,
+    watch: () => { const k = typeof L4 !== 'undefined' && L4.knot; return k && k.state !== 'sleep' && k.state !== 'dead' && k.state !== 'gone' ? 'knot' : null; },
+    sec: {
+      in: { ch: 'Em | B7sus4 B7 |' },
+      A: { ch: 'Em | B7/D# | Em | Am6 B7 | Cmaj7 | Am7 | F#m7b5 B7 | Em |',
+        lead: 'E4:s F#4:s D#4:s E4:s C5:q. B4:e G4:e E4:e | A4:h G4:e F#4:e D#4:q | G4:s A4:s F#4:s G4:s E5:q. D#5:e B4:e G4:e | C5:q. A4:e B4:q. F#4:e | E4:s F#4:s D#4:s E4:s C5:q. B4:e G4:e E4:e | A4:h C5:e B4:e A4:q | A4:q. C5:e B4:q. D#5:e | E5:h. r:q |' },
+      A2: { ch: 'Em | B7/D# | Em | Am6 B7 | C | D | B7sus4 B7 | Em |',
+        lead: 'E4:s F#4:s D#4:s E4:s C5:q. B4:e G4:e E4:e | A4:h G4:e F#4:e D#4:q | G4:s A4:s F#4:s G4:s E5:q. D#5:e B4:e G4:e | C5:q. A4:e B4:q. F#4:e | G4:s A4:s F#4:s G4:s E5:q. D5:e C5:e G4:e | A4:s B4:s G#4:s A4:s F#5:q. E5:e D5:e A4:e | E5:q. B4:e D#5:q. B4:e | E5:h. r:q |' },
+      B: { ch: 'Cmaj7 | G/B | Am7 | Em | Cmaj7 | G/B | Am7 | B7 |', lead: 'E5:h. D5:q | D5:h B4:h | C5:h. B4:q | B4:h G4:h | E5:h. F#5:q | G5:h D5:h | C5:q E5:q A5:q G5:q | F#5:h D#5:h |' },
+      knot: { ch: 'Em/B | C/B | Am/B | B7 | Em/B | C/B | F/B | B7 |',
+        lead: 'E4:e F4:e E4:e D#4:e E4:q G4:q | F#4:e G4:e F#4:e F4:e E4:h | C5:e D5:e C5:e B4:e A4:q C5:q | D#5:e E5:e D#5:e D5:e C5:e B4:e A4:e F#4:e | E4:e F4:e E4:e D#4:e E4:q B4:q | C5:e D5:e C5:e B4:e A4:q E5:q | F5:e E5:e D5:e C5:e B4:h | A4:e B4:e C5:e D#5:e F#5:q B4:q |' },
+      fin: { ch: 'C D9sus4 | G69 | G69 |', lead: 'E5:q. C5:e D5:q. A4:e | ' + MT.home },
+    },
+    mix: muMix('bass mar bsn cl str glk dr', { mar: { g: 0.45, bus: 'R' }, str: { g: 0.6 } }),
+    tracks: [
+      { gen: 'bass', inst: 'bass', ch: 'bass', mode: (s, p, b) => (s === 'fin' ? MU_FIN3(s, p, b) : s === 'knot' ? 'R:e R:e R:e R:e R:e R:e R:e R:e' : s === 'B' ? 'R:h 5:h' : 'R:q. R:e 5:q R:q'), v: 0.75, art: 0.8 },
+      { gen: 'comp', inst: 'marimba', ch: 'mar', pat: '0:e 1:e 2:e 1:e 0:e 1:e 2:e 1:e', n: 3, lo: 52, hi: 67, v: 0.36, on: (s) => s === 'in' || s === 'A' || s === 'A2' || s === 'knot' },
+      { gen: 'line', inst: 'bsn', ch: 'bsn', oct: -1, v: 0.7, on: (s, p) => ((s === 'A' || s === 'A2') && p % 2 === 0) || s === 'knot' },
+      { gen: 'line', inst: 'clar', ch: 'cl', v: 0.62, on: (s, p) => s === 'B' || s === 'fin' || ((s === 'A' || s === 'A2') && p % 2 === 1) },
+      { gen: 'guide', inst: 'bsn', ch: 'bsn', lo: 43, hi: 57, v: 0.45, on: (s) => s === 'B' },
+      { gen: 'pad', inst: 'strings', ch: 'str', n: 4, lo: 52, hi: 72, root: false, v: 0.55, on: (s, p) => s === 'B' || s === 'knot' || s === 'fin' || (s === 'A2' && p % 2 === 1) },
+      { gen: 'line', inst: 'glock', ch: 'glk', oct: 1, only: 'twirl', v: 0.5, on: (s, p) => (s === 'A2' && p % 2 === 1) || s === 'fin' },
+      { gen: 'drums', ch: 'dr', pat: (s, p, b) => (s === 'fin' ? (b ? null : { tom: 'x-------o-------' }) : s === 'knot' ? { tom: 'x---o---x---o-o-', tap: 'o-.-o-.-o-.-o.o.' }
+        : s === 'B' ? { swish: '----o-------o---' } : { tom: 'x-------o-------', tap: 'o-.-.-.-o-.-.o.o' }) },
+    ],
+  },
+  // 5, night among the racks: the tune in six-eight, swinging slowly, on vibraphone; a lullaby on the clarinet
+  5: {
+    bpm: 93, meter: 3, key: 'Eb', intro: ['in'], loop: ['A', 'B', 'A2'], passes: 2, trem: [4.2, 0.4],
+    sec: {
+      in: { ch: 'Ebmaj7 | Ebmaj7 |' },
+      A: { ch: 'Eb | Eb | C7/E | C7/E | Fm6 | Fm6 | Bb7 | Bb7 | Ebmaj7 | Ebmaj7 | Ab | Abm6 | Eb/Bb | C7 | Fm7 | Bb7 |',
+        lead: 'Eb4:e F4:s D4:s Eb4:e C5:q. | Bb4:q G4:e Eb4:q. | Bb4:h. | Ab4:e G4:e E4:e r:q. | F4:e G4:s E4:s F4:e D5:q. | C5:q Ab4:e F4:q. | Ab4:h. | G4:e F4:e D4:e r:q. | G4:e Ab4:s F#4:s G4:e Eb5:q. | D5:q Bb4:e G4:q. | C5:q. Bb4:q. | Cb5:q. Bb4:q. | Bb4:q. G4:q. | E4:q. G4:q. | Ab4:q F4:e G4:q. | Ab4:e G4:e F4:e D4:q. |' },
+      B: { ch: 'Cm | Ab | Fm7 | G7 | Cm | Ab | Fm7 | Bb7 |',
+        lead: 'G4:q. Ab4:e G4:e F4:e | Eb4:q. C4:q. | F4:q. G4:e F4:e Eb4:e | D4:q. B3:q. | Eb4:q. F4:e Eb4:e D4:e | C4:q. Eb4:q. | F4:q. G4:e Ab4:e C5:e | Bb4:q. D4:q. |' },
+      A2: { ch: 'Eb | Eb | Abmaj7 | Abmaj7 | Gm7 C7 | Fm7 Bb7 | Eb | Eb |',
+        lead: 'Eb4:e F4:s D4:s Eb4:e C5:q. | Bb4:q G4:e Eb4:q. | C5:e D5:s B4:s C5:e Ab5:q. | G5:q Eb5:e C5:q. | D5:q. C5:e Bb4:e G4:e | C5:q. Ab4:e Bb4:e D5:e | Eb5:h. | r:h. |' },
+      fin: { ch: 'Ebmaj7 D7sus4 | G69 | G69 |', lead: 'G4:q. A4:q. | G4:e A4:s F#4:s G4:e E5:q. | D5:h. |' },
+    },
+    mix: muMix('bass gtr vib cl str cel dr', { bass: { g: 0.5 }, str: { g: 0.45 } }),
+    tracks: [
+      { gen: 'bass', inst: 'bass', ch: 'bass', mode: (s, p, b) => (s === 'fin' ? ['R:q. R:q.', 'R:h.', 'r:h.'][b] : 'R:q. 5:q.'), v: 0.6, art: 0.95 },
+      { gen: 'comp', inst: 'nylon', ch: 'gtr', pat: (s, p, b) => (s === 'fin' && b === 2 ? 'r:h.' : '0:e 1:e 2:e 1:e 0:e 1:e'), n: 3, lo: 55, hi: 72, v: 0.42, ring: 2.2 },
+      { gen: 'line', inst: 'vibes', ch: 'vib', v: 0.62, art: 0.9, on: (s) => s === 'A' || s === 'A2' || s === 'fin' },
+      { gen: 'line', inst: 'clar', ch: 'cl', v: 0.6, on: (s) => s === 'B' },
+      { gen: 'guide', inst: 'clar', ch: 'cl', lo: 55, hi: 67, v: 0.38, on: (s, p) => (s === 'A' || s === 'A2') && p % 2 === 1 },
+      { gen: 'pad', inst: 'strings', ch: 'str', n: 4, lo: 53, hi: 72, root: false, v: 0.5, on: (s, p) => s === 'B' || s === 'fin' || (p % 2 === 1 && s !== 'in') },
+      { gen: 'line', inst: 'celesta', ch: 'cel', oct: 1, only: 'twirl', v: 0.5, on: (s) => s === 'A2' },
+      { gen: 'drums', ch: 'dr', pat: (s) => (s === 'fin' ? null : { sweep: 'o-----o-----', tap: '----.-----.-' }) },
+    ],
+  },
+  // 6, the draft at golden hour: in C with its fourth raised, the tune slowed to twice as long, harp running under
+  6: {
+    bpm: 96, key: 'C', intro: ['in'], loop: ['A', 'B'], passes: 2,
+    sec: {
+      in: { ch: 'Cmaj7#11 | Cmaj7#11 |' },
+      A: { ch: 'Cmaj7 | Cmaj7 | A7/C# | A7/C# | Dm6 | Dm6 | G7 | G7 | Cmaj7#11 | Cmaj7#11 | Fmaj7 | Fm6 | C/G | A7 | Dm7 | G7 |',
+        lead: 'C5:t D5:t B4:t C5:q A5:h | G5:q. E5:e C5:h | G5:h F5:q E5:q | C#5:h. r:q | D5:t E5:t C#5:t D5:q B5:h | A5:q. F5:e D5:h | F5:h E5:q D5:q | B4:h. r:q | E5:t F#5:t D#5:t E5:q C6:h | B5:q. G5:e E5:h | A5:h. G5:q | Ab5:h. G5:q | G5:h. E5:q | C#5:h E5:h | F5:h D5:q E5:q | F5:q E5:q D5:h |' },
+      B: { ch: 'D/C | Cmaj7 | D/C | Cmaj7 | Am7 | Em7 | Fmaj7 | G7sus4 G7 |', lead: 'A5:h. F#5:q | G5:h. E5:q | D6:h. A5:q | B5:w | C6:h. A5:q | B5:h. G5:q | A5:h. C6:q | C6:h B5:h |' },
+      fin: { ch: 'Cmaj7 D/C | G/B | G69 |', lead: 'E5:q. G5:e F#5:q. A5:e | G5:s A5:s F#5:s G5:s E6:q D6:h | r:w |' },
+    },
+    mix: muMix('hrp bass fl cl str dr', { bass: { g: 0.45 }, hrp: { g: 0.46 }, str: { g: 0.5 } }),
+    tracks: [
+      { gen: 'comp', inst: 'harp', ch: 'hrp', pat: (s, p, b) => (s === 'fin' ? ['B:e 0:e 1:e 2:e 3:e 2:e 1:e 0:e', 'C:w', 'r:w'][b] : 'B:e 0:e 1:e 2:e 3:e 2:e 1:e 0:e'), n: 4, lo: 55, hi: 79, spread: true, blo: 36, bhi: 50, v: 0.45, ring: 2.4, roll: 0.035 },
+      { gen: 'bass', inst: 'bass', ch: 'bass', mode: (s, p, b) => (s === 'fin' ? MU_FIN3(s, p, b) : 'R:h. r:q'), v: 0.5 },
+      { gen: 'line', inst: 'flute', ch: 'fl', v: 0.62, on: (s, p) => s === 'fin' || (s !== 'in' && (s === 'A') === (p % 2 === 0)) },
+      { gen: 'line', inst: 'clar', ch: 'cl', oct: -1, v: 0.6, on: (s, p) => s !== 'in' && s !== 'fin' && (s === 'A') === (p % 2 === 1) },
+      { gen: 'guide', inst: 'flute', ch: 'fl', lo: 74, hi: 86, v: 0.34, on: (s, p) => s === 'A' && p % 2 === 1 },
+      { gen: 'pad', inst: 'strings', ch: 'str', n: 4, lo: 52, hi: 74, root: false, v: 0.5, on: (s) => s !== 'in' },
+      { gen: 'drums', ch: 'dr', v: 0.8, pat: (s, p, b) => (s === 'fin' ? null : s === 'in' ? (b ? { swell: 'x---------------' } : null)
+        : Object.assign({ shaker: '.-o-.-o-.-o-.-o-' }, s === 'B' && b === 7 ? { swell: 'x---------------' } : null)) },
+    ],
+  },
+  // 7, the climb at dawn: in F, up a step to G for the second half, and fuller every time round
+  7: {
+    bpm: 126, key: 'F', intro: ['in'], loop: ['A', 'A2', 'B'], passes: 4,
+    sec: {
+      in: { ch: 'F | C7sus4 C7 |' },
+      A: { ch: 'F | D7/F# | Gm6 | C7 | Fmaj7 | Bb Bbm6 | F/C D7 | Gm7 D7 |',
+        lead: 'F4:s G4:s E4:s F4:s D5:q. C5:e A4:e F4:e | C5:h Bb4:e A4:e F#4:q | G4:s A4:s F#4:s G4:s E5:q. D5:e Bb4:e G4:e | Bb4:h A4:e G4:e E4:q | A4:s Bb4:s G#4:s A4:s F5:q. E5:e C5:e A4:e | D5:q. C5:e Db5:q. C5:e | C5:q. A4:e F#4:q A4:q | Bb4:q G4:e A4:e C5:e A4:e F#4:q |' },
+      A2: { ch: MT.c1 + MT.c4, lead: MT.a1 + MT.a4 },
+      B: { ch: 'Em7 | F#m7b5 B7 | Em7 | A7 | Dm7 | G7 | C7sus4 | C7 |', lead: 'B4:h E5:h | A5:h D#5:h | G5:h. E5:q | C#5:h G5:h | F5:h. D5:q | B4:h. D5:q | F5:h. G5:q | E5:h. C5:q |' },
+      fin: { ch: 'Am7 D9sus4 | G69 | G69 |', lead: 'C5:q. A4:e D5:q. A4:e | ' + MT.home },
+    },
+    mix: muMix('bass gtr cl mar strl glk str dr', { gtr: { g: 0.34 }, str: { g: 0.5 } }),
+    tracks: [
+      { gen: 'bass', inst: 'bass', ch: 'bass', mode: (s, p, b) => (s === 'fin' ? MU_FIN3(s, p, b) : p === 0 && s !== 'B' ? 'R:q R:q R:q R:q' : 'R:e R:e R:e R:e R:e R:e R:e 8:e'), art: 0.62, v: 0.7 },
+      { gen: 'comp', inst: 'nylon', ch: 'gtr', pat: (s, p, b) => (s === 'fin' ? ['D:h D:h', 'D:w', 'r:w'][b] : p === 0 ? 'd:h d:h' : 'D:e u:e d:e u:e D:e u:e d:e u:e'), n: 4, lo: 52, hi: 72, spread: true, v: 0.44 },
+      { gen: 'line', inst: 'clar', ch: 'cl', v: 0.64, on: (s, p) => s === 'fin' || ((s === 'A' || s === 'A2') && p !== 2) || (s === 'B' && p % 2 === 1) },
+      { gen: 'line', inst: 'marimba', ch: 'mar', v: 0.7, roll: 1.4, on: (s, p) => (s === 'A' || s === 'A2') && p === 2 },
+      { gen: 'line', inst: 'clar', ch: 'cl', harm: -1, v: 0.5, on: (s, p) => (s === 'A' || s === 'A2') && p === 2 },
+      { gen: 'guide', inst: 'marimba', ch: 'mar', lo: 60, hi: 74, v: 0.45, on: (s, p) => (s === 'A' || s === 'A2') && p % 2 === 1 },
+      { gen: 'line', inst: 'strings', ch: 'strl', v: 0.7, on: (s) => s === 'B' },
+      { gen: 'line', inst: 'glock', ch: 'glk', oct: 1, only: 'twirl', v: 0.5, on: (s, p) => ((s === 'A' || s === 'A2') && p >= 1) || s === 'fin' },
+      { gen: 'pad', inst: 'strings', ch: 'str', n: 4, lo: 55, hi: 74, root: false, v: 0.5, on: (s, p) => p >= 1 || s === 'B' || s === 'fin' },
+      { gen: 'drums', ch: 'dr', pat: (s, p, b) => (s === 'fin' ? (b ? null : { swish: '----x-------x---' }) : p === 0 ? (s === 'A' || s === 'in' ? null : { swish: '----o-------o---' })
+        : Object.assign({ kick: 'x-------x-------', swish: '----x-------x---', tap: '--.---.---.---.-' }, p === 2 ? { shaker: '.-o-.-o-.-o-.-o-' } : null)) },
+    ],
+  },
+};
+
+function muScale(key) {
+  const minor = key.endsWith('m'), r = muPc(muNote(key.replace(/m$/, '') + '4'));
+  return (minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11]).map((x) => (r + x) % 12);
+}
+// Read a piece: every bar of every line checked against its chords. A section at a time if asked.
+function muScore(id, one) {
+  const S = MU_SCORE[id];
+  if (S.secs) return S;
+  S.meter = S.meter || 4; S.scale = muScale(S.key);
+  const done = S._secs || (S._secs = {});
+  for (const name in S.sec) {
+    if (done[name]) continue;
+    const d = S.sec[name], chart = muChart(d.ch, S.meter), lines = {};
+    for (const k in d) {
+      if (k === 'ch') continue;
+      lines[k] = muLine(d[k], S.meter);
+      if (lines[k].bars !== chart.length) throw new Error(`music: ${id} ${name} ${k} has ${lines[k].bars} bars against ${chart.length} of chords`);
+    }
+    done[name] = { name, chart, lines, bars: chart.length };
+    if (one) return null;
+  }
+  S.secs = done;
+  return S;
+}
+
+// ---------- a piece playing ----------
+
+class MuPlay {
+  constructor(E, id, t0, o = {}) {
+    const S = muScore(id);
+    this.E = E; this.id = id; this.S = S; this.spb = 60 / S.bpm; this.bb = S.meter;
+    this.t0 = t0; this.nextT = t0; this.pass = 0; this.q = []; this.live = []; this.reeds = {}; this.lfos = []; this.ring = {}; this.buses = {};
+    this.st = S.tracks.map(() => ({}));
+    this.list = S.intro.length ? S.intro : S.loop; this.li = 0; this.b = 0; this.inLoop = !S.intro.length;
+    this.ending = null; this.done = false; this.fadeEnd = 0; this.force = null; this.forced = null;
+    this.collect = o.collect || null;
+    if (this.collect) return;   // a dry run: only what it would play
+    const c = E.ctx, lvl = S.lvl ?? 1;
+    this.dry = c.createGain(); this.wet = c.createGain();
+    for (const g of [this.dry.gain, this.wet.gain]) {
+      if (o.fadeIn) { g.setValueAtTime(0, t0); g.linearRampToValueAtTime(lvl, t0 + o.fadeIn); } else g.value = lvl;
+    }
+    this.dry.connect(E.mix); this.wet.connect(E.rev);
+    if (S.delay) {   // an echo, for under the ceiling
+      const [beats, fb, cut] = S.delay, dl = c.createDelay(2), f = c.createGain(), lp = c.createBiquadFilter(), ws = c.createGain();
+      this.dIn = c.createGain();
+      dl.delayTime.value = beats * this.spb; f.gain.value = fb; ws.gain.value = 0.5;
+      lp.type = 'lowpass'; lp.frequency.value = cut; lp.Q.value = -3;
+      this.dIn.connect(dl); dl.connect(lp); lp.connect(f); f.connect(dl); lp.connect(this.dry); lp.connect(ws); ws.connect(this.wet);
+    }
+    this.ch = S.mix;
+  }
+  // a bus, made the first time a note needs it: a panner, a send to the room (and the echo), the vibraphone's motor
+  bus(name) {
+    if (this.buses[name]) return this.buses[name];
+    const c = this.E.ctx, [pan, rev] = MU_BUS[name], p = c.createStereoPanner(), s = c.createGain();
+    p.pan.value = pan; p.connect(this.dry);
+    s.gain.value = rev; p.connect(s); s.connect(this.wet);
+    const ds = this.S.delay && this.S.delay[3][name];
+    if (ds) { const d = c.createGain(); d.gain.value = ds; p.connect(d); d.connect(this.dIn); }
+    let inp = p;
+    if (name === 'V') {   // every bar of a vibraphone turns with the same discs
+      const [rate, depth] = this.S.trem || [5.4, 0.3], tg = c.createGain(), lfo = c.createOscillator(), dg = c.createGain();
+      tg.gain.value = 1 - depth / 2; lfo.frequency.value = rate; dg.gain.value = depth / 2;
+      lfo.connect(dg); dg.connect(tg.gain); lfo.start(); tg.connect(p); inp = tg;
+      this.lfos.push(lfo);
+    }
+    return (this.buses[name] = inp);
+  }
+  // one vibrato for all the reeds in the piece
+  vibrato() {
+    if (!this.vib) { this.vib = this.E.ctx.createOscillator(); this.vib.frequency.value = 5; this.vib.start(); this.lfos.push(this.vib); }
+    return this.vib;
+  }
+  // beat x of the bar starting at t0, swung if the piece swings (a twirl's sixteenths stay even)
+  at(t0, x, even) {
+    const s = this.S.swing;
+    if (!s || even) return t0 + x * this.spb;
+    const i = Math.floor(x + 1e-9), f = x - i;
+    return t0 + (i + (f <= 0.5 ? f * 2 * s : s + (f - 0.5) * 2 * (1 - s))) * this.spb;
+  }
+  sec() { return this.S.secs[this.list[this.li]]; }
+  // the order: the intro once, then the loop for ever, a pass at a time. A section the game asks for (the Knot)
+  // comes in at the next bar line, and the loop starts again from the top when it's let go.
+  advance() {
+    this.b++;
+    if (!this.ending && this.force !== this.forced) {
+      this.forced = this.force; this.b = 0; this.li = 0; this.inLoop = true;
+      this.list = this.force ? [this.force] : this.S.loop;
+      return;
+    }
+    if (this.b < this.sec().bars) return;
+    this.b = 0;
+    if (++this.li < this.list.length) return;
+    if (this.ending) { this.done = true; return; }
+    if (!this.forced) { if (this.inLoop) this.pass++; this.list = this.S.loop; this.inLoop = true; }
+    this.li = 0;
+  }
+  peekChord() {
+    let list = this.list, li = this.li, b = this.b + 1;
+    if (!this.ending && this.force !== this.forced) { list = this.force ? [this.force] : this.S.loop; li = 0; b = 0; }
+    else if (b >= this.S.secs[list[li]].bars) {
+      b = 0;
+      if (++li >= list.length) { if (this.ending) return null; li = 0; if (!this.forced) list = this.S.loop; }
+    }
+    return this.S.secs[list[li]].chart[b][0][1];
+  }
+  genBar() {
+    const sec = this.sec(), b = this.b, t0 = this.nextT, out = [];
+    this.S.tracks.forEach((tr, k) => {
+      if (tr.on && !tr.on(sec.name, this.pass, b)) return;
+      MU_GEN[tr.gen](this, tr, this.st[k], sec, b, t0, out, makeRng(muHash(this.id, this.pass, sec.name, b, k)));
+    });
+    this.nextT += this.bb * this.spb;
+    this.advance();
+    if (this.collect) { for (const e of out) this.collect(e); return; }
+    for (const e of out) this.q.push(e);
+    this.q.sort((p, q) => p.t - q.t);
+  }
+  // write bars until `until`, and hand the notes due by then to the audio clock
+  pump(now, until) {
+    const len = this.bb * this.spb;
+    while (!this.done && this.nextT + len < now - 0.05) { this.nextT += len; this.advance(); }   // fell behind (a hidden tab): skip ahead quietly
+    while (!this.done && this.nextT < until) this.genBar();
+    let i = 0;
+    for (; i < this.q.length && this.q[i].t < until; i++) {
+      const ev = this.q[i];
+      if (ev.t < now - 0.04) { MUS.stats.lost++; continue; }
+      if (ev.t < now + 0.004) { ev.t = now + 0.004; MUS.stats.late++; }
+      if (this.E.live && (SFX.muted || (MUS.muffle && ev.k === 'drum'))) continue;   // nothing while muted; no kit while paused
+      this.fire(ev);
+    }
+    if (i) this.q.splice(0, i);
+    for (const k in this.reeds) if (this.reeds[k].idle(now)) { this.reeds[k].stop(now + 0.05); delete this.reeds[k]; }
+  }
+  fire(ev) {
+    MUS.stats.notes++;
+    const ch = this.ch[ev.ch], out = this.bus(ch.bus), v = ev.v * ch.g, bar = MU_BAR[ev.inst];
+    switch (ev.k) {
+      case 'ks': muOne(this, out, ev.inst, ev.t, ev.m, v, ev.d, ev.dmp); break;
+      case 'mal': muOne(this, out, ev.inst, ev.t, ev.m, v * bar.gain, ev.d, ev.dmp || bar.damp); break;
+      case 'strum': {   // the chord's strings share one gain; a new strum stops the ones the last left ringing
+        const damp = ev.dmp || (bar && bar.damp), g = muGain(this, out, ev.t, v * (bar ? bar.gain : 0.85), ev.d, damp), srcs = [];
+        ev.notes.forEach((m, i) => { const smp = muSample(ev.inst, m); if (smp) srcs.push(muSrc(this, smp, m, ev.t + i * ev.spread, g)); else MUS.stats.missing++; });
+        const last = this.ring[ev.ch];
+        if (last && !bar) { last.g.gain.setTargetAtTime(0, ev.t, 0.02); for (const s of last.srcs) s.stop(ev.t + 0.15); this.ring[ev.ch] = null; }
+        if (damp) { for (const s of srcs) s.stop(ev.t + ev.d + damp * 7); } else if (!bar) this.ring[ev.ch] = { g, srcs };
+        break;
+      }
+      case 'reed': (this.reeds[ev.ch] || (this.reeds[ev.ch] = new MuReed(this, out, ev.inst))).note(ev.t, ev.m, v, ev.d, ev.leg); break;
+      case 'pad': muPad(this, out, ev, v); break;
+      case 'drum': muDrum(this, out, ev, v); break;
+    }
+  }
+  // an ending (the cadence home, or the nests' little tag) from the next beat; what's ringing is let go
+  end(kind, now) {
+    if (this.ending) return;
+    this.ending = kind;
+    if (!this.S.secs[kind]) { this.done = true; return; }
+    const tb = this.t0 + Math.ceil((now + 0.06 - this.t0) / this.spb - 1e-9) * this.spb;
+    this.q = this.q.filter((e) => e.t < tb - 0.005);
+    for (const L of this.live) if (L.end > tb) { L.g.gain.cancelScheduledValues(tb); L.g.gain.setTargetAtTime(0, tb, 0.3); }
+    for (const k in this.reeds) this.reeds[k].cut(tb);
+    this.list = [kind]; this.li = 0; this.b = 0; this.nextT = tb; this.force = this.forced = null; this.done = false;
+    if (!this.collect) for (const g of [this.dry.gain, this.wet.gain]) { g.cancelScheduledValues(tb); g.setValueAtTime(g.value, tb); g.linearRampToValueAtTime((this.S.lvl ?? 1) * 2.5, tb + 0.4); }   // the ending comes up 8 dB, still under the nest's notes
+  }
+  fade(t, dur) {
+    if (this.fadeEnd || this.collect) return;
+    this.fadeEnd = t + dur;
+    this.dry.gain.setTargetAtTime(0, t, dur / 5); this.wet.gain.setTargetAtTime(0, t, dur / 5);
+    if (this.dIn) this.dIn.gain.setTargetAtTime(0, t, dur / 5);
+  }
+  dispose() {
+    const t = this.E.ctx.currentTime + 0.05;
+    for (const k in this.reeds) this.reeds[k].stop(t);
+    for (const l of this.lfos) l.stop(t);
+    this.dry.disconnect(); this.wet.disconnect();
+  }
+}
+
+// ---------- what it needs: a quiet run through each piece, to know which strings to draw ----------
+
+function* muDryWalk(id, take) {
+  const S = muScore(id), P = new MuPlay(null, id, 0, { collect: take });
+  const bars = (list) => list.reduce((a, n) => a + S.secs[n].bars, 0);
+  for (let n = bars(S.intro) + bars(S.loop) * (S.passes || 1); n > 0; n--) { P.genBar(); yield; }
+  for (const name in S.secs) {   // the endings, and anything the game can ask for
+    if (S.intro.includes(name) || S.loop.includes(name)) continue;
+    const Q = new MuPlay(null, id, 0, { collect: take });
+    Q.list = [name]; Q.ending = name;
+    while (!Q.done) { Q.genBar(); yield; }
+  }
+}
+function muDryJob(id) {
+  let it = null;
+  const need = new Set();
+  return {
+    dry: id,
+    step() {   // a millisecond of it at a time; reading the score is a step of its own
+      if (!MU_SCORE[id].secs) { muScore(id, true); return false; }
+      if (!it) {
+        it = muDryWalk(id, (e) => {
+          if (e.k === 'drum') { if (e.inst !== 'swell') for (let k = 0; k < MU_KIT[e.inst][1]; k++) need.add('kit:' + e.inst + ':' + k); return; }
+          if (e.k === 'reed') { need.add('kit:breath:0'); need.add('kit:breath:1'); return; }
+          if (MU_GRID[e.inst]) for (const m of e.notes || [e.m]) need.add(muKey(e.inst, m));
+        });
+        return false;
+      }
+      const t0 = performance.now();
+      do { if (it.next().done) { MU_SCORE[id]._need = need; return true; } } while (performance.now() - t0 < 1);
+      return false;
+    },
+  };
+}
+// Is a piece ready to play? If not, its work goes to the front of the queue.
+function muReady(id) {
+  const S = MU_SCORE[id];
+  if (!S._need) {
+    const j = MUS.jobs.find((x) => x.dry === id) || muDryJob(id);
+    MUS.jobs = [j, ...MUS.jobs.filter((x) => x !== j)];
+    return false;
+  }
+  let ok = true;
+  for (const key of S._need) {
+    if (MU_CACHE.has(key)) continue;
+    ok = false;
+    const j = MUS.jobs.find((x) => x.key === key);
+    if (j) { MUS.jobs = [j, ...MUS.jobs.filter((x) => x !== j)]; continue; }   // hurry it
+    MUS.queued.add(key); MUS.jobs.unshift(muJob(key));
+  }
+  return ok;
+}
+// Strings no piece now playing needs are let go.
+function muEvict() {
+  const keep = new Set();
+  for (const P of [MUS.cur, ...MUS.old]) if (P && P.S._need) for (const k of P.S._need) keep.add(k);
+  for (const k of [...MU_CACHE.keys()]) if (!keep.has(k)) MU_CACHE.delete(k);
+}
+
+// ---------- which piece, when: read off the game every frame ----------
+
+// The waiting work, until this frame's share of time is gone. Drawing steps are sized by how fast they've been going.
+function muWork(T0, ms) {
+  while (MUS.jobs.length) {
+    const left = ms - (performance.now() - T0);
+    if (left < 0.25) return;
+    const j = MUS.jobs[0], sp = MUS.sps[j.kind] || 0, n = Math.max(256, Math.floor(left * sp * 0.5)), t = performance.now();
+    const done = j.step(n), dt = performance.now() - t;
+    if (dt > 2.5) (MUS.stats.slow || (MUS.stats.slow = [])).push([j.key || 'read ' + j.dry, n, +dt.toFixed(1)]);
+    if (done) { MUS.jobs.shift(); if (j.key) MUS.queued.delete(j.key); }
+    if (sp && j.did > 200 && dt > 0.02) MUS.sps[j.kind] = clamp(Math.min(sp * 1.5, 0.5 * sp + (0.5 * j.did) / dt), 300, 30000);   // how fast it really went
+  }
+}
+// from where it is now to v over dur, and then still (a ramp ends; a target never quite does)
+function muRamp(param, v, now, dur, exp) {
+  const from = param.value;
+  param.cancelScheduledValues(now); param.setValueAtTime(from, now);
+  if (exp && from > 0 && v > 0) param.exponentialRampToValueAtTime(v, now + dur); else param.linearRampToValueAtTime(v, now + dur);
+}
+function muPieceFor(scene, mode) {
+  if (scene === 'hub') return mode === 'title' ? 'opening' : mode === 'leaving' ? null : 'nests';
+  return MU_SCORE[scene] ? scene : null;
+}
+function musicInit() {
+  if (MUS.E || !SFX.ctx) return;
+  MUS.E = muEngine(SFX.ctx, SFX.master);
+  MUS.E.live = true;
+  // a hidden tab gets no frames: go quiet rather than stop mid-phrase
+  document.addEventListener('visibilitychange', () => { MUS.fx = ''; muRamp(MUS.E.out.gain, document.hidden ? 0 : MUS.level, MUS.E.ctx.currentTime, 0.2); });
+}
+
+// The music must never cost the game a frame: if anything in it goes wrong, it says so once and stops.
+function musicFrame() {
+  if (MUS.broken) return;
+  try { muFrame(); } catch (e) {
+    MUS.broken = true;
+    try { if (MUS.E) MUS.E.out.disconnect(); } catch (e2) { /* already gone */ }
+    console.error('music stopped:', e);
+  }
+}
+function muFrame() {
+  const E = MUS.E, T0 = performance.now(), st = MUS.stats;
+  if (!E) {   // no sound yet: the scores are read and the nests' sounds drawn, a little each frame, so they're ready for the first click
+    if (!MUS.pre && MU_SCORE.nests._need) MUS.pre = muReady('nests') || true;
+    muWork(T0, 1.2);
+    return;
+  }
+  const now = E.ctx.currentTime, p = GAME.pending, mode = GAME.mode;
+  const want = p ? muPieceFor(p.id, 'select') : muPieceFor(GAME.scene, mode);
+  let cur = MUS.cur;
+
+  // a scene change asked for: the old piece goes down over the fade to black, written far enough ahead to outlast the build
+  if (p) {
+    if (!MUS.pend) { MUS.pend = true; MUS.wasMuffled = MUS.muffle; }
+    MUS.ahead = Math.min(2.4, MUS.ahead + 0.035);
+  } else { MUS.pend = false; MUS.ahead = Math.max(0.25, MUS.ahead - 0.1); }
+  if (cur && cur.id !== want) {
+    cur.fade(now, p ? 2.6 : mode === 'leaving' ? 1.0 : 1.6);
+    MUS.old.push(cur); MUS.cur = cur = null;
+  }
+  if (!cur && want != null && !p && muReady(want)) {
+    MUS.cur = cur = new MuPlay(E, want, now + 0.12, { fadeIn: 0.15 });
+    muEvict();
+  }
+  if (cur) {
+    if (mode === 'win' && !cur.ending) cur.end('fin', now);
+    if (mode === 'enter' && !cur.ending) cur.end('tag', now);
+    cur.force = cur.S.watch && !cur.ending ? cur.S.watch() : null;
+  }
+
+  // paused: muffled and lower, no kit; caught: a dip
+  const muf = mode === 'paused' || (p && MUS.wasMuffled), dead = mode === 'dead';
+  const fx = (muf ? 'p' : '') + (dead ? 'd' : '') + (document.hidden ? 'h' : '');
+  if (fx !== MUS.fx) {
+    MUS.fx = fx; MUS.muffle = muf;
+    muRamp(E.lp.frequency, muf ? 650 : dead ? 1800 : 18000, now, muf ? 0.35 : 0.8, true);
+    muRamp(E.out.gain, document.hidden ? 0 : MUS.level * (muf ? 0.45 : dead ? 0.6 : 1), now, muf ? 0.4 : 0.9);
+  }
+
+  const until = now + MUS.ahead;
+  if (cur) cur.pump(now, until);
+  for (let i = MUS.old.length - 1; i >= 0; i--) {
+    const P = MUS.old[i];
+    if (now > P.fadeEnd + 0.3) { P.dispose(); MUS.old.splice(i, 1); muEvict(); }
+    else if (now < P.fadeEnd) P.pump(now, Math.min(until, P.fadeEnd));
+  }
+
+  // whatever time is left this frame goes to drawing sounds and reading pieces
+  const tJ = performance.now();
+  muWork(T0, 2.5);
+  const tE = performance.now();
+  st.jobMs += tE - tJ; st.jobMax = Math.max(st.jobMax, tE - tJ);
+  st.frames++; st.ms += tE - T0; st.max = Math.max(st.max, tE - T0);
+}
+
+// What the music is doing, for checks: the piece, where it is, what it holds in memory, what it costs.
+function musicInfo() {
+  const P = MUS.cur, st = MUS.stats;
+  let bytes = 0;
+  for (const v of MU_CACHE.values()) bytes += v.bytes;
+  return {
+    piece: P ? P.id : null, sec: P ? P.list[P.li] : null, bar: P ? P.b : null, pass: P ? P.pass : null, ending: P ? P.ending : null, forced: P ? P.forced : null,
+    old: MUS.old.length, jobs: MUS.jobs.length, samples: MU_CACHE.size, mb: +(bytes / 1048576).toFixed(2),
+    avgMs: st.frames ? +(st.ms / st.frames).toFixed(3) : 0, maxMs: +st.max.toFixed(2), jobMax: +st.jobMax.toFixed(2),
+    notes: st.notes, late: st.late, lost: st.lost, missing: st.missing, muffle: MUS.muffle, ahead: +MUS.ahead.toFixed(2),
+  };
+}
+
+// For listening outside the game: a piece start to finish through the game's own master and compressor, written a
+// quarter second ahead at a time as the game does it. o.at: [[seconds, (piece, t) => ...]] to end it, or ask for a
+// section, partway through.
+async function musicRender(id, secs, o = {}) {
+  const sr = o.sr || 48000, oc = new OfflineAudioContext(2, Math.ceil(secs * sr), sr);
+  const comp = oc.createDynamicsCompressor();
+  comp.threshold.value = -18; comp.knee.value = 10; comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.2;
+  const master = oc.createGain();
+  master.gain.value = 0.9; master.connect(comp); comp.connect(oc.destination);
+  const E = muEngine(oc, master), S = muScore(id);
+  if (!S._need) { const j = muDryJob(id); while (!j.step()); }
+  for (const key of S._need) if (!MU_CACHE.has(key)) { const j = muJob(key); while (!j.step(1 << 30)); }
+  const P = new MuPlay(E, id, 0.05), at = (o.at || []).slice().sort((a, b) => a[0] - b[0]), step = 256 / sr * 47;
+  const slice = (t) => oc.suspend(t).then(() => {
+    while (at.length && at[0][0] <= t) at.shift()[1](P, t);
+    P.pump(t, t + 0.3);
+    if (t + step < secs) slice(t + step);
+    oc.resume();
+  });
+  P.pump(0, 0.3); slice(step);
+  return oc.startRendering();
+}
+
+// the scores are read before there is any sound, the likely ones first
+for (const id of ['nests', 'opening', 1, 2, 3, 4, 5, 6, 7]) MUS.jobs.push(muDryJob(id));
 
 // ---- 80-camera.js ----
 // A long lens close to the table, a little above it, following the twirl. Each level sets its own
@@ -7630,12 +8894,13 @@ window.addEventListener('keydown', (e) => {
   if (GAME.mode === 'boot' || GAME.mode === 'loading' || GAME.mode === 'leaving') return;
   if (GAME.mode === 'title') {
     if (e.code === 'Escape') return;
+    audioInit();   // a key on the opening is the first sound: its music starts here
     if (LEVEL.def.titleKey && LEVEL.def.titleKey(e.code)) return;   // the opening's own keys: moving the focus
     begin();
     return;
   }
   if (GAME.mode === 'paused') { if (e.code === 'Escape') leaveLevel(); else begin(); return; }
-  if (SFX.ctx && SFX.ctx.state === 'suspended') SFX.ctx.resume();
+  audioInit();   // a key turns the sound on if nothing has yet (the collection opens straight on the nests), or wakes it
   INPUT.keys.add(e.code);
   if (JUMP_CODES.has(e.code)) PLAYER.jumpBuf = PCFG.buffer;
   if (e.code === 'KeyM') setMuted(!SFX.muted);
@@ -7792,6 +9057,7 @@ function finishLevel() {
 let lastFrame = 0, acc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  musicFrame();   // reads the scene and mode, and writes the next notes onto the audio clock
   if (GAME.pending && CAM.fade < 0.03) {
     const p = GAME.pending;
     GAME.pending = null;
