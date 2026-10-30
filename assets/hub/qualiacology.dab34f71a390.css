@@ -732,6 +732,224 @@ p {
   border-image: linear-gradient(90deg, transparent, var(--line-bright) 12% 88%, transparent) 1;
 }
 
+/* Halloween: the Spooky Games strip at the top of the homepage. Alex asked for a link here
+   that looks really cool, so it knowingly spends past the budget above: a second aura
+   (candlelight and fire on its title) and a moving picture (a silent loop of the five
+   games, played by site.js only on screen, never under reduced motion, pausable). Take it
+   out whole when Halloween is over: this block, spookyBanner() in build-site.mjs and the
+   clip block in site.js. */
+@font-face {
+  font-family: "Archivo Black";
+  src: url("/assets/fonts/archivo-black-latin.woff2") format("woff2");
+  font-display: swap;
+}
+
+.spooky-banner {
+  position: relative;
+  margin-bottom: clamp(1.6rem, 3.4vw, 2.6rem);
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgba(255, 138, 42, 0.42);
+  background: #0b0810;
+  aspect-ratio: 32 / 5;
+  min-height: 9.5rem;
+  box-shadow: 0 0 34px rgba(255, 110, 20, 0.12);
+}
+
+.spooky-banner-clip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 66%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+}
+
+/* the dark the words stand in, and a candle under the title */
+.spooky-banner::before,
+.spooky-banner::after {
+  position: absolute;
+  z-index: 1;
+  content: "";
+  pointer-events: none;
+}
+
+.spooky-banner::before {
+  inset: 0;
+  background: linear-gradient(90deg, #0b0810 32%, rgba(11, 8, 16, 0.84) 44%, rgba(11, 8, 16, 0.2) 64%, rgba(11, 8, 16, 0) 80%);
+}
+
+.spooky-banner::after {
+  left: -8%;
+  top: -60%;
+  width: 54%;
+  height: 220%;
+  background: radial-gradient(closest-side, rgba(255, 122, 30, 0.22), rgba(255, 90, 10, 0.06) 60%, transparent);
+  animation: spooky-candle 3.2s infinite;
+}
+
+@keyframes spooky-candle {
+  0%, 100% { opacity: 0.85; }
+  9% { opacity: 0.62; }
+  13% { opacity: 1; }
+  31% { opacity: 0.74; }
+  47% { opacity: 0.96; }
+  52% { opacity: 0.66; }
+  70% { opacity: 0.9; }
+}
+
+.spooky-banner-link {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 0 clamp(1.25rem, 3vw, 2.5rem);
+  color: #ffd9ae;
+  text-decoration: none;
+}
+
+.spooky-banner-title {
+  width: fit-content;
+  color: #ff9a2e;
+  font-family: "Archivo Black", "Arial Black", sans-serif;
+  font-size: clamp(2.1rem, 4.6vw, 3.9rem);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  filter: drop-shadow(0 0 14px rgba(255, 110, 20, 0.55));
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .spooky-banner-title {
+    padding-block: 0.06em;
+    background: linear-gradient(180deg, #ffe08a 4%, #ffad30 40%, #ff6b13 76%, #c8380a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* the arrow carries its own colour: once it scales it leaves the title's clipped gradient */
+.spooky-banner-go {
+  display: inline-block;
+  color: #ff8a26;
+  -webkit-text-fill-color: #ff8a26;
+}
+
+.spooky-banner-names {
+  max-width: 36rem;
+  color: rgba(255, 222, 186, 0.9);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.spooky-banner-pause {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.65rem;
+  z-index: 3;
+  display: grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border: 1px solid rgba(255, 190, 120, 0.45);
+  background: rgba(10, 8, 14, 0.62);
+  color: #ffd7a8;
+  cursor: pointer;
+}
+
+.spooky-banner-pause[hidden] {
+  display: none;
+}
+
+.spooky-banner-pause svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  fill: currentColor;
+}
+
+.spooky-play-tri,
+.spooky-banner-pause[aria-pressed="true"] .spooky-pause-bars {
+  display: none;
+}
+
+.spooky-banner-pause[aria-pressed="true"] .spooky-play-tri {
+  display: inline;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .spooky-banner-clip,
+  .spooky-banner-go {
+    transition: scale 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .spooky-banner:hover .spooky-banner-clip,
+  .spooky-banner:focus-within .spooky-banner-clip {
+    scale: 1.05;
+  }
+
+  .spooky-banner:hover .spooky-banner-go,
+  .spooky-banner:focus-within .spooky-banner-go {
+    scale: 1.18;
+  }
+}
+
+.spooky-banner-link:active .spooky-banner-title {
+  transform: scale(0.98);
+  transition: transform 45ms;
+}
+
+@media (max-width: 44.99rem) {
+  .spooky-banner {
+    aspect-ratio: 16 / 11;
+    min-height: 0;
+  }
+
+  .spooky-banner-clip {
+    width: 100%;
+  }
+
+  .spooky-banner::before {
+    background: linear-gradient(0deg, #0b0810 6%, rgba(11, 8, 16, 0.84) 34%, rgba(11, 8, 16, 0) 66%);
+  }
+
+  .spooky-banner::after {
+    left: -25%;
+    top: 30%;
+    width: 100%;
+    height: 100%;
+  }
+
+  .spooky-banner-link {
+    justify-content: flex-end;
+    gap: 0.45rem;
+    padding: 1rem 1.1rem 1.15rem;
+  }
+
+  .spooky-banner-title {
+    font-size: clamp(2rem, 10vw, 2.7rem);
+  }
+
+  .spooky-banner-names {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+  }
+
+  .spooky-banner-pause {
+    top: 0.6rem;
+    bottom: auto;
+  }
+}
+
 /* The hallway: three rooms leak their light into the entry. Total alpha stays low. */
 .hero::before {
   position: absolute;

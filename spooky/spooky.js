@@ -157,6 +157,9 @@
 
   /* ================= THE SONG ================= */
 
+  // The trailer has its own song; the page's steps aside while it plays.
+  const music = { duck() {}, unduck() {} };
+
   /* One More House, quietly. Browsers keep a page silent until it is touched, so it starts
      on the first click or key, fades in low, and the corner button turns it off for good. */
   {
@@ -229,7 +232,13 @@
         if (e.type === "keydown" && (e.key === "Tab" || e.key === "Shift" || e.key === "Escape" || e.metaKey || e.ctrlKey || e.altKey)) return;
         removeEventListener("pointerdown", first, true);
         removeEventListener("keydown", first, true);
-        if (e.target && e.target.closest && e.target.closest(".sound")) return; // the button decides for itself
+        if (e.target && e.target.closest && e.target.closest(".sound, .trailer")) return; // they decide for themselves
+        if (wanted && !playing) play();
+      };
+      music.duck = () => {
+        if (playing) pause();
+      };
+      music.unduck = () => {
         if (wanted && !playing) play();
       };
       addEventListener("pointerdown", first, true);
@@ -239,6 +248,37 @@
         if (!audio) return;
         if (document.hidden) audio.pause();
         else if (playing) audio.play().catch(() => {});
+      });
+    }
+  }
+
+  /* ================= THE TRAILER ================= */
+
+  {
+    const video = document.querySelector(".trailer-video");
+    const cover = document.querySelector(".trailer-play");
+    if (video && cover) {
+      cover.hidden = false;
+      video.controls = false; // the big button starts it; the player's own bar comes with it
+      cover.addEventListener("click", () => {
+        cover.hidden = true;
+        video.controls = true;
+        const p = video.play();
+        if (p && p.catch) p.catch(() => {
+          cover.hidden = false;
+        });
+      });
+      video.addEventListener("play", () => {
+        cover.hidden = true;
+        video.controls = true;
+        music.duck();
+      });
+      video.addEventListener("pause", () => {
+        if (!video.ended && !video.seeking) music.unduck();
+      });
+      video.addEventListener("ended", () => {
+        cover.hidden = false;
+        music.unduck();
       });
     }
   }
