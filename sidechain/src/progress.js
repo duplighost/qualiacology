@@ -1,9 +1,10 @@
 // What you've earned, kept in this browser: points become experience, experience fills
-// levels, each level is one pick of a new board (or rider). Grades and best scores per song.
-// Everything here survives a blocked localStorage (a private window): it just isn't kept.
+// levels, each level is one pick of a new board (or rider, or the bonus track). Grades and best
+// scores per song. Everything here survives a blocked localStorage (a private window): it just isn't kept.
 
 const KEY = 'lc-progress';
-const blank = () => ({ xp: 0, level: 1, picks: 0, owned: ['classic'], board: 'classic', rider: 'classic', ridersOwned: ['classic'], songs: {} });
+const blank = () => ({ xp: 0, level: 1, picks: 0, owned: ['classic'], board: 'classic', rider: 'classic', ridersOwned: ['classic'], songsOwned: [], songs: {} });
+const listOf = (p, kind) => (kind === 'rider' ? p.ridersOwned : kind === 'song' ? p.songsOwned : p.owned);
 
 // points to fill each level: the first comes in a song or two, then a little more each time
 export function levelNeed(level) { return 24000 + 14000 * (level - 1); }
@@ -16,6 +17,7 @@ function load() {
   if (!Array.isArray(mem.owned)) mem.owned = ['classic'];
   if (!mem.owned.includes('classic')) mem.owned.unshift('classic');
   if (!Array.isArray(mem.ridersOwned)) mem.ridersOwned = ['classic'];
+  if (!Array.isArray(mem.songsOwned)) mem.songsOwned = [];
   if (!mem.songs || typeof mem.songs !== 'object') mem.songs = {};
   return mem;
 }
@@ -41,20 +43,20 @@ export const progress = {
     save();
     return { before, after: { xp: p.xp, level: p.level, picks: p.picks }, ups, newBest, newGrade, best: s.best, grade: s.grade };
   },
-  // spend a pick on a board (or rider)
+  // spend a pick on a board (or a rider, or a song)
   unlock(kind, id) {
     const p = load();
-    const list = kind === 'rider' ? p.ridersOwned : p.owned;
+    const list = listOf(p, kind);
     if (list.includes(id) || p.picks < 1) return false;
     p.picks--; list.push(id);
-    if (kind === 'rider') p.rider = id; else p.board = id;
+    if (kind === 'rider') p.rider = id; else if (kind === 'board') p.board = id;
     save(); return true;
   },
   choose(kind, id) {
     const p = load();
-    const list = kind === 'rider' ? p.ridersOwned : p.owned;
+    const list = listOf(p, kind);
     if (!list.includes(id)) return false;
-    if (kind === 'rider') p.rider = id; else p.board = id;
+    if (kind === 'rider') p.rider = id; else if (kind === 'board') p.board = id;
     save(); return true;
   },
 };

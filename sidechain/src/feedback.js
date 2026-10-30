@@ -9,6 +9,10 @@ import { wGeometry } from './scs-props.js';
 import { pickup as hglPickup } from './hgl-props.js';
 import { pickup as ptdPickup } from './ptd-props.js';
 import { pickup as itdPickup } from './itd-props.js';
+import { pickup as gcoPickup } from './gco-props.js';
+import { pickup as gsaPickup } from './gsa-props.js';
+import { pickup as mmsPickup } from './mms-props.js';
+import { pickup as tmfPickup } from './tmf-props.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -251,7 +255,7 @@ const PICKUP = {
 };
 // the songs added 28 Oct 2026 keep their pickup in their own props file:
 // { key, geo, color, mat (std's options), s, lit, face, beat, bob, flicker, move }
-for (const p of [hglPickup, ptdPickup, itdPickup]) if (p) PICKUP[p.key] = { ...p, mat: std(p.mat) };
+for (const p of [hglPickup, ptdPickup, itdPickup, gcoPickup, gsaPickup, mmsPickup, tmfPickup]) if (p) PICKUP[p.key] = { ...p, mat: std(p.mat) };
 export const PICKUP_KINDS = Object.keys(PICKUP);
 
 // Pickups to steer through, each one a note of a melody. Collected ones fly into the board;
