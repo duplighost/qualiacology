@@ -4,6 +4,8 @@
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
+// the crowd at the end: one clap's level, the roar's at its loudest
+const CLAP = 0.36, ROAR = 0.5;
 
 export class Sound {
   constructor() {
@@ -28,8 +30,7 @@ export class Sound {
     this.hp = c.createBiquadFilter(); this.hp.type = 'highpass'; this.hp.frequency.value = 20; this.hp.Q.value = 0.5;
     this.lp = c.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 20000; this.lp.Q.value = 0.5;
     this.songGain = c.createGain(); this.songGain.gain.value = 1;
-    this.dry = c.createGain(); this.dry.gain.value = 1;   // (less of it under Groovy's phaser)
-    this.songIn.connect(this.hp).connect(this.lp).connect(this.dry).connect(this.songGain).connect(this.master);
+    this.songIn.connect(this.hp).connect(this.lp).connect(this.songGain).connect(this.master);
     this.room = c.createConvolver();
     this.room.buffer = this._impulse(2.4, 2.2);
     this.roomSend = c.createGain(); this.roomSend.gain.value = 0;
@@ -41,6 +42,7 @@ export class Sound {
     this.sfx.connect(this.sfxRoom).connect(this.room);
 
     this._noise = this._noiseBuffer(2);
+    this._claps = this._clapBank();   // (made now, not as she stops)
     this._beds();
 
     this.src = null; this.t0 = 0; this.buffer = null;
@@ -715,34 +717,182 @@ export class Sound {
       o.connect(g).connect(this.sfx); o.start(at); o.stop(at + 0.55);
     });
   }
-  // while it lasts (k 0..1): a slow phaser over the song, one sweep every two beats
-  groovy(k, beatSec = 0.5) {
-    if (k < 0.001 && !this.ph) return;
-    const c = this.ctx;
-    if (!this.ph) {
-      const wet = c.createGain(); wet.gain.value = 0;
-      const lfo = c.createOscillator(); lfo.frequency.value = 1;
-      const depth = c.createGain(); depth.gain.value = 0;
-      lfo.connect(depth);
-      let prev = this.lp;
-      for (let i = 0; i < 4; i++) { const ap = c.createBiquadFilter(); ap.type = 'allpass'; ap.frequency.value = 950; ap.Q.value = 0.6; depth.connect(ap.frequency); prev.connect(ap); prev = ap; }
-      prev.connect(wet).connect(this.songGain);
-      lfo.start();
-      this.ph = { wet, lfo, depth };
+  // (while it lasts the song plays as it is: 29 Oct 2026, Alex: "can we make it so the groovy mode
+  // doesn't make the song sound different". It had a phaser over it and pumped on every beat.)
+
+  // ---------- the crowd, when she stops at the end ----------
+  // (29 Oct 2026, Alex: "the silence after you beat a track seems wrong.") A crowd made here like
+  // everything else. Each person has their own hands (a clap is a few ms of noise rung through a
+  // resonance: low for cupped hands, high for flat ones), their own pace and a place left to right
+  // and near to far; they start a moment apart and stop one by one, slowing and softening first.
+  // How many there are, how long they keep it up, and whether anyone whistles or shouts is how
+  // well the ride went (k 0..1). Claps are scheduled a few tenths of a second ahead (crowd(), once
+  // a frame), so nothing is made all at once.
+  _clapBank() {
+    const c = this.ctx, sr = c.sampleRate, len = Math.floor(sr * 0.06), bank = [];
+    for (let i = 0; i < 36; i++) {
+      // cupped (~620 Hz) to flat (~2.6 kHz), in order, so a pair of hands is a stretch of the bank
+      const fc = 620 * Math.pow(4.2, (i + Math.random()) / 36), Q = 1.8 + 3.2 * Math.random();
+      const w = 2 * Math.PI * fc / sr, al = Math.sin(w) / (2 * Q), a0 = 1 + al;
+      const b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w) / a0, a2 = (1 - al) / a0;
+      const att = Math.max(1, Math.round(sr * (0.0003 + 0.0007 * Math.random())));
+      const body = Math.exp(-1 / (sr * (0.0028 + 0.005 * Math.random()))), snap = Math.exp(-1 / (sr * 0.0012));
+      const crack = 0.25 + 0.35 * Math.random();
+      const b = c.createBuffer(1, len, sr), d = b.getChannelData(0);
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0, e = 1, es = 1, prev = 0, sum = 0;
+      for (let n = 0; n < len; n++) {
+        const a = n < att ? n / att : 1;
+        if (n >= att) { e *= body; es *= snap; }
+        const wn = Math.random() * 2 - 1, x = wn * e * a;
+        const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x; y2 = y1; y1 = y;
+        // and the crack of it: the noise's highs, shorter still
+        const v = y + crack * 0.5 * (wn - prev) * es * a; prev = wn;
+        d[n] = v; sum += v * v;
+      }
+      // all of them the same energy: a stinging clap is no louder than a cupped one
+      const s = Math.sqrt(0.0009 * sr / (sum || 1));
+      for (let n = 0; n < len; n++) d[n] *= s;
+      bank.push(b);
     }
-    const ph = this.ph;
-    this._glide(ph.wet.gain, 0.42 * k, 0.12, 0.004);
-    this._glide(this.dry.gain, 1 - 0.3 * k, 0.12, 0.004);
-    this._glide(ph.depth.gain, 720 * k, 0.12, 6);
-    this._glide(ph.lfo.frequency, 1 / Math.max(0.3, beatSec * 2), 0.5, 0.01);
+    return bank;
   }
-  // and the song pumping on every beat, as if sidechained to its own kick: down a little at the
-  // beat (at: the beat's time on the audio clock), back over most of it
-  pump(at, depth = 0.2, beatSec = 0.5) {
-    const g = this.songGain.gain, c = this.ctx;
-    at = Math.max(at, c.currentTime);
-    g.setTargetAtTime(1 - depth, at, 0.004);
-    g.setTargetAtTime(1, at + 0.03, beatSec * 0.26);
+  applause(k = 1) {
+    this.crowdStop(0.1);
+    if (!this._claps) this._claps = this._clapBank();
+    const c = this.ctx, t0 = c.currentTime + 0.05;
+    k = clamp01(k);
+    // its own bus: no deeper or brighter than the record, a little room round it
+    const out = c.createGain(); out.gain.value = 1;
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 160; hp.Q.value = 0.5;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6500; lp.Q.value = 0.5;
+    hp.connect(lp).connect(out).connect(this.sfx);
+    const wet = c.createGain(); wet.gain.value = 0.2; out.connect(wet).connect(this.room);
+    // nine places across the room, heard as by a pair of ears: louder and a moment sooner on the
+    // near side (each made when somebody there first makes a sound)
+    const pans = [];
+    const panAt = (i) => {
+      if (pans[i]) return pans[i];
+      const x = -0.9 + 1.8 * i / 8, a = (x + 1) * Math.PI / 4;
+      const inp = c.createGain(), m = c.createChannelMerger(2);
+      [[Math.cos(a), Math.max(0, x)], [Math.sin(a), Math.max(0, -x)]].forEach(([g, d], ch) => {
+        const gn = c.createGain(); gn.gain.value = g;
+        const dl = c.createDelay(0.01); dl.delayTime.value = 0.0012 * d;
+        inp.connect(gn).connect(dl).connect(m, 0, ch);
+      });
+      m.connect(hp);
+      return (pans[i] = inp);
+    };
+    const pan = () => Math.floor(Math.random() * 9);
+    const B = this._claps.length;
+    // the people: from two or three for a ride that went nowhere to sixty for one that flew (each
+    // one's own sound is made as they start, crowd(), not all of them now)
+    const n = Math.round(2 + 58 * Math.pow(k, 1.3)), hold = 2.2 + 6.2 * k;
+    const people = [], events = [];
+    let until = t0;
+    for (let i = 0; i < n; i++) {
+      const keen = Math.random(), far = Math.random();
+      // hands: mostly in the middle of the bank; further off, duller
+      const gs = (Math.random() + Math.random() + Math.random() - 1.5) * 0.9;
+      const h = Math.max(2, Math.min(B - 3, Math.round(B * (0.5 + 0.35 * gs) - 6 * far)));
+      const rate = Math.max(2.8, Math.min(6.2, 3.4 + 1.6 * keen + 0.4 * k + 0.5 * (Math.random() - 0.5)));
+      const start = t0 + Math.min(1.8, -Math.log(1 - Math.random() * 0.98) * (0.18 + 0.35 * (1 - keen)) * (1.4 - 0.6 * k));
+      const end = start + Math.max(1.4, hold * (0.45 + 0.65 * keen) * (0.85 + 0.3 * Math.random()));
+      // (most of them a way off; a few close by, heard one by one)
+      people.push({ g: null, pan: pan(), h, next: start, end, period: 1 / rate, lvl: (0.4 + 0.6 * Math.pow(1 - far, 1.5)) * (0.8 + 0.4 * keen) });
+      until = Math.max(until, end);
+    }
+    // when it went well, a roar under the clapping ...
+    if (k > 0.45) {
+      const fall = t0 + 1.6 + 2.6 * k;
+      events.push({ at: t0, go: () => this._roar(t0, fall, ROAR * (k - 0.45) / 0.55, panAt(1), panAt(7)) });
+      until = Math.max(until, fall + 3);
+    }
+    // ... and somebody whistles (two or three of them when it flew)
+    if (k > 0.5) {
+      const nw = k > 0.85 ? 3 : k > 0.68 ? 2 : 1;
+      let at = t0 + 0.25 + 0.4 * Math.random();
+      for (let i = 0; i < nw; i++) { const a = at, p = pan(), l = 0.05 + 0.03 * Math.random(); events.push({ at: a, go: () => this._whistle(a, panAt(p), l) }); at += 0.7 + 1.1 * Math.random(); }
+    }
+    this._crowd = { out, people, events, panAt, until: until + 2.5 };
+  }
+  // voices with no words, the vowels of a shout: up fast, settling, gone by fall
+  _roar(t0, fall, peak, left, right) {
+    const c = this.ctx;
+    // (it swells and settles a little as it goes, both sides together)
+    const lfo = c.createOscillator(); lfo.frequency.value = 0.7 + 0.5 * Math.random();
+    const lg = c.createGain(); lg.gain.value = 0.25; lfo.connect(lg);
+    for (const side of [left, right]) {
+      const src = c.createBufferSource(); src.buffer = this._noise; src.loop = true;
+      const mod = c.createGain(); mod.gain.value = 1; lg.connect(mod.gain);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + 0.45);
+      g.gain.setTargetAtTime(peak * 0.55, t0 + 0.9, 0.7); g.gain.setTargetAtTime(0.0001, fall, 0.8);
+      mod.connect(g).connect(side);
+      for (const [f, q, w] of [[650, 2.2, 1], [1150, 2.6, 0.7], [2500, 3.5, 0.25]]) {
+        const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * (0.94 + 0.12 * Math.random()); bp.Q.value = q;
+        const bg = c.createGain(); bg.gain.value = w; src.connect(bp).connect(bg).connect(mod);
+      }
+      src.start(t0, Math.random() * 2); src.stop(fall + 4);
+    }
+    lfo.start(t0); lfo.stop(fall + 4);
+  }
+  // a whistle through the fingers: up into it, a wobble, and off; sometimes a short one first
+  _whistle(t, out, lvl) {
+    const c = this.ctx, f1 = 2500 + 900 * Math.random();
+    const notes = Math.random() < 0.4 ? [[0, 0.16, 0.78, 1], [0.24, 0.55 + 0.3 * Math.random(), 0.85, 1.04]] : [[0, 0.5 + 0.5 * Math.random(), 0.72, 1]];
+    for (const [dt, len, from, to] of notes) {
+      const s = t + dt, e = s + len, f = f1 * to;
+      const o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f1 * from, s); o.frequency.exponentialRampToValueAtTime(f, s + Math.min(0.18, len * 0.45));
+      o.frequency.setValueAtTime(f, e - len * 0.2); o.frequency.exponentialRampToValueAtTime(f * 0.9, e);
+      const lfo = c.createOscillator(); lfo.frequency.value = 5 + 2 * Math.random();
+      const lg = c.createGain(); lg.gain.value = f * 0.012; lfo.connect(lg).connect(o.frequency);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, s); g.gain.exponentialRampToValueAtTime(lvl, s + 0.03);
+      g.gain.setValueAtTime(lvl, e - 0.06); g.gain.exponentialRampToValueAtTime(0.0001, e);
+      o.connect(g).connect(out); o.start(s); o.stop(e + 0.02); lfo.start(s); lfo.stop(e + 0.02);
+      // the breath round it
+      const nz = c.createBufferSource(); nz.buffer = this._noise;
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 5;
+      const gn = c.createGain();
+      gn.gain.setValueAtTime(0.0001, s); gn.gain.exponentialRampToValueAtTime(lvl * 0.6, s + 0.03);
+      gn.gain.setValueAtTime(lvl * 0.6, e - 0.06); gn.gain.exponentialRampToValueAtTime(0.0001, e);
+      nz.connect(bp).connect(gn).connect(out); nz.start(s, Math.random()); nz.stop(e + 0.02);
+    }
+  }
+  // once a frame: the claps of the next few tenths of a second (and a whistle or the roar when
+  // theirs come up; somebody's own sound is made as they start)
+  crowd() {
+    const cr = this._crowd;
+    if (!cr) return;
+    const c = this.ctx, now = c.currentTime, ahead = now + 0.3, bank = this._claps;
+    for (const e of cr.events) if (!e.done && e.at < ahead) { e.done = true; e.go(); }
+    for (const p of cr.people) {
+      if (p.next >= p.end || p.next >= ahead) continue;
+      if (!p.g) { p.g = c.createGain(); p.g.gain.value = 0; p.g.connect(cr.panAt(p.pan)); }
+      // (after a stall, carry on from now rather than catching up)
+      if (p.next < now - 0.05) p.next = now + Math.random() * p.period;
+      while (p.next < ahead && p.next < p.end) {
+        const t = p.next, fade = Math.min(1, (p.end - t) / 1.4);
+        const s = c.createBufferSource();
+        s.buffer = bank[p.h + Math.floor(Math.random() * 5) - 2];
+        s.playbackRate.value = 0.96 + 0.08 * Math.random();
+        p.g.gain.setValueAtTime(CLAP * p.lvl * (0.3 + 0.7 * fade) * (0.75 + 0.4 * Math.random()), t);
+        s.connect(p.g); s.start(t);
+        // slower as they're about to stop; never quite even
+        p.next = t + p.period * (1 + 0.5 * (1 - fade)) * (0.9 + 0.2 * Math.random());
+      }
+    }
+    if (now > cr.until) { this._crowd = null; try { cr.out.disconnect(); } catch (e) { /* gone */ } }
+  }
+  crowdStop(fade = 0.35) {
+    const cr = this._crowd;
+    if (!cr) return;
+    this._crowd = null;
+    const g = cr.out.gain, now = this.ctx.currentTime;
+    g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(0, now + fade);
+    setTimeout(() => { try { cr.out.disconnect(); } catch (e) { /* gone */ } }, fade * 1000 + 400);
   }
 
   // a run broken: the needle dragged across the record, short, and the song ducks under it
