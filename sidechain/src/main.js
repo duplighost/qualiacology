@@ -53,6 +53,10 @@ import { ScsWorld, ScsFinale } from './scs-world.js';
 import { HglWorld, HglFinale } from './hgl-world.js';
 import { PtdWorld, PtdFinale } from './ptd-world.js';
 import { ItdWorld, ItdFinale } from './itd-world.js';
+import { GcoWorld, GcoFinale } from './gco-world.js';
+import { GsaWorld, GsaFinale } from './gsa-world.js';
+import { MmsWorld, MmsFinale } from './mms-world.js';
+import { TmfWorld, TmfFinale } from './tmf-world.js';
 import { Hud } from './hud.js';
 import { Input } from './input.js';
 import { Screens } from './menu.js';
@@ -142,13 +146,18 @@ async function loadSong(index, onProgress = () => {}) {
 
 // ---------- the album: pick a song; then a loading card; then the start line ----------
 let menuSel = 0;
-function card(i) { const e = ALBUM[i]; const p = progress.song(e.id); return { id: e.id, num: i + 1, title: e.title, accent: e.accent || '#ff4f9a', image: `assets/menu/${e.id}.jpg`, best: p ? p.best : 0, grade: p ? p.grade : null, plays: p ? p.plays : 0 }; }
+function card(i) { const e = ALBUM[i]; const p = progress.song(e.id); return { id: e.id, index: i, num: i + 1, title: e.title, accent: e.accent || '#ff4f9a', image: `assets/menu/${e.id}.jpg`, best: p ? p.best : 0, grade: p ? p.grade : null, plays: p ? p.plays : 0, bonus: !!e.bonus }; }
+// the songs in the list: every one but a bonus track not yet picked (it's last on the record, so
+// the list's numbers are the record's)
+function listed() { const own = progress.get().songsOwned; return ALBUM.map((e, i) => i).filter((i) => !ALBUM[i].bonus || own.includes(ALBUM[i].id)); }
 // the songs' previews in the list start from each one's first chorus (data/profiles.json)
 let previewAt = null;
 fetch('data/profiles.json').then((r) => r.json()).then((p) => { previewAt = p; }).catch(() => { /* from a third of the way in */ });
 const PREVIEW = {
-  preview(i) { const e = ALBUM[i]; const pr = previewAt && previewAt[e.id]; sound.preview(e.id, pr ? pr.preview : 40); },
+  preview(id) { const pr = previewAt && previewAt[id]; sound.preview(id, pr ? pr.preview : 40); },
   stopPreview() { sound.stopPreview(0.4); },
+  // the list again, after a pick has put a song on it
+  songs() { return listed().map(card); },
 };
 function openMenu(sel = menuSel) {
   if (S) { sound.stop(); sound.charge(false); sound.siren(0); sound.skid(0); sound.crowdStop(); }
@@ -157,7 +166,8 @@ function openMenu(sel = menuSel) {
   document.body.classList.remove('fever'); if (S) S.feverOn = false;
   document.body.classList.remove('riding');
   hud.hideAll();
-  ui.showMenu(ALBUM.map((_, i) => card(i)), sel, (i) => { menuSel = i; sound.resume(); chooseSong(i); }, ME, PREVIEW);
+  const songs = listed().map(card);
+  ui.showMenu(songs, Math.max(0, songs.findIndex((s) => s.index === sel)), (i) => { menuSel = i; sound.resume(); chooseSong(i); }, ME, PREVIEW);
 }
 // the title: the film behind the name; the first key, click or tap wakes the sound and goes to the songs
 function openIntro() {
@@ -176,18 +186,19 @@ async function chooseSong(i) {
   state = 'title';
   showTitle();
 }
-// you, for the song list: your level, the bar to the next, your riders and boards; a new one
-// costs a level's pick
+// you, for the song list: your level, the bar to the next, your riders, boards and bonus tracks;
+// a new one costs a level's pick
 const ME = {
   get() {
     const p = progress.get();
     return { level: p.level, xp: p.xp, need: levelNeed(p.level), xpFrac: p.xp / levelNeed(p.level), picks: p.picks, board: p.board, rider: p.rider,
       riders: SKATERS.map((r) => ({ id: r.id, name: r.name, color: r.color, kind: 'rider', owned: p.ridersOwned.includes(r.id), image: `assets/riders/${r.id}.jpg` })),
-      boards: BOARDS.map((b) => ({ ...b, kind: 'board', owned: p.owned.includes(b.id), image: b.id === 'classic' ? null : `assets/boards/${b.id}.jpg` })) };
+      boards: BOARDS.map((b) => ({ ...b, kind: 'board', owned: p.owned.includes(b.id), image: b.id === 'classic' ? null : `assets/boards/${b.id}.jpg` })),
+      songs: ALBUM.flatMap((e, i) => (e.bonus ? [{ id: e.id, num: i + 1, name: e.title, color: e.accent || '#ff4f9a', kind: 'song', owned: p.songsOwned.includes(e.id), image: `assets/menu/${e.id}.jpg` }] : [])) };
   },
   pick(kind, id) {
     const p = progress.get();
-    const owned = kind === 'rider' ? p.ridersOwned : p.owned;
+    const owned = kind === 'rider' ? p.ridersOwned : kind === 'song' ? p.songsOwned : p.owned;
     if (owned.includes(id)) { progress.choose(kind, id); return 'chosen'; }
     if (p.picks > 0 && progress.unlock(kind, id)) return 'unlocked';
     return false;
@@ -247,13 +258,13 @@ function build(S) {
   const trail = new Trail(scene, P);
   const fireworks = new Fireworks(scene, [P.jacket, P.edge, P.fret, P.window, 0xffffff]);
   const plan = S.entry.scenery || {};
-  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale, town: TownLineFinale, lamp: LampFinale, portrait: PortraitFinale, wedding: WeddingFinale, busstop: BusStopFinale, crown: CrownFinale, boombox: BoomboxFinale, lipstick: LipstickFinale, till: TillFinale, talk: TalkFinale, key: KeyFinale, rocket: RocketFinale, boat: BoatFinale, book: BookFinale, ship: ShipFinale, house: HouseFinale, justdoor: JustDoorFinale, vanity: VanityFinale, set: SetFinale, furnace: FurnaceFinale, glasshouse: GlassHouseFinale, cmo: CmoFinale, nlg: NlgFinale, yst: YstFinale, dam: DamFinale, rpd: RpdFinale, ycl: YclFinale, irt: IrtFinale, wxm: WxmFinale, scs: ScsFinale, hgl: HglFinale, ptd: PtdFinale, itd: ItdFinale }[plan.finale?.kind] || Wreck;
+  const Finale = { ferris: FerrisWheel, heart: HeartStage, home: HomeFinale, screen: ScreenFinale, door: DoorFinale, town: TownLineFinale, lamp: LampFinale, portrait: PortraitFinale, wedding: WeddingFinale, busstop: BusStopFinale, crown: CrownFinale, boombox: BoomboxFinale, lipstick: LipstickFinale, till: TillFinale, talk: TalkFinale, key: KeyFinale, rocket: RocketFinale, boat: BoatFinale, book: BookFinale, ship: ShipFinale, house: HouseFinale, justdoor: JustDoorFinale, vanity: VanityFinale, set: SetFinale, furnace: FurnaceFinale, glasshouse: GlassHouseFinale, cmo: CmoFinale, nlg: NlgFinale, yst: YstFinale, dam: DamFinale, rpd: RpdFinale, ycl: YclFinale, irt: IrtFinale, wxm: WxmFinale, scs: ScsFinale, hgl: HglFinale, ptd: PtdFinale, itd: ItdFinale, gco: GcoFinale, gsa: GsaFinale, mms: MmsFinale, tmf: TmfFinale }[plan.finale?.kind] || Wreck;
   const finale = plan.finale ? new Finale(scene, course, P, plan.finale, town) : null;
   const vehicles = plan.vehicles ? new Vehicles(scene, course, plan.vehicles) : null;
   const confetti = S.entry.confetti ? new Confetti(scene, S.entry.confettiColors || [P.heart ?? P.glow, P.edge, P.fret, 0xffffff, P.windowAlt, 0x5ff2ff], 1100, { normal: S.entry.confettiNormal }) : null;
   const trains = plan.trains ? new Train(course, plan.trains.x, plan.trains.passes) : null;
   town.track = track;
-  const WORLDS = { crash: CrashWorld, beach: BeachWorld, trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld, funeral: FuneralWorld, club: ClubWorld, school: SchoolWorld, candy: CandyWorld, court: CourtWorld, shop: ShopWorld, smarthome: SmartWorld, venue: VenueWorld, launch: LaunchWorld, hotel: HotelWorld, library: LibraryWorld, ice: IceWorld, family: FamilyWorld, guest: GuestWorld, glam: GlamWorld, selfie: SelfieWorld, foundry: FoundryWorld, estate: EstateWorld, cmo: CmoWorld, nlg: NlgWorld, yst: YstWorld, dam: DamWorld, rpd: RpdWorld, ycl: YclWorld, irt: IrtWorld, wxm: WxmWorld, scs: ScsWorld, hgl: HglWorld, ptd: PtdWorld, itd: ItdWorld };
+  const WORLDS = { crash: CrashWorld, beach: BeachWorld, trail: TrailWorld, cinema: CinemaWorld, cold: ColdWorld, sunday: SundayWorld, summer: SummerWorld, house: HouseWorld, funeral: FuneralWorld, club: ClubWorld, school: SchoolWorld, candy: CandyWorld, court: CourtWorld, shop: ShopWorld, smarthome: SmartWorld, venue: VenueWorld, launch: LaunchWorld, hotel: HotelWorld, library: LibraryWorld, ice: IceWorld, family: FamilyWorld, guest: GuestWorld, glam: GlamWorld, selfie: SelfieWorld, foundry: FoundryWorld, estate: EstateWorld, cmo: CmoWorld, nlg: NlgWorld, yst: YstWorld, dam: DamWorld, rpd: RpdWorld, ycl: YclWorld, irt: IrtWorld, wxm: WxmWorld, scs: ScsWorld, hgl: HglWorld, ptd: PtdWorld, itd: ItdWorld, gco: GcoWorld, gsa: GsaWorld, mms: MmsWorld, tmf: TmfWorld };
   const world = WORLDS[S.entry.world] ? new WORLDS[S.entry.world](scene, { course, plan, P, track, rider, town }) : null;
   const hemi = new THREE.HemisphereLight(new THREE.Color(P.skyLight ?? 0x6a5a9a), new THREE.Color(P.bounce ?? 0x5a3a2a), P.hemiK ?? 1.9);
   scene.add(hemi);
@@ -1355,10 +1366,11 @@ function endSong() {
   try { if (st.dist > (+localStorage.getItem('lc-best-' + S.id) || 0)) localStorage.setItem('lc-best-' + S.id, st.dist); } catch (e) { /* private mode */ }
   hud.hideAll();
   S.endShown = performance.now();
-  const i = S.index, last = i >= ALBUM.length - 1;
-  const next = { label: 'Next song', key: 'enter', go: () => chooseSong(i + 1) };
+  // the next one in the list (the bonus track only once it's picked)
+  const i = S.index, inList = listed(), k = inList.indexOf(i), last = k < 0 || k >= inList.length - 1;
+  const next = { label: 'Next song', key: 'enter', go: () => chooseSong(inList[k + 1]) };
   const again = { label: 'Ride again', key: 'R', code: 'KeyR', go: rideAgain };
-  const menu = { label: 'All songs', key: 'M', code: 'KeyM', go: () => openMenu(last ? 0 : i + 1) };
+  const menu = { label: 'All songs', key: 'M', code: 'KeyM', go: () => openMenu(last ? inList[0] : inList[k + 1]) };
   const data = { title: S.entry.title, accent: S.entry.accent || '#ff4f9a', points, grade, best: prev ? prev.best : 0, newBest: !!(prev && prev.best > 0 && points > prev.best),
     dist: st.dist, inTime, perfects: st.perfects, bestStreak: st.bestStreak, notes: st.notes, notesTotal: st.notesTotal, top: st.top, collect: S.entry.collect, tricks: st.tricks,
     level: { before: res.before, gained: points, need: levelNeed } };

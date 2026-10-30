@@ -5,7 +5,10 @@
 // The songs added on 27 Oct 2026 keep their entry and palettes in their own <prefix>-song.js, beside
 // their place; seven go in before Heart of the Party and CUT ME OFF goes after it, last on the record
 // (bottom of this file). Summa Cum Stupid (scs, added later on 27 Oct 2026) goes in with the seven, after White Christmas;
-// Hot Girl Lobotomy (hgl), PTSDream Girl (ptd) and Isn't That the Dream (itd), added 28 Oct 2026, after it.
+// Hot Girl Lobotomy (hgl), PTSDream Girl (ptd) and Isn't That the Dream (itd), added 28 Oct 2026, after it;
+// Good Company (gco), Grocery Store at 2 AM (gsa) and Miss Misdemeanor (mms), added 29 Oct 2026, after those.
+// Try Me Free! (tmf) is the bonus track: last of all, out of the song list until a pick is spent on it
+// (`bonus: true`; main.js and menu.js).
 
 import * as nlg from './nlg-song.js';
 import * as yst from './yst-song.js';
@@ -19,7 +22,11 @@ import * as scs from './scs-song.js';
 import * as hgl from './hgl-song.js';
 import * as ptd from './ptd-song.js';
 import * as itd from './itd-song.js';
-const ADDED = [nlg, yst, dam, rpd, ycl, irt, wxm, scs, hgl, ptd, itd];
+import * as gco from './gco-song.js';
+import * as gsa from './gsa-song.js';
+import * as mms from './mms-song.js';
+import * as tmf from './tmf-song.js';
+const ADDED = [nlg, yst, dam, rpd, ycl, irt, wxm, scs, hgl, ptd, itd, gco, gsa, mms];
 
 // a doorway between the rooms of her apartment
 const DOOR = { kind: 'wall', hw: 11.5, hh: 30 };
@@ -5262,4 +5269,6 @@ export const PALETTES = {
 // the songs added on 27 Oct 2026: seven in before Heart of the Party, and CUT ME OFF to close the record
 ALBUM.splice(ALBUM.findIndex((e) => e.id === 'heart-of-the-party'), 0, ...ADDED.map((m) => m.song));
 ALBUM.push(cmo.song);
-for (const m of [...ADDED, cmo]) Object.assign(PALETTES, m.palettes);
+// and the bonus track after everything, its own pick to open
+ALBUM.push({ ...tmf.song, bonus: true });
+for (const m of [...ADDED, cmo, tmf]) Object.assign(PALETTES, m.palettes);

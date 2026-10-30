@@ -4,7 +4,7 @@
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const COLLECT = { duck: 'DUCKS', key: 'KEYS', lily: 'LILIES', corn: 'CANDY CORN', chip: 'CHIPS', pick: 'PICKS', star: 'STARS', coin: 'COINS', quill: 'QUILLS', flake: 'SNOWFLAKES', apple: 'APPLES', bulb: 'LIGHTS', like: 'LIKES', ember: 'EMBERS', pearl: 'PEARLS', lips: 'KISSES', shell: 'SHELLS', candy: 'CANDIES', perfume: 'PERFUMES', donut: 'DONUTS', cuffs: 'CUFFS', coffee: 'COFFEES', crown: 'CROWNS', popsicle: 'ICE POPS', drink: 'DRINKS', pin: 'PINS', heart: 'HEARTS', polaroid: 'PHOTOS', whistle: 'WHISTLES', cup: 'CUPS', tab: 'TABS', w: "W'S", tealight: 'CANDLES', pill: 'PILLS', tag: 'DOG TAGS' };
+const COLLECT = { duck: 'DUCKS', key: 'KEYS', lily: 'LILIES', corn: 'CANDY CORN', chip: 'CHIPS', pick: 'PICKS', star: 'STARS', coin: 'COINS', quill: 'QUILLS', flake: 'SNOWFLAKES', apple: 'APPLES', bulb: 'LIGHTS', like: 'LIKES', ember: 'EMBERS', pearl: 'PEARLS', lips: 'KISSES', shell: 'SHELLS', candy: 'CANDIES', perfume: 'PERFUMES', donut: 'DONUTS', cuffs: 'CUFFS', coffee: 'COFFEES', crown: 'CROWNS', popsicle: 'ICE POPS', drink: 'DRINKS', pin: 'PINS', heart: 'HEARTS', polaroid: 'PHOTOS', whistle: 'WHISTLES', cup: 'CUPS', tab: 'TABS', w: "W'S", tealight: 'CANDLES', pill: 'PILLS', tag: 'DOG TAGS', rose: 'ROSES', sticky: 'STICKY NOTES', can: 'CANS', sample: 'SAMPLES' };
 export const collectName = (k) => COLLECT[k] || 'DIAMONDS';
 // the course's parts, coloured as the ride's own songbar has them
 const KIND_COLOR = ['#8a7aa8', '#b78bd6', '#ff9ec9', '#ff5fa2', '#ff7fbf', '#7fd8ff', '#ffffff', '#ff3d8b', '#8a7aa8', '#5cffa8'];
@@ -72,14 +72,23 @@ export class Screens {
   }
 
   // ---------- the album ----------
+  // songs: [{ id, index (its place on the record), title, accent, image, best, grade }]; onChoose
+  // gets the record's index. hooks: preview(id), stopPreview(), songs() (the list again, after a pick)
   showMenu(songs, selected, onChoose, me, hooks = {}) {
-    this.active = 'menu'; this.onChoose = onChoose; this.songs = songs; this.me = me || null; this.hooks = hooks;
+    this.active = 'menu'; this.onChoose = onChoose; this.me = me || null; this.hooks = hooks;
     this._renderMe();
     this._renderGear();
     this.closeLocker(true);
+    this._renderList(songs);
+    this.menu.classList.add('on');
+    this.root.classList.add('on');
+    this._select(Math.max(0, Math.min(songs.length - 1, selected)), true);
+  }
+  _renderList(songs) {
+    this.songs = songs;
     this.list.innerHTML = songs.map((s, i) => `
       <li data-i="${i}" style="--accent:${s.accent}"${s.title.length > 30 ? ' class="long"' : ''}>
-        <span class="num">${String(i + 1).padStart(2, '0')}</span>
+        <span class="num">${String((s.index ?? i) + 1).padStart(2, '0')}</span>
         <span class="title">${esc(s.title)}</span>
         <span class="grade${s.grade ? ' g' + s.grade : ''}">${s.grade || ''}</span>
       </li>`).join('');
@@ -106,14 +115,14 @@ export class Screens {
         else this._select(i);
       });
     });
-    this.menu.classList.add('on');
-    this.root.classList.add('on');
-    this._select(Math.max(0, Math.min(songs.length - 1, selected)), true);
   }
+  // the song you're on, by its id
+  _songAt(id) { return this.songs ? this.songs.findIndex((s) => s.id === id) : -1; }
   _select(i, instant = false) {
     if (i === this.sel && !instant && this.items[i]?.classList.contains('sel')) return;
     if (!instant) this._sfx('move', i);
     this._selAt = performance.now();   // (the list scrolling to keep it in view isn't a finger: no clicks for it)
+    if (!this.lockerOn && this._hearing) { this._hearing = null; this.menu.querySelectorAll('.card.song.hear').forEach((c) => c.classList.remove('hear')); }
     this.sel = i;
     this.items.forEach((li, k) => li.classList.toggle('sel', k === i));
     this._reveal(instant);
@@ -132,13 +141,15 @@ export class Screens {
     this._detail();
     // hear it, once you've stopped on it a moment
     clearTimeout(this._pvT);
-    this._pvT = setTimeout(() => { if (this.active === 'menu' && this.sel === i && this.hooks.preview) this.hooks.preview(i); }, instant ? 150 : 380);
+    this._pvT = setTimeout(() => { if (this.active === 'menu' && this.sel === i && this.hooks.preview && !this._lockerSong()) this.hooks.preview(s.id); }, instant ? 150 : 380);
   }
+  // back to the song you're on in the list (after hearing another)
+  _previewSel() { const s = this.songs && this.songs[this.sel]; if (s && this.active === 'menu' && this.hooks.preview) this.hooks.preview(s.id); }
   _detail() {
     const s = this.songs && this.songs[this.sel];
     if (!s) return;
     const pr = this.profiles && this.profiles[s.id];
-    this.picNum.textContent = String(this.sel + 1).padStart(2, '0');
+    this.picNum.textContent = String((s.index ?? this.sel) + 1).padStart(2, '0');
     this.dName.textContent = s.title;
     this.dName.classList.toggle('long', s.title.length > 26);
     this.rideWhat.textContent = s.title;
@@ -195,7 +206,7 @@ export class Screens {
     if (this.hooks.stopPreview) this.hooks.stopPreview();
     this._sfx('ride');
     this.hideMenu();
-    if (this.onChoose) this.onChoose(i);
+    if (this.onChoose) this.onChoose(this.songs[i]?.index ?? i);
   }
   hideMenu() { this.menu.classList.remove('on'); this.closeLocker(true); if (this.active === 'menu') this.active = null; clearTimeout(this._pvT); this._rootOff(); }
 
@@ -210,25 +221,31 @@ export class Screens {
     const pk = this.meEl.querySelector('.pk');
     if (pk) pk.addEventListener('click', (e) => { e.stopPropagation(); this.openLocker(); });
   }
-  // a rider or a board as a card: its picture, its name, and a lock (or PICK, with a pick to spend)
+  // a rider, a board or a bonus track as a card: its picture, its name, and a lock (or PICK, with a
+  // pick to spend); a track you have shows its number on the record, and one you're looking at in
+  // the locker plays (the little bars say so)
   _card(it, cur, picks, i) {
     const state = it.owned ? (cur ? 'cur' : '') : (picks ? 'pick' : 'shut');
+    const song = it.kind === 'song';
     return `<button class="card ${it.kind} ${state}" data-kind="${it.kind}" data-id="${esc(it.id)}"${i !== undefined ? ` data-i="${i}"` : ''} style="--bc:${it.color}" title="${esc(it.name)}">
         <span class="pic"${it.image ? ` style="background-image:url(${it.image})"` : ''}></span>
         <span class="nm">${esc(it.name)}</span>
-        ${it.owned ? '' : `<span class="lk">${picks ? 'PICK' : LOCK}</span>`}
+        ${song ? '<span class="eq"><i></i><i></i><i></i></span>' : ''}
+        ${it.owned ? (song && it.num ? `<span class="tn">${String(it.num).padStart(2, '0')}</span>` : '') : `<span class="lk">${picks ? 'PICK' : LOCK}</span>`}
       </button>`;
   }
-  // on a wide screen the riders and the boards are right there; on a phone, two buttons that
-  // open them
+  // on a wide screen the riders, the boards and the bonus track are right there; on a phone, two
+  // buttons that open the locker
   _renderGear() {
     const me = this.me && this.me.get();
     if (!me || !this.gear) { if (this.gear) this.gear.innerHTML = ''; return; }
     const rider = me.riders.find((r) => r.id === me.rider) || me.riders[0];
     const board = me.boards.find((b) => b.id === me.board) || me.boards[0];
     const strip = (kind, list, cur) => `<div class="row ${kind}"><div class="lbl">${kind === 'rider' ? 'RIDER' : 'BOARD'}<span class="nm">${esc(cur.name)}</span></div><div class="strip">${list.map((it) => this._card(it, it.id === cur.id, me.picks)).join('')}</div></div>`;
+    const songs = me.songs || [];
+    const bonus = songs.length ? `<div class="row song"><div class="lbl">BONUS<span class="nm">${esc(songs[0].name)}</span></div><div class="strip">${songs.map((it) => this._card(it, false, me.picks)).join('')}</div></div>` : '';
     const btn = (kind, cur) => `<button class="pickbtn ${kind}" data-kind="${kind}"><span class="pic"${cur.image ? ` style="background-image:url(${cur.image})"` : ''}></span><span class="t"><span class="l">${kind === 'rider' ? 'RIDER' : 'BOARD'}</span><span class="n">${esc(cur.name)}</span></span>${me.picks ? '<span class="hot"></span>' : ''}</button>`;
-    this.gear.innerHTML = `<div class="strips">${strip('rider', me.riders, rider)}${strip('board', me.boards, board)}</div>`
+    this.gear.innerHTML = `<div class="strips">${strip('rider', me.riders, rider)}${strip('board', me.boards, board)}${bonus}</div>`
       + `<div class="btns">${btn('rider', rider)}${btn('board', board)}</div>`;
     this.gear.querySelectorAll('.strips .card').forEach((el) => el.addEventListener('click', (e) => { e.stopPropagation(); this._gearPick(el.dataset.kind, el.dataset.id, el); }));
     this.gear.querySelectorAll('.pickbtn').forEach((el) => el.addEventListener('click', (e) => { e.stopPropagation(); this.openLocker(el.dataset.kind); }));
@@ -236,10 +253,42 @@ export class Screens {
   // choose a rider or board you have; spend a pick on one you don't; or no
   _gearPick(kind, id, el) {
     const ok = this.me.pick(kind, id);
+    if (kind === 'song') { this._songPick(id, ok, el); return; }
     if (ok === 'unlocked') { this._sfx('unlock'); this._afterGear(kind, id, 'won'); }
     else if (ok === 'chosen') { this._sfx('gear', id.length); this._afterGear(kind, id, 'took'); }
     else { if (el) { el.classList.remove('no'); void el.offsetWidth; el.classList.add('no'); } this._sfx('no'); }
   }
+  // a bonus track: picked, it goes on the end of the list and the list goes to it; one you have,
+  // the list goes to it; no pick to spend, a shake, and a listen anyway (it's free to try)
+  _songPick(id, ok, el) {
+    if (ok === 'unlocked') {
+      this._sfx('unlock');
+      this._afterGear('song', id, 'won');
+      if (this.hooks.songs) { const keep = this.sel; this._renderList(this.hooks.songs()); this.items.forEach((li, k) => li.classList.toggle('sel', k === keep)); }
+      const k = this._songAt(id);
+      clearTimeout(this._newT);
+      this._newT = setTimeout(() => {
+        if (this.active !== 'menu' || k < 0) return;
+        this._hearing = null; this.menu.querySelectorAll('.card.song.hear').forEach((c) => c.classList.remove('hear'));
+        if (this.lockerOn) this.closeLocker();
+        this._select(k);
+        const li = this.items[k]; if (li) { li.classList.remove('new'); void li.offsetWidth; li.classList.add('new'); }
+      }, this.lockerOn ? 1100 : 450);
+    } else if (ok === 'chosen') {
+      const k = this._songAt(id); if (k < 0) return;
+      this._hearing = null;
+      if (this.lockerOn) this.closeLocker();
+      this._select(k);
+    } else {
+      if (el) { el.classList.remove('no'); void el.offsetWidth; el.classList.add('no'); }
+      this._sfx('no');
+      this._hearSong(id);
+    }
+  }
+  // a bonus track's preview, over the song the list is on; and back to that one
+  _hearSong(id) { if (!this.hooks.preview) return; this._hearing = id; clearTimeout(this._pvT); this.hooks.preview(id); this.menu.querySelectorAll('.card.song').forEach((c) => c.classList.toggle('hear', c.dataset.id === id)); }
+  _unhear() { if (!this._hearing) return; this._hearing = null; this.menu.querySelectorAll('.card.song.hear').forEach((c) => c.classList.remove('hear')); this._previewSel(); }
+  _lockerSong() { return this.lockerOn && this._hearing; }
   _afterGear(kind, id, fx) {
     this._renderMe(); this._renderGear();
     if (this.lockerOn) this._renderLocker();
@@ -256,31 +305,36 @@ export class Screens {
     this._gearPick(kind, list[(k + dir + list.length) % list.length].id);
   }
 
-  // the locker: every rider and board in a grid, over the album (on a phone, all of the screen)
+  // the locker: every rider, board and bonus track in a grid, over the album (on a phone, all of
+  // the screen)
   openLocker(focus = 'rider') {
     if (!this.me || this.lockerOn) return;
     this.lockerOn = true;
-    const me = this.me.get();
-    this.lsel = focus === 'board' ? me.riders.length + Math.max(0, me.boards.findIndex((b) => b.id === me.board)) : Math.max(0, me.riders.findIndex((r) => r.id === me.rider));
+    const me = this.me.get(), nR = me.riders.length, nB = me.boards.length;
+    this.lsel = focus === 'song' && me.songs.length ? nR + nB : focus === 'board' ? nR + Math.max(0, me.boards.findIndex((b) => b.id === me.board)) : Math.max(0, me.riders.findIndex((r) => r.id === me.rider));
     this._renderLocker();
     this.locker.classList.add('on'); this.menu.classList.add('locked');
-    if (focus === 'board') { const b = this.locker.querySelector('.lhead.sub'); if (b) b.scrollIntoView({ block: 'start' }); }
+    if (focus !== 'rider') { const b = this.locker.querySelector(focus === 'song' ? '.lhead.songs' : '.lhead.sub'); if (b) b.scrollIntoView({ block: 'start' }); }
     this._sfx('open');
   }
   closeLocker(quiet) {
     if (!this.locker) return;
     if (!quiet && this.lockerOn) this._sfx('close');
     this.lockerOn = false; this.locker.classList.remove('on'); this.menu.classList.remove('locked');
+    // (a bonus track you were hearing in it gives way to the song the list is on)
+    if (this._hearing) { if (quiet) this._hearing = null; else this._unhear(); }
     if (!quiet) { this._renderMe(); this._renderGear(); }
   }
-  _lockerItems(me) { return [...me.riders, ...me.boards]; }
+  _lockerItems(me) { return [...me.riders, ...me.boards, ...me.songs]; }
   _renderLocker() {
     const me = this.me.get();
-    const nR = me.riders.length;
+    const nR = me.riders.length, nB = me.boards.length;
     this.locker.innerHTML = `<div class="lhead"><span>RIDERS</span><span class="lp">${me.picks ? me.picks + ' TO PICK' : 'ONE MORE EACH LEVEL'}</span><button class="x" aria-label="close">&times;</button></div>
       <div class="grid riders">${me.riders.map((r, i) => this._card(r, r.id === me.rider, me.picks, i)).join('')}</div>
       <div class="lhead sub"><span>BOARDS</span></div>
       <div class="grid boards">${me.boards.map((b, i) => this._card(b, b.id === me.board, me.picks, nR + i)).join('')}</div>
+      ${me.songs.length ? `<div class="lhead sub songs"><span>BONUS TRACK</span></div>
+      <div class="grid songs">${me.songs.map((s, i) => this._card(s, false, me.picks, nR + nB + i)).join('')}</div>` : ''}
       <div class="foot"><span class="kb"><b>&larr; &rarr; &uarr; &darr;</b>&nbsp; look &nbsp;&middot;&nbsp; <b>enter</b>&nbsp; ride it &nbsp;&middot;&nbsp; <b>esc</b>&nbsp; songs</span><span class="tp">tap one to ride it &nbsp;&middot;&nbsp; tap outside for the songs</span></div>`;
     this.locker.querySelector('.x').addEventListener('click', (e) => { e.stopPropagation(); this.closeLocker(); });
     this.locker.querySelectorAll('.card').forEach((el) => {
@@ -289,15 +343,33 @@ export class Screens {
     });
     this._lockerFocus();
   }
-  _lockerFocus() { this.locker.querySelectorAll('.card').forEach((el) => el.classList.toggle('foc', +el.dataset.i === this.lsel)); }
-  // arrows: along a row, and between the riders and the boards
+  // the card you're on; a bonus track plays while you're on it
+  _lockerFocus() {
+    this.locker.querySelectorAll('.card').forEach((el) => el.classList.toggle('foc', +el.dataset.i === this.lsel));
+    const it = this._lockerItems(this.me.get())[this.lsel];
+    if (it && it.kind === 'song') this._hearSong(it.id); else this._unhear();
+  }
+  // arrows: along the cards in order, and up and down to the nearest card in the row above or below
   _lockerMove(k) {
-    const me = this.me.get(), nR = me.riders.length, nB = me.boards.length, n = nR + nB, i = this.lsel;
-    const cols = window.innerWidth < 700 && window.innerHeight > window.innerWidth ? 3 : 5;
+    const cards = [...this.locker.querySelectorAll('.card')], n = cards.length, i = this.lsel;
+    if (!n) return;
     if (k === 'right') this.lsel = (i + 1) % n;
     else if (k === 'left') this.lsel = (i - 1 + n) % n;
-    else if (k === 'down') this.lsel = i < nR ? Math.min(n - 1, nR + Math.min(nB - 1, i)) : Math.min(n - 1, i + cols);
-    else if (k === 'up') this.lsel = i >= nR + cols ? i - cols : (i >= nR ? Math.min(nR - 1, i - nR) : i);
+    else {
+      const cur = cards.find((el) => +el.dataset.i === i);
+      if (cur) {
+        const r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, down = k === 'down';
+        let best = null, bestRow = Infinity, bestDx = Infinity;
+        for (const el of cards) {
+          const q = el.getBoundingClientRect();
+          const row = down ? q.top - r.bottom : r.top - q.bottom;
+          if (row < -4) continue;
+          const dx = Math.abs(q.left + q.width / 2 - cx);
+          if (row < bestRow - 4 || (Math.abs(row - bestRow) <= 4 && dx < bestDx)) { best = el; bestRow = row; bestDx = dx; }
+        }
+        if (best) this.lsel = +best.dataset.i;
+      }
+    }
     if (this.lsel !== i) this._sfx('move', this.lsel);
     this._lockerFocus();
     const el = this.locker.querySelector(`.card[data-i="${this.lsel}"]`); if (el) el.scrollIntoView({ block: 'nearest' });
