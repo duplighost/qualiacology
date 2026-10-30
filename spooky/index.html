@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07060c">
+  <title>Spooky Games | Qualiacology</title>
+  <meta name="description" content="Spooky Games: OLLY OLLY, FETCH, STARSTRUCK, We Were Promised Morning and BELFRY. Five Halloween games that play in your browser.">
+  <link rel="canonical" href="https://qualiacology.com/spooky/">
+  <link rel="icon" href="/spooky/pumpkin.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:title" content="Spooky Games">
+  <meta property="og:description" content="OLLY OLLY, FETCH, STARSTRUCK, We Were Promised Morning and BELFRY. Five Halloween games that play in your browser.">
+  <meta property="og:url" content="https://qualiacology.com/spooky/">
+  <meta property="og:image" content="https://qualiacology.com/assets/og/spooky-og-v1.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Spooky Games, lit like a jack-o’-lantern under a full moon, bats circling and five gravestones in the fog">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Spooky Games">
+  <meta name="twitter:description" content="OLLY OLLY, FETCH, STARSTRUCK, We Were Promised Morning and BELFRY. Five Halloween games that play in your browser.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/og/spooky-og-v1.jpg">
+  <link rel="preload" href="/assets/fonts/archivo-black-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/fraunces-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/spooky/spooky.css?v=1">
+  <script>document.documentElement.classList.replace("no-js", "js");</script>
+  <script src="/spooky/spooky.js?v=1" defer></script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Spooky Games","url":"https://qualiacology.com/spooky/","mainEntity":{"@type":"ItemList","numberOfItems":5,"itemListElement":[{"@type":"ListItem","position":1,"name":"OLLY OLLY","url":"https://qualiacology.com/olly-olly/"},{"@type":"ListItem","position":2,"name":"FETCH","url":"https://qualiacology.com/fetch/"},{"@type":"ListItem","position":3,"name":"STARSTRUCK","url":"https://qualiacology.com/starstruck/"},{"@type":"ListItem","position":4,"name":"We Were Promised Morning","url":"https://qualiacology.com/curfew/"},{"@type":"ListItem","position":5,"name":"BELFRY","url":"https://qualiacology.com/belfry/"}]}}</script>
+</head>
+<body>
+  <a class="skip" href="#olly-olly">Skip to the games</a>
+
+  <canvas class="weather" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="hero" id="top" data-zone="hero">
+    <canvas class="sky-back" aria-hidden="true"></canvas>
+    <canvas class="land" aria-hidden="true"></canvas>
+    <canvas class="sky-front" aria-hidden="true"></canvas>
+    <div class="fog fog-back" aria-hidden="true"></div>
+
+    <h1 class="title">
+      <span class="sr-only">Spooky Games</span>
+      <svg class="title-glow" viewBox="0 0 1000 560" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="fire" x1="0" y1="20" x2="0" y2="560" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#ffd877"/>
+            <stop offset=".3" stop-color="#ffaa2c"/>
+            <stop offset=".62" stop-color="#ff7313"/>
+            <stop offset=".86" stop-color="#d33e0a"/>
+            <stop offset="1" stop-color="#8f1d06"/>
+          </linearGradient>
+          <filter id="carve" x="-4%" y="-6%" width="108%" height="112%">
+            <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="4" result="n"/>
+            <feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G"/>
+          </filter>
+          <filter id="core" x="-4%" y="-6%" width="108%" height="112%">
+            <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="4" result="n"/>
+            <feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G" result="cut"/>
+            <feMorphology in="cut" operator="erode" radius="10" result="thin"/>
+            <feGaussianBlur in="thin" stdDeviation="6" result="soft"/>
+            <feComposite in="soft" in2="cut" operator="in"/>
+          </filter>
+          <filter id="halo" x="-20%" y="-30%" width="140%" height="160%">
+            <feGaussianBlur stdDeviation="16"/>
+          </filter>
+        </defs>
+        <g filter="url(#halo)" fill="#ff6400">
+          <text x="10" y="248" textLength="980" lengthAdjust="spacingAndGlyphs">SPOOKY</text>
+          <text x="96" y="520" textLength="808" lengthAdjust="spacingAndGlyphs">GAMES</text>
+        </g>
+      </svg>
+      <svg class="title-face" viewBox="0 0 1000 560" aria-hidden="true" focusable="false">
+        <g class="drips" fill="url(#fire)"></g>
+        <g filter="url(#carve)" fill="url(#fire)" stroke="#2b0b03" stroke-width="3.5" paint-order="stroke">
+          <text x="10" y="248" textLength="980" lengthAdjust="spacingAndGlyphs">SPOOKY</text>
+          <text x="96" y="520" textLength="808" lengthAdjust="spacingAndGlyphs">GAMES</text>
+        </g>
+      </svg>
+      <svg class="title-core" viewBox="0 0 1000 560" aria-hidden="true" focusable="false">
+        <g filter="url(#core)" fill="#ffe7a1">
+          <text x="10" y="248" textLength="980" lengthAdjust="spacingAndGlyphs">SPOOKY</text>
+          <text x="96" y="520" textLength="808" lengthAdjust="spacingAndGlyphs">GAMES</text>
+        </g>
+      </svg>
+    </h1>
+
+    <nav class="graveyard" aria-label="The games">
+      <a class="stone stone-1" href="#olly-olly">
+        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 3c-6 0-9.5 5-9.5 11v13.5l3-2.4 3 2.4 3.5-2.6 3.5 2.6 3-2.4 3 2.4V14C25.5 8 22 3 16 3Z"/><ellipse class="cut" cx="12.6" cy="13.5" rx="1.9" ry="2.6"/><ellipse class="cut" cx="19.4" cy="13.5" rx="1.9" ry="2.6"/></svg>
+          <span class="name">OLLY OLLY</span></span>
+      </a>
+      <a class="stone stone-2" href="#fetch">
+        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 3.5C9.4 3.5 5.5 8.4 5.5 14c0 3.6 1.7 6.2 4 7.5V26c0 1.4 1 2.5 2.4 2.5h8.2c1.4 0 2.4-1.1 2.4-2.5v-4.5c2.3-1.3 4-3.9 4-7.5 0-5.6-3.9-10.5-10.5-10.5Z"/><ellipse class="cut" cx="11.6" cy="14.6" rx="2.9" ry="3.3"/><ellipse class="cut" cx="20.4" cy="14.6" rx="2.9" ry="3.3"/><path class="cut" d="M16 18.6l-1.7 3.4h3.4z"/></svg>
+          <span class="name">FETCH</span></span>
+      </a>
+      <a class="stone stone-3" href="#starstruck">
+        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 2.8l3.9 8.1 8.9 1.2-6.5 6.2 1.6 8.8L16 22.9l-7.9 4.2 1.6-8.8-6.5-6.2 8.9-1.2z"/></svg>
+          <span class="name">STARSTRUCK</span></span>
+      </a>
+      <a class="stone stone-4" href="#curfew">
+        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M6 22a10 10 0 0 1 20 0z"/><path d="M15 4h2v5h-2zM5.6 8.4l1.4-1.4 3.5 3.5-1.4 1.4zM21.5 10.5l3.5-3.5 1.4 1.4-3.5 3.5zM2 21h3v2H2zM27 21h3v2h-3zM2 25h28v2H2z"/></svg>
+          <span class="name">We Were Promised Morning</span></span>
+      </a>
+      <a class="stone stone-5" href="#belfry">
+        <span class="slab"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 12.2l-1.6-3.3-.9 2.6c-2.4.1-4 1.1-5 2.7-1.6-1.3-3.7-1.9-6.5-1.6 1.5 1.3 2.2 2.8 2.1 4.6 1.4-.6 2.9-.5 4.1.4.5 1.6.3 3.2-.6 4.7 2.5-.5 4.6-1.6 6-3.1.4 1 .9 1.9 2.4 3.3 1.5-1.4 2-2.3 2.4-3.3 1.4 1.5 3.5 2.6 6 3.1-.9-1.5-1.1-3.1-.6-4.7 1.2-.9 2.7-1 4.1-.4-.1-1.8.6-3.3 2.1-4.6-2.8-.3-4.9.3-6.5 1.6-1-1.6-2.6-2.6-5-2.7l-.9-2.6Z"/></svg>
+          <span class="name">BELFRY</span></span>
+      </a>
+    </nav>
+
+    <div class="pumpkin pumpkin-1" aria-hidden="true"></div>
+    <div class="pumpkin pumpkin-2" aria-hidden="true"></div>
+    <div class="pumpkin pumpkin-3" aria-hidden="true"></div>
+    <div class="fog fog-front" aria-hidden="true"></div>
+    <div class="ground" aria-hidden="true"></div>
+  </header>
+
+  <main>
+    <section class="scene copy-right" id="olly-olly" data-zone="leaves" style="--accent:#ff8a2a; --fx:50%; --fy:46%;" aria-labelledby="olly-olly-title">
+      <div class="stage">
+        <picture>
+          <source type="image/avif" srcset="/spooky/art/olly-olly-960.avif 960w, /spooky/art/olly-olly-1600.avif 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <source type="image/webp" srcset="/spooky/art/olly-olly-960.webp 960w, /spooky/art/olly-olly-1600.webp 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <img src="/spooky/art/olly-olly-1600.webp" width="1600" height="900" alt="A child in a bedsheet ghost costume walks a wet street of red leaves on Halloween night with a flashlight and a candy bag, past porches of jack-o’-lanterns, toward a church steeple under a full moon. A tall figure in a stained bedsheet stands under the trees." loading="lazy" decoding="async">
+        </picture>
+        <div class="fx" aria-hidden="true">
+          <i class="glow warm" style="--x:9.8; --y:36.7; --r:4.6;"></i>
+          <i class="glow warm" style="--x:18.3; --y:40.3; --r:3;"></i>
+          <i class="glow warm" style="--x:26.7; --y:46.8; --r:4.8;"></i>
+          <i class="glow warm" style="--x:24; --y:47.9; --r:2.4;"></i>
+          <i class="glow warm" style="--x:44.4; --y:46.1; --r:2.4;"></i>
+          <i class="glow warm" style="--x:71.3; --y:51.6; --r:1.8;"></i>
+          <i class="glow warm steady" style="--x:15.7; --y:20.7; --r:4;"></i>
+          <i class="glow torch" style="--x:30.8; --y:56.6; --r:3.4;"></i>
+          <i class="haunt"></i>
+        </div>
+        <div class="dark"></div>
+      </div>
+      <div class="copy">
+        <p class="genre">Narrative FPS</p>
+        <h2 class="scene-title" id="olly-olly-title">OLLY OLLY</h2>
+        <p class="line">Your brother died on Halloween. Now it’s your turn.</p>
+        <a class="play" href="/olly-olly/">Go out <span class="arrow" aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
+    <section class="scene copy-right" id="fetch" data-zone="rain" style="--accent:#8fd6ff; --fx:42%; --fy:40%;" aria-labelledby="fetch-title">
+      <div class="stage">
+        <picture>
+          <source type="image/avif" srcset="/spooky/art/fetch-960.avif 960w, /spooky/art/fetch-1600.avif 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <source type="image/webp" srcset="/spooky/art/fetch-960.webp 960w, /spooky/art/fetch-1600.webp 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <img src="/spooky/art/fetch-1600.webp" width="1600" height="900" alt="From a doorway, a hand reaches for a cracked skull with glowing eyes floating with an old key in its teeth. Behind it a flooded graveyard path leads to an iron gate, where a gaunt figure waits under a full moon." loading="lazy" decoding="async">
+        </picture>
+        <div class="fx" aria-hidden="true">
+          <i class="glow eye" style="--x:37; --y:32.4; --r:2.6;"></i>
+          <i class="glow eye" style="--x:43.3; --y:30.5; --r:2.6;"></i>
+          <i class="glow warm" style="--x:20; --y:33.3; --r:2.6;"></i>
+          <i class="glow warm steady" style="--x:35.8; --y:3.7; --r:2.4;"></i>
+        </div>
+        <div class="dark"></div>
+      </div>
+      <div class="copy">
+        <p class="genre">Puzzle, Action</p>
+        <h2 class="scene-title" id="fetch-title">FETCH</h2>
+        <p class="line">Use Your New Pet Skull to get the fuck out of there.</p>
+        <a class="play" href="/fetch/">Pick it up <span class="arrow" aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
+    <section class="scene copy-left" id="starstruck" data-zone="motes" style="--accent:#ffd36b; --fx:55%; --fy:45%;" aria-labelledby="starstruck-title">
+      <div class="stage">
+        <picture>
+          <source type="image/avif" srcset="/spooky/art/starstruck-960.avif 960w, /spooky/art/starstruck-1600.avif 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <source type="image/webp" srcset="/spooky/art/starstruck-960.webp 960w, /spooky/art/starstruck-1600.webp 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <img src="/spooky/art/starstruck-1600.webp" width="1600" height="900" alt="From a sea cave beside a waterfall, a shotgun in one hand and a throwing blade in the other: the drowned dead of a party, a man in a tuxedo and two women in evening dresses, wade through glowing blue water with jellyfish, under villas lit on the cliffs and a full moon." loading="lazy" decoding="async">
+        </picture>
+        <div class="fx" aria-hidden="true">
+          <i class="glow jelly" style="--x:62; --y:83; --r:3.4;"></i>
+          <i class="glow jelly" style="--x:68.3; --y:87.4; --r:3.8;"></i>
+          <i class="flashes"></i>
+        </div>
+        <div class="dark"></div>
+      </div>
+      <div class="copy">
+        <p class="genre">Zombie Hollywood FPS Survival</p>
+        <h2 class="scene-title" id="starstruck-title">STARSTRUCK</h2>
+        <p class="line">Nobody Famous ever dies. Until Tonight.</p>
+        <a class="play" href="/starstruck/">Survive the night <span class="arrow" aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
+    <section class="scene copy-right" id="curfew" data-zone="snow" style="--accent:#ffb38a; --fx:42%; --fy:50%;" aria-labelledby="curfew-title">
+      <div class="stage">
+        <picture>
+          <source type="image/avif" srcset="/spooky/art/curfew-960.avif 960w, /spooky/art/curfew-1600.avif 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <source type="image/webp" srcset="/spooky/art/curfew-960.webp 960w, /spooky/art/curfew-1600.webp 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <img src="/spooky/art/curfew-1600.webp" width="1600" height="900" alt="A loaded station wagon stopped on a snowy hillside at night, one headlight on, above a valley of pines: a lit petrol station, a watchtower, chapel ruins, a winding road and a walled castle town under a full moon." loading="lazy" decoding="async">
+        </picture>
+        <div class="fx" aria-hidden="true">
+          <i class="dawn"></i>
+          <i class="glow head" style="--x:32.2; --y:73; --r:5.2;"></i>
+          <i class="glow warm steady" style="--x:51.7; --y:61.6; --r:3.2;"></i>
+        </div>
+        <div class="dark"></div>
+      </div>
+      <div class="copy">
+        <p class="genre">Massive Open World FPS RPG</p>
+        <h2 class="scene-title" id="curfew-title">We Were Promised Morning</h2>
+        <p class="line">Get it? See what I did there?</p>
+        <a class="play" href="/curfew/">Go outside <span class="arrow" aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
+    <section class="scene copy-left" id="belfry" data-zone="glitter" style="--accent:#b8c8ff; --fx:40%; --fy:46%;" aria-labelledby="belfry-title">
+      <div class="stage">
+        <picture>
+          <source type="image/avif" srcset="/spooky/art/belfry-960.avif 960w, /spooky/art/belfry-1600.avif 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <source type="image/webp" srcset="/spooky/art/belfry-960.webp 960w, /spooky/art/belfry-1600.webp 1600w" sizes="(max-width: 760px) 100vw, max(100vw, 178svh)">
+          <img src="/spooky/art/belfry-1600.webp" width="1600" height="900" alt="A bat launches from beside the bell in a stone belfry, the colony streaming away over a town picked out in points of pale blue light, past a lit church and its graveyard, a river and a train crossing a viaduct under a crescent moon." loading="lazy" decoding="async">
+        </picture>
+        <div class="fx" aria-hidden="true">
+          <canvas class="echo"></canvas>
+          <i class="glow warm steady" style="--x:90.7; --y:51; --r:2.4;"></i>
+        </div>
+        <div class="dark"></div>
+      </div>
+      <div class="copy">
+        <p class="genre">Beautiful Bat Action</p>
+        <h2 class="scene-title" id="belfry-title">BELFRY</h2>
+        <p class="line">Ever wanted to be a bat? Now’s your chance.</p>
+        <a class="play" href="/belfry/">Let go <span class="arrow" aria-hidden="true">→</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="end">
+    <div class="pumpkin end-pumpkin" aria-hidden="true"></div>
+    <a href="/">Qualiacology</a>
+    <a href="/games/">All the games</a>
+  </footer>
+</body>
+</html>

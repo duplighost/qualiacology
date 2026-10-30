@@ -18,6 +18,7 @@ const routes = [
   ...data.games.map((game) => `/${game.slug}/`),
   ...data.albums.map((album) => `/music/${album.slug}/`),
   "/fetch/ending/",
+  "/spooky/",
   "/instead-of-the-goodbye/",
   "/doopliss/",
   "/no-moon/codex/",
@@ -170,6 +171,13 @@ const retiredRoutes = [
   "/pinball",
   "/handmedown",
   "/slotcars",
+  // THE EATEN PATH came off the site 2026-10-30 (Alex: 'we should take "the eaten path" off my website').
+  // Its source stays in Projects\eaten-path. Its legacy .html and both short links went with it.
+  "/eaten-path/",
+  "/eaten-path/index.html",
+  "/eaten-path.html",
+  "/eaten",
+  "/path",
 ];
 const results = [];
 const failures = [];

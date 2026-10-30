@@ -42,11 +42,6 @@
 /tennis        /rally/             302
 /duel          /rally/             302
 
-# --- THE EATEN PATH ---
-/eaten-path.html /eaten-path/              301!
-/eaten           /eaten-path/              302
-/path            /eaten-path/              302
-
 # --- Instead of the Goodbye (a walk, August 1st) ---
 /instead-of-the-goodbye.html /instead-of-the-goodbye/            301!
 /goodbye                     /instead-of-the-goodbye/            302
@@ -152,3 +147,7 @@
 
 # --- PASTA COLLECTION ---
 /pasta.html  /pasta/  301!
+
+# --- SPOOKY GAMES (Halloween, 30 Oct 2026) ---
+/spooky.html  /spooky/  301!
+/halloween  /spooky/  302

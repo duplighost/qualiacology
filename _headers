@@ -159,16 +159,6 @@
 /iron-psalm/*
   Cache-Control: public, max-age=0, must-revalidate
 
-# --- remaining established games ---
-/eaten-path/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/eaten-path/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/eaten-path/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
 # --- shared game startup guard ---
 /assets/game-webgl-guard.js
   Cache-Control: public, max-age=0, must-revalidate

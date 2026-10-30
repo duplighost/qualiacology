@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 84">
+  <defs>
+    <radialGradient id="skin" cx="44%" cy="38%" r="68%">
+      <stop offset="0" stop-color="#ffab4a"/>
+      <stop offset=".55" stop-color="#f0700f"/>
+      <stop offset="1" stop-color="#8f3205"/>
+    </radialGradient>
+    <radialGradient id="light" cx="50%" cy="55%" r="55%">
+      <stop offset="0" stop-color="#fff8cf"/>
+      <stop offset=".5" stop-color="#ffd25a"/>
+      <stop offset="1" stop-color="#ff8a12"/>
+    </radialGradient>
+    <clipPath id="body"><path d="M50 15C27 13 7 25 7 47c0 21 19 33 43 33s43-12 43-33c0-22-20-34-43-32Z"/></clipPath>
+  </defs>
+  <path d="M46 17c-1-7 2-12 9-15l3 3c-4 2-6 6-5 12z" fill="#55602a"/>
+  <path d="M50 15C27 13 7 25 7 47c0 21 19 33 43 33s43-12 43-33c0-22-20-34-43-32Z" fill="url(#skin)"/>
+  <g clip-path="url(#body)" fill="none" stroke="#9a3a06" stroke-opacity=".55" stroke-width="2.4">
+    <path d="M50 15c-9 18-9 47 0 65M50 15c9 18 9 47 0 65M31 17c-13 17-13 45 2 61M69 17c13 17 13 45-2 61"/>
+  </g>
+  <g fill="url(#light)">
+    <path d="M26 39l10-12 9 13z"/>
+    <path d="M55 40l9-13 10 12z"/>
+    <path d="M46 49l4-7 4 7z"/>
+    <path d="M22 50l16 6v6h6v-4.5h12V62h6v-6l16-6q-4 14-16 18l-9 1.5V63h-6v6.5L38 68q-12-4-16-18z"/>
+  </g>
+</svg>
