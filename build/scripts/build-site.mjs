@@ -396,7 +396,7 @@ function homepage() {
           </div>
           <div class="section-heading-copy">
             <p>Small, self-contained worlds that run right in your browser — horror, exploration, movement, celestial chaos, and descent. No downloads; each opens on its own page.</p>
-            <div class="section-action"><a class="button button-arrow" href="/games/">Browse all ${games.length} worlds</a></div>
+            <div class="section-action button-row"><a class="button button-arrow" href="/games/">Browse all ${games.length} worlds</a><a class="button button-arrow" href="/spooky/">Spooky Games</a></div>
           </div>
         </div>
       </div>
@@ -570,6 +570,7 @@ function gamesPage() {
           <p class="eyebrow">02 · Browser worlds</p>
           <h1>Games</h1>
           <p class="subhero-deck">Small, self-contained worlds that run right in your browser — horror, exploration, movement, celestial chaos, and descent. No downloads; each opens on its own page.</p>
+          <div class="section-action"><a class="button button-arrow" href="/spooky/">Spooky Games</a></div>
         </div>
         <div class="subhero-stat"><strong>${games.length}</strong><span>playable routes</span></div>
       </div>
@@ -687,6 +688,7 @@ function sitemap() {
     ["/music/", "0.9"],
     ...games.map((game) => [routeForGame(game), "0.8"]),
     ...albums.map((album) => [routeForAlbum(album), "0.7"]),
+    ["/spooky/", "0.8"],
     ["/instead-of-the-goodbye/", "0.7"],
     ["/no-moon/codex/", "0.6"],
   ];

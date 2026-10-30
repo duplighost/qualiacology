@@ -64,6 +64,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | tideglass | `Projects\tideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
 | fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
 | vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
+| spooky | this repo | Alex's Halloween page, hand-made, not generated. It repeats the five games' lines from `site-data.json`: change both |
 | strung | `Projects\strung` | `node build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | collateral | `Projects\collateral` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | sidechain (was last-chorus; `_redirects` sends that there) | `Projects\the music game` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
@@ -73,7 +74,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | spaghetti-sunshine | `D:/Projects/bianco-spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy. Included in PASTA; keep its direct route, without adding a separate card. |
 | spaghetti | `Projects\spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy. Its original two-game opening remains available. PASTA opens its seven-level select directly. |
 | al-dente | `Projects\al-dente` | copy `src/` (and `vendor/` only if three.js changes) into `al-dente/`; keep the site's index.html shell (it self-hosts the fonts and three.js). Included in PASTA and still reachable from the original /spaghetti/ opening. |
-| rally, rocket-shoes, eaten-path | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
+| rally, rocket-shoes | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
 | everything else | this repo | the site copy is the only source |
 
 ## Access and machine notes
