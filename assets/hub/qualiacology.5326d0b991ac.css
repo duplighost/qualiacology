@@ -1247,6 +1247,49 @@ body[data-page="psych"] .subhero h1 {
   margin-top: 1.4rem;
 }
 
+/* The Discord, live. site.js writes how many people are online in the server right now,
+   and how many are in voice when anyone is. Until then the line is empty and invisible
+   but keeps its height, so nothing below it moves when the number lands. The dot is the
+   room's colour and neither glows nor pulses: nothing spent from the discipline budget. */
+.discord-presence {
+  align-self: center;
+  min-height: 1.75em;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.discord-presence:empty {
+  visibility: hidden;
+}
+
+.discord-presence::before {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: var(--wing);
+  content: "";
+  vertical-align: middle;
+}
+
+/* line-height 1: Space Grotesk stands taller than Inter, and would otherwise grow the
+   line by a pixel the moment the number lands. */
+.discord-presence b {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.subhero-stat .discord-presence {
+  margin-top: 0.85rem;
+}
+
 .community-cta {
   display: grid;
   margin-top: clamp(2.75rem, 6vw, 4.5rem);
