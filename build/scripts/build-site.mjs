@@ -305,6 +305,13 @@ function albumCard(album, index, { eager = false } = {}) {
   </li>`;
 }
 
+// The Discord, live: site.js writes how many people are online in the server right now,
+// read from its public widget. Until then the line is empty and holds its place, so
+// nothing moves when the number lands; if the number never comes it stays empty.
+function discordPresence() {
+  return `<p class="discord-presence" data-discord-presence="${escapeHtml(site.discordServer)}"></p>`;
+}
+
 // Halloween: the way into /spooky/ at the top of the homepage. A silent loop cut from the
 // Spooky Games trailer runs behind the title; site.js plays it only while it is on screen,
 // never under reduced motion, and stops it for good if the pause button is pressed.
@@ -404,6 +411,7 @@ function homepage() {
 
         <div class="button-row community-actions">
           <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
+          ${discordPresence()}
         </div>
       </div>
     </section>
@@ -511,7 +519,7 @@ function psychopharmacologyPage() {
           <h1>The Psychopharmacology Server</h1>
           <p class="subhero-deck">We study medication, help people, and chill with friends.</p>
         </div>
-        <div class="subhero-stat"><strong>3,000+</strong><span>members</span></div>
+        <div class="subhero-stat"><strong>3,000+</strong><span>members</span>${discordPresence()}</div>
       </div>
     </section>
 

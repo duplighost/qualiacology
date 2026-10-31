@@ -261,6 +261,35 @@ if (audioButton) {
   renderAudioState();
 }
 
+// The Discord, live: how many people are in the server right now, from its public widget.
+// Discord lets any site read it and refreshes it every five minutes; no cookies and no
+// referrer go with the request. If the number never comes, the line stays empty.
+const presenceLines = [...document.querySelectorAll("[data-discord-presence]")];
+
+if (presenceLines.length && "fetch" in window) {
+  const server = encodeURIComponent(presenceLines[0].dataset.discordPresence);
+  const count = (n) => {
+    const number = document.createElement("b");
+    number.textContent = n.toLocaleString("en-US");
+    return number;
+  };
+
+  fetch(`https://discord.com/api/guilds/${server}/widget.json`, { credentials: "omit", referrerPolicy: "no-referrer" })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((widget) => {
+      const online = Number(widget?.presence_count);
+      if (!Number.isInteger(online) || online < 1) return;
+      // Discord lists up to 100 of the people online; the ones in a voice channel carry
+      // its id. Saturdays at 4 PM ET, that is the live chat.
+      const inVoice = (widget.members || []).filter((member) => member.channel_id).length;
+      presenceLines.forEach((line) => {
+        line.replaceChildren(count(online), " online now");
+        if (inVoice) line.append(" · ", count(inVoice), " in voice");
+      });
+    })
+    .catch(() => {});
+}
+
 // Halloween: the Spooky Games strip's silent clip plays only while it is on screen, never
 // under reduced motion, and stays stopped once someone presses its pause button.
 const spookyClip = document.querySelector("[data-spooky-clip]");
