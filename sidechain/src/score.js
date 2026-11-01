@@ -18,6 +18,11 @@ export const POINTS = {
   railTrick: { perfect: 80, good: 35 },   // a pump let go on the beat while grinding: the board flicked round on the rail
   gap: 250,                        // clearing a gap
   trick: { grab: 120, spin: 150, roll: 180, flip: 220 },
+  // a boss stage (boss-core.js): a tag on her, a note of the duel, a round of it answered whole,
+  // the pin held to the drop, the kiss; something on the road missed (closely), a race won
+  tag: { perfect: 400, good: 200 }, duel: { perfect: 120, good: 60 }, duelRound: 300,
+  pin: { perfect: 1500, good: 800 }, kiss: { perfect: 3000, good: 1800 },
+  dodge: 30, close: 110, race: 600,
 };
 export const GRADES = ['S', 'A', 'B', 'C', 'D'];
 // a grade by the share of what the autopilot (who never misses a pump, and goes Groovy whenever it
@@ -32,7 +37,7 @@ export class Score {
   constructor() { this.reset(); }
   reset() {
     this.points = 0; this.mult = 1; this.last = 0; this.k = 1;
-    this.parts = { pumps: 0, notes: 0, air: 0, tricks: 0, rails: 0, gaps: 0 };
+    this.parts = { pumps: 0, notes: 0, air: 0, tricks: 0, rails: 0, gaps: 0, boss: 0 };
     this.tricks = 0; this.grinds = 0; this.gaps = 0;
   }
   _add(part, base, streak) {
@@ -69,6 +74,10 @@ export class Score {
       case 'railTrick': return this._add('rails', POINTS.railTrick[e.grade] ?? 0, streak);
       case 'grindEnd': this.grinds++; return e.onBeat ? this._add('rails', POINTS.grindPop, streak) : 0;
       case 'gap': this.gaps++; return this._add('gaps', POINTS.gap, streak);
+      case 'tag': case 'duel': case 'pin': case 'kiss':
+        return e.grade === 'perfect' || e.grade === 'good' ? this._add('boss', POINTS[e.type][e.grade], e.streak) : 0;
+      case 'duelRound': case 'dodge': case 'close': case 'race':
+        return this._add('boss', POINTS[e.type], streak);
     }
     return 0;
   }

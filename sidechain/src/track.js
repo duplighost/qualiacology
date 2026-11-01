@@ -75,7 +75,7 @@ export class Track {
         this.frozen.set(k, [rider.xz.x - Math.sin(yaw) * back, rider.xz.z - Math.cos(yaw) * back]);
         const j = this._j(k);
         this.lit[j] = rider.flow;
-        this.held[j] = rider.press && !rider.stopping ? 1 : 0;
+        this.held[j] = (rider.heldIn ?? rider.press) && !rider.stopping ? 1 : 0;
       }
       this._lastK = kr;
       // forget far past

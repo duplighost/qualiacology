@@ -11,6 +11,16 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07050d; ove
 #songbar.on { opacity: .85; }
 #shape { width: 100%; height: 100%; display: block; }
 #songbar .mark { position: absolute; left: -1px; top: 0; width: 2px; height: 100%; background: #fff; will-change: transform; }
+/* a boss stage: her heart in pieces under the song, a piece gone for every tag (boss.js) */
+#boss { position: absolute; left: 50%; top: calc(48px + env(safe-area-inset-top)); transform: translateX(-50%); display: flex; align-items: center; gap: 9px; opacity: 0; transition: opacity .8s; }
+#boss.on { opacity: 1; }
+#boss .who { width: 9px; height: 9px; border-radius: 50%; background: var(--boss, #9fe7ff); box-shadow: 0 0 10px var(--boss, #9fe7ff), 0 0 2px #fff; }
+#boss .parts { display: flex; gap: 3px; }
+#boss .parts i { width: clamp(10px, 2.2vw, 22px); height: 6px; border-radius: 2px; background: var(--boss, #9fe7ff); box-shadow: 0 0 8px var(--boss, #9fe7ff); }
+#boss .parts i.gone { opacity: .14; box-shadow: none; }
+#menu .list li .title .tag, #menu .detail .name .tag, #title .song .tag { font: 700 9px/1 var(--ui); letter-spacing: .2em; font-style: normal; padding: 3px 5px 2px 6px; margin-left: 9px; border-radius: 3px; vertical-align: 2px; color: #07050d; background: var(--accent, #8fe3ff); box-shadow: 0 0 10px color-mix(in srgb, var(--accent, #8fe3ff) 70%, transparent); }
+#menu .detail .name .tag { font-size: 11px; vertical-align: 6px; }
+#title .song .tag { --accent: #8fe3ff; }
 
 #title { position: absolute; left: 0; right: 0; bottom: 12vh; text-align: center; transition: opacity .9s; }
 #title .name { font-size: 15px; letter-spacing: .62em; font-weight: 700; padding-left: .62em; opacity: .92; }

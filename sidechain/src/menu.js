@@ -87,9 +87,9 @@ export class Screens {
   _renderList(songs) {
     this.songs = songs;
     this.list.innerHTML = songs.map((s, i) => `
-      <li data-i="${i}" style="--accent:${s.accent}"${s.title.length > 30 ? ' class="long"' : ''}>
-        <span class="num">${String((s.index ?? i) + 1).padStart(2, '0')}</span>
-        <span class="title">${esc(s.title)}</span>
+      <li data-i="${i}" style="--accent:${s.accent}"${s.title.length > 30 || s.tag ? ` class="${s.title.length > 30 ? 'long' : ''}${s.tag ? ' tagged' : ''}"` : ''}>
+        <span class="num">${String(s.num ?? (s.index ?? i) + 1).padStart(2, '0')}</span>
+        <span class="title">${esc(s.title)}${s.tag ? `<em class="tag">${esc(s.tag)}</em>` : ''}</span>
         <span class="grade${s.grade ? ' g' + s.grade : ''}">${s.grade || ''}</span>
       </li>`).join('');
     this.items = [...this.list.querySelectorAll('li')];
@@ -149,8 +149,9 @@ export class Screens {
     const s = this.songs && this.songs[this.sel];
     if (!s) return;
     const pr = this.profiles && this.profiles[s.id];
-    this.picNum.textContent = String((s.index ?? this.sel) + 1).padStart(2, '0');
+    this.picNum.textContent = String(s.num ?? (s.index ?? this.sel) + 1).padStart(2, '0');
     this.dName.textContent = s.title;
+    if (s.tag) this.dName.insertAdjacentHTML('beforeend', `<em class="tag">${esc(s.tag)}</em>`);
     this.dName.classList.toggle('long', s.title.length > 26);
     this.rideWhat.textContent = s.title;
     const facts = [];
@@ -408,7 +409,7 @@ export class Screens {
           ${row('LONGEST RUN', '×' + d.bestStreak)}
           ${row(collectName(d.collect), d.notes + ' / ' + d.notesTotal)}
           ${d.tricks ? row('TRICKS', d.tricks) : ''}
-          ${row('DISTANCE', (d.dist / 1000).toFixed(2) + ' KM')}
+          ${d.boss ? row('TAGGED', d.boss.taken + ' / ' + d.boss.parts) + row('HER', d.boss.caught ? 'CAUGHT' : 'GONE') : row('DISTANCE', (d.dist / 1000).toFixed(2) + ' KM')}
         </div>
         ${lv ? `<div class="level"><div class="lt"><span>LEVEL <b class="ln">${lv.before.level}</b></span><span class="up"></span></div><div class="lbar"><i style="width:${(100 * lv.before.xp / lv.need(lv.before.level)).toFixed(1)}%"></i></div></div>` : ''}
         <div class="btns">${buttons.map((b, i) => `<button data-i="${i}" class="${i === 0 ? 'primary' : ''}">${esc(b.label)}<span class="k">${esc(b.key || '')}</span></button>`).join('')}</div>
