@@ -10,14 +10,14 @@
 <meta property="og:title" content="THRESHOLD | Qualiacology">
 <meta property="og:description" content="A synapse on Halloween. Light enough of them at once and it fires.">
 <meta property="og:url" content="https://qualiacology.com/threshold/">
-<meta property="og:image" content="https://qualiacology.com/assets/og/threshold-og-v1.jpg">
+<meta property="og:image" content="https://qualiacology.com/assets/og/threshold-og-v2.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="A dark synapse on Halloween: glowing jack-o’-lanterns sit on the membrane as green neurotransmitter falls toward them past pale ghosts">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="THRESHOLD | Qualiacology">
 <meta name="twitter:description" content="A synapse on Halloween. Light enough of them at once and it fires.">
-<meta name="twitter:image" content="https://qualiacology.com/assets/og/threshold-og-v1.jpg">
+<meta name="twitter:image" content="https://qualiacology.com/assets/og/threshold-og-v2.jpg">
 <meta name="twitter:image:alt" content="A dark synapse on Halloween: glowing jack-o’-lanterns sit on the membrane as green neurotransmitter falls toward them past pale ghosts">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <meta name="description" content="A synapse on Halloween. Light enough of them at once and it fires.">
@@ -52,13 +52,18 @@ noscript { position: fixed; inset: 0; display: grid; place-items: center; font-s
 const CFG = {
   burst: 5,          // wisps per tap
   poolMax: 6,        // vesicles in the terminal
-  regen: 0.42,       // seconds to refill one vesicle
+  regen: 0.6,        // seconds to make one new vesicle (reuptake tops them up faster)
+  upGain: 0.12,      // how much of a vesicle each wisp brought home by reuptake refills
+  riseDelay: 0.35,   // how long a landed wisp skitters before the transporters pull it home
+  riseLife: 4,
+  gabaInhib: 2.3,    // how long a pumpkin stays cold after GABA lands on it
+  forkWait: 4.5,     // a fork picks a road for you after this long
   drag: 1.25,
   grav: 520,
   jitter: 260,
   rest: 0.38,        // bounce off the membrane
   wispLife: 2.1,
-  afterLand: 0.7,    // how long a wisp lingers once it lands on the membrane
+  afterLand: 0.7,    // how long a wisp lingers on the membrane when reuptake is blocked
   hitstop: 0.075,
   fireHold: 0.34,
   transDur: 0.95,
@@ -93,6 +98,7 @@ const S = {
   fireT: 0, transT: 0, camY: 0, dieT: 0, overT: 0, outI: 0,
   titleA: 1, started: false, beat: 0, heartT: 0,
   hops: [], hopI: -1, spark: null,
+  seen: new Set(), forkOpts: null, forkChosen: null, forkT: 0, rings: [], bgT: 0.5, bgSp: [],
 };
 
 function resize() {
@@ -111,6 +117,7 @@ function resize() {
   BG = null;
   if (S.syn) spritesFor(S.syn);
   if (S.next) spritesFor(S.next);
+  if (S.forkOpts) S.forkOpts.forEach(spritesFor);
 }
 
 /* ======================= glow sprites ======================= */
@@ -140,6 +147,29 @@ function glow(name, x, y, r, a) {
   ctx.globalAlpha = 1;
 }
 
+/* ======================= atmosphere ======================= */
+const FOG = (() => {   // one soft bank of mist, drawn many times
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const g = c.getContext('2d'), r = mulberry(77);
+  for (let i = 0; i < 26; i++) {
+    const x = 30 + r() * 196, y = 32 + r() * 32, rad = 16 + r() * 30;
+    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+    grd.addColorStop(0, 'rgba(210,194,240,0.24)'); grd.addColorStop(1, 'rgba(210,194,240,0)');
+    g.fillStyle = grd; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  return c;
+})();
+const FOGS = Array.from({ length: 8 }, (_, i) => ({ x: Math.random() * 700, dy: rand(-30, 2), w: rand(170, 280), h: rand(40, 58), v: rand(4, 11) * (i % 3 ? 1 : -1), a: rand(0.18, 0.32), front: i % 2 === 0 }));
+const GRAIN = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), img = g.createImageData(128, 128);
+  for (let i = 0; i < img.data.length; i += 4) { const v = (Math.random() * 255) | 0; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  g.putImageData(img, 0, 0);
+  return c;
+})();
+let grainPat = null;
+const MOTES = Array.from({ length: 28 }, () => ({ x: Math.random() * W, y: Math.random(), r: rand(0.6, 1.6), v: rand(-6, 6), ph: rand(0, TAU), a: rand(0.1, 0.3) }));
+
 function loadBest() { try { return parseInt(localStorage.getItem('threshold.best') || '0', 10) || 0; } catch (e) { return 0; } }
 function saveBest() { try { localStorage.setItem('threshold.best', String(S.best)); } catch (e) { /* private window */ } }
 
@@ -154,7 +184,14 @@ function memAt(syn, x) {
 function neckY() { return Math.max(-6, termY - 150); }
 function pumpkinCY(syn, p) { return memAt(syn, p.x) - p.h * 0.5 + 3; }
 function ghostY(g) { return lerp(termY + 52, memY - 76, g.lane) + Math.sin(g.ph) * g.bob; }
-function litCount(syn) { let n = 0; for (const p of syn.pumpkins) if (!p.blue && p.lit > 0) n++; return n; }
+function litCount(syn) { let n = 0; for (const p of syn.pumpkins) if (!p.blue && !(p.inhib > 0) && p.lit > 0) n++; return n; }
+function coldCount(syn) { let n = 0; for (const p of syn.pumpkins) if (!p.blue && p.inhib > 0) n++; return n; }
+function needed(syn) { return syn.need + syn.blue + coldCount(syn); }   // every cold receptor is one more to beat
+function forkX(side) { return side ? W * 0.8 : W * 0.2; }
+function branchPts(side) { const sx = forkX(side); return [W / 2, memY + 70, W / 2, memY + 140, sx, H - 120, sx, H]; }   // meets the next synapse's axon exactly at the seam
+function inPts(syn) { const n = neckY(); return [syn.inX, 0, syn.inX, 60, W / 2, n - 50, W / 2, n + 4]; }
+function cubicAt(P, t) { const u = 1 - t; return [u * u * u * P[0] + 3 * u * u * t * P[2] + 3 * u * t * t * P[4] + t * t * t * P[6], u * u * u * P[1] + 3 * u * u * t * P[3] + 3 * u * t * t * P[5] + t * t * t * P[7]]; }
+function gabaFace(syn) { return { x: syn.gaba.side < 0 ? 30 : W - 30, y: termY + 118 }; }
 function axonNodesUp() { const a = []; for (let y = neckY() - 6; y > -70; y -= 52) a.push(y); return a.reverse(); }
 function axonNodesDown() { const a = []; for (let y = memY + 74; y < H + 70; y += 52) a.push(y); return a; }
 function vesicleX(syn, i) { return W / 2 + (i - (syn.poolMax - 1) / 2) * 25; }
@@ -164,42 +201,42 @@ function vesicleY(syn, i) { return termAt(syn, vesicleX(syn, i)) - 17; }
 // Each poison does at the synapse what it does in a body.
 const POISON = {
   nightshade: ['nightshade', 'atropine'],        // receptor antagonist: berries sit in the receptors
+  wort: ['st john’s wort', 'hyperforin'],        // reuptake inhibitor: transmitter stays in the cleft
   calabar: ['calabar bean', 'physostigmine'],    // cholinesterase inhibitor: the ghosts stop eating
   widow: ['black widow', 'α-latrotoxin'],        // forces vesicles to empty on their own
   agaric: ['fly agaric', 'muscimol'],            // GABA-A agonist: cold blue receptors hold the neuron down
   wolfsbane: ['wolfsbane', 'aconitine'],         // sodium channels stuck open: closer to firing, less time
 };
 const KINDS = Object.keys(POISON);
-const FIRST = { 5: 'nightshade', 7: 'calabar', 9: 'widow', 11: 'agaric', 13: 'wolfsbane' };
-let lastKey = '';
-function pickPoisons(depth) {
-  if (FIRST[depth]) return [FIRST[depth]];
-  if (depth < 14) return [];
-  for (let tries = 0; tries < 24; tries++) {
-    const r = Math.random();
-    let out;
-    if (r < 0.3) out = [];
-    else if (depth >= 18 && r > 0.8) {
-      const a = KINDS[(Math.random() * KINDS.length) | 0], b = KINDS[(Math.random() * KINDS.length) | 0];
-      if (a === b || (a === 'agaric' && b === 'wolfsbane') || (a === 'wolfsbane' && b === 'agaric')) continue;
-      out = [a, b];
-    } else out = [KINDS[(Math.random() * KINDS.length) | 0]];
-    const key = out.slice().sort().join('+');
-    if (key && key === lastKey) continue;
-    lastKey = key;
-    return out;
+const FIRST = { 5: 'nightshade', 7: 'wort' };
+const FORK_FROM = 9;   // from here every firing splits the axon and you pick your poison
+function pickPoisons(depth) { return FIRST[depth] ? [FIRST[depth]] : []; }
+function pickForkPair(depth) {
+  const unseen = KINDS.filter(k => !S.seen.has(k));
+  const one = exclude => {
+    let pool = unseen.filter(k => !exclude.includes(k));
+    if (!pool.length) pool = KINDS.filter(k => !exclude.includes(k));
+    return pool[(Math.random() * pool.length) | 0];
+  };
+  const a = [one([])], b = [one(a)];
+  if (depth >= 18 && Math.random() < 0.3) {   // now and then one road carries two
+    const t = Math.random() < 0.5 ? a : b, o = t === a ? b : a;
+    const extra = KINDS.filter(k => !t.includes(k) && !o.includes(k) && !(k === 'agaric' && t.includes('wolfsbane')) && !(k === 'wolfsbane' && t.includes('agaric')));
+    if (extra.length) t.push(extra[(Math.random() * extra.length) | 0]);
   }
-  return [];
+  return [a, b];
 }
 
-function makeSynapse(depth) {
-  const poisons = pickPoisons(depth);
+function makeSynapse(depth, forced) {
+  const poisons = forced || pickPoisons(depth);
   const has = k => poisons.includes(k);
   const syn = {
     depth, poisons, has,
     ph1: rand(0, TAU), ph2: rand(0, TAU), ph3: rand(0, TAU), ph4: rand(0, TAU),
-    pumpkins: [], ghosts: [], decor: [], spider: null,
+    pumpkins: [], ghosts: [], decor: [], spider: null, gaba: null, inX: W / 2,
+    pumps: [58, 128, 272, 342].map(x => ({ x: x + rand(-6, 6), gulp: 0 })),   // reuptake transporters
     mito: [[rand(0.26, 0.34), rand(38, 58), rand(-0.5, 0.5)], [rand(0.64, 0.72), rand(48, 72), rand(-0.5, 0.5)]],
+    fil: Array.from({ length: 4 }, () => ({ x0: W / 2 + rand(-10, 10), x1: rand(60, 340), c: rand(-80, 80) })),   // cytoskeleton
     need: 1, blue: 0, window: Infinity, winMax: Infinity,
     litDur: Math.max(0.95, 2.0 - 0.05 * (depth - 1)),
     lifeMul: 1, landMul: 1, poolMax: CFG.poolMax,
@@ -222,6 +259,7 @@ function makeSynapse(depth) {
     syn.window = syn.winMax = w;
   }
   if (has('calabar')) { syn.litDur *= 1.4; syn.lifeMul = 2; syn.landMul = 2.2; }
+  if (has('wort')) { syn.lifeMul = Math.max(syn.lifeMul, 1.8); syn.landMul = Math.max(syn.landMul, 3.7); }
 
   const margin = 30, span = W - margin * 2, slot = span / n;
   const pw = Math.min(58, slot * 0.86);
@@ -237,7 +275,7 @@ function makeSynapse(depth) {
       w, h: w * rand(0.74, 0.82),
       vx: depth >= 6 && !isBlue ? rand(-1, 1) * Math.min(6 + depth * 0.9, 34) : 0,
       face: (Math.random() * 4) | 0, lean: rand(-0.06, 0.06), flick: rand(0, TAU),
-      lit: 0, popT: 9, cap: 0, capJig: 0, perch: false, blue: isBlue,
+      lit: 0, popT: 9, cap: 0, capJig: 0, perch: false, blue: isBlue, inhib: 0,
       note: isBlue ? syn.root / 2 : syn.root * Math.pow(2, degrees[Math.min(k, 6)] / 12),
       spr: null,
     });
@@ -260,6 +298,7 @@ function makeSynapse(depth) {
     syn.ghosts.push(gh);
   }
   if (has('widow')) { const sx = Math.random() < 0.5 ? rand(44, 92) : rand(308, 356); syn.spider = { x: sx, tx: sx, len: 0, target: rand(40, 64), ph: rand(0, TAU), twitch: 0 }; }
+  if (depth === 8 || (depth >= 10 && Math.random() < 0.4)) syn.gaba = { side: Math.random() < 0.5 ? -1 : 1, t: rand(1.8, 2.6), charge: 0 };
   makeDecor(syn);
   spritesFor(syn);
   return syn;
@@ -281,7 +320,7 @@ function makeDecor(syn) {
 /* ======================= pumpkin sprites ======================= */
 function spritesFor(syn) {
   for (const p of syn.pumpkins) {
-    p.spr = p.blue ? { blue: pumpkinSprite(p, 'blue') } : { dark: pumpkinSprite(p, 'dark'), lit: pumpkinSprite(p, 'lit') };
+    p.spr = p.blue ? { blue: pumpkinSprite(p, 'blue') } : { dark: pumpkinSprite(p, 'dark'), lit: pumpkinSprite(p, 'lit'), blue: pumpkinSprite(p, 'blue') };
   }
 }
 function pumpkinSprite(p, state) {
@@ -470,6 +509,17 @@ const sfx = {
   capOn(x) { if (!live()) return; osc('sine', 330, A.c.currentTime, 0.003, 0.14, 0.04, bus(x), 150); },
   dull(p) { if (!live() || !gate('dl', 0.08)) return; osc('sine', p.note, A.c.currentTime, 0.005, 0.22, 0.025, bus(p.x)); },
   berry(x) { if (!live()) return; osc('sine', 700, A.c.currentTime, 0.003, 0.18, 0.02, bus(x), 520); },
+  slurp(x) { if (!live() || !gate('sl', 0.05)) return; osc('sine', 620, A.c.currentTime, 0.002, 0.05, 0.012, bus(x), 1100); },
+  gaba(x) {
+    if (!live()) return; const t = A.c.currentTime, b = bus(x);
+    osc('triangle', 300, t, 0.003, 0.12, 0.04, b, 190); hiss(t, 0.06, 0.012, b, 'bandpass', 1600, 1.2);
+  },
+  inhibit(p) {
+    if (!live() || !gate('ih', 0.08)) return; const t = A.c.currentTime, b = bus(p.x);
+    hiss(t, 0.22, 0.04, b, 'lowpass', 900, 0.7, 200); osc('sine', p.note / 2, t, 0.01, 0.4, 0.05, b, p.note / 3);
+  },
+  forkOpen(root) { if (!live()) return; const t = A.c.currentTime; bell(root * 1.5, t, 0.035, 0.9, bus(W * 0.2)); bell(root * 2, t + 0.09, 0.035, 0.9, bus(W * 0.8)); },
+  forkPick(side, root) { if (!live()) return; bell(side ? root * 2 : root * 1.5, A.c.currentTime, 0.05, 1.1, bus(forkX(side))); },
   fire(notes, root) {
     if (!live()) return; const c = A.c, t = c.currentTime + 0.04, m = A.master;
     const f0 = root / 4, car = c.createOscillator(), mod = c.createOscillator(), mg = c.createGain(), g = envG(t, 0.004, 0.2, 2.3);
@@ -497,6 +547,7 @@ const sfx = {
     if (!live()) return; const c = A.c, t = c.currentTime + 0.05, m = A.master;
     for (const k of list) {
       if (k === 'nightshade') { bell(185, t, 0.05, 1.4, m); bell(196, t + 0.01, 0.04, 1.4, m); }
+      if (k === 'wort') [2, 2.52, 3, 4].forEach((mul, i) => bell(196 * mul, t + i * 0.07, 0.03, 0.9, m));
       if (k === 'calabar') for (let i = 0; i < 9; i++) hiss(t + i * 0.045 + Math.random() * 0.02, 0.03, 0.025, m, 'bandpass', 3200, 2);
       if (k === 'widow') for (let i = 0; i < 12; i++) osc('triangle', 2400 + Math.random() * 900, t + i * 0.035 + Math.random() * 0.02, 0.001, 0.012, 0.012, m);
       if (k === 'agaric') {
@@ -552,7 +603,7 @@ function release(x, free, count) {
   const life = CFG.wispLife * syn.lifeMul;
   for (let k = 0; k < n; k++) {
     // a tight stream with the odd stray: a tap over a pumpkin should land on it
-    S.wisps.push({ x: x + rand(-4, 4), y: y + rand(0, 3), vx: (Math.random() + Math.random() - 1) * 62, vy: rand(560, 690), life: 0, max: life * rand(0.9, 1.1), tr: [], landed: false, dead: false });
+    S.wisps.push({ x: x + rand(-4, 4), y: y + rand(0, 3), vx: (Math.random() + Math.random() - 1) * 62, vy: rand(560, 690), life: 0, max: life * rand(0.9, 1.1), tr: [], landed: false, dead: false, mode: 'fall', kind: 'glu', riseAt: 0 });
   }
   addPart({ kind: 'ring', x, y: y + 2, r0: 4, r1: free ? 16 : 24, max: 0.28, col: '150,255,190' });
   sfx.release(x, free);
@@ -611,6 +662,49 @@ function dropBerry(syn) {
   sfx.berry(p.x);
 }
 
+function nearestPump(syn, x) { let bi = 0, bd = 1e9; syn.pumps.forEach((q, i) => { const d = Math.abs(q.x - x); if (d < bd) { bd = d; bi = i; } }); return bi; }
+function startRise(syn, w) { w.mode = 'rise'; w.pump = nearestPump(syn, w.x); w.tr.length = 0; }
+function absorb(syn, w) {   // reuptake: back inside, repacked into a vesicle
+  const q = syn.pumps[w.pump];
+  w.dead = true; q.gulp = 1;
+  S.pool = Math.min(syn.poolMax, S.pool + CFG.upGain);
+  sfx.slurp(q.x);
+}
+function unbind(syn, p) {   // a receptor lets go and its transmitter is back in the cleft
+  const w = { x: p.x + rand(-4, 4), y: pumpkinCY(syn, p) - p.h * 0.5 - 3, vx: rand(-30, 30), vy: -rand(60, 110), life: 0, max: CFG.riseLife, tr: [], landed: true, dead: false, mode: 'fall', kind: 'glu', riseAt: 0, from: p };
+  if (syn.has('wort')) { w.vx = rand(-1, 1) * 130; w.vy = -rand(150, 210); w.max = 1.2; }   // no reuptake: it hangs about and may land on another
+  else startRise(syn, w);
+  S.wisps.push(w);
+}
+function releaseGaba(syn) {
+  const f = gabaFace(syn);
+  const open = syn.pumpkins.filter(p => !p.blue && !(p.inhib > 0));
+  if (!open.length) return;
+  const lit = open.filter(p => p.lit > 0);
+  const target = lit.length && Math.random() < 0.5 ? lit[(Math.random() * lit.length) | 0] : open[(Math.random() * open.length) | 0];
+  for (let k = 0; k < 3; k++) {
+    const a = Math.atan2(pumpkinCY(syn, target) - f.y, target.x - f.x) + rand(-0.25, 0.25), sp = rand(170, 210);
+    S.wisps.push({ x: f.x, y: f.y + rand(-6, 6), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 3, tr: [], landed: false, dead: false, mode: 'fall', kind: 'gaba', target });
+  }
+  addPart({ kind: 'ring', x: f.x, y: f.y, r0: 4, r1: 18, max: 0.3, col: '120,180,255' });
+  sfx.gaba(f.x);
+}
+function inhibit(syn, p) {   // GABA pulls the cell away from firing: the receptor goes cold for a while
+  p.inhib = CFG.gabaInhib; p.popT = 0;
+  if (p.lit > 0) { p.lit = 0; if (p.perch) { p.perch = false; p.cap = 3; } }
+  const cy = pumpkinCY(syn, p);
+  for (let i = 0; i < 6; i++) addPart({ kind: 'spark', x: p.x + rand(-0.3, 0.3) * p.w, y: cy, vx: rand(-60, 60), vy: rand(-110, -30), g: 120, drag: 2, max: rand(0.25, 0.45), col: '150,205,255' });
+  sfx.inhibit(p);
+}
+function chooseFork(side) {   // the impulse runs down every branch; you follow one
+  if (!S.forkOpts) return;
+  S.next = S.forkOpts[side];
+  S.next.inX = forkX(side);
+  S.forkChosen = side; S.forkOpts = null;
+  sfx.forkPick(side, S.syn.root);
+  startTrans();
+}
+
 function fire() {
   const syn = S.syn;
   const lit = syn.pumpkins.filter(p => !p.blue && p.lit > 0);
@@ -620,9 +714,14 @@ function fire() {
   if (S.score > S.best) { S.best = S.score; S.newBest = true; saveBest(); }
   sfx.fire(lit.map(p => p.note), syn.root);
   buzz(18);
+  const nd = S.depth + 1, fork = nd >= FORK_FROM;
+  if (fork) { const [a, b] = pickForkPair(nd); S.forkOpts = [makeSynapse(nd, a), makeSynapse(nd, b)]; S.next = null; }
+  else { S.forkOpts = null; S.next = makeSynapse(nd); }
   const tx = W / 2, ty = memY + 62;
   S.bolts = lit.map(p => ({ x0: p.x, y0: pumpkinCY(syn, p), x1: tx, y1: ty, w: 1.5 }));
-  S.bolts.push({ x0: tx, y0: ty - 8, x1: tx, y1: H + 30, w: 2.6 });
+  if (fork) for (const s of [0, 1]) S.bolts.push({ x0: tx, y0: ty - 8, x1: forkX(s), y1: H + 30, w: 2.2 });
+  else S.bolts.push({ x0: tx, y0: ty - 8, x1: tx, y1: H + 30, w: 2.6 });
+  S.rings.push({ x: W / 2, y: memY + 40, t: 0 });
   for (const p of lit) {
     p.lit = 99; p.popT = 0;
     const cy = pumpkinCY(syn, p);
@@ -630,18 +729,24 @@ function fire() {
   }
   for (const w of S.wisps) if (!w.dead) addPart({ kind: 'spark', x: w.x, y: w.y, vx: rand(-90, 90), vy: rand(-90, 90), drag: 3, max: 0.25 });
   S.wisps.length = 0; S.falling.length = 0;
-  S.next = makeSynapse(S.depth + 1);
 }
 function startTrans() {
   S.mode = 'trans'; S.transT = 0; S.hopI = -1;
-  const pts = [memY + 26];
-  for (const y of axonNodesDown()) if (y < H) pts.push(y);
-  for (const y of axonNodesUp()) if (y > 0) pts.push(H + y);
-  pts.push(H + termY - 6);
-  S.hops = pts; S.spark = { y: pts[0], tr: [] };
+  const pts = [[W / 2, memY + 26]];
+  if (S.forkChosen !== null) {   // down the chosen branch, then in along the curve it arrives by
+    const B = branchPts(S.forkChosen), I = inPts(S.next);
+    for (let i = 1; i <= 5; i++) pts.push(cubicAt(B, i / 5));
+    for (let i = 1; i <= 4; i++) { const q = cubicAt(I, i / 4); pts.push([q[0], q[1] + H]); }
+  } else {
+    for (const y of axonNodesDown()) if (y < H) pts.push([W / 2, y]);
+    for (const y of axonNodesUp()) if (y > 0) pts.push([W / 2, H + y]);
+  }
+  pts.push([W / 2, H + termY - 6]);
+  S.hops = pts; S.spark = { x: W / 2, y: pts[0][1], tr: [] };
 }
 function finishTrans() {
-  S.syn = S.next; S.next = null; S.depth++;
+  S.syn = S.next; S.next = null; S.depth++; S.forkChosen = null;
+  for (const k of S.syn.poisons) S.seen.add(k);
   S.camY = 0; S.mode = 'play'; S.spark = null;
   S.pool = S.syn.poolMax;
   S.wisps.length = 0; S.falling.length = 0; S.bolts.length = 0; S.parts.length = 0;
@@ -654,7 +759,7 @@ function die() {
   sfx.over(S.syn);
 }
 function restart() {
-  lastKey = '';
+  S.seen = new Set(); S.forkOpts = null; S.forkChosen = null;
   S.depth = 1; S.score = 0; S.newBest = false;
   S.syn = makeSynapse(1); S.next = null;
   S.mode = 'play'; S.pool = S.syn.poolMax;
@@ -670,10 +775,29 @@ function update(dt) {
   S.flash = Math.max(0, S.flash - dt * 3.2);
   S.beat = Math.max(0, S.beat - dt * 4);
   if (S.started && S.titleA > 0) S.titleA = Math.max(0, S.titleA - dt * 1.6);
+  S.bgT -= dt;
+  if (S.bgT <= 0) {
+    S.bgT = rand(0.3, 0.9);
+    if (BG && BG.paths.length && S.bgSp.length < 5) S.bgSp.push({ p: BG.paths[(Math.random() * BG.paths.length) | 0], t: 0, dur: rand(0.6, 1.1) });
+  }
+  for (const s of S.bgSp) s.t += dt;
+  S.bgSp = S.bgSp.filter(s => s.t < s.dur);
+  for (const r of S.rings) r.t += dt;
+  S.rings = S.rings.filter(r => r.t < 0.7);
   if (S.hitstop > 0) { S.hitstop -= dt; return; }
   switch (S.mode) {
     case 'play': updatePlay(dt); break;
-    case 'fire': S.fireT += dt; updateWorld(dt, false); if (S.fireT >= CFG.fireHold) startTrans(); break;
+    case 'fire':
+      S.fireT += dt; updateWorld(dt, false);
+      if (S.fireT >= CFG.fireHold) {
+        if (!S.forkOpts) startTrans();
+        else { S.mode = 'fork'; S.forkT = 0; sfx.forkOpen(S.syn.root); }
+      }
+      break;
+    case 'fork':
+      S.forkT += dt; updateWorld(dt, false);
+      if (S.forkT >= CFG.forkWait) chooseFork(Math.random() < 0.5 ? 0 : 1);
+      break;
     case 'trans': updateTrans(dt); break;
     case 'die': updateDie(dt); break;
     case 'over': S.overT += dt; updateWorld(dt, false); break;
@@ -708,6 +832,12 @@ function updatePlay(dt) {
     syn.berryT -= dt;
     if (syn.berryT <= 0) { syn.berryT = rand(3.6, 5.2); dropBerry(syn); }
   }
+  if (syn.gaba && S.started && syn.window > 0) {   // the inhibitory neighbour fires on its own rhythm
+    const G = syn.gaba;
+    G.t -= dt;
+    G.charge = clamp(1 - G.t / 0.7, 0, 1);
+    if (G.t <= 0) { G.t = rand(3.2, 4.4); releaseGaba(syn); }
+  }
   updateWorld(dt, true);
   if (timed && syn.window > 0 && S.started) {
     const frac = syn.window / syn.winMax;
@@ -716,8 +846,8 @@ function updatePlay(dt) {
       if (S.heartT <= 0) { S.heartT = lerp(0.42, 0.95, frac / 0.4); sfx.heart(); S.beat = 1; }
     }
   }
-  if (litCount(syn) >= syn.need + syn.blue) { fire(); return; }
-  if (timed && syn.window === 0 && S.wisps.length === 0) die();
+  if (litCount(syn) >= needed(syn)) { fire(); return; }
+  if (timed && syn.window === 0 && !S.wisps.some(w => w.mode === 'fall' && w.kind === 'glu')) die();
 }
 
 function updateWorld(dt, active) {
@@ -732,10 +862,11 @@ function updateWorld(dt, active) {
     if (active && !p.blue && p.lit > 0) {
       p.lit -= dt;
       if (p.lit <= 0) {
-        p.lit = 0; sfx.out(p); smoke(p);
+        p.lit = 0; sfx.out(p); smoke(p); unbind(syn, p);
         if (p.perch) { p.perch = false; p.cap = 3; p.capJig = 1; sfx.capOn(p.x); }
       }
     }
+    if (p.inhib > 0) p.inhib = Math.max(0, p.inhib - dt);
     p.popT += dt;
     p.capJig = Math.max(0, p.capJig - dt * 6);
   }
@@ -779,6 +910,7 @@ function updateWorld(dt, active) {
     s.x = lerp(s.x, s.tx, 1 - Math.exp(-dt * 3));
     s.twitch = Math.max(0, s.twitch - dt * 4);
   }
+  for (const q of syn.pumps) q.gulp = Math.max(0, q.gulp - dt * 5);
   for (const b of S.falling) {
     if (b.dead) continue;
     b.vy = Math.min(b.vy + 260 * dt, 200);
@@ -796,12 +928,43 @@ function updateWorld(dt, active) {
   if (active) stepWisps(dt);
 }
 
+function ghostHit(syn, w) {
+  for (const g of syn.ghosts) {
+    if (g.frozen) continue;
+    const dx = (w.x - g.x) / (g.r * 0.95), dy = (w.y - g.y - g.r * 0.3) / (g.r * 1.15);
+    if (dx * dx + dy * dy < 1) { eatWisp(w, g); return true; }
+  }
+  return false;
+}
+function stepRise(syn, w, h) {   // reuptake: the transporters pull spent transmitter home
+  const q = syn.pumps[w.pump], tx = q.x, ty = termAt(syn, q.x) + 2;
+  const dx = tx - w.x, dy = ty - w.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 3 * h);
+  w.vx += ((dx / d) * 200 - w.vx) * k + (Math.random() * 2 - 1) * 300 * h;
+  w.vy += ((dy / d) * 200 - w.vy) * k + (Math.random() * 2 - 1) * 300 * h;
+  w.x += w.vx * h; w.y += w.vy * h;
+  if (ghostHit(syn, w)) return;
+  if (d < 9) absorb(syn, w);
+}
+function stepGaba(syn, w, h) {   // GABA homes in on its receptor; the ghosts break it down too
+  const p = w.target, dx = p.x - w.x, dy = pumpkinCY(syn, p) - w.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 1.6 * h);
+  w.vx += ((dx / d) * 200 - w.vx) * k + (Math.random() * 2 - 1) * 200 * h;
+  w.vy += ((dy / d) * 200 - w.vy) * k + (Math.random() * 2 - 1) * 200 * h;
+  w.x += w.vx * h; w.y += w.vy * h;
+  if (ghostHit(syn, w)) return;
+  for (const q of syn.pumpkins) {
+    const ex = (w.x - q.x) / (q.w * 0.5), ey = (w.y - pumpkinCY(syn, q)) / (q.h * 0.5);
+    if (ex * ex + ey * ey < 1) { w.dead = true; if (!q.blue) inhibit(syn, q); return; }
+  }
+  if (w.y > memAt(syn, w.x) - 1) w.dead = true;
+}
 function stepWisps(dt) {
   const syn = S.syn;
   const steps = Math.max(1, Math.ceil(dt / 0.009)), h = dt / steps, dk = Math.exp(-CFG.drag * h);
   for (let s = 0; s < steps; s++) {
     for (const w of S.wisps) {
       if (w.dead) continue;
+      if (w.kind === 'gaba') { stepGaba(syn, w, h); continue; }
+      if (w.mode === 'rise') { stepRise(syn, w, h); continue; }
       w.vx = w.vx * dk + (Math.random() * 2 - 1) * CFG.jitter * h;
       w.vy = w.vy * dk + CFG.grav * h + (Math.random() * 2 - 1) * CFG.jitter * h;
       w.x += w.vx * h; w.y += w.vy * h;
@@ -809,13 +972,7 @@ function stepWisps(dt) {
       else if (w.x > W - 5) { w.x = W - 5; w.vx = -Math.abs(w.vx) * 0.5; }
       const ty = termAt(syn, w.x) + 2;
       if (w.y < ty) { w.y = ty; w.vy = Math.abs(w.vy) * 0.4; }
-      let gone = false;
-      for (const g of syn.ghosts) {
-        if (g.frozen) continue;
-        const dx = (w.x - g.x) / (g.r * 0.95), dy = (w.y - g.y - g.r * 0.3) / (g.r * 1.15);
-        if (dx * dx + dy * dy < 1) { eatWisp(w, g); gone = true; break; }
-      }
-      if (gone) continue;
+      if (ghostHit(syn, w)) continue;
       for (const b of S.falling) {
         if (b.dead) continue;
         const dx = w.x - b.x, dy = w.y - b.y;
@@ -829,10 +986,11 @@ function stepWisps(dt) {
       }
       if (w.dead) continue;
       for (const p of syn.pumpkins) {
+        if (w.from === p) continue;
         const cy = pumpkinCY(syn, p), dx = (w.x - p.x) / (p.w * 0.5), dy = (w.y - cy) / (p.h * 0.5);
         if (dx * dx + dy * dy < 1) {
           if (p.cap > 0) hitCap(p, w);
-          else if (p.blue) { bounceOff(w, p, cy); sfx.dull(p); }
+          else if (p.blue || p.inhib > 0) { bounceOff(w, p, cy); sfx.dull(p); }
           else bindWisp(p, w);
           break;
         }
@@ -843,7 +1001,11 @@ function stepWisps(dt) {
         w.y = my;
         w.vy = -Math.abs(w.vy) * CFG.rest;
         w.vx += (Math.random() * 2 - 1) * 50;
-        if (!w.landed) { w.landed = true; w.max = Math.min(w.max, w.life + CFG.afterLand * syn.landMul); }
+        if (!w.landed) {
+          w.landed = true;
+          if (syn.has('wort')) w.max = Math.min(w.max, w.life + CFG.afterLand * syn.landMul);   // reuptake blocked: it hangs about
+          else { w.riseAt = w.life + CFG.riseDelay * syn.landMul; w.max = w.riseAt + CFG.riseLife; }
+        }
       }
     }
   }
@@ -851,8 +1013,9 @@ function stepWisps(dt) {
     if (w.dead) continue;
     w.life += dt;
     if (w.life > w.max) { w.dead = true; continue; }
+    if (w.mode === 'fall' && w.kind === 'glu' && w.riseAt && w.life >= w.riseAt) startRise(syn, w);
     w.tr.push(w.x, w.y);
-    if (w.tr.length > 10) w.tr.splice(0, 2);
+    if (w.tr.length > (w.mode === 'rise' ? 6 : 10)) w.tr.splice(0, 2);
   }
   S.wisps = S.wisps.filter(w => !w.dead);
 }
@@ -864,8 +1027,9 @@ function updateTrans(dt) {
   const f = T * (S.hops.length - 1);
   const i = Math.min(S.hops.length - 2, Math.floor(f)), u = f - i;
   const uu = u - Math.sin(u * TAU) / TAU;   // the impulse rests at each node, then jumps the myelin
-  S.spark.y = lerp(S.hops[i], S.hops[i + 1], uu);
-  S.spark.tr.push(S.spark.y); if (S.spark.tr.length > 8) S.spark.tr.shift();
+  S.spark.x = lerp(S.hops[i][0], S.hops[i + 1][0], uu);
+  S.spark.y = lerp(S.hops[i][1], S.hops[i + 1][1], uu);
+  S.spark.tr.push(S.spark.x, S.spark.y); if (S.spark.tr.length > 16) S.spark.tr.splice(0, 2);
   if (i !== S.hopI) { S.hopI = i; sfx.hop(i); }
   updateWorld(dt, false);
   if (T >= 1) finishTrans();
@@ -913,15 +1077,17 @@ function makeBg() {
   c.width = Math.max(1, Math.ceil(W * s)); c.height = Math.max(1, Math.ceil(h * s));
   const g = c.getContext('2d');
   g.scale(s, s); g.lineCap = 'round';
-  const branch = (r, x, y, a, len, d, wdt) => {
+  const paths = [];   // root-to-tip routes the background neurons fire along
+  const branch = (r, x, y, a, len, d, wdt, path) => {
     if (d <= 0) return;
     const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
     g.lineWidth = wdt;
     g.beginPath(); g.moveTo(x, y);
     g.quadraticCurveTo((x + x2) / 2 + (r() - 0.5) * 0.36 * len, (y + y2) / 2 + (r() - 0.5) * 0.36 * len, x2, y2);
     g.stroke();
+    if (path) path.push(x2, y2);
     const kids = d > 3 && r() < 0.45 ? 3 : 2;
-    for (let i = 0; i < kids; i++) branch(r, x2, y2, a + (r() - 0.5) * 1.5, len * (0.6 + r() * 0.18), d - 1, wdt * 0.66);
+    for (let i = 0; i < kids; i++) branch(r, x2, y2, a + (r() - 0.5) * 1.5, len * (0.6 + r() * 0.18), d - 1, wdt * 0.66, i === 0 ? path : null);
   };
   for (let i = 0; i < 9; i++) {
     for (const oy of [-h, 0, h]) {          // drawn three times so the tile wraps
@@ -930,7 +1096,11 @@ function makeBg() {
       const col = `rgba(${(44 + far * 22) | 0},${(17 + far * 10) | 0},${(58 + far * 28) | 0},${0.17 + far * 0.2})`;
       g.strokeStyle = col; g.fillStyle = col;
       const arms = 3 + ((r() * 3) | 0), base = r() * TAU, len = 24 + far * 28;
-      for (let k = 0; k < arms; k++) branch(r, x, y, base + (k / arms) * TAU + (r() - 0.5) * 0.6, len, 4, 2.6 + far * 1.6);
+      for (let k = 0; k < arms; k++) {
+        const path = oy === 0 ? [x, y] : null;
+        branch(r, x, y, base + (k / arms) * TAU + (r() - 0.5) * 0.6, len, 4, 2.6 + far * 1.6, path);
+        if (path) paths.push({ pts: path, far });
+      }
       const ax = base + Math.PI / arms;
       g.lineWidth = 1.6 + far; g.beginPath(); g.moveTo(x, y);
       g.quadraticCurveTo(x + Math.cos(ax) * len * 3, y + Math.sin(ax) * len * 3 + 40, x + Math.cos(ax) * len * 6, y + Math.sin(ax) * len * 6);
@@ -938,7 +1108,7 @@ function makeBg() {
       g.beginPath(); g.arc(x, y, 5 + far * 4, 0, TAU); g.fill();
     }
   }
-  return { c, h };
+  return { c, h, paths };
 }
 function bgHue() { return 266 + 62 * (0.5 - 0.5 * Math.cos(((S.depth - 1 + S.camY / H) * TAU) / 26)); }
 function drawBackdrop(x0, x1) {   // x0..x1 reaches past the column on a wide screen
@@ -953,6 +1123,22 @@ function drawBackdrop(x0, x1) {   // x0..x1 reaches past the column on a wide sc
     ctx.drawImage(BG.c, tx, y, W, BG.h);
     ctx.drawImage(BG.c, tx, y + BG.h, W, BG.h);
   }
+  // the brain around you is busy: now and then a distant neuron fires down one of its branches
+  ctx.globalCompositeOperation = 'lighter';
+  for (const s of S.bgSp) {
+    const pts = s.p.pts, n = pts.length / 2 - 1;
+    if (n < 1) continue;
+    const k = clamp(s.t / s.dur, 0, 1), f = k * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
+    const px = lerp(pts[i * 2], pts[i * 2 + 2], u), py = lerp(pts[i * 2 + 1], pts[i * 2 + 3], u);
+    const a = (0.3 + 0.45 * s.p.far) * Math.sin(Math.PI * k);
+    for (const oy of [y, y + BG.h]) {
+      if (py + oy < -30 || py + oy > H + 30) continue;
+      if (k < 0.2) glow('violet', pts[0], pts[1] + oy, 16, (0.2 - k) * 2.5 * a);
+      glow('violet', px, py + oy, 12, a * 0.7);
+      glow('white', px, py + oy, 3.5, a);
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
 }
 function drawBackground() {
   ctx.globalCompositeOperation = 'lighter';
@@ -960,6 +1146,11 @@ function drawBackground() {
     const x = ((S.t * (7 + i * 3) + i * 137) % (W + 260)) - 130;
     const yy = lerp(termY + 40, memY - 40, (i + 0.5) / 4) + Math.sin(S.t * 0.3 + i * 2) * 18;
     glow('violet', x, yy, 130, 0.045);
+  }
+  for (const m of MOTES) {   // dust in the cleft
+    const x = (((m.x + S.t * m.v + Math.sin(S.t * 0.7 + m.ph) * 8) % W) + W) % W;
+    const yy = lerp(termY + 30, memY - 10, m.y) + Math.sin(S.t * 0.5 + m.ph * 2) * 10;
+    glow('pale', x, yy, m.r * 4, m.a);
   }
   ctx.globalCompositeOperation = 'source-over';
   // an astrocyte's web in the top corner
@@ -1030,12 +1221,22 @@ function edgePath(syn, a, b) {
 }
 function drawTerminal(syn) {
   const n = neckY();
-  drawAxon(W / 2, axonNodesUp(), -70, n + 4);
+  if (syn.inX !== W / 2) drawCurvedAxon(inPts(syn)); else drawAxon(W / 2, axonNodesUp(), -70, n + 4);
   bulbPath(syn);
   const g = ctx.createLinearGradient(0, n, 0, termY + 26);
   g.addColorStop(0, '#120816'); g.addColorStop(1, '#2c1238');
   ctx.fillStyle = g; ctx.fill();
   ctx.strokeStyle = 'rgba(120,64,140,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.save();
+  ctx.clip();   // inside the bulb: a soft inner rim and the cytoskeleton
+  ctx.strokeStyle = 'rgba(170,100,210,0.13)'; ctx.lineWidth = 12; ctx.stroke();
+  ctx.strokeStyle = 'rgba(160,100,190,0.13)'; ctx.lineWidth = 1.1;
+  for (const f of syn.fil) {
+    ctx.beginPath(); ctx.moveTo(f.x0, n + 26);
+    ctx.quadraticCurveTo(W / 2 + f.c, (n + termY) / 2, f.x1, termY + 6);
+    ctx.stroke();
+  }
+  ctx.restore();
   for (const [fx, dy, rot] of syn.mito) {   // mitochondria
     ctx.save(); ctx.translate(W * fx, termY - dy); ctx.rotate(rot);
     roundRectPath(-15, -6, 30, 12, 6);
@@ -1061,6 +1262,8 @@ function drawTerminal(syn) {
     }
   }
   ctx.globalCompositeOperation = 'source-over';
+  drawBilayer(syn, true);
+  drawPumps(syn);
   drawVesicles(syn);
   drawVines(syn);
   drawSpider(syn);
@@ -1144,10 +1347,13 @@ function drawSpider(syn) {
 function drawGhosts(syn) {   // the enzymes: sheets that thin out toward a ragged hem
   for (const g of syn.ghosts) {
     const r = g.r, e = g.eat, dir = Math.sign(g.vx) || 1;
+    let warm = 0;   // a ghost near a lit pumpkin catches its light
+    for (const p of syn.pumpkins) if (!p.blue && !(p.inhib > 0) && p.lit > 0) warm = Math.max(warm, 1 - Math.hypot(p.x - g.x, pumpkinCY(syn, p) - g.y) / 180);
     ctx.save();
     ctx.translate(g.x, g.y);
     ctx.globalCompositeOperation = 'lighter';
     glow('pale', 0, r * 0.3, r * 2.6, g.frozen ? 0.05 : 0.17);
+    if (warm > 0) glow('orange', 0, r * 1.2, r * 2.3, 0.28 * warm);
     ctx.globalCompositeOperation = 'source-over';
     ctx.scale(1 + e * 0.18, 1 - e * 0.14);
     const len = r * 1.6, trail = g.frozen ? 0 : -dir * r * 0.32 + Math.sin(S.t * 2.3 + g.wob) * r * 0.08;
@@ -1166,6 +1372,7 @@ function drawGhosts(syn) {   // the enzymes: sheets that thin out toward a ragge
     if (g.frozen) { grd.addColorStop(0, 'rgba(160,156,182,0.36)'); grd.addColorStop(1, 'rgba(160,156,182,0.03)'); }
     else { grd.addColorStop(0, 'rgba(238,242,255,0.84)'); grd.addColorStop(0.5, 'rgba(222,228,255,0.52)'); grd.addColorStop(1, 'rgba(200,210,255,0.03)'); }
     ctx.fillStyle = grd; ctx.fill();
+    if (warm > 0) { ctx.fillStyle = `rgba(255,150,70,${0.2 * warm})`; ctx.fill(); }
     const ex = r * 0.36, ey = -r * 0.1;
     if (g.frozen) {
       ctx.strokeStyle = 'rgba(30,20,40,0.6)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
@@ -1208,16 +1415,70 @@ function drawPost(syn) {
   const tg = ctx.createLinearGradient(0, memY, 0, y1);
   tg.addColorStop(0, 'rgba(84,24,62,0.5)'); tg.addColorStop(1, 'rgba(40,10,30,0.55)');
   ctx.fillStyle = tg; ctx.fill();
-  const need = syn.need + syn.blue, frac = Math.min(1, litCount(syn) / need);
+  const frac = Math.min(1, litCount(syn) / needed(syn));
   if (frac > 0) { ctx.globalCompositeOperation = 'lighter'; glow('orange', W / 2, memY + 30, 120, 0.22 * frac); ctx.globalCompositeOperation = 'source-over'; }
-  drawAxon(W / 2, axonNodesDown(), memY + 70, H + 80);
+  const cur = syn === S.syn;
+  if (cur && S.forkOpts) { drawCurvedAxon(branchPts(0)); drawCurvedAxon(branchPts(1)); }
+  else if (cur && S.mode === 'trans' && S.forkChosen !== null) drawCurvedAxon(branchPts(S.forkChosen));
+  else drawAxon(W / 2, axonNodesDown(), memY + 70, H + 80);
   memPath(syn);
   ctx.strokeStyle = '#7a2552'; ctx.lineWidth = 3; ctx.stroke();
   ctx.strokeStyle = 'rgba(255,150,200,0.22)'; ctx.lineWidth = 1; ctx.stroke();
+  drawBilayer(syn, false);
   drawPips(syn);
 }
+function drawBilayer(syn, top) {   // both membranes are lipid bilayers: two rows of heads
+  const at = top ? x => termAt(syn, x) : x => memAt(syn, x);
+  const out = top ? 1.4 : -3.2, inn = top ? -4 : 2.4;   // the outer leaflet faces the cleft
+  ctx.fillStyle = top ? 'rgba(205,160,255,0.3)' : 'rgba(255,170,215,0.32)';
+  for (let x = 2; x < W; x += 5) ctx.fillRect(x - 1, at(x) + out, 2, 2);
+  ctx.fillStyle = top ? 'rgba(205,160,255,0.14)' : 'rgba(255,170,215,0.16)';
+  for (let x = 4.5; x < W; x += 5) ctx.fillRect(x - 1, at(x) + inn, 2, 2);
+}
+function drawShaft(syn) {   // a soft pool of light under the active zone, dimming with the fuse
+  const frac = syn.window === Infinity ? 1 : syn.window / syn.winMax, a = 0.05 * (0.4 + 0.6 * frac);
+  ctx.globalCompositeOperation = 'lighter';
+  glow('violet', W / 2, termY + 70, 230, a);
+  glow('violet', W / 2, lerp(termY, memY, 0.55), 260, a * 0.7);
+  ctx.globalCompositeOperation = 'source-over';
+}
+function drawFog(syn, front) {   // ground mist around the pumpkins; the lit ones warm it
+  const span = W + 300;
+  for (const f of FOGS) {
+    if (f.front !== front) continue;
+    const x = ((((f.x + S.t * f.v) % span) + span) % span) - 150;
+    ctx.globalAlpha = f.a * (front ? 0.75 : 1);
+    ctx.drawImage(FOG, x - f.w / 2, memY + f.dy + (front ? 6 : -20) - f.h / 2, f.w, f.h);
+  }
+  ctx.globalAlpha = 1;
+  if (!front) return;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const p of syn.pumpkins) {
+    if (p.blue || p.inhib > 0) glow('blue', p.x, memY - 4, p.w * 1.8, 0.12);
+    else if (p.lit > 0) glow('orange', p.x, memY - 4, p.w * 2.1, 0.2 * clamp(p.lit / 0.45, 0, 1));
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+function drawRings() {   // the shockwave of a firing, flattened like a ripple
+  ctx.globalCompositeOperation = 'lighter';
+  for (const r of S.rings) {
+    const k = r.t / 0.7, e = 1 - Math.pow(1 - k, 3), rad = 14 + e * 330;
+    ctx.strokeStyle = `rgba(225,190,255,${0.45 * (1 - k)})`; ctx.lineWidth = 1 + 3 * (1 - k);
+    ctx.beginPath(); ctx.ellipse(r.x, r.y, rad, rad * 0.42, 0, 0, TAU); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+function drawGrain() {   // a little film grain over everything
+  if (!grainPat) grainPat = ctx.createPattern(GRAIN, 'repeat');
+  const ox = CALM ? 0 : (Math.random() * 128) | 0, oy = CALM ? 0 : (Math.random() * 128) | 0;
+  ctx.setTransform(1, 0, 0, 1, -ox, -oy);
+  ctx.globalAlpha = 0.04; ctx.fillStyle = grainPat;
+  ctx.fillRect(ox, oy, cv.width, cv.height);
+  ctx.globalAlpha = 1;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
 function drawPips(syn) {
-  const n = syn.need + syn.blue, lit = Math.min(litCount(syn), n);
+  const n = needed(syn), lit = Math.min(litCount(syn), n);
   const gap = 17, y = memY + 38, x0 = W / 2 - ((n - 1) * gap) / 2;
   const almost = syn === S.syn && S.mode === 'play' && lit === n - 1;
   for (let i = 0; i < n; i++) {
@@ -1271,16 +1532,17 @@ function drawPumpkins(syn) {
   const flare = cur && (S.mode === 'fire' || S.mode === 'trans') ? clamp(1 - age / 0.7, 0, 1) : 0;
   for (const p of syn.pumpkins) {
     const cy = pumpkinCY(syn, p);
-    const lit = !p.blue && p.lit > 0;
+    const cold = p.blue ? 1 : clamp(p.inhib / 0.35, 0, 1);
+    const lit = !p.blue && !(p.inhib > 0) && p.lit > 0;
     let a = 0;
     if (lit) {
       const fade = clamp(p.lit / 0.45, 0, 1);
       const flick = 0.84 + 0.16 * Math.sin(S.t * 17 + p.flick) * Math.sin(S.t * 7.3 + p.flick * 2);
       const sput = p.lit < 0.45 ? 0.5 + 0.5 * Math.sin(S.t * 38 + p.flick) : 1;
       a = fade * flick * lerp(0.55, 1, sput);
-    } else if (p.blue) a = 0.85 + 0.15 * Math.sin(S.t * 2 + p.flick);
+    } else if (cold > 0) a = cold * (0.85 + 0.15 * Math.sin(S.t * 2 + p.flick));
     if (a > 0) {
-      const col = p.blue ? 'blue' : 'orange';
+      const col = lit ? 'orange' : 'blue';
       ctx.globalCompositeOperation = 'lighter';
       glow(col, p.x, cy - 2, p.w * 1.65, 0.5 * a);
       glow(col, p.x, memAt(syn, p.x) + 4, p.w * 1.15, 0.3 * a);
@@ -1294,6 +1556,10 @@ function drawPumpkins(syn) {
     ctx.scale(1 - 0.13 * k * c, 1 + 0.22 * k * c);
     const base = p.blue ? p.spr.blue : p.spr.dark;
     ctx.drawImage(base.c, -base.ox, -base.oy - p.h * 0.5, base.wL, base.hL);
+    if (!p.blue && cold > 0) {
+      const B = p.spr.blue;
+      ctx.globalAlpha = cold; ctx.drawImage(B.c, -B.ox, -B.oy - p.h * 0.5, B.wL, B.hL); ctx.globalAlpha = 1;
+    }
     if (lit) {
       const L = p.spr.lit;
       ctx.globalAlpha = clamp(a * 1.1, 0, 1);
@@ -1308,17 +1574,19 @@ function drawWisps() {
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineWidth = 2.2; ctx.lineCap = 'round';
   for (const w of S.wisps) {
-    const fade = clamp((w.max - w.life) / 0.35, 0, 1) * clamp(w.life / 0.04, 0, 1);
+    const gaba = w.kind === 'gaba', rise = w.mode === 'rise';
+    const fade = clamp((w.max - w.life) / 0.35, 0, 1) * clamp(w.life / 0.04, 0, 1) * (rise ? 0.45 : 1);
     const tr = w.tr;
     if (tr.length >= 4) {
       ctx.beginPath(); ctx.moveTo(tr[0], tr[1]);
       for (let i = 2; i < tr.length; i += 2) ctx.lineTo(tr[i], tr[i + 1]);
       ctx.lineTo(w.x, w.y);
-      ctx.strokeStyle = `rgba(120,255,180,${0.33 * fade})`; ctx.stroke();
+      ctx.strokeStyle = gaba ? `rgba(120,180,255,${0.4 * fade})` : `rgba(120,255,180,${0.33 * fade})`; ctx.stroke();
     }
-    glow('mint', w.x, w.y, 11, 0.55 * fade);
-    ctx.fillStyle = `rgba(235,255,242,${fade})`;
-    ctx.fillRect(w.x - 1.6, w.y - 1.6, 3.2, 3.2);
+    glow(gaba ? 'blue' : 'mint', w.x, w.y, rise ? 8 : 11, 0.55 * fade);
+    const sz = rise ? 2.4 : 3.2;
+    ctx.fillStyle = gaba ? `rgba(225,240,255,${fade})` : `rgba(235,255,242,${fade})`;
+    ctx.fillRect(w.x - sz / 2, w.y - sz / 2, sz, sz);
   }
   ctx.globalCompositeOperation = 'source-over';
 }
@@ -1381,23 +1649,112 @@ function drawScene(syn, oy, cur) {
   ctx.save();
   ctx.translate(0, oy);
   drawTerminal(syn);
+  drawShaft(syn);
   drawLabel(syn);
+  drawGabaTerminal(syn);
   drawGhosts(syn);
   drawPost(syn);
   drawDecorMem(syn);
+  drawFog(syn, false);
   drawPumpkins(syn);
-  if (cur) { drawWisps(); drawFalling(); drawParts(); drawBolts(); }
+  drawFog(syn, true);
+  if (cur) { drawRings(); drawWisps(); drawFalling(); drawParts(); drawBolts(); }
   ctx.restore();
 }
 function drawSpark() {
   if (!S.spark) return;
   ctx.globalCompositeOperation = 'lighter';
-  const tr = S.spark.tr;
-  for (let i = 0; i < tr.length; i++) glow('violet', W / 2, tr[i] - S.camY, 10 + i * 2, 0.08 + (i / tr.length) * 0.2);
-  const y = S.spark.y - S.camY;
-  glow('violet', W / 2, y, 42, 0.8);
-  glow('white', W / 2, y, 15, 1);
+  const tr = S.spark.tr, n = tr.length / 2;
+  for (let i = 0; i < n; i++) glow('violet', tr[i * 2], tr[i * 2 + 1] - S.camY, 10 + i * 2, 0.08 + (i / n) * 0.2);
+  const x = S.spark.x, y = S.spark.y - S.camY;
+  glow('violet', x, y, 42, 0.8);
+  glow('white', x, y, 15, 1);
   ctx.globalCompositeOperation = 'source-over';
+}
+function drawFork() {   // pick your poison: one label at the end of each branch
+  if (!S.forkOpts || (S.mode !== 'fire' && S.mode !== 'fork')) return;
+  const k = S.mode === 'fork' ? clamp(0.6 + S.forkT / 0.3, 0, 1) : clamp(S.fireT / CFG.fireHold, 0, 1) * 0.6;
+  const y = H - 74 - safeBot * 0.5;
+  for (const side of [0, 1]) {
+    const x = forkX(side), opt = S.forkOpts[side], pulse = 0.5 + 0.5 * Math.sin(S.t * 4 + side * Math.PI);
+    ctx.globalCompositeOperation = 'lighter';
+    glow('violet', x, y + 6, 62, (0.1 + 0.14 * pulse) * k);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(6,2,9,${0.6 * k})`;
+    ctx.beginPath(); ctx.ellipse(x, y + 2 + 18 * (opt.poisons.length - 1), 76, 26 + 18 * (opt.poisons.length - 1), 0, 0, TAU); ctx.fill();
+    let yy = y;
+    for (const kind of opt.poisons) {
+      const [name, drug] = POISON[kind];
+      ctx.font = `italic 400 18px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = `rgba(240,224,255,${0.95 * k})`; ctx.fillText(name, x, yy);
+      spaced(drug, x, yy + 14, `400 10px ${FONT}`, 1.4, `rgba(214,182,240,${0.65 * k})`);
+      yy += 36;
+    }
+  }
+  if (S.mode === 'fork') {   // the impulse waits where the axon splits
+    const p = 0.6 + 0.4 * Math.sin(S.t * 6);
+    ctx.globalCompositeOperation = 'lighter';
+    glow('violet', W / 2, memY + 76, 34, 0.7 * p); glow('white', W / 2, memY + 76, 11, 0.9);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+}
+function drawCurvedAxon(P) {   // an axon branch, still wrapped; the gaps are its nodes
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(P[0], P[1]); ctx.bezierCurveTo(P[2], P[3], P[4], P[5], P[6], P[7]);
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#1d0915'; ctx.lineWidth = 12; ctx.stroke();
+  ctx.setLineDash([40, 10]);
+  ctx.strokeStyle = '#4a3d35'; ctx.lineWidth = 21; ctx.stroke();
+  ctx.setLineDash([2.5, 4.5]);
+  ctx.strokeStyle = 'rgba(214,196,168,0.16)'; ctx.stroke();
+  ctx.setLineDash([10, 40]); ctx.lineDashOffset = -40;
+  ctx.strokeStyle = '#140810'; ctx.lineWidth = 23; ctx.stroke();
+  ctx.strokeStyle = '#1d0915'; ctx.lineWidth = 12; ctx.stroke();
+  ctx.restore();
+}
+function drawPumps(syn) {   // reuptake transporters set into the terminal's edge
+  const blocked = syn.has('wort');
+  for (const q of syn.pumps) {
+    const y = termAt(syn, q.x) - 1;
+    ctx.fillStyle = '#0b0410'; ctx.beginPath(); ctx.ellipse(q.x, y, 7, 3.6, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = blocked ? 'rgba(240,200,60,0.5)' : `rgba(150,255,200,${0.35 + q.gulp * 0.5})`;
+    ctx.lineWidth = 1.2; ctx.stroke();
+    if (q.gulp > 0) { ctx.globalCompositeOperation = 'lighter'; glow('mint', q.x, y, 14, 0.6 * q.gulp); ctx.globalCompositeOperation = 'source-over'; }
+    if (blocked) {   // st john's wort in flower, plugging the pump
+      ctx.strokeStyle = 'rgba(255,226,120,0.55)'; ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) { const a = (i * TAU) / 10; ctx.moveTo(q.x, y); ctx.lineTo(q.x + Math.cos(a) * 6.5, y + Math.sin(a) * 6.5); }
+      ctx.stroke();
+      ctx.fillStyle = '#f2c428';
+      for (let i = 0; i < 5; i++) { const a = (i * TAU) / 5 + 0.3; ctx.beginPath(); ctx.ellipse(q.x + Math.cos(a) * 4, y + Math.sin(a) * 4, 3.4, 2, a, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = '#e07a10'; ctx.beginPath(); ctx.arc(q.x, y, 1.8, 0, TAU); ctx.fill();
+    }
+  }
+}
+function drawGabaTerminal(syn) {   // an inhibitory neighbour: its GABA pulls the cell away from firing
+  const G = syn.gaba;
+  if (!G) return;
+  const s = G.side, y = termY + 118, cx = s < 0 ? -12 : W + 12, f = gabaFace(syn);
+  const g = ctx.createRadialGradient(cx, y, 4, cx, y, 46);
+  g.addColorStop(0, '#24335f'); g.addColorStop(1, '#0f1330');
+  ctx.beginPath(); ctx.ellipse(cx, y, 46, 36, 0, 0, TAU);
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(120,170,255,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.strokeStyle = 'rgba(170,205,255,0.16)'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.ellipse(cx, y, 41, 31, 0, 0, TAU); ctx.stroke();
+  ctx.fillStyle = 'rgba(170,205,255,0.3)';   // its bilayer, facing the cleft
+  for (let a = -1.2; a <= 1.2; a += 0.12) {
+    const ang = s < 0 ? a : Math.PI - a;
+    ctx.fillRect(cx + Math.cos(ang) * 48 - 1, y + Math.sin(ang) * 38 - 1, 2, 2);
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  glow('blue', f.x, f.y, 24 + G.charge * 12, 0.14 + 0.6 * G.charge);
+  ctx.globalCompositeOperation = 'source-over';
+  for (let i = 0; i < 2; i++) {
+    const vx = cx - s * (26 - i * 4), vy = y + (i ? 13 : -12), r = 6 + (i === 0 ? G.charge * 2.5 : 0);
+    ctx.fillStyle = 'rgba(120,180,255,0.25)'; ctx.beginPath(); ctx.arc(vx, vy, r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(200,225,255,0.8)'; ctx.lineWidth = 1; ctx.stroke();
+  }
 }
 function drawHUD() {
   if (S.score > 0 || S.depth > 1) {
@@ -1461,8 +1818,10 @@ function render() {
   const v = ctx.createRadialGradient(W / 2, H * 0.5, H * 0.3, W / 2, H * 0.5, H * 0.75);
   v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
   ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  drawFork();
   drawHUD();
   ctx.restore();
+  drawGrain();
 }
 
 /* ======================= loop, input, boot ======================= */
@@ -1479,9 +1838,11 @@ cv.addEventListener('pointerdown', e => {
   e.preventDefault();
   audioOn();
   if (S.mode === 'over') { if (S.overT > 0.7) restart(); return; }
+  const lx = (e.clientX - offX) / scale;
+  if (S.mode === 'fork') { if (S.forkT > 0.25) chooseFork(lx < W / 2 ? 0 : 1); return; }   // pick a branch
   if (S.mode !== 'play' || !S.syn) return;
   if (!S.started) S.started = true;
-  release((e.clientX - offX) / scale, false);
+  release(lx, false);
 }, { passive: false });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('gesturestart', e => e.preventDefault());
@@ -1504,7 +1865,7 @@ function boot(data) {
     Promise.all([`600 26px ${FONT}`, `italic 400 22px ${FONT}`, `300 112px ${FONT}`].map(f => document.fonts.load(f))).then(() => widthCache.clear()).catch(() => {});
   }
 }
-if (DEBUG) window.__T = { S, release, get H() { return H; }, get scale() { return scale; }, get offX() { return offX; }, get memY() { return memY; }, get termY() { return termY; }, pumpkinCY };
+if (DEBUG) window.__T = { S, release, choose: s => chooseFork(s), setSyn: (d, p) => { S.mode = 'play'; S.next = null; S.forkOpts = null; S.forkChosen = null; S.camY = 0; S.wisps.length = 0; S.depth = d; S.syn = makeSynapse(d, p); S.pool = S.syn.poolMax; S.started = true; S.titleA = 0; }, get H() { return H; }, get scale() { return scale; }, get offX() { return offX; }, get memY() { return memY; }, get termY() { return termY; }, pumpkinCY };
 
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) { try { hot.snapshot(() => ({ best: S.best })); } catch (e) { /* older viewer */ } }
