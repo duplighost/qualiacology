@@ -26,6 +26,7 @@ import * as gco from './gco-song.js';
 import * as gsa from './gsa-song.js';
 import * as mms from './mms-song.js';
 import * as tmf from './tmf-song.js';
+import { chaseOf } from './kcb-song.js';
 const ADDED = [nlg, yst, dam, rpd, ycl, irt, wxm, scs, hgl, ptd, itd, gco, gsa, mms];
 
 // a doorway between the rooms of her apartment
@@ -5272,3 +5273,5 @@ ALBUM.push(cmo.song);
 // and the bonus track after everything, its own pick to open
 ALBUM.push({ ...tmf.song, bonus: true });
 for (const m of [...ADDED, cmo, tmf]) Object.assign(PALETTES, m.palettes);
+// the boss stages, after everything on the record (the song list puts each under its own song)
+ALBUM.push(chaseOf(ALBUM.find((e) => e.id === 'kiss-me-like-a-car-crash')));

@@ -101,6 +101,7 @@ export class Hud {
     this.warmGroovy();
     this.title.classList.remove('off');
     this.title.querySelector('.song').textContent = song.title;
+    if (song.tag) this.title.querySelector('.song').insertAdjacentHTML('beforeend', `<em class="tag">${song.tag}</em>`);
     this.title.querySelector('.num').textContent = String((info.index ?? 0) + 1).padStart(2, '0');
     this.title.querySelector('.best').innerHTML = info.best ? 'BEST <b>' + info.best.toLocaleString('en-US') + '</b>' + (info.grade ? ' &nbsp;&middot;&nbsp; <b>' + info.grade + '</b>' : '') : '';
     this.bar.classList.remove('on'); this.speed.classList.remove('on'); this.gems.classList.remove('on'); this.scoreEl.classList.remove('on'); this.comboEl.classList.remove('on');

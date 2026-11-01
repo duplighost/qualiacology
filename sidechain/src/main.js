@@ -69,6 +69,8 @@ import { gradeOf } from './score.js';
 import { progress, levelNeed } from './progress.js';
 import { Kit } from './kit.js';
 import { ALBUM, PALETTES } from './album.js';
+import { BossStage } from './boss.js';
+import { BossCore, bossPar } from './boss-core.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const params = new URLSearchParams(location.search);
@@ -128,13 +130,16 @@ resize();
 async function loadSong(index, onProgress = () => {}) {
   state = 'loading';
   const entry = ALBUM[index];
-  const beats = await fetch(`data/beats/${entry.id}.json`).then((r) => r.json());
+  // (a boss stage plays its own song's music and beat map: entry.song)
+  const songId = entry.song || entry.id;
+  const beats = await fetch(`data/beats/${songId}.json`).then((r) => r.json());
   const chart = { ...beats, ...entry };
   if (!S || S.id !== entry.id) {
     if (S && S.scene) disposeScene(S.scene);
+    if (S && S.boss) S.boss.dispose();
     S = null;
     onProgress(0.02);
-    const buffer = await sound.song(entry.id, beats.duration, (p) => onProgress(0.05 + 0.7 * p));
+    const buffer = await sound.song(songId, beats.duration, (p) => onProgress(0.05 + 0.7 * p));
     S = { id: entry.id, index, entry, chart, buffer };
   }
   onProgress(0.8);
@@ -146,15 +151,26 @@ async function loadSong(index, onProgress = () => {}) {
 
 // ---------- the album: pick a song; then a loading card; then the start line ----------
 let menuSel = 0;
-function card(i) { const e = ALBUM[i]; const p = progress.song(e.id); return { id: e.id, index: i, num: i + 1, title: e.title, accent: e.accent || '#ff4f9a', image: `assets/menu/${e.id}.jpg`, best: p ? p.best : 0, grade: p ? p.grade : null, plays: p ? p.plays : 0, bonus: !!e.bonus }; }
+// (a boss stage wears its song's number, and its own tag: the list's numbers stay the record's)
+function card(i) { const e = ALBUM[i]; const p = progress.song(e.id); const base = e.of ? ALBUM.findIndex((x) => x.id === e.of) : i; return { id: e.id, index: i, num: base + 1, title: e.title, tag: e.tag || null, accent: e.accent || '#ff4f9a', image: e.image || `assets/menu/${e.id}.jpg`, best: p ? p.best : 0, grade: p ? p.grade : null, plays: p ? p.plays : 0, bonus: !!e.bonus }; }
 // the songs in the list: every one but a bonus track not yet picked (it's last on the record, so
-// the list's numbers are the record's)
-function listed() { const own = progress.get().songsOwned; return ALBUM.map((e, i) => i).filter((i) => !ALBUM[i].bonus || own.includes(ALBUM[i].id)); }
+// the list's numbers are the record's), and each song's boss stage right under it
+function listed() {
+  const own = progress.get().songsOwned;
+  const out = [];
+  ALBUM.forEach((e, i) => {
+    if (e.of || (e.bonus && !own.includes(e.id))) return;
+    out.push(i);
+    ALBUM.forEach((b, j) => { if (b.of === e.id) out.push(j); });
+  });
+  return out;
+}
 // the songs' previews in the list start from each one's first chorus (data/profiles.json)
 let previewAt = null;
 fetch('data/profiles.json').then((r) => r.json()).then((p) => { previewAt = p; }).catch(() => { /* from a third of the way in */ });
+const songOf = (id) => { const e = ALBUM.find((x) => x.id === id); return (e && e.song) || id; };
 const PREVIEW = {
-  preview(id) { const pr = previewAt && previewAt[id]; sound.preview(id, pr ? pr.preview : 40); },
+  preview(id) { const sid = songOf(id), pr = previewAt && (previewAt[id] || previewAt[sid]); sound.preview(sid, pr ? pr.preview : 40); },
   stopPreview() { sound.stopPreview(0.4); },
   // the list again, after a pick has put a song on it
   songs() { return listed().map(card); },
@@ -166,6 +182,7 @@ function openMenu(sel = menuSel) {
   document.body.classList.remove('fever'); if (S) S.feverOn = false;
   document.body.classList.remove('riding');
   hud.hideAll();
+  if (S && S.boss) { S.boss.show(false); S.boss.snd.fuseOff(0.05); }
   const songs = listed().map(card);
   ui.showMenu(songs, Math.max(0, songs.findIndex((s) => s.index === sel)), (i) => { menuSel = i; sound.resume(); chooseSong(i); }, ME, PREVIEW);
 }
@@ -209,7 +226,8 @@ function pctOf(id) { try { return +localStorage.getItem('lc-pct-' + id) || 0; } 
 function bestOf(id) { try { return +localStorage.getItem('lc-best-' + id) || 0; } catch (e) { return 0; } }
 function showTitle() {
   const p = progress.song(S.id);
-  hud.showTitle(S.entry, { index: S.index, best: p ? p.best : 0, grade: p ? p.grade : null });
+  hud.showTitle(S.entry, { index: card(S.index).num - 1, best: p ? p.best : 0, grade: p ? p.grade : null });
+  if (S.boss) S.boss.show(false);
 }
 
 // let go of a finished world's GPU memory before building the next one
@@ -229,6 +247,8 @@ function build(S) {
   const P = look.at(0);
   const scene = new THREE.Scene();
   const course = new Course(S.chart);
+  // a boss stage's rules, before the road is laid: they take pickups off it and draw the pin's hold on it
+  const bossCore = S.entry.boss ? new BossCore(course, S.entry.boss) : null;
   const rider = new Rider(course);
   const track = new Track(course, scene, P);
   const sky = makeSky(scene, P);
@@ -289,6 +309,10 @@ function build(S) {
     countIn: null, went: false, crossed: false, resume: null, wdT: null, wdAt: 0, anchorAt: 0,
     // (the end of the last ride, forgotten: the same song ridden again starts its ending afresh)
     ec: null, stopK: 0, outroK: 0, orbitA: undefined, cheer: 0, applauded: false });
+  // a boss stage: her, and what the stage does with the song (its rules take the pickups off the
+  // road where something lands); she waits beside you on the start line
+  if (S.boss) S.boss.dispose();
+  S.boss = S.entry.boss ? new BossStage(S, scene, { core: bossCore, sound, kit, hud, chase, post, camera, rider: params.get('rider') || progress.get().rider, board: params.get('board') || progress.get().board, step: (e) => runStep(S, e), broken: (e) => runBroken(S, e) }) : null;
   applyLook(S, look.at(0));
   // the count-in: the four beats of the song's own grid before it starts. She waits on the
   // title a little before the start line and rolls up to it on them.
@@ -302,6 +326,7 @@ function build(S) {
   S.startFrom = (inBeats[0] ?? -1.4) - 0.3;
   const tq = parseFloat(params.get('t') || '0');
   rider.reset(tq > 0 ? tq : S.startFrom, 22);
+  if (S.boss) S.boss.start();
   chase.first = true;
   chase.lift0 = S.entry.camLift || 0;
   chase.titleView = S.entry.titleView || null;
@@ -313,9 +338,10 @@ function build(S) {
 // build the ride and wait until everything it will draw is loaded and compiled
 async function prepare(S) {
   build(S);
-  S.par = parScore(S.course);
+  S.par = S.boss ? bossPar(S.course, S.entry.boss) : parScore(S.course);
   S.rider.reset(S.rider.t, S.rider.v);
-  await Promise.all([S.view.ready, S.finale && S.finale.ready].filter(Boolean));
+  if (S.boss) S.boss.start();
+  await Promise.all([S.view.ready, S.finale && S.finale.ready, S.boss && S.boss.ready].filter(Boolean));
   await precompile(S);
   // a layer a place first wants mid-ride compiles in the background, hidden until it's ready,
   // instead of the ride stopping while it compiles (it shows a moment late, far up the road)
@@ -405,6 +431,7 @@ function startRide() {
   }
   S.crossed = false; S.wdT = null; S.resume = null;
   S.thumbCrest = 0; S.purrTo = null;   // (the hold zones in your hand start over too)
+  if (S.boss) { S.boss.start(); S.boss.show(true); }
   hud.start(S.course);
   S.titleK = 1;
   S.pressHint = 0;
@@ -457,6 +484,7 @@ function togglePause() {
     S.resume = null;
     sound.pause(S.rider.t);
     sound.charge(false); sound.skid(0); sound.siren(0);
+    if (S.boss) { S.boss.snd.fuseOff(0.01); S.boss.fuseOn = false; }
     ui.showPause(pauseButtons());
   } else {
     paused = false;
@@ -493,6 +521,7 @@ function rideAgain() {
 // ---------- the autopilot: rides like someone who knows the song ----------
 function autoInput(S) {
   const r = S.rider, c = S.course;
+  if (S.boss) return { press: S.boss.core.autoPress(r), steer: S.boss.core.autoSteer(r), groovy: autoGroovy(r) };
   return { press: autoPress(r, c), steer: autoSteer(r, c), groovy: autoGroovy(r) };
 }
 
@@ -547,12 +576,19 @@ function frameBody(now) {
       // (songT is the song at this frame's timestamp: count back from that to the press)
       inp.pressAt = songT - Math.max(0, now - input.downAt) / 1000;
       inp.releaseAt = songT - Math.max(0, now - input.upAt) / 1000;
+      // (and which press and release they were: a boss stage judges presses as well as releases)
+      inp.downId = input.downAt; inp.upId = input.upAt;
     }
     // back from a pause: she holds where she was until the song comes round to her
     if (S.resume && S.resume.playing && songT >= S.resume.t) S.resume = null;
     // the music's over: the stop (song time slows with her from here)
     if (!rider.stopping && songT > course.duration + 0.05 && rider.grounded) beginStop(S);
     if (rider.stopping) stopFrame(S, dt);
+    else if (S.boss) {
+      // a boss stage's presses go to it first (the duel and the pin take the button off the board)
+      rider.advance(Math.max(rider.t, songT), S.boss.core.frame(rider, inp));
+      S.boss.core.after(rider, dt);
+    }
     else rider.advance(Math.max(rider.t, songT), inp);
     startAndFinish(S, songT);
     handleEvents(S, dt);
@@ -617,7 +653,7 @@ function frameBody(now) {
   const sec = course.sectionAt(rider.t);
   S.town.beatLamps = sec.kind === 'chorus' || sec.kind === 'final';
   if (S.entry.heart) heartFrame(S, dt, songNow);
-  S.town.update(track, rider, songNow, dt, beatPulse, (T) => { gatePosts(S, T, beatPulse); if (S.finale) { S.finale.beat = S.heartBeat; S.finale.camPos = camera.position; S.finale.update(track, rider, songNow, dt, S.fireworks); } if (S.trains) S.trains.draw(T, rider, songNow); if (S.world && S.world.draw) S.world.draw(T, rider, songNow); if (S.vehicles) S.vehicles.update(track, rider, songNow, T); });
+  S.town.update(track, rider, songNow, dt, beatPulse, (T) => { gatePosts(S, T, beatPulse); if (S.boss) S.boss.draw(T); if (S.finale) { S.finale.beat = S.heartBeat; S.finale.camPos = camera.position; S.finale.update(track, rider, songNow, dt, S.fireworks); } if (S.trains) S.trains.draw(T, rider, songNow); if (S.world && S.world.draw) S.world.draw(T, rider, songNow); if (S.vehicles) S.vehicles.update(track, rider, songNow, T); });
   partyFrame(S, camera, beatPulse);
   if (S.vehicles) {
     // the ambulance's siren: louder close by, higher coming up behind you, lower pulling away
@@ -637,13 +673,15 @@ function frameBody(now) {
   S.rings.update(track, rider, dt);
   // holding down a hill: the zone lights up under you and a soft rush rises
   const hs = course.sample(rider.t);
-  const holding = state === 'ride' && rider.press && hs.hold >= 0;
+  const holding = state === 'ride' && (rider.heldIn ?? rider.press) && hs.hold >= 0;
   S.pressGlow += ((holding ? 1 : 0) - S.pressGlow) * Math.min(1, dt * (holding ? 14 : 8));
   sound.charge(holding && !paused, Math.max(0, hs.hold));
   if (holding && !paused && (rider.grounded || rider.rail)) holdSpray(S, dt, hs.hold);
   S.hit *= Math.exp(-dt * 5);
   view.update(track, rider, dt, beatPulse);
   view.setTint(rider.flow);
+  // a boss stage: her, the rings, what's on the road (after you're placed: the boards lean in to meet)
+  if (S.boss) S.boss.update(dt, beatPulse, time, state === 'ride' && !paused);
   // (a hit flares the board's engine: S.burst)
   if (S.hoverboard) { S.trail.mesh.visible = false; S.hoverboard.update(dt, { speed: state === 'ride' || state === 'results' ? rider.v : 0, beat: beatPulse, boost: clamp(rider.flow * (state === 'ride' ? 1 : 0.3) + 0.8 * S.burst, 0, 1), airborne: !rider.grounded }); }
   // (faint while she's turning a trick: the tail going round in circles drew knots in the air)
@@ -666,12 +704,16 @@ function frameBody(now) {
   if (state === 'results' && rider.stopping) stopFrame(S, dt);
   // the end of the song: the camera goes round her (endCam), not along the road
   if (S.ec && (rider.stopping || state === 'results')) orbit = endCam(S, orbit);
+  // a boss stage takes the camera where the song sends it (side on, face to face...)
+  if (!orbit && S.boss && state === 'ride') orbit = S.boss.cam(rider);
   const tk = S.titleK * S.titleK * (3 - 2 * S.titleK);
   // her key light: behind her while riding (the side the chase camera sees), round to the
   // camera's side for the title and for the end, so she isn't a silhouette in either
   const ek = orbit && S.ec ? S.ec.k : 0;
   view.key.position.set(0.9 - 4.2 * tk, 2.7 - 0.3 * tk, -2.4 + 3.4 * tk);
   if (ek > 0) view.key.position.lerp(S._ekp.set(Math.sin(S.ec.a) * 2.6, 2.5, -Math.cos(S.ec.a) * 2.6), ek);
+  // (a boss stage's camera off to the side or in front: the light comes round with it)
+  if (S.boss && S.boss.camK > 0) view.key.position.lerp(S.boss.keyAt(S._bkp || (S._bkp = new THREE.Vector3())), S.boss.camK);
   view.titleK = tk;
   view.key.intensity = 9 + 5 * Math.max(tk, ek);
   chase.titleView = S.entry.titleView || null;
@@ -771,6 +813,10 @@ function handleEvents(S, dt) {
         break;
       }
       case 'judge': judgeFeedback(S, e); break;
+      // a boss stage's moves: the stage answers them (boss.js)
+      case 'tag': case 'kiss': case 'duel': case 'duelRound': case 'pin': case 'hazard': case 'dodge': case 'close': case 'race':
+        if (S.boss && state === 'ride') S.boss.onEvent(e);
+        break;
       case 'groovy': if (state === 'ride') groovyGo(S); break;
       case 'groovyEnd': if (state === 'ride' && !rider.stopping) { sound.groovyEnd(); haptics.buzz([16], 2); } break;
       case 'scrape': {
@@ -1130,12 +1176,10 @@ function judgeFeedback(S, e) {
   const mult = rider.score.mult;
   kit.pump(g, e.at ?? rider.t, mult, e.streak);
   if (e.points) hud.score(rider.score.points, mult);
-  // a new multiplier: a short fill into the next beat and a ring
-  const step = (g === 'perfect' || g === 'good') && e.streak > 0 && e.streak % 8 === 0 && e.streak <= 24;
-  if (step) { kit.fill(rider.t, mult); hud.mult(mult); }
-  // and in your hand: the multiplier's pulses, a double tap for a perfect, a tap for a good, a dull
-  // buzz for a run broken
-  if (step) haptics.buzz(haptics.mult(mult), 4);
+  // a new multiplier: a short fill into the next beat and a ring (and its pulses in your hand);
+  // otherwise a double tap for a perfect, a tap for a good, a dull buzz for a run broken
+  const step = runStep(S, e);
+  if (step) { /* (in your hand already) */ }
   else if (g === 'perfect') haptics.buzz([14, 36, 14], 3);
   else if (g === 'good') haptics.buzz([10], 2);
   else if (e.lost >= 4) haptics.buzz([45], 3);
@@ -1161,22 +1205,35 @@ function judgeFeedback(S, e) {
     chase.impulse(0, 0.06, 0.25); chase.punch(0.3);
     S.burst = Math.max(S.burst || 0, 0.4);
     hud.bump(0.6);
-  } else if (e.lost >= 4) {
-    // a run broken: a dull grey crack where it ended, the needle dragged across the record, the
-    // song dropping out a moment and the colour draining out of everything (more for a longer run)
-    S.rings.fire(new THREE.Color(0.35, 0.33, 0.4), 2.2, 0.4, 0.12);
-    const big = Math.min(1, e.lost / 24);
-    sound.scratch(0.5 + 0.5 * big);
-    S.muffle = Math.max(S.muffle, 0.55 + 0.35 * big);
-    S.drain = Math.max(S.drain || 0, 0.55 + 0.45 * big);
-    chase.impulse(0.4, 0.2, 0);
-  }
-  // a new multiplier at x4: the run's top. A run up the key, a gold flash, the world takes off
-  if (step && mult >= 4) {
+  } else if (e.lost >= 4) runBroken(S, e);
+}
+
+// a new multiplier (every eight in a row, to x4): a short fill into the next beat, the multiplier
+// slamming in and its pulses in your hand; at x4, the run's top, a run up the key and the world
+// taking off. (A pump in time or a boss stage's tag: both build the run.)
+function runStep(S, e) {
+  const g = e.grade;
+  if (!((g === 'perfect' || g === 'good') && e.streak > 0 && e.streak % 8 === 0 && e.streak <= 24)) return false;
+  const mult = S.rider.score.mult;
+  kit.fill(S.rider.t, mult); hud.mult(mult);
+  haptics.buzz(haptics.mult(mult), 4);
+  if (mult >= 4) {
     sound.flourish(e.streak);
     S.flash = Math.max(S.flash, 0.18); post.comp.uniforms.uFlashColor.value.setRGB(1, 0.78, 0.35); S.flashTint = 0.8;
     chase.impulse(0.3, 0.2, 1.4);
   }
+  return true;
+}
+// a run broken: a dull grey crack where it ended, the needle dragged across the record, the song
+// dropping out a moment and the colour draining out of everything (more for a longer run)
+function runBroken(S, e) {
+  if (!(e.lost >= 4)) return;
+  S.rings.fire(new THREE.Color(0.35, 0.33, 0.4), 2.2, 0.4, 0.12);
+  const big = Math.min(1, e.lost / 24);
+  sound.scratch(0.5 + 0.5 * big);
+  S.muffle = Math.max(S.muffle, 0.55 + 0.35 * big);
+  S.drain = Math.max(S.drain || 0, 0.55 + 0.45 * big);
+  chase.impulse(0.4, 0.2, 0);
 }
 
 // going Groovy: a burst of every colour off the board, the view kicked back, x8 slamming in (hud)
@@ -1237,6 +1294,7 @@ function stopFrame(S, dt) {
   S.stopClock += dt * r.stopVel / r.stopV0;
   r.advance(Math.max(r.t, S.stopClock), { press: false, steer: 0 });
   S.stopK = Math.min(1, (S.stopK || 0) + dt / 1.3);
+  if (S.boss) S.boss.stopFrame(r);
   if (r.stopVel < 2.5) { S.view.cheering = true; applaud(S); }
   const k = r.stopVel / r.stopV0;
   sound.skid(paused ? 0 : Math.min(1, k * 1.3) * (r.stopVel > 0.5 ? 1 : 0));
@@ -1373,7 +1431,9 @@ function endSong() {
   const menu = { label: 'All songs', key: 'M', code: 'KeyM', go: () => openMenu(last ? inList[0] : inList[k + 1]) };
   const data = { title: S.entry.title, accent: S.entry.accent || '#ff4f9a', points, grade, best: prev ? prev.best : 0, newBest: !!(prev && prev.best > 0 && points > prev.best),
     dist: st.dist, inTime, perfects: st.perfects, bestStreak: st.bestStreak, notes: st.notes, notesTotal: st.notesTotal, top: st.top, collect: S.entry.collect, tricks: st.tricks,
+    boss: S.boss ? S.boss.result() : null,
     level: { before: res.before, gained: points, need: levelNeed } };
+  if (S.boss) S.boss.show(false);
   S.endData = data;
   // (the grade lands like a stamp: a thump in your hand too, a longer one for an S)
   const fx = { tick: (k) => kit.tick(k), grade: (g) => { kit.grade(g); haptics.once(g === 'S' ? [30, 40, 30, 40, 70] : g === 'A' ? [30, 40, 50] : [40]); }, rise: (d) => kit.rise(d), levelUp: () => { kit.levelUp(); S.cheer = Math.max(S.cheer || 0, 1); haptics.once([18, 50, 18, 50, 18]); } };

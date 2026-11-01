@@ -385,6 +385,32 @@ export class Rider {
     this._emit({ type: 'judge', grade, err, q, streak: this.streak, lost, t: this.t, at });
   }
 
+  // A boss stage's moves (boss-core.js). A tag, a note of the duel, the pin, the kiss: each counts
+  // in the run like a pump in time, and one missed (or something on the road hit) breaks it like a
+  // pump out of time. A dodge or a race won is only points.
+  bossHit(type, grade, extra = {}) {
+    const st = this.stats;
+    this.streak++; st.hits++; st.judged++;
+    if (grade === 'perfect') st.perfects++; else st.goods++;
+    st.bestStreak = Math.max(st.bestStreak, this.streak);
+    st.boss = (st.boss || 0) + 1;
+    this._emit({ ...extra, type, grade, streak: this.streak, t: this.t });
+  }
+  bossMiss(type, extra = {}) {
+    const lost = this.streak;
+    this.stats.judged++; this.streak = 0;
+    this.groovyArm = GROOVY_AT;
+    if (this.groovyX2) { this.groovyX2 = false; this._emit({ type: 'groovyBreak', t: this.t }); }
+    this._emit({ ...extra, type, grade: 'miss', lost, streak: 0, t: this.t });
+  }
+  bossBonus(type, extra = {}) { this._emit({ ...extra, type, streak: this.streak, t: this.t }); }
+  // hit something on the road: a stumble, the run of flow knocked out of her
+  stumble(k = 0.5) {
+    this.wipe = Math.max(this.wipe, 0.32 * k + 0.08);
+    this.flow *= 0.55;
+    this.stats.hard++;
+  }
+
   _land(s) {
     // split your velocity into along-the-slope and square-on parts
     const v = this.v, vyR = this.vy;
