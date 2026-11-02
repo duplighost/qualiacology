@@ -31,6 +31,12 @@
 /music/index.html
   Cache-Control: public, max-age=0, must-revalidate
 
+/black-lacquer/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/black-lacquer/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /assets/site.webmanifest
   Content-Type: application/manifest+json; charset=UTF-8
   Cache-Control: public, max-age=0, must-revalidate

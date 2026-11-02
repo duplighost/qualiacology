@@ -154,3 +154,7 @@
 
 # TINBOUND
 /tin  /tinbound/  302
+
+# BLACK LACQUER
+/black-lacquer.html  /black-lacquer/  301!
+/blacklacquer  /black-lacquer/  302
