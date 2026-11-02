@@ -93,6 +93,20 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "black-lacquer",
+      "title": "BLACK LACQUER",
+      "descriptor": "3D action game",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/black-lacquer-card-v20261102.jpg",
+      "alt": "Two sword fighters beneath a brass chandelier in the opera house foyer, surrounded by marble columns and red carpet.",
+      "summary": "Fight through an opera house to free three stolen voices. Launch enemies, cut in the air, deflect their shots, and pull machinery into the fight. Keyboard and mouse.",
+      "metaDescription": "Fight through an opera house to free three stolen voices. Launch enemies, cut in the air, deflect their shots, and pull machinery into the fight. A desktop action game.",
+      "controls": "Desktop only · WASD move · mouse aim · left click cut · Q launch or slam · right click deflect · Space dash · R reel · E Crescendo · M map · Esc pause",
+      "actionLabel": "Play",
+      "duration": "20 connected areas"
+    },
+    {
       "slug": "tinbound",
       "title": "TINBOUND",
       "descriptor": "3D toy platformer",

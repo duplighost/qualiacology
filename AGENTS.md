@@ -69,6 +69,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | collateral | `Projects\collateral` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | sidechain (was last-chorus; `_redirects` sends that there) | `Projects\the music game` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | tinbound | `D:/Projects/tinbound` | `node tools/build-site-copy.mjs <this repo>` there; it copies the runtime, card and link-preview image. The offline single-file build stays separate. |
+| black-lacquer | `D:/Projects/black-lacquer` | `node tools/build-site-copy.mjs <this repo>` there; it copies the finished runtime, gameplay card and link-preview image. Never hand-edit the site copy. |
 | in-every-direction | `Projects\in-every-direction` | `node tools/build-site-copy.mjs <this repo>` there (it writes the card too); never hand-edit the site copy |
 | the-way-i-came | `Projects\the-way-i-came` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
 | threshold | `Projects\threshold` | `node tools/build-site-copy.mjs <this repo>` there (it copies the link-preview image too); never hand-edit the site copy. Alex's Halloween game for his psychopharmacology Discord; not on the hub pages |
