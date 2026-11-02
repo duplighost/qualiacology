@@ -234,3 +234,9 @@
 
 /skip/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/tinbound/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/tinbound/index.html
+  Cache-Control: public, max-age=0, must-revalidate

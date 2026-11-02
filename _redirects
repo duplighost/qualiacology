@@ -151,3 +151,6 @@
 # --- SPOOKY GAMES (Halloween, 30 Oct 2026) ---
 /spooky.html  /spooky/  301!
 /halloween  /spooky/  302
+
+# TINBOUND
+/tin  /tinbound/  302

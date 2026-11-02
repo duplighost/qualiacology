@@ -1,0 +1,230 @@
+src/assets/THREE-LICENSE.txt
+
+The MIT License
+
+Copyright © 2010-2026 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+src/assets/CREDITS.txt
+
+TINBOUND environment asset credits
+
+Poly Haven assets, CC0 1.0 Universal.
+https://polyhaven.com/license
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Potted Plant 04: James Ray Cock.
+Fern 02: Rob Tuytel (scanning), Rico Cilliers (modeling).
+Trowel 01, Seedling Tray 01, Garden Gloves 01: Satyaki Mandal.
+Watering Can Metal 01: Charles Nderitu.
+Planter Pot Clay: Amal Kumar.
+Model sources: https://polyhaven.com/a/ followed by each filename without .glb. Exact source/output checksums in provenance.json. Official glTF buffers and PBR image bytes repacked into self-contained GLBs; tea set uses 2K imagery and other listed scanned props use 1K. Source mesh/image bytes retained; runtime placement and fitted playable profiles are adaptations. Powered by Poly Haven (asset preparation API; no runtime API dependency).
+
+Wood049 and WoodFloor051: ambientCG, CC0.
+https://ambientcg.com/view?id=Wood049
+https://ambientcg.com/view?id=WoodFloor051
+https://docs.ambientcg.com/license/
+Existing Winterline source maps copied without changing the donor, resized at most1024px and JPEG re-encoded.
+
+TINBOUND table profiles, joinery, frames, labels, soil shading, room architecture and arrangement are original work.
+
+Brown Mud 03 photographic soil PBR, Poly Haven, CC0 1.0: https://polyhaven.com/a/brown_mud_03 (1K files byte-identical, source MD5 verified).
+
+Opening potting earth: Farm Soil by Amal Kumar, Poly Haven, CC0 1.0. https://polyhaven.com/a/farm_soil . Official 1K diffuse, OpenGL normal and roughness files retained byte-for-byte, with source MD5 verification in opening-soil-provenance.json. The runtime uses finer scale, reduced relief and a dry surface response.
+
+Studio Garden HDRI: Sergej Majboroda, Poly Haven CC0 1.0 https://polyhaven.com/a/studio_garden. 2K HDR exact official file, MD5 verified.
+
+Rain Barrel surfaces: Mossy Rock and Wood Planks Grey, Poly Haven CC0 1.0. https://polyhaven.com/a/mossy_rock and https://polyhaven.com/a/wood_planks_grey . Official 1K image bytes retained and source MD5 verified in rainbarrel-provenance.json.
+Water normals are original periodic spectral data generated for TINBOUND; cork grain is original procedural material. Planar reflection uses Three.js Reflector under the Three.js MIT license.
+
+Sewing fabrics: Velour Velvet (Rico Cilliers/colormass) and Denim Fabric 06 (Greg Zaal/Rico Cilliers), Poly Haven CC0 1.0. https://polyhaven.com/a/velour_velvet and https://polyhaven.com/a/denim_fabric_06 . Official 1K images retained byte-for-byte; source MD5 verified in sewing-provenance.json. Cutting-mat printing, spool labels, threads and sewing-machine geometry are original TINBOUND work.
+
+Tea Set 01: James Ray Cock (texturing), Rico Cilliers (modeling), Jurita Burger (graphic design), Poly Haven CC0 1.0. https://polyhaven.com/a/tea_set_01 . 2K original texture bytes retained; common normalized body/lid origin and separate fitted environment pieces created at runtime.
+Rough Linen: colormass (photography), Rico Cilliers (processing), Poly Haven CC0 1.0. https://polyhaven.com/a/rough_linen . The runtime shader uses neutral luminance for cream cloth.
+Brown Photostudio 02 lighting: Poly Haven CC0 1.0. https://polyhaven.com/a/brown_photostudio_02 . Official 1K HDR, source checksum in tea-light-provenance.json.
+
+Music Cabinet source models — Poly Haven, CC0 1.0.
+Ukulele 01 by Joseph Burgan: https://polyhaven.com/a/Ukulele_01
+Cassette Player by Oday Abuzaeed: https://polyhaven.com/a/cassette_player
+Bundled from the original 1K glTF with source-file MD5 verification.
+See music-provenance.json for the exact files and local SHA-256 hashes.
+
+Toy Railway source models and carpet — Poly Haven, CC0 1.0.
+Alarm Clock 01 by James Ray Cock (modeling/texturing) and Yann Kervran (rigging): https://polyhaven.com/a/alarm_clock_01
+Book Encyclopedia Set 01 by John Malcolm: https://polyhaven.com/a/book_encyclopedia_set_01
+Dirty Carpet: https://polyhaven.com/a/dirty_carpet
+Official 1K source files retained and MD5 verified. The glTF files are embedded as self-contained GLBs; book geometry is laid flat and fitted to physical stack dimensions at runtime. Original surface maps are also used for recolored book bindings and the blue rug. Track, station, wagon, bedroom furniture, mechanical rack, printed signs and arrangement are original TINBOUND work.
+Exact source URLs and local model SHA-256 hashes are in railway-provenance.json. Asset license: https://polyhaven.com/license
+
+Workshop source models — Poly Haven, CC0 1.0.
+Drill Press 01 by Viktor: https://polyhaven.com/a/drill_press_01
+Bench Vice 01 by Antanas Kep (modeling/texturing) and Yann Kervran (rigging): https://polyhaven.com/a/bench_vice_01
+Metal Tool Chest by John Hutcheson (modeling/texturing) and Yann Kervran (rigging): https://polyhaven.com/a/metal_tool_chest
+Cross Pein Hammer by Tics: https://polyhaven.com/a/cross_pein_hammer
+Combination Wrench by BKS: https://polyhaven.com/a/combination_wrench
+Screwdriver by PierreB3D: https://polyhaven.com/a/screwdriver
+Official 1K files retained and MD5 verified, repacked into self-contained GLB files. Runtime adaptations normalize source parts, close the chest lid and fit its landing surface, and articulate the drill using actual source pivots. Tool textures remain shared and unchanged. See workshop-provenance.json for source URLs and local SHA-256 hashes. Conveyor treads, machine frames, joinery, printed parts labels and room arrangement are original TINBOUND work.
+
+Storm Roof assets (original downloads, CC0 1.0):
+Roof Tiles — Stephan Seeliger / Poly Haven: https://polyhaven.com/a/roof_tiles
+Red Brick 03 — Rob Tuytel / Poly Haven: https://polyhaven.com/a/red_brick_03
+Kloppenheim 02 (Pure Sky) — Greg Zaal, sky edits by Jarod Guest / Poly Haven: https://polyhaven.com/a/kloppenheim_02_puresky
+Source and local hashes: roof-provenance.json. Original textures and sky are public domain.
+
+The Last Toy maple and ash surfaces (CC0 1.0):
+White Maple Veneer and Ash Veneer by Jenelle van Heerden / Poly Haven.
+https://polyhaven.com/a/white_maple_veneer
+https://polyhaven.com/a/ash_veneer
+Original 2K maps and source hashes: finale-provenance.json.
+
+Courtyard tree: Tree Small 02 by Rico Cilliers / Poly Haven, CC0 1.0. https://polyhaven.com/a/tree_small_02 . Derived from the authored LOD1 with reduced woody geometry and 15,000 textured leaf/sprig cards in the source positions: 40,698 triangles, three material primitives. Source UVs retained; texture resolutions reduced and normal vectors renormalized. Both exterior and aperture views use the same tree asset and placement. Exact source MD5 verification, derivative SHA-256 and processing details: courtyard-tree-provenance.json. License: https://polyhaven.com/license
+
+
+src/assets/audio/CREDITS.txt
+
+Little Revolutions — original instrumental composition for TINBOUND, 2026.
+Composed and arranged in tools/compose-score.py; 96 bars at 136 BPM.
+Instrumentation: sampled marimba, clarinet, pizzicato strings, upright bass,
+nylon guitar, vibraphone and brush drums. No existing melody or MIDI is reused.
+
+Instrument samples: GeneralUser GS 2.0.3 by S. Christian Collins.
+The author's license permits private and commercial musical recordings.
+Read GeneralUser-LICENSE.txt for the complete license and provenance notes.
+https://www.schristiancollins.com/generaluser
+https://github.com/mrbumpy409/GeneralUser-GS
+
+Rendered offline with FluidSynth 2.6.2; encoded with FFmpeg/libmp3lame.
+https://github.com/FluidSynth/fluidsynth/releases/tag/v2.6.2
+The game needs only score.mp3; the SoundFont and renderer are build tools.
+
+Loose Ends and Night Freight — original instrumental compositions for TINBOUND,2026.
+Composed and arranged in tools/compose-interiors.py.
+Loose Ends: 80 bars of 3/4 at114BPM; guitar, flute, piano, pizzicato and vibraphone.
+Night Freight: 80 bars of 4/4 at144BPM; marimba, bassoon, accordion, bass, pizzicato and brushes.
+The same GeneralUser GS2.0.3 license and rendering credits above apply.
+The three MP3 arrangements are embedded in the offline game.
+
+The little bird's whistle phrases, repair timing and synthesis are original
+TINBOUND sound design in src/audio.js and src/bird-voice.js. Repair strokes and thread movement also
+layer the credited Kenney CC0 impacts and cloth-like filtered noise. No voice,
+bird-song recording or external melody is sampled by these synthesized cues.
+
+
+src/assets/audio/GeneralUser-LICENSE.txt
+
+*** GeneralUser GS v2.0.3 ***
+***      License v2.0     ***
+
+** License of the complete work **
+You may use GeneralUser GS without restriction for your own music creation,
+private or commercial. This SoundFont bank is provided to the community free of
+charge. Please feel free to use it in your software projects, and to modify the
+SoundFont bank or its packaging to suit your needs.
+
+** License of contained samples **
+GeneralUser GS inherits the usage rights of the samples contained within, all of
+which allow full use in music production, including the ability to make profit
+from musical recordings created with GeneralUser GS.
+
+Many of the samples are original, but some were taken from other banks freely
+(and legally) available on the Internet from various SoundFont websites. Because
+GeneralUser GS originated as a personal project with no intention for
+publication, I cannot be 100% sure where all of the samples originated, although
+I do know that none of them came from commercially published SoundFont packages
+or sample CDs. Regardless, many "free" SoundFonts available on the web may
+indeed contain samples of questionable origin. My understanding of the
+copyrights of all samples is only as good as the information provided by the
+original sources. If you become aware of any restricted samples being used in
+GeneralUser GS, please let me know so I can replace them.
+
+This uncertainty may concern you if you intend to use GeneralUser GS in a
+commercial software product. That being said, I have never received any
+complaint regarding sample ownership since I published the original GeneralUser
+GS back in 2000, and as far as I am aware, neither have any of the companies
+creating commercial software products using GeneralUser GS.
+
+** More info **
+If you plan to feature GeneralUser GS on your own website, please do not link
+directly to my download files. Either link to my website, or provide your own
+local copy instead.
+
+I hope you enjoy GeneralUser GS! This SoundFont bank is the product of many
+years of hard work.
+
+You can find updates to GeneralUser GS and more of my virtual instruments at:
+http://www.schristiancollins.com
+
+I can be reached via the contact page on my website here:
+https://www.schristiancollins.com/contact
+
+Thank you!
+-~Chris
+
+
+src/assets/audio/kenney-impact-LICENSE.txt
+
+	
+
+	Impact Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 19-12-2019
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL
+
+src/assets/audio/kenney-rpg-LICENSE.txt
+
+	
+
+	RPG Audio
+
+	by  Kenney Vleugels (Kenney.nl)
+
+			------------------------------
+
+	License (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You may use these assets in personal and commercial projects.
+	Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+
+	Follow on Twitter for updates:
+	@KenneyNL
