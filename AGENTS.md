@@ -50,39 +50,47 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 
 ## Where each game's files come from
 
-| site folder | source | how the site copy is made |
-|---|---|---|
-| olly-olly | `Projects/olly-olly-wt/integration-20260923` | `node tools/build-site-copy.mjs` there; never hand-edit the site copy |
-| arc, thrown | `Projects\arc`, `Projects\thrown` | `node build-site-copy.mjs` there; never hand-edit the site copy |
-| curfew | `Projects\curfew` | `node build-site-copy.mjs` there; never hand-edit |
-| winterline | `Projects\winterline` | `node tools/build-site-copy.mjs` there; never hand-edit |
-| iron-psalm | `Projects\iron-psalm` | package source is in `source/`; `py -3 tools/build_website.py` rebuilds `publish/`, then `node build-site-copy.mjs` copies the runtime with the site shell |
-| kickmoon | `Projects\kick-ball-moonkick` (not `kick-ball`) | copy the `game/` runtime; keep the site's index.html shell |
-| hearse | `Projects\hearse` | `node tools/build-site-copy.mjs` there; never hand-edit the site copy |
-| belfry | `Projects\belfry` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| skip | `Projects\skip` | `node build-site-copy.mjs --site=<this repo>` there; never hand-edit the site copy |
-| tideglass | `Projects\tideglass-one` | `node build-site-copy.mjs` there; never hand-edit the site copy |
-| fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
-| vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
-| spooky | this repo | Alex's Halloween page, hand-made, not generated. It repeats the five games' lines from `site-data.json`: change both |
-| strung | `Projects\strung` | `node build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| collateral | `Projects\collateral` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| sidechain (was last-chorus; `_redirects` sends that there) | `Projects\the music game` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| tinbound | `D:/Projects/tinbound` | `node tools/build-site-copy.mjs <this repo>` there; it copies the runtime, card and link-preview image. The offline single-file build stays separate. |
-| black-lacquer | `D:/Projects/black-lacquer` | `node tools/build-site-copy.mjs <this repo>` there; it copies the finished runtime, gameplay card and link-preview image. Never hand-edit the site copy. |
-| in-every-direction | `Projects\in-every-direction` | `node tools/build-site-copy.mjs <this repo>` there (it writes the card too); never hand-edit the site copy |
-| the-way-i-came | `Projects\the-way-i-came` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy |
-| threshold | `Projects\threshold` | `node tools/build-site-copy.mjs <this repo>` there (it copies the link-preview image too); never hand-edit the site copy. Alex's Halloween game for his psychopharmacology Discord; not on the hub pages |
-| pasta | `D:/Projects/pasta-collection` | `node tools/build-site-copy.mjs <this repo>` there. One PASTA catalog card and six-game menu; three GPT Pro runtimes live in `pasta/games/`. Keep the original three local games at their existing routes and preserve their saves. Read the collection AGENTS.md for source versions. Alex requested the combined collection on 28 Oct, superseding earlier separation notes. |
-| spaghetti-sunshine | `D:/Projects/bianco-spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy. Included in PASTA; keep its direct route, without adding a separate card. |
-| spaghetti | `Projects\spaghetti` | `node tools/build-site-copy.mjs <this repo>` there; never hand-edit the site copy. Its original two-game opening remains available. PASTA opens its seven-level select directly. |
-| al-dente | `Projects\al-dente` | copy `src/` (and `vendor/` only if three.js changes) into `al-dente/`; keep the site's index.html shell (it self-hosts the fonts and three.js). Included in PASTA and still reachable from the original /spaghetti/ opening. |
-| rally, rocket-shoes | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
-| everything else | this repo | the site copy is the only source |
+A game with its own source lives in `D:\Projects\<site folder>`, named exactly like its
+folder here, and has a private GitHub repository `duplighost/<site folder>` (FETCH's is
+public). Commit and push there after working on a game, then make the site copy as below.
+Old copies and retired folders are in `D:\Archive`; never copy from there.
+
+| site folder | how the site copy is made (run inside `D:\Projects\<site folder>`) |
+|---|---|
+| olly-olly | `node tools/build-site-copy.mjs`; never hand-edit the site copy |
+| arc, thrown | `node build-site-copy.mjs`; never hand-edit the site copy |
+| curfew | `node build-site-copy.mjs`; never hand-edit |
+| winterline | `node tools/build-site-copy.mjs`; never hand-edit |
+| iron-psalm | package source is in `source/`; `py -3 tools/build_website.py` rebuilds `publish/`, then `node build-site-copy.mjs` copies the runtime with the site shell |
+| kickmoon | copy the `game/` runtime; keep the site's index.html shell |
+| hearse | `node tools/build-site-copy.mjs`; never hand-edit the site copy |
+| belfry | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy |
+| skip | `node build-site-copy.mjs --site=<this repo>`; never hand-edit the site copy |
+| tideglass | `node build-site-copy.mjs`; never hand-edit the site copy |
+| fetch | copy the changed `src/` files; keep the site's index.html shell |
+| vigil | none: the site copy here is the source. The older standalone folder is in `D:\Archive\Projects\vigil`; never copy it over the site copy |
+| spooky | none: Alex's Halloween page, hand-made, not generated. It repeats the five games' lines from `site-data.json`: change both |
+| strung | `node build-site-copy.mjs <this repo>`; never hand-edit the site copy |
+| collateral | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy |
+| sidechain (was last-chorus; `_redirects` sends that there) | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy. Its Android signing key never goes in a repository |
+| tinbound | `node tools/build-site-copy.mjs <this repo>`; it copies the runtime, card and link-preview image. The offline single-file build stays separate. |
+| black-lacquer | `node tools/build-site-copy.mjs <this repo>`; it copies the finished runtime, gameplay card and link-preview image. Never hand-edit the site copy. |
+| in-every-direction | `node tools/build-site-copy.mjs <this repo>` (it writes the card too); never hand-edit the site copy |
+| the-way-i-came | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy |
+| threshold | `node tools/build-site-copy.mjs <this repo>` (it copies the link-preview image too); never hand-edit the site copy. Alex's Halloween game for his psychopharmacology Discord; not on the hub pages |
+| pasta | `node tools/build-site-copy.mjs <this repo>`. One PASTA catalog card and six-game menu; three GPT Pro runtimes live in `pasta/games/`. Keep the original three local games at their existing routes and preserve their saves. Read the collection AGENTS.md for source versions. Alex requested the combined collection on 28 Oct, superseding earlier separation notes. |
+| spaghetti-sunshine | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy. Included in PASTA; keep its direct route, without adding a separate card. |
+| spaghetti | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy. Its original two-game opening remains available. PASTA opens its seven-level select directly. |
+| al-dente | copy `src/` (and `vendor/` only if three.js changes) into `al-dente/`; keep the site's index.html shell (it self-hosts the fonts and three.js). Included in PASTA and still reachable from the original /spaghetti/ opening. |
+| rally, rocket-shoes | plain copies; compare dates both ways before copying |
+| starstruck | `node tools/build-site-copy.mjs --site=<this repo>` writes `starstruck/`; never hand-edit the site copy |
+| sill | the page here (`sill/index.html`) is hand-written. The game is a Windows desktop app built in `D:\Projects\sill`; its download is `SILL-windows.zip` on this repo's GitHub release `sill-v1.0.0` |
+| everything else | none: the site copy here is the only source |
 
 ## Access and machine notes
 
 - GitHub `duplighost/qualiacology`; `gh` on this machine is logged in as duplighost.
+  Each game's source also has its own private repository, `duplighost/<site folder>`.
   Netlify team "Alexander Guitar", project `classy-strudel-55444b`.
 - CI (`.github/workflows/validate-site.yml`) rebuilds the hubs, validates, smoke-tests
   every route and rejects stale generated pages. It never deploys.
