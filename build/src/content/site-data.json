@@ -93,6 +93,20 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "tinbound",
+      "title": "TINBOUND",
+      "descriptor": "3D toy platformer",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/tinbound-card-v20261102.jpg",
+      "alt": "A small enamel wind-up toy on a greenhouse seed tray, with a mechanical bird ahead and a birdhouse outside the glass.",
+      "summary": "A wind-up toy carrying a damaged mechanical bird through ten connected rooms. Jump, dash and ground pound through the house, repair the bird, and bring it back to the courtyard refuge.",
+      "metaDescription": "A desktop 3D platformer about a wind-up toy carrying a damaged mechanical bird through ten connected rooms and back to its courtyard refuge.",
+      "controls": "Desktop only · WASD or arrows + mouse · Space jump and double jump · click or Shift dash · right click or X ground pound · Tab upgrades · Esc pause",
+      "actionLabel": "Play",
+      "duration": "10 rooms"
+    },
+    {
       "slug": "pasta",
       "title": "PASTA",
       "descriptor": "Six spaghetti games in one collection",
