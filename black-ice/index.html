@@ -1,0 +1,3616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLACK ICE | Qualiacology</title>
+<meta name="description" content="BLACK ICE is a browser game: skate across a frozen reservoir at night by lantern light, over the drowned village under the ice, to the church tower that still stands out of it.">
+<meta name="theme-color" content="#05070c">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:title" content="BLACK ICE | Qualiacology">
+<meta property="og:description" content="Skate a frozen reservoir at night by lantern light, over the village they drowned to make it.">
+<meta property="og:url" content="https://qualiacology.com/black-ice/">
+<meta property="og:image" content="https://qualiacology.com/assets/og/black-ice-og-v20261104.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BLACK ICE | Qualiacology">
+<meta name="twitter:description" content="Skate a frozen reservoir at night by lantern light, over the village they drowned to make it.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/og/black-ice-og-v20261104.jpg">
+<link rel="canonical" href="https://qualiacology.com/black-ice/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: none; }
+  #veil { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #e9eef2; font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; pointer-events: none;
+    transition: opacity 2.4s ease; user-select: none; }
+  #veil h1 { margin: 0; font-weight: 200; font-size: clamp(28px, 4.6vw, 72px); letter-spacing: 0.62em; padding-left: 0.62em;
+    text-shadow: 0 0 24px rgba(160, 200, 230, 0.25); }
+  #veil .sub { margin-top: 2.6em; font-size: 13px; letter-spacing: 0.5em; padding-left: 0.5em; opacity: 0;
+    transition: opacity 1.2s ease; text-transform: lowercase; color: #b9c6cf; }
+  #veil .bar { margin-top: 2.2em; width: 160px; height: 1px; background: rgba(255,255,255,0.12); overflow: hidden; }
+  #veil .bar i { display: block; height: 100%; width: 0; background: rgba(230,240,250,0.7); transition: width 0.25s; }
+  #veil.ready .sub { opacity: 0.85; }
+  #veil.ready .bar { opacity: 0; transition: opacity 0.6s; }
+  #veil.gone { opacity: 0; }
+  #pause { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; color: #dfe7ec;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 13px; letter-spacing: 0.5em; padding-left: 0.5em;
+    background: rgba(0,0,0,0.35); pointer-events: none; }
+  #pause.on { display: flex; }
+  #card { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #f3efe8; font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; pointer-events: none; opacity: 0;
+    transition: opacity 4s ease; user-select: none; }
+  #card.on { opacity: 1; }
+  #card h1 { margin: 0; font-weight: 200; font-size: clamp(28px, 4.6vw, 72px); letter-spacing: 0.62em; padding-left: 0.62em;
+    text-shadow: 0 0 30px rgba(255, 220, 180, 0.35); }
+  #card .tally { margin-top: 1.4em; font-size: 15px; letter-spacing: 0.35em; padding-left: 0.35em; opacity: 0.8; min-height: 1em; }
+  #card .sub { margin-top: 2.4em; font-size: 13px; letter-spacing: 0.5em; padding-left: 0.5em; opacity: 0; transition: opacity 2s ease 6s; }
+  #card.on .sub { opacity: 0.7; }
+  #err { position: fixed; left: 12px; bottom: 12px; right: 12px; color: #f88; font: 12px/1.4 Consolas, monospace;
+    white-space: pre-wrap; pointer-events: none; }
+  #fps { position: fixed; right: 10px; top: 8px; color: #8fa; font: 11px Consolas, monospace; display: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="veil"><h1>BLACK ICE</h1><div class="bar"><i></i></div><div class="sub">click</div></div>
+<div id="pause">paused</div>
+<div id="card"><h1>BLACK ICE</h1><div class="tally"></div><div class="sub">click</div></div>
+<div id="fps"></div>
+<div id="err"></div>
+<script>
+(function () {
+'use strict';
+// ---- 00-core.js ----
+// Small math, noise and helpers shared by everything.
+const PI = Math.PI, TAU = Math.PI * 2;
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+const sat = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = sat((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const fract = (x) => x - Math.floor(x);
+const wrapAngle = (a) => { a = (a + PI) % TAU; if (a < 0) a += TAU; return a - PI; };
+const expDecay = (k, dt) => 1 - Math.exp(-k * dt);
+
+// ---- vectors (plain arrays) ----
+const v3 = (x = 0, y = 0, z = 0) => [x, y, z];
+const vadd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const vsub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const vmul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const vdot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const vcross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const vlen = (a) => Math.hypot(a[0], a[1], a[2]);
+const vnorm = (a) => { const l = vlen(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const vlerp = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+
+// ---- 4x4 matrices, column-major ----
+function m4() { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; }
+function m4mul(a, b, o = new Float32Array(16)) {
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+  }
+  return o;
+}
+function m4persp(fovy, aspect, n, f) {
+  const m = new Float32Array(16), t = 1 / Math.tan(fovy / 2);
+  m[0] = t / aspect; m[5] = t; m[10] = (f + n) / (n - f); m[11] = -1; m[14] = 2 * f * n / (n - f);
+  return m;
+}
+function m4lookAt(e, c, up) {
+  const z = vnorm(vsub(e, c)), x = vnorm(vcross(up, z)), y = vcross(z, x);
+  const m = new Float32Array(16);
+  m[0] = x[0]; m[4] = x[1]; m[8] = x[2];
+  m[1] = y[0]; m[5] = y[1]; m[9] = y[2];
+  m[2] = z[0]; m[6] = z[1]; m[10] = z[2];
+  m[12] = -vdot(x, e); m[13] = -vdot(y, e); m[14] = -vdot(z, e); m[15] = 1;
+  return m;
+}
+function m4inv(m) {
+  const o = new Float32Array(16);
+  const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3], a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
+  const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11], a30 = m[12], a31 = m[13], a32 = m[14], a33 = m[15];
+  const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11;
+  const b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30;
+  const b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+  let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+  if (!det) return m4();
+  det = 1 / det;
+  o[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det; o[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
+  o[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det; o[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
+  o[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det; o[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
+  o[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det; o[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
+  o[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det; o[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
+  o[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det; o[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
+  o[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det; o[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det;
+  o[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det; o[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
+  return o;
+}
+// model matrix from translation, yaw (about +y), pitch (about local x), roll (about local z), uniform or xyz scale
+function m4trs(t, yaw = 0, pitch = 0, roll = 0, s = 1) {
+  const sx = Array.isArray(s) ? s[0] : s, sy = Array.isArray(s) ? s[1] : s, sz = Array.isArray(s) ? s[2] : s;
+  const cy = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
+  // R = Ry * Rx * Rz
+  const r00 = cy * cr + syw * sp * sr, r01 = -cy * sr + syw * sp * cr, r02 = syw * cp;
+  const r10 = cp * sr, r11 = cp * cr, r12 = -sp;
+  const r20 = -syw * cr + cy * sp * sr, r21 = syw * sr + cy * sp * cr, r22 = cy * cp;
+  const m = new Float32Array(16);
+  m[0] = r00 * sx; m[1] = r10 * sx; m[2] = r20 * sx;
+  m[4] = r01 * sy; m[5] = r11 * sy; m[6] = r21 * sy;
+  m[8] = r02 * sz; m[9] = r12 * sz; m[10] = r22 * sz;
+  m[12] = t[0]; m[13] = t[1]; m[14] = t[2]; m[15] = 1;
+  return m;
+}
+// a matrix whose local +y runs from a to b (for limbs), with local +z turned toward `fwd` as far as possible
+function m4between(a, b, fwd, width = 1) {
+  const d = vsub(b, a), L = vlen(d) || 1e-6, y = vmul(d, 1 / L);
+  let x = vcross(y, fwd); if (vlen(x) < 1e-4) x = vcross(y, [1, 0, 0]);
+  x = vnorm(x); const z = vcross(x, y);
+  const m = new Float32Array(16);
+  m[0] = x[0] * width; m[1] = x[1] * width; m[2] = x[2] * width;
+  m[4] = y[0] * L; m[5] = y[1] * L; m[6] = y[2] * L;
+  m[8] = z[0] * width; m[9] = z[1] * width; m[10] = z[2] * width;
+  m[12] = a[0]; m[13] = a[1]; m[14] = a[2]; m[15] = 1;
+  return m;
+}
+const m4apply = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
+const m4dir = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2], m[1] * p[0] + m[5] * p[1] + m[9] * p[2], m[2] * p[0] + m[6] * p[1] + m[10] * p[2]];
+
+// ---- hashing and noise (the same integer hash is used in GLSL) ----
+function hash2i(x, y) {
+  let h = (Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1)) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39) >>> 0;
+  return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
+}
+function vnoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const a = hash2i(ix, iy), b = hash2i(ix + 1, iy), c = hash2i(ix, iy + 1), d = hash2i(ix + 1, iy + 1);
+  return lerp(lerp(a, b, ux), lerp(c, d, ux), uy) * 2 - 1;
+}
+function fbm(x, y, oct = 4) {
+  let s = 0, a = 0.5, f = 1;
+  for (let i = 0; i < oct; i++) { s += a * vnoise(x * f, y * f); f *= 2.03; a *= 0.5; x += 17.3; y -= 9.1; }
+  return s;
+}
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+const BROWSER = typeof window !== 'undefined';
+const Q = new URLSearchParams(BROWSER ? location.search : '');
+const DEBUG = Q.has('debug');
+const $ = (id) => document.getElementById(id);
+function fail(msg) { const e = BROWSER && $('err'); if (e) e.textContent += msg + '\n'; console.error(msg); }
+if (BROWSER) window.addEventListener('error', (e) => fail('error: ' + (e.message || e) + (e.filename ? ' @' + e.lineno : '')));
+
+// ---- 05-gl.js ----
+// WebGL2 plumbing: context, programs, buffers, textures, render targets.
+let gl = null;
+const GLX = { floatLinear: false, colorFloat: false };
+
+function glInit(canvas) {
+  gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: true, stencil: false, powerPreference: 'high-performance', premultipliedAlpha: false });
+  if (!gl) throw new Error('This needs WebGL2.');
+  GLX.colorFloat = !!gl.getExtension('EXT_color_buffer_float');
+  GLX.floatLinear = !!gl.getExtension('OES_texture_float_linear');
+  gl.getExtension('EXT_color_buffer_half_float');
+  if (!GLX.colorFloat) throw new Error('This needs EXT_color_buffer_float.');
+  GLX.maxSamples = gl.getParameter(gl.MAX_SAMPLES);
+  return gl;
+}
+
+function compileShader(type, src, name) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  return s;
+}
+const PROGRAMS = [];
+// Programs are compiled in parallel by the driver (KHR_parallel_shader_compile): link everything, then check.
+function makeProgram(name, vs, fs) {
+  const head = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n';
+  const vsrc = head + vs, fsrc = head + '#define FRAG 1\n' + fs;
+  const v = compileShader(gl.VERTEX_SHADER, vsrc, name), f = compileShader(gl.FRAGMENT_SHADER, fsrc, name);
+  const p = gl.createProgram();
+  gl.attachShader(p, v); gl.attachShader(p, f);
+  gl.bindAttribLocation(p, 0, 'aPos'); gl.bindAttribLocation(p, 1, 'aNrm'); gl.bindAttribLocation(p, 2, 'aCol');
+  gl.bindAttribLocation(p, 3, 'aI0'); gl.bindAttribLocation(p, 4, 'aI1');
+  gl.linkProgram(p);
+  const P = { name, prog: p, v, f, vsrc, fsrc, u: null, ready: false };
+  PROGRAMS.push(P);
+  return P;
+}
+function numbered(src) { return src.split('\n').map((l, i) => String(i + 1).padStart(4) + ' ' + l).join('\n'); }
+function finishProgram(P) {
+  if (P.ready) return P;
+  const p = P.prog;
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    const vl = gl.getShaderInfoLog(P.v), fl = gl.getShaderInfoLog(P.f), pl = gl.getProgramInfoLog(p);
+    let msg = `shader ${P.name} failed\n${vl}\n${fl}\n${pl}`;
+    const m = /ERROR: 0:(\d+)/.exec(fl || vl || '');
+    if (m) {
+      const src = (fl ? P.fsrc : P.vsrc).split('\n'), ln = +m[1];
+      msg += '\n' + src.slice(Math.max(0, ln - 4), ln + 2).map((l, i) => (ln - 3 + i) + ': ' + l).join('\n');
+    }
+    throw new Error(msg);
+  }
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i);
+    const nm = info.name.replace(/\[0\]$/, '');
+    u[nm] = { loc: gl.getUniformLocation(p, info.name), type: info.type, size: info.size, unit: -1 };
+  }
+  let unit = 0;
+  for (const k in u) if (u[k].type === gl.SAMPLER_2D || u[k].type === gl.SAMPLER_3D || u[k].type === gl.SAMPLER_2D_ARRAY) u[k].unit = unit++;
+  P.u = u; P.ready = true;
+  gl.deleteShader(P.v); gl.deleteShader(P.f);
+  return P;
+}
+function allProgramsDone() {
+  const ext = gl.getExtension('KHR_parallel_shader_compile');
+  if (!ext) return true;
+  return PROGRAMS.every((P) => P.ready || gl.getProgramParameter(P.prog, ext.COMPLETION_STATUS_KHR));
+}
+
+let CUR = null;
+function use(P) { if (!P.ready) finishProgram(P); gl.useProgram(P.prog); CUR = P; return P; }
+// set uniforms on the current program: set({uTime: 1, uTex: texture, ...}); unknown names are ignored
+function set(obj) {
+  const u = CUR.u;
+  for (const k in obj) {
+    const e = u[k]; if (!e) continue;
+    const v = obj[k];
+    if (v === undefined || v === null) { if (!set.warned) { set.warned = 1; fail('uniform ' + k + ' unset in ' + CUR.name); } continue; }
+    switch (e.type) {
+      case gl.FLOAT: if (e.size > 1) gl.uniform1fv(e.loc, v); else gl.uniform1f(e.loc, v); break;
+      case gl.FLOAT_VEC2: gl.uniform2fv(e.loc, v); break;
+      case gl.FLOAT_VEC3: gl.uniform3fv(e.loc, v); break;
+      case gl.FLOAT_VEC4: gl.uniform4fv(e.loc, v); break;
+      case gl.FLOAT_MAT4: gl.uniformMatrix4fv(e.loc, false, v); break;
+      case gl.FLOAT_MAT3: gl.uniformMatrix3fv(e.loc, false, v); break;
+      case gl.INT: case gl.BOOL: if (e.size > 1) gl.uniform1iv(e.loc, v); else gl.uniform1i(e.loc, v); break;
+      case gl.SAMPLER_2D: case gl.SAMPLER_3D: case gl.SAMPLER_2D_ARRAY:
+        gl.activeTexture(gl.TEXTURE0 + e.unit);
+        gl.bindTexture(e.type === gl.SAMPLER_2D ? gl.TEXTURE_2D : e.type === gl.SAMPLER_3D ? gl.TEXTURE_3D : gl.TEXTURE_2D_ARRAY, v && v.tex ? v.tex : v);
+        gl.uniform1i(e.loc, e.unit); break;
+      default: break;
+    }
+  }
+}
+
+function texture2D(w, h, o = {}) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  const internal = o.internal || gl.RGBA8, format = o.format || gl.RGBA, type = o.type || gl.UNSIGNED_BYTE;
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, format, type, o.data || null);
+  const filt = o.filter || gl.LINEAR;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, o.mips ? gl.LINEAR_MIPMAP_LINEAR : filt);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, o.wrap || gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, o.wrap || gl.CLAMP_TO_EDGE);
+  if (o.mips) gl.generateMipmap(gl.TEXTURE_2D);
+  return { tex: t, w, h, internal, format, type };
+}
+
+// A render target: colour textures (or multisampled renderbuffers resolved into textures) and depth.
+function makeTarget(w, h, o = {}) {
+  const T = { w, h, fb: gl.createFramebuffer(), colors: [], depth: null, msaa: o.msaa || 0 };
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.fb);
+  const specs = o.colors || [{ internal: gl.RGBA16F, format: gl.RGBA, type: gl.HALF_FLOAT }];
+  const bufs = [];
+  specs.forEach((c, i) => {
+    if (T.msaa) {
+      const rb = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+      gl.renderbufferStorageMultisample(gl.RENDERBUFFER, T.msaa, c.internal, w, h);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.RENDERBUFFER, rb);
+      T.colors.push({ rb });
+    } else {
+      const t = texture2D(w, h, { internal: c.internal, format: c.format, type: c.type, filter: c.filter || gl.LINEAR });
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, t.tex, 0);
+      T.colors.push(t);
+    }
+    bufs.push(gl.COLOR_ATTACHMENT0 + i);
+  });
+  gl.drawBuffers(bufs);
+  if (o.depth !== false) {
+    if (o.depthTex && !T.msaa) {
+      const t = texture2D(w, h, { internal: gl.DEPTH_COMPONENT32F, format: gl.DEPTH_COMPONENT, type: gl.FLOAT, filter: gl.NEAREST });
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, t.tex, 0);
+      T.depth = t;
+    } else {
+      const rb = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+      if (T.msaa) gl.renderbufferStorageMultisample(gl.RENDERBUFFER, T.msaa, gl.DEPTH_COMPONENT24, w, h);
+      else gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+      T.depth = { rb };
+    }
+  }
+  const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (st !== gl.FRAMEBUFFER_COMPLETE) throw new Error('framebuffer incomplete ' + st);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return T;
+}
+function freeTarget(T) {
+  if (!T) return;
+  for (const c of T.colors) { if (c.rb) gl.deleteRenderbuffer(c.rb); if (c.tex) gl.deleteTexture(c.tex); }
+  if (T.depth) { if (T.depth.rb) gl.deleteRenderbuffer(T.depth.rb); if (T.depth.tex) gl.deleteTexture(T.depth.tex); }
+  gl.deleteFramebuffer(T.fb);
+}
+function bindTarget(T) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T ? T.fb : null);
+  gl.viewport(0, 0, T ? T.w : gl.drawingBufferWidth, T ? T.h : gl.drawingBufferHeight);
+}
+// copy a multisampled target's colour (and optionally depth) into a plain target
+function resolveInto(src, dst, depth = false) {
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, src.fb);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, dst.fb);
+  gl.readBuffer(gl.COLOR_ATTACHMENT0);
+  gl.blitFramebuffer(0, 0, src.w, src.h, 0, 0, dst.w, dst.h, gl.COLOR_BUFFER_BIT | (depth ? gl.DEPTH_BUFFER_BIT : 0), gl.NEAREST);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+}
+
+// ---- geometry ----
+let EMPTY_VAO = null;
+function drawFullscreen() {
+  if (!EMPTY_VAO) EMPTY_VAO = gl.createVertexArray();
+  gl.bindVertexArray(EMPTY_VAO);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+// interleaved pos3 nrm3 col4 (40 bytes), Uint32 indices
+function uploadMesh(data) {
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const vb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, data.verts, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 40, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 40, 12);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 40, 24);
+  const ib = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data.index, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, vb, ib, count: data.index.length, bounds: data.bounds };
+}
+function drawMesh(M, instances = 0) {
+  if (!M || !M.count) return;
+  gl.bindVertexArray(M.vao);
+  if (instances) gl.drawElementsInstanced(gl.TRIANGLES, M.count, gl.UNSIGNED_INT, 0, instances);
+  else gl.drawElements(gl.TRIANGLES, M.count, gl.UNSIGNED_INT, 0);
+}
+// per-instance data: two vec4 attributes (aI0, aI1) on a mesh's VAO
+function addInstances(M, data) {
+  gl.bindVertexArray(M.vao);
+  const b = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 32, 0); gl.vertexAttribDivisor(3, 1);
+  gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 4, gl.FLOAT, false, 32, 16); gl.vertexAttribDivisor(4, 1);
+  gl.bindVertexArray(null);
+  M.instances = data.length / 8; M.ibuf = b;
+  return M;
+}
+// a dynamic vertex stream: pos3 + col4 (28 bytes) drawn as triangles, for lines, decals and particles
+function makeStream(maxVerts) {
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const vb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, maxVerts * 28, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 28, 0);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 28, 12);
+  gl.bindVertexArray(null);
+  return { vao, vb, max: maxVerts, data: new Float32Array(maxVerts * 7), n: 0, uploaded: 0 };
+}
+function streamUpload(S, from = 0) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, S.vb);
+  if (S.n > from) gl.bufferSubData(gl.ARRAY_BUFFER, from * 28, S.data, from * 7, (S.n - from) * 7);
+  S.uploaded = S.n;
+}
+function drawStream(S, n = S.n) {
+  if (!n) return;
+  gl.bindVertexArray(S.vao);
+  gl.drawArrays(gl.TRIANGLES, 0, n);
+}
+
+// ---- 10-mesh.js ----
+// Mesh building: everything solid in the world is made here from boxes, cylinders, spheres and walls.
+// Vertex: position, normal, colour rgb + a material value in alpha (0..1 gloss, <0 emissive of that strength).
+class MB {
+  constructor() { this.v = []; this.ix = []; this.n = 0; this.jit = 0; this.rand = rng(7); }
+  vert(p, nr, c) {
+    let r = c[0], g = c[1], b = c[2];
+    if (this.jit) { const j = 1 + (this.rand() - 0.5) * this.jit; r *= j; g *= j; b *= j; }
+    this.v.push(p[0], p[1], p[2], nr[0], nr[1], nr[2], r, g, b, c[3] === undefined ? 0 : c[3]);
+    return this.n++;
+  }
+  tri(a, b, c) { this.ix.push(a, b, c); }
+  quad(a, b, c, d) { this.ix.push(a, b, c, a, c, d); }
+  // normal matrix (inverse transpose of the upper 3x3) for a model matrix
+  static nmat(M) {
+    const a = M[0], b = M[1], c = M[2], d = M[4], e = M[5], f = M[6], g = M[8], h = M[9], i = M[10];
+    const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+    const det = a * A + b * B + c * C || 1e-9;
+    // rows of inverse transpose
+    return [A / det, B / det, C / det, -(b * i - c * h) / det, (a * i - c * g) / det, -(a * h - b * g) / det,
+      (b * f - c * e) / det, -(a * f - c * d) / det, (a * e - b * d) / det];
+  }
+  static tn(N, n) { const x = N[0] * n[0] + N[3] * n[1] + N[6] * n[2], y = N[1] * n[0] + N[4] * n[1] + N[7] * n[2], z = N[2] * n[0] + N[5] * n[1] + N[8] * n[2]; const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; }
+  // unit cube centred on the origin
+  box(M, col, skip = '') {
+    const N = MB.nmat(M);
+    const F = [
+      ['+x', [1, 0, 0], [[.5, -.5, .5], [.5, -.5, -.5], [.5, .5, -.5], [.5, .5, .5]]],
+      ['-x', [-1, 0, 0], [[-.5, -.5, -.5], [-.5, -.5, .5], [-.5, .5, .5], [-.5, .5, -.5]]],
+      ['+y', [0, 1, 0], [[-.5, .5, .5], [.5, .5, .5], [.5, .5, -.5], [-.5, .5, -.5]]],
+      ['-y', [0, -1, 0], [[-.5, -.5, -.5], [.5, -.5, -.5], [.5, -.5, .5], [-.5, -.5, .5]]],
+      ['+z', [0, 0, 1], [[-.5, -.5, .5], [.5, -.5, .5], [.5, .5, .5], [-.5, .5, .5]]],
+      ['-z', [0, 0, -1], [[.5, -.5, -.5], [-.5, -.5, -.5], [-.5, .5, -.5], [.5, .5, -.5]]],
+    ];
+    for (const [k, nr, q] of F) {
+      if (skip.includes(k)) continue;
+      const nn = MB.tn(N, nr);
+      const id = q.map((p) => this.vert(m4apply(M, p), nn, col));
+      this.quad(id[0], id[1], id[2], id[3]);
+    }
+    return this;
+  }
+  // unit cylinder: radius 1 at y=0 .. radius `top` at y=1
+  cyl(M, col, seg = 12, top = 1, caps = true) {
+    const N = MB.nmat(M), base = this.n;
+    const slope = 1 - top;
+    for (let i = 0; i <= seg; i++) {
+      const a = (i / seg) * TAU, c = Math.cos(a), s = Math.sin(a);
+      const nn = MB.tn(N, vnorm([c, slope, s]));
+      this.vert(m4apply(M, [c, 0, s]), nn, col);
+      this.vert(m4apply(M, [c * top, 1, s * top]), nn, col);
+    }
+    for (let i = 0; i < seg; i++) { const a = base + i * 2; this.quad(a, a + 1, a + 3, a + 2); }
+    if (caps) {
+      const up = MB.tn(N, [0, 1, 0]), dn = MB.tn(N, [0, -1, 0]);
+      const c0 = this.vert(m4apply(M, [0, 0, 0]), dn, col), c1 = this.vert(m4apply(M, [0, 1, 0]), up, col);
+      const r0 = this.n; for (let i = 0; i <= seg; i++) { const a = (i / seg) * TAU; this.vert(m4apply(M, [Math.cos(a), 0, Math.sin(a)]), dn, col); }
+      const r1 = this.n; for (let i = 0; i <= seg; i++) { const a = (i / seg) * TAU; this.vert(m4apply(M, [Math.cos(a) * top, 1, Math.sin(a) * top]), up, col); }
+      for (let i = 0; i < seg; i++) { this.tri(c0, r0 + i, r0 + i + 1); if (top > 0) this.tri(c1, r1 + i + 1, r1 + i); }
+    }
+    return this;
+  }
+  sphere(M, col, su = 14, sv = 9) {
+    const N = MB.nmat(M), base = this.n;
+    for (let j = 0; j <= sv; j++) {
+      const v = (j / sv) * PI, sy = Math.cos(v), sr = Math.sin(v);
+      for (let i = 0; i <= su; i++) {
+        const u = (i / su) * TAU, p = [Math.cos(u) * sr, sy, Math.sin(u) * sr];
+        this.vert(m4apply(M, p), MB.tn(N, p), col);
+      }
+    }
+    for (let j = 0; j < sv; j++) for (let i = 0; i < su; i++) {
+      const a = base + j * (su + 1) + i, b = a + su + 1;
+      this.quad(a, a + 1, b + 1, b);
+    }
+    return this;
+  }
+  torus(M, col, R = 1, r = 0.2, su = 18, sv = 7) {
+    const N = MB.nmat(M), base = this.n;
+    for (let j = 0; j <= sv; j++) {
+      const v = (j / sv) * TAU;
+      for (let i = 0; i <= su; i++) {
+        const u = (i / su) * TAU, cx = Math.cos(u), cz = Math.sin(u);
+        const p = [(R + r * Math.cos(v)) * cx, r * Math.sin(v), (R + r * Math.cos(v)) * cz];
+        const nr = [Math.cos(v) * cx, Math.sin(v), Math.cos(v) * cz];
+        this.vert(m4apply(M, p), MB.tn(N, nr), col);
+      }
+    }
+    for (let j = 0; j < sv; j++) for (let i = 0; i < su; i++) {
+      const a = base + j * (su + 1) + i, b = a + su + 1;
+      this.quad(a, b, b + 1, a + 1);
+    }
+    return this;
+  }
+  // triangular prism (a gable): base from x=-0.5..0.5 at y=0, ridge at y=1, along z -0.5..0.5
+  prism(M, col) {
+    const N = MB.nmat(M);
+    const A = [-.5, 0, -.5], B = [.5, 0, -.5], C = [0, 1, -.5], D = [-.5, 0, .5], E = [.5, 0, .5], F = [0, 1, .5];
+    const face = (pts, nr) => { const nn = MB.tn(N, nr); const id = pts.map((p) => this.vert(m4apply(M, p), nn, col)); if (id.length === 3) this.tri(id[0], id[1], id[2]); else this.quad(id[0], id[1], id[2], id[3]); };
+    face([B, A, C], [0, 0, -1]); face([D, E, F], [0, 0, 1]);
+    face([A, D, F, C], vnorm([-1, 0.5, 0])); face([E, B, C, F], vnorm([1, 0.5, 0]));
+    return this;
+  }
+  // a surface of revolution: profile = [[r, y], ...] from bottom to top
+  lathe(M, col, prof, seg = 16) {
+    const N = MB.nmat(M), base = this.n;
+    for (let j = 0; j < prof.length; j++) {
+      const [r, y] = prof[j];
+      const p0 = prof[Math.max(0, j - 1)], p1 = prof[Math.min(prof.length - 1, j + 1)];
+      const dr = p1[0] - p0[0], dy = p1[1] - p0[1];
+      for (let i = 0; i <= seg; i++) {
+        const a = (i / seg) * TAU, c = Math.cos(a), s = Math.sin(a);
+        const nr = vnorm([dy * c, -dr, dy * s]);
+        this.vert(m4apply(M, [r * c, y, r * s]), MB.tn(N, nr), col);
+      }
+    }
+    for (let j = 0; j < prof.length - 1; j++) for (let i = 0; i < seg; i++) {
+      const a = base + j * (seg + 1) + i, b = a + seg + 1;
+      this.quad(a, b, b + 1, a + 1);
+    }
+    return this;
+  }
+  // a straight wall from a to b (x,z), standing from y0 to y0+h, `t` thick, with rectangular holes
+  // holes: [[u0, u1, v0, v1], ...] in metres along the wall and up from y0
+  wall(a, b, y0, h, t, col, holes = []) {
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz), yaw = Math.atan2(dx, dz);
+    const us = new Set([0, L]), vs = new Set([0, h]);
+    for (const o of holes) { us.add(clamp(o[0], 0, L)); us.add(clamp(o[1], 0, L)); vs.add(clamp(o[2], 0, h)); vs.add(clamp(o[3], 0, h)); }
+    const U = [...us].sort((p, q) => p - q), V = [...vs].sort((p, q) => p - q);
+    for (let i = 0; i < U.length - 1; i++) for (let j = 0; j < V.length - 1; j++) {
+      const um = (U[i] + U[i + 1]) / 2, vm = (V[j] + V[j + 1]) / 2;
+      if (holes.some((o) => um > o[0] && um < o[1] && vm > o[2] && vm < o[3])) continue;
+      const w = U[i + 1] - U[i], hh = V[j + 1] - V[j];
+      if (w < 1e-3 || hh < 1e-3) continue;
+      const k = um / L;
+      const c = [a[0] + dx * k, y0 + vm, a[1] + dz * k];
+      this.box(m4trs(c, yaw, 0, 0, [t, hh, w]), col);
+    }
+    return this;
+  }
+  build() {
+    const verts = new Float32Array(this.v), index = new Uint32Array(this.ix);
+    let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
+    for (let i = 0; i < verts.length; i += 10) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], verts[i + k]); mx[k] = Math.max(mx[k], verts[i + k]); }
+    return { verts, index, bounds: [mn, mx] };
+  }
+}
+const rgb = (hex, a = 0) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255, a];
+const rgbS = (c, s, a) => [c[0] * s, c[1] * s, c[2] * s, a === undefined ? c[3] : a];
+
+// ---- 20-world.js ----
+// The reservoir: a flooded valley, frozen. y = 0 is the ice. The way runs north (+z) from the jetty to the tower.
+const WORLD = {
+  size: 6144, x0: -3072, z0: -1536, res: 2048,      // height map covers x0..x0+size, z0..z0+size
+  iceRes: 2048,
+  height: null, ice: null,                             // Float32Array heights; Uint8Array RGBA ice (thick cm*6, white, snow, current)
+  route: [], routeLen: 0,
+};
+
+// The marked way across the ice, as x(z). Waypoints are (x, z).
+const ROUTE_PTS = [[0, -10], [0, 60], [34, 170], [-22, 420], [14, 640], [58, 780], [40, 980], [-30, 1180], [-26, 1440], [22, 1720],
+  [34, 1960], [12, 2240], [-14, 2500], [-4, 2760], [6, 2930], [8, 3010]];
+const RIVER_PTS = [[-300, -600], [-230, 150], [-80, 600], [58, 780], [190, 1000], [240, 1480], [170, 1960], [130, 2400], [230, 2860],
+  [160, 3400], [120, 3900]];
+const TOWER = { x: 12, z: 3022, w: 5.2, top: 13.5, base: -4.6 };
+const DAM_Z = 3640;
+const CABIN = { x: -6, z: -52 };
+
+// Catmull-Rom through points sorted by z, evaluated at z
+function splineX(pts, z) {
+  let i = 0;
+  while (i < pts.length - 2 && pts[i + 1][1] < z) i++;
+  const p1 = pts[i], p2 = pts[i + 1], p0 = pts[Math.max(0, i - 1)], p3 = pts[Math.min(pts.length - 1, i + 2)];
+  const t = clamp((z - p1[1]) / (p2[1] - p1[1] || 1), 0, 1);
+  if (z < pts[0][1]) return pts[0][0];
+  if (z > pts[pts.length - 1][1]) return pts[pts.length - 1][0];
+  const t2 = t * t, t3 = t2 * t;
+  // non-uniform spacing in z is mild; a plain Catmull-Rom on x is fine
+  return 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+}
+const routeX = (z) => splineX(ROUTE_PTS, z);
+const riverX = (z) => splineX(RIVER_PTS, z);
+const valleyX = (z) => routeX(clamp(z, 0, 3000)) * 0.55 + (40 * Math.sin(z / 760 + 0.4) + 30) * smooth(-100, 600, z);
+// half width of the lake at the waterline, as a function of z
+function lakeHalf(z) {
+  let w = 430 + 110 * Math.sin(z / 830 + 0.7) + 60 * Math.sin(z / 370 + 2.1);
+  w *= smooth(-40, 380, z);                 // the bay at the south end, where the cabin is
+  w = Math.max(w, 64 * smooth(-34, 30, z));
+  w *= 1 - 0.55 * smooth(3200, DAM_Z + 20, z);   // narrowing to the dam
+  return w;
+}
+
+// ---- the ground: valley floor, banks, hills, the old river's channel, the village and churchyard ----
+function groundRow(z) {
+  return { xc: valleyX(z), W: lakeHalf(z), xr: riverX(z), qx: routeX(z), floor: -6.2 + 1.0 * Math.sin(z / 540) + 1.2 * smooth(1650, 1900, z) * (1 - smooth(3060, 3200, z)) };
+}
+function groundAt(x, z, row) {
+  const R = row || groundRow(z);
+  const d = Math.abs(x - R.xc);
+  const W = R.W + 26 * fbm(x / 210, z / 210, 2);
+  let floor = R.floor + 0.9 * fbm(x / 90, z / 90, 2);
+  // the south bay: shallow near the jetty
+  floor = lerp(floor, -1.6, 1 - smooth(-40, 260, z));
+  // banks: from the floor at W-150 to 0 at W, then the hills
+  const bankW = Math.min(150, Math.max(16, W * 0.55));
+  let h;
+  const t = (d - (W - bankW)) / bankW;
+  if (t < 0) h = floor;
+  else if (t < 1) { const s = t * t * (3 - 2 * t); h = floor * (1 - s); }
+  else {
+    const e = d - W;
+    const hill = 46 + 38 * fbm(x / 700 + 3, z / 700 - 2, 3);
+    h = hill * (1 - Math.exp(-e / 260)) + e * 0.028 + 7 * fbm(x / 140, z / 140, 3) * smooth(0, 120, e);
+    h = Math.max(h, 0.15 + e * 0.02);
+    // the fells behind, rising toward the edge of the world
+    h += smooth(700, 2300, e) * (110 + 150 * fbm(x / 1100 - 7, z / 1100 + 3, 3));
+  }
+  // and at the two ends of the valley
+  const endK = smooth(-500, -1400, z) + smooth(4000, 4500, z);
+  if (endK > 0) h = Math.max(h, endK * (160 + 120 * fbm(x / 900, z / 900 + 5, 3)));
+  // the dam end: ground beyond the dam drops away, the dam wall closes the lake
+  if (z > DAM_Z) h = Math.max(h, 2.0 + (z - DAM_Z) * 0.02);
+  // the south end closes behind the cabin
+  if (z < -30) h = Math.max(h, (-30 - z) * 0.12);
+  // the old river channel, cut into the floor
+  const dr = Math.abs(x - R.xr);
+  if (h < -0.5) h -= 2.6 * (1 - smooth(5, 13, dr)) * smooth(-60, 120, z) * (1 - smooth(3500, 3600, z));
+  // the churchyard rises a little under the tower
+  const dt = Math.hypot(x - TOWER.x - 10, z - TOWER.z + 6);
+  h = lerp(h, TOWER.base, (1 - smooth(18, 46, dt)) * 0.85);
+  // the village street and plots are levelled
+  const inVillage = smooth(1700, 1760, z) * (1 - smooth(2520, 2600, z));
+  if (inVillage > 0 && h < -1) { const dv = Math.abs(x - R.qx); h = lerp(h, -5.3, inVillage * (1 - smooth(40, 90, dv))); }
+  return h;
+}
+
+function buildGround() {
+  const N = WORLD.res, S = WORLD.size, step = S / N;
+  const H = new Float32Array(N * N);
+  for (let j = 0; j < N; j++) {
+    const z = WORLD.z0 + (j + 0.5) * step, row = groundRow(z);
+    for (let i = 0; i < N; i++) H[j * N + i] = groundAt(WORLD.x0 + (i + 0.5) * step, z, row);
+  }
+  WORLD.height = H;
+}
+function heightAt(x, z) {
+  const N = WORLD.res, f = WORLD.res / WORLD.size;
+  const gx = (x - WORLD.x0) * f - 0.5, gz = (z - WORLD.z0) * f - 0.5;
+  const i = clamp(Math.floor(gx), 0, N - 2), j = clamp(Math.floor(gz), 0, N - 2);
+  const fx = clamp(gx - i, 0, 1), fz = clamp(gz - j, 0, 1), H = WORLD.height;
+  const a = H[j * N + i], b = H[j * N + i + 1], c = H[(j + 1) * N + i], d = H[(j + 1) * N + i + 1];
+  return lerp(lerp(a, b, fx), lerp(c, d, fx), fz);
+}
+
+// ---- the ice: thickness (cm), how white it is, snow lying on it, and where water moves under it ----
+const SPRINGS = [];      // thin round spots: {x, z, r}
+function iceAtRaw(x, z, row) {
+  const g = heightAt(x, z);
+  const depth = -g;
+  const rX = row ? row.rx : riverX(z), qX = row ? row.qx : routeX(z);
+  let th = 17 + 5 * fbm(x / 60, z / 60, 3);
+  let white = 0.08 + 0.25 * sat(fbm(x / 45 + 9, z / 45, 3) * 1.4 - 0.1);
+  // shallow water near the shore freezes white and thick
+  white = Math.max(white, 1 - smooth(0.4, 2.2, depth));
+  th += 12 * (1 - smooth(0.5, 2.5, depth));
+  // moving water in the old river keeps the ice thin
+  const dr = Math.abs(x - rX);
+  const cur = (1 - smooth(5, 20, dr)) * smooth(-100, 200, z);
+  th = lerp(th, 2.5 + 0.6 * dr, cur);
+  white *= 1 - cur * 0.9;
+  for (const s of SPRINGS) {
+    const d = Math.hypot(x - s.x, z - s.z);
+    if (d < s.r * 2.2) { const k = 1 - smooth(s.r * 0.55, s.r * 2.2, d); th = lerp(th, 2.2, k); white *= 1 - k; }
+  }
+  // the tower keeps a ring of rotten ice round its foot
+  const dt = Math.max(Math.abs(x - TOWER.x), Math.abs(z - TOWER.z)) - TOWER.w / 2;
+  if (dt < 6) { const k = 1 - smooth(0.8, 6, dt); th = lerp(th, 6, k * 0.7); }
+  // snow lies in patches and drifts, more near the shore and behind the huts
+  let snow = sat(fbm(x / 34 - 4, z / 34 + 7, 4) * 1.8 - 0.35) * 0.85;
+  snow = Math.max(snow, sat(1 - smooth(0.2, 1.4, depth)) * 0.9);
+  snow *= 1 - cur;
+  const dRoute = Math.abs(x - qX);
+  snow *= 0.35 + 0.65 * smooth(3, 14, dRoute);   // the way has been swept, roughly
+  return [th, white, snow, cur];
+}
+function buildIce() {
+  const N = WORLD.iceRes, S = WORLD.size, step = S / N;
+  const A = new Uint8Array(N * N * 4);
+  for (let j = 0; j < N; j++) {
+    const z = WORLD.z0 + (j + 0.5) * step;
+    const row = { rx: riverX(z), qx: routeX(z) };
+    for (let i = 0; i < N; i++) {
+      const x = WORLD.x0 + (i + 0.5) * step;
+      const k = (j * N + i) * 4;
+      if (heightAt(x, z) > 0.3) { A[k] = 255; A[k + 1] = 255; A[k + 2] = 255; A[k + 3] = 0; continue; }
+      const [th, w, sn, cur] = iceAtRaw(x, z, row);
+      A[k] = clamp(Math.round(th * 6), 0, 255); A[k + 1] = Math.round(sat(w) * 255); A[k + 2] = Math.round(sat(sn) * 255); A[k + 3] = Math.round(sat(cur) * 255);
+    }
+  }
+  WORLD.ice = A;
+}
+// thickness in cm (bilinear), 0 where a hole is open
+function iceThick(x, z) {
+  const N = WORLD.iceRes, f = N / WORLD.size;
+  const gx = (x - WORLD.x0) * f - 0.5, gz = (z - WORLD.z0) * f - 0.5;
+  const i = clamp(Math.floor(gx), 0, N - 2), j = clamp(Math.floor(gz), 0, N - 2);
+  const fx = clamp(gx - i, 0, 1), fz = clamp(gz - j, 0, 1), A = WORLD.ice;
+  const s = (ii, jj) => A[(jj * N + ii) * 4] / 6;
+  return lerp(lerp(s(i, j), s(i + 1, j), fx), lerp(s(i, j + 1), s(i + 1, j + 1), fx), fz);
+}
+function iceSnow(x, z) {
+  const N = WORLD.iceRes, f = N / WORLD.size;
+  const i = clamp(Math.round((x - WORLD.x0) * f - 0.5), 0, N - 1), j = clamp(Math.round((z - WORLD.z0) * f - 0.5), 0, N - 1);
+  return WORLD.ice[(j * N + i) * 4 + 2] / 255;
+}
+
+// ---- the route as a polyline with distance along it ----
+function buildRoute() {
+  const pts = [];
+  let s = 0, prev = null;
+  for (let z = ROUTE_PTS[0][1]; z <= ROUTE_PTS[ROUTE_PTS.length - 1][1]; z += 2) {
+    const p = [routeX(z), z];
+    if (prev) s += Math.hypot(p[0] - prev[0], p[1] - prev[1]);
+    pts.push({ x: p[0], z: p[1], s });
+    prev = p;
+  }
+  WORLD.route = pts; WORLD.routeLen = s;
+}
+// nearest point on the route: {s, d (signed: + east), x, z}
+function routeNear(x, z) {
+  const R = WORLD.route;
+  // the route is a function of z, so search near z
+  const z0 = R[0].z, i0 = clamp(Math.round((z - z0) / 2), 0, R.length - 1);
+  let best = 1e18, bi = i0;
+  for (let i = Math.max(0, i0 - 60); i <= Math.min(R.length - 1, i0 + 60); i++) {
+    const d = (R[i].x - x) ** 2 + (R[i].z - z) ** 2;
+    if (d < best) { best = d; bi = i; }
+  }
+  const p = R[bi];
+  return { s: p.s, d: Math.sign(x - p.x) * Math.sqrt(best), x: p.x, z: p.z, i: bi };
+}
+function routeAt(s) {
+  const R = WORLD.route;
+  let lo = 0, hi = R.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (R[m].s < s) lo = m; else hi = m; }
+  const a = R[lo], b = R[hi], t = clamp((s - a.s) / (b.s - a.s || 1), 0, 1);
+  const x = lerp(a.x, b.x, t), z = lerp(a.z, b.z, t);
+  return { x, z, dir: Math.atan2(b.x - a.x, b.z - a.z) };
+}
+
+function buildWorld() {
+  // a few thin spots near the way, where springs come up
+  const r = rng(91);
+  for (const [z, off] of [[310, 26], [540, -30], [1360, 34], [1580, -22], [2150, 30], [2390, -36]]) SPRINGS.push({ x: routeX(z) + off + (r() - 0.5) * 8, z, r: 4 + r() * 3 });
+  buildGround();
+  buildIce();
+  buildRoute();
+}
+
+// ---- 25-village.js ----
+// What was here before the water, and what stands on the ice now.
+const STONE = [rgb(0x6b655c), rgb(0x5d5a55), rgb(0x76705f), rgb(0x625b50), rgb(0x807a6e)];
+const WASH = [rgb(0xb8b2a3), rgb(0xa8a497), rgb(0xc2b9a5)];
+const SLATE = rgb(0x3a3d42, 0.1), WOOD = rgb(0x4a3a2c, 0.07), DARKWOOD = rgb(0x2c231b, 0.07), RUST = rgb(0x6a3c22, 0.2);
+const RED = rgb(0x8e1f1a, 0.3), BLACKP = rgb(0x141414, 0.3);
+const LIT = (k) => [1.0, 0.66, 0.34, -k];            // a lit window, k times as bright as its colour
+const CHECKPOINTS = [];                              // {s, x, z, lamp: [x,y,z]}
+const HUTS = [];                                     // {x, z, yaw, chimney: [x,y,z], window: [x,y,z]}
+const FISH_HOLES = [];                               // {x, z, r}
+const SCENE = { tower: null, bell: null, ropeTop: null, smoke: [], lamps: [], windows: [] };
+
+function routeFrame(z) {
+  const x = routeX(z), x2 = routeX(z + 1);
+  const yaw = Math.atan2(x2 - x, 1);
+  return { x, z, yaw, rx: -Math.cos(yaw), rz: Math.sin(yaw) };   // right of the way
+}
+
+// ---- pieces ----
+function house(b, x, z, yaw, o) {
+  const r = o.rand, floor = o.floor;
+  const w = o.w, d = o.d, wallH = o.wallH, t = 0.5;
+  const col = o.col;
+  const M = (lx, ly, lz, sx, sy, sz, ry = 0) => {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    return m4trs([x + c * lx + s * lz, floor + ly, z - s * lx + c * lz], yaw + ry, 0, 0, [sx, sy, sz]);
+  };
+  const wp = (lx, lz) => { const c = Math.cos(yaw), s = Math.sin(yaw); return [x + c * lx + s * lz, z - s * lx + c * lz]; };
+  b.jit = 0.12;
+  // plinth
+  b.box(M(0, 0.12, 0, w + 0.4, 0.24, d + 0.4), rgbS(col, 0.8));
+  // front (+z local, toward the street): a door and two windows; back: two windows; ends: one small window up high
+  const fh = [[w / 2 - 0.55, w / 2 + 0.55, 0.2, 2.15]];
+  const winY = [0.95, 2.0];
+  const front = [...fh, [0.7, 1.6, winY[0], winY[1]], [w - 1.6, w - 0.7, winY[0], winY[1]]];
+  const back = [[0.9, 1.8, winY[0], winY[1]], [w - 1.8, w - 0.9, winY[0], winY[1]]];
+  const ends = wallH > 3.5 ? [[d / 2 - 0.4, d / 2 + 0.4, 2.9, 3.5]] : [];
+  const A = wp(-w / 2, d / 2), B = wp(w / 2, d / 2), C = wp(w / 2, -d / 2), D = wp(-w / 2, -d / 2);
+  b.wall(A, B, floor + 0.24, wallH, t, col, front);
+  b.wall(C, D, floor + 0.24, wallH, t, col, back);
+  b.wall(B, C, floor + 0.24, wallH, t, col, ends);
+  b.wall(D, A, floor + 0.24, wallH, t, col, ends);
+  // gable ends; a roof (kept, fallen in, or gone)
+  const gableH = Math.min(o.gable, -0.75 - (floor + 0.24 + wallH));
+  if (gableH > 0.4) {
+    const top = floor + 0.24 + wallH;
+    // gable triangles stand on the end walls: base across the house's depth
+    b.prism(M(-w / 2 + t / 2, top - floor, 0, d, gableH, t, PI / 2), col);
+    b.prism(M(w / 2 - t / 2, top - floor, 0, d, gableH, t, PI / 2), col);
+    if (o.roof === 'kept') {
+      const pitch = Math.atan2(gableH, d / 2), L = Math.hypot(gableH, d / 2) + 0.25;
+      for (const sgn of [-1, 1]) {
+        const c = Math.cos(yaw), s = Math.sin(yaw);
+        const lz = sgn * d / 4, ly = top - floor + gableH / 2 + 0.05;
+        b.box(m4trs([x + s * lz, floor + ly, z + c * lz], yaw, sgn * pitch, 0, [w + 0.3, 0.12, L]), SLATE);
+      }
+    } else if (o.roof === 'ribs') {
+      for (let i = 0; i < 5; i++) {
+        const lx = -w / 2 + 0.6 + i * (w - 1.2) / 4;
+        for (const sgn of [-1, 1]) {
+          const pitch = Math.atan2(gableH, d / 2), L = Math.hypot(gableH, d / 2);
+          const c = Math.cos(yaw), s = Math.sin(yaw);
+          const lz = sgn * d / 4;
+          b.box(m4trs([x + c * lx + s * lz, top + gableH / 2, z - s * lx + c * lz], yaw, sgn > 0 ? pitch : -pitch, 0, [0.12, 0.14, L]), DARKWOOD);
+        }
+      }
+    }
+    // a chimney stack on one end, stopping short of the ice
+    const chTop = Math.min(top + gableH + 0.5, -0.6), chBot = top + gableH * 0.3;
+    if (chTop > chBot) b.box(M(w / 2 - 0.45, (chTop + chBot) / 2 - floor, 0, 0.6, chTop - chBot, 0.9), rgbS(col, 0.85));
+  }
+  b.jit = 0;
+  // a doorstep
+  b.box(M(0, 0.06, d / 2 + 0.35, 1.3, 0.12, 0.5), rgbS(col, 0.7));
+}
+function stoneWall(b, a, c, floor, h = 1.15) {
+  b.jit = 0.25;
+  const L = Math.hypot(c[0] - a[0], c[1] - a[1]), n = Math.max(1, Math.round(L / 2.2));
+  for (let i = 0; i < n; i++) {
+    const t0 = i / n, t1 = (i + 1) / n, hh = h * (0.75 + 0.25 * b.rand());
+    const p0 = [lerp(a[0], c[0], t0), lerp(a[1], c[1], t0)], p1 = [lerp(a[0], c[0], t1), lerp(a[1], c[1], t1)];
+    b.wall(p0, p1, floor, hh, 0.62, STONE[i % STONE.length]);
+    if (b.rand() < 0.5) { const m = [(p0[0] + p1[0]) / 2, floor + hh + 0.08, (p0[1] + p1[1]) / 2]; b.box(m4trs(m, Math.atan2(c[0] - a[0], c[1] - a[1]), 0, 0, [0.5, 0.16, 1.6]), STONE[(i + 2) % 5]); }
+  }
+  b.jit = 0;
+}
+function pine(b, x, y, z, s, col) {
+  b.cyl(m4trs([x, y, z], 0, 0, 0, [0.12 * s, 1.2 * s, 0.12 * s]), rgb(0x2b2017), 6, 0.6, false);
+  for (let i = 0; i < 4; i++) {
+    const k = i / 4, rr = (1.0 - k * 0.72) * 0.75 * s;
+    b.cyl(m4trs([x, y + (0.6 + k * 2.1) * s, z], i * 0.7, 0, 0, [rr, 1.1 * s * (1 - k * 0.3), rr]), col, 7, 0.0, true);
+  }
+}
+function deadTree(b, x, y, z, s, rand) {
+  const col = rgb(0x3a3127);
+  b.cyl(m4trs([x, y, z], 0, 0, 0, [0.18 * s, 2.6 * s, 0.18 * s]), col, 7, 0.55, false);
+  for (let i = 0; i < 6; i++) {
+    const a = rand() * TAU, h = (1.2 + rand() * 1.6) * s, L = (0.9 + rand() * 1.2) * s, up = 0.5 + rand() * 0.6;
+    const p0 = [x, y + h, z], p1 = [x + Math.sin(a) * L, y + h + L * up, z + Math.cos(a) * L];
+    b.cyl(m4between(p0, p1, [0, 0, 1], 0.06 * s), col, 5, 0.4, false);
+  }
+}
+function car(b, x, y, z, yaw, col) {
+  const M = (lx, ly, lz, sx, sy, sz) => { const c = Math.cos(yaw), s = Math.sin(yaw); return m4trs([x + c * lx + s * lz, y + ly, z - s * lx + c * lz], yaw, 0, 0, [sx, sy, sz]); };
+  b.box(M(0, 0.62, 0, 1.6, 0.55, 3.9), col);
+  b.box(M(0, 1.08, -0.2, 1.4, 0.45, 2.0), col);
+  b.box(M(0, 1.08, -0.2, 1.42, 0.3, 1.7), rgb(0x1b2226, 0.8));        // windows, dark
+  b.box(M(0, 0.48, 1.98, 1.5, 0.22, 0.1), rgb(0x9aa0a4, 0.9));        // bumper
+  b.box(M(0, 0.48, -1.98, 1.5, 0.22, 0.1), rgb(0x9aa0a4, 0.9));
+  for (const [lx, lz] of [[-0.78, 1.25], [0.78, 1.25], [-0.78, -1.3], [0.78, -1.3]]) {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    b.cyl(m4trs([x + c * lx + s * lz, y + 0.33, z - s * lx + c * lz], yaw + PI / 2, PI / 2, 0, [0.33, 0.22, 0.33]), rgb(0x111111), 12);
+  }
+  for (const lx of [-0.55, 0.55]) b.sphere(M(lx, 0.68, 1.96, 0.13, 0.13, 0.05), rgb(0xd8d8d0, 0.9), 8, 6);
+}
+function bicycle(b, x, y, z, yaw) {
+  const col = rgb(0x26343a, 0.4);
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const P = (lx, ly, lz) => [x + c * lx + s * lz, y + ly, z - s * lx + c * lz];
+  for (const lz of [-0.52, 0.52]) b.torus(m4trs(P(0, 0.34, lz), yaw + PI / 2, 0, PI / 2, 1), rgb(0x161616, 0.3), 0.33, 0.022, 18, 4);
+  const bar = (p, q) => b.cyl(m4between(P(...p), P(...q), [1, 0, 0], 0.018), col, 5);
+  bar([0, 0.34, -0.52], [0, 0.62, -0.1]); bar([0, 0.62, -0.1], [0, 0.34, 0.1]); bar([0, 0.34, 0.1], [0, 0.34, -0.52]);
+  bar([0, 0.62, -0.1], [0, 0.66, 0.42]); bar([0, 0.66, 0.42], [0, 0.34, 0.52]); bar([0, 0.34, 0.1], [0, 0.66, 0.42]);
+  bar([0, 0.66, 0.42], [0, 0.88, 0.38]); bar([-0.24, 0.88, 0.38], [0.24, 0.88, 0.38]);
+  b.box(m4trs(P(0, 0.7, -0.14), yaw, 0, 0, [0.1, 0.05, 0.22]), rgb(0x1a1210));
+  b.box(m4trs(P(0, 0.62, 0.62), yaw, 0, 0, [0.32, 0.22, 0.26]), rgb(0x3b2e22));     // a basket
+}
+function phoneBox(b, x, y, z, yaw) {
+  const red = rgb(0x8c1912, 0.35);
+  b.box(m4trs([x, y + 1.15, z], yaw, 0, 0, [1.0, 2.3, 1.0]), red);
+  b.box(m4trs([x, y + 2.38, z], yaw, 0, 0, [1.06, 0.16, 1.06]), red);
+  b.prism(m4trs([x, y + 2.46, z], yaw, 0, 0, [1.0, 0.18, 1.0]), red);
+  for (let i = 0; i < 4; i++) { const a = yaw + i * PI / 2; b.box(m4trs([x + Math.sin(a) * 0.505, y + 1.3, z + Math.cos(a) * 0.505], a, 0, 0, [0.7, 1.5, 0.02]), rgb(0x20282c, 0.9)); }
+}
+function memorial(b, x, y, z) {
+  const st = rgb(0x8a857a, 0.1);
+  b.box(m4trs([x, y + 0.25, z], 0, 0, 0, [2.2, 0.5, 2.2]), st);
+  b.box(m4trs([x, y + 0.65, z], 0, 0, 0, [1.4, 0.3, 1.4]), st);
+  b.box(m4trs([x, y + 1.6, z], 0, 0, 0, [0.6, 1.6, 0.6]), st);
+  b.box(m4trs([x, y + 3.0, z], 0, 0, 0, [0.28, 1.3, 0.28]), st);
+  b.box(m4trs([x, y + 3.2, z], 0, 0, 0, [0.95, 0.26, 0.28]), st);
+}
+function playground(b, x, y, z, yaw) {
+  const metal = rgb(0x3e4a50, 0.5), c = Math.cos(yaw), s = Math.sin(yaw);
+  const P = (lx, ly, lz) => [x + c * lx + s * lz, y + ly, z - s * lx + c * lz];
+  // swings: an A-frame each end, a bar, two seats on chains
+  for (const lx of [-1.6, 1.6]) for (const lz of [-0.7, 0.7]) b.cyl(m4between(P(lx, 0, lz), P(lx, 2.3, 0), [1, 0, 0], 0.05), metal, 6);
+  b.cyl(m4between(P(-1.7, 2.3, 0), P(1.7, 2.3, 0), [0, 0, 1], 0.06), metal, 6);
+  for (const lx of [-0.7, 0.7]) {
+    for (const dx of [-0.22, 0.22]) b.cyl(m4between(P(lx + dx, 2.3, 0), P(lx + dx, 0.5, 0.15), [0, 0, 1], 0.012), metal, 4);
+    b.box(m4trs(P(lx, 0.48, 0.15), yaw, 0.2, 0, [0.5, 0.05, 0.2]), rgb(0x2a2018));
+  }
+  // a slide
+  b.box(m4trs(P(4.2, 1.0, -0.8), yaw, -0.55, 0, [0.55, 0.06, 3.4]), rgb(0x8f9aa0, 0.8));
+  b.cyl(m4between(P(4.0, 0, -2.2), P(4.0, 2.0, -2.2), [1, 0, 0], 0.05), metal, 6);
+  b.cyl(m4between(P(4.4, 0, -2.2), P(4.4, 2.0, -2.2), [1, 0, 0], 0.05), metal, 6);
+  for (let i = 0; i < 6; i++) b.box(m4trs(P(4.2, 0.3 + i * 0.32, -2.35), yaw, 0, 0, [0.42, 0.04, 0.06]), metal);
+  // a roundabout
+  b.cyl(m4trs(P(-4.4, 0.25, 1.2), 0, 0, 0, [1.3, 0.08, 1.3]), rgb(0x6a2b22, 0.3), 16);
+}
+function gravestone(b, x, y, z, yaw, r) {
+  const st = rgb(0x6f6c66, 0.05);
+  const k = r();
+  if (k < 0.55) { b.box(m4trs([x, y + 0.5, z], yaw, (r() - 0.5) * 0.25, (r() - 0.5) * 0.2, [0.62, 1.0, 0.12]), st); b.cyl(m4trs([x, y + 1.0, z], yaw, PI / 2, 0, [0.31, 0.12, 0.31]), st, 10); }
+  else if (k < 0.8) { b.box(m4trs([x, y + 0.75, z], yaw, 0, (r() - 0.5) * 0.15, [0.18, 1.5, 0.16]), st); b.box(m4trs([x, y + 1.15, z], yaw, 0, 0, [0.7, 0.16, 0.16]), st); }
+  else { b.box(m4trs([x, y + 0.3, z], yaw, 0, 0, [0.9, 0.6, 1.9]), st); }
+}
+function lampPost(b, x, y, z, yaw) {
+  const m = rgb(0x22282a, 0.4);
+  b.cyl(m4trs([x, y, z], 0, 0, 0, [0.07, 3.9, 0.07]), m, 7, 0.7);
+  b.cyl(m4between([x, y + 3.85, z], [x + Math.sin(yaw) * 0.7, y + 3.95, z + Math.cos(yaw) * 0.7], [1, 0, 0], 0.035), m, 5);
+  b.box(m4trs([x + Math.sin(yaw) * 0.75, y + 3.82, z + Math.cos(yaw) * 0.75], yaw, 0, 0, [0.28, 0.2, 0.36]), m);
+}
+
+// a fishing hut on the ice: painted boards, a lit window, a stovepipe; a hole beside it
+function hut(b, x, z, yaw, col) {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const P = (lx, ly, lz) => [x + c * lx + s * lz, ly, z - s * lx + c * lz];
+  b.jit = 0.08;
+  b.box(m4trs(P(0, 1.05, 0), yaw, 0, 0, [2.0, 2.1, 2.6]), col);
+  b.box(m4trs(P(0, 2.2, 0), yaw, 0.16, 0, [2.3, 0.12, 3.0]), rgb(0x2a2a2c, 0.2));
+  b.jit = 0;
+  b.box(m4trs(P(0, 0.95, 1.305), yaw, 0, 0, [0.8, 1.75, 0.03]), rgbS(col, 0.6));       // door
+  b.box(m4trs(P(1.005, 1.35, 0.2), yaw, 0, 0, [0.03, 0.42, 0.55]), LIT(5));            // window
+  b.cyl(m4trs(P(-0.55, 2.0, -0.7), 0, 0, 0, [0.07, 0.9, 0.07]), rgb(0x2a2724, 0.7), 8);
+  b.box(m4trs(P(1.4, 0.03, 1.6), yaw + 0.4, 0, 0, [0.5, 0.06, 1.4]), WOOD);           // a sled
+  HUTS.push({ x, z, yaw, chimney: P(-0.55, 2.95, -0.7), window: P(1.06, 1.35, 0.2) });
+  COLLIDERS.push({ x, z, hx: 1.05, hz: 1.35, yaw, top: 2.3 });
+  // its fishing hole and a tip-up flag
+  const hp = P(1.9, 0, -0.4);
+  FISH_HOLES.push({ x: hp[0], z: hp[2], r: 0.38 });
+  b.cyl(m4trs([hp[0] + 0.5, 0, hp[2] + 0.3], 0, 0, 0, [0.015, 0.9, 0.015]), rgb(0x30302e), 4);
+  b.box(m4trs([hp[0] + 0.58, 0.85, hp[2] + 0.3], 0.3, 0, 0, [0.16, 0.11, 0.01]), RED);
+}
+// a marker: a little spruce stuck in the ice; some hold a lantern (the places you come back to)
+function marker(b, x, z, lamp) {
+  const g = rgb(0x1f2d22, 0.02);
+  b.cyl(m4trs([x, -0.2, z], 0, 0, 0, [0.03, 1.5, 0.03]), rgb(0x2b2017), 5);
+  for (let i = 0; i < 4; i++) { const k = i / 4; b.cyl(m4trs([x, 0.35 + k * 0.85, z], i, 0, 0, [0.32 * (1 - k * 0.7), 0.55, 0.32 * (1 - k * 0.7)]), g, 6, 0, true); }
+  if (lamp) {
+    b.cyl(m4between([x, 1.15, z], [x + 0.32, 1.2, z], [0, 0, 1], 0.012), rgb(0x222222), 4);
+    b.lathe(m4trs([x + 0.32, 0.98, z]), rgb(0x2a2523, 0.5), [[0, -0.09], [0.05, -0.09], [0.05, -0.07]], 8);
+    b.lathe(m4trs([x + 0.32, 0.98, z]), LIT(14), [[0.03, -0.07], [0.045, -0.02], [0.03, 0.05]], 8);
+    SCENE.lamps.push([x + 0.32, 0.98, z]);
+  }
+  COLLIDERS.push({ x, z, r: 0.1, top: 1.6 });
+}
+
+// ---- the church tower, which still stands up out of the ice ----
+function tower(b) {
+  const { x, z, w, top, base } = TOWER, t = 0.7;
+  const st = [rgb(0x5b574c), rgb(0x524e45), rgb(0x625d51)];
+  const cx = x, cz = z, h = top - base;
+  b.jit = 0.16;
+  // four walls; on the south face (toward the way) an opening at the ice where a window was
+  const S = [[cx - w / 2, cz - w / 2], [cx + w / 2, cz - w / 2], [cx + w / 2, cz + w / 2], [cx - w / 2, cz + w / 2]];
+  const holeS = [[w / 2 - 0.85, w / 2 + 0.85, -base - 0.2, -base + 2.5], [w / 2 - 0.5, w / 2 + 0.5, -base + 4.2, -base + 6.0], [w / 2 - 0.7, w / 2 + 0.7, h - 4.0, h - 1.5]];
+  const holeE = [[w / 2 - 0.5, w / 2 + 0.5, -base + 4.2, -base + 6.0], [w / 2 - 0.7, w / 2 + 0.7, h - 4.0, h - 1.5]];
+  b.wall(S[0], S[1], base, h, t, st[0], holeS);
+  b.wall(S[1], S[2], base, h, t, st[1], holeE);
+  b.wall(S[2], S[3], base, h, t, st[2], holeE);
+  b.wall(S[3], S[0], base, h, t, st[1], holeE);
+  // buttresses at the corners, a string course, battlements
+  for (const [px, pz] of S) b.box(m4trs([px, base + h * 0.4, pz], PI / 4, 0, 0, [1.0, h * 0.8, 1.0]), st[2]);
+  b.box(m4trs([cx, top - 1.2, cz], 0, 0, 0, [w + 0.3, 0.25, w + 0.3]), st[0]);
+  for (let i = 0; i < 4; i++) for (let k = 0; k < 4; k++) {
+    const a = i * PI / 2, along = (k - 1.5) * (w / 4), off = w / 2 + 0.05;
+    const px = cx + Math.sin(a) * off + Math.cos(a) * along, pz = cz + Math.cos(a) * off - Math.sin(a) * along;
+    b.box(m4trs([px, top + 0.35, pz], a, 0, 0, [0.62, 0.7, 0.62]), st[k % 3]);
+  }
+  b.box(m4trs([cx, top + 0.02, cz], 0, 0, 0, [w + 0.2, 0.16, w + 0.2]), st[1]);
+  // a short spire of lead, and a weathercock
+  b.cyl(m4trs([cx, top, cz], PI / 4, 0, 0, [w * 0.42, 4.2, w * 0.42]), rgb(0x3d4246, 0.4), 4, 0.03, false);
+  b.cyl(m4trs([cx, top + 4.1, cz], 0, 0, 0, [0.03, 1.0, 0.03]), rgb(0x2b2b2b, 0.6), 4);
+  b.box(m4trs([cx, top + 4.9, cz], 0.6, 0, 0, [0.04, 0.22, 0.55]), rgb(0x4b3a1e, 0.8));
+  b.jit = 0;
+  // the clock on the south face, stopped
+  const cfz = cz - w / 2 - 0.37, cy = base + h - 6.6;
+  b.cyl(m4trs([cx, cy, cfz], 0, PI / 2, 0, [0.9, 0.06, 0.9]), rgb(0x16191b, 0.4), 22);
+  b.cyl(m4trs([cx, cy, cfz - 0.06], 0, PI / 2, 0, [0.8, 0.02, 0.8]), rgb(0x91897a, 0.2), 22);
+  b.box(m4trs([cx + 0.18, cy + 0.28, cfz - 0.1], 0, 0, -0.55, [0.05, 0.62, 0.02]), rgb(0x111111, 0.4));
+  b.box(m4trs([cx - 0.12, cy + 0.12, cfz - 0.1], 0, 0, 0.9, [0.06, 0.4, 0.02]), rgb(0x111111, 0.4));
+  // inside: the ice floor is the old ringing chamber's air; the bell hangs above, its rope comes down
+  // the bell frame: two oak beams across the tower carrying the bell's gudgeons; no floor under it any more
+  for (const dz of [-0.75, 0.75]) b.box(m4trs([cx, 10.55, cz + dz], 0, 0, 0, [w - 2 * t + 0.6, 0.32, 0.3]), DARKWOOD);
+  for (const dx of [-1.25, 1.25]) for (const dz of [-0.75, 0.75]) b.box(m4trs([cx + dx, 9.5, cz + dz], 0, 0, 0, [0.24, 2.0, 0.24]), DARKWOOD);
+  b.box(m4trs([cx, 8.5, cz], 0, 0, 0, [w - 2 * t + 0.6, 0.22, 0.26]), DARKWOOD);
+  SCENE.bell = [cx, 10.55, cz];
+  SCENE.ropeTop = [cx + 0.4, 8.3, cz + 0.2];
+  // colliders: the walls, leaving the south opening
+  const half = w / 2, th = t / 2 + 0.05;
+  COLLIDERS.push({ x: cx, z: cz + half, hx: half + 0.2, hz: th, yaw: 0 });
+  COLLIDERS.push({ x: cx + half, z: cz, hx: th, hz: half + 0.2, yaw: 0 });
+  COLLIDERS.push({ x: cx - half, z: cz, hx: th, hz: half + 0.2, yaw: 0 });
+  COLLIDERS.push({ x: cx - half + 0.75, z: cz - half, hx: 0.85, hz: th, yaw: 0 });
+  COLLIDERS.push({ x: cx + half - 0.75, z: cz - half, hx: 0.85, hz: th, yaw: 0 });
+  for (const [px, pz] of S) COLLIDERS.push({ x: px, z: pz, r: 0.75 });
+}
+function church(b) {
+  // the nave runs east from the tower, roofless, its walls standing to just under the ice
+  const x0 = TOWER.x + TOWER.w / 2, z0 = TOWER.z, L = 19, W = 8.4, fl = TOWER.base + 0.2;
+  const st = rgb(0x6f6a5c);
+  b.jit = 0.15;
+  const win = [];
+  for (let i = 0; i < 4; i++) win.push([2.5 + i * 4.2, 3.6 + i * 4.2, 1.4, 3.6]);
+  b.wall([x0, z0 - W / 2], [x0 + L, z0 - W / 2], fl, 3.8, 0.7, st, win);
+  b.wall([x0 + L, z0 + W / 2], [x0, z0 + W / 2], fl, 3.8, 0.7, st, win);
+  b.wall([x0 + L, z0 - W / 2], [x0 + L, z0 + W / 2], fl, 3.95, 0.8, st, [[W / 2 - 1.2, W / 2 + 1.2, 1.2, 3.7]]);
+  // the porch on the south side
+  b.wall([x0 + 5, z0 - W / 2], [x0 + 5, z0 - W / 2 - 3], fl, 2.8, 0.5, st);
+  b.wall([x0 + 8, z0 - W / 2 - 3], [x0 + 8, z0 - W / 2], fl, 2.8, 0.5, st);
+  b.jit = 0;
+  // pews, some fallen
+  const r = rng(5);
+  for (let i = 0; i < 9; i++) for (const side of [-1, 1]) {
+    if (r() < 0.2) continue;
+    const px = x0 + 3 + i * 1.6, pz = z0 + side * 1.9;
+    b.box(m4trs([px, fl + 0.45, pz], PI / 2 + (r() - 0.5) * 0.3, r() < 0.15 ? 1.1 : 0, 0, [2.6, 0.08, 0.4]), DARKWOOD);
+    b.box(m4trs([px - 0.2, fl + 0.7, pz], PI / 2, 0, 0, [2.6, 0.5, 0.06]), DARKWOOD);
+  }
+  // the font, the altar step
+  b.cyl(m4trs([x0 + 2, fl, z0 - 2.2], 0, 0, 0, [0.4, 1.0, 0.4]), rgb(0x8a8578), 10, 1.25);
+  b.box(m4trs([x0 + L - 2, fl + 0.2, z0], 0, 0, 0, [2.0, 0.4, W - 1.8]), rgb(0x7d786b));
+  b.box(m4trs([x0 + L - 1.4, fl + 0.9, z0], 0, 0, 0, [0.9, 1.0, 2.2]), rgb(0x8d887a));
+  // the churchyard: stones in rows, a yew, the wall and lychgate
+  for (let i = 0; i < 70; i++) {
+    const gx = x0 - 18 + r() * 52, gz = z0 - 24 + r() * 50;
+    if (gx > x0 - 4 && gx < x0 + L + 2 && gz > z0 - W / 2 - 4 && gz < z0 + W / 2 + 2) continue;
+    if (Math.abs(gx - TOWER.x) < 5 && Math.abs(gz - TOWER.z) < 5) continue;
+    gravestone(b, gx, heightAt(gx, gz), gz, (r() - 0.5) * 0.2 + (r() < 0.5 ? 0 : PI), r);
+  }
+  deadTree(b, x0 + 24, heightAt(x0 + 24, z0 + 14), z0 + 14, 1.5, r);
+  const yard = [[x0 - 20, z0 - 26], [x0 + 36, z0 - 26], [x0 + 36, z0 + 28], [x0 - 20, z0 + 28]];
+  for (let i = 0; i < 4; i++) {
+    const a = yard[i], c = yard[(i + 1) % 4];
+    if (i === 0) { stoneWall(b, a, [lerp(a[0], c[0], 0.42), a[1]], heightAt(a[0], a[1]) - 0.1); stoneWall(b, [lerp(a[0], c[0], 0.5), a[1]], c, heightAt(c[0], c[1]) - 0.1); }
+    else stoneWall(b, a, c, heightAt((a[0] + c[0]) / 2, (a[1] + c[1]) / 2) - 0.1);
+  }
+}
+
+// ---- the village along the old road ----
+function village(b) {
+  const r = rng(1234);
+  b.rand = r;
+  const fl = -5.3;
+  const used = [];
+  const place = (z, side, w, d, extra = {}) => {
+    const F = routeFrame(z);
+    const setback = 4.2 + (extra.setback ?? (1.5 + r() * 3.5)) + d / 2;
+    const x = F.x + F.rx * side * setback, zz = F.z + F.rz * side * setback;
+    const yaw = F.yaw + (side > 0 ? -PI / 2 : PI / 2) + (r() - 0.5) * 0.06;
+    const col = extra.col || (r() < 0.35 ? WASH[Math.floor(r() * 3)] : STONE[Math.floor(r() * 5)]);
+    house(b, x, zz, yaw, { rand: r, floor: heightAt(x, zz) + 0.05, w, d, wallH: extra.wallH || (2.9 + r() * 0.6), gable: 1.6, roof: extra.roof || (r() < 0.25 ? 'kept' : r() < 0.6 ? 'ribs' : 'none'), col });
+    used.push({ z, side });
+    return { x, z: zz, yaw, F };
+  };
+  // the street: a darker strip, kerbs, garden walls
+  for (let z = 1745; z < 2520; z += 3) {
+    const F = routeFrame(z);
+    b.box(m4trs([F.x, fl + 0.02, z + 1.5], F.yaw, 0, 0, [7.0, 0.06, 3.05]), rgb(0x2e2d2b));
+    for (const side of [-1, 1]) b.box(m4trs([F.x + F.rx * side * 3.6, fl + 0.1, z + 1.5 + F.rz * side * 3.6], F.yaw, 0, 0, [0.25, 0.22, 3.0]), rgb(0x6d6a63));
+  }
+  // houses on both sides, with gaps for lanes and gardens
+  let z = 1770;
+  while (z < 2480) {
+    for (const side of [-1, 1]) {
+      if (r() < 0.18) continue;
+      const w = 6.5 + r() * 3.5, d = 5.2 + r() * 1.6;
+      const H = place(z + (r() - 0.5) * 4, side, w, d);
+      // a front wall and gate
+      const F = H.F, off = 4.2 + 0.3;
+      const a = [F.x + F.rx * side * off - Math.sin(F.yaw) * w / 2, F.z + F.rz * side * off - Math.cos(F.yaw) * w / 2];
+      const c = [F.x + F.rx * side * off + Math.sin(F.yaw) * w / 2, F.z + F.rz * side * off + Math.cos(F.yaw) * w / 2];
+      if (r() < 0.6) stoneWall(b, a, [lerp(a[0], c[0], 0.4), lerp(a[1], c[1], 0.4)], fl, 0.9), stoneWall(b, [lerp(a[0], c[0], 0.6), lerp(a[1], c[1], 0.6)], c, fl, 0.9);
+    }
+    z += 11 + r() * 9;
+  }
+  // landmarks
+  const at = (z, side, off) => { const F = routeFrame(z); return [F.x + F.rx * side * off, F.z + F.rz * side * off, F.yaw]; };
+  { const [x, zz, yaw] = at(1812, -1, 5.2); b.wall([x - 1.2, zz - 0.8], [x - 1.2, zz + 1.4], fl, 2.2, 0.1, rgb(0x3b4044, 0.4)); b.box(m4trs([x, fl + 2.25, zz + 0.3], yaw, 0, 0, [1.2, 0.08, 2.6]), rgb(0x3b4044, 0.4)); }
+  { const [x, zz, yaw] = at(1905, 1, 22); house(b, x, zz, yaw - PI / 2, { rand: r, floor: fl, w: 14, d: 7.5, wallH: 3.6, gable: 1.2, roof: 'ribs', col: rgb(0x7b6f5e) }); const [px, pz] = at(1905, 1, 9.5); playground(b, px, fl, pz, yaw); }
+  { const [x, zz] = at(1968, 1, 6.2); memorial(b, x, fl, zz); }
+  { const [x, zz, yaw] = at(1990, -1, 3.0); car(b, x, fl + 0.05, zz, yaw + 0.04, rgb(0x5a6a58, 0.5)); }
+  { const [x, zz, yaw] = at(2036, 1, 4.6); phoneBox(b, x, fl, zz, yaw); }
+  { const [x, zz, yaw] = at(2044, -1, 6.4); bicycle(b, x, fl, zz, yaw + 0.05); }
+  { const [x, zz, yaw] = at(2052, -1, 5.0); b.cyl(m4trs([x, fl, zz], 0, 0, 0, [0.08, 3.4, 0.08]), rgb(0x2a2622), 6); b.box(m4trs([x + Math.sin(yaw + PI / 2) * 0.55, fl + 3.1, zz + Math.cos(yaw + PI / 2) * 0.55], yaw, 0, 0, [0.05, 0.75, 0.9]), rgb(0x5a3020, 0.2)); }
+  { const [x, zz] = at(2110, 1, 4.6); b.cyl(m4trs([x, fl, zz], 0, 0, 0, [0.26, 1.3, 0.26]), RED, 12); b.sphere(m4trs([x, fl + 1.3, zz], 0, 0, 0, [0.27, 0.16, 0.27]), RED, 10, 5); }
+  for (let zz = 1790; zz < 2480; zz += 38) { const [x, z2, yaw] = at(zz, zz % 76 < 38 ? 1 : -1, 3.9); lampPost(b, x, fl, z2, yaw + (zz % 76 < 38 ? PI / 2 : -PI / 2)); }
+  { const [x, zz, yaw] = at(2300, -1, 26); house(b, x, zz, yaw + PI / 2, { rand: r, floor: heightAt(x, zz), w: 16, d: 9, wallH: 3.9, gable: 0.4, roof: 'none', col: rgb(0x5f584c) }); }
+  // a lane east toward the river, walled
+  { const [x, zz] = at(1968, 1, 4.5); for (let i = 0; i < 6; i++) { stoneWall(b, [x + i * 12, zz - 3], [x + (i + 1) * 12, zz - 3.3], fl); stoneWall(b, [x + i * 12, zz + 3], [x + (i + 1) * 12, zz + 3.2], fl); } }
+}
+
+// ---- the fields south of the village: walls, a fold, the farm track, the orchard, the railway, the bridge ----
+function fields(b) {
+  const r = rng(77);
+  b.rand = r;
+  // walls along the old farm track, which the way follows for a while
+  for (let z = 160; z < 640; z += 26) {
+    const F0 = routeFrame(z), F1 = routeFrame(z + 26);
+    for (const side of [-1, 1]) {
+      if (r() < 0.2) continue;
+      const o = 5.5 + side * 0.3;
+      stoneWall(b, [F0.x + F0.rx * side * o, F0.z + F0.rz * side * o], [F1.x + F1.rx * side * o, F1.z + F1.rz * side * o], heightAt(F0.x, F0.z) - 0.05);
+    }
+  }
+  // field walls running off from the track
+  for (let i = 0; i < 26; i++) {
+    const z = 170 + r() * 470, F = routeFrame(z), side = r() < 0.5 ? -1 : 1;
+    const a = [F.x + F.rx * side * 6, F.z + F.rz * side * 6];
+    const L = 40 + r() * 80, ang = F.yaw + side * PI / 2 + (r() - 0.5) * 0.5;
+    const c = [a[0] + Math.sin(ang) * L, a[1] + Math.cos(ang) * L];
+    if (heightAt(c[0], c[1]) > -1) continue;
+    stoneWall(b, a, c, Math.min(heightAt(a[0], a[1]), heightAt(c[0], c[1])) - 0.05);
+  }
+  // a sheepfold
+  { const F = routeFrame(470), cx = F.x - F.rx * 26, cz = F.z - F.rz * 26, fl = heightAt(cx, cz) - 0.05;
+    for (let i = 0; i < 14; i++) { if (i === 3) continue; const a0 = i / 14 * TAU, a1 = (i + 1) / 14 * TAU; stoneWall(b, [cx + Math.cos(a0) * 7, cz + Math.sin(a0) * 7], [cx + Math.cos(a1) * 7, cz + Math.sin(a1) * 7], fl, 1.3); } }
+  // an orchard, dead and standing
+  for (let i = 0; i < 18; i++) {
+    const F = routeFrame(300 + (i % 6) * 9), side = 1;
+    const x = F.x + F.rx * side * (14 + Math.floor(i / 6) * 9) + (r() - 0.5) * 2, z = F.z + F.rz * side * (14 + Math.floor(i / 6) * 9) + (r() - 0.5) * 2;
+    deadTree(b, x, heightAt(x, z), z, 0.75 + r() * 0.35, r);
+  }
+  // a farm: house and barn, west of the track
+  { const F = routeFrame(560), x = F.x - F.rx * 30, z = F.z - F.rz * 30; house(b, x, z, F.yaw + PI / 2, { rand: r, floor: heightAt(x, z), w: 8, d: 6, wallH: 3.2, gable: 1.5, roof: 'ribs', col: STONE[1] });
+    const x2 = x - Math.sin(F.yaw) * 14, z2 = z - Math.cos(F.yaw) * 14; house(b, x2, z2, F.yaw, { rand: r, floor: heightAt(x2, z2), w: 12, d: 7, wallH: 3.6, gable: 1.0, roof: 'none', col: STONE[3] }); }
+  // the bridge where the way crosses the old river (z ~ 780): three arches, parapets
+  { const z = 780, F = routeFrame(z), bx = F.x, bz = z, yaw = F.yaw, fl = -8.4;
+    const deck = -3.6;
+    const P = (lx, lz) => [bx + Math.cos(yaw) * lx + Math.sin(yaw) * lz, bz - Math.sin(yaw) * lx + Math.cos(yaw) * lz];
+    for (const lz of [-9.6, -3.2, 3.2, 9.6]) { const p = P(0, lz); b.jit = 0.2; b.box(m4trs([p[0], (fl + deck) / 2, p[1]], yaw, 0, 0, [4.6, deck - fl, 1.6]), STONE[2]); b.jit = 0; }
+    for (let lz = -12; lz < 12; lz += 1.5) { const p = P(0, lz + 0.75); b.box(m4trs([p[0], deck - 0.3, p[1]], yaw, 0, 0, [4.6, 0.6, 1.5]), STONE[(Math.round(lz) & 3)]); }
+    for (const lx of [-2.1, 2.1]) { const a = P(lx, -13), c = P(lx, 13); stoneWall(b, a, c, deck, 1.0); }
+  }
+  // the railway: an embankment across the valley, the rails, a halt with its lamp
+  { const z0 = 1560, yaw = 0.18, fl = -5.8;
+    for (let lx = -420; lx < 420; lx += 4) {
+      const x = routeX(z0) + lx * Math.cos(yaw), z = z0 - lx * Math.sin(yaw);
+      const g = heightAt(x, z); if (g > -1.6) continue;
+      const top = Math.max(g + 1.4, -4.4);
+      b.box(m4trs([x, (g + top) / 2 - 0.2, z], PI / 2 - yaw, 0, 0, [4.2, top - g + 0.4, 6.8]), rgb(0x4a4640));
+      for (let k = 0; k < 6; k++) b.box(m4trs([x + Math.cos(yaw) * (k - 2.5) * 0.66, top + 0.06, z - Math.sin(yaw) * (k - 2.5) * 0.66], PI / 2 - yaw, 0, 0, [0.22, 0.12, 2.4]), DARKWOOD);
+      for (const off of [-0.72, 0.72]) b.box(m4trs([x + Math.sin(yaw) * off, top + 0.16, z + Math.cos(yaw) * off], PI / 2 - yaw, 0, 0, [4.0, 0.12, 0.08]), rgb(0x5a3a28, 0.6));
+    }
+    const px = routeX(z0) + 26 * Math.cos(yaw) + 6, pz = z0 - 26 * Math.sin(yaw) + 6;
+    b.box(m4trs([px, -4.4, pz], PI / 2 - yaw, 0, 0, [18, 1.2, 3.2]), rgb(0x67625a));
+    lampPost(b, px + 4, -3.8, pz + 1, yaw);
+    b.box(m4trs([px - 4, -2.6, pz + 1.2], PI / 2 - yaw, 0, 0, [2.2, 0.7, 0.08]), rgb(0x23313a, 0.3));
+    b.cyl(m4trs([px - 4.9, -3.8, pz + 1.2], 0, 0, 0, [0.05, 1.3, 0.05]), rgb(0x222222), 5);
+    b.cyl(m4trs([px - 3.1, -3.8, pz + 1.2], 0, 0, 0, [0.05, 1.3, 0.05]), rgb(0x222222), 5);
+  }
+}
+
+// ---- above the ice ----
+function onIce(b) {
+  // the cabin on the shore at the start, its jetty frozen in
+  { const { x, z } = CABIN, g = heightAt(x, z);
+    // log walls: round logs stacked, ends crossing at the corners
+    b.jit = 0.14;
+    for (let i = 0; i < 10; i++) {
+      const y = g + 0.16 + i * 0.27;
+      for (const zz of [z - 2, z + 2]) b.cyl(m4between([x - 2.9, y, zz], [x + 2.9, y, zz], [0, 1, 0], 0.15), WOOD, 7, 1, true);
+      for (const xx of [x - 2.6, x + 2.6]) b.cyl(m4between([xx, y + 0.13, z - 2.3], [xx, y + 0.13, z + 2.3], [0, 1, 0], 0.15), WOOD, 7, 1, true);
+    }
+    b.jit = 0;
+    b.box(m4trs([x, g + 1.4, z], 0, 0, 0, [5.0, 2.8, 3.8]), DARKWOOD);
+    b.prism(m4trs([x, g + 2.8, z], 0, 0, 0, [5.8, 1.6, 4.6]), rgb(0x2e2a28, 0.1));
+    b.box(m4trs([x - 1.2, g + 1.5, z + 2.02], 0, 0, 0, [0.8, 0.7, 0.04]), LIT(6));
+    b.box(m4trs([x + 1.3, g + 1.1, z + 2.02], 0, 0, 0, [0.9, 1.9, 0.04]), DARKWOOD);
+    b.box(m4trs([x + 2.0, g + 3.4, z - 0.8], 0, 0, 0, [0.6, 1.6, 0.6]), rgb(0x4d4741));
+    SCENE.windows.push([x - 1.2, g + 1.5, z + 2.1]);
+    SCENE.smoke.push([x + 2.0, g + 4.3, z - 0.8]);
+    // the jetty: planks on posts running out onto the ice
+    for (let zz = z + 3; zz < -14; zz += 0.36) b.box(m4trs([x + 0.5, Math.max(heightAt(x, zz), 0) + 0.62, zz], 0.01 * Math.sin(zz), 0, 0, [1.5, 0.06, 0.3]), rgbS(WOOD, 0.85 + 0.15 * Math.sin(zz * 7)));
+    for (let zz = z + 4; zz < -13; zz += 2.4) for (const dx of [-0.25, 1.25]) { b.cyl(m4trs([x + dx, -1.4, zz], 0, 0, 0, [0.1, 2.0, 0.1]), DARKWOOD, 7); COLLIDERS.push({ x: x + dx, z: zz, r: 0.13 }); }
+    b.box(m4trs([x + 0.5, 0.2, -14.6], 0, 0, 0, [1.5, 0.4, 0.06]), DARKWOOD);
+  }
+  // markers along the way, a lantern every so often
+  const lampsAt = [0, 560, 940, 1420, 1960, 2440, 2800];
+  for (let s = 10; s < WORLD.routeLen - 25; s += 24) {
+    const p = routeAt(s), side = (Math.floor(s / 24) % 2) ? 1 : -1;
+    const [rx, rz] = rightOf(p.dir);
+    const lamp = lampsAt.some((q) => Math.abs(q - s) < 12);
+    const x = p.x + rx * side * 2.6, z = p.z + rz * side * 2.6;
+    if (heightAt(x, z) > -0.3) continue;
+    marker(b, x, z, lamp);
+    if (lamp) CHECKPOINTS.push({ s, x: p.x, z: p.z, dir: p.dir, lamp: [x + 0.32, 0.98, z] });
+  }
+  CHECKPOINTS.unshift({ s: 0, x: routeX(-8), z: -8, dir: 0, lamp: null });
+  // the ice-fishing camp
+  const huts = [[-1080, 1, 0x7d2520], [1115, -1, 0x2a4f3a], [1150, 1, 0x2b3c5f], [1205, -1, 0x7a5a24], [1238, 1, 0x5c2a40]];
+  for (const [zz, side, col] of huts) {
+    const z = Math.abs(zz), F = routeFrame(z), off = 9 + (z % 7);
+    hut(b, F.x + F.rx * side * off, F.z + F.rz * side * off, F.yaw + side * 0.4 + (z % 3) * 0.2, rgb(col, 0.1));
+  }
+  // the dam at the north end, the reason for all of it: a concrete wall, a road on top, its lamps
+  { const cx = valleyX(DAM_Z), z = DAM_Z, half = 460, con = rgb(0x7b7a74, 0.05), con2 = rgb(0x6a6964, 0.05);
+    b.jit = 0.04;
+    for (let x = -half; x < half; x += 12) b.box(m4trs([cx + x + 6, -1.5, z + 3.5], 0, 0, 0, [12.02, 17, 7]), (Math.floor(x / 12) & 1) ? con : con2);
+    b.jit = 0;
+    b.box(m4trs([cx, 7.5, z + 0.4], 0, 0, 0, [half * 2, 1.0, 0.4]), con);
+    b.box(m4trs([cx, 7.5, z + 6.6], 0, 0, 0, [half * 2, 1.0, 0.4]), con);
+    b.box(m4trs([cx, 7.05, z + 3.5], 0, 0, 0, [half * 2, 0.1, 6.0]), rgb(0x2a2a2a, 0.2));
+    SCENE.damLamps = [];
+    for (let x = -half + 20; x < half; x += 34) {
+      if (heightAt(cx + x, z - 4) > 3) continue;
+      b.cyl(m4trs([cx + x, 7, z + 0.6], 0, 0, 0, [0.09, 5.5, 0.09]), rgb(0x2b2b2b, 0.4), 6);
+      b.box(m4trs([cx + x, 12.45, z + 0.1], 0, 0, 0, [0.4, 0.18, 0.9]), rgb(0x2b2b2b, 0.4));
+      b.box(m4trs([cx + x, 12.33, z - 0.1], 0, 0, 0, [0.3, 0.06, 0.5]), [1.0, 0.55, 0.18, -22]);
+      SCENE.damLamps.push([cx + x, 12.2, z - 0.1]);
+    }
+    // the valve tower standing off the wall, a light in its hut
+    b.cyl(m4trs([cx + 40, -6, z - 14], 0, 0, 0, [3.2, 16, 3.2]), con, 18);
+    b.box(m4trs([cx + 40, 11.4, z - 14], 0, 0, 0, [4.2, 2.8, 4.2]), rgb(0x5e5c57, 0.05));
+    b.prism(m4trs([cx + 40, 12.8, z - 14], 0, 0, 0, [4.8, 1.4, 4.8]), rgb(0x34302c, 0.1));
+    b.box(m4trs([cx + 40, 11.6, z - 16.15], 0, 0, 0, [0.9, 0.7, 0.05]), LIT(4));
+    b.box(m4trs([cx + 40, 9.5, z - 6.5], 0, 0, 0, [1.4, 0.3, 13]), con2);
+    COLLIDERS.push({ x: cx, z: z + 3.5, hx: half, hz: 3.6, yaw: 0 });
+    COLLIDERS.push({ x: cx + 40, z: z - 14, r: 3.3 });
+  }
+  ridge(b, 1336, 62, [[-52, -43]]);
+  ridge(b, 1668, 85, [[31, 41]]);
+  ridge(b, 2206, 70, [[-61, -53], [47, 55]]);
+  ridge(b, 2342, 56, []);
+  // reeds frozen in near the shore of the bay
+  const r = rng(3);
+  for (let i = 0; i < 400; i++) {
+    const z = -20 + r() * 120, x = routeX(z) + (r() < 0.5 ? -1 : 1) * (8 + r() * 30);
+    const g = heightAt(x, z); if (g < -1.8 || g > -0.1) continue;
+    const h = 0.5 + r() * 0.9, lean = (r() - 0.5) * 0.4;
+    b.cyl(m4trs([x, -0.1, z], r() * TAU, lean, 0, [0.008, h, 0.008]), rgb(0x8a7a52), 3, 0.3, false);
+  }
+}
+
+// a pressure ridge: the ice heaved up into a line of broken slabs; hop it, or find where it is low
+function ridge(b, s, half, gaps) {
+  const p = routeAt(s), [rx, rz] = rightOf(p.dir);
+  const rr = rng(Math.floor(s) * 7 + 1);
+  const ice = rgb(0x6f9fbf, 0.95), ice2 = rgb(0x5d8cae, 0.95), ice3 = rgb(0x8db6cf, 0.9);
+  for (let u = -half; u < half; u += 0.55 + rr() * 0.45) {
+    if (gaps.some(([g0, g1]) => u > g0 && u < g1)) continue;
+    const wob = Math.sin(u * 0.07 + s) * 2.5;
+    const x = p.x + rx * u + Math.sin(p.dir) * wob, z = p.z + rz * u + Math.cos(p.dir) * wob;
+    if (heightAt(x, z) > -0.4) continue;
+    const edge = smooth(half, half - 12, Math.abs(u));
+    const h = (0.16 + rr() * 0.2) * (0.5 + 0.5 * edge);
+    for (let k = 0; k < 2; k++) {
+      const L = 0.45 + rr() * 0.55, tilt = (rr() - 0.5) * 1.1;
+      b.box(m4trs([x + (rr() - 0.5) * 0.3, h * 0.35, z + (rr() - 0.5) * 0.3], p.dir + (rr() - 0.5) * 1.4, tilt, (rr() - 0.5) * 0.7, [L, h * (k ? 0.7 : 1), 0.07 + rr() * 0.09]), [ice, ice2, ice3][Math.floor(rr() * 3)]);
+    }
+    COLLIDERS.push({ x, z, r: 0.34, top: h * 0.85 });
+  }
+}
+
+// ---- the forest on the shores ----
+function buildTrees() {
+  const b = new MB();
+  pine(b, 0, 0, 0, 1, rgb(0x1a2a20, 0.02));
+  const mesh = uploadMesh(b.build());
+  const inst = [];
+  const r = rng(11);
+  for (let i = 0; i < 26000 && inst.length < 7000 * 8; i++) {
+    const z = -400 + r() * 4300, x = valleyX(z) + (r() - 0.5) * 2400;
+    const g = heightAt(x, z);
+    if (g < 0.8 || g > 95) continue;
+    const dens = sat(fbm(x / 160, z / 160, 3) * 1.6 + 0.35);
+    if (r() > dens) continue;
+    const e = 2, gx = heightAt(x + e, z) - heightAt(x - e, z), gz = heightAt(x, z + e) - heightAt(x, z - e);
+    if (Math.hypot(gx, gz) / (2 * e) > 0.6) continue;
+    if (Math.hypot(x - CABIN.x, z - CABIN.z) < 9) continue;
+    const s = 2.2 + r() * 3.4;
+    inst.push(x, g - 0.3, z, s, r() * TAU, r(), 0, 0);
+  }
+  addInstances(mesh, new Float32Array(inst));
+  R.trees = mesh;
+}
+
+function buildScene() {
+  const under = new MB(), above = new MB();
+  fields(under);
+  village(under);
+  church(under);
+  tower(above);
+  onIce(above);
+  R.meshes.push({ mesh: uploadMesh(under.build()), snowy: false, under: true });
+  R.meshes.push({ mesh: uploadMesh(above.build()), snowy: true, under: false });
+  buildTrees();
+}
+
+// ---- 30-glsl.js ----
+// GLSL. Everything that lights a surface shares COMMON: the lantern, the moon, the sun at dawn, the sky, and the water
+// under the ice (light going down through it and the view coming back up is absorbed, red first).
+const COMMON = `
+uniform vec3 uCam; uniform float uTime; uniform vec2 uRes;
+uniform vec3 uLantern; uniform vec3 uLanternCol;
+uniform vec3 uMoonDir; uniform vec3 uMoonCol;
+uniform vec3 uSunDir; uniform vec3 uSunCol;
+uniform vec3 uSkyAmb; uniform vec3 uGroundAmb;
+uniform float uNight, uAurora, uDawn, uStorm, uDusk;
+uniform vec4 uWorld;
+uniform sampler2D uHeight; uniform sampler2D uIceTex;
+uniform float uReflect;
+uniform vec4 uFog;          // rgb colour, density
+uniform vec3 uBell;         // where the tower's light is (lit window)
+uniform float uUnderBoost;  // the lantern carries further under the ice than physics allows, so the village shows
+const vec3 SIGMA = vec3(0.105, 0.056, 0.052);
+const float APP = 0.78;     // under the ice things look nearer the surface than they are
+uint uhash(uvec2 v) { uint h = (v.x * 0x27d4eb2du) ^ (v.y * 0x165667b1u); h = (h ^ (h >> 15)) * 0x2c1b3c6du; h = (h ^ (h >> 12)) * 0x297a2d39u; return h ^ (h >> 15); }
+float h12(vec2 p) { return float(uhash(uvec2(ivec2(floor(p))))) * (1.0 / 4294967296.0); }
+vec2 h22(vec2 p) { uint h = uhash(uvec2(ivec2(floor(p)))); return vec2(float(h & 0xffffu), float(h >> 16)) * (1.0 / 65536.0); }
+float h31(vec3 p) { ivec3 i = ivec3(floor(p)); return float(uhash(uvec2(i.x * 7919 + i.z * 104729, i.y + i.z * 31))) * (1.0 / 4294967296.0); }
+float vnoise(vec2 p) { vec2 i = floor(p), f = p - i; vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h12(i), h12(i + vec2(1, 0)), u.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), u.x), u.y) * 2.0 - 1.0; }
+float fbm2(vec2 p) { return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03 + vec2(17.3, -9.1)); }
+float fbm3(vec2 p) { return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03 + vec2(17.3, -9.1)) + 0.125 * vnoise(p * 4.1 + vec2(-5.2, 11.7)); }
+float fbm4(vec2 p) { float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + vec2(17.3, -9.1); a *= 0.5; } return s; }
+// nearest and second-nearest feature point distance, and the nearest cell's hash
+vec3 cells(vec2 p) {
+  vec2 ip = floor(p), fp = p - ip; float d1 = 9.0, d2 = 9.0, id = 0.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec2 g = vec2(i, j), o = h22(ip + g); float d = length(g + o - fp);
+    if (d < d1) { d2 = d1; d1 = d; id = h12(ip + g + 7.0); } else if (d < d2) d2 = d;
+  }
+  return vec3(d1, d2, id);
+}
+vec2 wuv(vec2 xz) { return (xz - uWorld.xy) * uWorld.w; }
+float groundH(vec2 xz) { return texture(uHeight, wuv(xz)).r; }
+vec4 iceAt(vec2 xz) { return texture(uIceTex, wuv(xz)); }
+
+// ---- the sky ----
+vec3 starField(vec3 rd) {
+  vec3 col = vec3(0.0);
+  for (int k = 0; k < 3; k++) {
+    float sc = k == 0 ? 160.0 : k == 1 ? 330.0 : 620.0;
+    vec3 p = rd * sc, ip = floor(p), fp = p - ip;
+    float h = h31(ip);
+    float th = k == 0 ? 0.992 : k == 1 ? 0.982 : 0.972;
+    if (h > th) {
+      vec3 sp = vec3(h31(ip + 1.7), h31(ip + 3.1), h31(ip + 5.3)) * 0.6 + 0.2;
+      float d = length(fp - sp);
+      float b = pow((h - th) / (1.0 - th), 2.2) * (k == 0 ? 9.0 : k == 1 ? 3.0 : 1.4);
+      float tw = 0.75 + 0.25 * sin(uTime * (2.0 + h * 9.0) + h * 80.0);
+      float t = h31(ip + 9.9);
+      vec3 c = mix(vec3(1.0, 0.78, 0.55), vec3(0.62, 0.78, 1.0), t);
+      col += c * b * tw * smoothstep(0.16, 0.0, d);
+    }
+  }
+  // the milky way: a soft band of dust and faint stars
+  vec3 axis = normalize(vec3(0.35, 0.55, -0.76));
+  float band = exp(-pow(dot(rd, axis) * 3.4, 2.0));
+  float n = fbm4(vec2(atan(rd.z, rd.x) * 3.0, rd.y * 6.0) * 1.6);
+  col += vec3(0.10, 0.11, 0.15) * band * (0.35 + 0.65 * smoothstep(-0.3, 0.6, n)) * 0.18;
+  return col;
+}
+vec3 auroraSky(vec3 rd) {
+  if (uAurora < 0.01 || rd.y < 0.005) return vec3(0.0);
+  vec3 acc = vec3(0.0);
+  float t = uTime * 0.05;
+#ifdef FRAG
+  float jit = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+#else
+  float jit = 0.5;
+#endif
+  for (int i = 0; i < 26; i++) {
+    float fi = (float(i) + jit) / 26.0;
+    float h = 1.0 + fi * 0.9;
+    vec2 p = rd.xz / (rd.y + 0.06) * h * 0.55;
+    vec2 q = p + vec2(0.0, 3.6);
+    float w = fbm3(q * 0.42 + vec2(t, -t * 0.6)) * 2.2;
+    float r = q.x * 0.8 + q.y * 0.32 + w;
+    float band = abs(sin(r * 1.35 + 0.6 * sin(q.y * 0.7 + t * 2.0)));
+    float c = pow(1.0 - band, 9.0) * (0.55 + 0.45 * fbm2(q * 3.0 + t * 3.0));
+    c *= smoothstep(-2.5, 2.0, q.y) * smoothstep(14.0, 4.0, length(q));
+    vec3 col = mix(vec3(0.12, 1.0, 0.42), vec3(0.75, 0.18, 0.95), smoothstep(0.35, 1.0, fi));
+    col = mix(col, vec3(0.2, 0.9, 0.7), smoothstep(0.0, 0.15, fi) * (1.0 - smoothstep(0.15, 0.3, fi)) * 0.5);
+    acc += col * c * (1.0 - fi * 0.7);
+  }
+  return acc * uAurora * 0.075 * smoothstep(0.0, 0.18, rd.y);
+}
+// the sky without stars, moon or aurora: cheap, for fog
+vec3 skyBase(vec3 rd) {
+  float y = max(rd.y, 0.0);
+  vec3 night = mix(vec3(0.012, 0.016, 0.03), vec3(0.0016, 0.0024, 0.0065), smoothstep(-0.02, 0.5, y));
+  vec3 sd = normalize(vec3(-0.55, 0.0, -0.84));
+  float sa = max(dot(normalize(vec3(rd.x, 0.0, rd.z) + 1e-5), sd), 0.0);
+  vec3 dusk = mix(vec3(0.028, 0.034, 0.06), vec3(0.006, 0.01, 0.028), smoothstep(0.0, 0.5, y)) + vec3(0.42, 0.15, 0.05) * pow(sa, 4.0) * exp(-y * 10.0) * 0.7;
+  vec3 col = mix(night, dusk, uDusk);
+  vec3 dd = normalize(vec3(0.78, 0.0, -0.62));
+  float da = max(dot(normalize(vec3(rd.x, 0.0, rd.z) + 1e-5), dd), 0.0);
+  vec3 dawn = mix(vec3(0.34, 0.36, 0.42), vec3(0.11, 0.2, 0.42), smoothstep(0.0, 0.7, y)) + vec3(1.0, 0.45, 0.16) * pow(da, 4.0) * exp(-y * 6.0) * 1.3;
+  col = mix(col, dawn, uDawn);
+  col += vec3(0.004, 0.014, 0.008) * uAurora * (1.0 - uStorm);
+  col = mix(col, mix(vec3(0.03, 0.035, 0.042), vec3(0.012, 0.014, 0.018), smoothstep(-0.1, 0.5, y)), uStorm);
+  return col;
+}
+vec3 skyColor(vec3 rd) {
+  float y = rd.y;
+  vec3 night = mix(vec3(0.012, 0.016, 0.03), vec3(0.0016, 0.0024, 0.0065), smoothstep(-0.02, 0.5, y));
+  // dusk: the last of the sun behind you, to the south-west
+  vec3 sd = normalize(vec3(-0.55, 0.0, -0.84));
+  float sa = max(dot(normalize(vec3(rd.x, 0.0, rd.z)), sd), 0.0);
+  vec3 dusk = mix(vec3(0.028, 0.034, 0.06), vec3(0.006, 0.01, 0.028), smoothstep(0.0, 0.5, y));
+  dusk += vec3(0.42, 0.15, 0.05) * pow(sa, 4.0) * exp(-max(y, 0.0) * 10.0) * 0.7;
+  dusk += vec3(0.07, 0.04, 0.06) * pow(sa, 1.5) * exp(-max(y, 0.0) * 4.0) * 0.4;
+  vec3 col = mix(night, dusk, uDusk);
+  // dawn: east-south-east
+  vec3 dd = normalize(vec3(0.78, 0.0, -0.62));
+  float da = max(dot(normalize(vec3(rd.x, 0.0, rd.z)), dd), 0.0);
+  vec3 dawn = mix(vec3(0.34, 0.36, 0.42), vec3(0.11, 0.2, 0.42), smoothstep(0.0, 0.7, y));
+  dawn += vec3(1.0, 0.45, 0.16) * pow(da, 4.0) * exp(-max(y, 0.0) * 6.0) * 1.3;
+  dawn += vec3(0.9, 0.55, 0.35) * pow(max(dot(rd, uSunDir), 0.0), 600.0) * 30.0 * uDawn;
+  col = mix(col, dawn, uDawn);
+  float starVis = (1.0 - uDusk * 0.85) * (1.0 - uDawn) * (1.0 - uStorm);
+  col += starField(rd) * starVis * smoothstep(-0.02, 0.12, y);
+  // the moon
+  float md = dot(rd, uMoonDir);
+  float moonVis = (1.0 - uStorm) * (1.0 - uDawn * 0.7);
+  col += vec3(0.95, 0.95, 1.0) * smoothstep(0.99994, 0.99997, md) * 3.5 * moonVis;
+  col += vec3(0.12, 0.14, 0.2) * pow(max(md, 0.0), 300.0) * 0.35 * moonVis + vec3(0.02, 0.024, 0.036) * pow(max(md, 0.0), 16.0) * moonVis;
+  col += auroraSky(rd) * (1.0 - uStorm);
+  // the squall: low grey cloud full of snow
+  vec3 storm = mix(vec3(0.03, 0.035, 0.042), vec3(0.012, 0.014, 0.018), smoothstep(-0.1, 0.5, y));
+  col = mix(col, storm, uStorm);
+  if (y < 0.0) col = mix(col, vec3(0.002, 0.003, 0.005), smoothstep(0.0, -0.2, y));
+  return col;
+}
+
+// ---- lighting ----
+// light from the lantern reaching p (true position), through the ice and water if p is under it
+vec3 lanternAt(vec3 p, vec3 n) {
+  vec3 L = uLantern - p; float d2 = dot(L, L), d = sqrt(d2); vec3 l = L / d;
+  float ndl = max(dot(n, l), 0.0) * 0.85 + 0.15 * max(dot(n, l) * 0.5 + 0.5, 0.0);
+  float att = 1.0 / (d2 + 0.6) * smoothstep(46.0, 14.0, d);
+  vec3 T = vec3(1.0);
+  // under the ice the light falls off more gently than it should, so the village shows round you
+  if (p.y < 0.0) { float fw = (-p.y) / max(uLantern.y - p.y, 0.01); T = exp(-SIGMA * d * fw) * 0.9 * uUnderBoost; att = 1.0 / (d2 * 0.55 + 3.0) * smoothstep(52.0, 16.0, d); }
+  return uLanternCol * att * ndl * T;
+}
+vec3 skyLight(vec3 p, vec3 n) {
+  vec3 amb = mix(uGroundAmb, uSkyAmb, n.y * 0.5 + 0.5);
+  float ml = max(dot(n, uMoonDir), 0.0), sl = max(dot(n, uSunDir), 0.0);
+  vec3 c = amb + uMoonCol * ml + uSunCol * sl;
+  if (p.y < 0.0) {
+    float dep = -p.y;
+    c = uSkyAmb * (0.8 + 2.6 * uDawn) * exp(-SIGMA * dep * 1.5) * (0.6 + 0.4 * n.y)
+      + uMoonCol * ml * exp(-SIGMA * dep / max(uMoonDir.y, 0.35)) * 0.9
+      + uSunCol * sl * exp(-SIGMA * dep / max(uSunDir.y, 0.35)) * 0.9;
+  }
+  return c;
+}
+// the view through the water: absorb what is behind, add a little scattered light
+vec3 underwaterView(vec3 col, vec3 p) {
+  if (p.y >= 0.0 || uCam.y <= 0.0) return col;
+  float fw = (-p.y) / max(uCam.y - p.y, 0.01);
+  float Lw = length(uCam - p) * fw;
+  vec3 T = exp(-SIGMA * Lw);
+  vec3 mid = mix(p, uCam, fw * 0.5);
+  vec3 scat = vec3(0.0025, 0.007, 0.009) * (min(uSkyAmb.b, 0.02) * 40.0 + 0.15) + (uSkyAmb + uSunCol * 0.25) * vec3(0.05, 0.11, 0.12) * uDawn;
+  vec3 ld = uLantern - mid; float ldd = dot(ld, ld);
+  scat += uLanternCol * vec3(0.03, 0.06, 0.06) / (ldd + 4.0) * 0.5;
+  return col * T + scat * (1.0 - T);
+}
+vec3 airFog(vec3 col, vec3 p, vec3 rd) {
+  float d = length(p - uCam);
+  float f = 1.0 - exp(-d * uFog.w);
+  vec3 fc = uFog.rgb + skyBase(normalize(vec3(rd.x, max(rd.y, 0.02), rd.z))) * 0.35;
+  return mix(col, fc, f);
+}
+`;
+
+const SKY_VS = `
+out vec2 vUv;
+void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 1.0, 1.0); }`;
+const SKY_FS = COMMON + `
+in vec2 vUv; uniform mat4 uInvVP; out vec4 o;
+void main() {
+  vec4 a = uInvVP * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
+  vec3 rd = normalize(a.xyz / a.w - uCam);
+  o = vec4(skyColor(rd), 1.0);
+}`;
+
+// The ground: one height map for the lake bed and the shores. `uLevel` grids are nested, the coarser ones skip what a
+// finer one covers.
+const GROUND_VS = COMMON + `
+in vec3 aPos;
+uniform mat4 uVP; uniform vec3 uGrid; uniform float uDetail;
+out vec3 vP;
+void main() {
+  vec2 xz = uGrid.xy + aPos.xz * uGrid.z;
+  float h = groundH(xz);
+  if (uDetail > 0.0 && h < 0.0) h += (fbm3(xz * 0.35) * 0.22 + vnoise(xz * 1.7) * 0.05) * uDetail;
+  vP = vec3(xz.x, h, xz.y);
+  vec3 q = vP; if (q.y < 0.0) q.y *= APP;
+  gl_Position = uVP * vec4(q, 1.0);
+}`;
+const GROUND_FS = COMMON + `
+in vec3 vP; uniform vec4 uHole; uniform float uDetail; out vec4 o;
+void main() {
+  vec3 p = vP;
+  if (uReflect > 0.5 && p.y < -0.02) discard;
+  if (p.x > uHole.x && p.x < uHole.z && p.z > uHole.y && p.z < uHole.w) discard;
+  float e = 0.6;
+  float hx = groundH(p.xz + vec2(e, 0.0)) - groundH(p.xz - vec2(e, 0.0));
+  float hz = groundH(p.xz + vec2(0.0, e)) - groundH(p.xz - vec2(0.0, e));
+  vec3 n = normalize(vec3(-hx, 2.0 * e, -hz));
+  vec3 rd = normalize(p - uCam);
+  vec3 col;
+  if (p.y < 0.0) {
+    // the bed: silt over everything, stones and gravel where water ran, dead weed
+    vec2 q = p.xz;
+    float near = smoothstep(70.0, 40.0, length(p - uCam));
+    vec3 c = near > 0.0 ? cells(q * 1.3) : vec3(0.5, 0.8, 0.5);
+    float stones = smoothstep(0.36, 0.16, c.x) * step(0.45, c.z) * smoothstep(0.35, 0.75, fbm2(q * 0.06)) * near;
+    float rip = sin(q.x * 3.1 + fbm2(q * 0.4) * 5.0) * 0.5 + 0.5;
+    vec3 silt = vec3(0.33, 0.28, 0.21) * (0.75 + 0.35 * fbm3(q * 0.6));
+    vec3 alb = mix(silt, vec3(0.44, 0.41, 0.37) * (0.6 + 0.7 * c.z) * smoothstep(0.0, 0.25, c.y - c.x + 0.05), stones);
+    alb *= 0.9 + 0.12 * rip * smoothstep(-3.0, -1.0, p.y);
+    float weed = smoothstep(0.25, 0.65, fbm3(q * 0.21 + 4.0)) * smoothstep(-7.5, -3.0, p.y);
+    alb = mix(alb, vec3(0.12, 0.15, 0.07), weed * 0.55);
+    // fallen leaves and twigs from the old trees, sunk and dark
+    if (near > 0.0) {
+      vec3 lc = cells(q * 4.0 + 13.0);
+      alb = mix(alb, vec3(0.16, 0.09, 0.05) * (0.7 + 0.6 * lc.z), smoothstep(0.22, 0.12, lc.x) * step(0.55, lc.z) * 0.8 * near);
+    }
+    float twig = smoothstep(0.035, 0.0, abs(fract(dot(q, vec2(0.83, 0.55)) * 0.7 + h12(floor(q * 0.5)) * 7.0) - 0.5) * 0.3) * step(0.86, h12(floor(q * 0.5) + 3.0));
+    alb = mix(alb, vec3(0.12, 0.08, 0.05), twig * 0.7);
+    n = normalize(n + vec3(c.x - 0.3, 0.0, c.y - 0.5) * stones * 0.6 * uDetail);
+    col = alb * (lanternAt(p, n) + skyLight(p, n));
+    col = underwaterView(col, p);
+  } else {
+    // the shore: snow over everything; rock where it is steep
+    float steep = 1.0 - n.y;
+    vec3 snow = vec3(0.82, 0.86, 0.92) * (0.92 + 0.08 * vnoise(p.xz * 2.0));
+    vec3 rock = vec3(0.16, 0.15, 0.14) * (0.7 + 0.5 * vnoise(p.xz * 0.7));
+    vec3 alb = mix(snow, rock, smoothstep(0.32, 0.55, steep + 0.1 * vnoise(p.xz * 0.3)));
+    vec3 li = lanternAt(p, n) + skyLight(p, n);
+    col = alb * li;
+    // sparkle in the snow near the light
+    float sp = pow(h12(floor(p.xz * 40.0)), 60.0) * 6.0 * smoothstep(45.0, 12.0, length(p - uCam));
+    col += sp * (length(lanternAt(p, vec3(0, 1, 0))) * 0.6 + uMoonCol * 0.6) * smoothstep(0.35, 0.0, steep);
+    col = airFog(col, p, rd);
+  }
+  o = vec4(col, 1.0);
+}`;
+
+// Things: buildings, the tower, huts, markers, the skater. Static batches use uModel = identity.
+const OBJ_VS = COMMON + `
+in vec3 aPos; in vec3 aNrm; in vec4 aCol;
+uniform mat4 uVP; uniform mat4 uModel;
+out vec3 vP; out vec3 vN; out vec4 vC;
+void main() {
+  vec4 w = uModel * vec4(aPos, 1.0);
+  vP = w.xyz; vN = normalize(mat3(uModel) * aNrm); vC = aCol;
+  vec3 q = vP; if (q.y < 0.0) q.y *= APP;
+  gl_Position = uVP * vec4(q, 1.0);
+}`;
+const OBJ_FS = COMMON + `
+in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; out vec4 o;
+void main() {
+  vec3 p = vP;
+  if (uReflect > 0.5 && p.y < -0.01) discard;
+  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
+  vec3 alb = vC.rgb; float m = vC.a;
+  vec3 rd = normalize(p - uCam);
+  vec3 col;
+  if (m < -0.001) {
+    col = alb * (-m);
+  } else {
+    // stone shows its courses, under the ice and above it
+    if (m < 0.06 && abs(n.y) < 0.5) {
+      float row = floor(p.y / 0.27);
+      float u = (abs(n.x) > abs(n.z) ? p.z : p.x) / 0.52 + row * 0.5 + h12(vec2(row, 3.0)) * 0.3;
+      float mort = max(smoothstep(0.08, 0.0, abs(fract(p.y / 0.27) - 0.5) - 0.42), smoothstep(0.06, 0.0, abs(fract(u) - 0.5) - 0.44));
+      alb *= (0.75 + 0.45 * h12(vec2(floor(u), row))) * (1.0 - mort * 0.55);
+    }
+    if (p.y < 0.0) {
+      // drowned: silt settles on everything that faces up, weed darkens the rest
+      float up = smoothstep(0.35, 0.85, n.y);
+      alb = mix(alb, vec3(0.31, 0.27, 0.2), up * 0.7 + 0.08);
+      alb = mix(alb, alb * vec3(0.8, 0.9, 0.72), 0.3);
+      alb *= 0.85 + 0.3 * vnoise(p.xz * 3.0 + p.y);
+    } else if (uSnowy > 0.5) {
+      float cap = smoothstep(0.55, 0.9, n.y + 0.15 * vnoise(p.xz * 5.0));
+      alb = mix(alb, vec3(0.84, 0.88, 0.94), cap);
+    }
+    vec3 li = lanternAt(p, n) + skyLight(p, n) * uBright;
+    col = alb * li;
+    if (m > 0.0 && p.y >= 0.0) {
+      vec3 l = normalize(uLantern - p); vec3 h = normalize(l - rd);
+      float d2 = dot(uLantern - p, uLantern - p);
+      col += uLanternCol * pow(max(dot(n, h), 0.0), 20.0 + 200.0 * m) * m * 2.0 / (d2 + 0.6);
+      vec3 hm = normalize(uMoonDir - rd);
+      col += uMoonCol * pow(max(dot(n, hm), 0.0), 40.0 + 200.0 * m) * m * 0.6;
+    }
+  }
+  col = p.y < 0.0 ? underwaterView(col, p) : airFog(col, p, rd);
+  o = vec4(col, 1.0);
+}`;
+// trees on the shore, instanced: aI0 = x, y, z, scale; aI1 = yaw, tint
+const TREE_VS = COMMON + `
+in vec3 aPos; in vec3 aNrm; in vec4 aCol; in vec4 aI0; in vec4 aI1;
+uniform mat4 uVP;
+out vec3 vP; out vec3 vN; out vec4 vC;
+void main() {
+  float c = cos(aI1.x), s = sin(aI1.x);
+  vec3 lp = aPos * aI0.w;
+  vec3 w = vec3(c * lp.x + s * lp.z, lp.y, -s * lp.x + c * lp.z) + aI0.xyz;
+  vP = w; vN = vec3(c * aNrm.x + s * aNrm.z, aNrm.y, -s * aNrm.x + c * aNrm.z);
+  vC = vec4(aCol.rgb * (0.8 + 0.4 * aI1.y), aCol.a);
+  gl_Position = uVP * vec4(w, 1.0);
+}`;
+
+// The ice. It replaces what is under it: the view down into the water (refracted), the sky and shore in it (reflected,
+// strongest at a glancing look), white ice and snow lying on it, bubbles frozen in it.
+const ICE_VS = `
+in vec3 aPos; uniform mat4 uVP; uniform vec4 uQuad; out vec3 vP;
+void main() { vec2 xz = mix(uQuad.xy, uQuad.zw, aPos.xz); vP = vec3(xz.x, 0.0, xz.y); gl_Position = uVP * vec4(vP, 1.0); }`;
+const ICE_FS = COMMON + `
+in vec3 vP; uniform sampler2D uUnder; uniform sampler2D uRefl; uniform vec4 uSag; uniform vec4 uHoles[8];
+uniform float uIceVis;
+out vec4 o;
+vec3 bubbleLayer(vec3 p, vec3 rd, float depth, float scale, float dens, float seed) {
+  // where the view ray, bent into the ice, reaches this depth
+  vec3 rr = refract(rd, vec3(0, 1, 0), 1.0 / 1.31);
+  vec2 q = p.xz + rr.xz / max(-rr.y, 0.2) * depth;
+  vec3 c = cells(q * scale + seed);
+  float on = step(1.0 - dens, c.z);
+  float r = mix(0.035, 0.16, pow(fract(c.z * 13.7), 3.0));
+  // a bubble is a bright speck with a softer skirt; far away they fade rather than shimmer
+  float px = fwidth(q.x * scale) * 1.5;
+  float core = smoothstep(r + px, r * 0.3, c.x) * on;
+  vec3 qp = vec3(q.x, -depth, q.y);
+  vec3 li = lanternAt(qp, vec3(0, 1, 0)) * 1.2 + uMoonCol * 0.35 + uSkyAmb * 2.0 + uSunCol * 0.3;
+  return li * core * 0.35 * smoothstep(0.5, 0.12, px);
+}
+void main() {
+  vec3 p = vP;
+  vec4 id = iceAt(p.xz);
+  if (id.a < 0.001 && id.r > 0.99 && id.g > 0.99) discard;          // land
+  float thick = id.r * 255.0 / 6.0, white = id.g, snow = id.b, cur = id.a;
+  vec3 rd = normalize(p - uCam);
+  // open water: fishing holes and where the ice has gone through
+  float hole = 0.0;
+  for (int i = 0; i < 8; i++) { vec4 hh = uHoles[i]; if (hh.z <= 0.0) continue; float d = length(p.xz - hh.xy); hole = max(hole, smoothstep(hh.z, hh.z * 0.82, d + vnoise(p.xz * 6.0 + hh.w) * hh.z * 0.12)); }
+  // the surface: wind-frozen ripples, and the sag round you on thin ice
+  vec2 g = vec2(fbm2(p.xz * 0.9), fbm2(p.xz * 0.9 + 31.0)) * 0.012 + vec2(vnoise(p.xz * 7.0), vnoise(p.xz * 7.0 + 5.0)) * 0.003;
+  vec2 sd = p.xz - uSag.xy; float sr = length(sd);
+  if (uSag.z > 0.0) { float wv = sin(sr * 1.6 - uSag.w) * exp(-sr * 0.12) * uSag.z; g += (sd / max(sr, 0.01)) * wv * 0.06; }
+  vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
+  float cosT = max(dot(-rd, n), 0.0);
+  float F = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float dist = length(p - uCam);
+  vec2 dis = n.xz * (0.9 / (1.0 + dist * 0.08));
+  vec3 refl = texture(uRefl, vec2(uv.x, uv.y) + dis * vec2(0.02, 0.04)).rgb;
+  vec3 under = texture(uUnder, uv + dis * vec2(0.012, 0.012)).rgb;
+  // ice body
+  vec3 tint = mix(vec3(0.9, 0.96, 0.98), vec3(0.75, 0.84, 0.9), white);
+  vec3 li = lanternAt(p + vec3(0, 0.01, 0), vec3(0, 1, 0)) + skyLight(p, vec3(0, 1, 0));
+  vec3 whiteCol = vec3(0.55, 0.62, 0.68) * li * (0.85 + 0.15 * fbm2(p.xz * 3.0));
+  float op = white * 0.72;
+  // bubbles: denser in white ice and thick ice
+  vec3 bub = vec3(0.0);
+  if (dist < 42.0) {
+    float bd = mix(0.05, 0.4, white) * smoothstep(5.0, 14.0, thick) * (0.4 + 0.6 * smoothstep(-0.2, 0.5, fbm2(p.xz * 0.12)));
+    if (bd > 0.01) bub = bubbleLayer(p, rd, 0.02, 14.0, bd, 1.0) + bubbleLayer(p, rd, 0.07, 9.0, bd * 0.8, 9.0) + bubbleLayer(p, rd, 0.14, 6.0, bd * 0.5, 23.0);
+    // here and there stacks of bigger flat bubbles, where the old fields rot under the ice
+    float meth = smoothstep(0.6, 0.85, fbm2(p.xz * 0.045 + 3.0)) * (1.0 - white);
+    if (meth > 0.0) bub += (bubbleLayer(p, rd, 0.05, 2.6, 0.5 * meth, 40.0) + bubbleLayer(p, rd, 0.11, 2.4, 0.45 * meth, 41.0) + bubbleLayer(p, rd, 0.17, 2.2, 0.4 * meth, 42.0)) * 1.5;
+    bub *= smoothstep(42.0, 30.0, dist);
+  }
+  // thin ice is black and wet; moving water under it drags grey slush along; old hair cracks show in it
+  float thin = 1.0 - smoothstep(3.5, 10.0, thick);
+  vec3 col = under * tint * (1.0 - op) + whiteCol * op + bub * (1.0 - thin);
+  col = mix(col, col * 0.18, thin * 0.85);
+  float streak = fbm3(vec2(p.x * 0.9, p.z * 0.12) + vec2(0.0, uTime * 0.02));
+  float slush = cur * smoothstep(0.05, 0.55, streak) * (0.6 + 0.4 * vnoise(p.xz * 3.0));
+  col = mix(col, vec3(0.26, 0.29, 0.32) * li, slush * 0.45 * (1.0 - hole));
+  if (thin > 0.01 && dist < 60.0) {
+    vec2 hq = p.xz * 0.9 + vec2(fbm2(p.xz * 0.6), fbm2(p.xz * 0.6 + 9.0)) * 1.4;
+    vec3 hc = cells(hq + 71.0);
+    float hair = smoothstep(0.03, 0.0, hc.y - hc.x) * thin * smoothstep(0.45, 0.85, vnoise(p.xz * 0.35 + 3.0)) * step(0.35, h12(floor(hq + 71.0) * 1.7));
+    col += hair * (li * 0.8 + uMoonCol * 0.6 + uSkyAmb * 4.0) * smoothstep(60.0, 40.0, dist);
+  }
+  F = mix(F, min(1.0, F * 1.6 + 0.02), thin);
+  // snow lying on the ice
+  float sn = smoothstep(0.25, 0.75, snow + 0.25 * fbm3(p.xz * 1.1));
+  vec3 snowCol = vec3(0.84, 0.88, 0.93) * li;
+  float spark = pow(h12(floor(p.xz * 55.0)), 70.0) * 9.0 * smoothstep(40.0, 10.0, dist);
+  snowCol += spark * (length(lanternAt(p, vec3(0, 1, 0))) * 0.5 + uMoonCol * 0.7 + uSunCol * 0.4);
+  // the reflection, strongest at a glance
+  float Fs = F * (1.0 - sn) * (1.0 - op * 0.7);
+  col = mix(col, refl, Fs);
+  col = mix(col, snowCol, sn);
+  // holes: black water with a rim of slush
+  vec3 water = under * vec3(0.3, 0.42, 0.45) * 0.4 + refl * 0.1;
+  col = mix(col, water, hole);
+  col = airFog(col, p, rd);
+  o = vec4(col, 1.0);
+}`;
+
+// Marks in and on the ice: blade scratches, cracks. Additive. aCol.rgb is brightness and kind.
+const MARK_VS = COMMON + `
+in vec3 aPos; in vec4 aCol; uniform mat4 uVP; out vec3 vP; out vec4 vC;
+void main() { vP = aPos; vC = aCol; vec3 q = aPos; if (q.y < 0.0) q.y *= APP; gl_Position = uVP * vec4(q, 1.0); }`;
+const MARK_FS = COMMON + `
+in vec3 vP; in vec4 vC; out vec4 o;
+void main() {
+  vec3 L = uLantern - vP; float d2 = dot(L, L);
+  float lit = 1.0 / (d2 * 0.35 + 1.0) * smoothstep(40.0, 8.0, sqrt(d2));
+  vec3 c = vC.rgb * (uLanternCol * lit * 0.6 + uMoonCol * 1.4 + uSkyAmb * 6.0 + uSunCol * 0.8);
+  c += vC.rgb * vC.a;        // a mark can glow on its own (fresh cracks)
+  vec3 rd = normalize(vP - uCam);
+  float d = length(vP - uCam);
+  c *= exp(-d * uFog.w * 1.5);
+  o = vec4(c, 1.0);
+}`;
+
+// Things lying on the ice: open water in a lead (alpha 1), slush (alpha < 1, lit), glowing lines (alpha < 0, added)
+const DECAL_VS = COMMON + `
+in vec3 aPos; in vec4 aCol; uniform mat4 uVP; out vec3 vP; out vec4 vC;
+void main() { vP = aPos; vC = aCol; gl_Position = uVP * vec4(aPos, 1.0); }`;
+const DECAL_FS = COMMON + `
+in vec3 vP; in vec4 vC; uniform sampler2D uRefl; out vec4 o;
+void main() {
+  if (vC.a < 0.0) { o = vec4(vC.rgb, 0.0); return; }
+  vec3 rd = normalize(vP - uCam);
+  vec3 c;
+  if (vC.a > 0.99) {
+    float F = 0.02 + 0.98 * pow(1.0 - max(-rd.y, 0.0), 5.0);
+    vec2 uv = gl_FragCoord.xy / uRes;
+    vec2 w = vec2(vnoise(vP.xz * 2.0 + uTime * 0.3), vnoise(vP.xz * 2.0 - uTime * 0.25)) * 0.01;
+    c = texture(uRefl, uv + w).rgb * (F * 0.9 + 0.05) + vec3(0.0004, 0.0008, 0.001);
+  } else {
+    vec3 li = lanternAt(vP + vec3(0, 0.02, 0), vec3(0, 1, 0)) + skyLight(vP, vec3(0, 1, 0));
+    c = vC.rgb * li * (0.8 + 0.4 * vnoise(vP.xz * 9.0));
+  }
+  c = airFog(c, vP, rd);
+  o = vec4(c * vC.a, vC.a);
+}`;
+
+// Particles and glows: camera-facing quads built on the CPU. aCol = colour * intensity, alpha = softness kind.
+const SPRITE_VS = `
+in vec3 aPos; in vec4 aCol; uniform mat4 uVP; out vec4 vC; out vec2 vQ;
+void main() { vC = aCol; vQ = vec2(float((gl_VertexID % 6 == 1) || (gl_VertexID % 6 == 2) || (gl_VertexID % 6 == 4)), float((gl_VertexID % 6 == 2) || (gl_VertexID % 6 == 4) || (gl_VertexID % 6 == 5))) * 2.0 - 1.0;
+  vec3 q = aPos; if (q.y < 0.0) q.y *= 0.78; gl_Position = uVP * vec4(q, 1.0); }`;
+const SPRITE_FS = `
+in vec4 vC; in vec2 vQ; out vec4 o;
+void main() { float r = length(vQ); float a = vC.a > 2.5 ? smoothstep(1.0, 0.0, abs(vQ.y)) * smoothstep(1.0, 0.3, abs(vQ.x)) : vC.a > 1.5 ? exp(-r * r * 3.0) * (1.0 - smoothstep(0.8, 1.0, r)) : smoothstep(1.0, 0.2, r); o = vec4(vC.rgb * a, 1.0); }`;
+
+// ---- post ----
+const POST_VS = SKY_VS;
+const DOWN_FS = `
+in vec2 vUv; uniform sampler2D uSrc; uniform vec2 uTexel; uniform float uFirst; out vec4 o;
+vec3 s(vec2 uv) { vec3 c = texture(uSrc, uv).rgb; return uFirst > 0.5 ? c / (1.0 + max(max(c.r, c.g), c.b) * 0.1) : c; }
+void main() {
+  vec2 t = uTexel;
+  vec3 a = s(vUv + t * vec2(-2, 2)), b = s(vUv + t * vec2(0, 2)), c = s(vUv + t * vec2(2, 2));
+  vec3 d = s(vUv + t * vec2(-2, 0)), e = s(vUv), f = s(vUv + t * vec2(2, 0));
+  vec3 g = s(vUv + t * vec2(-2, -2)), h = s(vUv + t * vec2(0, -2)), i = s(vUv + t * vec2(2, -2));
+  vec3 j = s(vUv + t * vec2(-1, 1)), k = s(vUv + t * vec2(1, 1)), l = s(vUv + t * vec2(-1, -1)), m = s(vUv + t * vec2(1, -1));
+  vec3 r = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + k + l + m) * 0.125;
+  o = vec4(r, 1.0);
+}`;
+const UP_FS = `
+in vec2 vUv; uniform sampler2D uSrc; uniform vec2 uTexel; uniform float uRadius; out vec4 o;
+void main() {
+  vec2 t = uTexel * uRadius;
+  vec3 r = texture(uSrc, vUv).rgb * 4.0;
+  r += (texture(uSrc, vUv + vec2(-t.x, 0)).rgb + texture(uSrc, vUv + vec2(t.x, 0)).rgb + texture(uSrc, vUv + vec2(0, -t.y)).rgb + texture(uSrc, vUv + vec2(0, t.y)).rgb) * 2.0;
+  r += texture(uSrc, vUv + vec2(-t.x, -t.y)).rgb + texture(uSrc, vUv + vec2(t.x, -t.y)).rgb + texture(uSrc, vUv + vec2(-t.x, t.y)).rgb + texture(uSrc, vUv + vec2(t.x, t.y)).rgb;
+  o = vec4(r / 16.0, 1.0);
+}`;
+const FINAL_FS = `
+in vec2 vUv; uniform sampler2D uSrc; uniform sampler2D uBloom; uniform float uExposure; uniform float uBloomK; uniform float uTime;
+uniform float uFade; uniform float uUnderwater; uniform vec2 uRes; out vec4 o;
+vec3 aces(vec3 x) { const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14; return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0); }
+void main() {
+  vec2 uv = vUv;
+  if (uUnderwater > 0.0) uv += vec2(sin(uv.y * 18.0 + uTime * 2.0), cos(uv.x * 14.0 + uTime * 1.7)) * 0.004 * uUnderwater;
+  vec3 c = texture(uSrc, uv).rgb;
+  vec3 b = texture(uBloom, uv).rgb;
+  c = mix(c, b, uBloomK);
+  c *= uExposure;
+  if (uUnderwater > 0.0) c = mix(c, vec3(dot(c, vec3(0.2, 0.5, 0.3))) * vec3(0.3, 0.8, 0.9), uUnderwater * 0.7);
+  c = aces(c);
+  vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.55;
+  c = pow(c, vec3(1.0 / 2.2));
+  float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime * 7.13) * 91.0, vec2(12.9898, 78.233))) * 43758.5453);
+  c += (n - 0.5) / 255.0 * 1.5;
+  c *= 1.0 - uFade;
+  o = vec4(c, 1.0);
+}`;
+
+// ---- 40-render.js ----
+// The frame: the mirror image first (what the ice reflects), then the world, then the ice over the water, then marks,
+// sprites, bloom and tone.
+const R = {
+  P: {}, T: {}, W: 0, H: 0, scale: 1,
+  grids: [], iceQuad: null, cracks: null, scratches: null, sprites: null,
+  meshes: [],          // static world batches: {mesh, snowy}
+  trees: null,
+  U: {},               // the shared lighting state, set by the game each frame
+  holes: new Float32Array(32),
+  stats: { draws: 0 },
+};
+
+function gridMesh(N) {
+  const v = new Float32Array((N + 1) * (N + 1) * 10), ix = new Uint32Array(N * N * 6);
+  let k = 0;
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) { v[k] = i; v[k + 2] = j; v[k + 4] = 1; k += 10; }
+  k = 0;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
+    ix[k++] = a; ix[k++] = c; ix[k++] = b; ix[k++] = b; ix[k++] = c; ix[k++] = d;
+  }
+  return uploadMesh({ verts: v, index: ix, bounds: [[0, 0, 0], [N, 0, N]] });
+}
+
+function renderInit() {
+  R.P.sky = makeProgram('sky', SKY_VS, SKY_FS);
+  R.P.ground = makeProgram('ground', GROUND_VS, GROUND_FS);
+  R.P.obj = makeProgram('obj', OBJ_VS, OBJ_FS);
+  R.P.tree = makeProgram('tree', TREE_VS, OBJ_FS);
+  R.P.ice = makeProgram('ice', ICE_VS, ICE_FS);
+  R.P.mark = makeProgram('mark', MARK_VS, MARK_FS);
+  R.P.sprite = makeProgram('sprite', SPRITE_VS, SPRITE_FS);
+  R.P.decal = makeProgram('decal', DECAL_VS, DECAL_FS);
+  R.P.down = makeProgram('down', POST_VS, DOWN_FS);
+  R.P.up = makeProgram('up', POST_VS, UP_FS);
+  R.P.final = makeProgram('final', POST_VS, FINAL_FS);
+
+  // the world's data as textures
+  const N = WORLD.res;
+  R.heightTex = texture2D(N, N, { internal: GLX.floatLinear ? gl.R32F : gl.R16F, format: gl.RED, type: gl.FLOAT, data: WORLD.height });
+  R.iceTex = texture2D(WORLD.iceRes, WORLD.iceRes, { internal: gl.RGBA8, format: gl.RGBA, type: gl.UNSIGNED_BYTE, data: WORLD.ice });
+
+  R.grids = [
+    { mesh: gridMesh(256), step: 0.5, n: 256, detail: 1 },
+    { mesh: gridMesh(256), step: 3, n: 256, detail: 0.4 },
+    { mesh: gridMesh(384), step: 16, n: 384, detail: 0, fixed: true },
+  ];
+  R.iceQuad = gridMesh(1);
+  R.cracks = makeStream(240000);
+  R.scratches = makeStream(900000);
+  R.sprites = makeStream(60000);
+  R.decals = makeStream(12000);
+  R.pathS = makeStream(60000);
+}
+
+function resizeTargets(w, h) {
+  if (R.W === w && R.H === h) return;
+  R.W = w; R.H = h;
+  for (const k in R.T) { if (Array.isArray(R.T[k])) R.T[k].forEach(freeTarget); else freeTarget(R.T[k]); }
+  const hf = { internal: gl.RGBA16F, format: gl.RGBA, type: gl.HALF_FLOAT };
+  const samples = Math.min(4, GLX.maxSamples || 4);
+  R.T.main = makeTarget(w, h, { msaa: samples, colors: [hf] });
+  R.T.under = makeTarget(w, h, { colors: [hf], depth: false });
+  R.T.res = makeTarget(w, h, { colors: [hf], depth: false });
+  R.T.refl = makeTarget(Math.max(2, w >> 1), Math.max(2, h >> 1), { colors: [hf] });
+  R.T.bloom = [];
+  let bw = w >> 1, bh = h >> 1;
+  for (let i = 0; i < 6 && bw > 4 && bh > 4; i++) { R.T.bloom.push(makeTarget(bw, bh, { colors: [hf], depth: false })); bw >>= 1; bh >>= 1; }
+}
+
+// shared uniforms for whatever program is bound
+function common(extra) {
+  const U = R.U;
+  set({
+    uCam: U.cam, uTime: U.time, uRes: U.res, uLantern: U.lantern, uLanternCol: U.lanternCol,
+    uMoonDir: U.moonDir, uMoonCol: U.moonCol, uSunDir: U.sunDir, uSunCol: U.sunCol, uSkyAmb: U.skyAmb, uGroundAmb: U.groundAmb,
+    uNight: U.night, uAurora: U.aurora, uDawn: U.dawn, uStorm: U.storm, uDusk: U.dusk,
+    uWorld: U.world, uHeight: R.heightTex, uIceTex: R.iceTex, uReflect: U.reflect, uFog: U.fog, uUnderBoost: U.underBoost,
+    uBell: U.bell,
+  });
+  if (extra) set(extra);
+}
+
+function drawGround(vp, reflect) {
+  use(R.P.ground);
+  common({ uVP: vp });
+  const cx = R.U.cam[0], cz = R.U.cam[2];
+  let hole = [1e9, 1e9, -1e9, -1e9];
+  R.grids.forEach((G, li) => {
+    if (reflect && li === 0) { hole = [1e9, 1e9, -1e9, -1e9]; }
+    let ox, oz;
+    if (G.fixed) { ox = WORLD.x0; oz = WORLD.z0; }
+    else { const sn = G.step * 2; ox = Math.round(cx / sn) * sn - G.n * G.step / 2; oz = Math.round(cz / sn) * sn - G.n * G.step / 2; }
+    if (li > 0) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(li * 1.5, li * 3); }
+    set({ uGrid: [ox, oz, G.step], uDetail: G.detail, uHole: hole });
+    drawMesh(G.mesh);
+    const m = G.step * 1.5;   // the next coarser level skips this one's area, leaving a little overlap
+    hole = [ox + m, oz + m, ox + G.n * G.step - m, oz + G.n * G.step - m];
+  });
+  gl.disable(gl.POLYGON_OFFSET_FILL);
+}
+
+function drawObjects(vp, reflect, extraDraws) {
+  use(R.P.obj);
+  common({ uVP: vp, uModel: m4(), uSnowy: 1, uBright: 1 });
+  for (const B of R.meshes) {
+    if (reflect && B.under) continue;
+    set({ uSnowy: B.snowy ? 1 : 0 });
+    drawMesh(B.mesh);
+  }
+  if (R.trees) {
+    use(R.P.tree);
+    common({ uVP: vp, uSnowy: 1, uBright: 1 });
+    drawMesh(R.trees, R.trees.instances);
+    use(R.P.obj);
+    common({ uVP: vp, uSnowy: 0, uBright: 1 });
+  }
+  set({ uSnowy: 0 });
+  if (extraDraws) for (const d of extraDraws) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1 }); drawMesh(d.mesh); }
+}
+
+function drawSprites(vp) {
+  if (!R.sprites.n) return;
+  use(R.P.sprite);
+  set({ uVP: vp });
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);
+  drawStream(R.sprites);
+  gl.depthMask(true); gl.disable(gl.BLEND);
+}
+
+// view: {vp, invVP, cam, reflVP, reflInvVP, reflCam, skaterDraws}
+// GPU time per frame, when the browser allows timer queries
+const GPUT = { ext: null, q: [], ms: 0 };
+function gpuTimerBegin() {
+  if (GPUT.ext === null) GPUT.ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') || false;
+  if (!GPUT.ext) return null;
+  for (let i = GPUT.q.length - 1; i >= 0; i--) {
+    const q = GPUT.q[i];
+    if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+      if (!gl.getParameter(GPUT.ext.GPU_DISJOINT_EXT)) GPUT.ms = lerp(GPUT.ms, gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6, 0.1);
+      gl.deleteQuery(q); GPUT.q.splice(i, 1);
+    }
+  }
+  if (GPUT.q.length > 4) return null;
+  const q = gl.createQuery(); gl.beginQuery(GPUT.ext.TIME_ELAPSED_EXT, q); return q;
+}
+function gpuTimerEnd(q) { if (!q) return; gl.endQuery(GPUT.ext.TIME_ELAPSED_EXT); GPUT.q.push(q); }
+
+function renderFrame(view) {
+  const qT = gpuTimerBegin();
+  renderFrameInner(view);
+  gpuTimerEnd(qT);
+}
+function renderFrameInner(view) {
+  const U = R.U;
+  R.stats.draws = 0;
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+
+  // 1. what the ice reflects: the world mirrored in y = 0
+  bindTarget(R.T.refl);
+  gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.frontFace(gl.CW);
+  const camSave = U.cam; U.cam = view.reflCam; U.reflect = 1;
+  gl.depthMask(false); use(R.P.sky); common({ uInvVP: view.reflInvVP }); gl.disable(gl.CULL_FACE); drawFullscreen(); gl.enable(gl.CULL_FACE); gl.depthMask(true);
+  drawGround(view.reflVP, true);
+  drawObjects(view.reflVP, true, view.skaterDraws);
+  gl.frontFace(gl.CCW);
+  drawSprites(view.reflVP);
+  U.cam = camSave; U.reflect = 0;
+
+  // 2. the world
+  bindTarget(R.T.main);
+  gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.depthMask(false); use(R.P.sky); common({ uInvVP: view.invVP }); gl.disable(gl.CULL_FACE); drawFullscreen(); gl.enable(gl.CULL_FACE); gl.depthMask(true);
+  drawGround(view.vp, false);
+  drawObjects(view.vp, false, view.skaterDraws);
+  // cracks live inside the ice: drawn before it so the ice sees them through itself
+  if (R.cracks.n) {
+    use(R.P.mark); common({ uVP: view.vp });
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false); gl.disable(gl.CULL_FACE);
+    drawStream(R.cracks);
+    gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.CULL_FACE);
+  }
+  // 3. the ice, over what is under it
+  resolveInto(R.T.main, R.T.under);
+  bindTarget(R.T.main);
+  use(R.P.ice);
+  const qs = 4200;
+  common({ uVP: view.vp, uQuad: [U.cam[0] - qs, U.cam[2] - qs, U.cam[0] + qs, U.cam[2] + qs], uUnder: R.T.under.colors[0], uRefl: R.T.refl.colors[0], uSag: U.sag, uHoles: R.holes });
+  gl.disable(gl.CULL_FACE);
+  gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
+  drawMesh(R.iceQuad);
+  gl.disable(gl.POLYGON_OFFSET_FILL);
+  // 4. scratches on the ice and everything that glows
+  if (R.scratches.n) {
+    use(R.P.mark); common({ uVP: view.vp });
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);
+    drawStream(R.scratches);
+    gl.depthMask(true); gl.disable(gl.BLEND);
+  }
+  if (R.decals.n || R.pathS.n) {
+    use(R.P.decal); common({ uVP: view.vp, uRefl: R.T.refl.colors[0] });
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2, -4);
+    if (R.decals.n) drawStream(R.decals);
+    if (R.pathS.n) drawStream(R.pathS);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.depthMask(true); gl.disable(gl.BLEND);
+  }
+  drawSprites(view.vp);
+  gl.enable(gl.CULL_FACE);
+
+  // 5. bloom and tone
+  resolveInto(R.T.main, R.T.res);
+  gl.disable(gl.DEPTH_TEST);
+  let src = R.T.res;
+  R.T.bloom.forEach((B, i) => {
+    bindTarget(B); use(R.P.down);
+    set({ uSrc: src.colors[0], uTexel: [1 / src.w, 1 / src.h], uFirst: i === 0 ? 1 : 0 });
+    drawFullscreen(); src = B;
+  });
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  for (let i = R.T.bloom.length - 1; i > 0; i--) {
+    const from = R.T.bloom[i], to = R.T.bloom[i - 1];
+    bindTarget(to); use(R.P.up); set({ uSrc: from.colors[0], uTexel: [1 / from.w, 1 / from.h], uRadius: 1.0 });
+    drawFullscreen();
+  }
+  gl.disable(gl.BLEND);
+  bindTarget(null);
+  use(R.P.final);
+  set({ uSrc: R.T.res.colors[0], uBloom: R.T.bloom[0].colors[0], uExposure: U.exposure, uBloomK: U.bloomK, uTime: U.time, uFade: U.fade, uUnderwater: U.underwater, uRes: U.res });
+  drawFullscreen();
+  gl.enable(gl.DEPTH_TEST);
+}
+
+// ---- 50-skater.js ----
+// The skater: how a body moves on blades, and what it looks like doing it.
+// Heading `h`: forward is (sin h, 0, cos h). Right is (-cos h, 0, sin h).
+const TUNE = {
+  vmax: 11.2,          // top speed holding skate, m/s
+  push0: 2.0,          // speed added by one push from standing
+  pushTop: 0.32,       // ... and near top speed
+  pushTime: 0.26,      // seconds a push lasts
+  periodSlow: 0.40, periodFast: 0.74,
+  friction: 0.07, drag: 0.0042,
+  grip: 12.5,          // lateral acceleration the edges hold before they let go (m/s^2)
+  skid: 8.5,           // braking while sliding sideways
+  stop: 10.5,          // hockey stop braking
+  snowDrag: 2.4,
+  hopV: 3.5, gravity: 13.5,
+  turnKeys: 2.3,       // rad/s with A/D
+};
+const SK = {
+  x: 0, z: 0, y: 0, vx: 0, vz: 0, vy: 0, h: 0,
+  air: false, stopping: 0, skid: 0, speed: 0, pushT: 99, pushLeft: 0, pushSide: 1, nextPush: 0, pushing: 0,
+  strideK: 0, lean: 0, turnRate: 0, crouch: 0, sway: 0, bob: 0, phase: 0, landT: 9, hopT: 9,
+  lant: { a: 0, va: 0, b: 0, vb: 0 },   // lantern swing: about the skater's right axis (a) and forward axis (b)
+  scarf: [], events: [], alive: true, still: 0, snow: 0, fallen: false,
+  joints: null,
+};
+function skaterReset(x, z, h) {
+  Object.assign(SK, { x, z, y: 0, vx: 0, vz: 0, vy: 0, h, air: false, stopping: 0, skid: 0, speed: 0, pushT: 99, pushLeft: 0, nextPush: 0, pushing: 0, lean: 0, turnRate: 0, still: 0, fallen: false });
+  SK.scarf = [];
+  for (let i = 0; i < 9; i++) SK.scarf.push({ p: [x - Math.sin(h) * i * 0.09, 1.45 - i * 0.05, z - Math.cos(h) * i * 0.09], o: null });
+  SK.scarf.forEach((s) => (s.o = s.p.slice()));
+  SK.lant = { a: 0, va: 0, b: 0, vb: 0 };
+}
+const fwdOf = (h) => [Math.sin(h), Math.cos(h)];
+const rightOf = (h) => [-Math.cos(h), Math.sin(h)];
+
+// in: {turn (rad this frame), turnKey -1..1, skate, stop, hop (pressed this frame)}
+function skaterStep(dt, inp) {
+  const S = SK, T = TUNE;
+  if (S.fallen) return;
+  S.h = wrapAngle(S.h - inp.turn - inp.turnKey * T.turnKeys * dt);
+  const [fx, fz] = fwdOf(S.h);
+  let vx = S.vx, vz = S.vz;
+  let sp = Math.hypot(vx, vz);
+  const snow = iceSnow(S.x, S.z);
+  S.snow = lerp(S.snow, snow > 0.55 ? 1 : 0, expDecay(8, dt));
+  if (!S.air) {
+    // the edges: velocity turns toward where the blades point, as fast as grip allows; what's left is a slide
+    if (sp > 0.05) {
+      let va = Math.atan2(vx, vz);
+      const want = S.h;
+      let slip = wrapAngle(want - va);
+      const backward = Math.abs(slip) > PI * 0.75;          // gliding backward: blades still guide
+      if (backward) slip = wrapAngle(slip + PI);
+      const maxRot = (T.grip / Math.max(sp, 1.2)) * dt * (S.stopping > 0.5 ? 0.25 : 1);
+      const rot = clamp(slip, -maxRot, maxRot);
+      va += rot;
+      const rest = slip - rot;
+      const sideways = Math.abs(Math.sin(rest));
+      S.skid = lerp(S.skid, sideways > 0.06 && sp > 2 ? sat(sideways * 2.2) : 0, expDecay(14, dt));
+      sp = Math.max(0, sp - T.skid * sideways * dt);
+      vx = Math.sin(va) * sp; vz = Math.cos(va) * sp;
+      S.turnRate = lerp(S.turnRate, rot / dt, expDecay(10, dt));
+    } else { S.skid = lerp(S.skid, 0, expDecay(10, dt)); S.turnRate = lerp(S.turnRate, 0, expDecay(10, dt)); }
+    // glide losses, snow, the hockey stop
+    let dec = T.friction + T.drag * sp * sp + T.snowDrag * S.snow;
+    S.stopping = lerp(S.stopping, inp.stop && sp > 0.4 ? 1 : 0, expDecay(inp.stop ? 16 : 6, dt));
+    if (inp.stop) dec += T.stop * sat(S.stopping * 1.4);
+    sp = Math.max(0, sp - dec * dt);
+    const k = Math.hypot(vx, vz) > 1e-6 ? sp / Math.hypot(vx, vz) : 0;
+    vx *= k; vz *= k;
+    // strides
+    S.nextPush -= dt;
+    const wantSkate = inp.skate && !inp.stop;
+    if (wantSkate && S.nextPush <= 0 && S.pushLeft <= 0) {
+      const f = sat(sp / T.vmax);
+      const dv = lerp(T.push0, T.pushTop, Math.pow(f, 0.8)) * (1 - S.snow * 0.45) * (sp > T.vmax ? 0 : 1);
+      S.pushLeft = T.pushTime; S.pushAcc = dv / T.pushTime;
+      S.pushSide = -S.pushSide;
+      S.nextPush = lerp(T.periodSlow, T.periodFast, Math.pow(f, 0.7));
+      S.pushT = 0;
+      S.events.push({ k: 'push', side: S.pushSide, speed: sp, snow: S.snow });
+    }
+    if (!wantSkate && S.nextPush < 0) S.nextPush = 0;
+    if (S.pushLeft > 0) {
+      const a = S.pushAcc * Math.min(dt, S.pushLeft) / dt;
+      if (sp < 0.3) { vx = fx * 0.3; vz = fz * 0.3; }
+      // push along where you face, with a little of the push leg's sideways shove
+      const [rx, rz] = rightOf(S.h);
+      vx += (fx - rx * S.pushSide * 0.06) * a * dt; vz += (fz - rz * S.pushSide * 0.06) * a * dt;
+      S.pushLeft -= dt;
+    }
+    S.pushT += dt;
+    // a hop
+    if (inp.hop && S.landT > 0.18) { S.air = true; S.vy = T.hopV; S.hopT = 0; S.events.push({ k: 'hop', speed: sp }); }
+  } else {
+    S.vy -= T.gravity * dt;
+    S.y += S.vy * dt;
+    S.hopT += dt;
+    if (S.y <= 0) { S.y = 0; S.air = false; S.landT = 0; S.events.push({ k: 'land', impact: -S.vy, speed: Math.hypot(vx, vz) }); S.vy = 0; }
+  }
+  S.landT += dt;
+  // move, then keep off the shore and out of solid things
+  let nx = S.x + vx * dt, nz = S.z + vz * dt;
+  const hit = collide(nx, nz, 0.32, S.y);
+  if (hit) {
+    nx = hit.x; nz = hit.z;
+    const vn = vx * hit.nx + vz * hit.nz;
+    if (vn < 0) {
+      vx -= vn * hit.nx * 1.25; vz -= vn * hit.nz * 1.25;
+      const keep = 0.55; vx *= keep; vz *= keep;
+      if (-vn > 1.2) S.events.push({ k: 'bump', v: -vn, soft: hit.soft });
+    }
+  }
+  S.x = nx; S.z = nz; S.vx = vx; S.vz = vz;
+  S.speed = Math.hypot(vx, vz);
+  S.still = S.speed < 0.5 ? S.still + dt : 0;
+  skaterAnimate(dt);
+}
+
+// ---- solid things the skater can run into: the shore and colliders the world registers ----
+const COLLIDERS = [];      // {x, z, r} circles and {x, z, hx, hz, yaw} boxes (half sizes), {top} height they stand to
+function collide(x, z, r, y) {
+  // the shore: wherever the ground stands above the ice
+  const h = heightAt(x, z);
+  let out = null;
+  if (h > 0.02) {
+    const e = 1.5, gx = heightAt(x + e, z) - heightAt(x - e, z), gz = heightAt(x, z + e) - heightAt(x, z - e);
+    const gl2 = Math.hypot(gx, gz) || 1;
+    const nx = -gx / gl2, nz = -gz / gl2;
+    const push = Math.min(1.2, h / Math.max(0.02, gl2 / (2 * e)) + 0.05);
+    out = { x: x + nx * push, z: z + nz * push, nx, nz, soft: true };
+  }
+  for (const c of COLLIDERS) {
+    if (c.top !== undefined && y > c.top) continue;
+    const dx = x - c.x, dz = z - c.z;
+    if (c.r) {
+      const d = Math.hypot(dx, dz), rr = c.r + r;
+      if (d < rr && d > 1e-6) { const nx = dx / d, nz = dz / d; return { x: c.x + nx * rr, z: c.z + nz * rr, nx, nz, soft: false }; }
+    } else {
+      const cs = Math.cos(c.yaw || 0), sn = Math.sin(c.yaw || 0);
+      const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;      // into the box's frame
+      const ex = c.hx + r, ez = c.hz + r;
+      if (Math.abs(lx) < ex && Math.abs(lz) < ez) {
+        const px = ex - Math.abs(lx), pz = ez - Math.abs(lz);
+        let nlx = 0, nlz = 0, qx = lx, qz = lz;
+        if (px < pz) { nlx = Math.sign(lx) || 1; qx = nlx * ex; } else { nlz = Math.sign(lz) || 1; qz = nlz * ez; }
+        const wx = qx * cs + qz * sn, wz = -qx * sn + qz * cs;
+        const nx = nlx * cs + nlz * sn, nz = -nlx * sn + nlz * cs;
+        return { x: c.x + wx, z: c.z + wz, nx, nz, soft: false };
+      }
+    }
+  }
+  return out;
+}
+
+// ---- the body: procedural, from the stride clock ----
+function ik2(hip, foot, a, b, bend) {
+  const d = vsub(foot, hip); let L = vlen(d);
+  const maxL = (a + b) * 0.999; let f = foot;
+  if (L > maxL) { f = vadd(hip, vmul(d, maxL / L)); L = maxL; }
+  const dn = vmul(vsub(f, hip), 1 / L);
+  const x = (a * a - b * b + L * L) / (2 * L), y = Math.sqrt(Math.max(0, a * a - x * x));
+  let side = vsub(bend, vmul(dn, vdot(bend, dn))); side = vnorm(side);
+  return { knee: vadd(vadd(hip, vmul(dn, x)), vmul(side, y)), foot: f };
+}
+function skaterAnimate(dt) {
+  const S = SK;
+  const sp = S.speed, f = sat(sp / TUNE.vmax);
+  // lean into turns (centripetal), crouch with speed and before a hop
+  const latA = S.turnRate * sp;
+  S.lean = lerp(S.lean, clamp(-latA / 9.81, -0.55, 0.55), expDecay(8, dt));
+  S.crouch = lerp(S.crouch, 0.35 + f * 0.45 + S.stopping * 0.35, expDecay(5, dt));
+  // the stride clock: phase 0..1 over a push and its recovery
+  const pushing = S.pushT < TUNE.pushTime + 0.36;
+  S.pushing = lerp(S.pushing, pushing ? 1 : 0, expDecay(6, dt));
+  S.sway = lerp(S.sway, pushing ? -S.pushSide * 0.1 * (1 - f * 0.4) : 0, expDecay(5, dt));
+  S.bob = lerp(S.bob, pushing ? Math.sin(sat(S.pushT / (TUNE.pushTime + 0.36)) * PI) * 0.035 : 0, expDecay(12, dt));
+  // the lantern swings from the hand: driven by the hand's acceleration
+  const L = S.lant;
+  const ax = S.pushLeft > 0 ? S.pushAcc : 0, aSide = latA;
+  L.va += (-L.a * 30 - L.va * 2.4 - ax * 0.35 - (S.stopping * sp) * 0.25) * dt;
+  L.vb += (-L.b * 30 - L.vb * 2.4 + aSide * 0.18 + S.sway * 0.0) * dt;
+  L.a = clamp(L.a + L.va * dt, -0.9, 0.9); L.b = clamp(L.b + L.vb * dt, -0.9, 0.9);
+}
+
+// world-space joints for drawing and for where the light is
+function skaterPose() {
+  const S = SK;
+  // in a hockey stop the whole body turns side-on to the way it is sliding
+  if (S.stopping < 0.05) S.stopSide = S.turnRate > 0.3 ? 1 : S.turnRate < -0.3 ? -1 : (S.stopSide || 1);
+  const bodyH = S.h + S.stopping * S.stopSide * PI * 0.42;
+  S.bodyH = bodyH;
+  const [fx, fz] = fwdOf(bodyH), [rx, rz] = rightOf(bodyH);
+  const F = [fx, 0, fz], Rt = [rx, 0, rz], UP = [0, 1, 0];
+  const o = [S.x, S.y, S.z];
+  const at = (r, u, fw) => [o[0] + Rt[0] * r + F[0] * fw, o[1] + u, o[2] + Rt[2] * r + F[2] * fw];
+  const f = sat(S.speed / TUNE.vmax);
+  const hipH = 0.94 - S.crouch * 0.2 + S.bob + (S.air ? 0.06 : 0);
+  const lean = S.lean;
+  // pelvis shifts over the gliding leg, the whole body leans into the turn
+  const pel = at(S.sway + lean * 0.25, hipH, -0.02 - S.stopping * 0.06);
+  const tilt = 0.32 + f * 0.25 - S.stopping * 0.4;           // forward lean of the torso
+  const up = vnorm(vadd(vadd(vmul(UP, Math.cos(tilt)), vmul(F, Math.sin(tilt))), vmul(Rt, lean * 0.6)));
+  const chest = vadd(pel, vmul(up, 0.5));
+  const neck = vadd(pel, vmul(up, 0.62));
+  const head = vadd(neck, vadd(vmul(up, 0.13), vmul(F, 0.03)));
+  // legs: the pushing foot goes out and back, then lifts and comes home
+  const legs = [];
+  const sideOfStop = S.stopping;
+  for (const side of [-1, 1]) {
+    const hip = vadd(pel, vmul(Rt, side * 0.1));
+    let lat = side * (0.12 + f * 0.03), fw = side * 0.04 * (1 - f), lift = 0, out = 0;
+    const t = S.pushT, P = TUNE.pushTime, Rc = 0.36;
+    if (S.pushSide === side && t < P + Rc && !S.air) {
+      if (t < P) { const k = t / P; lat = side * (0.12 + 0.46 * k * (0.6 + 0.4 * (1 - f))); fw = -0.06 - 0.22 * k; out = 0.6 * k; }
+      else { const k = (t - P) / Rc; lat = side * lerp(0.58, 0.12, k); fw = lerp(-0.28, 0.05, k); lift = Math.sin(k * PI) * (0.1 + f * 0.12); out = lerp(0.6, 0, k); }
+    }
+    if (S.air) { lift = 0.12 * Math.sin(sat(S.hopT / 0.5) * PI); lat = side * 0.1; }
+    if (sideOfStop > 0.05) { lat = lerp(lat, side * 0.2, sideOfStop); fw = lerp(fw, side * S.stopSide * 0.14, sideOfStop); out *= 1 - sideOfStop; }
+    const foot = at(lat, lift + 0.12, fw);
+    const r = ik2(hip, foot, 0.46, 0.46, vadd(F, [0, 0.2, 0]));
+    // a pushing blade turns outward (right turns are negative heading)
+    legs.push({ side, hip, knee: r.knee, foot: r.foot, yaw: bodyH - side * out });
+  }
+  // arms: the free (left) arm swings against the push; the right hand holds the lantern out in front and low
+  const shL = vadd(chest, vadd(vmul(Rt, -0.2), vmul(up, 0.05)));
+  const shR = vadd(chest, vadd(vmul(Rt, 0.2), vmul(up, 0.05)));
+  const swing = S.pushing * S.pushSide * 0.35;
+  let handL = vadd(shL, vadd(vadd(vmul(Rt, -0.18 - f * 0.1), vmul(F, swing - 0.05)), [0, -0.48 + Math.abs(swing) * 0.2, 0]));
+  let handR = vadd(shR, vadd(vadd(vmul(Rt, 0.12), vmul(F, 0.32)), [0, -0.38, 0]));
+  // in the tower both hands are on the rope's sally
+  if (BELL.inside && SCENE.bell) {
+    const g = [SCENE.bell[0] + 0.55, 1.55 + BELL.rope + 0.2, SCENE.bell[2]];
+    handL = vadd(g, [0, 0.16, 0]); handR = vadd(g, [0, -0.04, 0]);
+  }
+  const elL = ik2(shL, handL, 0.29, 0.28, vadd(vmul(F, -1), vmul(Rt, -0.3))).knee;
+  const elR = ik2(shR, handR, 0.29, 0.28, vadd(vmul(F, -0.5), vmul(Rt, 0.6))).knee;
+  // the lantern hangs from the right hand on its bail
+  const L = S.lant;
+  const hang = vnorm([Math.sin(L.b) * Rt[0] + Math.sin(L.a) * F[0], -Math.cos(L.a) * Math.cos(L.b), Math.sin(L.b) * Rt[2] + Math.sin(L.a) * F[2]]);
+  let lantTop = vadd(handR, [0, -0.02, 0]);
+  let lantC = vadd(lantTop, vmul(hang, 0.2));
+  if (BELL.inside) { lantC = at(0.55, 0.17, 0.25); lantTop = vadd(lantC, [0, 0.2, 0]); hang[0] = 0; hang[1] = -1; hang[2] = 0; }
+  S.joints = { pel, chest, neck, head, up, F, Rt, legs, shL, shR, elL, elR, handL, handR, lantTop, lantC, hang };
+  return S.joints;
+}
+
+// the scarf: a few points on strings, pulled by gravity and the air you move through
+function scarfStep(dt) {
+  const J = SK.joints; if (!J) return;
+  const P = SK.scarf;
+  const anchor = vadd(J.neck, vadd(vmul(J.F, -0.1), vmul(J.up, -0.02)));
+  P[0].p = anchor; P[0].o = anchor.slice();
+  const wind = [-SK.vx + (WEATHER.windX || 0), 0, -SK.vz + (WEATHER.windZ || 0)];
+  const sub = 3, h = dt / sub;
+  for (let s = 0; s < sub; s++) {
+    for (let i = 1; i < P.length; i++) {
+      const q = P[i], v = vsub(q.p, q.o);
+      const rel = vsub(wind, vmul(v, 1 / Math.max(h, 1e-4)));
+      const acc = vadd([0, -6.5, 0], vmul(rel, 1.4 + 0.15 * Math.sin(SK.phase * 9 + i)));
+      q.o = q.p.slice();
+      q.p = vadd(vadd(q.p, vmul(v, 0.985)), vmul(acc, h * h));
+    }
+    for (let it = 0; it < 3; it++) for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i], d = vsub(b.p, a.p), L = vlen(d) || 1e-6, want = 0.085;
+      const corr = vmul(d, (L - want) / L);
+      if (i === 1) b.p = vsub(b.p, corr); else { a.p = vadd(a.p, vmul(corr, 0.5)); b.p = vsub(b.p, vmul(corr, 0.5)); }
+      if (b.p[1] < 0.03) b.p[1] = 0.03;
+    }
+  }
+  SK.phase += dt;
+}
+
+// ---- meshes ----
+const SKM = {};
+function buildSkaterMeshes() {
+  const coat = rgb(0x1d2333, 0.05), coatHi = rgb(0x2a3248, 0.05), trou = rgb(0x17191f, 0.05), boot = rgb(0x0e0d0c, 0.35);
+  const skin = rgb(0xc79a82, 0.1), hat = rgb(0xa3262a, 0.03), cream = rgb(0xe8dfcf, 0.02), mitt = rgb(0x5a2420, 0.02);
+  const steel = rgb(0xc9d2da, 0.95), iron = rgb(0x24201d, 0.6), lred = rgb(0x6e1e18, 0.5);
+  const unitCyl = (col, top = 1, seg = 10) => uploadMesh(new MB().cyl(m4(), col, seg, top).build());
+  const unitSph = (col) => uploadMesh(new MB().sphere(m4(), col, 12, 8).build());
+  SKM.thigh = unitCyl(trou, 0.78, 12); SKM.shin = unitCyl(trou, 0.72, 12);
+  SKM.upper = unitCyl(coat, 0.82, 12); SKM.fore = unitCyl(coat, 0.78, 12);
+  SKM.joint = unitSph(trou); SKM.jointC = unitSph(coat);
+  // torso: a wool coat, broad at the shoulders, belted, its skirt flaring over the hips; flattened front to back
+  {
+    const b = new MB();
+    b.lathe(m4trs([0, 0, 0], 0, 0, 0, [1, 1, 0.74]), coat, [[0.2, -0.3], [0.215, -0.22], [0.19, -0.08], [0.17, 0.04], [0.185, 0.18], [0.215, 0.33], [0.235, 0.43], [0.21, 0.5], [0.12, 0.56], [0.06, 0.58]], 16);
+    b.cyl(m4trs([0, 0.02, 0], 0, 0, 0, [0.178, 0.05, 0.135]), rgb(0x2b2118, 0.3), 16);    // belt
+    b.box(m4trs([0, 0.25, 0.155], 0, -0.1, 0, [0.02, 0.4, 0.01]), coatHi);               // placket
+    for (let i = 0; i < 4; i++) b.sphere(m4trs([0.03, 0.1 + i * 0.1, 0.165 - i * 0.004], 0, 0, 0, 0.012), rgb(0x8a7a5a, 0.6), 6, 4);
+    b.lathe(m4trs([0, 0.5, 0], 0, 0, 0, [1, 1, 0.9]), coatHi, [[0.13, 0], [0.12, 0.05], [0.09, 0.08]], 12);   // collar
+    SKM.torso = uploadMesh(b.build());
+  }
+  {
+    const b = new MB();
+    b.sphere(m4trs([0, 0, 0], 0, 0, 0, [0.095, 0.115, 0.1]), skin, 14, 10);
+    b.sphere(m4trs([0, 0.0, 0.095], 0, 0, 0, [0.022, 0.026, 0.02]), rgb(0xd49a86, 0.1), 8, 6);      // nose, cold
+    b.lathe(m4trs([0, 0.025, 0], 0, -0.1, 0), hat, [[0.104, 0], [0.108, 0.05], [0.1, 0.1], [0.075, 0.15], [0.03, 0.18], [0, 0.185]], 14);
+    b.cyl(m4trs([0, 0.015, 0], 0, -0.1, 0, [0.108, 0.04, 0.108]), cream, 14);   // the turned-up band
+    b.sphere(m4trs([0, 0.215, -0.02], 0, 0, 0, 0.045), cream, 10, 7);           // pom-pom
+    SKM.head = uploadMesh(b.build());
+  }
+  {
+    const b = new MB();
+    b.box(m4trs([0, 0.05, 0.03], 0, 0, 0, [0.09, 0.11, 0.24]), boot);
+    b.box(m4trs([0, 0.14, -0.01], 0, 0, 0, [0.085, 0.12, 0.12]), boot);
+    b.box(m4trs([0, -0.012, 0.03], 0, 0, 0, [0.06, 0.022, 0.2]), iron);          // sole
+    b.box(m4trs([0, -0.05, 0.03], 0, 0, 0, [0.006, 0.05, 0.3]), steel);          // the blade
+    b.box(m4trs([0, -0.03, 0.17], 0, -0.6, 0, [0.006, 0.03, 0.05]), steel);
+    SKM.boot = uploadMesh(b.build());
+  }
+  SKM.mitt = uploadMesh(new MB().sphere(m4trs([0, 0, 0], 0, 0, 0, [0.045, 0.05, 0.06]), mitt, 10, 7).build());
+  {
+    // a hurricane lantern: base, globe (lit), guard wires, cap, bail
+    const b = new MB();
+    b.lathe(m4(), lred, [[0.0, -0.13], [0.07, -0.13], [0.075, -0.1], [0.06, -0.075], [0.045, -0.07]], 14);
+    b.lathe(m4(), lred, [[0.035, 0.07], [0.06, 0.08], [0.05, 0.11], [0.02, 0.13], [0.0, 0.135]], 14);
+    for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; b.cyl(m4trs([Math.cos(a) * 0.058, -0.075, Math.sin(a) * 0.058], 0, 0, 0, [0.004, 0.15, 0.004]), iron, 5); }
+    b.torus(m4trs([0, 0.15, 0], 0, PI / 2, 0, 1), iron, 0.065, 0.004, 14, 4);      // bail
+    SKM.lantern = uploadMesh(b.build());
+    const g = new MB();
+    g.lathe(m4(), [1.0, 0.62, 0.3, -9.0], [[0.04, -0.07], [0.058, -0.04], [0.062, 0.0], [0.055, 0.04], [0.036, 0.07]], 14);
+    SKM.globe = uploadMesh(g.build());
+    const fl = new MB();
+    fl.sphere(m4trs([0, -0.01, 0], 0, 0, 0, [0.012, 0.03, 0.012]), [1.0, 0.75, 0.4, -60.0], 8, 6);
+    SKM.flame = uploadMesh(fl.build());
+  }
+  SKM.scarf = makeDynMesh(400, 1200);
+  {
+    // the tower's bell, mouth down, its pivot at the origin; the headstock, the wheel its rope comes off, the clapper
+    const b = new MB(), bronze = rgb(0x6e4c28, 0.75), oak = rgb(0x3a2a1c, 0.1);
+    b.lathe(m4(), bronze, [[0.56, -1.0], [0.585, -0.975], [0.53, -0.92], [0.44, -0.74], [0.375, -0.5], [0.345, -0.3], [0.3, -0.2], [0.0, -0.17]], 22);
+    b.lathe(m4(), rgbS(bronze, 0.55, 0.4), [[0.0, -0.24], [0.27, -0.26], [0.32, -0.33], [0.35, -0.52], [0.42, -0.74], [0.5, -0.92], [0.545, -0.99]], 22);
+    b.box(m4trs([0, 0.0, 0], 0, 0, 0, [1.05, 0.26, 0.4]), oak);
+    b.torus(m4trs([0.55, -0.05, 0], 0, 0, PI / 2, 1), oak, 0.66, 0.03, 26, 5);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * PI; b.cyl(m4between([0.55, -0.05 + Math.cos(a) * 0.64, Math.sin(a) * 0.64], [0.55, -0.05 - Math.cos(a) * 0.64, -Math.sin(a) * 0.64], [1, 0, 0], 0.018), oak, 4); }
+    b.cyl(m4between([0, -0.2, 0], [0, -0.82, 0], [0, 0, 1], 0.022), rgb(0x2a2a2a, 0.6), 6);
+    b.sphere(m4trs([0, -0.86, 0], 0, 0, 0, 0.075), rgb(0x2a2a2a, 0.6), 10, 7);
+    SKM.bell = uploadMesh(b.build());
+    SKM.rope = uploadMesh(new MB().cyl(m4(), rgb(0xb09a70, 0.02), 6, 1, false).build());
+    const s = new MB(), cols = [rgb(0x8e1f1a, 0.02), rgb(0xe8e0d0, 0.02), rgb(0x1f2f5a, 0.02)];
+    for (let i = 0; i < 9; i++) s.cyl(m4trs([0, i / 9 - 0.5, 0], 0, 0, 0, [1, 1 / 9, 1]), cols[i % 3], 10, 1, i === 0 || i === 8);
+    SKM.sally = uploadMesh(s.build());
+  }
+}
+
+// a mesh rewritten every frame (the scarf)
+function makeDynMesh(maxV, maxI) {
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, maxV * 40, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 40, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 40, 12);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 40, 24);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, maxI * 4, gl.DYNAMIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, vb, ib, count: 0 };
+}
+function updateDynMesh(M, data) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, M.vb); gl.bufferSubData(gl.ARRAY_BUFFER, 0, data.verts);
+  gl.bindVertexArray(M.vao);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.ib); gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, data.index);
+  gl.bindVertexArray(null);
+  M.count = data.index.length;
+}
+
+function skaterDraws() {
+  const J = SK.joints; if (!J) return [];
+  const D = [];
+  const limb = (mesh, a, b, w, fwd) => D.push({ mesh, m: m4between(a, b, fwd || J.F, w) });
+  const ball = (mesh, p, r) => D.push({ mesh, m: m4trs(p, 0, 0, 0, r) });
+  for (const L of J.legs) {
+    limb(SKM.thigh, L.hip, L.knee, 0.088);
+    limb(SKM.shin, L.knee, L.foot, 0.066);
+    ball(SKM.joint, L.knee, 0.07);
+    ball(SKM.joint, L.hip, 0.09);
+    D.push({ mesh: SKM.boot, m: m4trs([L.foot[0], L.foot[1] - 0.04, L.foot[2]], L.yaw, 0, 0) });
+  }
+  // torso stands on the pelvis along `up`
+  {
+    const m = m4between(J.pel, vadd(J.pel, J.up), J.F, 1);
+    D.push({ mesh: SKM.torso, m });
+  }
+  D.push({ mesh: SKM.head, m: m4trs(J.head, SK.bodyH - SK.stopping * SK.stopSide * 0.9, 0.08 + SK.crouch * 0.06, -SK.lean * 0.4) });
+  limb(SKM.upper, J.shL, J.elL, 0.07); limb(SKM.fore, J.elL, J.handL, 0.058); ball(SKM.jointC, J.shL, 0.085); ball(SKM.jointC, J.elL, 0.06);
+  limb(SKM.upper, J.shR, J.elR, 0.07); limb(SKM.fore, J.elR, J.handR, 0.058); ball(SKM.jointC, J.shR, 0.085); ball(SKM.jointC, J.elR, 0.06);
+  ball(SKM.mitt, J.handL, 1); ball(SKM.mitt, J.handR, 1);
+  // the lantern hangs along `hang`
+  // the lantern is built at its own size: a rotation-only frame with +y up its bail
+  const yv = vmul(J.hang, -1), xv = vnorm(vcross(yv, J.F)), zv = vcross(xv, yv);
+  const M = new Float32Array([xv[0], xv[1], xv[2], 0, yv[0], yv[1], yv[2], 0, zv[0], zv[1], zv[2], 0, J.lantC[0], J.lantC[1], J.lantC[2], 1]);
+  D.push({ mesh: SKM.lantern, m: M }); D.push({ mesh: SKM.globe, m: M }); D.push({ mesh: SKM.flame, m: M });
+  // the scarf ribbon
+  {
+    const b = new MB(), P = SK.scarf;
+    const red = rgb(0x9e2a24, 0.02), wool = rgb(0xe6dccb, 0.02);
+    let prev = null;
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i].p, nxt = P[Math.min(P.length - 1, i + 1)].p, prv = P[Math.max(0, i - 1)].p;
+      const t = vnorm(vsub(nxt, prv));
+      let side = vnorm(vcross(t, [0, 1, 0])); if (!isFinite(side[0])) side = J.Rt;
+      const w = 0.07 * (1 - i / P.length * 0.25);
+      const nr = vnorm(vcross(side, t));
+      const col = (Math.floor(i / 2) % 2) ? red : wool;
+      const a = b.vert(vadd(p, vmul(side, w)), nr, col), c = b.vert(vsub(p, vmul(side, w)), nr, col);
+      if (prev) b.quad(prev[0], prev[1], c, a);
+      prev = [a, c];
+    }
+    // the wrap round the neck
+    b.torus(m4trs(vadd(J.neck, vmul(J.up, -0.01)), SK.h, 0, 0, 1), red, 0.085, 0.035, 12, 6);
+    updateDynMesh(SKM.scarf, b.build());
+    D.push({ mesh: SKM.scarf, m: m4() });
+  }
+  return D;
+}
+
+// ---- 55-ice.js ----
+// What the ice does: it keeps your blade marks, it cracks, it sags and sings on thin ice, and sometimes it lets you in.
+const ICE = {
+  stress: 0, sagPhase: 0, cracks: [], feet: [null, null], holes: [], crackTimer: 0, lastCrackAt: 0,
+  danger: 0,     // 0..1, how close to going through, for sound and camera
+};
+
+// ---- blade marks: thin quads lying on the ice ----
+function pushQuadFlat(S, a, b, w, col, y = 0.004) {
+  if (S.n + 6 > S.max) return;
+  const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1e-6;
+  const nx = -dz / L * w * 0.5, nz = dx / L * w * 0.5;
+  const P = [[a[0] + nx, y, a[1] + nz], [b[0] + nx, y, b[1] + nz], [b[0] - nx, y, b[1] - nz], [a[0] + nx, y, a[1] + nz], [b[0] - nx, y, b[1] - nz], [a[0] - nx, y, a[1] - nz]];
+  const D = S.data; let k = S.n * 7;
+  for (const p of P) { D[k++] = p[0]; D[k++] = p[1]; D[k++] = p[2]; D[k++] = col[0]; D[k++] = col[1]; D[k++] = col[2]; D[k++] = col[3]; }
+  S.n += 6;
+}
+// a crack: a sheet standing down into the ice
+function pushQuadSheet(S, a, b, depth, col) {
+  if (S.n + 6 > S.max) return;
+  const y0 = -0.004, y1 = -depth;
+  const P = [[a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y0, a[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]];
+  const D = S.data; let k = S.n * 7;
+  for (const p of P) { D[k++] = p[0]; D[k++] = p[1]; D[k++] = p[2]; D[k++] = col[0]; D[k++] = col[1]; D[k++] = col[2]; D[k++] = col[3]; }
+  S.n += 6;
+}
+
+function marksStep(dt) {
+  const J = SK.joints; if (!J || SK.fallen) return;
+  J.legs.forEach((L, i) => {
+    const onIce = !SK.air && L.foot[1] < 0.135 && SK.speed > 0.35;
+    const p = [L.foot[0], L.foot[2]];
+    const last = ICE.feet[i];
+    if (!onIce) { ICE.feet[i] = null; return; }
+    if (!last) { ICE.feet[i] = p; return; }
+    const d = Math.hypot(p[0] - last[0], p[1] - last[1]);
+    if (d < 0.16) return;
+    const pushing = SK.pushSide === L.side && SK.pushT < TUNE.pushTime;
+    const sk = Math.max(SK.skid, SK.stopping);
+    const w = 0.011 + (pushing ? 0.006 : 0) + sk * 0.16;
+    const bright = 0.035 + (pushing ? 0.03 : 0) + sk * 0.09;
+    pushQuadFlat(R.scratches, last, p, w, [bright, bright * 1.02, bright * 1.05, 0]);
+    ICE.feet[i] = p;
+  });
+}
+
+// ---- cracks: grow from a point, wander, branch, and stop ----
+function crack(x, z, o = {}) {
+  const c = {
+    pts: [[x, z]], ang: o.ang ?? Math.random() * TAU, len: 0, max: o.max ?? (3 + Math.random() * 8), speed: o.speed ?? (40 + Math.random() * 60),
+    depth: o.depth ?? (0.03 + Math.random() * 0.05), bright: o.bright ?? 0.1, branch: o.branch ?? 0.08, gen: o.gen || 0, wob: o.wob ?? 0.35,
+  };
+  ICE.cracks.push(c);
+  return c;
+}
+function cracksStep(dt) {
+  for (let i = ICE.cracks.length - 1; i >= 0; i--) {
+    const c = ICE.cracks[i];
+    let step = c.speed * dt;
+    while (step > 0 && c.len < c.max) {
+      const seg = Math.min(step, 0.35);
+      c.ang += (Math.random() - 0.5) * c.wob * 2 * Math.sqrt(seg);
+      const a = c.pts[c.pts.length - 1];
+      const b = [a[0] + Math.sin(c.ang) * seg, a[1] + Math.cos(c.ang) * seg];
+      if (heightAt(b[0], b[1]) > -0.05) { c.len = c.max; break; }
+      const k = 1 - c.len / c.max;
+      pushQuadSheet(R.cracks, a, b, c.depth * (0.4 + 0.6 * k), [c.bright, c.bright * 1.08, c.bright * 1.2, 0]);
+      c.pts.push(b); c.len += seg; step -= seg;
+      if (c.gen < 3 && Math.random() < c.branch * seg) {
+        crack(b[0], b[1], { ang: c.ang + (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.8), max: (c.max - c.len) * (0.3 + Math.random() * 0.5), speed: c.speed * 0.8, depth: c.depth * 0.7, bright: c.bright * 0.85, branch: c.branch, gen: c.gen + 1, wob: c.wob });
+      }
+    }
+    if (c.len >= c.max) ICE.cracks.splice(i, 1);
+  }
+}
+// a star of cracks from a point: what your weight does to thin ice
+function crackBurst(x, z, n, size, o = {}) {
+  const a0 = Math.random() * TAU;
+  for (let i = 0; i < n; i++) crack(x, z, Object.assign({ ang: a0 + (i / n) * TAU + (Math.random() - 0.5) * 0.6, max: size * (0.5 + Math.random()), speed: 25 + Math.random() * 40 }, o));
+  AUDIO.crack(x, z, Math.min(1, size / 8 + n * 0.05));
+}
+
+// ---- thin ice, weight, and going through ----
+function iceStep(dt) {
+  if (SK.fallen) return;
+  const x = SK.x, z = SK.z;
+  const th = iceThick(x, z);
+  let open = th < 1.2;
+  for (const hh of ICE.holes) if (Math.hypot(x - hh.x, z - hh.z) < hh.r * 0.85) open = true;
+  if (open && !SK.air) { fallThrough(); return; }
+  const weak = Math.pow(sat((9.5 - th) / 6.5), 1.6);
+  const load = SK.air ? 0 : 1 / (1 + Math.pow(SK.speed / 3.2, 2));
+  let spike = 0;
+  for (const e of SK.events) {
+    if (e.k === 'push') spike += 0.08;
+    if (e.k === 'land') spike += 0.12 + e.impact * 0.09;
+    if (e.k === 'bump') spike += 0.05;
+  }
+  ICE.stress = Math.max(0, ICE.stress + (weak * (load * 1.25 + 0.06) - 0.5 * (1 - weak) - 0.16) * dt + spike * weak);
+  ICE.danger = lerp(ICE.danger, sat(ICE.stress), expDecay(6, dt));
+  // cracks come out from under you, more as the stress builds; at speed they open behind you
+  ICE.crackTimer -= dt;
+  if (weak > 0.05 && !SK.air && ICE.crackTimer <= 0) {
+    const rate = weak * (0.6 + ICE.stress * 4 + spike * 8);
+    if (Math.random() < rate * 0.5 || spike > 0.1) {
+      const back = SK.speed * 0.12;
+      const [fx, fz] = fwdOf(SK.h);
+      crackBurst(x - fx * back, z - fz * back, 2 + Math.floor(weak * 3 + ICE.stress * 4), 2 + weak * 5 + ICE.stress * 6, { bright: 0.11 + weak * 0.07 });
+      ICE.crackTimer = 0.18 + Math.random() * 0.25;
+    }
+  }
+  if (ICE.stress > 1) fallThrough();
+  ICE.sagPhase += dt * (3 + ICE.danger * 6);
+}
+
+const FALL = { t: 0, x: 0, z: 0, count: 0 };
+function fallThrough() {
+  if (SK.fallen) return;
+  SK.fallen = true;
+  FALL.t = 0; FALL.x = SK.x; FALL.z = SK.z; FALL.count++;
+  ICE.holes.push({ x: SK.x, z: SK.z, r: 1.15 + Math.random() * 0.3, seed: Math.random() * 100, mine: true });
+  crackBurst(SK.x, SK.z, 9, 5, { bright: 0.16, depth: 0.08 });
+  for (let i = 0; i < 24; i++) spray(SK.x + (Math.random() - 0.5) * 1.2, 0.05, SK.z + (Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 2.5, 0.8 + Math.random() * 2, (Math.random() - 0.5) * 2.5, 0.4 + Math.random() * 0.6, 0.018, [0.25, 0.28, 0.32]);
+  AUDIO.plunge();
+  updateHoles();
+}
+function updateHoles() {
+  R.holes.fill(0);
+  const list = FISH_HOLES.map((h) => ({ ...h, seed: h.x })).concat(ICE.holes.slice(-3));
+  // the eight nearest to you go to the shader
+  list.sort((a, b) => Math.hypot(a.x - SK.x, a.z - SK.z) - Math.hypot(b.x - SK.x, b.z - SK.z));
+  list.slice(0, 8).forEach((h, i) => { R.holes[i * 4] = h.x; R.holes[i * 4 + 1] = h.z; R.holes[i * 4 + 2] = h.r; R.holes[i * 4 + 3] = h.seed || 0; });
+}
+
+// ---- particles: spray off the blades, snow, breath, shards. Built as camera-facing quads each frame ----
+const PARTS = [];
+function spray(x, y, z, vx, vy, vz, life, size, col, kind = 1, drag = 2.5, grav = 6, windK = 0.3, lit = true) {
+  if (PARTS.length > 6000) return;
+  PARTS.push({ x, y, z, vx, vy, vz, life, max: life, size, col, kind, drag, grav, windK, lit });
+}
+function partsStep(dt) {
+  for (let i = PARTS.length - 1; i >= 0; i--) {
+    const p = PARTS[i];
+    p.life -= dt;
+    if (p.life <= 0) { PARTS.splice(i, 1); continue; }
+    const d = Math.exp(-p.drag * dt);
+    p.vx = p.vx * d + (WEATHER.windX || 0) * (1 - d) * p.windK; p.vz = p.vz * d + (WEATHER.windZ || 0) * (1 - d) * p.windK;
+    p.vy = p.vy * d - p.grav * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    if (p.y < 0.01 && p.grav > 0) { p.y = 0.01; p.vy *= -0.2; p.vx *= 0.5; p.vz *= 0.5; }
+  }
+}
+function buildSprites(camRight, camUp, extra) {
+  const S = R.sprites; S.n = 0;
+  const D = S.data;
+  const quad = (x, y, z, s, r, g, b, kind) => {
+    if (S.n + 6 > S.max) return;
+    const rx = camRight[0] * s, ry = camRight[1] * s, rz = camRight[2] * s, ux = camUp[0] * s, uy = camUp[1] * s, uz = camUp[2] * s;
+    const C = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
+    let k = S.n * 7;
+    for (const [a, c] of C) { D[k++] = x + rx * a + ux * c; D[k++] = y + ry * a + uy * c; D[k++] = z + rz * a + uz * c; D[k++] = r; D[k++] = g; D[k++] = b; D[k++] = kind; }
+    S.n += 6;
+  };
+  const view = vcross(camUp, camRight);
+  for (const p of PARTS) {
+    const t = p.life / p.max, a = p.kind === 2 ? Math.sin(t * PI) : p.kind === 3 ? Math.min(1, t * 4) * Math.min(1, (1 - t) * 6) : t;
+    const lit = p.lit === false ? 1 : (0.25 + 2.2 / (1 + ((p.x - R.U.lantern[0]) ** 2 + (p.y - R.U.lantern[1]) ** 2 + (p.z - R.U.lantern[2]) ** 2) * 0.6));
+    if (p.kind === 3) { streak(p, a * lit); continue; }
+    quad(p.x, p.y, p.z, p.size * (p.kind === 2 ? (1.5 - t * 0.5) : 1), p.col[0] * a * lit, p.col[1] * a * lit, p.col[2] * a * lit, p.kind === 2 ? 2 : 1);
+  }
+  if (extra) for (const g of extra) quad(g[0], g[1], g[2], g[3], g[4], g[5], g[6], 2);
+  // a flake driven by the wind: a short line along its motion
+  function streak(p, k) {
+    if (S.n + 6 > S.max) return;
+    const v = [p.vx, p.vy, p.vz], vl = vlen(v) || 1;
+    const L = Math.min(0.16, vl * 0.011) + p.size, ax = vmul(v, L / vl);
+    let bx = vcross(v, view); const bl = vlen(bx) || 1; bx = vmul(bx, p.size * 0.5 / bl);
+    const C = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
+    let q = S.n * 7;
+    for (const [u, w] of C) { D[q++] = p.x + ax[0] * u + bx[0] * w; D[q++] = p.y + ax[1] * u + bx[1] * w; D[q++] = p.z + ax[2] * u + bx[2] * w; D[q++] = p.col[0] * k; D[q++] = p.col[1] * k; D[q++] = p.col[2] * k; D[q++] = 3; }
+    S.n += 6;
+  }
+  streamUpload(S);
+}
+
+// ---- 60-audio.js ----
+// Sound. Every sound is made here at load, once, into buffers; everything that keeps time runs off one clock.
+// The ice sings: flexing ice carries high notes faster than low ones, so a crack heard from far off arrives as a falling
+// "pew". Near, it is a short bright tick; far, a long laser-like sweep; under you on thin ice, a low groan.
+const AUDIO = {
+  ctx: null, on: false, muted: false, buf: {}, out: null, sfx: null, send: null, music: null,
+  glide: null, wind: null, creak: null, voices: 0, chordI: 0, arpI: 0, beat: 0, nextBeat: 0, started: false,
+  listener: { pos: [0, 0, 0], right: [1, 0, 0] },
+};
+const SR = 48000;
+const NOTE = (m) => 440 * Math.pow(2, (m - 69) / 12);
+// D minor, cold: Dm9, Bbmaj9, Gm11, A7sus4. At dawn: D major.
+const CHORDS = [
+  { root: 50, tones: [62, 65, 69, 72, 76, 81] },
+  { root: 46, tones: [62, 65, 69, 70, 74, 77] },
+  { root: 43, tones: [62, 65, 67, 70, 72, 77] },
+  { root: 45, tones: [62, 64, 67, 69, 74, 76] },
+];
+const DAWN_CHORD = { root: 50, tones: [62, 66, 69, 74, 78, 81] };
+const TEMPO = 76;
+
+function mkBuf(sec, fill, ch = 1) {
+  const n = Math.max(1, Math.floor(sec * SR));
+  const b = AUDIO.ctx.createBuffer(ch, n, SR);
+  for (let c = 0; c < ch; c++) fill(b.getChannelData(c), n, c);
+  return b;
+}
+// one-pole filters for shaping noise while rendering
+function lp1(x, a) { let y = 0; for (let i = 0; i < x.length; i++) { y += a * (x[i] - y); x[i] = y; } return x; }
+function hp1(x, a) { let y = 0, px = 0; for (let i = 0; i < x.length; i++) { y = a * (y + x[i] - px); px = x[i]; x[i] = y; } return x; }
+function normalize(x, peak = 0.9) { let m = 0; for (let i = 0; i < x.length; i++) m = Math.max(m, Math.abs(x[i])); if (m > 0) for (let i = 0; i < x.length; i++) x[i] *= peak / m; return x; }
+// a two-pole resonant band-pass, for scrapes and wind
+function bp2(x, f, q) {
+  const w = TAU * f / SR, al = Math.sin(w) / (2 * q), b0 = al, a0 = 1 + al, a1 = -2 * Math.cos(w), a2 = 1 - al;
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < x.length; i++) { const y = (b0 * x[i] - b0 * x2 - a1 * y1 - a2 * y2) / a0; x2 = x1; x1 = x[i]; y2 = y1; y1 = y; x[i] = y; }
+  return x;
+}
+
+function renderSounds() {
+  const A = AUDIO, r = rng(42);
+  const noise = () => r() * 2 - 1;
+  A.buf.noise = mkBuf(3, (d) => { for (let i = 0; i < d.length; i++) d[i] = noise(); }, 2);
+  // a push: the blade biting and scraping back
+  A.buf.push = [];
+  for (let v = 0; v < 5; v++) A.buf.push.push(mkBuf(0.24, (d, n) => {
+    for (let i = 0; i < n; i++) { const t = i / SR; const env = Math.min(1, t / 0.006) * Math.exp(-t / (0.045 + v * 0.008)); const grit = 0.6 + 0.4 * Math.sin(t * TAU * (420 + v * 60) + Math.sin(t * 900) * 3) * (r() < 0.3 ? 1 : 0.4); d[i] = noise() * env * grit; }
+    bp2(d, 3800 + v * 350, 1.1); hp1(d, 0.97); normalize(d, 0.8);
+  }));
+  // a push in snow: a soft crunch
+  A.buf.crunch = [];
+  for (let v = 0; v < 3; v++) A.buf.crunch.push(mkBuf(0.22, (d, n) => {
+    for (let i = 0; i < n; i++) { const t = i / SR; const env = Math.min(1, t / 0.01) * Math.exp(-t / 0.06); d[i] = (r() < 0.12 ? noise() * 2 : noise() * 0.3) * env; }
+    lp1(d, 0.35); bp2(d, 1300 + v * 200, 0.8); normalize(d, 0.7);
+  }));
+  // the hockey stop: a long rasping spray
+  A.buf.stop = mkBuf(0.9, (d, n) => {
+    for (let i = 0; i < n; i++) { const t = i / SR; const env = Math.min(1, t / 0.02) * Math.exp(-t / 0.28); const grain = r() < 0.45 ? 1 : 0.25; d[i] = noise() * env * grain; }
+    bp2(d, 3000, 0.7); hp1(d, 0.985); normalize(d, 0.8);
+  });
+  // landing: a thump of the body, a knock of steel on ice
+  A.buf.land = mkBuf(0.5, (d, n) => {
+    for (let i = 0; i < n; i++) { const t = i / SR; d[i] = Math.sin(TAU * 62 * t * (1 - t * 0.6)) * Math.exp(-t / 0.09) * 0.9 + noise() * Math.exp(-t / 0.008) * 0.5; }
+    normalize(d, 0.8);
+  });
+  A.buf.bump = mkBuf(0.45, (d, n) => { for (let i = 0; i < n; i++) { const t = i / SR; d[i] = noise() * Math.min(1, t / 0.005) * Math.exp(-t / 0.07); } lp1(d, 0.08); lp1(d, 0.2); normalize(d, 0.8); });
+  // the ice singing: dispersive sweeps (frequency falls as 1/t^2), with an echo or two off the far ice
+  const pew = (T, fHi, fLo, ring, bright) => mkBuf(T * 1.9 + 0.3, (d, n) => {
+    const t1 = T / (Math.sqrt(fHi / fLo) - 1);
+    for (const [delay, amp, stretch] of [[0, 1, 1], [T * 0.32, 0.38 * ring, 1.12], [T * 0.71, 0.18 * ring, 1.3]]) {
+      const TT = T * stretch, tt1 = TT / (Math.sqrt(fHi / fLo) - 1);
+      for (let i = 0; i < n; i++) {
+        const t = i / SR - delay; if (t < 0 || t > TT * 1.15) continue;
+        const ph = TAU * fHi * tt1 * t / (t + tt1);
+        const f = fHi * Math.pow(tt1 / (t + tt1), 2);
+        const env = Math.min(1, t / 0.002) * Math.exp(-t / (TT * 0.45)) * (0.5 + 0.5 * Math.min(1, 900 / f)) * (t < TT ? 1 : Math.max(0, 1 - (t - TT) / (TT * 0.15)));
+        d[i] += Math.sin(ph) * env * amp * (1 - bright * 0.3) + Math.sin(ph * 2.003) * env * amp * bright * 0.25;
+      }
+    }
+    normalize(d, 0.75);
+  });
+  A.buf.pewNear = [pew(0.07, 9000, 1400, 0.4, 0.5), pew(0.09, 8000, 1100, 0.5, 0.4), pew(0.06, 10000, 1800, 0.3, 0.6)];
+  A.buf.pewMid = [pew(0.3, 7500, 420, 0.7, 0.3), pew(0.42, 6800, 330, 0.8, 0.2), pew(0.36, 7000, 520, 0.7, 0.3)];
+  A.buf.pewFar = [pew(0.95, 5200, 170, 1, 0.1), pew(1.3, 4800, 120, 1, 0.1), pew(1.1, 5500, 150, 0.9, 0.15)];
+  // the boom of a long crack opening somewhere out on the lake, and the groan of thin ice under you
+  A.buf.boom = mkBuf(3.2, (d, n) => {
+    const t1 = 0.25; let ph = 0;
+    for (let i = 0; i < n; i++) { const t = i / SR; const f = 300 * Math.pow(t1 / (t + t1), 1.4) + 32; ph += TAU * f / SR;
+      d[i] = (Math.sin(ph) * 0.8 + noise() * 0.15 * Math.exp(-t / 0.05)) * Math.min(1, t / 0.004) * Math.exp(-t / 0.9); }
+    lp1(d, 0.12); normalize(d, 0.85);
+  });
+  A.buf.creak = [];
+  for (let v = 0; v < 4; v++) A.buf.creak.push(mkBuf(0.9, (d, n) => {
+    let ph = 0; const f0 = 90 + v * 25;
+    for (let i = 0; i < n; i++) { const t = i / SR; const slip = Math.pow(Math.max(0, Math.sin(t * TAU * (7 + v * 2))), 8); const f = f0 * (1 + 0.3 * Math.sin(t * 3 + v)); ph += TAU * f / SR;
+      d[i] = (Math.sin(ph) * 0.6 + Math.sin(ph * 2.7) * 0.25) * slip * Math.sin(Math.min(1, t / 0.8) * PI); }
+    lp1(d, 0.3); normalize(d, 0.7);
+  }));
+  A.buf.crack = [];
+  for (let v = 0; v < 4; v++) A.buf.crack.push(mkBuf(0.35, (d, n) => {
+    for (let i = 0; i < n; i++) { const t = i / SR; d[i] = noise() * Math.exp(-t / (0.004 + v * 0.002)) * 1.2 + noise() * (r() < 0.04 ? 1 : 0) * Math.exp(-t / 0.08) * 0.6; }
+    hp1(d, 0.9); normalize(d, 0.8);
+  }));
+  // through: the ice giving way, water, bubbles going up past you
+  A.buf.plunge = mkBuf(3.2, (d, n) => {
+    for (let i = 0; i < n; i++) { const t = i / SR; d[i] = noise() * Math.exp(-t / 0.35) * 0.9; }
+    lp1(d, 0.12);
+    for (let b = 0; b < 70; b++) { const t0 = 0.15 + r() * 2.6, f = 300 + r() * 900, L = 0.03 + r() * 0.05; const i0 = Math.floor(t0 * SR);
+      for (let i = 0; i < L * SR && i0 + i < n; i++) { const t = i / SR; d[i0 + i] += Math.sin(TAU * f * t * (1 + t * 8)) * Math.exp(-t / (L * 0.4)) * 0.25 * Math.exp(-t0 / 1.5); } }
+    normalize(d, 0.85);
+  });
+  // bells: a struck bell's partials (hum, prime, tierce, quint, nominal, ...), each with its own decay
+  const bell = (f, sec, bright = 1) => mkBuf(sec, (d, n) => {
+    const P = [[0.5, 0.55, 1.0], [1.0, 0.35, 0.75], [1.183, 0.42, 0.45], [1.506, 0.22, 0.35], [2.0, 0.6, 0.32], [2.514, 0.18, 0.2], [2.662, 0.14, 0.17], [3.011, 0.12, 0.14], [4.166, 0.09 * bright, 0.08], [5.433, 0.06 * bright, 0.05], [6.796, 0.04 * bright, 0.035]];
+    for (const [k, a, dec] of P) { const ff = f * k, tau = sec * dec, beat = 0.6 + r() * 0.8; const ph0 = r() * TAU;
+      for (let i = 0; i < n; i++) { const t = i / SR; d[i] += Math.sin(TAU * ff * t + ph0) * a * Math.exp(-t / tau) * (1 + 0.12 * Math.sin(TAU * beat * t)); } }
+    for (let i = 0; i < Math.min(n, 2400); i++) d[i] += noise() * Math.exp(-i / 300) * 0.4 * bright;
+    normalize(d, 0.85);
+  });
+  A.buf.tower = bell(NOTE(62), 9, 1.2);           // the tower's bell: nominal D4
+  A.buf.peal = [74, 72, 70, 69, 67, 65].map((m) => bell(NOTE(m), 5, 0.6));   // the drowned peal, rounds
+  // a glass note for each stride: a soft struck tone with a faint inharmonic shimmer
+  A.buf.glass = {};
+  for (const m of new Set([].concat(...CHORDS.map((c) => c.tones), DAWN_CHORD.tones))) A.buf.glass[m] = mkBuf(2.2, (d, n) => {
+    const f = NOTE(m + 12);
+    for (let i = 0; i < n; i++) { const t = i / SR; const env = Math.min(1, t / 0.003) * Math.exp(-t / 0.7); d[i] = (Math.sin(TAU * f * t) + 0.25 * Math.sin(TAU * f * 2.76 * t) * Math.exp(-t / 0.12) + 0.12 * Math.sin(TAU * f * 5.4 * t) * Math.exp(-t / 0.05)) * env; }
+    normalize(d, 0.6);
+  });
+  // a soft pad voice per chord tone, looped
+  A.buf.padNote = {};
+  // a rope pulled and the bell's wheel turning
+  A.buf.rope = mkBuf(0.6, (d, n) => { for (let i = 0; i < n; i++) { const t = i / SR; d[i] = noise() * Math.min(1, t / 0.05) * Math.exp(-t / 0.15); } bp2(d, 700, 1.4); lp1(d, 0.3); normalize(d, 0.6); });
+}
+
+// make the context and every buffer while the title is up (a suspended context can do that), start on the click
+function audioPrepare() {
+  const A = AUDIO;
+  if (A.ctx) return;
+  try { A.ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive', sampleRate: SR }); } catch (e) { A.ctx = null; return; }
+  const t0 = performance.now();
+  renderSounds();
+  A.renderMs = Math.round(performance.now() - t0);
+}
+function audioInit() {
+  const A = AUDIO;
+  if (!A.ctx) audioPrepare();
+  if (!A.ctx) return;
+  A.ctx.resume();
+  if (A.on) return;
+  const c = A.ctx;
+  A.out = c.createGain(); A.out.gain.value = 0;
+  const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.25;
+  A.out.connect(comp); comp.connect(c.destination); A.comp = comp;
+  A.out.gain.setTargetAtTime(0.9, c.currentTime + 0.1, 0.8);
+  A.sfx = c.createGain(); A.sfx.connect(A.out);
+  A.music = c.createGain(); A.music.gain.value = 0.55; A.music.connect(A.out);
+  // space: a soft diffuse tail, and the hills answering a second and a bit later
+  A.send = c.createGain(); A.send.gain.value = 1;
+  const conv = c.createConvolver();
+  conv.buffer = mkBuf(3.0, (d, n, ch) => { const rr = rng(9 + ch); for (let i = 0; i < n; i++) { const t = i / SR; d[i] = (rr() * 2 - 1) * Math.exp(-t / 0.9) * (t < 0.02 ? t / 0.02 : 1); } lp1(d, 0.25); }, 2);
+  const revGain = c.createGain(); revGain.gain.value = 0.35;
+  A.send.connect(conv); conv.connect(revGain); revGain.connect(A.out);
+  const dl = c.createDelay(3); dl.delayTime.value = 1.35;
+  const fb = c.createGain(); fb.gain.value = 0.22;
+  const dlf = c.createBiquadFilter(); dlf.type = 'lowpass'; dlf.frequency.value = 1800;
+  const dlOut = c.createGain(); dlOut.gain.value = 0.32;
+  A.send.connect(dl); dl.connect(dlf); dlf.connect(fb); fb.connect(dl); dlf.connect(dlOut); dlOut.connect(A.out);
+  // continuous: the blades' hiss, the wind
+  const loop = (buf, f, q, type = 'bandpass') => {
+    const s = c.createBufferSource(); s.buffer = buf; s.loop = true;
+    const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+    const g = c.createGain(); g.gain.value = 0;
+    const pan = c.createStereoPanner();
+    s.connect(fl); fl.connect(g); g.connect(pan); pan.connect(A.sfx);
+    s.start(c.currentTime + Math.random() * 0.1, Math.random() * 2);
+    return { s, f: fl, g, pan };
+  };
+  A.glide = loop(A.buf.noise, 4200, 1.2);
+  A.carve = loop(A.buf.noise, 7000, 2.5);
+  A.wind = loop(A.buf.noise, 420, 0.6);
+  A.whistle = loop(A.buf.noise, 1900, 9);
+  // the pad: two quiet voices that follow the chord
+  A.pad = [0, 1, 2].map((i) => {
+    const o = c.createOscillator(); o.type = 'triangle';
+    const o2 = c.createOscillator(); o2.type = 'sine'; o2.detune.value = 7;
+    const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 900;
+    const g = c.createGain(); g.gain.value = 0;
+    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(A.music); g.connect(A.send);
+    o.start(); o2.start();
+    return { o, o2, g, f: fl };
+  });
+  A.on = true; A.started = true;
+  A.nextBeat = c.currentTime + 0.5;
+}
+
+// play a buffer: at a world position (panned, quieter and duller with distance, later by the time sound takes), or flat
+function play(buf, o = {}) {
+  const A = AUDIO; if (!A.on || !buf) return null;
+  if (A.voices > 48) return null;
+  const c = A.ctx;
+  const s = c.createBufferSource(); s.buffer = buf;
+  s.playbackRate.value = o.rate || 1;
+  const g = c.createGain();
+  let gain = o.gain ?? 1, delay = o.delay || 0, pan = o.pan || 0, cut = o.cut || 20000;
+  if (o.pos) {
+    const L = A.listener, dx = o.pos[0] - L.pos[0], dy = (o.pos[1] || 0) - L.pos[1], dz = o.pos[2] - L.pos[2];
+    const d = Math.hypot(dx, dy, dz);
+    gain *= 1 / (1 + d / (o.ref || 8));
+    cut = Math.min(cut, 20000 / (1 + d / 120));
+    pan = clamp((dx * L.right[0] + dz * L.right[2]) / Math.max(d, 1), -1, 1) * 0.85;
+    if (o.travel !== false) delay += d / 343;
+  }
+  if (gain < 0.002) return null;
+  g.gain.value = gain;
+  let node = s;
+  if (cut < 19000) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cut; node.connect(f); node = f; }
+  const p = c.createStereoPanner(); p.pan.value = pan;
+  node.connect(g); g.connect(p); p.connect(o.bus || A.sfx);
+  if (o.wet) { const w = c.createGain(); w.gain.value = o.wet; p.connect(w); w.connect(A.send); }
+  A.voices++;
+  s.onended = () => { A.voices--; };
+  s.start(c.currentTime + delay);
+  return { s, g };
+}
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+AUDIO.init = audioInit;
+AUDIO.prepare = audioPrepare;
+AUDIO.mute = function () { const A = AUDIO; if (!A.ctx) return; A.muted = !A.muted; A.out.gain.setTargetAtTime(A.muted ? 0 : 0.9, A.ctx.currentTime, 0.1); };
+AUDIO.chord = () => (G.dawn > 0.2 ? DAWN_CHORD : CHORDS[AUDIO.chordI % CHORDS.length]);
+// the ice answering something at x,z: near ones tick, far ones sweep
+AUDIO.sing = function (x, z, k = 1) {
+  const A = AUDIO; if (!A.on) return;
+  const d = Math.hypot(x - A.listener.pos[0], z - A.listener.pos[2]);
+  const set = d < 25 ? A.buf.pewNear : d < 140 ? A.buf.pewMid : A.buf.pewFar;
+  const ch = AUDIO.chord(), tone = pick(ch.tones);
+  const rate = Math.pow(2, (tone - 69) / 24) * (0.92 + Math.random() * 0.16);
+  play(pick(set), { pos: [x, 0, z], gain: 0.55 * k, ref: 30, rate, wet: 0.5, travel: true });
+};
+AUDIO.crack = function (x, z, k) {
+  const A = AUDIO; if (!A.on) return;
+  play(pick(A.buf.crack), { pos: [x, 0, z], gain: 0.5 * k, ref: 6, rate: 0.8 + Math.random() * 0.5, wet: 0.3 });
+  AUDIO.sing(x, z, 0.8 * k);
+  if (k > 0.6) play(A.buf.boom, { pos: [x, 0, z], gain: 0.35 * k, ref: 20, rate: 0.9 + Math.random() * 0.2, wet: 0.6 });
+};
+// the drowned peal answering the tower, clearer each time
+AUDIO.peal = function (n) {
+  const A = AUDIO; if (!A.on) return;
+  for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.05 + Math.min(0.12, n * 0.012), cut: 700 + n * 350, delay: 1.2 + i * 0.42, wet: 1, pan: Math.sin(i * 1.3) * 0.5, travel: false });
+};
+// morning: the lake's last answer opens out into D major
+AUDIO.morning = function () {
+  const A = AUDIO; if (!A.on) return;
+  DAWN_CHORD.tones.forEach((m, i) => play(A.buf.glass[m], { gain: 0.12, delay: 2 + i * 0.7, wet: 0.9, bus: A.music, pan: (i / 5 - 0.5) * 0.6, travel: false }));
+  for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.16, cut: 4000, delay: 5.5 + i * 0.48, wet: 1, pan: Math.sin(i * 1.3) * 0.5, travel: false });
+  for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.12, cut: 6000, delay: 9 + i * 0.48, wet: 1, pan: Math.sin(i * 1.7) * 0.5, travel: false });
+};
+AUDIO.plunge = function () { play(AUDIO.buf.plunge, { gain: 0.8, wet: 0.4 }); play(AUDIO.buf.boom, { gain: 0.6, rate: 0.7, wet: 0.6 }); };
+AUDIO.bell = function (k = 1, pos) { play(AUDIO.buf.tower, { pos: pos || SCENE.bell, gain: 0.42 * k, ref: 40, wet: 0.7, travel: true }); };
+
+AUDIO.event = function (e) {
+  const A = AUDIO; if (!A.on) return;
+  const p = [SK.x, 0.1, SK.z];
+  if (e.k === 'push') {
+    const sp = e.speed;
+    if (e.snow > 0.5) play(pick(A.buf.crunch), { pos: p, gain: 0.35, rate: 0.9 + Math.random() * 0.2, travel: false });
+    else play(pick(A.buf.push), { pos: p, gain: 0.18 + sat(sp / 10) * 0.16, rate: 0.9 + Math.random() * 0.15, travel: false, wet: 0.08 });
+    // each push plays the next note of the chord, quietly, as if the ice were struck glass
+    const ch = AUDIO.chord(), tones = ch.tones;
+    const seq = [0, 2, 4, 1, 3, 5, 2, 4];
+    const m = tones[seq[A.arpI % seq.length] % tones.length];
+    A.arpI++;
+    play(A.buf.glass[m], { gain: 0.09 + sat(sp / 11) * 0.05, wet: 0.7, bus: A.music, pan: (e.side || 0) * 0.25, travel: false });
+    // black ice answers a push with a tick that runs away from you
+    if (iceThick(SK.x, SK.z) < 30 && Math.random() < 0.45) { const a = Math.random() * TAU, r = 8 + Math.random() * 30; AUDIO.sing(SK.x + Math.sin(a) * r, SK.z + Math.cos(a) * r, 0.35); }
+  }
+  if (e.k === 'land') { play(A.buf.land, { pos: p, gain: 0.25 + Math.min(0.5, e.impact * 0.08), travel: false, wet: 0.2 }); AUDIO.sing(SK.x + 10, SK.z + 6, 0.6); }
+  if (e.k === 'hop') play(pick(A.buf.push), { pos: p, gain: 0.2, rate: 1.3, travel: false });
+  if (e.k === 'bump') play(A.buf.bump, { pos: p, gain: Math.min(0.8, 0.25 + e.v * 0.1), travel: false, wet: 0.2 });
+};
+
+AUDIO.update = function (dt) {
+  const A = AUDIO; if (!A.on) return;
+  const c = A.ctx, now = c.currentTime;
+  const C = G.cam;
+  A.listener.pos = C.pos.slice();
+  A.listener.right = [-Math.cos(C.yaw), 0, Math.sin(C.yaw)];
+  const sp = SK.fallen ? 0 : SK.speed;
+  const onIce = !SK.air && !SK.fallen;
+  const snow = SK.snow;
+  // blade hiss: louder with speed, brighter on black ice, gone in the air or in snow
+  const gl = onIce ? sat(sp / 9) * 0.06 * (1 - snow * 0.8) : 0;
+  A.glide.g.gain.setTargetAtTime(gl, now, 0.05);
+  A.glide.f.frequency.setTargetAtTime(3200 + sp * 230, now, 0.1);
+  const carve = onIce ? sat(Math.abs(SK.turnRate) * sp / 12) * 0.04 + SK.skid * 0.065 + SK.stopping * sat(sp / 3) * 0.13 : 0;
+  A.carve.g.gain.setTargetAtTime(carve * (1 - snow * 0.7), now, 0.03);
+  A.carve.f.frequency.setTargetAtTime(5000 + SK.skid * 2500 - SK.stopping * 1800, now, 0.05);
+  // wind: always a little; the squall a lot
+  const storm = G.storm || 0;
+  A.wind.g.gain.setTargetAtTime(0.02 + storm * 0.16 + sat(sp / 11) * 0.03 + (WEATHER.gust || 0) * 0.05, now, 0.3);
+  A.wind.f.frequency.setTargetAtTime(380 + storm * 300 + sp * 20, now, 0.3);
+  A.whistle.g.gain.setTargetAtTime(storm * 0.012, now, 0.5);
+  // the music's clock: a chord every two bars
+  const spb = 60 / TEMPO;
+  while (A.nextBeat < now + 0.1) {
+    A.beat++;
+    if (A.beat % 8 === 0) A.chordI++;
+    A.nextBeat += spb;
+  }
+  const ch = AUDIO.chord();
+  const padK = (0.012 + G.aurora * 0.018) * (1 - storm * 0.8) * (G.state === 'title' ? 0.6 : 1) + G.dawn * 0.03;
+  A.pad.forEach((v, i) => {
+    const m = i === 0 ? ch.root : ch.root + (i === 1 ? 7 : 12 + (ch.tones[1] - 62));
+    v.o.frequency.setTargetAtTime(NOTE(m), now, 0.8); v.o2.frequency.setTargetAtTime(NOTE(m), now, 0.8);
+    v.g.gain.setTargetAtTime(padK * (i === 0 ? 1 : 0.6), now, 1.5);
+    v.f.frequency.setTargetAtTime(500 + G.aurora * 700 + G.dawn * 1200, now, 1);
+  });
+  // thin ice under you groans, more as it gives
+  if (onIce && ICE.danger > 0.05 && Math.random() < dt * (1 + ICE.danger * 6)) play(pick(A.buf.creak), { gain: 0.15 + ICE.danger * 0.4, rate: 0.8 + Math.random() * 0.4 - ICE.danger * 0.2, wet: 0.3 });
+  // the lake, now and then, by itself: far booms and long sweeps
+  if (G.state !== 'title' && Math.random() < dt * (0.06 + G.night * 0.08)) {
+    const a = Math.random() * TAU, r = 120 + Math.random() * 500;
+    const x = SK.x + Math.sin(a) * r, z = SK.z + Math.cos(a) * r;
+    if (heightAt(x, z) < -0.5) { if (Math.random() < 0.3) play(A.buf.boom, { pos: [x, 0, z], gain: 0.4, ref: 60, rate: 0.8 + Math.random() * 0.3, wet: 0.7 }); AUDIO.sing(x, z, 0.8); }
+  }
+  // under the village, faint, the old peal going round
+  const inVillage = smooth(1740, 1860, G.s) * (1 - smooth(2420, 2520, G.s));
+  if (inVillage > 0.05 && G.state === 'play') {
+    A.pealT = (A.pealT || 0) - dt;
+    if (A.pealT <= 0) {
+      A.pealI = (A.pealI || 0) + 1;
+      const k = A.pealI % 6;
+      const pos = [SK.x + 40 * Math.sin(A.pealI), -5, SK.z + 30];
+      play(A.buf.peal[k], { gain: 0.07 * inVillage, cut: 700, rate: 1 - Math.random() * 0.004, wet: 1.0, pan: Math.sin(A.pealI * 1.7) * 0.4, travel: false });
+      A.pealT = k === 5 ? 6 + Math.random() * 6 : 0.9;
+    }
+  }
+};
+
+// ---- 70-game.js ----
+// The night: where you are on the way, what time it is, the camera, falling in and coming back.
+const WEATHER = { windX: 0, windZ: 0, snow: 0, gust: 0 };
+const G = {
+  state: 'title', time: 0, s: 0, maxS: 0, d: 0, cp: 0, fade: 1, fallT: 0,
+  cam: { yaw: 0, pitch: 0.3, pos: [0, 2, -6], fov: 62, shake: 0, look: [0, 1, 0], dist: 4.6 },
+  pitchIn: 0.24, title: true, dawn: 0, ending: null, aurora: 0, storm: 0, falls: 0, started: 0,
+  view: null,
+};
+const MOON_DIR = vnorm([0.55, 0.26, 0.8]);
+
+function lightState() {
+  const U = R.U, s = G.maxS, here = G.s;
+  const dusk = 1 - smooth(0, 700, s);
+  const night = smooth(120, 900, s);
+  const storm = smooth(2430, 2530, here) * (1 - smooth(2730, 2860, here)) * (1 - G.dawn);
+  G.storm = lerp(G.storm, storm, 0.02);
+  const aur = smooth(1260, 1760, s) * (1 - G.dawn * 0.85);
+  G.aurora = lerp(G.aurora, aur, 0.01);
+  const dawn = G.dawn;
+  U.time = G.time; U.dusk = dusk; U.night = night; U.storm = G.storm; U.aurora = G.aurora; U.dawn = dawn;
+  U.world = [WORLD.x0, WORLD.z0, WORLD.size, 1 / WORLD.size];
+  const stormK = 1 - G.storm * 0.85;
+  U.moonDir = MOON_DIR;
+  U.moonCol = vmul([0.034, 0.04, 0.056], stormK * (1 - dusk * 0.6) * (1 - dawn));
+  const sun = vnorm([0.75, lerp(-0.08, 0.16, dawn), -0.6]);
+  U.sunDir = sun;
+  U.sunCol = vmul([1.4, 0.95, 0.62], smooth(0.2, 1, dawn) * 1.4);
+  const aurAmb = [0.0006, 0.0028, 0.0016];
+  U.skyAmb = vadd(vadd(vlerp([0.0036, 0.0048, 0.0085], [0.026, 0.025, 0.036], dusk), vmul(aurAmb, G.aurora)), vmul([0.16, 0.19, 0.25], dawn));
+  U.skyAmb = vlerp(U.skyAmb, [0.006, 0.0065, 0.0075], G.storm);
+  U.groundAmb = vmul(U.skyAmb, 0.55);
+  U.fog = [...vlerp(vlerp([0.0035, 0.0045, 0.0075], [0.03, 0.028, 0.034], dusk), [0.014, 0.0155, 0.018], G.storm), (0.00055 + dusk * 0.0002) * (1 - 0.75 * dawn) + G.storm * 0.045];
+  const fl = 1 + 0.035 * Math.sin(G.time * 11.3) + 0.025 * Math.sin(G.time * 23.7 + 1.3) + 0.02 * vnoise(G.time * 6, 3.3);
+  let lk = fl * (SK.fallen ? Math.max(0, 1 - G.fallT * 0.55) : 1);
+  U.lanternCol = vmul([1.0, 0.6, 0.29], 3.2 * lk);
+  // the light is the lantern's globe; when the ice lets you in it goes down with you
+  if (SK.fallen) U.lantern = [FALL.x, Math.max(-6, 0.3 - G.fallT * G.fallT * 1.6), FALL.z];
+  else U.lantern = SK.joints ? SK.joints.lantC.slice() : [SK.x, 1, SK.z];
+  U.underBoost = 4.2;
+  U.exposure = lerp(lerp(2.1, 1.5, dusk), 1.05, dawn) * (G.state === 'tower' && !G.ending ? 0.7 : 1);
+  U.bloomK = 0.055;
+  U.sag = [SK.x, SK.z, ICE.danger * 0.9, ICE.sagPhase];
+  U.bell = SCENE.bell || [0, 0, 0];
+  U.reflect = 0;
+}
+
+function cameraStep(dt, mdy) {
+  const C = G.cam, S = SK;
+  G.pitchIn = clamp(G.pitchIn + mdy, -0.2, 1.0);
+  // the camera follows where you face, a little behind where you are going
+  let want = S.h;
+  if (S.speed > 1.5) { const va = Math.atan2(S.vx, S.vz); want = S.h + wrapAngle(va - S.h) * 0.35; }
+  C.yaw += wrapAngle(want - C.yaw) * expDecay(S.fallen ? 1 : 7.5, dt);
+  C.pitch = lerp(C.pitch, S.fallen ? 0.95 : G.pitchIn, expDecay(S.fallen ? 2 : 12, dt));
+  const sp = S.speed;
+  C.dist = lerp(C.dist, 5.0 + sp * 0.14 + (S.fallen ? 1.5 : 0), expDecay(3, dt));
+  C.fov = lerp(C.fov, 60 + Math.min(sp, 12) * 0.9, expDecay(3, dt));
+  const target = [S.x + Math.sin(S.h) * 0.9, (S.fallen ? 0 : S.y) + 1.05, S.z + Math.cos(S.h) * 0.9];
+  if (S.fallen) { target[0] = FALL.x; target[2] = FALL.z; target[1] = 0.2; }
+  C.look = vlerp(C.look, target, expDecay(18, dt));
+  const cp = Math.cos(C.pitch), spch = Math.sin(C.pitch);
+  const dir = [Math.sin(C.yaw) * cp, -spch, Math.cos(C.yaw) * cp];
+  let pos = vsub(C.look, vmul(dir, C.dist));
+  if (pos[1] < 0.35) pos[1] = 0.35;
+  C.shake = Math.max(0, C.shake - dt * 2.5);
+  const sh = C.shake * C.shake * 0.08 + ICE.danger * 0.012;
+  if (sh > 0) pos = vadd(pos, [(Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh]);
+  C.pos = pos;
+}
+function titleCamera(dt) {
+  const C = G.cam;
+  const t = G.time;
+  C.yaw = 0.05 + Math.sin(t * 0.05) * 0.04; C.pitch = 0.05;
+  C.look = [SK.x + 2, 1.6, SK.z + 30];
+  C.pos = [SK.x - 2.5, 2.2, SK.z - 7.5];
+  C.fov = 58;
+}
+
+// inside the tower: low in a corner, looking up the rope to the bell
+function towerCamera(dt) {
+  const C = G.cam, T = TOWER;
+  const want = [T.x - 1.35, 1.25, T.z - 1.45];
+  C.pos = vlerp(C.pos, want, expDecay(2.5, dt));
+  const look = [T.x + 0.45, 5.5 + Math.sin(BELL.a) * 0.4 + sat(BELL.strikes / 6) * 2.5, T.z + 0.2];
+  C.look = vlerp(C.look, look, expDecay(2.5, dt));
+  C.fov = lerp(C.fov, 66, expDecay(2, dt));
+  C.yaw = Math.atan2(C.look[0] - C.pos[0], C.look[2] - C.pos[2]);
+  C.shake = Math.max(0, C.shake - dt * 2.5);
+  if (C.shake > 0) C.pos = vadd(C.pos, [(Math.random() - 0.5) * C.shake * 0.05, (Math.random() - 0.5) * C.shake * 0.05, 0]);
+}
+// after the card: the morning, skate where you like
+function skateOn() {
+  if (!STORY.card || G.state === 'play') return;
+  $('card').classList.remove('on');
+  G.ending = false; G.state = 'play'; BELL.inside = false;
+  G.dawn = 1;
+  skaterReset(TOWER.x, TOWER.z - TOWER.w / 2 - 2.2, PI);
+  G.cam.yaw = PI; G.cam.pos = [TOWER.x, 2.5, TOWER.z - TOWER.w / 2 - 8]; G.cam.look = [TOWER.x, 1, TOWER.z - 10];
+  G.morningFree = true;
+}
+
+function buildView() {
+  const C = G.cam;
+  const W = R.W, H = R.H;
+  const proj = m4persp(C.fov * PI / 180, W / H, 0.12, 9000);
+  const view = m4lookAt(C.pos, C.look, [0, 1, 0]);
+  const vp = m4mul(proj, view);
+  const mirror = new Float32Array([1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const rvp = m4mul(vp, mirror);
+  const right = [view[0], view[4], view[8]], up = [view[1], view[5], view[9]];
+  return { vp, invVP: m4inv(vp), reflVP: rvp, reflInvVP: m4inv(rvp), reflCam: [C.pos[0], -C.pos[1], C.pos[2]], cam: C.pos, right, up };
+}
+
+// where you come back to after the ice lets you in
+function respawn() {
+  let cp = CHECKPOINTS[0];
+  for (const c of CHECKPOINTS) if (c.s <= G.cpS + 1) cp = c;
+  const p = routeAt(Math.max(0, cp.s - 3));
+  skaterReset(p.x, p.z, p.dir);
+  G.cam.yaw = p.dir; G.cam.look = [p.x, 1.2, p.z];
+  ICE.stress = 0; ICE.danger = 0;
+  G.fade = 1;
+}
+
+function gameStep(dt, inp) {
+  G.time += dt;
+  if (G.state === 'title') { skaterPose(); scarfStep(dt); titleCamera(dt); G.fade = Math.max(0, G.fade - dt * 0.5); return; }
+  if (G.state === 'play') {
+    // fixed small steps for the body so the feel does not depend on the frame rate
+    const n = Math.max(1, Math.ceil(dt / (1 / 240)));
+    const h = dt / n;
+    for (let i = 0; i < n; i++) {
+      skaterStep(h, { turn: inp.turn / n, turnKey: inp.turnKey, skate: inp.skate, stop: inp.stop, hop: inp.hop && i === 0 });
+      iceStep(h);
+      gameEvents(h);
+      SK.events.length = 0;
+      if (SK.fallen) break;
+    }
+    skaterPose(); scarfStep(dt);
+    marksStep(dt);
+    const q = routeNear(SK.x, SK.z);
+    G.s = q.s; G.d = q.d;
+    if (Math.abs(q.d) < 40) G.maxS = Math.max(G.maxS, q.s);
+    for (const c of CHECKPOINTS) if (c.s <= G.maxS && Math.hypot(SK.x - c.x, SK.z - c.z) < 14 && c.s > (G.cpS ?? -1)) G.cpS = c.s;
+    if (SK.fallen) { G.state = 'fall'; G.fallT = 0; }
+    G.fade = Math.max(0, G.fade - dt * 0.8);
+    storyStep(dt, inp);
+  } else if (G.state === 'fall') {
+    G.fallT += dt;
+    if (G.fallT > 1.9) G.fade = Math.min(1, G.fade + dt * 1.4);
+    if (G.fallT > 3.0) { respawn(); G.state = 'play'; updateHoles(); }
+    squallStep(dt);
+  } else if (G.state === 'tower') {
+    // stand under the rope, face it; any button takes the rope
+    const tx = SCENE.bell[0] + 0.55, tz = SCENE.bell[2] - 0.42;
+    SK.x = lerp(SK.x, tx, expDecay(3, dt)); SK.z = lerp(SK.z, tz, expDecay(3, dt));
+    SK.h += wrapAngle(0 - SK.h) * expDecay(4, dt);
+    SK.vx = SK.vz = 0; SK.speed = 0; SK.pushT = 99;
+    SK.crouch = lerp(SK.crouch, BELL.pullT > 0 ? 0.9 : 0.3, expDecay(6, dt));
+    towerStep(dt, inp.skate || inp.stop);
+    skaterPose(); scarfStep(dt);
+    squallStep(dt);
+  }
+  cracksStep(dt);
+  partsStep(dt);
+  if (G.ending) { morningCamera(dt); pathDecal(); }
+  else if (G.morningFree) { MORNING.t += dt; pathDecal(); }
+  else if (G.state === 'tower') towerCamera(dt);
+  else cameraStep(dt, inp.lookY);
+  streamUpload(R.scratches, R.scratches.uploaded);
+  streamUpload(R.cracks, R.cracks.uploaded);
+  if (Math.random() < dt * 2) updateHoles();
+}
+
+// spray, sounds and shakes for what the body did this step
+function gameEvents(dt) {
+  const S = SK, J = S.joints;
+  for (const e of S.events) {
+    AUDIO.event(e);
+    if (e.k === 'push' && J) {
+      const L = J.legs.find((l) => l.side === e.side) || J.legs[0];
+      const n = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < n; i++) spray(L.foot[0], 0.03, L.foot[2], (Math.random() - 0.5) * 0.8 - S.vx * 0.1, 0.3 + Math.random() * 0.4, (Math.random() - 0.5) * 0.8 - S.vz * 0.1, 0.25 + Math.random() * 0.3, 0.012, [0.5, 0.55, 0.6]);
+    }
+    if (e.k === 'land') G.cam.shake = Math.max(G.cam.shake, Math.min(1, e.impact * 0.18));
+    if (e.k === 'bump') { G.cam.shake = Math.max(G.cam.shake, Math.min(1, e.v * 0.15)); for (let i = 0; i < 14; i++) spray(S.x, 0.2, S.z, (Math.random() - 0.5) * 2, Math.random() * 1.6, (Math.random() - 0.5) * 2, 0.5 + Math.random() * 0.6, 0.03, [0.6, 0.65, 0.7], 2, 2.5, 4); }
+  }
+  // a skid or a stop throws snow off the blades
+  const sk = Math.max(S.skid, S.stopping * sat(S.speed / 3));
+  if (sk > 0.15 && !S.air && J && S.speed > 1.2) {
+    const n = sk * S.speed * 60 * dt;
+    for (let i = 0; i < n; i++) {
+      const L = J.legs[i % 2];
+      const [rx, rz] = rightOf(S.bodyH || S.h);
+      const side = S.stopSide || 1;
+      spray(L.foot[0], 0.02, L.foot[2], S.vx * 0.55 + rx * side * (Math.random() - 0.2) * 1.5, 0.4 + Math.random() * 1.2, S.vz * 0.55 + rz * side * (Math.random() - 0.2) * 1.5, 0.35 + Math.random() * 0.5, 0.015 + Math.random() * 0.02, [0.62, 0.66, 0.72], 1, 2.2, 7);
+    }
+  }
+}
+
+// ---- 75-story.js ----
+// The night's events: the squall, the water being let out at the dam, the tower and its bell, and morning.
+const PATH = [];                      // where you have been, every metre and a half, for the morning
+const LEAD = { on: false, t: 0, a: null, b: null, w: 0, maxW: 2.6 };
+const DRAW = { on: false, t: 0, booms: [] };
+const BELL = { a: 0, w: 0, strikes: 0, lastSide: 0, rope: 0, grab: 0, energy: 0, inside: false, held: false, pullT: 0 };
+const STORY = { squallBellT: 3, ended: false, endT: 0, card: false };
+
+function pathStep() {
+  const last = PATH[PATH.length - 1];
+  if (!SK.fallen && (!last || Math.hypot(SK.x - last[0], SK.z - last[1]) > 1.5)) PATH.push([SK.x, SK.z]);
+}
+
+// ---- the squall: snow driven across the ice, the bell ringing by itself in the wind ----
+function squallStep(dt) {
+  const k = G.storm;
+  WEATHER.windX = -11 * k; WEATHER.windZ = 3 * k;
+  WEATHER.gust = k * (0.5 + 0.5 * Math.sin(G.time * 0.7) * Math.sin(G.time * 1.9));
+  if (k > 0.02) {
+    const n = k * 1400 * dt;
+    const C = G.cam.pos;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, r = 3.5 + Math.random() * 24;
+      const x = C[0] + Math.sin(a) * r + 12, z = C[2] + Math.cos(a) * r, y = Math.random() * 5;
+      spray(x, y, z, WEATHER.windX * (0.8 + Math.random() * 0.4), -0.6 - Math.random(), WEATHER.windZ, 1.6 + Math.random() * 1.2, 0.005 + Math.random() * 0.005, [0.22, 0.23, 0.25], 3, 0.0, 0.4, 0.0);
+    }
+    // a bell rung by the wind: irregular, from the dark ahead
+    STORY.squallBellT -= dt;
+    if (STORY.squallBellT <= 0 && G.state === 'play') {
+      AUDIO.bell(0.35 + Math.random() * 0.25);
+      STORY.squallBellT = 3.5 + Math.random() * 4;
+    }
+  }
+}
+
+// ---- the drawdown: below the dam they let water out; the ice drops and breaks across the lake ----
+function drawdownStep(dt) {
+  if (!DRAW.on && G.state === 'play' && G.s > 2775 && G.s < 2900) {
+    DRAW.on = true; DRAW.t = 0;
+    for (let i = 0; i < 9; i++) DRAW.booms.push({ t: 0.2 + i * 0.45 + Math.random() * 0.3, done: false });
+  }
+  if (!DRAW.on) return;
+  DRAW.t += dt;
+  for (const b of DRAW.booms) {
+    if (b.done || DRAW.t < b.t) continue;
+    b.done = true;
+    // the boom starts far up the lake and runs toward you, cracks racing across the ice
+    const k = DRAW.booms.indexOf(b) / DRAW.booms.length;
+    const ang = (Math.random() - 0.5) * 1.2;
+    const dist = lerp(260, 25, k);
+    const x = SK.x + Math.sin(ang) * dist + (Math.random() - 0.5) * 30, z = SK.z + Math.cos(ang) * dist;
+    if (heightAt(x, z) < -0.3) {
+      crack(x, z, { ang: Math.atan2(SK.x - x, SK.z - z) + (Math.random() - 0.5) * 0.8, max: 60 + Math.random() * 90, speed: 140 + Math.random() * 120, depth: 0.07, bright: 0.13, branch: 0.05, wob: 0.18 });
+      crack(x, z, { ang: Math.random() * TAU, max: 30 + Math.random() * 50, speed: 120, depth: 0.06, bright: 0.11, branch: 0.06, wob: 0.25 });
+      AUDIO.crack(x, z, 1);
+    }
+    G.cam.shake = Math.max(G.cam.shake, 0.35 + k * 0.5);
+  }
+  ICE.drop = sat(DRAW.t / 3) * (1 - sat((DRAW.t - 14) / 6));
+  // the lead: a crack across the way that opens into black water
+  if (!LEAD.on && DRAW.t > 2.0) {
+    LEAD.on = true; LEAD.t = 0;
+    const s = 2872, p = routeAt(s), [rx, rz] = rightOf(p.dir);
+    LEAD.a = [p.x - rx * 70, p.z - rz * 70]; LEAD.b = [p.x + rx * 70, p.z + rz * 70];
+    LEAD.dir = p.dir;
+    crack(LEAD.a[0], LEAD.a[1], { ang: Math.atan2(rx, rz), max: 140, speed: 90, depth: 0.09, bright: 0.2, branch: 0.02, wob: 0.02 });
+    AUDIO.crack(p.x, p.z, 1);
+  }
+  if (LEAD.on) {
+    LEAD.t += dt;
+    LEAD.w = LEAD.maxW * smooth(1.2, 7, LEAD.t);
+    if (Math.random() < dt * 2) { const k = Math.random(); AUDIO.sing(lerp(LEAD.a[0], LEAD.b[0], k), lerp(LEAD.a[1], LEAD.b[1], k), 0.5); }
+  }
+}
+function inLead(x, z) {
+  if (!LEAD.on || LEAD.w < 0.25) return false;
+  const ax = LEAD.b[0] - LEAD.a[0], az = LEAD.b[1] - LEAD.a[1], L2 = ax * ax + az * az;
+  const t = clamp(((x - LEAD.a[0]) * ax + (z - LEAD.a[1]) * az) / L2, 0, 1);
+  const px = LEAD.a[0] + ax * t, pz = LEAD.a[1] + az * t;
+  return Math.hypot(x - px, z - pz) < LEAD.w * 0.5 - 0.1;
+}
+// the lead drawn as black water with ragged slush edges, lying on the ice
+function leadDecal() {
+  if (!LEAD.on || LEAD.w < 0.02) return;
+  const S = R.decals; S.n = 0;
+  const ax = LEAD.b[0] - LEAD.a[0], az = LEAD.b[1] - LEAD.a[1], L = Math.hypot(ax, az);
+  const ux = ax / L, uz = az / L, nx = -uz, nz = ux;
+  const N = 140;
+  for (let i = 0; i < N; i++) {
+    const t0 = i / N, t1 = (i + 1) / N;
+    const w0 = LEAD.w * 0.5 * (0.75 + 0.5 * vnoise(t0 * 40, 1)), w1 = LEAD.w * 0.5 * (0.75 + 0.5 * vnoise(t1 * 40, 1));
+    const o0 = vnoise(t0 * 9, 7) * 1.2, o1 = vnoise(t1 * 9, 7) * 1.2;
+    const c0 = [LEAD.a[0] + ax * t0 + nx * o0, LEAD.a[1] + az * t0 + nz * o0], c1 = [LEAD.a[0] + ax * t1 + nx * o1, LEAD.a[1] + az * t1 + nz * o1];
+    const q = (p, w, y) => [p[0] + nx * w, y, p[1] + nz * w];
+    const tri = (a, b, c, col) => { for (const v of [a, b, c]) { const k = S.n * 7; S.data[k] = v[0]; S.data[k + 1] = v[1]; S.data[k + 2] = v[2]; S.data[k + 3] = col[0]; S.data[k + 4] = col[1]; S.data[k + 5] = col[2]; S.data[k + 6] = col[3]; S.n++; } };
+    const water = [0.0, 0.0, 0.0, 1];
+    tri(q(c0, -w0, 0.006), q(c1, -w1, 0.006), q(c1, w1, 0.006), water); tri(q(c0, -w0, 0.006), q(c1, w1, 0.006), q(c0, w0, 0.006), water);
+    const rim = [0.55, 0.6, 0.65, 0.5];
+    for (const sg of [-1, 1]) { tri(q(c0, sg * w0, 0.007), q(c1, sg * w1, 0.007), q(c1, sg * (w1 + 0.18), 0.007), rim); tri(q(c0, sg * w0, 0.007), q(c1, sg * (w1 + 0.18), 0.007), q(c0, sg * (w0 + 0.22), 0.007), rim); }
+  }
+  streamUpload(R.decals);
+}
+
+// ---- the tower: skate in, take the rope when it comes down to you, ring ----
+function inTower(x, z) { const h = TOWER.w / 2 - 0.7; return Math.abs(x - TOWER.x) < h && Math.abs(z - TOWER.z) < h; }
+function towerStep(dt, held) {
+  const B = BELL;
+  // the bell swings on its headstock; the rope's end rises and falls with it
+  const g = 3.2;
+  B.w += (-g * Math.sin(B.a) - B.w * 0.12) * dt;
+  // a pull adds swing in the way it is going, best taken as the rope comes down (the bell through the bottom)
+  if (held && !B.held) { B.pullT = 0.35; B.held = true; play(AUDIO.buf.rope, { gain: 0.3, travel: false }); }
+  if (!held) B.held = false;
+  if (B.pullT > 0) {
+    B.pullT -= dt;
+    const dir = Math.abs(B.w) > 0.05 ? Math.sign(B.w) : (B.lastSide || 1);
+    const atBottom = Math.cos(B.a);
+    B.w += dir * 1.55 * atBottom * atBottom * dt * (Math.abs(B.a) > 1.3 ? 0.2 : 1);
+  }
+  const prev = B.a;
+  B.a += B.w * dt;
+  B.a = clamp(B.a, -1.9, 1.9);
+  // the clapper strikes the lip at the end of each swing, once the swing is big enough
+  if (Math.abs(B.a) > 0.55 && Math.sign(B.w) !== Math.sign(B.w + (-g * Math.sin(B.a)) * dt) && Math.sign(B.a) !== B.lastSide) {
+    B.lastSide = Math.sign(B.a);
+    B.strikes++;
+    const k = sat((Math.abs(B.a) - 0.5) / 0.9);
+    AUDIO.bell(0.45 + k * 0.6);
+    G.cam.shake = Math.max(G.cam.shake, 0.15 + k * 0.2);
+    // the lake answers
+    for (let i = 0; i < 2 + B.strikes; i++) {
+      const a = Math.random() * TAU, r = 60 + Math.random() * 600;
+      const x = TOWER.x + Math.sin(a) * r, z = TOWER.z - Math.abs(Math.cos(a)) * r;
+      if (heightAt(x, z) < -0.5) setTimeout(() => AUDIO.sing(x, z, 0.9), 200 + Math.random() * 1500);
+    }
+    if (B.strikes >= 3) AUDIO.peal(B.strikes);
+    if (B.strikes >= 8 && !G.ending) startMorning();
+  }
+  B.rope = -Math.sin(B.a) * 0.9;
+}
+function bellDraws() {
+  const D = [];
+  if (!SCENE.bell) return D;
+  const [bx, by, bz] = SCENE.bell;
+  // the bell hangs from its headstock and swings about the x axis
+  D.push({ mesh: SKM.bell, m: m4trs([bx, by, bz], 0, BELL.a, 0) });
+  // the rope from the wheel down to the sally
+  const top = [bx + 0.55, by - 0.71, bz], endY = 1.55 + BELL.rope;
+  D.push({ mesh: SKM.rope, m: m4between([top[0], endY, top[2]], top, [0, 0, 1], 0.012) });
+  D.push({ mesh: SKM.sally, m: m4trs([top[0], endY + 0.35, top[2]], 0, 0, 0, [0.035, 0.6, 0.035]) });
+  return D;
+}
+
+// ---- morning ----
+const MORNING = { t: 0, keys: null };
+function startMorning() {
+  if (STORY.ended) return;
+  STORY.ended = true;
+  G.ending = true; MORNING.t = 0;
+  const T = TOWER;
+  // up the inside of the tower, out of the belfry, back over the lake to see it all
+  // up the inside of the tower and out of the belfry; down over the drowned church; south along the old street, looking
+  // down through the ice; then up, to see the whole valley and the way you came
+  const vz = (z) => [routeX(z), z];
+  MORNING.keys = [
+    { t: 0, pos: [T.x - 0.9, 1.5, T.z - 0.8], look: [T.x + 0.2, 10, T.z + 0.3] },
+    { t: 6, pos: [T.x - 0.2, 10.5, T.z - 0.6], look: [T.x - 1, 13, T.z - 12] },
+    { t: 13, pos: [T.x - 6, 24, T.z - 24], look: [T.x + 10, -6, T.z + 4] },
+    { t: 22, pos: [vz(2700)[0] - 12, 30, 2700], look: [vz(2560)[0], -6, 2560] },
+    { t: 32, pos: [vz(2250)[0] - 16, 34, 2250], look: [vz(2120)[0] + 4, -6, 2120] },
+    { t: 42, pos: [vz(2010)[0] - 20, 46, 2010], look: [vz(1880)[0], -6, 1880] },
+    { t: 60, pos: [vz(1900)[0] - 140, 260, 2150], look: [vz(700)[0], -4, 700] },
+  ];
+  AUDIO.morning();
+}
+function morningCamera(dt) {
+  MORNING.t += dt;
+  const K = MORNING.keys, t = MORNING.t;
+  let i = 0; while (i < K.length - 2 && K[i + 1].t < t) i++;
+  const a = K[i], b = K[i + 1];
+  // a Catmull-Rom through the keys, so the flight does not stop at each one
+  const i0 = K[Math.max(0, i - 1)], i3 = K[Math.min(K.length - 1, i + 2)];
+  const u = clamp((t - a.t) / (b.t - a.t), 0, 1);
+  const cr = (p0, p1, p2, p3) => p1.map((_, k) => 0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * u + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * u * u + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * u * u * u));
+  G.cam.pos = cr(i0.pos, a.pos, b.pos, i3.pos);
+  G.cam.look = vlerp(G.cam.look, cr(i0.look, a.look, b.look, i3.look), expDecay(3, dt));
+  G.cam.fov = lerp(G.cam.fov, 56, expDecay(0.5, dt));
+  G.dawn = smooth(3, 24, t);
+  if (t > 46 && !STORY.card) { STORY.card = true; showCard(); }
+}
+function showCard() {
+  const el = $('card'); if (!el) return;
+  const n = FALL.count;
+  el.querySelector('.tally').textContent = n ? '|'.repeat(Math.min(n, 40)) : '';
+  el.classList.add('on');
+}
+// your way across the lake, drawn on the ice for the morning: constant width on screen
+function pathDecal() {
+  const S = R.pathS; S.n = 0;
+  if (PATH.length < 2) return;
+  const C = G.cam.pos;
+  const k = smooth(8, 22, MORNING.t);
+  const col = [1.0 * k, 0.78 * k, 0.5 * k, -1];
+  for (let i = 0; i < PATH.length - 1 && S.n + 6 < S.max; i++) {
+    const a = PATH[i], b = PATH[i + 1];
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 8) continue;           // a jump back to a lantern after falling in
+    const d = Math.hypot(a[0] - C[0], C[1], a[1] - C[2]);
+    pushQuadFlat(S, a, b, 0.0022 * d + 0.03, col, 0.01);
+  }
+  streamUpload(S);
+}
+
+// smoke from the cabin and the huts' stovepipes: someone is in there
+function smokeStep(dt) {
+  const C = G.cam.pos;
+  const pipes = SCENE.smoke.concat(HUTS.map((h) => h.chimney));
+  for (const p of pipes) {
+    if (Math.hypot(p[0] - C[0], p[2] - C[2]) > 160 || Math.random() > dt * 9) continue;
+    spray(p[0] + (Math.random() - 0.5) * 0.1, p[1], p[2] + (Math.random() - 0.5) * 0.1, (Math.random() - 0.5) * 0.15 + 0.25, 0.55 + Math.random() * 0.3, (Math.random() - 0.5) * 0.15, 4 + Math.random() * 3, 0.32 + Math.random() * 0.2, [0.07, 0.072, 0.08], 2, 0.15, -0.02, 0.4);
+  }
+}
+
+function storyStep(dt, inp) {
+  pathStep();
+  smokeStep(dt);
+  squallStep(dt);
+  drawdownStep(dt);
+  leadDecal();
+  if (G.state === 'play' && inLead(SK.x, SK.z) && !SK.air) fallThrough();
+  if (G.state === 'play' && inTower(SK.x, SK.z) && !G.ending && !G.morningFree) { G.state = 'tower'; BELL.inside = true; SK.vx *= 0.2; SK.vz *= 0.2; }
+}
+
+// ---- 90-main.js ----
+// Start-up, input, the loop.
+const INP = { mdx: 0, mdy: 0, skate: false, stop: false, hop: false, keys: new Set(), locked: false, mx: 0.5, my: 0.5, inside: false };
+const canvas = $('c');
+let lastT = 0, frames = 0, fpsT = 0, fps = 0, renderScale = clamp(Number(Q.get('scale')) || 1, 0.3, 2);
+let paused = false;
+const SPEED = clamp(Number(Q.get('speed')) || 1, 0.1, 8);
+// a stand-in pilot for checking: follows the marked way, hops the ridges and the lead, rings the bell
+const BOT = { on: Q.has('bot'), pulled: false };
+function botInput(inp) {
+  if (G.state === 'tower') { inp.skate = BELL.held ? BELL.pullT > 0 : Math.abs(BELL.a) < 0.15; return; }
+  if (G.state !== 'play') return;
+  const look = G.s + 10 + SK.speed * 0.9;
+  const p = look > WORLD.routeLen - 3 ? { x: TOWER.x, z: TOWER.z } : routeAt(look);
+  const want = Math.atan2(p.x - SK.x, p.z - SK.z);
+  inp.turn = clamp(wrapAngle(SK.h - want), -0.06, 0.06);
+  inp.skate = true; inp.stop = false;
+  const [fx, fz] = fwdOf(SK.h);
+  const ax = SK.x + fx * (1.2 + SK.speed * 0.12), az = SK.z + fz * (1.2 + SK.speed * 0.12);
+  if (!SK.air && (COLLIDERS.some((c) => c.top !== undefined && c.top < 0.6 && Math.hypot(c.x - ax, c.z - az) < 0.9) || inLead(ax, az) || inLead(SK.x + fx * 2.6, SK.z + fz * 2.6))) inp.hop = true;
+}
+
+// the picture's size follows the GPU: if a frame's work runs past what the screen's refresh allows, draw fewer pixels
+const ADAPT = { base: renderScale, hist: [], over: 0, under: 0, fixed: Q.has('scale') };
+function adapt(dtMs) {
+  if (ADAPT.fixed || !GPUT.ext || G.state === 'title') return;
+  ADAPT.hist.push(dtMs); if (ADAPT.hist.length > 90) ADAPT.hist.shift();
+  const sorted = ADAPT.hist.slice().sort((a, b) => a - b), frame = sorted[sorted.length >> 1] || 16.7;
+  const gpu = GPUT.ms;
+  if (gpu > frame * 0.88) ADAPT.over += dtMs; else ADAPT.over = Math.max(0, ADAPT.over - dtMs * 0.5);
+  if (gpu < frame * 0.5) ADAPT.under += dtMs; else ADAPT.under = 0;
+  if (ADAPT.over > 1500 && renderScale > 0.55) { renderScale = Math.max(0.55, renderScale - 0.1); ADAPT.over = 0; }
+  if (ADAPT.under > 6000 && renderScale < ADAPT.base) { renderScale = Math.min(ADAPT.base, renderScale + 0.05); ADAPT.under = 0; }
+}
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(2, Math.round(canvas.clientWidth * dpr * renderScale)), h = Math.max(2, Math.round(canvas.clientHeight * dpr * renderScale));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  resizeTargets(w, h);
+  R.U.res = [w, h];
+}
+
+function setBar(k) { const b = document.querySelector('#veil .bar i'); if (b) b.style.width = Math.round(k * 100) + '%'; }
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+
+async function boot() {
+  try {
+    glInit(canvas);
+    setBar(0.05); await nextFrame();
+    buildWorld();
+    setBar(0.35); await nextFrame();
+    renderInit();
+    buildScene();
+    buildSkaterMeshes();
+    setBar(0.6); await nextFrame();
+    AUDIO.prepare();
+    skaterReset(CHECKPOINTS[0].x, CHECKPOINTS[0].z, 0);
+    updateHoles();
+    resize();
+    // let the driver finish the shaders in the background
+    for (let i = 0; i < 600 && !allProgramsDone(); i++) { setBar(0.6 + 0.35 * (i / 600)); await nextFrame(); }
+    PROGRAMS.forEach(finishProgram);
+    setBar(1);
+    $('veil').classList.add('ready');
+    G.ready = true;
+    if (Q.has('auto')) start();
+    requestAnimationFrame(loop);
+  } catch (e) { fail(String(e && e.stack || e)); }
+}
+
+function start() {
+  if (G.state !== 'title') return;
+  G.state = 'play';
+  G.started = G.time;
+  $('veil').classList.add('gone');
+  AUDIO.init();
+  G.cam.yaw = SK.h;
+}
+
+function loop(t) {
+  requestAnimationFrame(loop);
+  let dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
+  if (lastT) adapt(t - lastT);
+  lastT = t;
+  frames++; fpsT += dt; if (fpsT > 0.5) { fps = Math.round(frames / fpsT); frames = 0; fpsT = 0; if (DEBUG || Q.has('fps')) { const f = $('fps'); f.style.display = 'block'; f.textContent = `${fps} fps gpu ${GPUT.ms.toFixed(1)}ms ${R.W}x${R.H} s=${G.s.toFixed(0)} v=${SK.speed.toFixed(1)} th=${iceThick(SK.x, SK.z).toFixed(1)} st=${ICE.stress.toFixed(2)}`; } }
+  if (paused) dt = 0;
+  dt *= SPEED;
+  resize();
+  const sens = 0.0024;
+  const inp = {
+    turn: INP.locked ? INP.mdx * sens : 0,
+    lookY: INP.locked ? INP.mdy * sens * 0.6 : 0,
+    turnKey: (INP.keys.has('KeyA') || INP.keys.has('ArrowLeft') ? 1 : 0) - (INP.keys.has('KeyD') || INP.keys.has('ArrowRight') ? 1 : 0),
+    skate: INP.skate || INP.keys.has('KeyW') || INP.keys.has('ArrowUp'),
+    stop: INP.stop || INP.keys.has('KeyS') || INP.keys.has('ArrowDown'),
+    hop: INP.hop,
+  };
+  // without pointer lock the mouse is a stick: the further from the middle, the harder you turn
+  if (!INP.locked && INP.inside && G.state === 'play') { const k = (INP.mx - 0.5) * 2; inp.turnKey -= Math.sign(k) * Math.max(0, Math.abs(k) - 0.12) * 1.2; }
+  if (BOT.on) botInput(inp);
+  INP.mdx = 0; INP.mdy = 0; INP.hop = false;
+  if (!paused) gameStep(dt, inp);
+  lightState();
+  const V = buildView();
+  R.U.cam = V.cam;
+  R.U.fade = G.fade;
+  R.U.underwater = 0;
+  const glows = [];
+  if (SK.joints && !SK.fallen) { const c = SK.joints.lantC; glows.push([c[0], c[1], c[2], 0.5, 0.26, 0.14, 0.05]); }
+  for (const l of SCENE.lamps) glows.push([l[0], l[1], l[2], 0.35, 0.2, 0.11, 0.05]);
+  for (const h of HUTS) glows.push([h.window[0], h.window[1], h.window[2], 0.9, 0.09, 0.05, 0.02]);
+  if (SCENE.damLamps) for (const l of SCENE.damLamps) glows.push([l[0], l[1], l[2], 2.4, 0.5, 0.22, 0.06]);
+  buildSprites(V.right, V.up, glows);
+  AUDIO.update(dt);
+  const draws = G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws();
+  if (Math.hypot(G.cam.pos[0] - TOWER.x, G.cam.pos[2] - TOWER.z) < 600) draws.push(...bellDraws());
+  renderFrame({ ...V, skaterDraws: draws });
+}
+
+// ---- input ----
+canvas.addEventListener('mousedown', (e) => {
+  if (G.state === 'title') { if (G.ready) { start(); canvas.requestPointerLock && canvas.requestPointerLock(); } return; }
+  if (STORY.card && G.ending) { skateOn(); return; }
+  if (!INP.locked && canvas.requestPointerLock) canvas.requestPointerLock();
+  if (paused) { paused = false; $('pause').classList.remove('on'); }
+  if (e.button === 0) INP.skate = true;
+  if (e.button === 2) INP.stop = true;
+});
+window.addEventListener('mouseup', (e) => { if (e.button === 0) INP.skate = false; if (e.button === 2) INP.stop = false; });
+window.addEventListener('mousemove', (e) => {
+  if (INP.locked) { INP.mdx += e.movementX; INP.mdy += e.movementY; }
+  INP.mx = e.clientX / window.innerWidth; INP.my = e.clientY / window.innerHeight; INP.inside = true;
+});
+document.addEventListener('mouseleave', () => (INP.inside = false));
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+document.addEventListener('pointerlockchange', () => {
+  INP.locked = document.pointerLockElement === canvas;
+  if (!INP.locked && G.state !== 'title' && !G.ending) { paused = true; $('pause').classList.add('on'); INP.skate = INP.stop = false; }
+});
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  INP.keys.add(e.code);
+  if (e.code === 'Space') { INP.hop = true; e.preventDefault(); }
+  if (e.code === 'KeyM') AUDIO.mute();
+  if (e.code === 'KeyF') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); }
+  if (G.state === 'title' && G.ready && (e.code === 'Space' || e.code === 'Enter')) start();
+  if (paused && (e.code === 'Space' || e.code === 'Enter')) { paused = false; $('pause').classList.remove('on'); canvas.requestPointerLock && canvas.requestPointerLock(); }
+});
+window.addEventListener('keyup', (e) => INP.keys.delete(e.code));
+window.addEventListener('blur', () => { INP.keys.clear(); INP.skate = INP.stop = false; });
+
+// ---- for checking it headless ----
+window.__ice = {
+  SK, G, ICE, R, WORLD, TUNE, CHECKPOINTS, INP,
+  state: () => ({ gpu: +GPUT.ms.toFixed(2), s: +G.s.toFixed(1), d: +G.d.toFixed(1), x: +SK.x.toFixed(1), z: +SK.z.toFixed(1), v: +SK.speed.toFixed(2), fps, state: G.state, stress: +ICE.stress.toFixed(2), thick: +iceThick(SK.x, SK.z).toFixed(1), W: R.W, H: R.H }),
+  tp(s, off = 0) { const p = routeAt(s); const [rx, rz] = rightOf(p.dir); skaterReset(p.x + rx * off, p.z + rz * off, p.dir); G.cam.yaw = p.dir; G.maxS = Math.max(G.maxS, s); G.cpS = s; },
+  hold(k) { INP.skate = !!k; }, stopHold(k) { INP.stop = !!k; }, turn(dx) { INP.mdx += dx; }, pitch(dy) { G.pitchIn = dy; },
+  key(code, down) { if (down) INP.keys.add(code); else INP.keys.delete(code); },
+  FALL, AUDIO, start, skateOn, morning: () => startMorning(), BELL, LEAD, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
+  maxS: (s) => (G.maxS = s),
+};
+boot();
+
+})();
+</script>
+</body>
+</html>
