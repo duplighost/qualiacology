@@ -4,7 +4,7 @@
 // haunted mansion from previous games made it in as destinations. I would like it if they
 // did." None had. This is the first: DESIGN section 7 row 5, Blackthorn Manor.
 //
-// donor: C:/Users/Alex/Projects/blackthorn-manor/src/world.js:6-188 (CS, GX/GZ, LV, ROOMS,
+// donor: C:/Projects/blackthorn-manor/src/world.js:6-188 (CS, GX/GZ, LV, ROOMS,
 //   DOORS, OPEN_PAIRS, RAIL_PAIRS, RAIL_SKIP, RAMPS, FLOOR_HOLES, CEIL_HOLES), read
 //   2026-09-03. The tables are ported VERBATIM in the donor's own frame (a 2 m cell grid,
 //   x 0..60 m, z 0..40 m, the front door on the +z face, y in the donor's metres with the

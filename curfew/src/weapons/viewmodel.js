@@ -181,7 +181,7 @@ const REST_ROT = new THREE.Euler(-0.024, 0.038, 0.052);
  * sway, bob, lag, melee, the flash, the brass pool) is untouched and reads `this.cur`.
  *
  * The carbine's numbers are VIGIL's, lifted from the readable donor:
- *   donor: C:/Users/Alex/Projects/vigil-handoff/vigil-enhanced/src/weapons/viewmodel.js:14-20
+ *   donor: C:/Projects/vigil-handoff/vigil-enhanced/src/weapons/viewmodel.js:14-20
  *     REST  (0.0975, -0.0880, -0.2820) rot (-0.024, 0.038, 0.052)
  *     SIGHT (0, 0.0680, -0.0790), ADS_DIST 0.155, MUZZLE (0, 0.012, -0.472)
  * The CINDER carbine is 0.47 m long (butt at +0.199), so VIGIL's rest z puts the butt 8 cm
@@ -1260,7 +1260,7 @@ export class Viewmodel {
    * Geometry lifted piece by piece from the readable donor, in the SAME material instances
    * as the rifle (blued for anodized/steel, matte for polymer/ceramic, brass for the few
    * bright fittings) so no program links when it first appears:
-   *   donor: C:/Users/Alex/Projects/vigil-handoff/vigil-enhanced/src/weapons/viewmodel.js:96-210
+   *   donor: C:/Projects/vigil-handoff/vigil-enhanced/src/weapons/viewmodel.js:96-210
    * What is NOT lifted, on purpose: the cyan emissive conduit and the tinted magazine window
    * (each is a new material), the two gloved hands (the rifle has none; two guns with one
    * pair of hands between them would be the odd one), the chamfer helper (gfx/shapes.js is

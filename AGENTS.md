@@ -50,12 +50,12 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 
 ## Where each game's files come from
 
-A game with its own source lives in `D:\Projects\<site folder>`, named exactly like its
+A game with its own source lives in `C:\Projects\<site folder>`, named exactly like its
 folder here, and has a private GitHub repository `duplighost/<site folder>` (FETCH's is
 public). Commit and push there after working on a game, then make the site copy as below.
-Old copies and retired folders are in `D:\Archive`; never copy from there.
+Old copies and retired folders are in `C:\Archive`; never copy from there.
 
-| site folder | how the site copy is made (run inside `D:\Projects\<site folder>`) |
+| site folder | how the site copy is made (run inside `C:\Projects\<site folder>`) |
 |---|---|
 | olly-olly | `node tools/build-site-copy.mjs`; never hand-edit the site copy |
 | arc, thrown | `node build-site-copy.mjs`; never hand-edit the site copy |
@@ -68,7 +68,7 @@ Old copies and retired folders are in `D:\Archive`; never copy from there.
 | skip | `node build-site-copy.mjs --site=<this repo>`; never hand-edit the site copy |
 | tideglass | `node build-site-copy.mjs`; never hand-edit the site copy |
 | fetch | copy the changed `src/` files; keep the site's index.html shell |
-| vigil | none: the site copy here is the source. The older standalone folder is in `D:\Archive\Projects\vigil`; never copy it over the site copy |
+| vigil | none: the site copy here is the source. The older standalone folder is in `C:\Archive\Projects\vigil`; never copy it over the site copy |
 | spooky | none: Alex's Halloween page, hand-made, not generated. It repeats the five games' lines from `site-data.json`: change both |
 | strung | `node build-site-copy.mjs <this repo>`; never hand-edit the site copy |
 | collateral | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy |
@@ -84,7 +84,7 @@ Old copies and retired folders are in `D:\Archive`; never copy from there.
 | al-dente | copy `src/` (and `vendor/` only if three.js changes) into `al-dente/`; keep the site's index.html shell (it self-hosts the fonts and three.js). Included in PASTA and still reachable from the original /spaghetti/ opening. |
 | rally, rocket-shoes | plain copies; compare dates both ways before copying |
 | starstruck | `node tools/build-site-copy.mjs --site=<this repo>` writes `starstruck/`; never hand-edit the site copy |
-| sill | the page here (`sill/index.html`) is hand-written. The game is a Windows desktop app built in `D:\Projects\sill`; its download is `SILL-windows.zip` on this repo's GitHub release `sill-v1.0.0` |
+| sill | the page here (`sill/index.html`) is hand-written. The game is a Windows desktop app built in `C:\Projects\sill`; its download is `SILL-windows.zip` on this repo's GitHub release `sill-v1.0.0` |
 | everything else | none: the site copy here is the only source |
 
 ## Access and machine notes
