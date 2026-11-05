@@ -219,6 +219,7 @@ function makeProgram(name, vs, fs) {
   gl.attachShader(p, v); gl.attachShader(p, f);
   gl.bindAttribLocation(p, 0, 'aPos'); gl.bindAttribLocation(p, 1, 'aNrm'); gl.bindAttribLocation(p, 2, 'aCol');
   gl.bindAttribLocation(p, 3, 'aI0'); gl.bindAttribLocation(p, 4, 'aI1');
+  gl.bindAttribLocation(p, 5, 'aBi'); gl.bindAttribLocation(p, 6, 'aBw');
   gl.linkProgram(p);
   const P = { name, prog: p, v, f, vsrc, fsrc, u: null, ready: false };
   PROGRAMS.push(P);
@@ -1675,8 +1676,20 @@ void main() {
   vec3 q = vP; if (q.y < 0.0) q.y *= APP;
   gl_Position = uVP * vec4(q, 1.0);
 }`;
+// the skater's body: each vertex follows up to four bones
+const OBJ_SKIN_VS = COMMON + `
+in vec3 aPos; in vec3 aNrm; in vec4 aCol; in vec4 aBi; in vec4 aBw;
+uniform mat4 uVP; uniform mat4 uBones[12];
+out vec3 vP; out vec3 vN; out vec4 vC;
+void main() {
+  mat4 M = uBones[int(aBi.x)] * aBw.x + uBones[int(aBi.y)] * aBw.y + uBones[int(aBi.z)] * aBw.z + uBones[int(aBi.w)] * aBw.w;
+  vec4 w = M * vec4(aPos, 1.0);
+  vP = w.xyz; vN = normalize(mat3(M) * aNrm); vC = aCol;
+  vec3 q = vP; if (q.y < 0.0) q.y *= APP;
+  gl_Position = uVP * vec4(q, 1.0);
+}`;
 const OBJ_FS = COMMON + `
-in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; uniform float uLanternK; out vec4 o;
+in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; uniform float uLanternK; uniform float uStone; out vec4 o;
 void main() {
   vec3 p = vP;
   if (uReflect > 0.5 && p.y < -0.01) discard;
@@ -1687,8 +1700,8 @@ void main() {
   if (m < -0.001) {
     col = alb * (-m);
   } else {
-    // stone shows its courses, under the ice and above it
-    if (m < 0.06 && abs(n.y) < 0.5) {
+    // stone shows its courses, under the ice and above it (built things only: not the skater, the rope, the bell)
+    if (uStone > 0.5 && m < 0.06 && abs(n.y) < 0.5) {
       float row = floor(p.y / 0.27);
       float u = (abs(n.x) > abs(n.z) ? p.z : p.x) / 0.52 + row * 0.5 + h12(vec2(row, 3.0)) * 0.3;
       float mort = max(smoothstep(0.08, 0.0, abs(fract(p.y / 0.27) - 0.5) - 0.42), smoothstep(0.06, 0.0, abs(fract(u) - 0.5) - 0.44));
@@ -1943,6 +1956,7 @@ function renderInit() {
   R.P.ground = makeProgram('ground', GROUND_VS, GROUND_FS);
   R.P.obj = makeProgram('obj', OBJ_VS, OBJ_FS);
   R.P.tree = makeProgram('tree', TREE_VS, OBJ_FS);
+  R.P.skin = makeProgram('skin', OBJ_SKIN_VS, OBJ_FS);
   R.P.ice = makeProgram('ice', ICE_VS, ICE_FS);
   R.P.mark = makeProgram('mark', MARK_VS, MARK_FS);
   R.P.sprite = makeProgram('sprite', SPRITE_VS, SPRITE_FS);
@@ -2018,7 +2032,7 @@ function drawGround(vp, reflect) {
 
 function drawObjects(vp, reflect, extraDraws) {
   use(R.P.obj);
-  common({ uVP: vp, uModel: m4(), uSnowy: 1, uBright: 1, uLanternK: 1 });
+  common({ uVP: vp, uModel: m4(), uSnowy: 1, uBright: 1, uLanternK: 1, uStone: 1 });
   for (const B of R.meshes) {
     if (reflect && B.under) continue;
     set({ uSnowy: B.snowy ? 1 : 0 });
@@ -2026,13 +2040,19 @@ function drawObjects(vp, reflect, extraDraws) {
   }
   if (R.trees) {
     use(R.P.tree);
-    common({ uVP: vp, uSnowy: 1, uBright: 1, uLanternK: 1 });
+    common({ uVP: vp, uSnowy: 1, uBright: 1, uLanternK: 1, uStone: 1 });
     drawMesh(R.trees, R.trees.instances);
     use(R.P.obj);
     common({ uVP: vp, uSnowy: 0, uBright: 1 });
   }
-  set({ uSnowy: 0 });
-  if (extraDraws) for (const d of extraDraws) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh); }
+  set({ uSnowy: 0, uStone: 0 });
+  if (!extraDraws) return;
+  for (const d of extraDraws) if (!d.bones) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh); }
+  let skin = false;
+  for (const d of extraDraws) if (d.bones) {
+    if (!skin) { use(R.P.skin); common({ uVP: vp, uSnowy: 0, uStone: 0 }); skin = true; }
+    set({ uBones: d.bones, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh);
+  }
 }
 
 function drawSprites(vp) {
@@ -2178,7 +2198,7 @@ const SK = {
 function skaterReset(x, z, h) {
   Object.assign(SK, { x, z, y: 0, vx: 0, vz: 0, vy: 0, h, air: false, stopping: 0, skid: 0, speed: 0, pushT: 99, pushLeft: 0, nextPush: 0, pushing: 0, lean: 0, turnRate: 0, still: 0, fallen: false });
   SK.scarf = [];
-  for (let i = 0; i < 9; i++) SK.scarf.push({ p: [x - Math.sin(h) * i * 0.09, 1.45 - i * 0.05, z - Math.cos(h) * i * 0.09], o: null });
+  for (let i = 0; i < 11; i++) SK.scarf.push({ p: [x - Math.sin(h) * i * 0.07, 1.45 - i * 0.04, z - Math.cos(h) * i * 0.07], o: null });
   SK.scarf.forEach((s) => (s.o = s.p.slice()));
   SK.lant = { a: 0, va: 0, b: 0, vb: 0 };
 }
@@ -2321,7 +2341,7 @@ function skaterAnimate(dt) {
   // lean into turns (centripetal), crouch with speed and before a hop
   const latA = S.turnRate * sp;
   S.lean = lerp(S.lean, clamp(-latA / 9.81, -0.55, 0.55), expDecay(8, dt));
-  S.crouch = lerp(S.crouch, 0.35 + f * 0.45 + S.stopping * 0.35, expDecay(5, dt));
+  S.crouch = lerp(S.crouch, 0.1 + f * 0.6 + S.stopping * 0.35, expDecay(5, dt));
   // the stride clock: phase 0..1 over a push and its recovery
   const pushing = S.pushT < TUNE.pushTime + 0.36;
   S.pushing = lerp(S.pushing, pushing ? 1 : 0, expDecay(6, dt));
@@ -2347,20 +2367,23 @@ function skaterPose() {
   const o = [S.x, S.y, S.z];
   const at = (r, u, fw) => [o[0] + Rt[0] * r + F[0] * fw, o[1] + u, o[2] + Rt[2] * r + F[2] * fw];
   const f = sat(S.speed / TUNE.vmax);
-  const hipH = 0.94 - S.crouch * 0.2 + S.bob + (S.air ? 0.06 : 0);
+  const hipH = 1.07 - S.crouch * 0.2 + S.bob + (S.air ? 0.05 : 0);
   const lean = S.lean;
-  // pelvis shifts over the gliding leg, the whole body leans into the turn
-  const pel = at(S.sway + lean * 0.25, hipH, -0.02 - S.stopping * 0.06);
-  const tilt = 0.32 + f * 0.25 - S.stopping * 0.4;           // forward lean of the torso
-  const up = vnorm(vadd(vadd(vmul(UP, Math.cos(tilt)), vmul(F, Math.sin(tilt))), vmul(Rt, lean * 0.6)));
+  const tilt = 0.17 + f * 0.24 - S.stopping * 0.3;           // forward lean of the torso
+  // pelvis shifts over the gliding leg and back as the chest goes forward; the whole body leans into the turn
+  const pel = at(S.sway + lean * 0.25, hipH, -0.03 - tilt * 0.12 - S.stopping * 0.05);
+  const tiltV = (t, side) => vnorm(vadd(vadd(vmul(UP, Math.cos(t)), vmul(F, Math.sin(t))), vmul(Rt, side)));
+  const up = tiltV(tilt, lean * 0.6);
+  const hipUp = tiltV(tilt * 0.45, lean * 0.5);
   const chest = vadd(pel, vmul(up, 0.5));
   const neck = vadd(pel, vmul(up, 0.62));
   const head = vadd(neck, vadd(vmul(up, 0.13), vmul(F, 0.03)));
   // legs: the pushing foot goes out and back, then lifts and comes home
+  const legHint = vadd(F, [0, 0.2, 0]);
   const legs = [];
   const sideOfStop = S.stopping;
   for (const side of [-1, 1]) {
-    const hip = vadd(pel, vmul(Rt, side * 0.1));
+    const hip = vadd(pel, vmul(Rt, side * 0.09));
     let lat = side * (0.12 + f * 0.03), fw = side * 0.04 * (1 - f), lift = 0, out = 0;
     const t = S.pushT, P = TUNE.pushTime, Rc = 0.36;
     if (S.pushSide === side && t < P + Rc && !S.air) {
@@ -2370,40 +2393,62 @@ function skaterPose() {
     if (S.air) { lift = 0.12 * Math.sin(sat(S.hopT / 0.5) * PI); lat = side * 0.1; }
     if (sideOfStop > 0.05) { lat = lerp(lat, side * 0.2, sideOfStop); fw = lerp(fw, side * S.stopSide * 0.14, sideOfStop); out *= 1 - sideOfStop; }
     const foot = at(lat, lift + 0.12, fw);
-    const r = ik2(hip, foot, 0.46, 0.46, vadd(F, [0, 0.2, 0]));
+    const r = ik2(hip, foot, 0.47, 0.47, legHint);
     // a pushing blade turns outward (right turns are negative heading)
     legs.push({ side, hip, knee: r.knee, foot: r.foot, yaw: bodyH - side * out });
   }
+  // the coat's skirt hangs from the hips (its front and sides go with the thighs, by their weights), swinging forward a
+  // little over the knees
+  const thighs = vnorm(vadd(vsub(legs[0].knee, legs[0].hip), vsub(legs[1].knee, legs[1].hip)));
+  const skirtUp = vnorm(vadd(vmul(hipUp, 0.8), vmul(vnorm(vadd(vmul(thighs, -0.5), [0, 0.5, 0])), 0.2)));
   // arms: the free (left) arm swings against the push; the right hand holds the lantern out in front and low
-  const shL = vadd(chest, vadd(vmul(Rt, -0.2), vmul(up, 0.05)));
-  const shR = vadd(chest, vadd(vmul(Rt, 0.2), vmul(up, 0.05)));
-  const swing = S.pushing * S.pushSide * 0.35;
-  let handL = vadd(shL, vadd(vadd(vmul(Rt, -0.18 - f * 0.1), vmul(F, swing - 0.05)), [0, -0.48 + Math.abs(swing) * 0.2, 0]));
-  let handR = vadd(shR, vadd(vadd(vmul(Rt, 0.2), vmul(F, 0.4)), [0, -0.36, 0]));
+  const shL = vadd(chest, vadd(vmul(Rt, -0.18), vmul(up, 0.02)));
+  const shR = vadd(chest, vadd(vmul(Rt, 0.18), vmul(up, 0.02)));
+  const swing = S.pushing * S.pushSide * 0.32;
+  let handL = vadd(shL, vadd(vadd(vmul(Rt, -0.14 - f * 0.08), vmul(F, swing + 0.02)), [0, -0.5 + Math.abs(swing) * 0.16, 0]));
+  let handR = vadd(shR, vadd(vadd(vmul(Rt, 0.12), vmul(F, 0.3)), [0, -0.42, 0]));
   // in the tower both hands are on the rope's sally
   if (BELL.inside && SCENE.bell) {
     const g = [SCENE.bell[0] + 0.55, 1.55 + BELL.rope + 0.2, SCENE.bell[2]];
     handL = vadd(g, [0, 0.16, 0]); handR = vadd(g, [0, -0.04, 0]);
   }
-  const elL = ik2(shL, handL, 0.29, 0.28, vadd(vmul(F, -1), vmul(Rt, -0.3))).knee;
-  const elR = ik2(shR, handR, 0.29, 0.28, vadd(vmul(F, -0.5), vmul(Rt, 0.6))).knee;
+  const hintL = vadd(vmul(F, -1), vmul(Rt, -0.3)), hintR = vadd(vmul(F, -0.5), vmul(Rt, 0.6));
+  const aL = ik2(shL, handL, 0.29, 0.28, hintL), aR = ik2(shR, handR, 0.29, 0.28, hintR);
+  const elL = aL.knee, elR = aR.knee;
+  handL = aL.foot; handR = aR.foot;
   // the lantern hangs from the right hand on its bail
   const L = S.lant;
   const hang = vnorm([Math.sin(L.b) * Rt[0] + Math.sin(L.a) * F[0], -Math.cos(L.a) * Math.cos(L.b), Math.sin(L.b) * Rt[2] + Math.sin(L.a) * F[2]]);
   let lantTop = vadd(handR, [0, -0.02, 0]);
   let lantC = vadd(lantTop, vmul(hang, 0.2));
   if (BELL.inside) { lantC = at(0.55, 0.17, 0.25); lantTop = vadd(lantC, [0, 0.2, 0]); hang[0] = 0; hang[1] = -1; hang[2] = 0; }
-  S.joints = { pel, chest, neck, head, up, F, Rt, legs, shL, shR, elL, elR, handL, handR, lantTop, lantC, hang };
-  return S.joints;
+  const J = { pel, chest, neck, head, up, hipUp, skirtUp, F, Rt, legs, shL, shR, elL, elR, handL, handR, lantTop, lantC, hang, hintL, hintR, legHint,
+    headYaw: bodyH - S.stopping * S.stopSide * 0.9, headPitch: 0.1 + S.crouch * 0.05, headRoll: -lean * 0.4 };
+  J.frames = boneFrames(J);
+  S.joints = J;
+  return J;
 }
 
-// the scarf: a few points on strings, pulled by gravity and the air you move through
+// the scarf: a few points on strings, pulled by gravity and the air you move through, kept outside the body
 function scarfStep(dt) {
-  const J = SK.joints; if (!J) return;
-  const P = SK.scarf;
-  const anchor = vadd(J.neck, vadd(vmul(J.F, -0.1), vmul(J.up, -0.02)));
+  const J = SK.joints; if (!J || !J.frames) return;
+  const P = SK.scarf, FR = J.frames;
+  const anchor = toWorld(FR[BONE.chest], [0.03, 0.57, -0.122]);
   P[0].p = anchor; P[0].o = anchor.slice();
   const wind = [-SK.vx + (WEATHER.windX || 0), 0, -SK.vz + (WEATHER.windZ || 0)];
+  // the body, as the scarf feels it: the coat (an elliptic column), its skirt, the head
+  const pushOut = (q) => {
+    let hit = false;
+    for (const [b, y0, y1, ax, az, cz] of [[BONE.chest, 0.05, 0.53, 0.215, 0.152, -0.01], [BONE.skirt, -0.34, 0.12, 0.225, 0.18, -0.006]]) {
+      const M = FR[b], l = toLocal(M, q.p);
+      if (l[1] < y0 || l[1] > y1) continue;
+      const ex = l[0] / ax, ez = (l[2] - cz) / az, e = ex * ex + ez * ez;
+      if (e < 1) { const s = 1 / Math.sqrt(Math.max(e, 1e-4)); l[0] *= s; l[2] = cz + (l[2] - cz) * s; q.p = toWorld(M, l); hit = true; }
+    }
+    const hc = J.head, dh = vsub(q.p, hc), dl = vlen(dh);
+    if (dl < 0.13) { q.p = vadd(hc, vmul(dh, 0.13 / Math.max(dl, 1e-4))); hit = true; }
+    if (hit) q.o = vadd(q.p, vmul(vsub(q.o, q.p), 0.7));     // wool on wool: it drags
+  };
   const sub = 3, h = dt / sub;
   for (let s = 0; s < sub; s++) {
     for (let i = 1; i < P.length; i++) {
@@ -2413,11 +2458,14 @@ function scarfStep(dt) {
       q.o = q.p.slice();
       q.p = vadd(vadd(q.p, vmul(v, 0.985)), vmul(acc, h * h));
     }
-    for (let it = 0; it < 3; it++) for (let i = 1; i < P.length; i++) {
-      const a = P[i - 1], b = P[i], d = vsub(b.p, a.p), L = vlen(d) || 1e-6, want = 0.085;
-      const corr = vmul(d, (L - want) / L);
-      if (i === 1) b.p = vsub(b.p, corr); else { a.p = vadd(a.p, vmul(corr, 0.5)); b.p = vsub(b.p, vmul(corr, 0.5)); }
-      if (b.p[1] < 0.03) b.p[1] = 0.03;
+    for (let it = 0; it < 3; it++) {
+      for (let i = 1; i < P.length; i++) {
+        const a = P[i - 1], b = P[i], d = vsub(b.p, a.p), L = vlen(d) || 1e-6, want = 0.068;
+        const corr = vmul(d, (L - want) / L);
+        if (i === 1) b.p = vsub(b.p, corr); else { a.p = vadd(a.p, vmul(corr, 0.5)); b.p = vsub(b.p, vmul(corr, 0.5)); }
+        if (b.p[1] < 0.03) b.p[1] = 0.03;
+      }
+      for (let i = 1; i < P.length; i++) pushOut(P[i]);
     }
   }
   SK.phase += dt;
@@ -2426,59 +2474,24 @@ function scarfStep(dt) {
 // ---- meshes ----
 const SKM = {};
 function buildSkaterMeshes() {
-  const coat = rgb(0x121829, 0.05), coatHi = rgb(0x1c2438, 0.05), trou = rgb(0x0f1014, 0.05), boot = rgb(0x0b0a09, 0.4);
-  const skin = rgb(0xc79a82, 0.1), hat = rgb(0xa3262a, 0.03), cream = rgb(0xe8dfcf, 0.02), mitt = rgb(0x5a2420, 0.02);
+  const boot = rgb(0x141110, 0.45);
   const steel = rgb(0xc9d2da, 0.95), iron = rgb(0x24201d, 0.6), lred = rgb(0x6e1e18, 0.5);
-  // limbs are tapered capsules built at the bone's own length, so nothing is stretched and no joint shows
-  const capsule = (len, r0, r1, col, extra) => {
-    const P = [], n = 6;
-    for (let i = 0; i <= n; i++) { const a = -PI / 2 + (i / n) * (PI / 2); P.push([r0 * Math.cos(a), r0 * Math.sin(a)]); }
-    for (let i = 1; i <= n; i++) { const a = (i / n) * (PI / 2); P.push([r1 * Math.cos(a), len + r1 * Math.sin(a)]); }
-    const b = new MB(); b.lathe(m4(), col, P, 14);
-    if (extra) extra(b);
-    return uploadMesh(b.build());
-  };
-  SKM.thigh = capsule(0.46, 0.092, 0.064, trou);
-  SKM.shin = capsule(0.46, 0.064, 0.047, trou, (b) => b.lathe(m4trs([0, 0.17, 0]), rgbS(trou, 0.8), [[0.066, 0], [0.069, 0.06], [0.064, 0.12]], 14));
-  SKM.upper = capsule(0.29, 0.07, 0.057, coat);
-  SKM.fore = capsule(0.28, 0.056, 0.046, coat, (b) => b.lathe(m4trs([0, 0.2, 0]), coatHi, [[0.056, 0], [0.062, 0.03], [0.06, 0.075], [0.05, 0.085]], 14));
-  // torso: a wool coat, broad at the shoulders, belted, its skirt flaring over the hips; flattened front to back
+  buildBody();
   {
-    const b = new MB();
-    b.lathe(m4trs([0, 0, 0], 0, 0, 0, [1, 1, 0.74]), coat, [[0.172, -0.02], [0.17, 0.04], [0.185, 0.18], [0.215, 0.33], [0.235, 0.43], [0.21, 0.5], [0.12, 0.56], [0.06, 0.58]], 16);
-    b.cyl(m4trs([0, 0.02, 0], 0, 0, 0, [0.178, 0.05, 0.135]), rgb(0x2b2118, 0.3), 16);    // belt
-    b.box(m4trs([0, 0.25, 0.155], 0, -0.1, 0, [0.02, 0.4, 0.01]), coatHi);               // placket
-    for (let i = 0; i < 4; i++) b.sphere(m4trs([0.03, 0.1 + i * 0.1, 0.165 - i * 0.004], 0, 0, 0, 0.012), rgb(0x8a7a5a, 0.6), 6, 4);
-    b.lathe(m4trs([0, 0.5, 0], 0, 0, 0, [1, 1, 0.9]), coatHi, [[0.13, 0], [0.12, 0.05], [0.09, 0.08]], 12);   // collar
-    SKM.torso = uploadMesh(b.build());
-    const k = new MB();
-    k.lathe(m4trs([0, 0, 0], 0, 0, 0, [1, 1, 0.78]), coat, [[0.205, -0.34], [0.212, -0.3], [0.2, -0.2], [0.185, -0.08], [0.172, 0.02], [0.16, 0.04]], 16);
-    SKM.skirt = uploadMesh(k.build());
-  }
-  {
-    const b = new MB();
-    b.sphere(m4trs([0, 0, 0], 0, 0, 0, [0.095, 0.115, 0.1]), skin, 14, 10);
-    b.sphere(m4trs([0, -0.01, -0.012], 0, 0, 0, [0.099, 0.075, 0.098]), rgb(0x2a1c14, 0.1), 14, 8);   // hair under the hat
-    b.sphere(m4trs([0, 0.0, 0.095], 0, 0, 0, [0.022, 0.026, 0.02]), rgb(0xd49a86, 0.1), 8, 6);      // nose, cold
-    b.lathe(m4trs([0, 0.025, 0], 0, -0.1, 0), hat, [[0.104, 0], [0.108, 0.05], [0.1, 0.1], [0.075, 0.15], [0.03, 0.18], [0, 0.185]], 14);
-    b.cyl(m4trs([0, 0.015, 0], 0, -0.1, 0, [0.108, 0.04, 0.108]), cream, 14);   // the turned-up band
-    b.sphere(m4trs([0, 0.215, -0.02], 0, 0, 0, 0.045), cream, 10, 7);           // pom-pom
-    SKM.head = uploadMesh(b.build());
-  }
-  {
-    // a leather skate boot laced high, its origin at the ankle; the blade's edge is 0.12 below it
-    const b = new MB(), lace = rgb(0x6b5b45, 0.05);
-    b.lathe(m4(), boot, [[0.058, -0.06], [0.06, 0.0], [0.057, 0.06], [0.06, 0.095], [0.055, 0.1]], 14);
-    b.sphere(m4trs([0, -0.058, 0.045], 0, 0, 0, [0.05, 0.04, 0.125]), boot, 14, 8);           // the foot
-    b.sphere(m4trs([0, -0.05, -0.035], 0, 0, 0, [0.048, 0.045, 0.055]), boot, 12, 8);          // the heel
-    for (let i = 0; i < 5; i++) b.box(m4trs([0, -0.02 + i * 0.024, 0.052 - i * 0.006], 0, -0.3, 0, [0.06, 0.006, 0.012]), lace);
-    b.box(m4trs([0, -0.088, 0.035], 0, 0, 0, [0.072, 0.014, 0.25]), iron);                       // sole
-    b.box(m4trs([0, -0.1, 0.035], 0, 0, 0, [0.014, 0.018, 0.24]), iron);                          // blade holder
-    b.box(m4trs([0, -0.111, 0.04], 0, 0, 0, [0.004, 0.018, 0.31]), steel);                        // the blade
-    b.box(m4trs([0, -0.103, 0.2], 0, -0.55, 0, [0.004, 0.016, 0.04]), steel);                     // its curled toe
+    // a black leather skate boot laced high, its origin at the ankle; the blade's edge is 0.12 below it
+    const b = new MB(), lace = rgb(0x8a7d68, 0.05);
+    b.lathe(m4(), boot, [[0.047, -0.07], [0.05, -0.02], [0.048, 0.04], [0.051, 0.095], [0.047, 0.102], [0.04, 0.104]], 16);   // the shaft
+    b.sphere(m4trs([0, -0.064, 0.048], 0, 0, 0, [0.041, 0.031, 0.105]), boot, 16, 9);         // the foot
+    b.sphere(m4trs([0, -0.057, -0.026], 0, 0, 0, [0.04, 0.038, 0.045]), boot, 12, 8);          // the heel
+    b.sphere(m4trs([0, -0.071, 0.118], 0, 0, 0, [0.036, 0.026, 0.04]), boot, 12, 7);           // the toe
+    for (let i = 0; i < 6; i++) b.box(m4trs([0, -0.035 + i * 0.024, 0.048 - i * 0.0045], 0, -0.22, 0, [0.05, 0.005, 0.01]), lace);
+    b.box(m4trs([0, -0.091, 0.044], 0, 0, 0, [0.06, 0.012, 0.23]), iron);                        // sole
+    for (const z of [-0.03, 0.125]) b.box(m4trs([0, -0.104, z], 0, 0, 0, [0.012, 0.024, 0.034]), steel);   // the posts
+    b.box(m4trs([0, -0.108, 0.048], 0, 0, 0, [0.006, 0.01, 0.2]), steel);                         // the tube
+    b.box(m4trs([0, -0.114, 0.046], 0, 0, 0, [0.0035, 0.014, 0.3]), steel);                       // the blade
+    b.box(m4trs([0, -0.106, 0.198], 0, -0.6, 0, [0.0035, 0.014, 0.036]), steel);                  // its curled toe
     SKM.boot = uploadMesh(b.build());
   }
-  SKM.mitt = uploadMesh(new MB().sphere(m4trs([0, 0, 0], 0, 0, 0, [0.045, 0.05, 0.06]), mitt, 10, 7).build());
   {
     // a hurricane lantern: base, globe (lit), guard wires, cap, bail
     const b = new MB();
@@ -2494,7 +2507,7 @@ function buildSkaterMeshes() {
     fl.sphere(m4trs([0, -0.01, 0], 0, 0, 0, [0.012, 0.03, 0.012]), [1.0, 0.75, 0.4, -60.0], 8, 6);
     SKM.flame = uploadMesh(fl.build());
   }
-  SKM.scarf = makeDynMesh(400, 1200);
+  SKM.scarf = makeDynMesh(400, 2400);
   {
     // the tower's bell, mouth down, its pivot at the origin; the headstock, the wheel its rope comes off, the clapper
     const b = new MB(), bronze = rgb(0x6e4c28, 0.75), oak = rgb(0x3a2a1c, 0.1);
@@ -2533,57 +2546,505 @@ function updateDynMesh(M, data) {
 }
 
 function skaterDraws() {
-  const J = SK.joints; if (!J) return [];
+  const J = SK.joints; if (!J || !J.frames) return [];
   const D = [];
-  // a bone: origin at a, +y toward b, +z turned toward fwd; not scaled (the meshes are built at their lengths)
-  const limb = (mesh, a, b, fwd) => D.push({ mesh, m: m4between(a, b, fwd || J.F, 1, true) });
-  const ball = (mesh, p, r) => D.push({ mesh, m: m4trs(p, 0, 0, 0, r) });
-  for (const L of J.legs) {
-    limb(SKM.thigh, L.hip, L.knee);
-    limb(SKM.shin, L.knee, L.foot);
-    D.push({ mesh: SKM.boot, m: m4trs([L.foot[0], L.foot[1] - 0.004, L.foot[2]], L.yaw, 0, 0) });
-  }
-  // torso stands on the pelvis along `up`
-  {
-    const m = m4between(J.pel, vadd(J.pel, J.up), J.F, 1);
-    D.push({ mesh: SKM.torso, m });
-    // the skirt hangs from the waist: mostly straight down, swinging back a little with speed and out with the push
-    const f = sat(SK.speed / TUNE.vmax);
-    const hangUp = vnorm(vadd(vadd(vmul(J.up, 0.35), [0, 0.65, 0]), vmul(J.F, 0.15 + f * 0.12)));
-    D.push({ mesh: SKM.skirt, m: m4between(J.pel, vadd(J.pel, hangUp), J.F, 1) });
-  }
-  D.push({ mesh: SKM.head, m: m4trs(J.head, SK.bodyH - SK.stopping * SK.stopSide * 0.9, 0.08 + SK.crouch * 0.06, -SK.lean * 0.4) });
-  limb(SKM.upper, J.shL, J.elL); limb(SKM.fore, J.elL, J.handL);
-  limb(SKM.upper, J.shR, J.elR); limb(SKM.fore, J.elR, J.handR);
-  ball(SKM.mitt, J.handL, 1); ball(SKM.mitt, J.handR, 1);
-  // the lantern hangs along `hang`
+  const bones = bodySkin(J);
+  // the lantern is close to its own skater: it lights them less than it would anything else
+  for (const mesh of BODY.layers) D.push({ mesh, bones, lk: 0.12 });
+  for (const L of J.legs) D.push({ mesh: SKM.boot, m: m4trs([L.foot[0], L.foot[1] - 0.004, L.foot[2]], L.yaw, 0, 0) });
   // the lantern is built at its own size: a rotation-only frame with +y up its bail
   const yv = vmul(J.hang, -1), xv = vnorm(vcross(yv, J.F)), zv = vcross(xv, yv);
   const M = new Float32Array([xv[0], xv[1], xv[2], 0, yv[0], yv[1], yv[2], 0, zv[0], zv[1], zv[2], 0, J.lantC[0], J.lantC[1], J.lantC[2], 1]);
   D.push({ mesh: SKM.lantern, m: M }); D.push({ mesh: SKM.globe, m: M }); D.push({ mesh: SKM.flame, m: M });
-  // the scarf ribbon
+  // the scarf's loose end: a band of wool with a little thickness, striped, drawn as a smooth curve through its points
   {
-    const b = new MB(), P = SK.scarf;
-    const red = rgb(0x9e2a24, 0.02), wool = rgb(0xe6dccb, 0.02);
-    let prev = null;
-    for (let i = 0; i < P.length; i++) {
-      const p = P[i].p, nxt = P[Math.min(P.length - 1, i + 1)].p, prv = P[Math.max(0, i - 1)].p;
-      const t = vnorm(vsub(nxt, prv));
-      let side = vnorm(vcross(t, [0, 1, 0])); if (!isFinite(side[0])) side = J.Rt;
-      const w = 0.07 * (1 - i / P.length * 0.25);
+    const b = new MB(), P = SK.scarf.map((q) => q.p), n = P.length;
+    const red = rgb(0x9a2822, 0.02), wool = rgb(0xcfc3ae, 0.02);
+    const at = (i) => P[clamp(i, 0, n - 1)];
+    const cr = (i, t) => {   // Catmull-Rom between point i and i + 1
+      const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2), t2 = t * t, t3 = t2 * t;
+      return [0, 1, 2].map((k) => 0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3));
+    };
+    const S = [];
+    for (let i = 0; i < n - 1; i++) for (let k = 0; k < 3; k++) S.push(cr(i, k / 3));
+    S.push(P[n - 1]);
+    let prev = null, side0 = null;
+    for (let i = 0; i < S.length; i++) {
+      const p = S[i], t = vnorm(vsub(S[Math.min(S.length - 1, i + 1)], S[Math.max(0, i - 1)]));
+      let side = vnorm(vcross(t, [0, 1, 0])); if (!isFinite(side[0]) || vlen(side) < 0.5) side = side0 || J.Rt;
+      if (side0 && vdot(side, side0) < 0) side = vmul(side, -1);
+      side0 = side;
+      const u = i / (S.length - 1), w = 0.056 * (1 - u * 0.15), th = 0.0065;
       const nr = vnorm(vcross(side, t));
-      const col = (Math.floor(i / 2) % 2) ? red : wool;
-      const a = b.vert(vadd(p, vmul(side, w)), nr, col), c = b.vert(vsub(p, vmul(side, w)), nr, col);
-      if (prev) b.quad(prev[0], prev[1], c, a);
-      prev = [a, c];
+      const col = (Math.floor(u * 5.5 + 0.5) % 2) ? red : wool;
+      const sw = vmul(side, w), st = vmul(nr, th);
+      const C = [vadd(vadd(p, sw), st), vadd(vsub(p, sw), st), vsub(vsub(p, sw), st), vsub(vadd(p, sw), st)];
+      const N4 = [nr, vmul(side, -1), vmul(nr, -1), side];
+      const ring = N4.map((nn, k) => [b.vert(C[k], nn, col), b.vert(C[(k + 1) % 4], nn, col)]);
+      if (prev) for (let k = 0; k < 4; k++) { b.quad(prev[k][0], prev[k][1], ring[k][1], ring[k][0]); b.quad(ring[k][0], ring[k][1], prev[k][1], prev[k][0]); }
+      prev = ring;
     }
-    // the wrap round the neck
-    b.torus(m4trs(vadd(J.neck, vmul(J.up, -0.01)), SK.h, 0, 0, 1), red, 0.085, 0.035, 12, 6);
     updateDynMesh(SKM.scarf, b.build());
     D.push({ mesh: SKM.scarf, m: m4() });
   }
   return D;
 }
+
+// ---- 52-body.js ----
+// The skater's body: three layers (the coat with its sleeves, mittens and the scarf's wrap; the trousers; the head and
+// neck under a knitted hat). Each is modelled as smooth shapes melted together, every shape in its own bone's frame,
+// made into one mesh at load (surface nets over the shapes' distance field) and bent by the skeleton in the vertex
+// shader. One surface per layer, so nothing comes apart at a joint and the head sits on a neck.
+const BONE = { hips: 0, chest: 1, head: 2, uarmL: 3, farmL: 4, uarmR: 5, farmR: 6, thighL: 7, shinL: 8, thighR: 9, shinR: 10, skirt: 11 };
+const NBONE = 12;
+const BODY = { bind: null, invBind: null, J: null, skin: new Float32Array(NBONE * 16), coat: null, legs: null, head: null, ms: 0, verts: 0, tris: 0 };
+
+// rigid frames for every bone: local +y along the bone, +z toward a reference (forward, or where the elbow points)
+function boneFrames(J) {
+  const F = [];
+  F[BONE.hips] = m4between(J.pel, vadd(J.pel, J.hipUp), J.F, 1, true);
+  F[BONE.chest] = m4between(J.pel, vadd(J.pel, J.up), J.F, 1, true);
+  F[BONE.skirt] = m4between(J.pel, vadd(J.pel, J.skirtUp), J.F, 1, true);
+  F[BONE.head] = m4trs(J.head, J.headYaw, J.headPitch, J.headRoll);
+  F[BONE.uarmL] = m4between(J.shL, J.elL, J.hintL, 1, true);
+  F[BONE.farmL] = m4between(J.elL, J.handL, J.hintL, 1, true);
+  F[BONE.uarmR] = m4between(J.shR, J.elR, J.hintR, 1, true);
+  F[BONE.farmR] = m4between(J.elR, J.handR, J.hintR, 1, true);
+  const [L, R] = J.legs;          // legs[0] is the left
+  F[BONE.thighL] = m4between(L.hip, L.knee, J.legHint, 1, true);
+  F[BONE.shinL] = m4between(L.knee, L.foot, J.legHint, 1, true);
+  F[BONE.thighR] = m4between(R.hip, R.knee, J.legHint, 1, true);
+  F[BONE.shinR] = m4between(R.knee, R.foot, J.legHint, 1, true);
+  return F;
+}
+// the pose the body is modelled in: facing +z (the skater's left is +x), arms a little out, knees a little bent
+function bindJoints() {
+  const F = [0, 0, 1], Rt = [-1, 0, 0], UP = [0, 1, 0];
+  const pel = [0, 1.05, 0];
+  const J = { pel, up: UP, hipUp: UP, skirtUp: UP, F, Rt, headYaw: 0, headPitch: 0, headRoll: 0 };
+  J.neck = vadd(pel, [0, 0.62, 0]); J.head = vadd(J.neck, [0, 0.13, 0.03]);
+  const chest = vadd(pel, [0, 0.5, 0]);
+  J.shL = vadd(chest, [0.18, 0.02, 0]); J.shR = vadd(chest, [-0.18, 0.02, 0]);
+  J.hintL = vadd(vmul(F, -1), vmul(Rt, -0.3)); J.hintR = vadd(vmul(F, -0.5), vmul(Rt, 0.6));
+  const arm = (sh, s) => { const u = vnorm([s * 0.56, -0.83, 0.02]), f = vnorm([s * 0.42, -0.84, 0.34]); const el = vadd(sh, vmul(u, 0.29)); return [el, vadd(el, vmul(f, 0.28))]; };
+  [J.elL, J.handL] = arm(J.shL, 1); [J.elR, J.handR] = arm(J.shR, -1);
+  J.legHint = vadd(F, [0, 0.2, 0]);
+  J.legs = [-1, 1].map((side) => {
+    const hip = vadd(pel, vmul(Rt, side * 0.09));
+    const r = ik2(hip, vadd(vadd(hip, vmul(Rt, side * 0.06)), [0, -0.93, 0]), 0.47, 0.47, J.legHint);
+    return { side, hip, knee: r.knee, foot: r.foot };
+  });
+  return J;
+}
+
+// ---- shapes: signed distance in a bone's local frame, with a local bounding box ----
+const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
+const smax = (a, b, k) => -smin(-a, -b, k);
+const SD = {
+  sph(c, r) { return { d: (x, y, z) => Math.hypot(x - c[0], y - c[1], z - c[2]) - r, lo: [c[0] - r, c[1] - r, c[2] - r], hi: [c[0] + r, c[1] + r, c[2] + r] }; },
+  ell(c, R) {
+    const d = (x, y, z) => {
+      const px = (x - c[0]) / R[0], py = (y - c[1]) / R[1], pz = (z - c[2]) / R[2];
+      const k0 = Math.hypot(px, py, pz), k1 = Math.hypot(px / R[0], py / R[1], pz / R[2]);
+      return k1 > 1e-9 ? k0 * (k0 - 1) / k1 : -Math.min(R[0], R[1], R[2]);
+    };
+    return { d, lo: [c[0] - R[0], c[1] - R[1], c[2] - R[2]], hi: [c[0] + R[0], c[1] + R[1], c[2] + R[2]] };
+  },
+  // a round cone: sphere ra at a, rb at b and the hull between (exact)
+  cone(a, b, ra, rb) {
+    const bx = b[0] - a[0], by = b[1] - a[1], bz = b[2] - a[2];
+    const l2 = bx * bx + by * by + bz * bz, rr = ra - rb, a2 = l2 - rr * rr, il2 = 1 / l2, sr = Math.sign(rr);
+    const d = (x, y, z) => {
+      const px = x - a[0], py = y - a[1], pz = z - a[2];
+      const yy = px * bx + py * by + pz * bz, zz = yy - l2;
+      const qx = px * l2 - bx * yy, qy = py * l2 - by * yy, qz = pz * l2 - bz * yy;
+      const x2 = qx * qx + qy * qy + qz * qz, y2 = yy * yy * l2, z2 = zz * zz * l2;
+      const k = sr * rr * rr * x2;
+      if (Math.sign(zz) * a2 * z2 > k) return Math.sqrt(x2 + z2) * il2 - rb;
+      if (Math.sign(yy) * a2 * y2 < k) return Math.sqrt(x2 + y2) * il2 - ra;
+      return (Math.sqrt(x2 * a2 * il2) + yy * rr) * il2 - ra;
+    };
+    const r = Math.max(ra, rb);
+    return { d, lo: [Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, Math.min(a[2], b[2]) - r], hi: [Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, Math.max(a[2], b[2]) + r] };
+  },
+  // a ring round local y
+  torus(c, R, r) { return { d: (x, y, z) => Math.hypot(Math.hypot(x - c[0], z - c[2]) - R, y - c[1]) - r, lo: [c[0] - R - r, c[1] - r, c[2] - R - r], hi: [c[0] + R + r, c[1] + r, c[2] + R + r] }; },
+  // cut by f > 0, its edge rounded by r (sharp edges come out ragged from a grid)
+  cut(s, f, r = 0) { const d0 = s.d; return { ...s, d: r ? (x, y, z) => smax(d0(x, y, z), f(x, y, z), r) : (x, y, z) => Math.max(d0(x, y, z), f(x, y, z)) }; },
+};
+
+// ---- meshing ----
+// prims: [{bone, d, lo, hi, k (blend), carve?, col: rgba or fn(local x,y,z), w: fn(bind x,y,z, out weights)}], cell h
+function prepField(prims, h) {
+  const bind = BODY.bind, inv = BODY.invBind;
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const p of prims) {
+    p.k = p.k || 1e-4; p.m = inv[p.bone];
+    const M = bind[p.bone], g = p.k + 0.02 + 2 * h, blo = [1e9, 1e9, 1e9], bhi = [-1e9, -1e9, -1e9];
+    for (let c = 0; c < 8; c++) {
+      const q = m4apply(M, [c & 1 ? p.hi[0] : p.lo[0], c & 2 ? p.hi[1] : p.lo[1], c & 4 ? p.hi[2] : p.lo[2]]);
+      for (let a = 0; a < 3; a++) { blo[a] = Math.min(blo[a], q[a] - g); bhi[a] = Math.max(bhi[a], q[a] + g); }
+    }
+    p.blo = blo; p.bhi = bhi;
+    if (!p.carve) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], blo[a]); hi[a] = Math.max(hi[a], bhi[a]); }
+  }
+  // the field anywhere (for settling vertices, normals, colours and weights)
+  const field = (x, y, z, want) => {
+    let d = 1, best = 1e9, bi = -1;
+    for (let n = 0; n < prims.length; n++) {
+      const p = prims[n];
+      if (x < p.blo[0] || y < p.blo[1] || z < p.blo[2] || x > p.bhi[0] || y > p.bhi[1] || z > p.bhi[2]) continue;
+      const m = p.m;
+      const di = p.d(m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]);
+      if (p.carve) d = smax(d, -di, p.k);
+      else { d = smin(d, di, p.k); if (di < best) { best = di; bi = n; } }
+    }
+    if (want) want.i = bi;
+    return d;
+  };
+  return { lo, hi, field };
+}
+// from: another layer (its mesh) to take weights from, for things sewn onto it, so the two bend exactly alike
+function sdfMesh(prims, h, name, from) {
+  const tm = performance.now();
+  const { lo, hi, field } = prepField(prims, h);
+  const nx = Math.ceil((hi[0] - lo[0]) / h) + 1, ny = Math.ceil((hi[1] - lo[1]) / h) + 1, nz = Math.ceil((hi[2] - lo[2]) / h) + 1;
+  const V = new Float32Array(nx * ny * nz).fill(1);
+  // each shape writes its distance into the grid points inside its own box, in order (melted, or carved)
+  for (const p of prims) {
+    const m = p.m, d = p.d, k = p.k, carve = !!p.carve;
+    const i0 = Math.max(0, Math.floor((p.blo[0] - lo[0]) / h)), i1 = Math.min(nx - 1, Math.ceil((p.bhi[0] - lo[0]) / h));
+    const j0 = Math.max(0, Math.floor((p.blo[1] - lo[1]) / h)), j1 = Math.min(ny - 1, Math.ceil((p.bhi[1] - lo[1]) / h));
+    const l0 = Math.max(0, Math.floor((p.blo[2] - lo[2]) / h)), l1 = Math.min(nz - 1, Math.ceil((p.bhi[2] - lo[2]) / h));
+    for (let l = l0; l <= l1; l++) {
+      const z = lo[2] + l * h;
+      for (let j = j0; j <= j1; j++) {
+        const y = lo[1] + j * h;
+        const bx = m[4] * y + m[8] * z + m[12], by = m[5] * y + m[9] * z + m[13], bz = m[6] * y + m[10] * z + m[14];
+        let idx = (l * ny + j) * nx + i0;
+        for (let i = i0; i <= i1; i++, idx++) {
+          const x = lo[0] + i * h;
+          const di = d(m[0] * x + bx, m[1] * x + by, m[2] * x + bz);
+          V[idx] = carve ? smax(V[idx], -di, k) : smin(V[idx], di, k);
+        }
+      }
+    }
+  }
+  const tGrid = performance.now();
+  // surface nets: a vertex in every cell the surface crosses, at the mean of its edge crossings
+  const OFF = [0, 1, nx, nx + 1, nx * ny, nx * ny + 1, nx * ny + nx, nx * ny + nx + 1];
+  const EDGE = [0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7];
+  const cellV = new Int32Array(nx * ny * nz).fill(-1);
+  const P = [], cv = new Float32Array(8);
+  for (let l = 0; l < nz - 1; l++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const base = (l * ny + j) * nx + i;
+    let mask = 0;
+    for (let c = 0; c < 8; c++) { const v = V[base + OFF[c]]; cv[c] = v; if (v < 0) mask |= 1 << c; }
+    if (mask === 0 || mask === 255) continue;
+    let sx = 0, sy = 0, sz = 0, n = 0;
+    for (let e = 0; e < 24; e += 2) {
+      const a = EDGE[e], b = EDGE[e + 1], va = cv[a], vb = cv[b];
+      if ((va < 0) === (vb < 0)) continue;
+      const t = va / (va - vb);
+      sx += (a & 1) + t * ((b & 1) - (a & 1)); sy += ((a >> 1) & 1) + t * (((b >> 1) & 1) - ((a >> 1) & 1)); sz += ((a >> 2) & 1) + t * (((b >> 2) & 1) - ((a >> 2) & 1)); n++;
+    }
+    cellV[base] = P.length / 3;
+    P.push(lo[0] + (i + sx / n) * h, lo[1] + (j + sy / n) * h, lo[2] + (l + sz / n) * h);
+  }
+  const Q = [];
+  for (let l = 0; l < nz; l++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const idx = (l * ny + j) * nx + i, inside = V[idx] < 0;
+    const C = (a, b, c) => cellV[(c * ny + b) * nx + a];
+    if (i < nx - 1 && j > 0 && l > 0 && inside !== (V[idx + 1] < 0)) Q.push(C(i, j - 1, l - 1), C(i, j, l - 1), C(i, j, l), C(i, j - 1, l));
+    if (j < ny - 1 && i > 0 && l > 0 && inside !== (V[idx + nx] < 0)) Q.push(C(i - 1, j, l - 1), C(i - 1, j, l), C(i, j, l), C(i, j, l - 1));
+    if (l < nz - 1 && i > 0 && j > 0 && inside !== (V[idx + nx * ny] < 0)) Q.push(C(i - 1, j - 1, l), C(i, j - 1, l), C(i, j, l), C(i - 1, j, l));
+  }
+  const tNets = performance.now();
+  // settle every vertex onto the surface (one step down the field's gradient, which is also its normal), then take
+  // its colour and weights from the shapes there
+  const nv = P.length / 3, N = new Float32Array(nv * 3), COL = new Float32Array(nv * 4);
+  let W = new Float32Array(nv * NBONE);
+  const e = h * 0.3, who = { i: -1 }, wv = new Float32Array(NBONE), tau = h * 0.45;
+  for (let v = 0; v < nv; v++) {
+    let x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
+    const d = field(x, y, z);
+    const gx = field(x + e, y, z) - field(x - e, y, z), gy = field(x, y + e, z) - field(x, y - e, z), gz = field(x, y, z + e) - field(x, y, z - e);
+    const g2 = (gx * gx + gy * gy + gz * gz) / (4 * e * e);
+    if (g2 > 1e-8) {
+      let st = d / g2 / (2 * e); const mv = Math.abs(st) * Math.sqrt(g2) * 2 * e;
+      if (mv > h) st *= h / mv;
+      x -= st * gx; y -= st * gy; z -= st * gz;
+    }
+    P[v * 3] = x; P[v * 3 + 1] = y; P[v * 3 + 2] = z;
+    const gl_ = Math.hypot(gx, gy, gz) || 1;
+    N[v * 3] = gx / gl_; N[v * 3 + 1] = gy / gl_; N[v * 3 + 2] = gz / gl_;
+    // colour: the shapes at the surface here, each by how near it is, so edges between them are soft
+    let dmin = 1e9, best = null;
+    for (const q of prims) { if (q.carve || x < q.blo[0] || y < q.blo[1] || z < q.blo[2] || x > q.bhi[0] || y > q.bhi[1] || z > q.bhi[2]) { q.di = 1e9; continue; } const m = q.m; q.lx = m[0] * x + m[4] * y + m[8] * z + m[12]; q.ly = m[1] * x + m[5] * y + m[9] * z + m[13]; q.lz = m[2] * x + m[6] * y + m[10] * z + m[14]; q.di = q.d(q.lx, q.ly, q.lz); if (q.di < dmin) { dmin = q.di; best = q; } }
+    let cr = 0, cg = 0, cb = 0, ca = 0, cw = 0;
+    for (const q of prims) {
+      if (q.di > dmin + tau * 4) continue;
+      const wq = Math.exp(-(q.di - dmin) / tau), c = typeof q.col === 'function' ? q.col(q.lx, q.ly, q.lz) : q.col;
+      cr += c[0] * wq; cg += c[1] * wq; cb += c[2] * wq; ca += (c[3] || 0) * wq; cw += wq;
+    }
+    COL[v * 4] = cr / cw; COL[v * 4 + 1] = cg / cw; COL[v * 4 + 2] = cb / cw; COL[v * 4 + 3] = ca / cw;
+    wv.fill(0); (best || prims[0]).w(x, y, z, wv);
+    W.set(wv, v * NBONE);
+  }
+  const tSettle = performance.now();
+  // quads to triangles, wound outward, split on the shorter diagonal
+  const T = new Uint32Array(Q.length / 4 * 6);
+  let nt = 0;
+  for (let q = 0; q < Q.length; q += 4) {
+    const a = Q[q], c = Q[q + 2];
+    let b = Q[q + 1], d = Q[q + 3];
+    if (a < 0 || b < 0 || c < 0 || d < 0) continue;
+    const ux = P[c * 3] - P[a * 3], uy = P[c * 3 + 1] - P[a * 3 + 1], uz = P[c * 3 + 2] - P[a * 3 + 2];
+    const wx = P[d * 3] - P[b * 3], wy = P[d * 3 + 1] - P[b * 3 + 1], wz = P[d * 3 + 2] - P[b * 3 + 2];
+    const fx = uy * wz - uz * wy, fy = uz * wx - ux * wz, fz = ux * wy - uy * wx;
+    const dot = fx * (N[a * 3] + N[b * 3] + N[c * 3] + N[d * 3]) + fy * (N[a * 3 + 1] + N[b * 3 + 1] + N[c * 3 + 1] + N[d * 3 + 1]) + fz * (N[a * 3 + 2] + N[b * 3 + 2] + N[c * 3 + 2] + N[d * 3 + 2]);
+    if (dot < 0) { const t = b; b = d; d = t; }
+    if (ux * ux + uy * uy + uz * uz <= wx * wx + wy * wy + wz * wz) { T[nt++] = a; T[nt++] = b; T[nt++] = c; T[nt++] = a; T[nt++] = c; T[nt++] = d; }
+    else { T[nt++] = a; T[nt++] = b; T[nt++] = d; T[nt++] = b; T[nt++] = c; T[nt++] = d; }
+  }
+  // weights spread a little over the surface so no seam is left between neighbouring shapes (only the bones this layer
+  // uses), then the four largest kept
+  if (from) {
+    // weights from the nearest vertices of the layer this one is sewn onto
+    const F = from.src, c = 0.02, key = (x, y, z) => (Math.floor(x / c) * 73856093) ^ (Math.floor(y / c) * 19349663) ^ (Math.floor(z / c) * 83492791);
+    const hash = new Map();
+    for (let v = 0; v < F.nv; v++) { const k = key(F.P[v * 3], F.P[v * 3 + 1], F.P[v * 3 + 2]); let a = hash.get(k); if (!a) hash.set(k, a = []); a.push(v); }
+    for (let v = 0; v < nv; v++) {
+      const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2], o = v * NBONE;
+      let ws = 0; const acc = new Float32Array(NBONE);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const a = hash.get(key(x + dx * c, y + dy * c, z + dz * c)); if (!a) continue;
+        for (const u of a) {
+          const d2 = (F.P[u * 3] - x) ** 2 + (F.P[u * 3 + 1] - y) ** 2 + (F.P[u * 3 + 2] - z) ** 2;
+          if (d2 > c * c) continue;
+          const wu = 1 / (d2 + 1e-6); ws += wu;
+          for (let k = 0; k < NBONE; k++) acc[k] += F.W[u * NBONE + k] * wu;
+        }
+      }
+      if (ws > 0) for (let k = 0; k < NBONE; k++) W[o + k] = acc[k] / ws;
+    }
+  }
+  const used = [];
+  for (let k = 0; k < NBONE; k++) { for (let v = 0; v < nv; v++) if (W[v * NBONE + k] > 0) { used.push(k); break; } }
+  const cnt = new Float32Array(nv);
+  for (let t = 0; t < nt; t++) cnt[T[t]] += 2;
+  let W2 = new Float32Array(W.length);
+  if (used.length > 1 && !from) for (let it = 0; it < 8; it++) {
+    W2.fill(0);
+    for (let t = 0; t < nt; t += 3) for (let s = 0; s < 3; s++) {
+      const a = T[t + s] * NBONE, b = T[t + (s + 1) % 3] * NBONE;
+      for (const k of used) { W2[a + k] += W[b + k]; W2[b + k] += W[a + k]; }
+    }
+    for (let v = 0; v < nv; v++) { const o = v * NBONE, c = cnt[v] || 1; for (const k of used) W2[o + k] = W[o + k] * 0.5 + 0.5 * W2[o + k] / c; }
+    const t = W; W = W2; W2 = t;
+  }
+  const out = new Float32Array(nv * 18), top = [0, 0, 0, 0];
+  for (let v = 0; v < nv; v++) {
+    const o = v * 18, w0 = v * NBONE;
+    top.fill(-1);
+    for (const k of used) {
+      const wk = W[w0 + k];
+      for (let j = 0; j < 4; j++) { if (top[j] < 0 || wk > W[w0 + top[j]]) { for (let m = 3; m > j; m--) top[m] = top[m - 1]; top[j] = k; break; } }
+    }
+    let s = 0; for (const b of top) if (b >= 0) s += W[w0 + b];
+    out[o] = P[v * 3]; out[o + 1] = P[v * 3 + 1]; out[o + 2] = P[v * 3 + 2];
+    out[o + 3] = N[v * 3]; out[o + 4] = N[v * 3 + 1]; out[o + 5] = N[v * 3 + 2];
+    out[o + 6] = COL[v * 4]; out[o + 7] = COL[v * 4 + 1]; out[o + 8] = COL[v * 4 + 2]; out[o + 9] = COL[v * 4 + 3];
+    for (let k = 0; k < 4; k++) { const b = top[k]; out[o + 10 + k] = b < 0 ? 0 : b; out[o + 14 + k] = b < 0 || s <= 0 ? (k === 0 && s <= 0 ? 1 : 0) : W[w0 + b] / s; }
+  }
+  BODY.verts += nv; BODY.tris += nt / 3;
+  (BODY.parts = BODY.parts || {})[name] = { verts: nv, tris: nt / 3, grid: nx * ny * nz, ms: Math.round(performance.now() - tm), grid_ms: Math.round(tGrid - tm), nets_ms: Math.round(tNets - tGrid), settle_ms: Math.round(tSettle - tNets), rest_ms: Math.round(performance.now() - tSettle) };
+  const M = uploadSkinned(out, T.subarray(0, nt));
+  M.src = { P, W, nv }; M.prims = prims;
+  return M;
+}
+// pos3 nrm3 col4 bone4 weight4, 72 bytes
+function uploadSkinned(verts, index) {
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+  const L = [[0, 3, 0], [1, 3, 12], [2, 4, 24], [5, 4, 40], [6, 4, 56]];
+  for (const [loc, n, off] of L) { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 72, off); }
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, index, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, vb, ib, count: index.length, skinned: true };
+}
+
+// ---- the body itself ----
+function buildBody() {
+  const t0 = performance.now();
+  const J = bindJoints();
+  BODY.J = J; BODY.bind = boneFrames(J); BODY.invBind = BODY.bind.map((m) => m4inv(m));
+  BODY.verts = 0; BODY.tris = 0;
+  const B = BONE, inv = BODY.invBind;
+  const loc = (b, x, y, z) => { const m = inv[b]; return [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]]; };
+  // weights: one bone; the torso (chest over the coat's skirt); a limb chain (body | upper | lower), blended at its joints
+  const one = (b) => (x, y, z, o) => { o[b] = 1; };
+  const wTorso = (x, y, z, o) => { const s = smooth(0.07, 0.25, loc(B.chest, x, y, z)[1]); o[B.chest] = s; o[B.skirt] = 1 - s; };
+  // the coat's skirt hangs from the waist, but its front lies over the thighs and goes where the knees go
+  const wSkirt = (x, y, z, o) => {
+    const q = loc(B.chest, x, y, z), s = smooth(0.07, 0.25, q[1]);
+    const k = smooth(0.02, -0.22, q[1]) * smooth(-0.1, 0.06, q[2]) * 0.85, l = smooth(-0.08, 0.08, q[0]);
+    o[B.chest] = s; o[B.skirt] = (1 - s) * (1 - k); o[B.thighL] = (1 - s) * k * l; o[B.thighR] = (1 - s) * k * (1 - l);
+  };
+  const chain = (b0, b1, b2, j1, j2, j3, a0, a1, c0, c1) => {
+    const d1 = vnorm(vsub(j2, j1)), d2 = vnorm(vadd(d1, vnorm(vsub(j3, j2))));
+    return (x, y, z, o) => {
+      const p = [x, y, z], a = smooth(a0, a1, vdot(vsub(p, j1), d1)), c = smooth(c0, c1, vdot(vsub(p, j2), d2));
+      o[b0] += 1 - a; o[b1] += a * (1 - c); o[b2] += a * c;
+    };
+  };
+  const wArmL = chain(B.chest, B.uarmL, B.farmL, J.shL, J.elL, J.handL, -0.03, 0.06, -0.035, 0.035);
+  const wArmR = chain(B.chest, B.uarmR, B.farmR, J.shR, J.elR, J.handR, -0.03, 0.06, -0.035, 0.035);
+  const [LL, LR] = J.legs;
+  const wLegL = chain(B.hips, B.thighL, B.shinL, LL.hip, LL.knee, LL.foot, -0.05, 0.05, -0.04, 0.045);
+  const wLegR = chain(B.hips, B.thighR, B.shinR, LR.hip, LR.knee, LR.foot, -0.05, 0.05, -0.04, 0.045);
+  const wNeck = (x, y, z, o) => { const s = smooth(-0.165, -0.085, loc(B.head, x, y, z)[1]); o[B.head] = s; o[B.chest] = 1 - s; };
+
+  const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t), lerp(a[3], b[3], t)];
+  const toBind = (bone) => { const M = BODY.bind[bone]; return (x, y, z) => [M[0] * x + M[4] * y + M[8] * z + M[12], M[1] * x + M[5] * y + M[9] * z + M[13], M[2] * x + M[6] * y + M[10] * z + M[14]]; };
+  const L = (name, prims, h, from) => { const M = sdfMesh(prims, h, name, from); BODY.layers.push(M); return M; };
+  BODY.layers = [];
+
+  // the coat: a short wool coat, its skirt flaring over the hips to a hem above the knee
+  const coatC = rgb(0x5b4632, 0.03);
+  const skirt = (() => {
+    const yT = 0.24, yH = -0.03, yB = -0.34;
+    const d = (x, y, z) => {
+      let rx, rz;
+      if (y > yH) { const u = sat((y - yH) / (yT - yH)); rx = 0.206 - 0.06 * u * u; rz = 0.15 - 0.045 * u * u; }
+      else { const v = sat((yH - y) / (yH - yB)); rx = 0.206 + 0.024 * v; rz = 0.15 + 0.024 * v; }
+      const cz = -0.012 + 0.01 * sat((yH - y) / (yH - yB));
+      const ds = (Math.hypot(x / rx, (z - cz) / rz) - 1) * Math.min(rx, rz);
+      return Math.max(smax(ds, yB - y, 0.012), y - yT);
+    };
+    return { d, lo: [-0.235, yB, -0.19], hi: [0.235, yT, 0.18] };
+  })();
+  const arm = (side) => side < 0 ? [B.uarmL, B.farmL, wArmL] : [B.uarmR, B.farmR, wArmR];
+  const sleeve = (side) => {
+    const [ua, fa, w] = arm(side);
+    return [
+      { bone: ua, ...SD.sph([0, 0.026, 0], 0.062), k: 0.05, col: coatC, w },                        // the shoulder
+      { bone: ua, ...SD.cone([0, 0.02, 0], [0, 0.29, 0], 0.066, 0.058), k: 0.03, col: coatC, w },
+      { bone: fa, ...SD.cone([0, 0, 0], [0, 0.235, 0], 0.06, 0.051), k: 0.03, col: coatC, w },
+      { bone: fa, ...SD.cut(SD.cone([0, 0.185, 0], [0, 0.25, 0], 0.057, 0.061), (x, y) => y - 0.252, 0.01), k: 0.012, col: coatC, w },   // the cuff
+    ];
+  };
+  const coatPrims = [];
+  const coatM = L('coat', coatPrims.concat([
+    { bone: B.chest, ...SD.ell([0, 0.19, 0.004], [0.15, 0.115, 0.106]), k: 0.06, col: coatC, w: wTorso },   // waist
+    { bone: B.chest, ...SD.ell([0, 0.36, 0.01], [0.168, 0.165, 0.12]), k: 0.07, col: coatC, w: wTorso },    // ribs
+    { bone: B.chest, ...SD.ell([0, 0.43, -0.03], [0.17, 0.12, 0.1]), k: 0.07, col: coatC, w: wTorso },      // upper back
+    { bone: B.chest, ...SD.cone([0.125, 0.48, -0.016], [-0.125, 0.48, -0.016], 0.062, 0.062), k: 0.07, col: coatC, w: wTorso },   // shoulders
+    { bone: B.skirt, ...skirt, k: 0.07, col: coatC, w: wSkirt },
+    ...sleeve(-1), ...sleeve(1),
+  ]), 0.0125);
+  const coat = coatM.prims;
+  // on the coat: a leather belt with a brass buckle, and two rows of buttons, all placed on the coat's own surface
+  const coatF = prepField(coat, 0.0125).field, cb = toBind(B.chest);
+  const inCoat = (x, y, z) => { const q = cb(x, y, z); return coatF(q[0], q[1], q[2]) < 0; };
+  const surf = (o, d, r0, r1) => { for (let it = 0; it < 26; it++) { const r = (r0 + r1) / 2; if (inCoat(o[0] + d[0] * r, o[1] + d[1] * r, o[2] + d[2] * r)) r0 = r; else r1 = r; } return (r0 + r1) / 2; };
+  const beltY = 0.165, belt = rgb(0x231812, 0.3), brass = rgb(0x8a7046, 0.7), button = rgb(0x2a1e16, 0.45);
+  // the coat's outline round the waist, measured at a few heights across the belt, so the belt follows it
+  const NB = 96, BY = [beltY - 0.03, beltY - 0.015, beltY, beltY + 0.015, beltY + 0.03];
+  const prof = BY.map((y) => { const r = new Float32Array(NB + 1); for (let i = 0; i <= NB; i++) { const a = i / NB * TAU; r[i] = surf([0, y, 0], [Math.sin(a), 0, Math.cos(a)], 0.05, 0.3); } return r; });
+  const radAt = (x, y, z) => {
+    const u = (Math.atan2(x, z) + TAU) % TAU / TAU * NB, i = Math.floor(u), f = u - i;
+    const v = clamp((y - BY[0]) / 0.015, 0, 3.999), j = Math.floor(v), g = v - j;
+    return lerp(lerp(prof[j][i], prof[j][i + 1], f), lerp(prof[j + 1][i], prof[j + 1][i + 1], f), g);
+  };
+  const trim = [
+    { bone: B.chest, d: (x, y, z) => smax(Math.abs(Math.hypot(x, z) - radAt(x, y, z) + 0.004) - 0.011, Math.abs(y - beltY) - 0.019, 0.004), lo: [-0.22, beltY - 0.022, -0.2], hi: [0.22, beltY + 0.022, 0.2], k: 1e-4, col: belt, w: wTorso },
+    { bone: B.chest, d: (x, y, z) => {
+      const qx = Math.abs(x + 0.004) - 0.022, qy = Math.abs(y - beltY) - 0.023, qz = Math.abs(Math.hypot(x, z) - radAt(x, y, z) - 0.01) - 0.0045;
+      return Math.max(Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - 0.002, 0.05 - z);
+    }, lo: [-0.03, beltY - 0.028, 0.05], hi: [0.03, beltY + 0.028, 0.2], k: 1e-4, col: brass, w: wTorso },
+  ];
+  L('belt', trim, 0.0045, coatM);
+  const buttons = [];
+  for (const by of [0.25, 0.33, 0.41]) for (const bx of [-0.042, 0.042]) {
+    const bz = surf([bx, by, 0], [0, 0, 1], 0.0, 0.3);
+    buttons.push({ bone: B.chest, ...SD.ell([bx, by, bz + 0.001], [0.0105, 0.0105, 0.0045]), k: 1e-4, col: button, w: wTorso });
+  }
+  L('buttons', buttons, 0.0035, coatM);
+  // red wool mittens
+  const mitt = rgb(0x6e2420, 0.03);
+  const mitten = (side) => {
+    const [, fa, w] = arm(side);
+    return [
+      { bone: fa, ...SD.ell([0, 0.302, -0.004], [0.034, 0.06, 0.044]), k: 0.016, col: mitt, w },
+      { bone: fa, ...SD.cone([0, 0.262, -0.03], [0, 0.295, -0.05], 0.016, 0.015), k: 0.012, col: mitt, w },   // the thumb
+      { bone: fa, ...SD.cone([0, 0.22, 0], [0, 0.262, -0.002], 0.04, 0.036), k: 0.016, col: mitt, w },        // the wrist, up inside the cuff
+    ];
+  };
+  L('mittens', [...mitten(-1), ...mitten(1)], 0.0075);
+  // the scarf, wound twice round the neck and knotted at the back
+  const scarfR = rgb(0x9a2822, 0.02), scarfD = rgb(0x7c1f1a, 0.02);
+  const scarfCol = (x, y, z) => mixc(scarfR, scarfD, smooth(0.3, 0.7, 0.5 + 0.5 * Math.sin(Math.atan2(x, z) * 7)));
+  L('scarf', [
+    { bone: B.chest, ...SD.torus([0, 0.588, -0.006], 0.066, 0.032), k: 0.02, col: scarfCol, w: one(B.chest) },
+    { bone: B.chest, ...SD.torus([0, 0.628, -0.004], 0.06, 0.029), k: 0.02, col: scarfCol, w: one(B.chest) },
+    { bone: B.chest, ...SD.sph([0.03, 0.585, -0.088], 0.034), k: 0.02, col: scarfR, w: one(B.chest) },
+  ], 0.0075);
+
+  // the trousers, down over the boots
+  const trou = rgb(0x1c1d22, 0.03);
+  const leg = (side, w) => {
+    const th = side < 0 ? B.thighL : B.thighR, sh = side < 0 ? B.shinL : B.shinR;
+    return [
+      { bone: th, ...SD.cone([0, -0.02, 0], [0, 0.45, 0.004], 0.078, 0.06), k: 0.05, col: trou, w },
+      { bone: th, ...SD.sph([0, 0.47, 0.0], 0.052), k: 0.04, col: trou, w },                         // knee
+      { bone: sh, ...SD.cone([0, 0, 0], [0, 0.42, 0], 0.06, 0.049), k: 0.035, col: trou, w },
+      { bone: sh, ...SD.ell([0, 0.15, -0.018], [0.06, 0.15, 0.062]), k: 0.04, col: trou, w },        // calf
+      { bone: sh, ...SD.cut(SD.cone([0, 0.33, 0], [0, 0.44, 0], 0.052, 0.068), (x, y) => y - 0.445, 0.01), k: 0.02, col: trou, w },   // the hem over the boot
+    ];
+  };
+  L('legs', [
+    { bone: B.hips, ...SD.ell([0, -0.035, -0.012], [0.158, 0.125, 0.118]), k: 0.05, col: trou, w: one(B.hips) },
+    ...leg(-1, wLegL), ...leg(1, wLegR),
+  ], 0.0125);
+
+  // the head on its neck, cold-cheeked, dark hair at the nape
+  const skin = rgb(0xa47258, 0.12), rosy = rgb(0xab6250, 0.12), hair = rgb(0x2a1b12, 0.08), eye = rgb(0x120d0a, 0.6);
+  const H = (sh, col, k, w) => ({ bone: B.head, ...sh, k, col, w: w || one(B.head) });
+  L('head', [
+    H(SD.cone([0, -0.2, -0.035], [0, -0.065, -0.012], 0.052, 0.046), skin, 0.03, wNeck),   // neck
+    H(SD.ell([0, 0.012, -0.006], [0.081, 0.097, 0.093]), skin, 0.04),                        // skull
+    H(SD.ell([0, -0.04, 0.026], [0.063, 0.063, 0.064]), skin, 0.04),                         // face and jaw
+    H(SD.sph([0, -0.083, 0.057], 0.023), skin, 0.03),                                        // chin
+    H(SD.sph([0.04, -0.028, 0.056], 0.026), rosy, 0.03), H(SD.sph([-0.04, -0.028, 0.056], 0.026), rosy, 0.03),   // cheeks
+    H(SD.ell([0, 0.018, 0.072], [0.058, 0.014, 0.02]), skin, 0.02),                          // brow
+    H(SD.cone([0, -0.002, 0.087], [0, -0.025, 0.1], 0.01, 0.0145), rosy, 0.012),             // nose
+    H(SD.ell([0.082, -0.016, -0.01], [0.013, 0.025, 0.019]), rosy, 0.008), H(SD.ell([-0.082, -0.016, -0.01], [0.013, 0.025, 0.019]), rosy, 0.008),   // ears
+    H(SD.ell([0, -0.035, -0.046], [0.076, 0.062, 0.07]), hair, 0.02),                        // hair at the nape
+  ], 0.0065);
+  L('eyes', [H(SD.sph([0.028, -0.004, 0.081], 0.0102), eye, 1e-4), H(SD.sph([-0.028, -0.004, 0.081], 0.0102), eye, 1e-4)], 0.0026);
+  // a knitted hat: the crown, the brim turned up, a pompom
+  const hatR = rgb(0x9c2a24, 0.02), hatW = rgb(0xe4dac8, 0.02);
+  const edge = (y, z) => (y - (-0.004 + 0.32 * z)) * 0.952;           // height above the hat's lower edge
+  const hatE = SD.ell([0, 0.036, -0.008], [0.1, 0.112, 0.104]).d, bandE = SD.ell([0, 0.036, -0.008], [0.108, 0.118, 0.111]).d;
+  L('hat', [H({ d: (x, y, z) => smax(hatE(x, y, z), -edge(y, z) + 0.01, 0.008), lo: [-0.1, -0.08, -0.115], hi: [0.1, 0.15, 0.1] }, hatR, 1e-4)], 0.0072);
+  L('brim', [
+    H({ d: (x, y, z) => smax(smax(bandE(x, y, z), -edge(y, z), 0.009), edge(y, z) - 0.042, 0.009), lo: [-0.11, -0.09, -0.12], hi: [0.11, 0.08, 0.11] }, hatW, 1e-4),
+    H({ d: (x, y, z) => Math.hypot(x, y - 0.152, z + 0.028) - 0.04 + 0.0035 * Math.sin(150 * x) * Math.sin(150 * y) * Math.sin(150 * z), lo: [-0.045, 0.107, -0.073], hi: [0.045, 0.197, 0.017] }, hatW, 0.012),
+  ], 0.006);
+  BODY.ms = performance.now() - t0;
+}
+
+// skin matrices for the current pose (frames made in skaterPose)
+function bodySkin(J) {
+  const F = J.frames, out = BODY.skin, tmp = new Float32Array(16);
+  if (BODY.showBind) { const M = m4trs([SK.x, SK.y, SK.z], SK.bodyH); for (let b = 0; b < NBONE; b++) out.set(M, b * 16); return out; }   // checking: the body as modelled
+  for (let b = 0; b < NBONE; b++) { m4mul(F[b], BODY.invBind[b], tmp); out.set(tmp, b * 16); }
+  return out;
+}
+// a world point in a bone's frame, and back (rigid frames)
+const toLocal = (M, p) => { const x = p[0] - M[12], y = p[1] - M[13], z = p[2] - M[14]; return [M[0] * x + M[1] * y + M[2] * z, M[4] * x + M[5] * y + M[6] * z, M[8] * x + M[9] * y + M[10] * z]; };
+const toWorld = (M, q) => m4apply(M, q);
 
 // ---- 55-ice.js ----
 // What the ice does: it keeps your blade marks, it cracks, it sags and sings on thin ice, and sometimes it lets you in.
@@ -3665,13 +4126,14 @@ function loop(t) {
   const inp = {
     turn: INP.locked ? INP.mdx * sens : 0,
     lookY: INP.locked ? INP.mdy * sens * 0.6 : 0,
-    turnKey: (INP.keys.has('KeyA') || INP.keys.has('ArrowLeft') ? 1 : 0) - (INP.keys.has('KeyD') || INP.keys.has('ArrowRight') ? 1 : 0),
+    // positive turns right (the heading falls), the same sense as moving the mouse right
+    turnKey: (INP.keys.has('KeyD') || INP.keys.has('ArrowRight') ? 1 : 0) - (INP.keys.has('KeyA') || INP.keys.has('ArrowLeft') ? 1 : 0),
     skate: INP.skate || INP.keys.has('KeyW') || INP.keys.has('ArrowUp'),
     stop: INP.stop || INP.keys.has('KeyS') || INP.keys.has('ArrowDown'),
     hop: INP.hop,
   };
   // without pointer lock the mouse is a stick: the further from the middle, the harder you turn
-  if (!INP.locked && INP.inside && G.state === 'play') { const k = (INP.mx - 0.5) * 2; inp.turnKey -= Math.sign(k) * Math.max(0, Math.abs(k) - 0.12) * 1.2; }
+  if (!INP.locked && INP.inside && G.state === 'play') { const k = (INP.mx - 0.5) * 2; inp.turnKey += Math.sign(k) * Math.max(0, Math.abs(k) - 0.12) * 1.2; }
   if (BOT.on && !window.__iceStill) botInput(inp);
   INP.mdx = 0; INP.mdy = 0; INP.hop = false;
   if (!paused) gameStep(dt, inp);
@@ -3731,7 +4193,7 @@ window.__ice = {
   tp(s, off = 0) { const p = routeAt(s); const [rx, rz] = rightOf(p.dir); skaterReset(p.x + rx * off, p.z + rz * off, p.dir); G.cam.yaw = p.dir; G.maxS = Math.max(G.maxS, s); G.cpS = s; },
   hold(k) { INP.skate = !!k; }, stopHold(k) { INP.stop = !!k; }, turn(dx) { INP.mdx += dx; }, pitch(dy) { G.pitchIn = dy; },
   key(code, down) { if (down) INP.keys.add(code); else INP.keys.delete(code); },
-  FALL, AUDIO, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, skateOn, morning: () => startMorning(), BELL, LEAD, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
+  FALL, AUDIO, BODY, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, skateOn, morning: () => startMorning(), BELL, LEAD, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
   maxS: (s) => (G.maxS = s),
 };
 boot();
