@@ -93,6 +93,19 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "the-wake",
+      "title": "THE WAKE",
+      "descriptor": "Skating over a drowned village",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/the-wake-card-v20261104.jpg",
+      "alt": "A skater in a red hat carrying a lantern on clear black ice at night, the aurora overhead and mirrored in the ice, a drowned stone house showing through the ice beside them.",
+      "summary": "Skate across a frozen reservoir at night by lantern light, over the village they flooded to make it, to the church tower that still stands up out of the ice. Keyboard and mouse.",
+      "metaDescription": "Skate across a frozen reservoir at night by lantern light, over the drowned village under the ice, to the church tower that still stands out of it. A desktop browser game.",
+      "controls": "Desktop only · mouse steers · hold left click or W to skate · right click or S to stop · Space hops · M mutes · F full screen · Esc pauses",
+      "actionLabel": "Skate"
+    },
+    {
       "slug": "black-lacquer",
       "title": "BLACK LACQUER",
       "descriptor": "3D action game",
