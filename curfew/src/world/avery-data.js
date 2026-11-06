@@ -6,10 +6,10 @@
 // CURFEW's existing merged house compiler can consume. It does not port UNINVITED's game.
 //
 // PRIMARY DONOR
-//   C:/Users/Alex/Projects/uninvited/src/world.js:12-155
+//   C:/Projects/uninvited/src/world.js:12-155
 //     CS, GX/GZ, LV, TALL_CEIL, ROOMS, DOORS, OPEN_PAIRS, RAIL_PAIRS, RAIL_SKIP,
 //     RAMPS, FLOOR_HOLES and CEIL_HOLES.
-//   C:/Users/Alex/Projects/uninvited/src/rooms.js:751-758
+//   C:/Projects/uninvited/src/rooms.js:751-758
 //     the boiler-room fuse-box anchor used as CURFEW's physical claim fixture.
 //
 // HISTORICAL PROOF
@@ -56,7 +56,7 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-export const DONOR_SOURCE_PATH = 'C:/Users/Alex/Projects/uninvited/src/world.js';
+export const DONOR_SOURCE_PATH = 'C:/Projects/uninvited/src/world.js';
 export const DONOR_SITE_COMMIT = '84de062de65686afb3096ba39cc48bc5de61b13f';
 export const DONOR_REMOVAL_COMMIT = 'd488ac14f6ffa3923604b721cdc2c00b730eb4ea';
 
@@ -70,8 +70,8 @@ export const DONOR_TEXTURES_SHA256 = '67F37B930F2A8D6D410C287BD7D0F378E95B966774
 export const DONOR_PROVENANCE = deepFreeze({
   project: 'UNINVITED',
   house: 'Avery House',
-  localRoot: 'C:/Users/Alex/Projects/uninvited',
-  historicalRoot: 'C:/Users/Alex/Projects/qualiacology',
+  localRoot: 'C:/Projects/uninvited',
+  historicalRoot: 'C:/Projects/qualiacology',
   historicalCommit: DONOR_SITE_COMMIT,
   beforeRemovalCommit: DONOR_REMOVAL_COMMIT,
   files: {

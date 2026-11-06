@@ -10,7 +10,7 @@
 // Lambert (one solid mesh, one glow mesh per phase — no new material, no new program),
 // with every collider emitted through api.emit in the statement that places the wall.
 //
-// donor: C:/Users/Alex/Projects/blackthorn-manor/src/world.js:203-620 (World.build,
+// donor: C:/Projects/blackthorn-manor/src/world.js:203-620 (World.build,
 //   buildWallsFor, emitWall, spawnWindow, emitRail, balustrade, buildStairs, railSlope,
 //   buildRailings), read 2026-09-03. Ported function by function; the donor's own
 //   comments are kept where they still describe the code. Its `Door` class (world.js:
