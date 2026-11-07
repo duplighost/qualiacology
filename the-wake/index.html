@@ -789,10 +789,11 @@ const WASH = [rgb(0xb8b2a3), rgb(0xa8a497), rgb(0xc2b9a5)];
 const SLATE = rgb(0x3a3d42, 0.1), WOOD = rgb(0x4a3a2c, 0.07), DARKWOOD = rgb(0x2c231b, 0.07), RUST = rgb(0x6a3c22, 0.2);
 const RED = rgb(0x8e1f1a, 0.3), BLACKP = rgb(0x141414, 0.3);
 const LIT = (k) => [1.0, 0.66, 0.34, -k];            // a lit window, k times as bright as its colour
+const DROWN = (k) => [1.0, 0.48, 0.18, -(100 + k)];  // a light left on under the ice: it flickers, the bell puts it out
 const CHECKPOINTS = [];                              // {s, x, z, lamp: [x,y,z]}
 const HUTS = [];                                     // {x, z, yaw, chimney: [x,y,z], window: [x,y,z]}
 const FISH_HOLES = [];                               // {x, z, r}
-const SCENE = { tower: null, bell: null, ropeTop: null, smoke: [], lamps: [], windows: [] };
+const SCENE = { tower: null, bell: null, ropeTop: null, smoke: [], lamps: [], windows: [], houses: [], lampPosts: [], deepLamps: [], church: null };
 
 function routeFrame(z) {
   const x = routeX(z), x2 = routeX(z + 1);
@@ -932,6 +933,25 @@ function house(b, x, z, yaw, o) {
   b.jit = 0;
   // a doorstep
   b.box(M(0, 0.06, d / 2 + 0.35, 1.3, 0.12, 0.5), rgbS(col, 0.7));
+  SCENE.houses.push({ x, z, yaw, w, d, wallH, group: o.group || '' });
+  // a light left on: a pane in some windows, embers in the hearth, a candle on the table
+  if (o.lit) {
+    const lr = rng(Math.floor(Math.abs(x) * 13 + Math.abs(z) * 7) + 1);
+    let any = false;
+    const panes = (P, Q, holes) => {
+      const L = Math.hypot(Q[0] - P[0], Q[1] - P[1]), ux = (Q[0] - P[0]) / L, uz = (Q[1] - P[1]) / L, wy = Math.atan2(ux, uz);
+      for (const [u0, u1, v0, v1] of holes) {
+        if (v0 < 0.4 || lr() > o.lit) continue;
+        any = true;
+        b.box(m4trs([P[0] + ux * (u0 + u1) / 2, base + (v0 + v1) / 2, P[1] + uz * (u0 + u1) / 2], wy, 0, 0, [0.06, v1 - v0 - 0.06, u1 - u0 - 0.06]), DROWN(1.2 + lr() * 1.6));
+      }
+    };
+    panes(A, B, front); panes(C, D, back);
+    if (any || lr() < o.lit) {
+      b.box(M(w / 2 - t / 2 - 0.14, 0.38, 0, 0.1, 0.16, 0.8), DROWN(3));
+      b.box(M(-w / 4, 1.06, -0.3, 0.05, 0.1, 0.05), DROWN(8));
+    }
+  }
 }
 function stoneWall(b, a, c, floor, h = 1.15) {
   b.jit = 0.25;
@@ -1030,6 +1050,9 @@ function lampPost(b, x, y, z, yaw) {
   b.cyl(m4trs([x, y, z], 0, 0, 0, [0.07, 3.9, 0.07]), m, 7, 0.7);
   b.cyl(m4between([x, y + 3.85, z], [x + Math.sin(yaw) * 0.7, y + 3.95, z + Math.cos(yaw) * 0.7], [1, 0, 0], 0.035), m, 5);
   b.box(m4trs([x + Math.sin(yaw) * 0.75, y + 3.82, z + Math.cos(yaw) * 0.75], yaw, 0, 0, [0.28, 0.2, 0.36]), m);
+  const hx = x + Math.sin(yaw) * 0.75, hz = z + Math.cos(yaw) * 0.75;
+  if (y + 3.7 < -0.3) { b.box(m4trs([hx, y + 3.67, hz], yaw, 0, 0, [0.16, 0.1, 0.22]), DROWN(8)); SCENE.deepLamps.push([hx, y + 3.55, hz]); }
+  SCENE.lampPosts.push([x, y, z, yaw]);
 }
 
 // a fishing hut on the ice: painted boards, a lit window, a stovepipe; a hole beside it
@@ -1119,6 +1142,7 @@ function tower(b) {
 function church(b) {
   // the nave runs east from the tower, roofless, its walls standing to just under the ice
   const x0 = TOWER.x + TOWER.w / 2, z0 = TOWER.z, L = 19, W = 8.4, fl = TOWER.base + 0.2;
+  SCENE.church = { x0, z0, L, W };
   const st = rgb(0x6f6a5c);
   b.jit = 0.15;
   const win = [];
@@ -1143,11 +1167,19 @@ function church(b) {
   b.box(m4trs([x0 + L - 2, fl + 0.2, z0], 0, 0, 0, [2.0, 0.4, W - 1.8]), rgb(0x7d786b));
   b.box(m4trs([x0 + L - 1.4, fl + 0.9, z0], 0, 0, 0, [0.9, 1.0, 2.2]), rgb(0x8d887a));
   // the churchyard: stones in rows, a yew, the wall and lychgate
+  const cr = rng(808);
   for (let i = 0; i < 70; i++) {
     const gx = x0 - 18 + r() * 52, gz = z0 - 24 + r() * 50;
     if (gx > x0 - 4 && gx < x0 + L + 2 && gz > z0 - W / 2 - 4 && gz < z0 + W / 2 + 2) continue;
     if (Math.abs(gx - TOWER.x) < 5 && Math.abs(gz - TOWER.z) < 5) continue;
-    gravestone(b, gx, heightAt(gx, gz), gz, (r() - 0.5) * 0.2 + (r() < 0.5 ? 0 : PI), r);
+    const gy = heightAt(gx, gz), gyaw = (r() - 0.5) * 0.2 + (r() < 0.5 ? 0 : PI);
+    gravestone(b, gx, gy, gz, gyaw, r);
+    // a grave light left burning in front of some: a candle in a red glass
+    if (cr() < 0.45) {
+      const cx = gx + Math.sin(gyaw) * 0.42, cz = gz + Math.cos(gyaw) * 0.42;
+      b.box(m4trs([cx, gy + 0.09, cz], gyaw, 0, 0, [0.09, 0.16, 0.09]), cr() < 0.6 ? [1.0, 0.25, 0.12, -105.5] : DROWN(5));
+      SCENE.deepLamps.push([cx, gy + 0.12, cz, 0.55]);
+    }
   }
   deadTree(b, x0 + 24, heightAt(x0 + 24, z0 + 14), z0 + 14, 1.5, r);
   const yard = [[x0 - 20, z0 - 26], [x0 + 36, z0 - 26], [x0 + 36, z0 + 28], [x0 - 20, z0 + 28]];
@@ -1170,7 +1202,7 @@ function village(b) {
     const x = F.x + F.rx * side * setback, zz = F.z + F.rz * side * setback;
     const yaw = F.yaw + (side > 0 ? -PI / 2 : PI / 2) + (r() - 0.5) * 0.06;
     const col = extra.col || (r() < 0.35 ? WASH[Math.floor(r() * 3)] : STONE[Math.floor(r() * 5)]);
-    house(b, x, zz, yaw, { rand: r, floor: heightAt(x, zz) + 0.05, w, d, wallH: extra.wallH || (2.9 + r() * 0.6), gable: 1.6, roof: extra.roof || (r() < 0.25 ? 'kept' : r() < 0.6 ? 'ribs' : 'none'), col, garden: yard - 0.4 });
+    house(b, x, zz, yaw, { rand: r, floor: heightAt(x, zz) + 0.05, w, d, wallH: extra.wallH || (2.9 + r() * 0.6), gable: 1.6, roof: extra.roof || (r() < 0.25 ? 'kept' : r() < 0.6 ? 'ribs' : 'none'), col, garden: yard - 0.4, group: 'village', lit: 0.12 + 0.5 * smooth(1770, 2480, z) });
     used.push({ z, side });
     return { x, z: zz, yaw, F };
   };
@@ -1198,7 +1230,7 @@ function village(b) {
   // landmarks
   const at = (z, side, off) => { const F = routeFrame(z); return [F.x + F.rx * side * off, F.z + F.rz * side * off, F.yaw]; };
   { const [x, zz, yaw] = at(1812, -1, 5.2); b.wall([x - 1.2, zz - 0.8], [x - 1.2, zz + 1.4], fl, 2.2, 0.1, rgb(0x3b4044, 0.4)); b.box(m4trs([x, fl + 2.25, zz + 0.3], yaw, 0, 0, [1.2, 0.08, 2.6]), rgb(0x3b4044, 0.4)); }
-  { const [x, zz, yaw] = at(1905, 1, 22); house(b, x, zz, yaw - PI / 2, { rand: r, floor: fl, w: 14, d: 7.5, wallH: 3.6, gable: 1.2, roof: 'ribs', col: rgb(0x7b6f5e) }); const [px, pz] = at(1905, 1, 9.5); playground(b, px, fl, pz, yaw); }
+  { const [x, zz, yaw] = at(1905, 1, 22); house(b, x, zz, yaw - PI / 2, { rand: r, floor: fl, w: 14, d: 7.5, wallH: 3.6, gable: 1.2, roof: 'ribs', col: rgb(0x7b6f5e), group: 'village', lit: 0.3 }); const [px, pz] = at(1905, 1, 9.5); playground(b, px, fl, pz, yaw); }
   { const [x, zz] = at(1968, 1, 6.2); memorial(b, x, fl, zz); }
   { const [x, zz, yaw] = at(1990, -1, 3.0); car(b, x, fl + 0.05, zz, yaw + 0.04, rgb(0x5a6a58, 0.5)); }
   { const [x, zz, yaw] = at(2036, 1, 4.6); phoneBox(b, x, fl, zz, yaw); }
@@ -1206,7 +1238,7 @@ function village(b) {
   { const [x, zz, yaw] = at(2052, -1, 5.0); b.cyl(m4trs([x, fl, zz], 0, 0, 0, [0.08, 3.4, 0.08]), rgb(0x2a2622), 6); b.box(m4trs([x + Math.sin(yaw + PI / 2) * 0.55, fl + 3.1, zz + Math.cos(yaw + PI / 2) * 0.55], yaw, 0, 0, [0.05, 0.75, 0.9]), rgb(0x5a3020, 0.2)); }
   { const [x, zz] = at(2110, 1, 4.6); b.cyl(m4trs([x, fl, zz], 0, 0, 0, [0.26, 1.3, 0.26]), RED, 12); b.sphere(m4trs([x, fl + 1.3, zz], 0, 0, 0, [0.27, 0.16, 0.27]), RED, 10, 5); }
   for (let zz = 1790; zz < 2480; zz += 38) { const [x, z2, yaw] = at(zz, zz % 76 < 38 ? 1 : -1, 3.9); lampPost(b, x, fl, z2, yaw + (zz % 76 < 38 ? PI / 2 : -PI / 2)); }
-  { const [x, zz, yaw] = at(2300, -1, 26); house(b, x, zz, yaw + PI / 2, { rand: r, floor: heightAt(x, zz), w: 16, d: 9, wallH: 3.9, gable: 0.4, roof: 'none', col: rgb(0x5f584c) }); }
+  { const [x, zz, yaw] = at(2300, -1, 26); house(b, x, zz, yaw + PI / 2, { rand: r, floor: heightAt(x, zz), w: 16, d: 9, wallH: 3.9, gable: 0.4, roof: 'none', col: rgb(0x5f584c), group: 'village', lit: 0.5 }); }
   // a lane east toward the river, walled
   { const [x, zz] = at(1968, 1, 4.5); for (let i = 0; i < 6; i++) { stoneWall(b, [x + i * 12, zz - 3], [x + (i + 1) * 12, zz - 3.3], fl); stoneWall(b, [x + i * 12, zz + 3], [x + (i + 1) * 12, zz + 3.2], fl); } }
 }
@@ -1243,8 +1275,8 @@ function fields(b) {
     deadTree(b, x, heightAt(x, z), z, 0.75 + r() * 0.35, r);
   }
   // a farm: house and barn, west of the track
-  { const F = routeFrame(560), x = F.x - F.rx * 30, z = F.z - F.rz * 30; house(b, x, z, F.yaw + PI / 2, { rand: r, floor: heightAt(x, z), w: 8, d: 6, wallH: 3.2, gable: 1.5, roof: 'ribs', col: STONE[1] });
-    const x2 = x - Math.sin(F.yaw) * 14, z2 = z - Math.cos(F.yaw) * 14; house(b, x2, z2, F.yaw, { rand: r, floor: heightAt(x2, z2), w: 12, d: 7, wallH: 3.6, gable: 1.0, roof: 'none', col: STONE[3] }); }
+  { const F = routeFrame(560), x = F.x - F.rx * 30, z = F.z - F.rz * 30; house(b, x, z, F.yaw + PI / 2, { rand: r, floor: heightAt(x, z), w: 8, d: 6, wallH: 3.2, gable: 1.5, roof: 'ribs', col: STONE[1], group: 'farm' });
+    const x2 = x - Math.sin(F.yaw) * 14, z2 = z - Math.cos(F.yaw) * 14; house(b, x2, z2, F.yaw, { rand: r, floor: heightAt(x2, z2), w: 12, d: 7, wallH: 3.6, gable: 1.0, roof: 'none', col: STONE[3], group: 'farm' }); }
   // the bridge where the way crosses the old river (z ~ 780): three arches, parapets
   { const z = 780, F = routeFrame(z), bx = F.x, bz = z, yaw = F.yaw, fl = -8.4;
     const deck = -3.6;
@@ -1259,9 +1291,9 @@ function fields(b) {
       const x = routeX(z0) + lx * Math.cos(yaw), z = z0 - lx * Math.sin(yaw);
       const g = heightAt(x, z); if (g > -1.6) continue;
       const top = Math.max(g + 1.4, -4.4);
-      b.box(m4trs([x, (g + top) / 2 - 0.2, z], PI / 2 - yaw, 0, 0, [4.2, top - g + 0.4, 6.8]), rgb(0x4a4640));
-      for (let k = 0; k < 6; k++) b.box(m4trs([x + Math.cos(yaw) * (k - 2.5) * 0.66, top + 0.06, z - Math.sin(yaw) * (k - 2.5) * 0.66], PI / 2 - yaw, 0, 0, [0.22, 0.12, 2.4]), DARKWOOD);
-      for (const off of [-0.72, 0.72]) b.box(m4trs([x + Math.sin(yaw) * off, top + 0.16, z + Math.cos(yaw) * off], PI / 2 - yaw, 0, 0, [4.0, 0.12, 0.08]), rgb(0x5a3a28, 0.6));
+      b.box(m4trs([x, (g + top) / 2 - 0.2, z], yaw, 0, 0, [4.2, top - g + 0.4, 6.8]), rgb(0x4a4640));
+      for (let k = 0; k < 6; k++) b.box(m4trs([x + Math.cos(yaw) * (k - 2.5) * 0.66, top + 0.06, z - Math.sin(yaw) * (k - 2.5) * 0.66], yaw, 0, 0, [0.22, 0.12, 2.4]), DARKWOOD);
+      for (const off of [-0.72, 0.72]) b.box(m4trs([x + Math.sin(yaw) * off, top + 0.16, z + Math.cos(yaw) * off], yaw, 0, 0, [4.0, 0.12, 0.08]), rgb(0x5a3a28, 0.6));
     }
     const px = routeX(z0) + 26 * Math.cos(yaw) + 6, pz = z0 - 26 * Math.sin(yaw) + 6;
     b.box(m4trs([px, -4.4, pz], PI / 2 - yaw, 0, 0, [18, 1.2, 3.2]), rgb(0x67625a));
@@ -1269,6 +1301,38 @@ function fields(b) {
     b.box(m4trs([px - 4, -2.6, pz + 1.2], PI / 2 - yaw, 0, 0, [2.2, 0.7, 0.08]), rgb(0x23313a, 0.3));
     b.cyl(m4trs([px - 4.9, -3.8, pz + 1.2], 0, 0, 0, [0.05, 1.3, 0.05]), rgb(0x222222), 5);
     b.cyl(m4trs([px - 3.1, -3.8, pz + 1.2], 0, 0, 0, [0.05, 1.3, 0.05]), rgb(0x222222), 5);
+    train(b, z0, yaw);
+  }
+}
+// the last train, stopped at the halt: three carriages and the engine, its windows still lit, its lamp on
+function train(b, z0, yaw) {
+  const r = rng(31);
+  const ux = Math.cos(yaw), uz = -Math.sin(yaw), nx = Math.sin(yaw), nz = Math.cos(yaw);   // along the line, across it
+  const at = (lx, off = 0, y = 0) => [routeX(z0) + lx * ux + nx * off, y, z0 + lx * uz + nz * off];
+  const railY = (lx) => { const p = at(lx); return Math.max(heightAt(p[0], p[2]) + 1.4, -4.4) + 0.22; };
+  const dark = rgb(0x18191b, 0.3), glass = rgb(0x0b0c0e, 0.6);
+  const B = (lx, off, y, sx, sy, sz, col) => b.box(m4trs(at(lx, off, y), yaw, 0, 0, [sx, sy, sz]), col);
+  for (const [c0, c1] of [[-24.5, -9.5], [-8.5, 6.5], [7.5, 22.5]]) {
+    const lm = (c0 + c1) / 2, L = c1 - c0, y0 = railY(lm) + 0.55;
+    B(lm, 0, y0 + 1.3, L, 2.6, 2.8, rgb(0x3a2624, 0.18));                       // the body, maroon
+    B(lm, 0, y0 + 2.68, L + 0.1, 0.18, 2.9, rgb(0x1c1d20, 0.2));                 // its roof
+    for (const e of [c0 + 2.2, c1 - 2.2]) B(e, 0, y0 - 0.25, 2.6, 0.55, 2.2, dark);   // bogies
+    for (let i = 0; i < 9; i++) for (const side of [-1, 1]) {
+      const lw = c0 + 1.7 + i * (L - 3.4) / 8;
+      B(lw, side * 1.415, y0 + 1.55, 0.85, 0.72, 0.04, r() < 0.75 ? DROWN(1.3 + r() * 1.5) : glass);
+    }
+    for (const e of [c0 + 0.55, c1 - 0.55]) for (const side of [-1, 1]) B(e, side * 1.415, y0 + 1.15, 0.7, 1.9, 0.04, dark);   // doors
+  }
+  // the engine, facing on down the line
+  { const y0 = railY(30) + 0.55;
+    B(25.5, 0, y0 + 1.45, 3.2, 2.9, 2.8, rgb(0x1e2124, 0.3));                    // the cab
+    B(25.5, 0, y0 + 2.95, 3.5, 0.15, 3.0, dark);
+    b.cyl(m4between(at(27, 0, y0 + 1.35), at(35.5, 0, y0 + 1.35), [0, 1, 0], 0.85), rgb(0x23272a, 0.35), 14);   // the boiler
+    b.cyl(m4trs(at(34.4, 0, y0 + 2.1), 0, 0, 0, [0.22, 0.75, 0.22]), dark, 10);    // the chimney
+    B(30, 0, y0 - 0.15, 10, 0.5, 2.3, dark);
+    B(35.6, 0, y0 + 0.9, 0.12, 0.34, 0.34, DROWN(12));                           // its lamp
+    SCENE.deepLamps.push(at(36, 0, y0 + 0.9));
+    for (const side of [-1, 1]) B(25.5, side * 1.415, y0 + 1.9, 0.9, 0.7, 0.04, DROWN(2));
   }
 }
 
@@ -1406,6 +1470,7 @@ function buildScene() {
   R.meshes.push({ mesh: uploadMesh(under.build()), snowy: false, under: true });
   R.meshes.push({ mesh: uploadMesh(above.build()), snowy: true, under: false });
   buildTrees();
+  buildGhosts();
 }
 
 // ---- 30-glsl.js ----
@@ -1424,6 +1489,11 @@ uniform float uReflect;
 uniform vec4 uFog;          // rgb colour, density
 uniform vec3 uBell;         // where the tower's light is (lit window)
 uniform float uUnderBoost;  // the lantern carries further under the ice than physics allows, so the village shows
+uniform float uDrown;       // the lights left on in the drowned village, 0..1
+uniform float uOutR;        // the bell has put them out this far from the tower
+uniform vec2 uTowerXZ;
+uniform vec4 uDeep;         // a lantern walking under the ice: where, and how bright
+uniform vec3 uDeepCol;
 const vec3 SIGMA = vec3(0.105, 0.056, 0.052);
 const float APP = 0.78;     // under the ice things look nearer the surface than they are
 uint uhash(uvec2 v) { uint h = (v.x * 0x27d4eb2du) ^ (v.y * 0x165667b1u); h = (h ^ (h >> 15)) * 0x2c1b3c6du; h = (h ^ (h >> 12)) * 0x297a2d39u; return h ^ (h >> 15); }
@@ -1548,6 +1618,14 @@ vec3 skyColor(vec3 rd) {
 
 // ---- lighting ----
 // light from the lantern reaching p (true position), through the ice and water if p is under it
+vec3 deepAt(vec3 p, vec3 n) {
+  if (uDeep.w <= 0.0 || p.y > -0.05) return vec3(0.0);
+  vec3 L = uDeep.xyz - p; float d2 = dot(L, L), d = sqrt(d2);
+  float ndl = max(dot(n, L / max(d, 1e-3)), 0.0) * 0.8 + 0.2;
+  return uDeepCol * uDeep.w * exp(-SIGMA * d) * ndl / (d2 * 0.5 + 1.2) * smoothstep(24.0, 7.0, d);
+}
+// still burning: out where the bell has rung
+float stillLit(vec3 p) { return uOutR <= 0.0 ? 1.0 : smoothstep(uOutR - 3.0, uOutR + 3.0, length(p.xz - uTowerXZ)); }
 vec3 lanternAt(vec3 p, vec3 n) {
   vec3 L = uLantern - p; float d2 = dot(L, L), d = sqrt(d2); vec3 l = L / d;
   float ndl = max(dot(n, l), 0.0) * 0.85 + 0.15 * max(dot(n, l) * 0.5 + 0.5, 0.0);
@@ -1555,7 +1633,7 @@ vec3 lanternAt(vec3 p, vec3 n) {
   vec3 T = vec3(1.0);
   // under the ice the light falls off more gently than it should, so the village shows round you
   if (p.y < 0.0) { float fw = (-p.y) / max(uLantern.y - p.y, 0.01); T = exp(-SIGMA * d * fw) * 0.9 * mix(1.0, uUnderBoost, smoothstep(0.3, 2.5, -p.y)); att = mix(att, 1.0 / (d2 * 0.55 + 3.0) * smoothstep(52.0, 16.0, d), smoothstep(0.3, 2.5, -p.y)); }
-  return uLanternCol * att * ndl * T;
+  return uLanternCol * att * ndl * T + deepAt(p, n);
 }
 vec3 skyLight(vec3 p, vec3 n) {
   vec3 amb = mix(uGroundAmb, uSkyAmb, n.y * 0.5 + 0.5);
@@ -1579,6 +1657,7 @@ vec3 underwaterView(vec3 col, vec3 p) {
   vec3 scat = vec3(0.0025, 0.007, 0.009) * (min(uSkyAmb.b, 0.02) * 40.0 + 0.15) + (uSkyAmb + uSunCol * 0.25) * vec3(0.05, 0.11, 0.12) * uDawn;
   vec3 ld = uLantern - mid; float ldd = dot(ld, ld);
   scat += uLanternCol * vec3(0.03, 0.06, 0.06) / (ldd + 4.0) * 0.5;
+  if (uDeep.w > 0.0) { vec3 dd = uDeep.xyz - mid; scat += uDeepCol * uDeep.w * vec3(0.05, 0.11, 0.1) / (dot(dd, dd) * 0.6 + 2.0); }
   return col * T + scat * (1.0 - T);
 }
 vec3 airFog(vec3 col, vec3 p, vec3 rd) {
@@ -1689,7 +1768,7 @@ void main() {
   gl_Position = uVP * vec4(q, 1.0);
 }`;
 const OBJ_FS = COMMON + `
-in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; uniform float uLanternK; uniform float uStone; out vec4 o;
+in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; uniform float uLanternK; uniform float uStone; uniform float uGhostK; out vec4 o;
 void main() {
   vec3 p = vP;
   if (uReflect > 0.5 && p.y < -0.01) discard;
@@ -1697,7 +1776,11 @@ void main() {
   vec3 alb = vC.rgb; float m = vC.a;
   vec3 rd = normalize(p - uCam);
   vec3 col;
-  if (m < -0.001) {
+  if (m < -99.0) {
+    // a light left on in the drowned village: it flickers, and the bell puts it out
+    float fl = 0.7 + 0.3 * vnoise(vec2(floor(p.x * 0.4) * 1.7 + floor(p.z * 0.4) * 3.1 + uTime * 1.4, floor(p.y)));
+    col = alb * (-m - 100.0) * uDrown * fl * stillLit(p);
+  } else if (m < -0.001) {
     col = alb * (-m);
   } else {
     // stone shows its courses, under the ice and above it (built things only: not the skater, the rope, the bell)
@@ -1727,8 +1810,13 @@ void main() {
       col += uMoonCol * pow(max(dot(n, hm), 0.0), 40.0 + 200.0 * m) * m * 0.6;
     }
   }
-  col = p.y < 0.0 ? underwaterView(col, p) : airFog(col, p, rd);
-  o = vec4(col, 1.0);
+  // what stands only in the reflection: gone when you come near, and where the bell has rung
+  float alpha = 1.0;
+  if (uGhostK > 0.0) alpha = uGhostK * smoothstep(25.0, 110.0, length(p - uCam)) * stillLit(p) * (m < -0.001 ? 1.0 : 0.75);
+  // the drowned lights lose less of their red on the way up than the stone round them does, so they stay warm
+  if (m < -99.0 && p.y < 0.0) col = mix(underwaterView(col, p), underwaterView(col * vec3(2.6, 1.15, 0.9), p), 0.6);
+  else col = p.y < 0.0 ? underwaterView(col, p) : airFog(col, p, rd);
+  o = vec4(col, alpha);
 }`;
 // trees on the shore, instanced: aI0 = x, y, z, scale; aI1 = yaw, tint
 const TREE_VS = COMMON + `
@@ -1981,6 +2069,7 @@ function renderInit() {
   R.sprites = makeStream(60000);
   R.decals = makeStream(12000);
   R.pathS = makeStream(60000);
+  R.deep = makeStream(3000);
 }
 
 function resizeTargets(w, h) {
@@ -2006,7 +2095,7 @@ function common(extra) {
     uMoonDir: U.moonDir, uMoonCol: U.moonCol, uSunDir: U.sunDir, uSunCol: U.sunCol, uSkyAmb: U.skyAmb, uGroundAmb: U.groundAmb,
     uNight: U.night, uAurora: U.aurora, uDawn: U.dawn, uStorm: U.storm, uDusk: U.dusk,
     uWorld: U.world, uHeight: R.heightTex, uIceTex: R.iceTex, uReflect: U.reflect, uFog: U.fog, uUnderBoost: U.underBoost,
-    uBell: U.bell,
+    uBell: U.bell, uDrown: U.drown, uOutR: U.outR, uTowerXZ: U.towerXZ, uDeep: U.deep, uDeepCol: U.deepCol,
   });
   if (extra) set(extra);
 }
@@ -2046,6 +2135,13 @@ function drawObjects(vp, reflect, extraDraws) {
     common({ uVP: vp, uSnowy: 0, uBright: 1 });
   }
   set({ uSnowy: 0, uStone: 0 });
+  // in the mirror only: the farm and the village as they stood
+  if (reflect) {
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    for (const [mesh, k] of [[R.ghostFarm, DEEP.farm], [R.ghostVillage, DEEP.village]]) if (mesh && k > 0.003) { set({ uModel: m4(), uGhostK: k, uLanternK: 0, uBright: 1 }); drawMesh(mesh); }
+    gl.disable(gl.BLEND); gl.depthMask(true);
+    set({ uGhostK: 0 });
+  }
   if (!extraDraws) return;
   for (const d of extraDraws) if (!d.bones) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh); }
   let skin = false;
@@ -2111,6 +2207,13 @@ function renderFrameInner(view) {
   gl.depthMask(false); use(R.P.sky); common({ uInvVP: view.invVP }); gl.disable(gl.CULL_FACE); drawFullscreen(); gl.enable(gl.CULL_FACE); gl.depthMask(true);
   drawGround(view.vp, false);
   drawObjects(view.vp, false, view.skaterDraws);
+  // the glow round the lights under the ice, before the ice lies over them
+  if (R.deep.n) {
+    use(R.P.sprite); set({ uVP: view.vp });
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);
+    drawStream(R.deep);
+    gl.depthMask(true); gl.disable(gl.BLEND);
+  }
   // cracks live inside the ice: drawn before it so the ice sees them through itself
   if (R.cracks.n) {
     use(R.P.mark); common({ uVP: view.vp });
@@ -3422,6 +3525,13 @@ function audioInit() {
     o.start(); o2.start();
     return { o, o2, g, f: fl };
   });
+  // the drowned lights' hum: two low sines a breath apart, so they beat slowly
+  A.hum = [NOTE(38), NOTE(45) + 0.35].map((f) => {
+    const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const g = c.createGain(); g.gain.value = 0;
+    o.connect(g); g.connect(A.music); g.connect(A.send); o.start();
+    return { o, g };
+  });
   A.on = true; A.started = true;
   A.nextBeat = c.currentTime + 0.5;
 }
@@ -3487,6 +3597,13 @@ AUDIO.morning = function () {
   DAWN_CHORD.tones.forEach((m, i) => play(A.buf.glass[m], { gain: 0.12, delay: 2 + i * 0.7, wet: 0.9, bus: A.music, pan: (i / 5 - 0.5) * 0.6, travel: false }));
   for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.16, cut: 4000, delay: 5.5 + i * 0.48, wet: 1, pan: Math.sin(i * 1.3) * 0.5, travel: false });
   for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.12, cut: 6000, delay: 9 + i * 0.48, wet: 1, pan: Math.sin(i * 1.7) * 0.5, travel: false });
+};
+// a step under the ice: whoever carries that lantern, muffled by the water, on the chord
+AUDIO.under = function (pos, k = 1) {
+  const A = AUDIO; if (!A.on) return;
+  const ch = AUDIO.chord(); A.underI = (A.underI || 0) + 1;
+  const m = ch.tones[(A.underI * 2) % ch.tones.length];
+  play(A.buf.glass[m], { pos, gain: 0.09 * k, ref: 14, rate: 0.5, cut: 1300, wet: 0.8, bus: A.music, travel: false });
 };
 AUDIO.plunge = function () { play(AUDIO.buf.plunge, { gain: 0.34, wet: 0.35 }); play(AUDIO.buf.boom, { gain: 0.22, rate: 0.7, wet: 0.5 }); };
 AUDIO.bell = function (k = 1, pos) { play(AUDIO.buf.tower, { pos: pos || SCENE.bell, gain: 0.42 * k, ref: 40, wet: 0.7, travel: true }); };
@@ -3556,6 +3673,7 @@ AUDIO.update = function (dt) {
     const x = SK.x + Math.sin(a) * r, z = SK.z + Math.cos(a) * r;
     if (heightAt(x, z) < -0.5) { if (Math.random() < 0.3) play(A.buf.boom, { pos: [x, 0, z], gain: 0.4, ref: 60, rate: 0.8 + Math.random() * 0.3, wet: 0.7 }); AUDIO.sing(x, z, 0.8); }
   }
+  if (A.hum) A.hum.forEach((v, i) => v.g.gain.setTargetAtTime(DEEP.hum * (i ? 0.016 : 0.026) * (1 - G.dawn), now, 1.5));
   // under the village, faint, the old peal going round
   const inVillage = smooth(1740, 1860, G.s) * (1 - smooth(2420, 2520, G.s));
   if (inVillage > 0.05 && G.state === 'play') {
@@ -3587,20 +3705,22 @@ function lightState() {
   const night = smooth(120, 900, s);
   const storm = smooth(2430, 2530, here) * (1 - smooth(2730, 2860, here)) * (1 - G.dawn);
   G.storm = lerp(G.storm, storm, 0.02);
-  const aur = smooth(1260, 1760, s) * (1 - G.dawn * 0.85);
+  const aur = smooth(1260, 1760, s) * (1 - smooth(2050, 2350, s) * 0.85) * (1 - G.dawn * 0.85);
   G.aurora = lerp(G.aurora, aur, 0.01);
   const dawn = G.dawn;
   U.time = G.time; U.dusk = dusk; U.night = night; U.storm = G.storm; U.aurora = G.aurora; U.dawn = dawn;
   U.world = [WORLD.x0, WORLD.z0, WORLD.size, 1 / WORLD.size];
   const stormK = 1 - G.storm * 0.85;
   U.moonDir = MOON_DIR;
-  U.moonCol = vmul([0.034, 0.04, 0.056], stormK * (1 - dusk * 0.6) * (1 - dawn));
+  const eerie = DEEP.eerie;
+  U.moonCol = vmul([0.034, 0.04, 0.056], stormK * (1 - dusk * 0.6) * (1 - dawn) * (1 - eerie * 0.6));
   const sun = vnorm([0.75, lerp(-0.08, 0.16, dawn), -0.6]);
   U.sunDir = sun;
   U.sunCol = vmul([1.4, 0.95, 0.62], smooth(0.2, 1, dawn) * 1.4);
   const aurAmb = [0.0006, 0.0028, 0.0016];
   U.skyAmb = vadd(vadd(vlerp([0.0036, 0.0048, 0.0085], [0.026, 0.025, 0.036], dusk), vmul(aurAmb, G.aurora)), vmul([0.16, 0.19, 0.25], dawn));
   U.skyAmb = vlerp(U.skyAmb, [0.006, 0.0065, 0.0075], G.storm);
+  U.skyAmb = vmul(U.skyAmb, 1 - eerie * 0.45);
   U.groundAmb = vmul(U.skyAmb, 0.55);
   U.fog = [...vlerp(vlerp([0.0035, 0.0045, 0.0075], [0.03, 0.028, 0.034], dusk), [0.014, 0.0155, 0.018], G.storm), (0.00055 + dusk * 0.0002) * (1 - 0.75 * dawn) + G.storm * 0.045];
   const fl = 1 + 0.035 * Math.sin(G.time * 11.3) + 0.025 * Math.sin(G.time * 23.7 + 1.3) + 0.02 * vnoise(G.time * 6, 3.3);
@@ -3614,6 +3734,9 @@ function lightState() {
   U.bloomK = 0.055;
   U.sag = [SK.x, SK.z, ICE.danger * 0.9, ICE.sagPhase];
   U.bell = SCENE.bell || [0, 0, 0];
+  const W = DEEP.walker;
+  U.drown = DEEP.drown; U.outR = DEEP.outR; U.towerXZ = [TOWER.x, TOWER.z];
+  U.deep = [W.x, W.y, W.z, W.on ? W.k * 5.0 : 0]; U.deepCol = [1.0, 0.55, 0.22];
   U.reflect = 0;
 }
 
@@ -3662,16 +3785,6 @@ function towerCamera(dt) {
   C.yaw = Math.atan2(C.look[0] - C.pos[0], C.look[2] - C.pos[2]);
   C.shake = Math.max(0, C.shake - dt * 2.5);
   if (C.shake > 0) C.pos = vadd(C.pos, [(Math.random() - 0.5) * C.shake * 0.05, (Math.random() - 0.5) * C.shake * 0.05, 0]);
-}
-// after the card: the morning, skate where you like
-function skateOn() {
-  if (!STORY.card || G.state === 'play') return;
-  $('card').classList.remove('on');
-  G.ending = false; G.state = 'play'; BELL.inside = false;
-  G.dawn = 1;
-  skaterReset(TOWER.x, TOWER.z - TOWER.w / 2 - 2.2, PI);
-  G.cam.yaw = PI; G.cam.pos = [TOWER.x, 2.5, TOWER.z - TOWER.w / 2 - 8]; G.cam.look = [TOWER.x, 1, TOWER.z - 10];
-  G.morningFree = true;
 }
 
 function buildView() {
@@ -3725,7 +3838,12 @@ function gameStep(dt, inp) {
     if (G.fallT > 1.9) G.fade = Math.min(1, G.fade + dt * 1.4);
     if (G.fallT > 3.0) { respawn(); G.state = 'play'; updateHoles(); }
     squallStep(dt);
-  } else if (G.state === 'tower') {
+  } else if (G.state === 'morning') {
+    // standing outside the tower while the morning comes
+    SK.vx = SK.vz = 0; SK.speed = 0;
+    skaterPose(); scarfStep(dt);
+  }
+  if (G.state === 'tower') {
     // stand under the rope, face it; any button takes the rope
     const tx = SCENE.bell[0] + 0.55, tz = SCENE.bell[2] - 0.42;
     SK.x = lerp(SK.x, tx, expDecay(3, dt)); SK.z = lerp(SK.z, tz, expDecay(3, dt));
@@ -3736,12 +3854,22 @@ function gameStep(dt, inp) {
     skaterPose(); scarfStep(dt);
     squallStep(dt);
   }
+  // the bell rings itself down once you have let go of it
+  if (STORY.ended && G.state !== 'tower') towerStep(dt, false);
+  deepStep(dt);
   cracksStep(dt);
   partsStep(dt);
-  if (G.ending) { morningCamera(dt); pathDecal(); }
-  else if (G.morningFree) { MORNING.t += dt; pathDecal(); }
+  if (G.ending) { morningCamera(dt, inp); pathDecal(); }
   else if (G.state === 'tower') towerCamera(dt);
-  else cameraStep(dt, inp.lookY);
+  else {
+    if (G.morningFree) { MORNING.t += dt; pathDecal(); }
+    cameraStep(dt, inp.lookY);
+  }
+  // the card lifts when you skate, or after a while
+  if (MORNING.cardT >= 0) {
+    MORNING.cardT += dt;
+    if (MORNING.cardT > 9 || (MORNING.cardT > 0.8 && (inp.skate || inp.stop))) { $('card').classList.remove('on'); MORNING.cardT = -1; }
+  }
   streamUpload(R.scratches, R.scratches.uploaded);
   streamUpload(R.cracks, R.cracks.uploaded);
   if (Math.random() < dt * 2) updateHoles();
@@ -3771,6 +3899,154 @@ function gameEvents(dt) {
       spray(L.foot[0], 0.02, L.foot[2], S.vx * 0.55 + rx * side * (Math.random() - 0.2) * 1.5, 0.4 + Math.random() * 1.2, S.vz * 0.55 + rz * side * (Math.random() - 0.2) * 1.5, 0.35 + Math.random() * 0.5, 0.015 + Math.random() * 0.02, [0.62, 0.66, 0.72], 1, 2.2, 7);
     }
   }
+}
+
+// ---- 72-deep.js ----
+// What the ice shows that is not there, and what is under it that should not be lit. In the reflection the farm and the
+// village stand as they were, windows and street lamps lit; below the ice their ruins, a few windows and lamps still
+// burning, the last train at the halt, and a lantern walking the drowned street ahead of you to the church. The bell
+// puts them out, from the tower outward; then it is morning.
+const DEEP = {
+  farm: 0, village: 0,          // how much of each stands in the reflection
+  drown: 0,                     // the lights left on under the ice
+  eerie: 0,                     // the night closing in toward the village
+  outR: 0, outT: 0, outWait: 0, // put out this far from the tower, how far the bell has sent it, and when it goes
+  hum: 0,
+  walker: { on: false, s: 0, x: 0, y: -4, z: 0, lit: 0, k: 0, t: 0, stepT: 0, moving: false },
+};
+const stillLitAt = (x, z) => (DEEP.outR <= 0 ? 1 : smooth(DEEP.outR - 3, DEEP.outR + 3, Math.hypot(x - TOWER.x, z - TOWER.z)));
+
+function deepStep(dt) {
+  const s = G.maxS, dawn = G.dawn;
+  DEEP.farm = smooth(240, 420, s) * (1 - smooth(820, 980, s)) * (1 - dawn);
+  DEEP.village = smooth(1500, 1720, s) * (1 - dawn);
+  DEEP.drown = smooth(1360, 1520, s);           // until the bell's dark reaches each one
+  DEEP.eerie = smooth(1600, 2300, s) * (1 - dawn);
+  // the bell's answer goes out across the lake: slowly while it rings, at a run when it is done
+  // while it rings, only the lantern at the door goes out; once it is done, the dark spreads out from the tower,
+  // slowly through the churchyard and then faster, across the lake
+  if (DEEP.outWait > 0) DEEP.outWait -= dt;
+  else DEEP.outR = Math.min(DEEP.outT, DEEP.outR + (DEEP.outT > 400 ? 3 + DEEP.outR * 0.33 : 45) * dt);
+  walkerStep(dt);
+  // the drowned lights hum, low, when you are over them
+  const near = Math.max(smooth(170, 40, Math.abs(G.s - 1560)), smooth(1700, 1800, G.s) * (1 - smooth(2990, 3070, G.s)));
+  DEEP.hum = DEEP.drown * near * stillLitAt(SK.x, SK.z) * (G.state === 'play' || G.state === 'fall' ? 1 : 0.4);
+}
+
+// a lantern under the ice, carried along the drowned street toward the church: ahead of you, waiting if you fall behind
+function walkerStep(dt) {
+  const W = DEEP.walker;
+  if (!W.on) {
+    if (G.state !== 'play' || G.s < 1735 || G.s > 2900 || STORY.ended) return;
+    W.on = true; W.s = Math.max(1775, G.s + 34); W.lit = 0; W.t = 0;
+  }
+  W.t += dt;
+  const end = WORLD.routeLen - 9;
+  let v = 0;
+  if (G.state === 'play') {
+    // further ahead the faster you come, so it is always out in front of you, not under you
+    const want = Math.min(end, G.s + 21 + SK.speed * 2);
+    if (want > W.s && G.s > W.s - 75) v = clamp((want - W.s) * 1.1, 1.1, 16);
+  }
+  W.s = Math.min(end, W.s + v * dt);
+  W.moving = v > 0.3;
+  const p = routeAt(W.s), [rx, rz] = rightOf(p.dir);
+  const sway = Math.sin(W.t * 0.7) * 0.8 * (1 - smooth(end - 40, end, W.s));
+  let x = p.x + rx * sway, z = p.z + rz * sway;
+  // at the end of the way it goes to the tower's door, and waits
+  const k = smooth(end - 34, end, W.s);
+  x = lerp(x, TOWER.x + 0.5, k); z = lerp(z, TOWER.z - TOWER.w / 2 - 1.3, k);
+  W.x = x; W.z = z; W.y = heightAt(x, z) + 1.05 + Math.sin(W.t * 2.2) * 0.05;
+  W.lit = Math.min(1, W.lit + dt * 0.4);
+  W.k = W.lit * stillLitAt(x, z) * (1 - G.dawn) * (0.86 + 0.14 * Math.sin(W.t * 7.3) * Math.sin(W.t * 3.1));
+  if (W.moving && W.k > 0.25) { W.stepT -= dt; if (W.stepT <= 0) { W.stepT = 1.3; AUDIO.under([W.x, W.y, W.z], W.k); } }
+}
+
+// ---- the reflection's village: drawn only in the ice's mirror, so it is there when you look across and gone when you
+// look down ----
+function buildGhosts() {
+  const wall = rgb(0x2a2e34, 0.05), roof = rgb(0x17181c, 0.08), glass = rgb(0x0a0b0d, 0.5), door = rgb(0x1a1612, 0.1);
+  const house = (b, h, r) => {
+    const { x, z, yaw, w, d } = h, H = Math.max(3.0, h.wallH) + 0.3, G2 = 2.1;
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const M = (lx, ly, lz, sx, sy, sz, ry = 0) => m4trs([x + c * lx + s * lz, ly, z - s * lx + c * lz], yaw + ry, 0, 0, [sx, sy, sz]);
+    b.box(M(0, H / 2, 0, w, H, d), wall);
+    b.prism(M(0, H, 0, d + 0.5, G2, w + 0.4, PI / 2), roof);
+    b.box(M(w / 2 - 0.7, H + G2 * 0.6, 0, 0.6, G2 * 0.9, 0.8), wall);                  // the chimney
+    for (const lz of [d / 2 + 0.03, -d / 2 - 0.03]) {
+      for (const lx of [-w / 2 + 1.15, w / 2 - 1.15]) b.box(M(lx, 1.45, lz, 0.9, 1.05, 0.05), r() < 0.6 ? LIT(5 + r() * 5) : glass);
+      if (w > 9) b.box(M(0, 1.45, lz, 0.9, 1.05, 0.05), r() < 0.5 ? LIT(5 + r() * 4) : glass);
+    }
+    b.box(M(0, 1.05, d / 2 + 0.04, 1.0, 2.0, 0.05), door);
+    // the ends, which face up and down the street: a window each, and one up in the gable
+    for (const lx of [w / 2 + 0.03, -w / 2 - 0.03]) {
+      b.box(M(lx, 1.45, 0, 0.05, 1.05, 0.9), r() < 0.55 ? LIT(5 + r() * 5) : glass);
+      if (r() < 0.6) b.box(M(lx, H + 0.75, 0, 0.05, 0.62, 0.5), r() < 0.5 ? LIT(4 + r() * 4) : glass);
+    }
+  };
+  const build = (group) => {
+    const b = new MB(), r = rng(group === 'farm' ? 3 : 4);
+    for (const h of SCENE.houses) if (h.group === group) house(b, h, r);
+    if (group === 'village') {
+      // the street lamps, lit
+      for (const [x, , z, yaw] of SCENE.lampPosts) {
+        if (z < 1700 || z > 2600) continue;
+        b.cyl(m4trs([x, 0, z], 0, 0, 0, [0.07, 3.9, 0.07]), wall, 6, 0.7);
+        b.box(m4trs([x + Math.sin(yaw) * 0.75, 3.78, z + Math.cos(yaw) * 0.75], yaw, 0, 0, [0.24, 0.18, 0.32]), LIT(40));
+      }
+      // the church whole again, its windows lit, beside the tower that is really there
+      const C = SCENE.church;
+      if (C) {
+        const H = 7, cx = C.x0 + C.L / 2;
+        b.box(m4trs([cx, H / 2, C.z0], 0, 0, 0, [C.L, H, C.W]), wall);
+        b.prism(m4trs([cx, H, C.z0], PI / 2, 0, 0, [C.W + 0.8, 4.2, C.L + 0.5]), roof);
+        for (let i = 0; i < 4; i++) for (const side of [-1, 1]) b.box(m4trs([C.x0 + 3.2 + i * 4.2, 3.6, C.z0 + side * (C.W / 2 + 0.04)], 0, 0, 0, [1.1, 3.0, 0.06]), LIT(side < 0 ? 8 : 5));
+        b.box(m4trs([C.x0 + C.L + 0.04, 3.8, C.z0], 0, 0, 0, [0.06, 3.6, 2.4]), LIT(9));
+        b.box(m4trs([C.x0 + 6.5, 1.6, C.z0 - C.W / 2 - 1.6], 0, 0, 0, [3.2, 3.2, 3.2]), wall);   // the porch
+      }
+    }
+    return b.n ? uploadMesh(b.build()) : null;
+  };
+  R.ghostFarm = build('farm');
+  R.ghostVillage = build('village');
+  SKM.deepLamp = uploadMesh(new MB().sphere(m4(), LIT(40), 10, 7).build());
+}
+
+// the walker's lantern, for the frame
+function deepDraws() {
+  const W = DEEP.walker;
+  return W.on && W.k > 0.01 ? [{ mesh: SKM.deepLamp, m: m4trs([W.x, W.y, W.z], 0, 0, 0, 0.075 * Math.sqrt(W.k)), lk: 0 }] : [];
+}
+
+// light seen through the water: dimmer and bluer the more water it comes through on its way up to you
+function throughWater(p, col, cam, kk = 1) {
+  const depth = -p[1];
+  if (depth <= 0) return col;
+  const fw = depth / Math.max(cam[1] + depth, 0.01);
+  const Lw = Math.hypot(p[0] - cam[0], p[1] - cam[1], p[2] - cam[2]) * fw;
+  return [col[0] * Math.exp(-0.105 * Lw * kk), col[1] * Math.exp(-0.056 * Lw * kk), col[2] * Math.exp(-0.052 * Lw * kk)];
+}
+// soft glows round the lights under the ice, drawn before the ice so it lies over them
+function buildDeepGlows(camRight, camUp) {
+  const S = R.deep; S.n = 0;
+  const cam = G.cam.pos, D = S.data;
+  const quad = (p, s, c) => {
+    if (S.n + 6 > S.max) return;
+    const C = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
+    let k = S.n * 7;
+    for (const [a, b] of C) { D[k++] = p[0] + camRight[0] * s * a + camUp[0] * s * b; D[k++] = p[1] + camRight[1] * s * a + camUp[1] * s * b; D[k++] = p[2] + camRight[2] * s * a + camUp[2] * s * b; D[k++] = c[0]; D[k++] = c[1]; D[k++] = c[2]; D[k++] = 2; }
+    S.n += 6;
+  };
+  if (DEEP.drown > 0.01) {
+    SCENE.deepLamps.forEach((l, i) => {
+      if (Math.hypot(l[0] - cam[0], l[2] - cam[2]) > 320) return;
+      const k = DEEP.drown * stillLitAt(l[0], l[2]) * (0.8 + 0.2 * Math.sin(G.time * (1.3 + (i % 5) * 0.4) + i));
+      if (k > 0.01) quad(l, 1.6 * (l[3] || 1), throughWater(l, [0.3 * k, 0.15 * k, 0.05 * k], cam, 0.7));
+    });
+  }
+  const W = DEEP.walker;
+  if (W.on && W.k > 0.01) { const p = [W.x, W.y, W.z]; quad(p, 3.8, throughWater(p, [0.9 * W.k, 0.45 * W.k, 0.15 * W.k], cam, 0.5)); quad(p, 0.9, throughWater(p, [1.2 * W.k, 0.75 * W.k, 0.32 * W.k], cam, 0.5)); }
+  streamUpload(S);
 }
 
 // ---- 75-story.js ----
@@ -3901,7 +4177,7 @@ function towerStep(dt, held) {
     B.strikes++;
     const k = sat((Math.abs(B.a) - 0.5) / 0.9);
     AUDIO.bell(0.45 + k * 0.6);
-    G.cam.shake = Math.max(G.cam.shake, 0.15 + k * 0.2);
+    if (G.state === 'tower') G.cam.shake = Math.max(G.cam.shake, 0.15 + k * 0.2);
     // the lake answers
     for (let i = 0; i < 2 + B.strikes; i++) {
       const a = Math.random() * TAU, r = 60 + Math.random() * 600;
@@ -3909,7 +4185,8 @@ function towerStep(dt, held) {
       if (heightAt(x, z) < -0.5) setTimeout(() => AUDIO.sing(x, z, 0.9), 200 + Math.random() * 1500);
     }
     if (B.strikes >= 3) AUDIO.peal(B.strikes);
-    if (B.strikes >= 8 && !G.ending) startMorning();
+    if (!STORY.ended) DEEP.outT = [0, 6, 6, 6, 6][Math.min(4, B.strikes)];
+    if (B.strikes >= 5 && !G.ending) startMorning();
   }
   B.rope = -Math.sin(B.a) * 0.9;
 }
@@ -3927,41 +4204,80 @@ function bellDraws() {
 }
 
 // ---- morning ----
-const MORNING = { t: 0, keys: null };
+// up past the bell and out through the belfry; the lights going out across the village below as the light comes; the
+// whole way you came, drawn on the ice; then down to you, standing outside the tower, to skate on. Any press goes
+// straight to you.
+const MORNING = { t: 0, keys: null, moved: false, armed: false, cardT: -1, end: null };
+const MORNING_END = 11;
+function behindCam(x, z, h, pitch, dist) {
+  const look = [x + Math.sin(h) * 0.9, 1.05, z + Math.cos(h) * 0.9];
+  const cp = Math.cos(pitch), sp = Math.sin(pitch), dir = [Math.sin(h) * cp, -sp, Math.cos(h) * cp];
+  return { pos: vsub(look, vmul(dir, dist)), look };
+}
 function startMorning() {
   if (STORY.ended) return;
   STORY.ended = true;
-  G.ending = true; MORNING.t = 0;
-  const T = TOWER;
-  // up the inside of the tower, out of the belfry, back over the lake to see it all
-  // up the inside of the tower and out of the belfry; down over the drowned church; south along the old street, looking
-  // down through the ice; then up, to see the whole valley and the way you came
-  const vz = (z) => [routeX(z), z];
+  G.ending = true; Object.assign(MORNING, { t: 0, moved: false, armed: false, cardT: -1, skip: false, skipT: 0 });
+  DEEP.outT = 4200; DEEP.outWait = 3.0;
+  const T = TOWER, C = G.cam;
+  MORNING.end = behindCam(T.x, T.z - 9.5, PI, G.pitchIn, 5.0);
+  // up past the bell to the belfry's south opening and out through it; round and down over the drowned church and its
+  // churchyard as the grave lights go out, from the tower outward; then down to you, outside, your way home drawn on
+  // the ice in front of you
+  const E = SCENE.church ? SCENE.church.x0 + 9 : T.x + 12;
   MORNING.keys = [
-    { t: 0, pos: [T.x - 0.9, 1.5, T.z - 0.8], look: [T.x + 0.2, 10, T.z + 0.3] },
-    { t: 6, pos: [T.x - 0.2, 10.5, T.z - 0.6], look: [T.x - 1, 13, T.z - 12] },
-    { t: 13, pos: [T.x - 6, 24, T.z - 24], look: [T.x + 10, -6, T.z + 4] },
-    { t: 22, pos: [vz(2700)[0] - 12, 30, 2700], look: [vz(2560)[0], -6, 2560] },
-    { t: 32, pos: [vz(2250)[0] - 16, 34, 2250], look: [vz(2120)[0] + 4, -6, 2120] },
-    { t: 42, pos: [vz(2010)[0] - 20, 46, 2010], look: [vz(1880)[0], -6, 1880] },
-    { t: 60, pos: [vz(1900)[0] - 140, 260, 2150], look: [vz(700)[0], -4, 700] },
+    { t: 0, pos: C.pos.slice(), look: C.look.slice() },
+    { t: 1.8, pos: [T.x - 0.85, 7.4, T.z - 1.15], look: [T.x + 0.2, 10.9, T.z - 0.2] },
+    { t: 3.2, pos: [T.x + 0.05, 10.75, T.z - 1.8], look: [T.x, 9.2, T.z - 14] },
+    { t: 4.0, pos: [T.x, 11.2, T.z - 4.4], look: [T.x + 3, 2, T.z - 24] },
+    { t: 6.2, pos: [T.x + 9, 17, T.z - 19], look: [E, -3.5, T.z - 1] },
+    { t: 8.4, pos: [E + 20, 24, T.z - 13], look: [E - 4, -4, T.z + 2] },
+    { t: MORNING_END, pos: MORNING.end.pos, look: MORNING.end.look },
   ];
   AUDIO.morning();
 }
-function morningCamera(dt) {
+// a smooth path through timed keys: each key's speed takes account of how long the neighbouring stretches are, so the
+// flight neither stops at a key nor swings wide of it; at rest at both ends
+function keyPath(K, t, f) {
+  let i = 0; while (i < K.length - 2 && K[i + 1].t <= t) i++;
+  const a = K[i], b = K[i + 1], D = b.t - a.t, u = clamp((t - a.t) / D, 0, 1);
+  const vel = (j) => (j <= 0 || j >= K.length - 1 ? [0, 0, 0] : vmul(vsub(K[j + 1][f], K[j - 1][f]), 1 / (K[j + 1].t - K[j - 1].t)));
+  const va = vel(i), vb = vel(i + 1), u2 = u * u, u3 = u2 * u;
+  const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+  return [0, 1, 2].map((k) => h00 * a[f][k] + h10 * D * va[k] + h01 * b[f][k] + h11 * D * vb[k]);
+}
+function morningCamera(dt, inp) {
   MORNING.t += dt;
-  const K = MORNING.keys, t = MORNING.t;
-  let i = 0; while (i < K.length - 2 && K[i + 1].t < t) i++;
-  const a = K[i], b = K[i + 1];
-  // a Catmull-Rom through the keys, so the flight does not stop at each one
-  const i0 = K[Math.max(0, i - 1)], i3 = K[Math.min(K.length - 1, i + 2)];
-  const u = clamp((t - a.t) / (b.t - a.t), 0, 1);
-  const cr = (p0, p1, p2, p3) => p1.map((_, k) => 0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * u + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * u * u + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * u * u * u));
-  G.cam.pos = cr(i0.pos, a.pos, b.pos, i3.pos);
-  G.cam.look = vlerp(G.cam.look, cr(i0.look, a.look, b.look, i3.look), expDecay(3, dt));
-  G.cam.fov = lerp(G.cam.fov, 56, expDecay(0.5, dt));
-  G.dawn = smooth(3, 24, t);
-  if (t > 46 && !STORY.card) { STORY.card = true; showCard(); }
+  const C = G.cam;
+  // a fresh press goes straight to you (the press that rang the bell does not count)
+  const pressed = inp && (inp.skate || inp.stop || inp.hop);
+  if (!pressed) MORNING.armed = true;
+  else if (MORNING.armed && MORNING.t > 0.6 && !MORNING.skip) { MORNING.skip = true; MORNING.skipT = 0; }
+  if (MORNING.skip) {
+    // a breath of dark, then you
+    MORNING.skipT += dt;
+    G.fade = MORNING.skipT < 0.35 ? smooth(0, 0.35, MORNING.skipT) : 1 - smooth(0.35, 0.9, MORNING.skipT);
+    if (MORNING.skipT >= 0.35 && MORNING.t < MORNING_END) MORNING.t = MORNING_END - 1e-3;
+  }
+  const t = MORNING.t;
+  // out of the tower while no one is looking: you are standing outside it, facing back the way you came
+  if (!MORNING.moved && t > 2.4) {
+    MORNING.moved = true; BELL.inside = false;
+    skaterReset(TOWER.x, TOWER.z - 9.5, PI);
+    G.state = 'morning';
+  }
+  G.dawn = Math.max(G.dawn, smooth(2.5, 11, t));
+  C.pos = keyPath(MORNING.keys, Math.min(t, MORNING_END), 'pos');
+  C.look = keyPath(MORNING.keys, Math.min(t, MORNING_END), 'look');
+  C.fov = lerp(C.fov, t > MORNING_END - 2.5 ? 60 : 56, expDecay(1.5, dt));
+  if (t >= MORNING_END && (!MORNING.skip || MORNING.skipT >= 0.9)) { G.fade = 0; handOver(); }
+}
+// the camera is behind you again: skate on, in the morning
+function handOver() {
+  const C = G.cam;
+  G.ending = false; G.state = 'play'; G.morningFree = true; G.dawn = 1;
+  C.yaw = PI; C.pitch = G.pitchIn; C.dist = 5.0;
+  STORY.card = true; MORNING.cardT = 0; showCard();
 }
 function showCard() {
   const el = $('card'); if (!el) return;
@@ -3974,13 +4290,13 @@ function pathDecal() {
   const S = R.pathS; S.n = 0;
   if (PATH.length < 2) return;
   const C = G.cam.pos;
-  const k = smooth(8, 22, MORNING.t);
-  const col = [1.0 * k, 0.78 * k, 0.5 * k, -1];
+  const k = smooth(3.5, 7, MORNING.t);
+  const col = [0.48 * k, 0.33 * k, 0.17 * k, -1];
   for (let i = 0; i < PATH.length - 1 && S.n + 6 < S.max; i++) {
     const a = PATH[i], b = PATH[i + 1];
     if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 8) continue;           // a jump back to a lantern after falling in
     const d = Math.hypot(a[0] - C[0], C[1], a[1] - C[2]);
-    pushQuadFlat(S, a, b, 0.0022 * d + 0.03, col, 0.01);
+    pushQuadFlat(S, a, b, 0.0032 * d + 0.035, col, 0.01);
   }
   streamUpload(S);
 }
@@ -4015,6 +4331,7 @@ const SPEED = clamp(Number(Q.get('speed')) || 1, 0.1, 8);
 // a stand-in pilot for checking: follows the marked way, hops the ridges and the lead, rings the bell
 const BOT = { on: Q.has('bot'), pulled: false };
 function botInput(inp) {
+  if (G.ending) return;
   if (G.state === 'tower') { inp.skate = BELL.held ? BELL.pullT > 0 : Math.abs(BELL.a) < 0.15; return; }
   if (G.state !== 'play') return;
   const look = G.s + 10 + SK.speed * 0.9;
@@ -4149,7 +4466,8 @@ function loop(t) {
   if (SCENE.damLamps) for (const l of SCENE.damLamps) glows.push([l[0], l[1], l[2], 2.4, 0.5, 0.22, 0.06]);
   buildSprites(V.right, V.up, glows);
   AUDIO.update(dt);
-  const draws = G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws();
+  buildDeepGlows(V.right, V.up);
+  const draws = (G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws()).concat(deepDraws());
   if (Math.hypot(G.cam.pos[0] - TOWER.x, G.cam.pos[2] - TOWER.z) < 600) draws.push(...bellDraws());
   renderFrame({ ...V, skaterDraws: draws });
 }
@@ -4157,7 +4475,6 @@ function loop(t) {
 // ---- input ----
 canvas.addEventListener('mousedown', (e) => {
   if (G.state === 'title') { if (G.ready) { start(); canvas.requestPointerLock && canvas.requestPointerLock(); } return; }
-  if (STORY.card && G.ending) { skateOn(); return; }
   if (!INP.locked && canvas.requestPointerLock) canvas.requestPointerLock();
   if (paused) { paused = false; $('pause').classList.remove('on'); }
   if (e.button === 0) INP.skate = true;
@@ -4193,8 +4510,8 @@ window.__ice = {
   tp(s, off = 0) { const p = routeAt(s); const [rx, rz] = rightOf(p.dir); skaterReset(p.x + rx * off, p.z + rz * off, p.dir); G.cam.yaw = p.dir; G.maxS = Math.max(G.maxS, s); G.cpS = s; },
   hold(k) { INP.skate = !!k; }, stopHold(k) { INP.stop = !!k; }, turn(dx) { INP.mdx += dx; }, pitch(dy) { G.pitchIn = dy; },
   key(code, down) { if (down) INP.keys.add(code); else INP.keys.delete(code); },
-  FALL, AUDIO, BODY, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, skateOn, morning: () => startMorning(), BELL, LEAD, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
-  maxS: (s) => (G.maxS = s),
+  FALL, AUDIO, BODY, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, DEEP, morning: () => startMorning(), BELL, LEAD, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
+  maxS: (s) => (G.maxS = s), MORNING_T: () => (G.ending || G.morningFree ? MORNING.t : -1),
 };
 boot();
 
