@@ -106,6 +106,20 @@
       "actionLabel": "Skate"
     },
     {
+      "slug": "no-shore",
+      "title": "NO SHORE",
+      "descriptor": "Underwater, endlessly in every direction",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/no-shore-card-v20261106.jpg",
+      "alt": "A sunlit coral reef in clear blue water: tiered table corals, branching corals and sea fans on white sand, a manta ray passing overhead.",
+      "summary": "An underwater exploration game that goes on endlessly in every direction. Get lost there forever and keep discovering new handcrafted places. Deep water gradually turns into different biomes, each with its own animals and plants. Keyboard and mouse.",
+      "metaDescription": "NO SHORE is an underwater exploration game in the browser that goes on endlessly in every direction. Get lost there forever and keep discovering new handcrafted places, as deep water gradually turns into different biomes with their own animals and plants. Keyboard and mouse.",
+      "controls": "Desktop only · mouse looks · WASD swims · Space up · C down · Shift kicks hard · T or right click torch · F full screen · M mutes · Esc pauses",
+      "actionLabel": "Dive in",
+      "duration": "As long as you like"
+    },
+    {
       "slug": "black-lacquer",
       "title": "BLACK LACQUER",
       "descriptor": "3D action game",
