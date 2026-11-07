@@ -16,10 +16,20 @@ export class SfxBridge {
     const un = UNARMED.indexOf(st.name);
     this.s.strike(un >= 0 ? un : st.name, { unarmed: un >= 0, dir: Math.sin(pl.facing) >= 0 ? 1 : -1, pan: this._pan(pl.x) });
   }
-  hit({ heavy, onBeat, pan = 0, crit } = {}) { return this.s.impact({ weight: crit ? 'crit' : heavy ? 'heavy' : 'light', pan, intensity: onBeat ? 1.1 : 0.92 }); }
+  hit({ heavy, onBeat, pan = 0, crit, soft } = {}) { return this.s.impact({ weight: crit ? 'crit' : heavy ? 'heavy' : 'light', pan, intensity: soft ? 0.62 : onBeat ? 1.12 : 0.92 }); }
   returnHit(pan = 0) { return this.s.impact({ weight: 'heavy', gold: true, pan }); }
   catch(q, pan = 0) { return this.s.catch({ perfect: q === 'perfect', quality: q, pan }); }
   parry(q, pan = 0) { return this.s.parry({ pan, intensity: q === 'perfect' ? 1.1 : 0.95 }); }
+  // a pink hit stopped on the held guard: a dull knock, a little ring of the copper
+  block(pan = 0) { this.s.deflect({ pan, intensity: 0.85 }); return this.s.chip({ pan, intensity: 0.6 }); }
+  // the finisher's and a send-back's burst of gold on her
+  goldBurst(pan = 0) { return this.s.play('gold-burst', this.s._o({ pan })); }
+  // she's thrown into a wall or a prop
+  slamSet(pan = 0) { this.s.impact({ weight: 'heavy', pan, intensity: 1.05 }); return this.s.breakOff({ pan, intensity: 0.6 }); }
+  throwBack(pan = 0, toPan = pan) { return this.s.throwBack({ pan, toPan }); }
+  // her glaze going hard: a glassy ring; and cracking open on the beat
+  harden(pan = 0) { this.s.play('k-latch', this.s._o({ pan, gain: 0.9, rate: 1.6 })); return this.s.deflect({ pan, intensity: 0.7 }); }
+  crackGlaze(pan = 0) { this.s.chip({ pan, intensity: 1 }); return this.s.breakOff({ pan, intensity: 0.7 }); }
   ringThrow(r) { const h = this.s.ringThrow({ pan: this._pan(r.pos ? r.pos.x : 0) }); if (h) this._hums.set(r, h); }
   ringRecall(r) { this.s.ringReturn({ pan: this._pan(r.pos ? r.pos.x : 0) }); }
   ringCatch(r) { const h = this._hums.get(r); if (h && h.stop) h.stop(0.06); this._hums.delete(r); this.s.ringCatch({ pan: this._pan(r.pos ? r.pos.x : 0) }); }

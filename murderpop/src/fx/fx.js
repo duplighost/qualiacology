@@ -1,7 +1,12 @@
 // Effects: particles (sparks, chips, glitter, dust, petals), ribbon trails, the aim line, the catch flash,
-// near-miss glints, the spotlight cone, and screen pushes (flash, aberration) on the post stack.
+// near-miss glints, the spotlight cone, and screen pushes (flash, aberration) on the post stack. The strike's own
+// pictures (the cut's arc, the star where it lands, floor rings, the guard, the solo's pips) are in strikes.js.
 import * as THREE from 'three';
 import { FXK } from '../engine/post.js';
+import { StrikeFX, SX_GOLD, SX_IVORY, SX_PINK, SX_WHITE } from './strikes.js';
+
+const TRAIL_VS = 'attribute float alpha; varying float vA; void main(){ vA = alpha; gl_Position = projectionMatrix * (viewMatrix * vec4(position,1.0)); }';
+const TRAIL_FS = 'uniform vec3 uC; uniform float uFxK; varying float vA; void main(){ gl_FragColor = vec4(uC * vA * uFxK, vA); }';
 
 const MAXP = 2400;
 const PVS = /* glsl */`
@@ -67,13 +72,30 @@ export class FX {
     this.spotCone = new THREE.Mesh(cone, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
       uniforms: { uK: { value: 0 }, uCol: { value: new THREE.Color(1.6, 1.4, 1.1) }, uFxK: FXK },
       vertexShader: `varying float vY; varying vec3 vN; varying vec3 vV; void main(){ vY = position.y; vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `uniform float uK; uniform vec3 uCol; uniform float uFxK; varying float vY; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 1.5); float h = smoothstep(-14.0, -10.0, vY) * smoothstep(0.0, -3.0, vY); float a = (0.05 + 0.16 * (1.0 - f)) * h * uK; gl_FragColor = vec4(uCol * a * uFxK, a); }` }));
+      fragmentShader: `uniform float uK; uniform vec3 uCol; uniform float uFxK; varying float vY; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 1.5); float h = smoothstep(-14.0, -10.0, vY) * smoothstep(0.0, -3.0, vY); float a = (0.08 + 0.34 * (1.0 - f)) * h * uK; gl_FragColor = vec4(uCol * a * uFxK, a); }` }));
     this.spotCone.position.set(0, 14, 0); this.spotCone.visible = false; scene.add(this.spotCone);
-    this.spotPool = new THREE.Mesh(new THREE.CircleGeometry(2.0, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 1.05, 0.85), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    // the light's pool on the floor: soft, a little brighter at its rim, like a real follow-spot
+    this.spotPool = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 4.6), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { uK: { value: 0 }, uCol: { value: new THREE.Color(1.15, 1.0, 0.8) }, uFxK: FXK },
+      vertexShader: 'varying vec2 vP; void main(){ vP = position.xy / 2.3; gl_Position = projectionMatrix * (viewMatrix * (modelMatrix * vec4(position, 1.0))); }',
+      fragmentShader: 'uniform float uK; uniform vec3 uCol; uniform float uFxK; varying vec2 vP; void main(){ float r = length(vP); float a = (smoothstep(1.0, 0.82, r) * (0.16 + 0.1 * smoothstep(0.55, 0.9, r)) + smoothstep(0.98, 0.9, r) * smoothstep(0.8, 0.9, r) * 0.18) * uK; if (a < 0.003) discard; gl_FragColor = vec4(uCol * a * uFxK, a); }' }));
     this.spotPool.rotation.x = -Math.PI / 2; this.spotPool.position.y = 0.03; scene.add(this.spotPool);
     this.spotK = 0; this.spotTarget = 0;
     this.flashC = new THREE.Color(); this.caK = 0;
-    this._v = new THREE.Vector3();
+    this._v = new THREE.Vector3(); this._sv = new THREE.Vector3();
+    this.sx = new StrikeFX(scene);
+    // trail materials are shared by colour, so a new trail never waits for a shader; each is drawn once at load
+    this._trailMats = new Map();
+    for (const c of [new THREE.Color(3.2, 1.9, 0.5), new THREE.Color(0.95, 0.66, 0.36), new THREE.Color(3.2, 1.95, 0.5), new THREE.Color(1.9, 1.65, 1.35)]) {
+      const warm = new THREE.Mesh(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, -9, 0, 0.01, -9, 0, 0, -9, 0.01], 3)).setAttribute('alpha', new THREE.Float32BufferAttribute([0, 0, 0], 1)), this._trailMat(c));
+      warm.frustumCulled = false; warm.visible = false; scene.add(warm);
+    }
+  }
+  _trailMat(color) {
+    const key = color.r.toFixed(3) + ',' + color.g.toFixed(3) + ',' + color.b.toFixed(3);
+    let m = this._trailMats.get(key);
+    if (!m) { m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uC: { value: color.clone() }, uFxK: FXK }, vertexShader: TRAIL_VS, fragmentShader: TRAIL_FS }); this._trailMats.set(key, m); }
+    return m;
   }
 
   // ---------- particles ----------
@@ -128,10 +150,7 @@ export class FX {
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('alpha', new THREE.BufferAttribute(al, 1).setUsage(THREE.DynamicDrawUsage));
     const idx = []; for (let i = 0; i < n - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } g.setIndex(idx);
-    const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uC: { value: color }, uFxK: FXK },
-      vertexShader: 'attribute float alpha; varying float vA; void main(){ vA = alpha; gl_Position = projectionMatrix * (viewMatrix * vec4(position,1.0)); }',
-      fragmentShader: 'uniform vec3 uC; uniform float uFxK; varying float vA; void main(){ gl_FragColor = vec4(uC * vA * uFxK, vA); }' });
-    const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; mesh.renderOrder = 5; this.scene.add(mesh);
+    const mesh = new THREE.Mesh(g, this._trailMat(color)); mesh.frustumCulled = false; mesh.renderOrder = 5; this.scene.add(mesh);
     const tr = { get, w, flat, pts: [], mesh, g, pos, al, n, live: true, fade: 1, life };
     this.trails.push(tr);
     return tr;
@@ -186,7 +205,43 @@ export class FX {
     if (on) r.trail = this.trail(() => r.pos, { w: 0.2, color: new THREE.Color(3.2, 1.9, 0.5), len: 16, life: 0.2 });
     else if (r.trail) { r.trail.live = false; r.trail = null; }
   }
-  swing(pl, s) {}
+  // a strike: ribbons off both rings (or her fists) for as long as it lasts, gold when it's on the beat
+  swing(pl, s) {
+    this._endSwing();
+    const big = !!(s.finisher || s.riposte);
+    const col = s.on || s.riposte ? new THREE.Color(3.2, 1.95, 0.5) : new THREE.Color(1.9, 1.65, 1.35);
+    const srcs = [];
+    if (s.armed !== false && pl.rings) for (const r of pl.rings) if (r.state === 'hand' && r.holder) srcs.push(() => r.holder.getWorldPosition(this._sv));
+    if (!srcs.length) for (const b of [pl.rig.bones.hand_l, pl.rig.bones.hand_r]) if (b) srcs.push(() => b.getWorldPosition(this._sv));
+    this._swing = { s, trails: srcs.map((get) => this.trail(get, { w: big ? 0.24 : s.on ? 0.17 : 0.12, color: col, len: big ? 18 : 12, life: big ? 0.22 : 0.13 })) };
+  }
+  _endSwing() { if (this._swing) { for (const t of this._swing.trails) t.live = false; this._swing = null; } }
+  // the cut's arc in the air, at the moment it lands
+  slash(pl, s, ang) {
+    const big = !!(s.finisher || s.riposte);
+    // off the beat the cut is a thin grey ghost of itself
+    this.sx.slash(pl.x, pl.z, ang, { sweep: big ? 1 : s.sweep, gold: s.on || s.riposte, big, color: s.on || s.riposte ? undefined : new THREE.Color(0.9, 0.85, 0.8), r: s.on || big ? undefined : 1.45 });
+    if (big) this.sx.slash(pl.x, pl.z, ang + 0.35, { sweep: -1, gold: true, big: true, r: 1.7 });
+  }
+  impact(x, y, z, dir, o = {}) { this.sx.impact(x, y, z, o); }
+  ring(x, z, color, r = 2) { this.sx.ring(x, z, color, r); }
+  // a pink hit on the guard: sparks where it met the shield, the shield flares (pl.blockK)
+  blocked(pl, fx, fz) {
+    const a = Math.atan2(fx - pl.x, fz - pl.z), x = pl.x + Math.sin(a) * 0.8, z = pl.z + Math.cos(a) * 0.8;
+    this.sparks(x, 1.1, z, new THREE.Color(3.4, 2.4, 0.9), 18, a);
+    this.sx.impact(x, 1.1, z, { gold: true, power: 0.7 });
+  }
+  // a white hit goes through the guard: the shield breaks into white glass
+  guardBreak(pl) {
+    const a = pl.facing, x = pl.x + Math.sin(a) * 0.75, z = pl.z + Math.cos(a) * 0.75;
+    this.emit(22, { x, y: 1.0, z, color: new THREE.Color(2.4, 2.6, 2.9), shape: 2, speed: 4.5, life: 0.6, size: 0.06, gravity: 12, angle: a, spread: 2.6, up: 0.6, bounce: 0.3, drag: 0.8 });
+    this.aberrate(1.4);
+  }
+  // her tell: a pink glint where she'll answer from
+  tell(b) { this.sx.tell(b.x, 1.6, b.z); }
+  // the meter's full: the spotlight is yours to take
+  meterFull(pl) { this.glitter(pl.x, 1.3, pl.z, new THREE.Color(3.2, 2.2, 0.7), 22, 0.7); this.sx.ring(pl.x, pl.z, SX_GOLD, 1.6, 0.4); }
+  soloBeats(left, n, pulse, pl) { this.sx.soloBeats(left, n, pulse, pl, this._dt || 1 / 60); }
 
   // ---------- screen ----------
   flash(color, k = 1) { this.flashC.r = Math.max(this.flashC.r, color.r * k); this.flashC.g = Math.max(this.flashC.g, color.g * k); this.flashC.b = Math.max(this.flashC.b, color.b * k); }
@@ -195,9 +250,13 @@ export class FX {
   spotlight(on, x, z) { this.spotTarget = on ? 1 : 0; if (x !== undefined) { this.spotX = x; this.spotZ = z; } }
 
   update(dt, camPos, player) {
+    this._dt = dt; this._time = (this._time || 0) + dt;
     this._updateParticles(dt);
     this._updateTrails(dt, camPos);
     if (this._dashTrail && player && player.state !== 'dash') this.dashEnd(player);
+    if (this._swing && (!player || player.state !== 'strike' || player.strike !== this._swing.s)) this._endSwing();
+    this.sx.update(dt);
+    this.sx.updateGuard(dt, player, this._time);
     // catch ring
     if (player) {
       this.catchRing.position.set(player.x, 0.05, player.z);
@@ -211,7 +270,7 @@ export class FX {
     this.spotCone.visible = this.spotK > 0.01;
     if (player) { this.spotCone.position.set(player.x, 14, player.z); this.spotPool.position.set(player.x, 0.03, player.z); }
     this.spotCone.material.uniforms.uK.value = this.spotK;
-    this.spotPool.material.opacity = this.spotK * 0.22 * Math.min(1, FXK.value);
+    this.spotPool.material.uniforms.uK.value = this.spotK; this.spotPool.visible = this.spotK > 0.01;
     // post pushes
     const fx = this.post.fx;
     fx.flash.copy(this.flashC);
@@ -220,5 +279,5 @@ export class FX {
     this.caK *= Math.exp(-dt * 7);
   }
 
-  clear() { this.p.length = 0; for (const t of this.trails) { this.scene.remove(t.mesh); t.g.dispose(); } this.trails.length = 0; }
+  clear() { this.p.length = 0; for (const t of this.trails) { this.scene.remove(t.mesh); t.g.dispose(); } this.trails.length = 0; this._swing = null; this._dashTrail = null; this.sx.clear(); }
 }

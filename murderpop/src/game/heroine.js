@@ -7,6 +7,29 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Retargeter } from '../engine/retarget.js';
 import { Rig, isUpper } from '../engine/character.js';
 import { Springs } from '../engine/springs.js';
+import { FXK } from '../engine/post.js';
+
+// a warm rim on YOU's silhouette (copper, like her rings): she reads on any floor, dark rooms most of all
+const RIM = { value: new THREE.Color(0, 0, 0) };
+function addRim(model) {
+  model.traverse((m) => {
+    if (!m.isMesh || /iris|teeth|tongue|lash|eyeliner|eyebrow/i.test(m.name)) return;
+    for (const mat of [].concat(m.material)) {
+      if (!mat || mat.userData.rim || !('emissive' in mat)) continue;
+      mat.userData.rim = true;
+      const prev = mat.onBeforeCompile;
+      mat.onBeforeCompile = (sh, r) => {
+        if (prev) prev(sh, r);
+        sh.uniforms.uYouRim = RIM;
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uYouRim;')
+          .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n { float yr = 1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0); totalEmissiveRadiance += uYouRim * yr * yr * yr; }');
+      };
+      const key = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : () => '';
+      mat.customProgramCacheKey = () => key() + '|you-rim';
+      mat.needsUpdate = true;
+    }
+  });
+}
 
 export const HEROINE_CLIPS = [
   'Sword_Idle', 'Idle_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Walk_Loop', 'Sword_Regular_A', 'Sword_Regular_B', 'Sword_Regular_C',
@@ -65,6 +88,7 @@ export class Heroine {
   constructor(model, kit) {
     this.model = model;
     model.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; } });
+    addRim(model);
     this.rig = new Rig(kit, model);
     this.root = this.rig.root;
     const bones = this.rig.bones;
@@ -101,16 +125,22 @@ export class Heroine {
   }
 
   setExpression(name, w = 1) { for (const k of Object.keys(this.exprT)) this.exprT[k] = 0; if (name) this.exprT[name] = w; }
+  // the song in YOU's mouth (the spotlight: it's her song now)
+  setMouth(m) { this.mouth = Math.max(0, Math.min(1, m)); }
 
   _morph(name, v) {
     for (const m of this.morphs) { const i = m.morphTargetDictionary[name]; if (i !== undefined) m.morphTargetInfluences[i] = v; }
   }
 
   update(dt) {
+    RIM.value.setRGB(0.95, 0.56, 0.28).multiplyScalar(0.3 * Math.min(1.25, FXK.value));
     this.rig.update(dt);
     this.springs.update(dt);
     // expressions ease
     for (const k of Object.keys(this.expr)) { this.expr[k] += (this.exprT[k] - this.expr[k]) * Math.min(1, dt * 8); this._morph(k, this.expr[k]); }
+    // the mouth
+    this.mouthS = (this.mouthS || 0) + ((this.mouth || 0) - (this.mouthS || 0)) * Math.min(1, dt * 24);
+    if (this.mouthS > 0.002 || this._mouthOn) { this._morph('mouthOpen', this.mouthS * 0.85); this._morph('mouthSmile', this.mouthS * 0.15); this._mouthOn = this.mouthS > 0.002; }
     // blink
     this.blinkT -= dt;
     if (this.blinkT <= 0) { this.blink = 1; this.blinkT = 2.2 + Math.random() * 3.5; }

@@ -32,6 +32,7 @@ export function sharedUniforms() {
     fShardTex: { value: null }, fVorN: { value: 27 },
     fShardN: { value: 1 },
     fGlitterT: { value: 0 },
+    fRim: { value: new THREE.Color(0, 0, 0) },                          // a pale rim on her silhouette (the room sets it)
   };
 }
 
@@ -667,7 +668,7 @@ export function makeGlaze(kind, U, o = {}) {
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + VERT_NORMAL)
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + VERT_POS);
     if (o.shard) vs = vs.replace('#include <skinning_vertex>', '').replace('#include <skinnormal_vertex>', '').replace('#include <skinbase_vertex>', '');
-    fs = fs.replace('#include <common>', '#include <common>\n' + FRAG_PARS)
+    fs = fs.replace('#include <common>', '#include <common>\nuniform vec3 fRim;\n' + FRAG_PARS)
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + FRAG_SURF)
       .replace('#include <color_fragment>', `#include <color_fragment>
         #ifdef USE_MAP
@@ -687,7 +688,7 @@ export function makeGlaze(kind, U, o = {}) {
           vec2 dH = vec2(dFdx(gS.h * ${kind === 'hair' ? '1.0' : '0.35'} + gS.ccH), dFdy(gS.h * ${kind === 'hair' ? '1.0' : '0.35'} + gS.ccH)) / figPx;
           clearcoatNormal = figPerturb(figPos, ${kind === 'hair' ? 'normal' : 'clearcoatNormal'}, dH, faceDirection); }
         #endif`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += gS.emissive;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += gS.emissive;\n { float figFr = 1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0); totalEmissiveRadiance += fRim * figFr * figFr * figFr * (gl_FrontFacing ? 1.0 : 0.0); }')
       .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
         #ifdef USE_CLEARCOAT
           material.clearcoat = saturate(gS.coat);

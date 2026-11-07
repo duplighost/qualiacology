@@ -10,9 +10,9 @@ export class ArenaCamera {
   constructor(aspect) {
     this.cam = new THREE.PerspectiveCamera(30, aspect, 0.3, 400);      // rendered
     this.logic = new THREE.PerspectiveCamera(30, aspect, 0.3, 400);    // for aiming
-    this.pitch = THREE.MathUtils.degToRad(54);
+    this.pitch = THREE.MathUtils.degToRad(52);
     this.dist = 21; this.distT = 21;
-    this.minDist = 12.5; this.maxDist = 26;
+    this.minDist = 11; this.maxDist = 26;
     this.closeK = 0;          // 0 normal, 1 intimate (bridge)
     this.focus = new THREE.Vector3(); this.focusV = new THREE.Vector3();
     this.bounds = { minX: -11, maxX: 11, minZ: -7, maxZ: 7 };
@@ -39,7 +39,7 @@ export class ArenaCamera {
     if (this.roomMaxZ !== undefined) out.z = Math.min(out.z, this.roomMaxZ - this._bottomReach());
     // fit: the nearest distance at which both fighters (feet and heads) sit inside safe margins
     // (the top of the screen is the boss bar, the bottom-left the hearts)
-    this.distT = this._fit(out, px, pz, bx, bz) * (1 - 0.2 * this.closeK);
+    this.distT = this._fit(out, px, pz, bx, bz) * (1 - 0.2 * this.closeK) * (1 - 0.22 * (this.soloK || 0));
     return out;
   }
 

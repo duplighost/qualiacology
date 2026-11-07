@@ -1,11 +1,11 @@
 // Keyboard and mouse. Presses are stamped with the frame time they arrived in (performance.now())
 // and kept in a short buffer, so an action pressed a little early still happens when it can.
-// Desktop only: WASD/arrows move, the mouse aims, LMB strike, RMB parry (hold to aim a throw),
-// Space dash, Q/E/F spotlight, Esc pause.
+// Desktop only: WASD/arrows move, the mouse aims, LMB strike, RMB guard (hold to block, press as it lands to
+// send it back), E throws a ring at the reticle, Space dash, Q spotlight, Esc pause. (F is full screen, in main.js.)
 
 const BIND = {
   KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
-  Space: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash', KeyQ: 'spot', KeyE: 'spot', KeyF: 'spot',
+  Space: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash', KeyQ: 'spot', KeyE: 'throw',
   KeyJ: 'strike', KeyK: 'parry', KeyL: 'throw',
   Escape: 'pause', KeyP: 'pause', Enter: 'confirm', NumpadEnter: 'confirm', KeyR: 'retry', KeyM: 'menu', Backspace: 'back',
 };

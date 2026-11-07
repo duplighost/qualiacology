@@ -44,6 +44,10 @@ export default {
   spawn: { player: [7.9, 2.9, -Math.PI / 2], boss: [-4.4, 1.4, Math.PI / 2] },
 
   // ------------------------------------------------------------------ the set
+  // she only ever comes toward you (the one step back is the finisher's, below), and the road has its own things to
+  // break: no shared knockback, no porcelain ornaments
+  knockback: false, setPieces: false,
+
   async buildArena(f) {
     const arena = await Arena.load(`assets/arenas/${ID}/${ID}.json`, f.app.renderer, f.scene, { camera: f.cam.cam });
     arena.prepareCamera(f.cam.cam);

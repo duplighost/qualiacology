@@ -474,8 +474,15 @@ export class Figurine {
     return c;
   }
 
+  // a flash of colour from her heart outward: her tell before she hits back (the next hit's flash is its own colour)
+  tell(color = new THREE.Color(3.2, 0.42, 1.5)) {
+    if (this.shattered) return;
+    this.U.fFlashColor.value.copy(color); this._tellColor = true;
+    this.U.fFlash.value.set(0, this.I.Y.bust, 0.05, 0); this.flashAge = 0;
+  }
   hitAt(worldPos, dir = new THREE.Vector3(0, 0, -1), { power = 1, chips = true } = {}) {
     if (this.shattered) return null;
+    if (this._tellColor) { this.U.fFlashColor.value.setRGB(1.0, 0.85, 0.55); this._tellColor = false; }
     this.root.updateWorldMatrix(true, true);
     const I = this.I, set = I.hitSet;
     const P = new Float32Array(set.length * 3);
@@ -774,7 +781,9 @@ export class Figurine {
     this.flashAge += dt; this.U.fFlash.value.w = this.flashAge;
     if (this.shatterAge !== undefined) { this.shatterAge += dt; this.U.fShardGlow.value = (0.9 * Math.exp(-this.shatterAge * 2.5) + 0.06) * Math.min(1, FXK.value); }
     // the white pop on a hit: quieter in a dark room raised by exposure (a combo strobed her pale)
-    this.pop = Math.max(0, (this.pop || 0) - dt * 14); this.U.fHitPop.value = this.pop * 0.75 * Math.min(1, FXK.value);
+    // her silhouette keeps a pale rim, so she reads on a dark floor (scaled like every glow: FXK)
+    if (this.U.fRim) this.U.fRim.value.setRGB(0.42, 0.36, 0.48).multiplyScalar((this.rimK ?? 1) * 0.55 * Math.min(1.2, FXK.value));
+    this.pop = Math.max(0, (this.pop || 0) - dt * 14); this.U.fHitPop.value = Math.max(this.pop * 0.75, (this.hardK || 0) * 0.32) * Math.min(1, FXK.value);
     for (let s = 0; s < 4; s++) this.breakAge[s] += dt;
     this.U.fBreakAge.value.set(...this.breakAge);
     // debris

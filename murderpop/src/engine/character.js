@@ -133,6 +133,7 @@ export class Rig {
     const span = clip.duration * (to - from);
     const sp = duration > 0 ? span / duration : speed;
     if (this.upperAct) this.upperAct.fadeOut(fade);
+    this._upperHold = false;
     const a = this.mixer.clipAction(clip);
     a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true;
     a.timeScale = sp; a.time = clip.duration * from; a.enabled = true;
@@ -142,11 +143,17 @@ export class Rig {
     this.upperEvents = events.map((e) => ({ t: clip.duration * (from + (to - from) * e.at), fn: e.fn, done: false }));
     return a;
   }
-  upperStop(fade = 0.12) { if (this.upperAct) { this.upperAct.fadeOut(fade); this.upperAct = null; } }
+  // upper body: play into a pose and hold it there (a guard) until upperStop()
+  upperHold(name, { duration = 0.12, from = 0, to = 0.3, fade = 0.06, weight = 1 } = {}) {
+    const a = this.upperOnce(name, { duration, from, to, fade, weight });
+    if (a) this._upperHold = true;
+    return a;
+  }
+  upperStop(fade = 0.12) { this._upperHold = false; if (this.upperAct) { this.upperAct.fadeOut(fade); this.upperAct = null; } }
 
   _finished(e) {
     if (e.action === this.base && this._then) { const t = this._then; this._then = null; this.play(t, { fade: this._thenFade }); }
-    if (e.action === this.upperAct) { this.upperAct.fadeOut(0.15); this.upperAct = null; }
+    if (e.action === this.upperAct && !this._upperHold) { this.upperAct.fadeOut(0.15); this.upperAct = null; }
   }
 
   hitStop(sec) { this.frozen = Math.max(this.frozen, sec); }
@@ -166,7 +173,10 @@ export class Rig {
     }
     if (this.upperAct && this.upperEvents) {
       for (const e of this.upperEvents) if (!e.done && this.upperAct.time >= e.t) { e.done = true; e.fn(); }
-      if (this.upperAct.time >= this._upperEnd - 1e-3) { this.upperAct.fadeOut(0.12); this.upperAct = null; }
+      if (this.upperAct.time >= this._upperEnd - 1e-3) {
+        if (this._upperHold) { this.upperAct.time = this._upperEnd - 1e-3; this.upperAct.timeScale = 0; }   // held in the pose
+        else { this.upperAct.fadeOut(0.12); this.upperAct = null; }
+      }
     }
     this._post(dt);
   }

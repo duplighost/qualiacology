@@ -1,6 +1,10 @@
 // A fight: one song, start to finish. The song is the clock. This runs the track's timeline, YOU, the boss,
 // projectiles, telegraphs, waves and beams; resolves every hit; heals a heart at each new section; rewinds the
 // record to the section's start when you die; lands the finish on the song's last hit, or calls an ENCORE.
+// Shared rules every song gets: a pink hit on your held guard is stopped; pressed as it lands it's sent back
+// (close: you cut her with it; far: the gold flies back). Strike her and keep striking and she answers on the
+// next beat (a pink ring round her: block it, send it back, or get out). A finisher or a hit sent back knocks
+// her into the set: a wall or a prop in the way hurts her and breaks what it can. The spotlight is your solo.
 import * as THREE from 'three';
 import { BeatMap } from '../engine/beats.js';
 import { Timeline, inShape } from './choreo.js';
@@ -13,6 +17,9 @@ import { Signs } from '../fx/signs.js';
 import { Vocal } from './vocal.js';
 import { LAYER } from './arena.js';
 import { FXK } from '../engine/post.js';
+import { trackById } from '../tracks/index.js';
+import { makeKeepsake, KEEPSAKE_SIZE } from '../ui/keepsakes.js';
+import { SetPieces } from './setpieces.js';
 
 const WAVE_GEO = new THREE.CircleGeometry(1, 128);
 function waveMaterial(color) {
@@ -26,6 +33,13 @@ function waveMaterial(color) {
         float a = (band * 0.55 + edge * 0.9) * uA; if (a < 0.01) discard; gl_FragColor = vec4(uC * a * uFxK, a); }` });
 }
 const GOLD = new THREE.Color(3.2, 2.0, 0.55), PINK = new THREE.Color(4, 0.6, 1.7), WHITE = new THREE.Color(2.6, 2.9, 3.4), PORCELAIN = new THREE.Color(2.2, 2.1, 2.0);
+const SOLO_BEATS = 8;
+// her health under the shared rules (hits sent back, finishers, the solo, the room's ornaments), on top of each track's
+// own: set so the good bot empties her bar at about 40% of the song (it plays on the beat and catches everything)
+const HEALTH = { 'sexy-trauma-costume': 1.75, 'rent-free': 1.36, 'makeup-sex-at-your-funeral': 1.39, 'try-me-free': 1.1, 'ptsdream-girl': 1.21,
+  'reverse-psychology-degree': 1.21, 'pretty-until-proven-guilty': 1.3, 'kiss-me-like-a-car-crash': 1.15 };
+const _SP = new THREE.Vector3(), _SOLO_LIT = new THREE.Color(1.0, 0.82, 0.6);
+const toward = (a, b) => Math.atan2(b.x - a.x, b.z - a.z);
 
 export class Fight {
   // app: { renderer, post, scene, cam (ArenaCamera), input, audio, sfx, hud, fx }
@@ -89,6 +103,8 @@ export class Fight {
     this.boss = await tr.buildBoss(this);
     this.player = this.app.player;
     this.player.arena = this.arena;
+    const hk = HEALTH[tr.id] || 1;
+    if (hk !== 1) { this.boss.maxHp = Math.round(this.boss.maxHp * hk); this.boss.hp = this.boss.maxHp; }
     if (this.encoreMode) { this.boss.maxHp = Math.round(this.boss.maxHp * 1.25); this.boss.hp = this.boss.maxHp; }
     onProgress(0.8);
     // a porcelain figurine's shaders (glaze, cracks, the shatter) compile now, not on the first hit
@@ -106,9 +122,12 @@ export class Fight {
     this.T.compile();
     this.lastHit = tr.lastHit ?? this._findLastHit();
     this.finalChorus = this.T.sections.find((s) => s.final) || this.T.sections[this.T.sections.length - 2] || this.T.sections[0];
+    this.setPieces = new SetPieces(this);
     this.boss.on('hit', (h) => this._bossHit(h));
     this.boss.on('break', (b) => this._bossBreak(b));
     this.boss.on('deflect', (h) => this._deflect(h));
+    this.boss.on('harden', (h) => this._harden(h));
+    this.boss.on('crack', (h) => this._crack(h));
     this.boss.on('empty', () => this._bossEmpty());
     onProgress(1);
   }
@@ -128,6 +147,7 @@ export class Fight {
     this.player.revive(); this.player.inv = 0; this.player.hearts = Math.min(this.player.hearts, this.maxHearts);
     const sp = this.track.spawn || { player: [0, 4.5, Math.PI], boss: [0, -3.5, 0] };
     if (at <= 0.01) { this.player.place(...sp.player); this.boss.place(...sp.boss); this.track.onStart && this.track.onStart(this); }
+    this.setPieces.reset();
     this.cam.snap(this.player, this.boss);
     this.boss._now = at; this.boss.busyUntil = 0;
     this.T.seek(at);
@@ -165,6 +185,7 @@ export class Fight {
       // spotlight ends
       if (this.spotUntil > 0 && this.t >= this.spotUntil) this._endSpotlight();
       this.T.advance(this.t, this);
+      this._counterCheck();
     }
     // once her bar is empty she's beaten: her attacks are gone, and nothing (a set's own hazard included) takes your last heart
     this.harmless = this.boss.hp <= 0;
@@ -173,16 +194,25 @@ export class Fight {
     // entities
     this.player.update(ctx);
     if (this.player.aiming) this.fx.setAim(this.player.x, this.player.z, ctx.aim.x, ctx.aim.z, FEEL.ringRange);
+    this.boss.beatPulse = this.bm.pulse(this.t, 6);
+    this.boss.nod = this.bm.strikePulse(this.t, 5);
     this.boss.update(dt, this.t, this.beat, this.player);
+    this.setPieces.update(dt);
     this.proj.update(dt, this.bounds, (p) => this._projHit(p, ctx));
     this._waves(dt, ctx); this._beams(ctx);
-    this.tele.update(this.t);
+    this.tele.update(this.t, this.bm.pulse(this.t, 7));
     this.proj.draw(this.t);
     this.signs.update(this.t);
-    this.marks.update(this.player, this.boss, this.player.dashCharges, this.player.dashCool, FEEL.dashCharges, FEEL.dashRecharge);
-    if (this.boss.fig && this.boss.fig.setMouth) this.boss.fig.setMouth(this.state === 'play' ? this.vocal.at(this.t, dt) : 0);
+    this.marks.update(this.player, this.boss, this.player.dashCharges, this.player.dashCool, FEEL.dashCharges, FEEL.dashRecharge, this.bm.pulse(this.t, 7) * (0.45 + 0.55 * this.bm.strikePulse(this.t, 3.5)));
+    // the song's words come out of the narrator's mouth; in the spotlight, out of YOU's (it's her song for two bars)
+    const sing = this.state === 'play' ? this.vocal.at(this.t, dt) : 0, solo = this.spotUntil > 0;
+    if (this.boss.fig && this.boss.fig.setMouth) this.boss.fig.setMouth(solo ? 0 : sing);
+    if (this.player.h.setMouth) this.player.h.setMouth(solo ? sing : 0);
+    this.cam.soloK = (this.cam.soloK || 0) + ((solo ? 1 : 0) - (this.cam.soloK || 0)) * Math.min(1, dt * (solo ? 4 : 2.5));
+    this._keepsake(dt);
     this.arena.update && this.arena.update(dt, this.t, this);
     this.track.update && this.track.update(this, dt);
+    this._soloLook(dt);
     // death
     if (this.player.state === 'dead' && this.state === 'play') this._die();
     // the end of the song
@@ -238,7 +268,7 @@ export class Fight {
     this.cam.floorPoint(m.x, m.y, this._aim);
     return { dt, t: this.t, input: this.input, aim: this._aim, boss: this.boss, projectiles: this.proj, beats: this.bm, fx: this.fx, sfx: this.sfx, arena: this.arena, hud: this.hud,
       onSpotlight: () => this._spotlight(), onPlayerLanded: (s, res, on, counter, at) => this._landed(s, res, on, counter, at),
-      onStrikeArc: (x, z, ang, range, arc, s) => this.arena.strikeArc && this.arena.strikeArc(x, z, ang, range, arc, s, this) };
+      onStrikeArc: (x, z, ang, range, arc, s) => { this.arena.strikeArc && this.arena.strikeArc(x, z, ang, range, arc, s, this); this.setPieces && this.setPieces.strikeArc(x, z, ang, range, arc, s); } };
   }
 
   // ---------------- hits ----------------
@@ -263,6 +293,8 @@ export class Fight {
       }
       if (d < p.radius + FEEL.radius) {
         if (pl.invulnerable) { if (pl.state === 'dash' && !p._nm) { p._nm = true; pl.nearMiss(ctx); this._good(60); } return; }
+        // a pink shot on the held guard: stopped
+        if (p.parryable && pl.blocking) { p.dead = true; this._block(p.x, p.z, { power: 0.5 }); return; }
         if (pl.hurt(ctx, p.damage, p.x, p.z, 'shot')) { this._hurt(p.x, p.z); }
         p.dead = true;
       }
@@ -282,6 +314,8 @@ export class Fight {
     if (this.suppress || this.harmless) return 'miss';
     if (o.tele && o.tele.dead) return 'miss';   // its telegraph was cleared: nothing lands that you can't see
     const pl = this.player;
+    // whatever of the room's is under it shatters
+    this.setPieces && this.setPieces.areaHit(sh);
     if (!inShape(sh, pl.x, pl.z, FEEL.radius * 0.8)) return 'miss';
     if (o.kind === 'pink' && pl.catching) {
       const q = pl.tryCatch();
@@ -293,9 +327,13 @@ export class Fight {
         this.sfx.parry && this.sfx.parry(q, this.pan(pl.x));
         this._glimmer(q === 'perfect' ? 2 : 1, true);
         this._good(q === 'perfect' ? 150 : 90);
+        // a hit of her body, turned on her: a cut if she's close, the gold back at her if she isn't
+        if (o.melee || o.counter) this._sendBack(q);
         return 'parried';
       }
     }
+    // the held guard stops anything pink
+    if (o.kind === 'pink' && pl.blocking && !pl.invulnerable) { this._block(sh.x, sh.z, { power: o.melee ? 1 : 0.7 }); return 'blocked'; }
     if (pl.invulnerable) { if (pl.state === 'dash') { pl.nearMiss(this._ctx(0)); this._good(70); } return 'dodged'; }
     if (pl.hurt(this._ctx(0), o.damage ?? 1, sh.x, sh.z, o.melee ? 'melee' : 'area')) { this._hurt(sh.x, sh.z); return 'hit'; }
     return 'miss';
@@ -358,18 +396,122 @@ export class Fight {
   _mult() { this.mult = this.chain >= 40 ? 8 : this.chain >= 24 ? 6 : this.chain >= 14 ? 4 : this.chain >= 6 ? 2 : 1; }
 
   _landed(s, res, on, counter, at) {
-    const b = this.boss;
+    const b = this.boss, pl = this.player;
     const x = at ? at.x : b.x, z = at ? at.z : b.z;
-    const dir = Math.atan2(b.x - this.player.x, b.z - this.player.z);
-    this.fx.sparks(x, 1.3, z, on ? GOLD : new THREE.Color(2.4, 2.2, 2.0), on ? 22 : 14, dir);
-    this.fx.chips(x, 1.3, z, PORCELAIN, res.dmg > 15 ? 12 : 7, dir);
-    if (on) this.fx.glitter(x, 1.4, z, GOLD, 8, 0.3);
-    this.cam.shake(s.heavy || counter ? 0.55 : 0.28, 0.12);
-    if (s.heavy || counter) this.cam.kick(0.9);
-    this.sfx.hit && this.sfx.hit({ heavy: !!(s.heavy || counter), onBeat: on, kind: s.name, pan: this.pan(x) });
-    if (on) this._glimmer(0, false);
-    this._good(on ? 40 : 25);
-    b.fig && b.fig.hitAt && b.fig.hitAt(new THREE.Vector3(x, 1.3, z), new THREE.Vector3(Math.sin(dir), 0, Math.cos(dir)), { power: s.heavy || counter ? 1.6 : on ? 1.2 : 1 });
+    const dir = Math.atan2(b.x - pl.x, b.z - pl.z);
+    const big = !!(s.finisher || s.riposte), heavy = !!(s.heavy || counter || big);
+    // a plain strike while she's performing counts toward her answer (an opening, a stagger, the solo don't)
+    if (s.name !== 'ring' && !big && b.state === 'perform' && !pl.solo) (this._landedAt ||= []).push(this.t);
+    // on the beat it's gold, loud and heavy; off the beat it's a small grey knock: you can see and hear which
+    const fat = on && (s.big || s.name === 'ring' || pl.solo);
+    this.fx.sparks(x, 1.3, z, on ? GOLD : new THREE.Color(1.5, 1.4, 1.3), big ? 40 : fat ? 26 : on ? 16 : 7, dir);
+    this.fx.chips(x, 1.3, z, PORCELAIN, big ? 22 : fat ? 12 : on ? 8 : 4, dir);
+    if (on) this.fx.glitter(x, 1.4, z, GOLD, big ? 26 : fat ? 10 : 5, big ? 0.8 : 0.3);
+    this.fx.impact && this.fx.impact(x, 1.25, z, dir, { gold: on, power: big ? 2.2 : heavy && on ? 1.5 : fat ? 1.25 : on ? 0.95 : 0.5 });
+    // her body stops for a moment with yours: the hit has weight
+    if (b.rig && b.rig.hitStop) b.rig.hitStop(big ? 0.13 : fat ? 0.075 : on ? 0.055 : 0.025);
+    this.cam.shake(big ? 1.0 : heavy && on ? 0.55 : fat ? 0.42 : on ? 0.3 : 0.14, big ? 0.2 : 0.12);
+    if (heavy && on) this.cam.kick(big ? 2.4 : 0.9);
+    if (big) { this.fx.flash(new THREE.Color(0.16, 0.11, 0.03), 1); this.fx.aberrate(1.8); }
+    this.sfx.hit && this.sfx.hit({ heavy: heavy && on, onBeat: on, kind: s.name, pan: this.pan(x), crit: big, soft: !on });
+    if (big) this.sfx.goldBurst && this.sfx.goldBurst(this.pan(x));
+    if (on) this._glimmer(big ? 2 : fat ? 1 : 0, false);
+    this._good(big ? 120 : fat ? 50 : on ? 35 : 12);
+    b.fig && b.fig.hitAt && b.fig.hitAt(new THREE.Vector3(x, 1.3, z), new THREE.Vector3(Math.sin(dir), 0, Math.cos(dir)), { power: big ? 2.2 : heavy && on ? 1.6 : fat ? 1.3 : on ? 1.05 : 0.6, chips: on });
+    // the finisher and a hit sent back throw her into the room
+    if (big) { this._knock(s.riposte ? 1.9 : 1.5, dir); if (s.finisher) b.open(0.6); }
+  }
+
+  // ---------------- the guard, her answer, the set ----------------
+  _block(x, z, o = {}) {
+    const pl = this.player, b = this.boss;
+    // the hit came from where its shape is; one drawn on you came from her
+    let fx = x, fz = z;
+    if (Math.hypot(x - pl.x, z - pl.z) < 0.8) { fx = b.x; fz = b.z; }
+    pl.blocked(this._ctx(0), fx, fz, o.power ?? 1);
+    this.fx.blocked && this.fx.blocked(pl, fx, fz);
+    if (this.sfx.block) this.sfx.block(this.pan(pl.x)); else if (this.sfx.deflect) this.sfx.deflect(this.pan(pl.x));
+    this.cam.shake(0.32, 0.1);
+    this._good(15);
+  }
+  _sendBack(q) {
+    const pl = this.player, b = this.boss;
+    if (pl.riposte(this._ctx(0), q)) return;
+    if (!b.targetable) return;
+    const p = this.proj.spawn({ x: pl.x, z: pl.z, y: 1.3, angle: toward(pl, b), speed: 19, kind: 'gold', shape: 'star', size: 0.5, owner: 'you', life: 3, homing: 9, target: () => b, spin: 7 });
+    if (p) p.dmgBack = q === 'perfect' ? 30 : 20;
+    this.sfx.throwBack && this.sfx.throwBack(this.pan(pl.x), this.pan(b.x));
+  }
+  // strike her and keep striking: she answers on the next beat with a pink ring round her
+  _counterCheck() {
+    const b = this.boss, pl = this.player, now = this.t;
+    const list = this._landedAt; if (!list || !list.length) return;
+    while (list.length && now - list[0] > 2.6) list.shift();
+    if (list.length < 5 || now < (this._counterCool || 0)) return;
+    if (this.track.counters === false || this.suppress || this.harmless || this.spotUntil > 0 || this.state !== 'play') return;
+    if (b.state !== 'perform' || !b.targetable || b.guard || b.busy || b.move || b.intangible || b.hp <= 0) return;
+    if (Math.hypot(b.x - pl.x, b.z - pl.z) > 3.8) return;
+    // nothing of hers is already on its way: she doesn't stack an answer on her own song
+    if (this.tele.list.some((g) => !g.dead && g.kind !== 'gold' && g.end > now - 0.05 && g.end < now + 1.3)) return;
+    this._counter();
+  }
+  _counter() {
+    const b = this.boss, pl = this.player, bm = this.bm, now = this.t;
+    // on a beat at least 0.42 s away (an eighth if the beat is slow)
+    let t1 = bm.timeOf(Math.ceil(bm.beatAt(now + 0.42)));
+    if (t1 - now > 0.86) t1 = bm.timeOf(Math.ceil(bm.beatAt(now + 0.42) * 2) / 2);
+    this._counterCool = t1 + 3.2; this._landedAt.length = 0;
+    b.faceNow(pl.x, pl.z);
+    b.strikeAt('Melee_Hook', t1, { from: 0.0, to: 0.95, hit: 0.5 });
+    if (b.fig && b.fig.tell) b.fig.tell();
+    this.fx.tell && this.fx.tell(b);
+    this.sfx.windup && this.sfx.windup(t1 - now, this.pan(b.x));
+    PAT.area(this, { shape: 'circle', x: b.x, z: b.z, w: 2.35, kind: 'pink', start: now, end: t1, damage: 1, melee: true, counter: true, alphaK: 0.6, flash: 0.35,
+      follow: () => ({ x: b.x, z: b.z }),
+      onImpact: (hit) => { this.fx.ring && this.fx.ring(b.x, b.z, hit === 'parried' ? GOLD : PINK, 2.35); if (hit === 'hit') this.cam.shake(0.8, 0.18); } });
+    this.counters = (this.counters || 0) + 1;
+  }
+  // she's thrown a little way; a wall or a prop in the way stops her hard: it hurts her, and breaks what it can
+  _knock(dist, ang) {
+    const b = this.boss, A = this.arena;
+    if (this.track.knockback === false || b.move || !b.targetable || b.state === 'finished' || b.lockPos) return;
+    const res = (x, z) => (A && A.resolve ? A.resolve(x, z, b.radius * 0.8) : { x, z });
+    // standing somewhere the room keeps you out of (a stage, behind a counter): she stays put
+    const here = res(b.x, b.z); if (Math.hypot(here.x - b.x, here.z - b.z) > 0.04) return;
+    const bd = this.bounds;
+    let ex = b.x, ez = b.z, slam = false;
+    for (let i = 1; i <= 8; i++) {
+      const k = i / 8;
+      let px = b.x + Math.sin(ang) * dist * k, pz = b.z + Math.cos(ang) * dist * k;
+      if (bd) { const cx = Math.max(bd.minX + 0.8, Math.min(bd.maxX - 0.8, px)), cz = Math.max(bd.minZ + 0.8, Math.min(bd.maxZ - 0.8, pz)); if (cx !== px || cz !== pz) { slam = true; px = cx; pz = cz; } }
+      const r = res(px, pz);
+      if (Math.hypot(r.x - px, r.z - pz) > 0.06) slam = true;
+      ex = r.x; ez = r.z;
+      if (slam) break;
+    }
+    if (Math.hypot(ex - b.x, ez - b.z) < 0.05 && !slam) return;
+    b.moveTo(ex, ez, 0.16, { easing: 'out', face: false });
+    // where she lands: a wall stops her hard; the room's ornaments in the way go to pieces (and so does a bit of her)
+    this.after(0.13, () => {
+      const n = this.setPieces ? this.setPieces.slam(ex, ez, 1.3) : 0;
+      if (slam) this._slam(ex, ez, ang);
+      else if (n && b.targetable) { b.takeHit({ dmg: 10 * n, kind: 'slam', heavy: true, x: ex, z: ez, onBeat: false }); this.fx.chips(ex, 1.0, ez, PORCELAIN, 10); this.cam.shake(0.5, 0.15); this._good(60 * n); }
+    });
+  }
+  _slam(x, z, ang) {
+    const b = this.boss;
+    if (!b.targetable || this.state !== 'play') return;
+    b.takeHit({ dmg: 16, kind: 'slam', heavy: true, x: x - Math.sin(ang), z: z - Math.cos(ang), onBeat: false });
+    this.fx.dust(x + Math.sin(ang) * 0.5, z + Math.cos(ang) * 0.5, 16, new THREE.Color(0.75, 0.7, 0.66));
+    this.fx.chips(x, 1.1, z, PORCELAIN, 18);
+    this.fx.ring && this.fx.ring(x + Math.sin(ang) * 0.6, z + Math.cos(ang) * 0.6, WHITE, 1.8);
+    this.cam.shake(0.85, 0.22); this.cam.kick(1.1);
+    if (this.sfx.slamSet) this.sfx.slamSet(this.pan(x)); else if (this.sfx.break) this.sfx.break(this.pan(x));
+    if (b.rig && b.rig.hitStop) b.rig.hitStop(0.1);
+    // whatever she hit
+    this.arena.strikeArc && this.arena.strikeArc(x, z, ang, 1.8, Math.PI, { heavy: true, slam: true, name: 'slam', dmg: 30 }, this);
+    this.slams = (this.slams || 0) + 1;
+    this._good(150);
   }
   _glimmer(level, isCatch) {
     // a quiet note of the chord that's sounding; a combo climbs it
@@ -396,6 +538,26 @@ export class Fight {
     this.sfx.deflect && this.sfx.deflect(this.pan(this.boss.x));
     this.fx.sparks(this.boss.x, 1.3, this.boss.z, WHITE, 8);
     this.player.rig.hitStop(0.04);
+    // a strike glancing off still pushes her toward an answer
+    if (h && h.kind === 'strike') (this._landedAt ||= []).push(this.t);
+  }
+  // her glaze goes hard (three off the beat in a row): white, ringing; off-beat strikes glance off it now
+  _harden(h) {
+    const b = this.boss;
+    this.fx.sparks(b.x, 1.4, b.z, WHITE, 16);
+    this.fx.ring && this.fx.ring(b.x, b.z, WHITE, 1.5);
+    this.sfx.harden ? this.sfx.harden(this.pan(b.x)) : this.sfx.deflect && this.sfx.deflect(this.pan(b.x));
+  }
+  // one on the beat cracks it: gold through the white
+  _crack(h) {
+    const b = this.boss;
+    this.fx.glitter(b.x, 1.4, b.z, GOLD, 22, 0.6);
+    this.fx.chips(b.x, 1.4, b.z, WHITE, 16);
+    this.fx.ring && this.fx.ring(b.x, b.z, GOLD, 2.2);
+    this.cam.shake(0.6, 0.14);
+    this.sfx.crackGlaze ? this.sfx.crackGlaze(this.pan(b.x)) : this.sfx.breakProp && this.sfx.breakProp(this.pan(b.x));
+    this._glimmer(1, false);
+    this._good(100);
   }
   _bossEmpty() {
     // she's beaten: everything of hers in the air and on the floor goes, at once (the song plays on to the finish)
@@ -404,31 +566,127 @@ export class Fight {
     for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
     for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
     this.hud.banner('', ''); this.sfx.empty && this.sfx.empty(); this.track.onEmpty && this.track.onEmpty(this);
+    this._dropKeepsake();
+  }
+
+  // ---------------- what she leaves ----------------
+  // Her bar empties and her keepsake comes off her: it lands on the floor between you, glinting, and YOU takes it
+  // back by walking over it (on the last hit it comes to her anyway). The results card says what it was.
+  _dropKeepsake() {
+    if (this.ks || this.track.keepsake === false) return;
+    const meta = trackById(this.track.id), kind = meta && meta.id === this.track.id ? meta.prize : null;
+    if (!kind) return;
+    const g = new THREE.Group(), m = makeKeepsake(kind);
+    m.scale.setScalar(0.55 / (KEEPSAKE_SIZE[kind] || 0.12));
+    // its own materials, warmed gold, so it reads on any floor
+    m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.material = (Array.isArray(o.material) ? o.material : [o.material]).map((x) => { const c = x.clone(); if (c.emissive) { c.emissive.setRGB(0.5, 0.33, 0.08); c.emissiveIntensity = 0.6; } return c; }); if (o.material.length === 1) o.material = o.material[0]; } });
+    g.add(m); this.scene.add(g);
+    // a column of gold light stands on it while it waits for you
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 7, 24, 1, true), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { uK: { value: 0 }, uFxK: FXK },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (viewMatrix * (modelMatrix * vec4(position, 1.0))); }',
+      fragmentShader: 'uniform float uK; uniform float uFxK; varying vec2 vUv; void main(){ float a = (1.0 - vUv.y) * (1.0 - vUv.y) * 0.3 * uK; gl_FragColor = vec4(vec3(3.0, 2.0, 0.6) * a * uFxK, a); }' }));
+    col.position.y = 3.5; col.renderOrder = 6; col.frustumCulled = false;
+    // she drops it off to one side of her, a few steps from YOU: you see it land, and go for it
+    const b = this.boss, pl = this.player, a = Math.atan2(pl.x - b.x, pl.z - b.z), A = this.arena;
+    let tx = b.x, tz = b.z;
+    for (const side of [1, -1, 0.5, -0.5, 0]) {
+      const aa = a + side * 1.7;
+      let x = b.x + Math.sin(aa) * 2.4, z = b.z + Math.cos(aa) * 2.4;
+      const bd = this.bounds; if (bd) { x = Math.max(bd.minX + 1, Math.min(bd.maxX - 1, x)); z = Math.max(bd.minZ + 1, Math.min(bd.maxZ - 1, z)); }
+      if (A && A.resolve) { const r = A.resolve(x, z, 0.5); x = r.x; z = r.z; }
+      tx = x; tz = z;
+      if (Math.hypot(x - pl.x, z - pl.z) > 2.2) break;
+    }
+    this.ks = { g, col, kind, t: 0, from: new THREE.Vector3(b.x, 1.5, b.z), at: new THREE.Vector3(tx, 0, tz), state: 'fall', glint: 0 };
+    this.fx.glitter(b.x, 1.5, b.z, GOLD, 30, 0.6);
+    this.sfx.goldBurst && this.sfx.goldBurst(this.pan(b.x));
+  }
+  _keepsake(dt) {
+    const k = this.ks; if (!k || k.state === 'gone') return;
+    k.t += dt;
+    const pl = this.player, g = k.g;
+    if (k.state === 'fall') {
+      const u = Math.min(1, k.t / 0.62);
+      g.position.lerpVectors(k.from, k.at, u); g.position.y = k.from.y * (1 - u) + 0.32 * u + 2.2 * u * (1 - u);
+      g.rotation.y += dt * 9; g.rotation.x = (1 - u) * 2.5;
+      if (u >= 1) { k.state = 'wait'; k.t = 0; this.fx.ring && this.fx.ring(k.at.x, k.at.z, GOLD, 1.2); this.fx.dust(k.at.x, k.at.z, 6); this.sfx.ringCatch && this.sfx.ringCatch({ pos: k.at }); k.col.position.set(k.at.x, 3.5, k.at.z); this.scene.add(k.col); }
+    } else if (k.state === 'wait') {
+      g.position.set(k.at.x, 0.36 + Math.sin(k.t * 3) * 0.06, k.at.z); g.rotation.set(0.25, g.rotation.y + dt * 1.6, 0);
+      k.col.material.uniforms.uK.value = Math.min(1, k.t * 3) * (0.75 + 0.25 * this.bm.pulse(this.t, 5));
+      if ((k.glint -= dt) <= 0) { k.glint = 0.5; this.fx.glitter(k.at.x, 0.5, k.at.z, GOLD, 4, 0.25); if (this.fx.ring) this.fx.ring(k.at.x, k.at.z, GOLD, 0.9); }
+      if (Math.hypot(pl.x - k.at.x, pl.z - k.at.z) < 1.0 || this.state === 'finishing') { k.state = 'take'; k.t = 0; k.from = g.position.clone(); this.scene.remove(k.col); pl.rig.upperOnce('Interact', { duration: 0.45, from: 0.1, to: 0.6, fade: 0.05 }); }
+    } else if (k.state === 'take') {
+      const hand = pl.rig.bones.hand_r, to = hand ? hand.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(pl.x, 1.1, pl.z);
+      const u = Math.min(1, k.t / 0.24);
+      g.position.lerpVectors(k.from, to, u * u); g.scale.setScalar(1 - 0.7 * u);
+      if (u >= 1) {
+        k.state = 'gone'; this.scene.remove(g); this.kept = k.kind;
+        this.fx.glitter(to.x, to.y, to.z, GOLD, 26, 0.4); this.fx.ring && this.fx.ring(pl.x, pl.z, GOLD, 1.6);
+        this._glimmer(2, true); this.after(0.12, () => this._glimmer(3, true));
+        this.score += 2500 * this.mult;
+      }
+    }
   }
 
   // ---------------- spotlight ----------------
+  // THE SOLO: the house lights go down and the light is yours for two bars. Everything of hers in the air and on the
+  // floor bursts as it comes on, she can't touch you, she covers her eyes, and every strike lands on the music for
+  // double. The pips round the light count the beats you have left.
   _spotlight() {
     const pl = this.player;
     if (pl.meter < 1 || this.spotUntil > 0 || this.state !== 'play') return;
     pl.meter = 0;
-    const nb = this.bm.nearest(this.t, 1);
-    const start = nb.time > this.t ? nb.time : this.bm.timeOf(nb.beat + 1);
-    this.spotUntil = start + this.bm.periodAt(this.t) * 4;
+    const b0 = this.bm.beatAt(this.t);
+    this.spotStart = this.t; this.spotB0 = b0;
+    this.spotUntil = this.bm.timeOf(Math.floor(b0) + 1 + SOLO_BEATS);
     this.suppress = true; this.boss.blinded = true;
+    // what she had coming bursts, where it was
+    const PINKG = new THREE.Color(3.4, 0.8, 1.9);
+    for (const g of this.tele.list) if (!g.dead && g.kind !== 'gold') this.fx.glitter(g.x, 0.35, g.z, g.kind === 'pink' ? PINKG : WHITE, 8, Math.min(1.6, (g.w || 1) * 0.6));
+    for (const p of this.proj.list) if (p.owner === 'boss' && !p.dead) this.fx.glitter(p.x, p.y || 1, p.z, PINKG, 3, 0.15);
     this.proj.clear('boss'); this.tele.clear();
     for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
     for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
     this.fx.spotlight(true);
-    this.app.post.fx.focusK = 0.6;
+    this.fx.flash(new THREE.Color(0.22, 0.2, 0.17), 1);
+    this.cam.kick(1.6);
     this.sfx.spotlight && this.sfx.spotlight();
+    pl.speedMul = 1.2; pl.solo = true;
+    const b = this.boss;
+    if (b.rig && b.rig.upperOnce && b.targetable) b.rig.upperOnce('Sword_Block', { duration: Math.min(1.4, this.spotUntil - this.t), from: 0.1, to: 0.5, fade: 0.1 });
+    if (b.fig && b.fig.tell) b.fig.tell(new THREE.Color(2.6, 2.4, 2.1));
+    b.open(this.spotUntil - this.t);
     this.track.onSpotlight && this.track.onSpotlight(this, true);
-    pl.speedMul = 1.25;
-    this.boss.open(this.spotUntil - this.t);
   }
   _endSpotlight() {
     this.spotUntil = -1; this.suppress = false; this.boss.blinded = false;
-    this.fx.spotlight(false); this.app.post.fx.focusK = 0; this.player.speedMul = 1;
+    this.fx.spotlight(false); this.player.speedMul = 1; this.player.solo = false;
     this.track.onSpotlight && this.track.onSpotlight(this, false);
+  }
+  // the solo's picture: the room down, the light on YOU, the beats left
+  _soloLook(dt) {
+    const on = this.spotUntil > 0;
+    const k = this._soloK = (this._soloK || 0) + ((on ? 1 : 0) - (this._soloK || 0)) * Math.min(1, dt * (on ? 10 : 4));
+    const post = this.app.post.fx;
+    // the room's exposure, whoever set it this frame (a track sets it every frame; some only once), times the dim
+    if (this._expLast === undefined || Math.abs(post.exposure - this._expLast) > 1e-6) this._expBase = post.exposure;
+    post.exposure = this._expBase * (1 - 0.38 * k); this._expLast = post.exposure;
+    // and the room's glow breathes a little with the beat (the same way: on top of whatever the room set)
+    if (this._bloomLast === undefined || Math.abs(post.bloom - this._bloomLast) > 1e-6) this._bloomBase = post.bloom;
+    const bp = this.state === 'play' ? this.bm.pulse(this.t, 7) : 0;
+    post.bloom = this._bloomBase * (1 + 0.1 * bp * bp); this._bloomLast = post.bloom;
+    if (k > 0.002) {
+      const sp = this.cam.toScreen(_SP.set(this.player.x, 1.0, this.player.z));
+      post.focus.set(sp.x, 1 - sp.y);
+      post.focusK = 0.72 * k;
+    } else if (post.focusK) post.focusK = 0;
+    // YOU, lit by it
+    if (k > 0.002 || this._soloLit) { this.player.rig.flash(_SOLO_LIT, 0.16 * k); this._soloLit = k > 0.002; }
+    if (this.fx.soloBeats) {
+      const left = on ? Math.max(0, Math.min(SOLO_BEATS, Math.floor(this.spotB0) + 1 + SOLO_BEATS - this.bm.beatAt(this.t))) : 0;
+      this.fx.soloBeats(on ? left : 0, SOLO_BEATS, this.bm.pulse(this.t, 8), this.player);
+    }
   }
 
   // ---------------- sections, death, the end ----------------
@@ -438,6 +696,7 @@ export class Fight {
     if (prev && !this.encoreMode) this.player.heal(1);
     this.checkpoint = { t: sec.t0, boss: this.boss.snapshot(), score: this.score };
     this.track.onSection && this.track.onSection(this, sec, prev);
+    this.setPieces.fill();
   }
 
   _die() {
@@ -471,6 +730,7 @@ export class Fight {
     this.score = cp.score;            // a rewind takes back what you scored since the checkpoint
     this.hud.restoreNotches(this.boss.broken);
     this.player.revive();
+    this.setPieces.reset();
     this.T.seek(cp.t);
     this.t = cp.t;
     this.lastSection = this.T.sectionAt(cp.t);
@@ -519,6 +779,7 @@ export class Fight {
         for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
         this.T.seek(to); this.t = to; this.lastSection = this.T.sectionAt(to);
         this.boss._now = to; this.boss.busyUntil = 0; this.boss.move = null;
+        this.setPieces.reset();
         this.track.onRewind && this.track.onRewind(this, to);
         this.checkpoint = { t: to, boss: this.boss.snapshot(), score: this.score };
         this.state = 'play'; this.player.heal(2);
@@ -556,6 +817,10 @@ export class Fight {
 
   dispose() {
     this.cam.roomMaxZ = undefined;
+    // the picture as the room left it, without the solo's dim or the beat's glow on top
+    if (this._expBase !== undefined) this.app.post.fx.exposure = this._expBase;
+    if (this._bloomBase !== undefined) this.app.post.fx.bloom = this._bloomBase;
+    this.app.post.fx.focusK = 0; this.cam.soloK = 0;
     this.sfx.detach && this.sfx.detach();
     this.proj.clear(); this.tele.clear(); this.fx.clear();
     this.scene.remove(this.proj.mesh, this.proj.dots, this.tele.mesh);
@@ -563,6 +828,9 @@ export class Fight {
     for (const w of this.waves) this._dropWave(w);
     for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh);
     if (this._wavePool) for (const k in this._wavePool) for (const m of this._wavePool[k]) m.dispose();
+    if (this.ks) { if (this.ks.g.parent) this.scene.remove(this.ks.g); if (this.ks.col.parent) this.scene.remove(this.ks.col); this.ks.col.geometry.dispose(); }
+    if (this.player.h.setMouth) this.player.h.setMouth(0);
+    this.setPieces && this.setPieces.dispose();
     this.arena && this.arena.dispose && this.arena.dispose();
     this.boss && this.scene.remove(this.boss.root);
     this.audio.stop();

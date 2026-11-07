@@ -1,7 +1,10 @@
 // The record: the game's menu. A black vinyl record on a turntable under a spotlight. Each track is a band
 // of grooves on the disc; the label says MURDERPOP. Hover a band and it lights; a won track's groove is gold.
-// Drop the needle on a band to play it. Flip the record for Side B.
+// Drop the needle on a band to play it. Flip the record for Side B. YOU stands on it, by the label: it's her record,
+// every song on it is about her, and what she took back from each one goes round in its groove beside her.
 import * as THREE from 'three';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { Rig } from '../engine/character.js';
 import { makeKeepsake, KEEPSAKE_SIZE } from './keepsakes.js';
 
 const REC_R = 3.0, LABEL_R = 1.02;
@@ -151,6 +154,21 @@ export class RecordMenu {
     u.tLabel.value = labelCanvas(side, tracks, this.encore);
   }
 
+  // YOU, on her record: arms folded while you choose; she looks at the groove you're on, and squares up when the
+  // needle goes down
+  setHeroine(h) {
+    if (this.you || !h) return;
+    const model = SkeletonUtils.clone(h.model);
+    model.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; } });
+    const rig = new Rig(h.rig.kit, model);
+    rig.root.position.set(-0.5, 0.055, 0.55); rig.root.rotation.y = 0.42; rig.root.scale.setScalar(1.15);
+    this.scene.add(rig.root);
+    rig.play('Idle_FoldArms_Loop', { fade: 0 });
+    this.you = rig; this._look = new THREE.Vector3(1.2, 1.6, 6.9);
+    // her own key light, so she reads against the black vinyl
+    const key = new THREE.SpotLight(0xffe6cc, 26, 9, 0.5, 0.7, 1.4); key.position.set(-1.6, 4.2, 3.2); key.target = rig.root; this.scene.add(key);
+  }
+
   pick(mx, my) {
     this.ndc.set(mx * 2 - 1, -(my * 2 - 1));
     this.ray.setFromCamera(this.ndc, this.cam);
@@ -172,8 +190,12 @@ export class RecordMenu {
     this.hover = i; this.recMat.uniforms.uHover.value = i;
     const t = this.tracks[i];
     this.armTarget = t ? this._armFor((t._r0 + t._r1) / 2 + 0.05) : this.armRest;
+    // she looks at the groove (toward the camera's side of the record, where you see it)
+    if (this._look) { if (t) { const r = (t._r0 + t._r1) / 2; this._look.set(Math.cos(-0.35) * r + 0.6, 0.2, Math.sin(0.9) * r); } else this._look.set(1.2, 1.6, 6.9); }
   }
-  drop() { this.armLiftT = 0; }   // the needle goes down
+  drop() { this.armLiftT = 0; if (this.you) this.you.play('Sword_Idle', { fade: 0.25 }); }   // the needle goes down; she squares up
+  // back on the record (after a fight): arms folded again
+  rest() { if (this.you && this.you.baseName !== 'Idle_FoldArms_Loop') this.you.play('Idle_FoldArms_Loop', { fade: 0.5 }); }
   lift() { this.armLiftT = 0.3; }
   // after the credits: close on the label going round, the needle in the run-out groove; it lifts, and we pull back
   runout() {
@@ -203,6 +225,7 @@ export class RecordMenu {
     this.armLift += (this.armLiftT - this.armLift) * Math.min(1, dt * 8);
     this.arm.rotation.y = this.armAng;
     this.arm.position.y = 0.35 + this.armLift;
+    if (this.you) { this.you.lookTarget = this._look; this.you.update(dt); }
   }
   render(renderer, post, time) { post.render(this.scene, this.cam, time); }
   setAspect(a) { this.cam.aspect = a; this.cam.updateProjectionMatrix(); }

@@ -62,6 +62,7 @@ class App {
     // YOU, loaded once
     this.heroine = await loadHeroine('assets/characters/heroine.glb', 'assets/characters/anims.glb', (k) => this.screens.veil(true, 'MURDERPOP', 0.1 + k * 0.8));
     this.player = new Player(this.heroine, this.scene);
+    this.record.setHeroine(this.heroine);
     this.last = performance.now();
     window.__MP = this;
     // the stepped clock (tests): __step(dt, quiet) advances the game dt seconds; quiet skips drawing the frame
@@ -101,7 +102,7 @@ class App {
   toTitle() { this.screen = 'title'; this.menuDom.mode('title'); this.hud.show(false); this.record.hoverTo(-1); this.sfx.ambience && this.sfx.ambience(true); }
   toRecord() {
     if (this.screen === 'record') return;
-    this.screen = 'record'; this.menuDom.mode('record'); this.hud.show(false);
+    this.screen = 'record'; this.menuDom.mode('record'); this.hud.show(false); this.record.rest();
     this.sfx.ui && this.sfx.ui('spin'); this.sfx.ambience && this.sfx.ambience(true);
     this.setSide(this.side || 'A');
   }
@@ -219,7 +220,9 @@ class App {
     }
     const mod = { default: fight.track };
     if (Q.has('auto') && fight.kind === 'walk' && mod.default.tour) { this.auto = new WalkBot(fight, mod.default.tour); fight.input = this.auto; }
-    if (Q.has('auto') && fight.kind !== 'walk') { this.auto = new Autopilot(fight, Q.get('auto') === 'bad' ? { react: 0.3, jitter: 0.12, miss: 0.35, greed: 0.6 } : {}); fight.input = this.auto; }
+    // the bots: 1 (good: times its strikes, catches on the beat), mash (as good, but strikes whenever), bad
+    const BOTS = { bad: { react: 0.3, jitter: 0.12, miss: 0.35, greed: 0.6, rhythm: 0 }, mash: { rhythm: 0 } };
+    if (Q.has('auto') && fight.kind !== 'walk') { this.auto = new Autopilot(fight, BOTS[Q.get('auto')] || {}); fight.input = this.auto; }
     this.fight = fight;
     fight.resultCb = (r) => this.results(r, meta);
     await this._warm();
