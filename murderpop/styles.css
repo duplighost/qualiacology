@@ -34,9 +34,11 @@ body.menu canvas#view { cursor: default; }
 .mp-you { position: absolute; left: 2.6vw; bottom: 3.6vh; }
 .mp-hearts { display: flex; gap: 8px; margin-bottom: 10px; }
 .mp-heart { width: 30px; height: 28px; display: block; position: relative; filter: drop-shadow(0 0 7px rgba(255, 46, 136, .7)); }
-.mp-heart svg { width: 100%; height: 100%; fill: url(#none); }
-.mp-heart path { fill: var(--pink); stroke: var(--ivory); stroke-width: 1.6; }
-.mp-heart.lost path { fill: rgba(30, 14, 22, .65); stroke: rgba(247, 239, 228, .35); }
+.mp-heart svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: url(#none); }
+.mp-heart .h-bg path { fill: rgba(30, 14, 22, .65); stroke: rgba(247, 239, 228, .35); stroke-width: 1.6; }
+.mp-heart .h-fg path { fill: var(--pink); stroke: var(--ivory); stroke-width: 1.6; }
+.mp-heart.half .h-fg { clip-path: inset(0 50% 0 0); }
+.mp-heart.lost .h-fg { opacity: 0; }
 .mp-heart.lost { filter: none; }
 .mp-heart.break { animation: mpHeartBreak .5s ease-out; }
 .mp-heart.gain { animation: mpHeartGain .5s ease-out; }

@@ -65,7 +65,13 @@ export class GroundMarks {
       u.uPipK0.value = dashCharges >= 1 ? 1 : 0; u.uPipK1.value = dashCharges >= 2 ? 1 : (dashCharges === 1 ? 1 - Math.max(0, dashCool) / recharge : 0);
       this.you.visible = player.state !== 'dead';
     }
-    if (boss) { this.her.position.set(boss.x, 0.025, boss.z); this.her.visible = boss.state !== 'finished' && boss.state !== 'gone' && !boss.intangible; }
+    // her ring stands where she stands (up on something, it's up there with her); a track can fade it where it would
+    // mislead (behind a counter it would show on the floor in front of it: she'd look to be inside it)
+    if (boss) {
+      this.her.position.set(boss.x, (boss.root ? boss.root.position.y : 0) + 0.025, boss.z);
+      this.her.material.uniforms.uA.value = 0.35 * (boss.markK ?? 1);
+      this.her.visible = boss.state !== 'finished' && boss.state !== 'gone' && !boss.intangible && (boss.markK ?? 1) > 0.01;
+    }
   }
   dispose(scene) { scene.remove(this.you, this.her); }
 }

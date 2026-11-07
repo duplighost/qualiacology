@@ -84,7 +84,7 @@ export class Finale {
   }
   // a strike landed on her during the finale (at song time t): its points (already multiplied), and what it did.
   // A ring is landed by a strike pressed on the beat it closes on (it may land a moment later), or landing on it.
-  struck(s, on, t) {
+  struck(s, on, t, air = false) {
     const ring = this.rings.find((r) => !r.hit && !r.done && (r.last ? this._onLast(s, r) || Math.abs(t - r.t1) <= FINALE.window * 1.4 : on && ((s.beatT != null && Math.abs(s.beatT - r.t1) < 0.045) || Math.abs(t - r.t1) <= FINALE.window)));
     let pts, perfect = false, last = false, broke = false;
     if (ring) {
@@ -97,6 +97,7 @@ export class Finale {
     } else if (!on) { pts = FINALE.perHit * this.kept; if (++this.offRun >= 3) { this.offRun = 0; broke = this.mult > 1; this._drop(); } }
     else pts = FINALE.perHit * this.mult * this.kept * (s.finisher ? 3 : 1.5);
     if (on) this.offRun = 0;
+    if (air) pts *= 2;                     // (up in the air: a juggle is worth twice)
     pts = Math.round(pts);
     this.bank += pts;
     return { pts, perfect, last, broke };

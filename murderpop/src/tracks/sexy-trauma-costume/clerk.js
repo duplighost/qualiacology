@@ -431,5 +431,9 @@ export class Clerk {
     // height: up on the counter, down on the floor (a hop is quick; a vault quicker)
     this.y += (this.yT - this.y) * Math.min(1, dt * (vaulting ? 26 : 14));
     b.root.position.y = this.y;
+    // behind the counter her ring would show on the floor in front of it (Alex, 7 Nov: she looked to be inside "the
+    // stage"): it fades while she's back there, and comes back as she comes out
+    const behind = this.y < 0.3 && b.z < COUNTER.z1 - 0.05 && Math.abs(b.x) < COUNTER.x1 + 0.6;
+    b.markK = (b.markK ?? 1) + ((behind ? 0 : 1) - (b.markK ?? 1)) * Math.min(1, dt * 10);
   }
 }

@@ -12,7 +12,8 @@ export class ArenaCamera {
     this.logic = new THREE.PerspectiveCamera(30, aspect, 0.3, 400);    // for aiming
     this.pitch = THREE.MathUtils.degToRad(52);
     this.dist = 21; this.distT = 21;
-    this.minDist = 11; this.maxDist = 26;
+    // (Alex, 7 Nov: "its still a bit close most of the time": the nearest it comes is further out, and it fits wider)
+    this.baseMin = 13.5; this.minDist = this.baseMin; this.maxDist = 27;
     this.closeK = 0;          // 0 normal, 1 intimate (bridge)
     this.focus = new THREE.Vector3(); this.focusV = new THREE.Vector3();
     this.bounds = { minX: -11, maxX: 11, minZ: -7, maxZ: 7 };
@@ -24,6 +25,13 @@ export class ArenaCamera {
   }
 
   setAspect(a) { this.cam.aspect = this.logic.aspect = a; this.cam.updateProjectionMatrix(); this.logic.updateProjectionMatrix(); }
+
+  // a fight starts (or ends) clean: no lean-in left over from the last finish (it stayed on into the next song: black
+  // bars and a camera half-pointed at the last room), nothing a track set for itself
+  reset() {
+    this.override = null; this.closeK = 0; this.soloK = 0; this.weight = 0.45; this.minDist = this.baseMin;
+    this.fovKick = 0; this.shakeA = 0; this.shakeT = 0; this.roomMaxZ = undefined; this.bossAirY = 0;
+  }
 
   snap(player, boss) { this._target(player, boss, _v); this.focus.copy(_v); this.focusV.set(0, 0, 0); this.dist = this.distT; this.update(0, player, boss); }
 
@@ -46,14 +54,14 @@ export class ArenaCamera {
   _fit(focus, px, pz, bx, bz) {
     const c = this._fitCam || (this._fitCam = new THREE.PerspectiveCamera());
     c.fov = this.fov; c.aspect = this.logic.aspect; c.near = 0.3; c.far = 400; c.updateProjectionMatrix();
-    const pts = [[px, 0, pz], [px, 1.9, pz], [bx, 0, bz], [bx, 2.3, bz]];
+    const pts = [[px, 0, pz], [px, 1.9, pz], [bx, 0, bz], [bx, 2.3 + (this.bossAirY || 0), bz]];
     const p = _v2;
     let d = this.minDist;
     for (; d < this.maxDist; d += 0.5) {
       const back = Math.cos(this.pitch) * d, up = Math.sin(this.pitch) * d;
       c.position.set(focus.x, up, focus.z + back); c.lookAt(focus.x, 0.4, focus.z); c.updateMatrixWorld();
       let ok = true;
-      for (const q of pts) { p.set(q[0], q[1], q[2]).project(c); if (p.y > 0.68 || p.y < -0.8 || Math.abs(p.x) > 0.86) { ok = false; break; } }
+      for (const q of pts) { p.set(q[0], q[1], q[2]).project(c); if (p.y > 0.64 || p.y < -0.76 || Math.abs(p.x) > 0.82) { ok = false; break; } }
       if (ok) break;
     }
     return d;

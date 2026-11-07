@@ -58,7 +58,7 @@ export default {
       resolve: (x, z, r) => world.resolve(x, z, r),
       update: (dt, t, ff) => world.update(dt, L.songT),
       strikeArc: (x, z, ang, range, arc, s) => strikeArc(f, x, z, ang, range, arc, s),
-      dispose: () => { f.cam.weight = 0.45; f.cam.minDist = 12.5; L.beams.dispose(); snd.stopAll(); if (L.solver) L.solver.dispose(); world.dispose(); },
+      dispose: () => { f.cam.weight = 0.45; f.cam.minDist = f.cam.baseMin; L.beams.dispose(); snd.stopAll(); if (L.solver) L.solver.dispose(); world.dispose(); },
     };
   },
 
@@ -479,7 +479,7 @@ export default {
     // verse 2b is close (intimate) until the H-pattern needs reading; the second stop pulls right back to the whole yard
     // so the lake can be seen rising into a wall round it
     { const sec = f.lastSection; if (sec && sec.name.startsWith('verse 2b')) sec.close = L.songT < 71.94;
-      f.cam.minDist = f.state === 'play' && L.songT >= S.rise + 0.3 && L.songT < S.under + 0.2 ? 23 : 12.5; }
+      f.cam.minDist = f.state === 'play' && L.songT >= S.rise + 0.3 && L.songT < S.under + 0.2 ? 23 : f.cam.baseMin; }
     // the first stop: the picture leans toward her and YOUR car at the end of the pier (YOU stays in it)
     { const k = f.state === 'play' && L.songT > S.still && L.songT < S.surge + 0.6 ? Math.min(1, (L.songT - S.still) / 0.8, (S.surge + 0.6 - L.songT) / 0.5) : 0; f.cam.weight = 0.45 + 0.22 * k; }
     BEAT.pulse = f.bm.pulse(t, 7); BEAT.t = t;

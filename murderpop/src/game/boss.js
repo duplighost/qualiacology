@@ -56,7 +56,7 @@ export class Boss {
 
   // move to (x, z) over dur seconds (game time); returns the arrival time
   moveTo(x, z, dur, { easing = 'inOut', face = true, now = this._now } = {}) {
-    if (this.pinned) return now + dur;
+    if (this.pinned || this.dazed) return now + dur;
     this.move = { fx: this.x, fz: this.z, tx: x, tz: z, t0: now, dur: Math.max(0.01, dur), ease: ease[easing] || ease.inOut, face };
     return now + dur;
   }
@@ -64,7 +64,7 @@ export class Boss {
 
   // play a clip fitted so that `at` (0..1 of the clip window) lands at song time `impactT`
   perform(clip, { from = 0, to = 1, duration, then = 'idle', fade = 0.1, speed, force = false } = {}) {
-    if (!this.rig || (this.pinned && !force)) return;
+    if (!this.rig || ((this.pinned || this.dazed) && !force)) return;
     this.rig.once(clip, { from, to, duration, speed, fade, then: then === 'idle' ? this.idleClip : then });
     const c = this.rig.kit.clips[clip];
     const len = duration || (c ? c.duration * (to - from) / (speed || 1) : 0.5);
@@ -78,6 +78,15 @@ export class Boss {
     this.perform(clip, { from, to, duration: lead / Math.max(0.05, hit), then, fade: 0.06 });
   }
   loop(clip, opts = {}) { if (this.rig && (!this.pinned || opts.force)) this.rig.play(clip, { fade: 0.2, ...opts }); }
+  // stunned by a counter: she reels for sec (her script's walks and moves wait), and whatever lands on her meanwhile
+  // does k times the damage
+  daze(sec, k = 1.35) {
+    if (this.hp <= 0 || this.state === 'finished' || this.state === 'gone') return;
+    if (this.state === 'perform' || this.state === 'open') { this.state = 'open'; this.st = 0; this.openFor = sec; }
+    this.openK = k; this.move = null; this.dazeUntil = (this._now || 0) + sec; this.busyUntil = 0;
+    if (this.rig) this.rig.once(k >= 2 ? 'Hit_Knockback' : 'Hit_Head', { duration: Math.min(sec, k >= 2 ? 0.7 : 0.4), fade: 0.05, then: this.idleClip });
+  }
+  get dazed() { return (this._now || 0) < (this.dazeUntil || 0); }
   // down on her knees for the finale's last bars. Some tracks play clips straight on her rig: while she's pinned those
   // wait too (all but the one she's down in)
   pin(clip = 'Crouch_Idle_Loop') {
@@ -109,7 +118,7 @@ export class Boss {
       else if (this.state === 'perform' && ++this.offRun >= 3) { this.hard = 1; this.offRun = 0; this.hardT = 0; this.emit('harden', info); }
     }
     let dmg = info.dmg;
-    if (this.state === 'open' || this.state === 'stagger') dmg *= 1.35;
+    if (this.state === 'open' || this.state === 'stagger') dmg *= this.state === 'open' && this.dazed ? (this.openK || 1.35) : 1.35;
     if (this.state === 'desperate' || this.hp <= 0) {
       // the bar is empty: she's wrecked, still performing until the song ends; hits still crack her and score
       this.emit('hit', { ...info, dmg, desperate: true });
@@ -148,7 +157,7 @@ export class Boss {
     this._now = now; this._beat = beat || 0.5;
     this.st += dt;
     if (this.state === 'stagger' && this.st >= (this.staggerFor || 1)) { this.state = this.hp <= 0 ? 'desperate' : 'perform'; this.st = 0; this.emit('recover'); }
-    if (this.state === 'open' && this.st >= (this.openFor || 0.8)) { this.state = 'perform'; this.st = 0; }
+    if (this.state === 'open' && this.st >= (this.openFor || 0.8)) { this.state = 'perform'; this.st = 0; this.openK = 0; }
     if (this.move) {
       const m = this.move, k = Math.min(1, Math.max(0, (now - m.t0) / m.dur)), e = m.ease(k);
       const nx = m.fx + (m.tx - m.fx) * e, nz = m.fz + (m.tz - m.fz) * e;
