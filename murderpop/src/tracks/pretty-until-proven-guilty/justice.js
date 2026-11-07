@@ -75,7 +75,7 @@ export class Justice {
     this.goldMat = gold;
     // the statue: the base body, seated, in marble, scaled up
     const kit = o.kit;
-    const gl = await kit.load('source/quaternius/base/Superhero_Female_FullBody.gltf');
+    const gl = await kit.load('assets/characters/base/Superhero_Female_FullBody.gltf');
     const model = kit.instance(gl);
     model.traverse((m) => { if (m.isMesh) { m.material = m.name.startsWith('Eye') ? mat : mat; m.castShadow = true; m.receiveShadow = true; } });
     model.scale.setScalar(this.scale);

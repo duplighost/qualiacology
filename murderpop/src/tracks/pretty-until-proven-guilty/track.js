@@ -818,7 +818,7 @@ export default {
     S.knives = new Knives(f); S.motto = new Motto(f); S.flats = new Flats(f);
     S.props = new Props(f); S.shelving = new Shelving(f); S.page = new FrontPage(f); S.cells = new Cells(f); S.frost = new Frost(f);
     S.doors = new Doors(f); S.floor = new FloorLight(f); S.prints = new Prints(f); S.phoneZones = [];
-    const base = await kit.load('source/quaternius/base/Superhero_Female_FullBody.gltf');
+    const base = await kit.load('assets/characters/base/Superhero_Female_FullBody.gltf');
     S.crowd = new Crowd(f, kit, base); S.hall = new Hall(f, kit, base, reach);
     S.doubles = new Doubles(f, kit, base);
     S.dropMesh = { hoodie: exhibitMesh('hoodie'), heart: exhibitMesh('heart') }; for (const m of Object.values(S.dropMesh)) { m.visible = false; f.scene.add(m); }

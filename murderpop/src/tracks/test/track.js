@@ -9,7 +9,7 @@ import { Shafts, Motes } from '../../fx/atmos.js';
 let kit = null;
 async function standIn(scene) {
   if (!kit) { kit = new CharacterKit('assets/characters/'); await kit.init(); }
-  const g = await kit.load('source/quaternius/base/Superhero_Female_FullBody.gltf');
+  const g = await kit.load('assets/characters/base/Superhero_Female_FullBody.gltf');
   const model = kit.instance(g);
   const mat = new THREE.MeshPhysicalMaterial({ color: 0xf4ece6, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 0.4, sheenColor: new THREE.Color(0xffd0e0) });
   const black = new THREE.MeshPhysicalMaterial({ color: 0x0c0709, roughness: 0.25, clearcoat: 1 });
