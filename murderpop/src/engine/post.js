@@ -1,7 +1,8 @@
 // HDR scene -> bloom (mip chain) -> one composite pass:
-// exposure, filmic tone map, grade (lift/gamma/gain, saturation, split tone), vignette, chromatic
-// aberration, flash, desaturate, VHS (for rewinds), letterbox, grain. Everything the fight wants to
-// push on the picture is a number on `post.fx`.
+// exposure, a light sharpen, filmic tone map, grade (lift/gamma/gain, saturation, split tone), vignette, chromatic
+// aberration (off unless something pushes it), flash, desaturate, a glitch (a brief colour split; no scanlines),
+// letterbox, grain (off unless a room asks). Everything the fight wants to push on the picture is a number on
+// `post.fx`. Alex, 7 Nov: no old-TV look in the fights, sharper.
 import * as THREE from 'three';
 
 // The game's own glowing things (telegraphs, shots, sparks, trails, the spotlight) are drawn in absolute HDR
@@ -49,11 +50,12 @@ void main() {
 const COMPOSITE_FS = /* glsl */`
 uniform sampler2D tScene; uniform sampler2D tBloom;
 uniform vec2 uRes; uniform float uTime;
-uniform float uExposure, uBloom, uSat, uContrast, uVignette, uCA, uGrain, uDesat, uVHS, uLetterbox, uFade;
+uniform float uExposure, uBloom, uSat, uContrast, uVignette, uCA, uGrain, uDesat, uVHS, uLetterbox, uFade, uSharp;
 uniform vec3 uLift, uGamma, uGain, uShadowTint, uHighTint, uFlash, uFade3;
 uniform vec2 uFocus; uniform float uFocusK;
 varying vec2 vUv;
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+// a hash with no sin() in it (sin of big numbers turns into moving stripes on some GPUs)
+float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 // AgX-ish filmic curve (Troy Sobotka's AgX approximation, as in three.js)
 vec3 agx(vec3 color) {
   const mat3 inMat = mat3(0.856627153315983, 0.137318972929847, 0.11189821299995, 0.0951212405381588, 0.761241990602591, 0.0767994186031903, 0.0482516061458583, 0.101439036467562, 0.811302368396859);
@@ -72,20 +74,23 @@ vec3 agx(vec3 color) {
 vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 void main() {
   vec2 uv = vUv;
-  // VHS: line jitter and a rolling tear while rewinding
-  if (uVHS > 0.0) {
-    float line = floor(uv.y * uRes.y / 2.0);
-    float j = (hash(vec2(line, floor(uTime * 30.0))) - 0.5) * 0.012 * uVHS;
-    float tear = smoothstep(0.02, 0.0, abs(fract(uv.y + uTime * 0.7) - 0.5)) * 0.05 * uVHS;
-    uv.x += j + tear;
-  }
   vec2 dc = uv - 0.5;
   float r2 = dot(dc, dc);
-  float ca = uCA * (0.25 + r2 * 3.0) + uVHS * 0.004;
-  vec3 col;
-  col.r = texture2D(tScene, uv + dc * ca).r;
-  col.g = texture2D(tScene, uv).g;
-  col.b = texture2D(tScene, uv - dc * ca).b;
+  vec3 col = texture2D(tScene, uv).rgb;
+  // a light sharpen on brightness only (no colour fringes, halos held down)
+  if (uSharp > 0.0) {
+    vec2 px = 1.0 / uRes;
+    vec3 n = (texture2D(tScene, uv + vec2(px.x, 0.0)).rgb + texture2D(tScene, uv - vec2(px.x, 0.0)).rgb + texture2D(tScene, uv + vec2(0.0, px.y)).rgb + texture2D(tScene, uv - vec2(0.0, px.y)).rgb) * 0.25;
+    float L = dot(col, vec3(0.2126, 0.7152, 0.0722)), Ln = dot(n, vec3(0.2126, 0.7152, 0.0722));
+    col *= clamp(1.0 + uSharp * (L - Ln) / max(L, 0.04), 0.8, 1.3);
+  }
+  // colour split: only while something pushes it (a big hit for a moment, a glitch), never resting on the picture
+  float ca = uCA * (0.25 + r2 * 3.0) + uVHS * 0.003;
+  if (ca > 0.00002) {
+    vec2 o = dc * ca + vec2(uVHS * 0.004, 0.0);
+    col.r = texture2D(tScene, uv + o).r;
+    col.b = texture2D(tScene, uv - o).b;
+  }
   vec3 bloom = texture2D(tBloom, uv).rgb;
   col += bloom * uBloom;
   col *= uExposure;
@@ -108,13 +113,8 @@ void main() {
     vec2 fd = (vUv - uFocus) * vec2(uRes.x / uRes.y, 1.0);
     col *= mix(1.0, smoothstep(0.55, 0.12, length(fd)) * 0.85 + 0.15, uFocusK);
   }
-  if (uVHS > 0.0) {
-    float scan = 0.85 + 0.15 * sin(vUv.y * uRes.y * 1.6);
-    col = mix(col, col * scan + vec3(0.02, 0.0, 0.04), uVHS);
-  }
-  // grain, stronger in the shadows
-  float gr = hash(vUv * uRes + fract(uTime * 7.31) * 100.0) - 0.5;
-  col += gr * uGrain * (1.0 - ld * 0.7);
+  // grain, stronger in the shadows (only where a room asks for it)
+  if (uGrain > 0.0) { float gr = hash(floor(vUv * uRes) + floor(fract(uTime * 7.31) * 97.0) * vec2(13.0, 7.0)) - 0.5; col += gr * uGrain * (1.0 - ld * 0.7); }
   col = mix(col, uFade3, uFade);
   // letterbox
   float lb = uLetterbox * 0.12;
@@ -136,7 +136,7 @@ export class Post {
     this.down = new THREE.ShaderMaterial({ vertexShader: FS_QUAD_VS, fragmentShader: DOWN_FS, uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 1.0 }, uFirst: { value: 0 } }, depthTest: false, depthWrite: false });
     this.up = new THREE.ShaderMaterial({ vertexShader: FS_QUAD_VS, fragmentShader: UP_FS, uniforms: { tSrc: { value: null }, tPrev: { value: null }, uTexel: { value: new THREE.Vector2() }, uRadius: { value: 1.0 } }, depthTest: false, depthWrite: false });
     this.fx = {
-      exposure: 1.0, bloom: 0.6, threshold: 1.0, saturation: 1.0, contrast: 1.0, vignette: 0.55, ca: 0.0015, grain: 0.035,
+      exposure: 1.0, bloom: 0.6, threshold: 1.0, saturation: 1.0, contrast: 1.0, vignette: 0.55, ca: 0, grain: 0, sharpen: 0.4,
       desat: 0, vhs: 0, letterbox: 0, fade: 0, fadeColor: new THREE.Color(0, 0, 0),
       lift: new THREE.Color(0, 0, 0), gamma: new THREE.Color(1, 1, 1), gain: new THREE.Color(1, 1, 1),
       shadowTint: new THREE.Color(1, 1, 1), highTint: new THREE.Color(1, 1, 1),
@@ -147,7 +147,7 @@ export class Post {
       uniforms: {
         tScene: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uTime: { value: 0 },
         uExposure: { value: 1 }, uBloom: { value: 0.6 }, uSat: { value: 1 }, uContrast: { value: 1 }, uVignette: { value: 0.5 }, uCA: { value: 0 },
-        uGrain: { value: 0.03 }, uDesat: { value: 0 }, uVHS: { value: 0 }, uLetterbox: { value: 0 }, uFade: { value: 0 }, uFade3: { value: new THREE.Color() },
+        uGrain: { value: 0 }, uDesat: { value: 0 }, uVHS: { value: 0 }, uLetterbox: { value: 0 }, uFade: { value: 0 }, uFade3: { value: new THREE.Color() }, uSharp: { value: 0.4 },
         uLift: { value: new THREE.Color() }, uGamma: { value: new THREE.Color(1, 1, 1) }, uGain: { value: new THREE.Color(1, 1, 1) },
         uShadowTint: { value: new THREE.Color(1, 1, 1) }, uHighTint: { value: new THREE.Color(1, 1, 1) }, uFlash: { value: new THREE.Color() },
         uFocus: { value: new THREE.Vector2(0.5, 0.5) }, uFocusK: { value: 0 },
@@ -210,7 +210,7 @@ export class Post {
     u.tBloom.value = (this.ups[0] || this.levels[0]).texture;
     u.uTime.value = time;
     u.uExposure.value = fx.exposure; u.uBloom.value = fx.bloom; u.uSat.value = fx.saturation; u.uContrast.value = fx.contrast;
-    u.uVignette.value = fx.vignette; u.uCA.value = fx.ca; u.uGrain.value = fx.grain; u.uDesat.value = fx.desat; u.uVHS.value = fx.vhs;
+    u.uVignette.value = fx.vignette; u.uCA.value = fx.ca; u.uGrain.value = fx.grain; u.uDesat.value = fx.desat; u.uVHS.value = fx.vhs; u.uSharp.value = fx.sharpen ?? 0.4;
     u.uLetterbox.value = fx.letterbox; u.uFade.value = fx.fade; u.uFade3.value.copy(fx.fadeColor);
     u.uLift.value.copy(fx.lift); u.uGamma.value.copy(fx.gamma); u.uGain.value.copy(fx.gain);
     u.uShadowTint.value.copy(fx.shadowTint); u.uHighTint.value.copy(fx.highTint); u.uFlash.value.copy(fx.flash);

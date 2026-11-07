@@ -719,7 +719,8 @@ export class Fight {
       }],
     ]);
   }
-  _rewindFx(on) { const fx = this.app.post.fx; fx.vhs = on ? 1 : 0; fx.desat = on ? 0.55 : 0; }
+  // the rewind: the colour drains while the record winds back (no TV lines: Alex wants it clean)
+  _rewindFx(on) { const fx = this.app.post.fx; fx.vhs = 0; fx.desat = on ? 0.6 : 0; }
   _resetTo(cp) {
     this.proj.clear(); this.tele.clear(); this.fx.clear();
     for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
