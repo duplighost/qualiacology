@@ -727,6 +727,65 @@ function heightAt(x, z) {
   return lerp(lerp(a, b, fx), lerp(c, d, fx), fz);
 }
 
+// ---- side ways: out from the swept way a frozen stream runs through the drifts to where someone keeps a vigil, candles
+// on the ice over something of theirs under it. The drifts are slow; the streams are clear ice ----
+const VIGILS = [];       // {x, z, yaw (facing back to the way), kind, s}
+const STREAMS = [];      // {seg: [[ax, az, bx, bz]...], w (half width), box: [x0, z0, x1, z1]}
+const STREAM_SEGS = [];  // every segment with its half width, for the ice: [ax, az, bx, bz, w]
+function buildVigils() {
+  // [route metres, metres right of the way, what is down there, where its stream leaves the way]
+  const defs = [[430, -40, 'swing', 396], [702, -42, 'table', 664], [1012, -44, 'car', 972], [1452, 38, 'pram', 1414], [2262, 34, 'bed', 2222]];
+  const r = rng(404);
+  // nowhere near thin ice: the old river's moving water, or a spring
+  const safe = (P) => P.every(([x, z]) => Math.abs(x - riverX(z)) > 30 && SPRINGS.every((s) => Math.hypot(x - s.x, z - s.z) > s.r * 2.4 + 6));
+  for (const [z, off0, kind, from] of defs) {
+    const F = routeFrame(z), F0 = routeFrame(from), ph = r() * TAU, waves = 1.1 + r() * 0.7, amp = 5 + r() * 3;
+    let v, pts;
+    for (const flip of [1, -1]) {
+      let off = off0 * flip;
+      // somewhere deep enough that the ice is clear over it
+      while (Math.abs(off) > 14 && groundAt(F.x + F.rx * off, F.z + F.rz * off) > -3.2) off -= Math.sign(off) * 4;
+      v = [F.x + F.rx * off, F.z + F.rz * off];
+      const sg = Math.sign(off), a = [F0.x + F0.rx * sg * 2.4, F0.z + F0.rz * sg * 2.4];
+      // the stream winds: never straight, never back on itself
+      const dx = v[0] - a[0], dz = v[1] - a[1], L = Math.hypot(dx, dz), nx = -dz / L, nz = dx / L;
+      const n = Math.max(10, Math.ceil(L / 3));
+      pts = [];
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, env = Math.sin(t * PI) * (1 - 0.6 * t);
+        const wv = (Math.sin(t * waves * TAU + ph) + 0.35 * Math.sin(t * waves * 2.7 * TAU + ph * 1.7)) * amp * env;
+        pts.push([a[0] + dx * t + nx * wv, a[1] + dz * t + nz * wv]);
+      }
+      if (safe(pts)) break;
+    }
+    const a = pts[0];
+    const add = (P, w) => {
+      const seg = [];
+      for (let i = 0; i < P.length - 1; i++) seg.push([P[i][0], P[i][1], P[i + 1][0], P[i + 1][1]]);
+      if (P.length === 1) seg.push([P[0][0], P[0][1], P[0][0], P[0][1]]);
+      const xs = P.map((q) => q[0]), zs = P.map((q) => q[1]);
+      STREAMS.push({ seg, w, box: [Math.min(...xs) - w, Math.min(...zs) - w, Math.max(...xs) + w, Math.max(...zs) + w] });
+      for (const s of seg) STREAM_SEGS.push([s[0], s[1], s[2], s[3], w]);
+    };
+    add(pts, 1.75);
+    add([v], 4.6);      // the clearing at its end, a round window in the snow
+    VIGILS.push({ x: v[0], z: v[1], yaw: Math.atan2(a[0] - v[0], a[1] - v[1]), kind, s: z });
+  }
+}
+// on a stream or in a clearing: swept clear, not snow
+function inStream(x, z) {
+  for (const S of STREAMS) {
+    const b = S.box;
+    if (x < b[0] || x > b[2] || z < b[1] || z > b[3]) continue;
+    for (const [ax, az, bx, bz] of S.seg) {
+      const ux = bx - ax, uz = bz - az, L2 = ux * ux + uz * uz;
+      const t = L2 > 1e-6 ? clamp(((x - ax) * ux + (z - az) * uz) / L2, 0, 1) : 0;
+      if (Math.hypot(x - ax - ux * t, z - az - uz * t) < S.w - 0.25) return true;
+    }
+  }
+  return false;
+}
+
 // ---- the ice: thickness (cm), how white it is, snow lying on it, and where water moves under it ----
 const SPRINGS = [];      // thin round spots: {x, z, r}
 function iceAtRaw(x, z, row) {
@@ -754,6 +813,7 @@ function iceAtRaw(x, z, row) {
   let snow = sat(fbm(x / 34 - 4, z / 34 + 7, 4) * 1.8 - 0.35) * 0.85;
   snow = Math.max(snow, sat(1 - smooth(0.2, 1.4, depth)) * 0.9);
   snow *= 1 - cur;
+  for (const v of VIGILS) { const dv = Math.hypot(x - v.x, z - v.z); if (dv < 72) snow = Math.max(snow, 0.95 * (1 - smooth(34, 70, dv))); }
   const dRoute = Math.abs(x - qX);
   snow *= 0.35 + 0.65 * smooth(3, 14, dRoute);   // the way has been swept, roughly
   return [th, white, snow, cur];
@@ -784,6 +844,7 @@ function iceThick(x, z) {
   return lerp(lerp(s(i, j), s(i + 1, j), fx), lerp(s(i, j + 1), s(i + 1, j + 1), fx), fz);
 }
 function iceSnow(x, z) {
+  if (STREAMS.length && inStream(x, z)) return 0;
   const N = WORLD.iceRes, f = N / WORLD.size;
   const i = clamp(Math.round((x - WORLD.x0) * f - 0.5), 0, N - 1), j = clamp(Math.round((z - WORLD.z0) * f - 0.5), 0, N - 1);
   return WORLD.ice[(j * N + i) * 4 + 2] / 255;
@@ -828,6 +889,7 @@ function buildWorld() {
   const r = rng(91);
   for (const [z, off] of [[310, 26], [540, -30], [1360, 34], [1580, -22], [2150, 30], [2390, -36]]) SPRINGS.push({ x: routeX(z) + off + (r() - 0.5) * 8, z, r: 4 + r() * 3 });
   buildGround();
+  buildVigils();
   buildIce();
   buildRoute();
 }
@@ -843,7 +905,7 @@ const DROWN = (k) => [1.0, 0.48, 0.18, -(100 + k)];  // a light left on under th
 const CHECKPOINTS = [];                              // {s, x, z, lamp: [x,y,z]}
 const HUTS = [];                                     // {x, z, yaw, chimney: [x,y,z], window: [x,y,z]}
 const FISH_HOLES = [];                               // {x, z, r}
-const SCENE = { tower: null, bell: null, ropeTop: null, smoke: [], lamps: [], windows: [], houses: [], lampPosts: [], deepLamps: [], church: null };
+const SCENE = { tower: null, bell: null, ropeTop: null, smoke: [], lamps: [], windows: [], houses: [], lampPosts: [], deepLamps: [], church: null, candles: [] };
 
 function routeFrame(z) {
   const x = routeX(z), x2 = routeX(z + 1);
@@ -862,7 +924,8 @@ function house(b, x, z, yaw, o) {
   };
   const wp = (lx, lz) => { const c = Math.cos(yaw), s = Math.sin(yaw); return [x + c * lx + s * lz, z - s * lx + c * lz]; };
   b.jit = 0.12;
-  const ruined = o.roof === 'none';
+  // whole: as it stood (the other side): every wall to its height, a roof, glass in the windows, the door shut
+  const whole = !!o.whole, ruined = !whole && o.roof === 'none';
   const dressed = rgbS(col, 1.22), base = floor + 0.24;
   // plinth
   b.box(M(0, 0.12, 0, w + 0.4, 0.24, d + 0.4), rgbS(col, 0.8));
@@ -872,6 +935,8 @@ function house(b, x, z, yaw, o) {
   const front = [...fh, [0.7, 1.6, winY[0], winY[1]], [w - 1.6, w - 0.7, winY[0], winY[1]]];
   const back = [[0.9, 1.8, winY[0], winY[1]], [w - 1.8, w - 0.9, winY[0], winY[1]]];
   const ends = wallH > 3.5 ? [[d / 2 - 0.4, d / 2 + 0.4, 2.9, 3.5]] : [];
+  // a house of two floors has its windows upstairs too
+  if (whole && wallH > 4.6) { for (const H of [front, back]) H.push([0.7, 1.6, 3.4, 4.4], [w - 1.6, w - 0.7, 3.4, 4.4]); if (w > 7.5) front.push([w / 2 - 0.45, w / 2 + 0.45, 3.4, 4.4]); }
   const A = wp(-w / 2, d / 2), B = wp(w / 2, d / 2), C = wp(w / 2, -d / 2), D = wp(-w / 2, -d / 2);
   // a ruined house's walls stand to their full height only at the corners; between, the tops have fallen away
   const wallUp = (P, Q, holes) => {
@@ -895,13 +960,14 @@ function house(b, x, z, yaw, o) {
       if (!ruined || r() < 0.6) b.box(m4trs(at(um, base + v1 + 0.11), wy, 0, 0, [t + 0.1, 0.22, wd + 0.34]), dressed);
       const isDoor = v0 < 0.4;
       if (!isDoor) b.box(m4trs(at(um, base + v0 - 0.04), wy, 0, 0, [t + 0.14, 0.08, wd + 0.16]), dressed);
-      if (!isDoor && r() < 0.45) {
+      if (!isDoor && (whole || r() < 0.45)) {
         const fr = r() < 0.5 ? DARKWOOD : rgbS(WASH[0], 0.6, 0.07);
         for (const uu of [u0 + 0.03, u1 - 0.03]) b.box(m4trs(at(uu, base + (v0 + v1) / 2), wy, 0, 0, [0.07, v1 - v0, 0.06]), fr);
         b.box(m4trs(at(um, base + (v0 + v1) / 2), wy, 0, 0, [0.06, v1 - v0, 0.04]), fr);
         b.box(m4trs(at(um, base + (v0 + v1) * 0.5 + 0.1), wy, 0, 0, [0.06, 0.04, wd]), fr);
       }
-      if (isDoor && r() < 0.55) {
+      if (isDoor && whole) b.box(m4trs(at(um, base + (v0 + v1) / 2), wy, 0, 0, [0.09, v1 - v0 - 0.02, wd - 0.04]), o.door || DARKWOOD);
+      else if (isDoor && r() < 0.55) {
         // the door, swung open on its hinge
         const ang = (0.25 + r() * 1.1) * (r() < 0.5 ? 1 : -1), hx = P[0] + ux * (u0 + 0.04), hz = P[1] + uz * (u0 + 0.04);
         const dx = ux * Math.cos(ang) - uz * Math.sin(ang), dz = ux * Math.sin(ang) + uz * Math.cos(ang), dw = wd - 0.08;
@@ -920,12 +986,14 @@ function house(b, x, z, yaw, o) {
     }
   }
   // inside: a hearth on one end, and for some a table still standing, a beam come down across the room
-  b.box(M(w / 2 - t / 2 - 0.08, 0.75, 0, 0.12, 1.0, 1.2), rgb(0x1c1a18, 0.05));
-  b.box(M(w / 2 - t / 2 - 0.12, 1.28, 0, 0.26, 0.08, 1.5), DARKWOOD);
-  if (r() < 0.4) { b.box(M(-w / 4, 0.98, -0.3, 0.9, 0.05, 0.62), DARKWOOD); for (const [lx, lz] of [[-0.4, -0.26], [0.4, -0.26], [-0.4, 0.26], [0.4, 0.26]]) b.box(M(-w / 4 + lx, 0.6, -0.3 + lz, 0.05, 0.74, 0.05), DARKWOOD); }
-  if (o.roof !== 'kept' && r() < 0.7) { const c = Math.cos(yaw), s = Math.sin(yaw), lx = (r() - 0.5) * w * 0.5; b.box(m4trs([x + c * lx, floor + 0.24 + wallH * 0.42, z - s * lx], yaw + (r() - 0.5) * 0.4, 0.42 + r() * 0.2, 0, [0.15, 0.15, d * 0.95]), DARKWOOD); }
+  if (!whole) {
+    b.box(M(w / 2 - t / 2 - 0.08, 0.75, 0, 0.12, 1.0, 1.2), rgb(0x1c1a18, 0.05));
+    b.box(M(w / 2 - t / 2 - 0.12, 1.28, 0, 0.26, 0.08, 1.5), DARKWOOD);
+    if (r() < 0.4) { b.box(M(-w / 4, 0.98, -0.3, 0.9, 0.05, 0.62), DARKWOOD); for (const [lx, lz] of [[-0.4, -0.26], [0.4, -0.26], [-0.4, 0.26], [0.4, 0.26]]) b.box(M(-w / 4 + lx, 0.6, -0.3 + lz, 0.05, 0.74, 0.05), DARKWOOD); }
+    if (o.roof !== 'kept' && r() < 0.7) { const c = Math.cos(yaw), s = Math.sin(yaw), lx = (r() - 0.5) * w * 0.5; b.box(m4trs([x + c * lx, floor + 0.24 + wallH * 0.42, z - s * lx], yaw + (r() - 0.5) * 0.4, 0.42 + r() * 0.2, 0, [0.15, 0.15, d * 0.95]), DARKWOOD); }
+  }
   // fallen stone and slates on the floor and outside
-  for (let i = 0; i < (ruined ? 14 : 5); i++) {
+  for (let i = 0; i < (whole ? 0 : ruined ? 14 : 5); i++) {
     const lx = (r() - 0.5) * (w + 2.4), lz = (r() - 0.5) * (d + 2.4);
     const slate = r() < 0.4;
     b.box(M(lx, 0.24 + (slate ? 0.02 : 0.1), lz, slate ? 0.45 : 0.3 + r() * 0.25, slate ? 0.03 : 0.16 + r() * 0.12, slate ? 0.3 : 0.25 + r() * 0.2, r() * PI), slate ? SLATE : STONE[Math.floor(r() * 5)]);
@@ -934,14 +1002,15 @@ function house(b, x, z, yaw, o) {
   const gd = o.garden || 0;
   if (gd > 1.0 && r() < 0.6) {
     for (let lx = -w / 2; lx <= w / 2; lx += 0.45) {
-      if (r() < 0.22) continue;
-      b.box(M(lx, 0.62, d / 2 + gd, 0.07, 1.0 - r() * 0.25, 0.05), rgb(0x4a4136, 0.07));
+      if (!whole && r() < 0.22) continue;
+      b.box(M(lx, 0.62, d / 2 + gd, 0.07, 1.0 - r() * 0.25, 0.05), whole ? rgb(0x5d5346, 0.07) : rgb(0x4a4136, 0.07));
     }
-    for (const yy of [0.45, 0.9]) if (r() < 0.8) b.box(M(0, yy, d / 2 + gd, w, 0.06, 0.04), rgb(0x4a4136, 0.07));
+    for (const yy of [0.45, 0.9]) if (whole || r() < 0.8) b.box(M(0, yy, d / 2 + gd, w, 0.06, 0.04), rgb(0x4a4136, 0.07));
+    if (whole && o.colliders) { const [fx, fz] = wp(0, d / 2 + gd); o.colliders.push({ x: fx, z: fz, hx: w / 2 + 0.1, hz: 0.12, yaw, top: 1.1 }); }
     for (let i = 0; i < 2; i++) if (r() < 0.7) { const c = Math.cos(yaw), s = Math.sin(yaw), lx = (r() - 0.5) * w, lz = d / 2 + 0.5 + r() * (gd - 0.7); deadTree(b, x + c * lx + s * lz, floor + 0.1, z - s * lx + c * lz, 0.32 + r() * 0.12, r); }
   }
   // gable ends; a roof (kept, fallen in, or gone)
-  const gableH = Math.min(o.gable, -0.75 - (floor + 0.24 + wallH));
+  const gableH = whole ? o.gable : Math.min(o.gable, -0.75 - (floor + 0.24 + wallH));
   if (gableH > 0.4) {
     const top = floor + 0.24 + wallH;
     // gable triangles stand on the end walls: base across the house's depth
@@ -973,20 +1042,42 @@ function house(b, x, z, yaw, o) {
       }
     }
     // a chimney stack on one end, stopping short of the ice
-    const chTop = Math.min(top + gableH + 0.5, -0.6), chBot = top + gableH * 0.3;
+    const chTop = whole ? top + gableH + 0.6 : Math.min(top + gableH + 0.5, -0.6), chBot = top + gableH * 0.3;
     if (chTop > chBot) {
       b.box(M(w / 2 - 0.45, (chTop + chBot) / 2 - floor, 0, 0.6, chTop - chBot, 0.9), rgbS(col, 0.85));
       b.box(M(w / 2 - 0.45, chTop - floor + 0.04, 0, 0.7, 0.08, 1.0), dressed);
-      for (const pz of [-0.2, 0.2]) if (chTop + 0.36 < -0.5 && r() < 0.8) b.cyl(M(w / 2 - 0.45, chTop - floor + 0.08, pz, 0.1, 0.32, 0.1), rgb(0x8a4a30, 0.1), 8, 0.85);
+      for (const pz of [-0.2, 0.2]) if ((whole || chTop + 0.36 < -0.5) && r() < 0.8) b.cyl(M(w / 2 - 0.45, chTop - floor + 0.08, pz, 0.1, 0.32, 0.1), rgb(0x8a4a30, 0.1), 8, 0.85);
+      if (whole && o.smoke) { const [sx, sz] = wp(w / 2 - 0.45, 0); o.smoke.push([sx, chTop + 0.45, sz]); }
     }
   }
   b.jit = 0;
   // a doorstep
   b.box(M(0, 0.06, d / 2 + 0.35, 1.3, 0.12, 0.5), rgbS(col, 0.7));
   const rec = { x, z, yaw, w, d, wallH, group: o.group || '', lit: false };
-  SCENE.houses.push(rec);
+  if (!whole) SCENE.houses.push(rec);
+  if (whole) {
+    // glass in every window, lamps lit behind most; now and then someone at one, dark against it
+    const lr = rng(Math.floor(Math.abs(x) * 13 + Math.abs(z) * 7) + 5), glass = rgb(0x0b0c0e, 0.6), shade = rgb(0x0d0b0a, 0.05);
+    const panes = (P, Q, holes) => {
+      const L = Math.hypot(Q[0] - P[0], Q[1] - P[1]), ux = (Q[0] - P[0]) / L, uz = (Q[1] - P[1]) / L, wy = Math.atan2(ux, uz), nx = -uz, nz = ux;
+      for (const [u0, u1, v0, v1] of holes) {
+        if (v0 < 0.4) continue;
+        const lit = lr() < (o.lit ?? 0.6), cx = P[0] + ux * (u0 + u1) / 2, cz = P[1] + uz * (u0 + u1) / 2, cy = base + (v0 + v1) / 2, ww = u1 - u0, hh = v1 - v0;
+        b.box(m4trs([cx, cy, cz], wy, 0, 0, [0.06, hh - 0.06, ww - 0.06]), lit ? LIT(0.9 + lr() * 1.4) : glass);
+        if (!lit) continue;
+        if (o.lights) o.lights.push({ p: [cx + nx * 0.9, cy, cz + nz * 0.9], c: [0.5, 0.33, 0.17], r: 7 });
+        if (lr() < 0.16) {
+          const ox = nx * (t / 2 - 0.2), oz = nz * (t / 2 - 0.2), sh = (lr() - 0.5) * ww * 0.3;
+          b.sphere(m4trs([cx + ox + ux * sh, cy + 0.06, cz + oz + uz * sh], 0, 0, 0, [0.1, 0.12, 0.1]), shade, 8, 6);
+          b.box(m4trs([cx + ox + ux * sh, cy - hh * 0.32, cz + oz + uz * sh], wy, 0, 0, [0.05, hh * 0.45, Math.min(ww * 0.6, 0.42)]), shade);
+        }
+      }
+    };
+    panes(A, B, front); panes(C, D, back); panes(B, C, ends); panes(D, A, ends);
+    if (o.colliders) o.colliders.push({ x, z, hx: w / 2 + 0.3, hz: d / 2 + 0.3, yaw });
+  }
   // a light left on: a pane in some windows, embers in the hearth, a candle on the table
-  if (o.lit) {
+  else if (o.lit) {
     const lr = rng(Math.floor(Math.abs(x) * 13 + Math.abs(z) * 7) + 1);
     let any = false;
     const panes = (P, Q, holes) => {
@@ -1155,7 +1246,7 @@ function hut(b, x, z, yaw, col) {
   b.cyl(m4trs(P(-0.55, 2.0, -0.7), 0, 0, 0, [0.07, 0.9, 0.07]), rgb(0x2a2724, 0.7), 8);
   b.box(m4trs(P(1.4, 0.03, 1.6), yaw + 0.4, 0, 0, [0.5, 0.06, 1.4]), WOOD);           // a sled
   HUTS.push({ x, z, yaw, chimney: P(-0.55, 2.95, -0.7), window: P(1.06, 1.35, 0.2) });
-  COLLIDERS.push({ x, z, hx: 1.05, hz: 1.35, yaw, top: 2.3 });
+  COLLIDERS.push({ x, z, hx: 1.05, hz: 1.35, yaw, top: 2.3, living: true });
   // its fishing hole and a tip-up flag
   const hp = P(1.9, 0, -0.4);
   FISH_HOLES.push({ x: hp[0], z: hp[2], r: 0.38 });
@@ -1172,7 +1263,7 @@ function marker(b, x, z, lamp) {
     b.lathe(m4trs([x + 0.32, 0.98, z]), LIT(14), [[0.03, -0.07], [0.045, -0.02], [0.03, 0.05]], 8);
     SCENE.lamps.push([x + 0.32, 0.98, z]);
   }
-  COLLIDERS.push({ x, z, r: 0.1, top: 1.6 });
+  COLLIDERS.push({ x, z, r: 0.1, top: 1.6, living: true });
 }
 
 // ---- the church tower, which still stands up out of the ice ----
@@ -1423,28 +1514,29 @@ function train(b, z0, yaw) {
 }
 
 // ---- above the ice ----
-function onIce(b) {
+// b: what stands on the ice in both worlds; L: what the living have put there, which is not there on the other side
+function onIce(b, L) {
   // the cabin on the shore at the start, its jetty frozen in
   { const { x, z } = CABIN, g = heightAt(x, z);
     // log walls: round logs stacked, ends crossing at the corners
-    b.jit = 0.14;
+    L.jit = 0.14;
     for (let i = 0; i < 10; i++) {
       const y = g + 0.16 + i * 0.27;
-      for (const zz of [z - 2, z + 2]) b.cyl(m4between([x - 2.9, y, zz], [x + 2.9, y, zz], [0, 1, 0], 0.15), WOOD, 7, 1, true);
-      for (const xx of [x - 2.6, x + 2.6]) b.cyl(m4between([xx, y + 0.13, z - 2.3], [xx, y + 0.13, z + 2.3], [0, 1, 0], 0.15), WOOD, 7, 1, true);
+      for (const zz of [z - 2, z + 2]) L.cyl(m4between([x - 2.9, y, zz], [x + 2.9, y, zz], [0, 1, 0], 0.15), WOOD, 7, 1, true);
+      for (const xx of [x - 2.6, x + 2.6]) L.cyl(m4between([xx, y + 0.13, z - 2.3], [xx, y + 0.13, z + 2.3], [0, 1, 0], 0.15), WOOD, 7, 1, true);
     }
-    b.jit = 0;
-    b.box(m4trs([x, g + 1.4, z], 0, 0, 0, [5.0, 2.8, 3.8]), DARKWOOD);
-    b.prism(m4trs([x, g + 2.8, z], 0, 0, 0, [5.8, 1.6, 4.6]), rgb(0x2e2a28, 0.1));
-    b.box(m4trs([x - 1.2, g + 1.5, z + 2.02], 0, 0, 0, [0.8, 0.7, 0.04]), LIT(6));
-    b.box(m4trs([x + 1.3, g + 1.1, z + 2.02], 0, 0, 0, [0.9, 1.9, 0.04]), DARKWOOD);
-    b.box(m4trs([x + 2.0, g + 3.4, z - 0.8], 0, 0, 0, [0.6, 1.6, 0.6]), rgb(0x4d4741));
+    L.jit = 0;
+    L.box(m4trs([x, g + 1.4, z], 0, 0, 0, [5.0, 2.8, 3.8]), DARKWOOD);
+    L.prism(m4trs([x, g + 2.8, z], 0, 0, 0, [5.8, 1.6, 4.6]), rgb(0x2e2a28, 0.1));
+    L.box(m4trs([x - 1.2, g + 1.5, z + 2.02], 0, 0, 0, [0.8, 0.7, 0.04]), LIT(6));
+    L.box(m4trs([x + 1.3, g + 1.1, z + 2.02], 0, 0, 0, [0.9, 1.9, 0.04]), DARKWOOD);
+    L.box(m4trs([x + 2.0, g + 3.4, z - 0.8], 0, 0, 0, [0.6, 1.6, 0.6]), rgb(0x4d4741));
     SCENE.windows.push([x - 1.2, g + 1.5, z + 2.1]);
     SCENE.smoke.push([x + 2.0, g + 4.3, z - 0.8]);
     // the jetty: planks on posts running out onto the ice
-    for (let zz = z + 3; zz < -14; zz += 0.36) b.box(m4trs([x + 0.5, Math.max(heightAt(x, zz), 0) + 0.62, zz], 0.01 * Math.sin(zz), 0, 0, [1.5, 0.06, 0.3]), rgbS(WOOD, 0.85 + 0.15 * Math.sin(zz * 7)));
-    for (let zz = z + 4; zz < -13; zz += 2.4) for (const dx of [-0.25, 1.25]) { b.cyl(m4trs([x + dx, -1.4, zz], 0, 0, 0, [0.1, 2.0, 0.1]), DARKWOOD, 7); COLLIDERS.push({ x: x + dx, z: zz, r: 0.13 }); }
-    b.box(m4trs([x + 0.5, 0.2, -14.6], 0, 0, 0, [1.5, 0.4, 0.06]), DARKWOOD);
+    for (let zz = z + 3; zz < -14; zz += 0.36) L.box(m4trs([x + 0.5, Math.max(heightAt(x, zz), 0) + 0.62, zz], 0.01 * Math.sin(zz), 0, 0, [1.5, 0.06, 0.3]), rgbS(WOOD, 0.85 + 0.15 * Math.sin(zz * 7)));
+    for (let zz = z + 4; zz < -13; zz += 2.4) for (const dx of [-0.25, 1.25]) { L.cyl(m4trs([x + dx, -1.4, zz], 0, 0, 0, [0.1, 2.0, 0.1]), DARKWOOD, 7); COLLIDERS.push({ x: x + dx, z: zz, r: 0.13, living: true }); }
+    L.box(m4trs([x + 0.5, 0.2, -14.6], 0, 0, 0, [1.5, 0.4, 0.06]), DARKWOOD);
   }
   // markers along the way, a lantern every so often
   const lampsAt = [0, 560, 940, 1420, 1960, 2440, 2800];
@@ -1454,7 +1546,7 @@ function onIce(b) {
     const lamp = lampsAt.some((q) => Math.abs(q - s) < 12);
     const x = p.x + rx * side * 2.6, z = p.z + rz * side * 2.6;
     if (heightAt(x, z) > -0.3) continue;
-    marker(b, x, z, lamp);
+    marker(L, x, z, lamp);
     if (lamp) CHECKPOINTS.push({ s, x: p.x, z: p.z, dir: p.dir, lamp: [x + 0.32, 0.98, z] });
   }
   CHECKPOINTS.unshift({ s: 0, x: routeX(-8), z: -8, dir: 0, lamp: null });
@@ -1462,7 +1554,7 @@ function onIce(b) {
   const huts = [[-1080, 1, 0x7d2520], [1115, -1, 0x2a4f3a], [1150, 1, 0x2b3c5f], [1205, -1, 0x7a5a24], [1238, 1, 0x5c2a40]];
   for (const [zz, side, col] of huts) {
     const z = Math.abs(zz), F = routeFrame(z), off = 9 + (z % 7);
-    hut(b, F.x + F.rx * side * off, F.z + F.rz * side * off, F.yaw + side * 0.4 + (z % 3) * 0.2, rgb(col, 0.1));
+    hut(L, F.x + F.rx * side * off, F.z + F.rz * side * off, F.yaw + side * 0.4 + (z % 3) * 0.2, rgb(col, 0.1));
   }
   // the dam at the north end, the reason for all of it: a concrete wall, a road on top, its lamps
   { const cx = valleyX(DAM_Z), z = DAM_Z, half = 460, con = rgb(0x7b7a74, 0.05), con2 = rgb(0x6a6964, 0.05);
@@ -1489,10 +1581,11 @@ function onIce(b) {
     COLLIDERS.push({ x: cx, z: z + 3.5, hx: half, hz: 3.6, yaw: 0 });
     COLLIDERS.push({ x: cx + 40, z: z - 14, r: 3.3 });
   }
-  ridge(b, 1336, 62, [[-52, -43], [-3.5, 3.5]]);   // the first has a way chopped through it where the markers go
-  ridge(b, 1668, 85, [[31, 41]]);
-  ridge(b, 2206, 70, [[-61, -53], [47, 55]]);
-  ridge(b, 2342, 56, []);
+  // (the ridges are the living's ice: on the far side the street is a street)
+  ridge(L, 1336, 62, [[-52, -43], [-3.5, 3.5]]);   // the first has a way chopped through it where the markers go
+  ridge(L, 1668, 85, [[31, 41]]);
+  ridge(L, 2206, 70, [[-61, -53], [47, 55]]);
+  ridge(L, 2342, 56, []);
   // reeds frozen in near the shore of the bay
   const r = rng(3);
   for (let i = 0; i < 400; i++) {
@@ -1519,7 +1612,7 @@ function ridge(b, s, half, gaps) {
       const L = 0.45 + rr() * 0.55, tilt = (rr() - 0.5) * 1.1;
       b.box(m4trs([x + (rr() - 0.5) * 0.3, h * 0.35, z + (rr() - 0.5) * 0.3], p.dir + (rr() - 0.5) * 1.4, tilt, (rr() - 0.5) * 0.7, [L, h * (k ? 0.7 : 1), 0.07 + rr() * 0.09]), [ice, ice2, ice3][Math.floor(rr() * 3)]);
     }
-    COLLIDERS.push({ x, z, r: 0.3, top: 0.04 });     // any hop clears it
+    COLLIDERS.push({ x, z, r: 0.3, top: 0.04, living: true });     // any hop clears it
   }
 }
 
@@ -1563,16 +1656,106 @@ function treeLodUpdate(cam) {
 }
 
 function buildScene() {
-  const under = new MB(), above = new MB();
+  const under = new MB(), above = new MB(), living = new MB();
   fields(under);
   village(under);
   church(under);
   tower(above);
-  onIce(above);
+  onIce(above, living);
+  vigils(under, living);
   R.meshes.push({ mesh: uploadMesh(under.build()), snowy: false, under: true });
   R.meshes.push({ mesh: uploadMesh(above.build()), snowy: true, under: false });
+  R.meshes.push({ mesh: uploadMesh(living.build()), snowy: true, under: false, living: true });
   buildTrees();
   buildGhosts();
+  buildOtherside();
+}
+
+// ---- the vigils: where a stream through the drift ends, a clearing swept round, and at its near edge candles in jars and
+// a wreath on the ice; under the ice, what they come to look at ----
+function candleJar(b, x, z, red, k) {
+  b.lathe(m4trs([x, 0, z]), red ? rgb(0x7a1c14, 0.9) : rgb(0x8e9aa2, 0.95), [[0.0, 0.0], [0.045, 0.004], [0.05, 0.02], [0.05, 0.06], [0.044, 0.07]], 10);
+  b.cyl(m4trs([x, 0.07, z], 0, 0, 0, [0.026, 0.025, 0.026]), rgb(0xe8e0cc, 0.2), 8);
+  b.lathe(m4trs([x, 0.095, z]), LIT(24 * k), [[0.0, 0.0], [0.009, 0.008], [0.006, 0.026], [0.0, 0.042]], 6);
+  SCENE.candles.push([x, 0.12, z, k]);
+}
+function vigils(U, L) {
+  const bark = rgb(0x3a3127), cloth = rgb(0xd8d2c4, 0.05), china = rgb(0xe8e6e0, 0.6), wood = rgb(0x4a3526, 0.1);
+  for (const v of VIGILS) {
+    const r = rng(Math.floor(Math.abs(v.x) * 7 + v.z));
+    const c = Math.cos(v.yaw), s = Math.sin(v.yaw), g = heightAt(v.x, v.z);
+    const W = (lx, lz) => [v.x + c * lx + s * lz, v.z - s * lx + c * lz];
+    const P = (lx, ly, lz) => { const q = W(lx, lz); return [q[0], g + ly, q[1]]; };
+    const B = (lx, ly, lz, sx, sy, sz, col, ry = 0, rx = 0) => U.box(m4trs(P(lx, ly, lz), v.yaw + ry, rx, 0, [sx, sy, sz]), col);
+    // on the ice: the candles along the near edge of the clearing, a wreath, and sprigs stuck in the drift along the stream
+    for (let i = 0; i < 5; i++) {
+      const a = (i - 2) * 0.27 + (r() - 0.5) * 0.1, rr = 3.6 + r() * 0.5;
+      candleJar(L, v.x + Math.sin(v.yaw + a) * rr, v.z + Math.cos(v.yaw + a) * rr, r() < 0.35, 0.8 + r() * 0.4);
+    }
+    { const q = W(0.5, 3.1);
+      L.torus(m4trs([q[0], 0.035, q[1]], r() * TAU, 0, 0, [1, 0.6, 1]), rgb(0x1c3022, 0.05), 0.3, 0.07, 18, 6);
+      for (let i = 0; i < 7; i++) { const a = i / 7 * TAU; L.sphere(m4trs([q[0] + Math.cos(a) * 0.3, 0.08, q[1] + Math.sin(a) * 0.3], 0, 0, 0, 0.025), rgb(0x8a1810, 0.4), 6, 4); } }
+    const S = STREAMS.find((q) => q.w < 3 && Math.hypot(q.seg[q.seg.length - 1][2] - v.x, q.seg[q.seg.length - 1][3] - v.z) < 1);
+    if (S) S.seg.forEach((q, i) => {
+      if (i % 4 !== 2) return;
+      const sx = q[2] - q[0], sz = q[3] - q[1], l = Math.hypot(sx, sz) || 1, side = (i % 8 < 4) ? 1 : -1;
+      const x = q[0] - sz / l * side * 2.7, z = q[1] + sx / l * side * 2.7;
+      spruce(L, x, 0.02, z, 0.7 + r() * 0.3, { tiers: 7, seg: 12, width: 0.2, lift: 1.4, rand: r, col: rgb(0x1d2c21, 0.04) });
+      COLLIDERS.push({ x, z, r: 0.1, top: 0.9, living: true });
+    });
+    // under the ice, what is theirs
+    if (v.kind === 'swing') {
+      // the big tree in a garden, and the swing still hanging from it
+      U.cyl(m4trs(P(-1.8, 0, 0.6), 0, 0, 0, [0.42, 4.4, 0.42]), bark, 9, 0.6, false);
+      U.cyl(m4between(P(-1.8, 3.1, 0.6), P(1.4, 3.35, 0.4), [0, 1, 0], 0.13), bark, 7, 0.5, false);
+      U.cyl(m4between(P(-1.8, 3.6, 0.6), P(-3.6, 5.0, 1.8), [0, 1, 0], 0.12), bark, 6, 0.5, false);
+      U.cyl(m4between(P(-1.8, 4.2, 0.6), P(-0.9, 5.6, -1.2), [0, 1, 0], 0.1), bark, 6, 0.4, false);
+      for (const lz of [0.18, 0.72]) U.cyl(m4between(P(0.4, 3.28, lz), P(0.4, 0.62, lz), [1, 0, 0], 0.014), rgb(0x6d5d44), 4);
+      B(0.4, 0.6, 0.45, 0.26, 0.05, 0.7, wood);
+      for (let lx = -4; lx <= 4; lx += 0.45) B(lx, 0.55, -2.6, 0.07, 0.95 - r() * 0.3, 0.05, rgb(0x4a4136, 0.07));
+      B(0, 0.42, -2.6, 8.2, 0.06, 0.04, rgb(0x4a4136, 0.07));
+      U.wall(W(3.4, -3.0), W(3.4, 2.5), g, 2.4, 0.5, WASH[1], [[1.6, 2.5, 0.9, 1.9]]);
+    } else if (v.kind === 'table') {
+      // a kitchen with its walls down to the sills, the table laid for two and the lamp still on
+      const rm = [[-2.8, -2.3], [2.8, -2.3], [2.8, 2.3], [-2.8, 2.3]];
+      for (let i = 0; i < 4; i++) { if (i === 3) continue; const a = rm[i], q = rm[(i + 1) % 4]; U.wall(W(...a), W(...q), g, 1.3 + r() * 0.5, 0.45, STONE[i]); }
+      U.wall(W(-2.8, 2.3), W(-2.8, 0.5), g, 1.5, 0.45, STONE[3]);
+      B(0, 0.74, 0, 1.4, 0.05, 0.86, wood); for (const [lx, lz] of [[-0.6, -0.36], [0.6, -0.36], [-0.6, 0.36], [0.6, 0.36]]) B(lx, 0.37, lz, 0.06, 0.74, 0.06, wood);
+      B(0, 0.775, 0, 1.5, 0.02, 0.96, cloth);
+      for (const lx of [-0.38, 0.38]) { U.cyl(m4trs(P(lx, 0.79, 0.05), 0, 0, 0, [0.13, 0.015, 0.13]), china, 12); U.cyl(m4trs(P(lx + 0.18, 0.79, -0.18), 0, 0, 0, [0.04, 0.07, 0.04]), china, 8); }
+      U.cyl(m4trs(P(0, 0.79, -0.28), 0, 0, 0, [0.06, 0.12, 0.06]), rgb(0x6b5a3a, 0.6), 8);
+      U.sphere(m4trs(P(0, 0.99, -0.28), 0, 0, 0, [0.07, 0.09, 0.07]), LIT(7), 8, 6);
+      for (const lx of [-1.0, 1.0]) { B(lx, 0.45, 0, 0.42, 0.05, 0.42, wood); B(lx + Math.sign(lx) * 0.19, 0.75, 0, 0.05, 0.6, 0.42, wood); }
+      B(0, 0.85, -2.0, 1.8, 1.7, 0.4, wood); for (const yy of [0.95, 1.4]) for (let i = 0; i < 4; i++) U.cyl(m4trs(P(-0.6 + i * 0.4, yy, -1.84), 0, PI / 2, 0, [0.14, 0.02, 0.14]), china, 10);
+    } else if (v.kind === 'car') {
+      // a car on the old road, its lights still on
+      car(U, v.x, g + 0.05, v.z, v.yaw + 0.35, rgb(0x6a2a24, 0.5));
+      const yy = v.yaw + 0.35, cy = Math.cos(yy), sy = Math.sin(yy);
+      for (const lx of [-0.55, 0.55]) U.box(m4trs([v.x + cy * lx + sy * 2.0, g + 0.73, v.z - sy * lx + cy * 2.0], yy, 0, 0, [0.2, 0.16, 0.04]), LIT(9));
+      U.box(m4trs([v.x + sy * -2.02, g + 0.75, v.z + cy * -2.02], yy, 0, 0, [1.2, 0.08, 0.03]), [1.0, 0.12, 0.06, -3]);
+    } else if (v.kind === 'pram') {
+      // a garden gate left open, and the pram by it
+      for (const lx of [-1.0, 1.0]) B(lx, 0.65, -1.4, 0.26, 1.3, 0.26, STONE[2]);
+      U.wall(W(-6, -1.4), W(-1.13, -1.4), g, 1.0, 0.45, STONE[1]); U.wall(W(1.13, -1.4), W(6, -1.4), g, 1.0, 0.45, STONE[0]);
+      B(-0.35, 0.6, -0.95, 0.9, 1.0, 0.05, rgb(0x3d3328, 0.07), -1.1);
+      const nb = rgb(0x22304a, 0.15);
+      for (const [lx, lz] of [[-0.28, -0.34], [0.28, -0.34], [-0.28, 0.36], [0.28, 0.36]]) U.torus(m4trs(P(lx, 0.2, lz), v.yaw + PI / 2, 0, PI / 2, 1), rgb(0x161616, 0.3), 0.18, 0.02, 14, 4);
+      B(0, 0.56, 0, 0.5, 0.32, 0.86, nb);
+      U.sphere(m4trs(P(0, 0.7, -0.3), v.yaw, 0, 0, [0.25, 0.26, 0.24]), nb, 10, 6);
+      B(0, 0.74, 0.12, 0.46, 0.05, 0.5, cloth);
+      U.cyl(m4between(P(0, 0.72, 0.42), P(0, 1.05, 0.78), [1, 0, 0], 0.015), rgb(0x8a8e90, 0.8), 5);
+      U.cyl(m4between(P(-0.22, 1.05, 0.78), P(0.22, 1.05, 0.78), [0, 0, 1], 0.02), rgb(0x2a2420, 0.3), 5);
+    } else if (v.kind === 'bed') {
+      // a bedroom with the roof gone: the bed made, the lamp by it on, the cot beside
+      U.wall(W(-3, -2.6), W(3, -2.6), g, 2.3 + r() * 0.4, 0.45, WASH[0], [[2.4, 3.4, 1.0, 2.0]]);
+      U.wall(W(3, -2.6), W(3, 2.6), g, 1.8, 0.45, WASH[0]);
+      U.wall(W(-3, 2.6), W(-3, -2.6), g, 1.4 + r() * 0.5, 0.45, WASH[0]);
+      B(0, 0.22, -0.6, 1.1, 0.44, 2.0, wood); B(0, 0.62, -1.62, 1.16, 0.9, 0.08, wood);
+      B(0, 0.5, -0.55, 1.02, 0.14, 1.86, cloth); B(0, 0.6, -0.15, 1.08, 0.06, 1.25, rgb(0x6a3a3a, 0.05)); B(0, 0.62, -1.3, 0.62, 0.11, 0.34, cloth);
+      B(0.95, 0.3, -1.45, 0.45, 0.6, 0.4, wood); U.cyl(m4trs(P(0.95, 0.6, -1.45), 0, 0, 0, [0.04, 0.22, 0.04]), rgb(0x5a4a30, 0.6), 6); U.sphere(m4trs(P(0.95, 0.88, -1.45), 0, 0, 0, [0.11, 0.09, 0.11]), LIT(5), 8, 5);
+      B(-1.4, 0.32, -0.9, 0.62, 0.05, 1.1, wood); for (let i = 0; i < 9; i++) for (const lx of [-1.69, -1.11]) B(lx, 0.6, -1.4 + i * 0.125, 0.025, 0.55, 0.025, wood);
+    }
+  }
 }
 
 // ---- 30-glsl.js ----
@@ -1603,6 +1786,8 @@ uniform vec4 uSunSh;        // texel size of each cascade in metres, on, strengt
 uniform vec3 uShadowDir;    // toward the light that casts them
 uniform vec2 uScat;         // how much the air and the water under the ice scatter the lantern's light
 uniform vec4 uLant2; uniform vec3 uLantCol2;   // the cold lantern of the one in the ice (lights only them)
+// lamps: street lamps, lit windows, candles left on the ice. The nearest few, each a point with a reach (w)
+uniform vec4 uLamps[16]; uniform vec3 uLampCol[16]; uniform float uLampN;
 const vec3 SIGMA = vec3(0.086, 0.052, 0.05);
 const vec3 SIGMA_L = vec3(0.06, 0.05, 0.05);    // the lantern's light on its way down: kept warmer than physics would
 const float APP = 0.78;     // under the ice things look nearer the surface than they are
@@ -1648,8 +1833,13 @@ float glint(vec2 q, float scale, vec3 V, vec3 L, float tilt) {
   vec2 c = floor(q * scale), f = fract(q * scale) - 0.5;
   float a = h12(c), b = h12(c + 17.3);
   vec3 fn = normalize(vec3((a - 0.5) * tilt, 1.0, (b - 0.5) * tilt));
-  float g = pow(max(dot(fn, normalize(L + V)), 0.0), 1400.0);
-  return g * smoothstep(0.32, 0.05, length(f - (vec2(b, a) - 0.5) * 0.5));
+  float g = pow(max(dot(fn, normalize(L + V)), 0.0), 1400.0) * smoothstep(0.32, 0.05, length(f - (vec2(b, a) - 0.5) * 0.5));
+#ifdef FRAG
+  // a crystal smaller than a few pixels only flickers as you move: let it go before then
+  vec2 fw = fwidth(q * scale);
+  g *= smoothstep(0.45, 0.18, max(fw.x, fw.y));
+#endif
+  return g;
 }
 vec2 wuv(vec2 xz) { return (xz - uWorld.xy) * uWorld.w; }
 float groundH(vec2 xz) { return texture(uHeight, wuv(xz)).r; }
@@ -1867,6 +2057,19 @@ vec3 deepAt(vec3 p, vec3 n) {
   float ndl = max(dot(n, L / max(d, 1e-3)), 0.0) * 0.8 + 0.2;
   return uDeepCol * uDeep.w * exp(-SIGMA * d) * ndl / (d2 * 0.5 + 1.2) * smoothstep(24.0, 7.0, d);
 }
+// the lamps near p: warm pools on the snow, light up the walls round a window
+vec3 lampsAt(vec3 p, vec3 n, float twoSided) {
+  vec3 c = vec3(0.0);
+  for (int i = 0; i < 16; i++) {
+    if (float(i) >= uLampN) break;
+    vec3 L = uLamps[i].xyz - p; float d2 = dot(L, L), d = sqrt(d2), r = uLamps[i].w;
+    if (d > r) continue;
+    float nl = dot(n, L / max(d, 1e-3));
+    float ndl = mix(max(nl, 0.0), abs(nl), twoSided) * 0.85 + 0.15;
+    c += uLampCol[i] * ndl / (d2 + 0.35) * smoothstep(r, r * 0.35, d);
+  }
+  return c;
+}
 // still burning: out where the bell has rung
 float stillLit(vec3 p) { return uOutR <= 0.0 ? 1.0 : smoothstep(uOutR - 3.0, uOutR + 3.0, length(p.xz - uTowerXZ)); }
 vec3 lanternRaw(vec3 p, vec3 n) {
@@ -2066,6 +2269,7 @@ void main() {
     vec3 li = lanternAtS(p, ns, lsh) + skyLightS(p, ns, ssh);
     // snow in shadow is blue with the sky
     li += uSkyAmb * vec3(0.15, 0.3, 0.6) * (1.0 - bare) * (1.0 - ssh * 0.7);
+    if (uLampN > 0.0) li += lampsAt(p, ns, 0.0);
     col = alb * li;
     // glints: crystals catching the lantern and the moon
     if (near > 0.0) {
@@ -2156,6 +2360,7 @@ void main() {
       alb = mix(alb, vec3(0.84, 0.88, 0.94), cap);
     }
     vec3 li = lanternAt(p, n) * uLanternK + skyLight(p, n) * uBright;
+    if (uLampN > 0.0 && p.y > -0.05) li += lampsAt(p, n, 0.0) * uBright;
     col = alb * li;
     if (m > 0.0 && p.y >= 0.0) {
       vec3 l = normalize(uLantern - p); vec3 h = normalize(l - rd);
@@ -2207,7 +2412,22 @@ in vec3 aPos; uniform mat4 uVP; uniform vec4 uQuad; out vec3 vP;
 void main() { vec2 xz = mix(uQuad.xy, uQuad.zw, aPos.xz); vP = vec3(xz.x, 0.0, xz.y); gl_Position = uVP * vec4(vP, 1.0); }`;
 const ICE_FS = COMMON + `
 in vec3 vP; uniform sampler2D uUnder; uniform sampler2D uRefl; uniform vec4 uSag; uniform vec4 uHoles[8];
+uniform vec4 uStream[40]; uniform float uStreamW[40]; uniform float uStreamN;
+uniform float uReflGain; uniform float uMirrorBoost; uniform float uMirrorGain;
 out vec4 o;
+// frozen streams through the drifts, and the round clearings where they end: how clear of snow it is here, 0..1
+float streamK(vec2 xz) {
+  float k = 0.0;
+  float wob = vnoise(xz * 0.9) * 0.5 + vnoise(xz * 3.1) * 0.18 - 0.34;
+  for (int i = 0; i < 40; i++) {
+    if (float(i) >= uStreamN) break;
+    vec4 s = uStream[i]; vec2 ab = s.zw - s.xy;
+    float t = clamp(dot(xz - s.xy, ab) / max(dot(ab, ab), 1e-4), 0.0, 1.0);
+    float d = length(xz - s.xy - ab * t) + wob, w = uStreamW[i];
+    k = max(k, smoothstep(w + 0.2, w - 0.4, d));
+  }
+  return k;
+}
 // where the view, bent into the ice, has got to at this depth under the surface
 vec2 inIce(vec2 xz, vec3 rr, float depth) { return xz + rr.xz / max(-rr.y, 0.22) * depth; }
 // bubbles frozen in columns: a column to a cell, a bubble at some of the depths down it, so they line up as you look in.
@@ -2267,6 +2487,9 @@ void main() {
   // coarse and dips below the ice at the waterline; there the ice shows as the snow it meets, not as a dark seam
   float land = smoothstep(0.0, 0.05, groundH(p.xz));
   float thick = id.r * 255.0 / 6.0, white = id.g, snow = id.b, cur = id.a;
+  // a frozen stream through the drifts: clear ice, swept of snow
+  float stream = uStreamN > 0.0 ? streamK(p.xz) : 0.0;
+  snow *= 1.0 - stream; white *= 1.0 - stream * 0.9;
   vec3 rd = normalize(p - uCam), V = -rd, up = vec3(0, 1, 0);
   // open water: fishing holes and where the ice has gone through
   float hole = 0.0;
@@ -2288,6 +2511,8 @@ void main() {
   float lsh = lanternShadow(p + vec3(0, 0.01, 0), up), ssh = sunShadow(p, up);
   vec3 lanL = lanternAtS(p + vec3(0, 0.01, 0), up, lsh);
   vec3 li = lanL + skyLightS(p, up, ssh);
+  // lamps and candles: from above, or from a light under the ice
+  if (uLampN > 0.0) li += lampsAt(p + vec3(0.0, 0.02, 0.0), up, 1.0);
   // what is in the ice is lit from all round: the lantern, the moon, the sky
   vec3 liIn = lanL * 1.1 + (uMoonCol * 0.45 + uSunCol * 0.3) * ssh + uSkyAmb * 1.6;
   vec3 tint = mix(vec3(0.88, 0.95, 0.98), vec3(0.75, 0.84, 0.9), white);
@@ -2300,11 +2525,6 @@ void main() {
     if (bd > 0.01 && dist < 42.0) inside += bubbleCols(p.xz, rr, bd, 7.0, 0.05, 0.15, 0.026, liIn) * 0.32 * smoothstep(42.0, 28.0, dist);
     float meth = smoothstep(0.56, 0.8, fbm2(p.xz * 0.045 + 3.0)) * (1.0 - white) * (1.0 - thin);
     if (meth > 0.0) inside += methane(p.xz, rr, 0.6 * meth, liIn, uSkyAmb * 2.0) * 0.5;
-    vec2 ck = crackSheet(p.xz, rr, 0.03, 0.0016, thick * 0.01, 3.0, 0.34);
-    if (dist < 32.0) ck += crackSheet(p.xz, rr, 0.17, 0.004, thick * 0.007, 17.0, 0.22) * smoothstep(32.0, 14.0, dist) * 0.7;
-    vec3 cl = lanL * 0.55 / (1.0 + length(lanL) * 0.35) + (uMoonCol * 0.5 + uSunCol * 0.12) * ssh + uSkyAmb * 0.9;
-    inside += cl * (ck.x * 0.16 + ck.y * 0.24);
-    cover = min(0.5, ck.x * 0.35 + ck.y * 0.3);
     inside *= smoothstep(75.0, 45.0, dist);
   }
   vec3 col = under * tint * (1.0 - op) * (1.0 - cover) + whiteCol * op + inside * (1.0 - op * 0.5) * (1.0 - thin * 0.6);
@@ -2322,10 +2542,13 @@ void main() {
   F = mix(F, min(1.0, F * 1.6 + 0.02), thin);
   // snow lying on the ice: drifted in streaks along the wind, a dusting of grains at its edges
   vec2 w = vec2(0.94, 0.34);
-  float sk = fbm3(vec2(dot(p.xz, w) * 0.45, dot(p.xz, vec2(-w.y, w.x)) * 2.2));
-  float sn = max(smoothstep(0.45, 0.57, snow + 0.13 * sk + 0.1 * fbm3(p.xz * 1.3) + 0.06 * vnoise(p.xz * 6.0)), land);
+  vec2 fwp = fwidth(p.xz); float mpp = max(fwp.x, fwp.y);     // metres a pixel covers here
+  float sk = mix(0.44, fbm3(vec2(dot(p.xz, w) * 0.45, dot(p.xz, vec2(-w.y, w.x)) * 2.2)), smoothstep(0.3, 0.12, mpp));
+  float sv = snow + 0.13 * sk + 0.1 * fbm3(p.xz * 1.3) + 0.06 * vnoise(p.xz * 6.0) * smoothstep(0.09, 0.035, mpp);
+  float sw = max(0.06, fwidth(sv) * 1.5);
+  float sn = max(smoothstep(0.51 - sw, 0.51 + sw, sv), land);
   float dust = 0.0;
-  if (dist < 26.0) { float dg; vec4 gr = cellsN(p.xz * 24.0, dg); dust = smoothstep(0.06, 0.36, snow + 0.3 * sk) * (1.0 - sn) * smoothstep(0.34, 0.16, gr.z) * step(0.45, gr.w) * smoothstep(26.0, 8.0, dist); }
+  if (dist < 26.0) { float dg; vec4 gr = cellsN(p.xz * 24.0, dg); dust = smoothstep(0.06, 0.36, snow + 0.3 * sk) * (1.0 - sn) * smoothstep(0.34, 0.16, gr.z) * step(0.45, gr.w) * smoothstep(26.0, 8.0, dist) * smoothstep(0.012, 0.005, mpp); }
   vec3 snowCol = vec3(0.85, 0.89, 0.94) * li + uSkyAmb * vec3(0.15, 0.3, 0.6) * (1.0 - ssh * 0.7);
   // the light on the surface: frost crystals and snow grains flashing as you pass, a soft sheen round the lantern
   vec3 Lv = uLantern - p; float dl = length(Lv); vec3 Ll = Lv / dl;
@@ -2337,8 +2560,11 @@ void main() {
   }
   vec3 sparkle = min(frost, 1.0) * smoothstep(45.0, 20.0, dist) * (gl * uLanternCol * lsh * 3.5 / (dl * dl + 1.0) + gm * (uMoonCol * 26.0 + uSunCol * 8.0) * ssh);
   float Fs = F * (1.0 - sn) * (1.0 - op * 0.35);
-  Fs = max(Fs, clamp(reflA.a, 0.0, 1.0) * 0.82 * (1.0 - sn * 0.6));
-  col = mix(col, refl, Fs);
+  // from the far side the ice is a window on the world you left
+  Fs = max(Fs, uMirrorBoost * (1.0 - sn) * (1.0 - op * 0.5));
+  float mk = clamp(reflA.a, 0.0, 1.0);
+  Fs = max(Fs, mk * 0.82 * (1.0 - sn * 0.6));
+  col = mix(col, refl * mix(uReflGain, uMirrorGain, mk), Fs);
   vec3 Hl = normalize(Ll + V);
   col += uLanternCol * lsh * (pow(max(dot(n, Hl), 0.0), 2400.0) * 2.5 + pow(max(dot(n, Hl), 0.0), 260.0) * 0.25) * (0.2 + F) / (dl * dl + 0.5) * (1.0 - sn) * (1.0 - hole);
   col = mix(col, snowCol, sn);
@@ -2566,7 +2792,10 @@ function common(extra) {
     uBell: U.bell, uDrown: U.drown, uOutR: U.outR, uTowerXZ: U.towerXZ, uDeep: U.deep, uDeepCol: U.deepCol,
     uLShadow: R.SH.cube, uLShadowNF: U.lshadow || [0.04, 56, 0], uSunShadow: R.SH.sun, uSunVP0: U.sunVP0 || IDENT, uSunVP1: U.sunVP1 || IDENT,
     uSunSh: U.sunSh || [0, 0, 0, 0], uShadowDir: U.shadowDir || [0, 1, 0],
-    uScat: U.scat || [0, 0], uLant2: U.lant2 || [0, 0, 0, 0], uLantCol2: [0.55, 0.68, 1.0],
+    uScat: U.scat || [0, 0], uLant2: U.lant2 || [0, 0, 0, 0], uLantCol2: U.lantCol2 || [0.55, 0.68, 1.0],
+    uLamps: OS.lightsU.pos, uLampCol: OS.lightsU.col, uLampN: R.lampsOff ? 0 : OS.lightsU.n,
+    uStream: OS.streamU.seg, uStreamW: OS.streamU.w, uStreamN: OS.streamU.n,
+    uReflGain: U.reflGain ?? 1, uMirrorBoost: U.mirrorBoost ?? 0, uMirrorGain: U.mirrorGain ?? 1,
   });
   if (extra) set(extra);
 }
@@ -2595,9 +2824,12 @@ function drawObjects(vp, reflect, extraDraws) {
   common({ uVP: vp, uModel: m4(), uSnowy: 1, uBright: 1, uLanternK: 1, uStone: 1 });
   for (const B of R.meshes) {
     if (reflect && B.under) continue;
+    // on the far side: none of the drowned, and none of what the living put on the ice (that is in the mirror)
+    if (OS.on && !reflect && (B.under || B.living)) continue;
     set({ uSnowy: B.snowy ? 1 : 0 });
     drawMesh(B.mesh);
   }
+  if (OS.on && !reflect && R.osMesh) { set({ uSnowy: 1 }); drawMesh(R.osMesh); }
   if (R.treeLod) {
     use(R.P.tree);
     common({ uVP: vp, uSnowy: 1, uBright: 1, uLanternK: 1, uStone: 0 });
@@ -2607,16 +2839,18 @@ function drawObjects(vp, reflect, extraDraws) {
   }
   set({ uSnowy: 0, uStone: 0 });
   // in the mirror only: the farm and the village as they stood
-  if (reflect) {
+  if (reflect && !OS.on) {
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
     for (const [mesh, k] of [[R.ghostFarm, DEEP.farm], [R.ghostVillage, DEEP.village]]) if (mesh && k > 0.003) { set({ uModel: m4(), uGhostK: k, uLanternK: 0, uBright: 1 }); drawMesh(mesh); }
     gl.disable(gl.BLEND); gl.depthMask(true);
     set({ uGhostK: 0 });
   }
   if (!extraDraws) return;
-  for (const d of extraDraws) if (!d.bones && !d.mirror) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh); }
+  // (from the far side you have no reflection, and the train is not in the world you left)
+  const skip = (d) => reflect && OS.on && (d.self || d.os);
+  for (const d of extraDraws) if (!d.bones && !d.mirror && !skip(d)) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh); }
   let skin = false;
-  for (const d of extraDraws) if (d.bones && !d.mirror) {
+  for (const d of extraDraws) if (d.bones && !d.mirror && !skip(d)) {
     if (!skin) { use(R.P.skin); common({ uVP: vp, uSnowy: 0, uStone: 0 }); skin = true; }
     set({ uBones: d.bones, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh);
   }
@@ -2660,7 +2894,8 @@ function treesNear(c, r) {
 // everything that throws a shadow, into the bound depth target
 function drawCasters(vp, o, draws) {
   use(R.P.shObj); set({ uSVP: vp, uModel: IDENT });
-  for (const B of R.meshes) drawMesh(B.mesh);
+  for (const B of R.meshes) if (!OS.on || !(B.under || B.living)) drawMesh(B.mesh);
+  if (OS.on && R.osMesh) drawMesh(R.osMesh);
   if (o.ground) { use(R.P.shGround); common({ uSVP: vp }); const Gd = R.grids[2]; set({ uGrid: [WORLD.x0, WORLD.z0, Gd.step] }); drawMesh(Gd.mesh); }
   if (R.treeLod && o.trees) { use(R.P.shTree); set({ uSVP: vp }); for (const M of R.treeLod) if (M.instances) drawMesh(M, M.instances); }
   if (!draws) return;
@@ -2757,11 +2992,14 @@ function renderFrameInner(view) {
   gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, R.W, Math.min(R.H, hy));
   gl.frontFace(gl.CW);
   const camSave = U.cam; U.cam = view.reflCam; U.reflect = 1;
+  // from the far side the mirror is the world you left, in its morning
+  const osSaved = OS.on ? osMirrorEnter(U) : null;
   gl.depthMask(false); use(R.P.sky); common({ uInvVP: view.reflInvVP }); gl.disable(gl.CULL_FACE); drawFullscreen(); gl.enable(gl.CULL_FACE); gl.depthMask(true);
   drawGround(view.reflVP, true);
   drawObjects(view.reflVP, true, view.skaterDraws);
   gl.frontFace(gl.CCW);
   drawSprites(view.reflVP);
+  if (osSaved) osMirrorLeave(U, osSaved);
   U.cam = camSave; U.reflect = 0;
   gl.colorMask(true, true, true, true);
   gl.disable(gl.SCISSOR_TEST);
@@ -2855,7 +3093,7 @@ const TUNE = {
   grip: 14,            // lateral acceleration the edges hold before they let go (m/s^2)
   skid: 8.5,           // braking while sliding sideways
   stop: 10.5,          // hockey stop braking
-  snowDrag: 2.4,
+  snowDrag: 0.5, snowDrag2: 0.45,   // in snow: a little drag at a walk, more the faster you try to go
   hopV: 3.9, gravity: 13,
   turnKeys: 2.3,       // rad/s with A/D
 };
@@ -2906,7 +3144,7 @@ function skaterStep(dt, inp) {
       S.turnRate = lerp(S.turnRate, rot / dt, expDecay(10, dt));
     } else { S.skid = lerp(S.skid, 0, expDecay(10, dt)); S.turnRate = lerp(S.turnRate, 0, expDecay(10, dt)); }
     // glide losses, snow, the hockey stop
-    let dec = T.friction + T.drag * sp * sp + T.snowDrag * S.snow;
+    let dec = T.friction + T.drag * sp * sp + S.snow * (T.snowDrag + T.snowDrag2 * Math.max(0, sp - 2.5));
     S.stopping = lerp(S.stopping, inp.stop && sp > 0.4 ? 1 : 0, expDecay(inp.stop ? 16 : 6, dt));
     if (inp.stop) dec += T.stop * sat(S.stopping * 1.4);
     sp = Math.max(0, sp - dec * dt);
@@ -2917,7 +3155,7 @@ function skaterStep(dt, inp) {
     const wantSkate = inp.skate && !inp.stop;
     if (wantSkate && S.nextPush <= 0 && S.pushLeft <= 0) {
       const f = sat(sp / T.vmax);
-      const dv = lerp(T.push0, T.pushTop, Math.pow(f, 0.8)) * (1 - S.snow * 0.45) * (sp > T.vmax ? 0 : 1);
+      const dv = lerp(T.push0, T.pushTop, Math.pow(f, 0.8)) * (1 - S.snow * 0.25) * (sp > T.vmax ? 0 : 1);
       S.pushLeft = T.pushTime; S.pushAcc = dv / T.pushTime;
       S.pushSide = -S.pushSide;
       S.nextPush = lerp(T.periodSlow, T.periodFast, Math.pow(f, 0.7));
@@ -3038,9 +3276,10 @@ function skaterPose(S = SK) {
   const o = [S.x, S.y, S.z];
   const at = (r, u, fw) => [o[0] + Rt[0] * r + F[0] * fw, o[1] + u, o[2] + Rt[2] * r + F[2] * fw];
   const f = sat(S.speed / TUNE.vmax);
-  const hipH = 1.07 - S.crouch * 0.2 + S.bob + (S.air ? 0.05 : 0);
+  const kn = S.kneel || 0, reach = S.reach || 0;
+  const hipH = lerp(1.07 - S.crouch * 0.2 + S.bob + (S.air ? 0.05 : 0), 0.56, kn);
   const lean = S.lean;
-  const tilt = 0.17 + f * 0.24 - S.stopping * 0.3;           // forward lean of the torso
+  const tilt = lerp(0.17 + f * 0.24 - S.stopping * 0.3, 0.5 + reach * 0.25, kn);           // forward lean of the torso
   // pelvis shifts over the gliding leg and back as the chest goes forward; the whole body leans into the turn
   const pel = at(S.sway + lean * 0.25, hipH, -0.03 - tilt * 0.12 - S.stopping * 0.05);
   const tiltV = (t, side) => vnorm(vadd(vadd(vmul(UP, Math.cos(t)), vmul(F, Math.sin(t))), vmul(Rt, side)));
@@ -3063,7 +3302,8 @@ function skaterPose(S = SK) {
     }
     if (S.air) { lift = 0.12 * Math.sin(sat(S.hopT / 0.5) * PI); lat = side * 0.1; }
     if (sideOfStop > 0.05) { lat = lerp(lat, side * 0.2, sideOfStop); fw = lerp(fw, side * S.stopSide * 0.14, sideOfStop); out *= 1 - sideOfStop; }
-    const foot = at(lat, lift + 0.12, fw);
+    let foot = at(lat, lift + 0.12, fw);
+    if (kn > 0) foot = vlerp(foot, side < 0 ? at(-0.16, 0.12, 0.34) : at(0.17, 0.1, -0.5), kn);
     const r = ik2(hip, foot, 0.47, 0.47, legHint);
     // a pushing blade turns outward (right turns are negative heading)
     legs.push({ side, hip, knee: r.knee, foot: r.foot, yaw: bodyH - side * out });
@@ -3078,6 +3318,7 @@ function skaterPose(S = SK) {
   const swing = S.pushing * S.pushSide * 0.32;
   let handL = vadd(shL, vadd(vadd(vmul(Rt, -0.14 - f * 0.08), vmul(F, swing + 0.02)), [0, -0.5 + Math.abs(swing) * 0.16, 0]));
   let handR = vadd(shR, vadd(vadd(vmul(Rt, 0.12), vmul(F, 0.3)), [0, -0.42, 0]));
+  if (kn > 0) { handL = vlerp(handL, at(-0.08, lerp(0.5, 0.05, reach), 0.62), kn); handR = vlerp(handR, at(0.32, 0.42, 0.3), kn); }
   // in the tower both hands are on the rope's sally
   if (inTower && SCENE.bell) {
     const g = [SCENE.bell[0] + 0.55, 1.55 + BELL.rope + 0.2, SCENE.bell[2]];
@@ -3230,7 +3471,8 @@ function skaterDraws() {
   const yv = vmul(J.hang, -1), xv = vnorm(vcross(yv, J.F)), zv = vcross(xv, yv);
   const M = new Float32Array([xv[0], xv[1], xv[2], 0, yv[0], yv[1], yv[2], 0, zv[0], zv[1], zv[2], 0, J.lantC[0], J.lantC[1], J.lantC[2], 1]);
   // (light: the lantern does not throw its own shadow)
-  D.push({ mesh: SKM.lantern, m: M, light: true }); D.push({ mesh: SKM.globe, m: M, light: true }); D.push({ mesh: SKM.flame, m: M, light: true });
+  // on the far side of the ice it burns cold, like theirs did
+  D.push({ mesh: SKM.lantern, m: M, light: true }); D.push({ mesh: OS.on ? SKM.globe2 : SKM.globe, m: M, light: true }); D.push({ mesh: OS.on ? SKM.flame2 : SKM.flame, m: M, light: true });
   // the scarf's loose end: a band of wool with a little thickness, striped, drawn as a smooth curve through its points
   {
     const b = new MB(), P = SK.scarf.map((q) => q.p), n = P.length;
@@ -3550,7 +3792,7 @@ function uploadSkinned(verts, index) {
 }
 
 // ---- the body itself ----
-function buildBody() {
+function buildBody(pal = {}) {
   const t0 = performance.now();
   const J = bindJoints();
   BODY.J = J; BODY.bind = boneFrames(J); BODY.invBind = BODY.bind.map((m) => m4inv(m));
@@ -3586,7 +3828,7 @@ function buildBody() {
   BODY.layers = [];
 
   // the coat: a short wool coat, its skirt flaring over the hips to a hem above the knee
-  const coatC = rgb(0x5b4632, 0.03);
+  const coatC = pal.coat || rgb(0x5b4632, 0.03);
   const skirt = (() => {
     const yT = 0.24, yH = -0.03, yB = -0.34;
     const d = (x, y, z) => {
@@ -3647,7 +3889,7 @@ function buildBody() {
   }
   L('buttons', buttons, 0.0035, coatM);
   // red wool mittens
-  const mitt = rgb(0x6e2420, 0.03);
+  const mitt = pal.mitt || rgb(0x6e2420, 0.03);
   const mitten = (side) => {
     const [, fa, w] = arm(side);
     return [
@@ -3658,7 +3900,7 @@ function buildBody() {
   };
   L('mittens', [...mitten(-1), ...mitten(1)], 0.0075);
   // the scarf, wound twice round the neck and knotted at the back
-  const scarfR = rgb(0x9a2822, 0.02), scarfD = rgb(0x7c1f1a, 0.02);
+  const scarfR = pal.scarfR || rgb(0x9a2822, 0.02), scarfD = pal.scarfD || rgb(0x7c1f1a, 0.02);
   const scarfCol = (x, y, z) => mixc(scarfR, scarfD, smooth(0.3, 0.7, 0.5 + 0.5 * Math.sin(Math.atan2(x, z) * 7)));
   L('scarf', [
     { bone: B.chest, ...SD.torus([0, 0.588, -0.006], 0.066, 0.032), k: 0.02, col: scarfCol, w: one(B.chest) },
@@ -3667,7 +3909,7 @@ function buildBody() {
   ], 0.0075);
 
   // the trousers, down over the boots
-  const trou = rgb(0x1c1d22, 0.03);
+  const trou = pal.trou || rgb(0x1c1d22, 0.03);
   const leg = (side, w) => {
     const th = side < 0 ? B.thighL : B.thighR, sh = side < 0 ? B.shinL : B.shinR;
     return [
@@ -3684,7 +3926,7 @@ function buildBody() {
   ], 0.0125);
 
   // the head on its neck, cold-cheeked, dark hair at the nape
-  const skin = rgb(0xa47258, 0.12), rosy = rgb(0xab6250, 0.12), hair = rgb(0x2a1b12, 0.08), eye = rgb(0x120d0a, 0.6);
+  const skin = rgb(0xa47258, 0.12), rosy = rgb(0xab6250, 0.12), hair = pal.hair || rgb(0x2a1b12, 0.08), eye = rgb(0x120d0a, 0.6);
   const H = (sh, col, k, w) => ({ bone: B.head, ...sh, k, col, w: w || one(B.head) });
   L('head', [
     H(SD.cone([0, -0.2, -0.035], [0, -0.065, -0.012], 0.052, 0.046), skin, 0.03, wNeck),   // neck
@@ -3699,7 +3941,7 @@ function buildBody() {
   ], 0.0065);
   L('eyes', [H(SD.sph([0.028, -0.004, 0.081], 0.0102), eye, 1e-4), H(SD.sph([-0.028, -0.004, 0.081], 0.0102), eye, 1e-4)], 0.0026);
   // a knitted hat: the crown, the brim turned up, a pompom
-  const hatR = rgb(0x9c2a24, 0.02), hatW = rgb(0xe4dac8, 0.02);
+  const hatR = pal.hatR || rgb(0x9c2a24, 0.02), hatW = pal.hatW || rgb(0xe4dac8, 0.02);
   const edge = (y, z) => (y - (-0.004 + 0.32 * z)) * 0.952;           // height above the hat's lower edge
   const hatE = SD.ell([0, 0.036, -0.008], [0.1, 0.112, 0.104]).d, bandE = SD.ell([0, 0.036, -0.008], [0.108, 0.118, 0.111]).d;
   L('hat', [H({ d: (x, y, z) => smax(hatE(x, y, z), -edge(y, z) + 0.01, 0.008), lo: [-0.1, -0.08, -0.115], hi: [0.1, 0.15, 0.1] }, hatR, 1e-4)], 0.0072);
@@ -3720,6 +3962,15 @@ function bodySkin(J, out = BODY.skin) {
 // a world point in a bone's frame, and back (rigid frames)
 const toLocal = (M, p) => { const x = p[0] - M[12], y = p[1] - M[13], z = p[2] - M[14]; return [M[0] * x + M[1] * y + M[2] * z, M[4] * x + M[5] * y + M[6] * z, M[8] * x + M[9] * y + M[10] * z]; };
 const toWorld = (M, q) => m4apply(M, q);
+
+// the same body in someone else's clothes: the one who comes looking for you (built when it is needed, in the dark)
+function buildBody2() {
+  const keep = Object.assign({}, BODY);
+  buildBody({ coat: rgb(0x262c38, 0.03), mitt: rgb(0x4d5258, 0.03), scarfR: rgb(0xa8823a, 0.02), scarfD: rgb(0x8a6a2c, 0.02), trou: rgb(0x23262c, 0.03), hatR: rgb(0x3c4a5c, 0.02), hatW: rgb(0xcfc8b8, 0.02), hair: rgb(0x5a4030, 0.08) });
+  const L2 = BODY.layers;
+  Object.assign(BODY, keep);
+  BODY.layers2 = L2;
+}
 
 // ---- 55-ice.js ----
 // What the ice does: it keeps your blade marks, it cracks, it sags and groans on thin ice, and sometimes it lets you in.
@@ -4039,6 +4290,17 @@ function renderSounds() {
   // a soft pad voice per chord tone, looped
   A.buf.padNote = {};
   // a rope pulled and the bell's wheel turning
+  // the far side: a steam whistle (two soft notes and the breath through them), its chuff, a match struck
+  A.buf.whistle = mkBuf(2.6, (d, n) => {
+    for (let i = 0; i < n; i++) { const t = i / SR, env = smooth(0, 0.25, t) * (1 - smooth(1.6, 2.5, t)), vib = 1 + 0.004 * Math.sin(t * 31);
+      d[i] = (Math.sin(TAU * 523 * vib * t) * 0.5 + Math.sin(TAU * 659 * vib * t) * 0.4 + Math.sin(TAU * 784 * vib * t) * 0.18 + noise() * 0.12) * env; }
+    lp1(d, 0.25); normalize(d, 0.6);
+  });
+  A.buf.chuff = mkBuf(0.26, (d, n) => { for (let i = 0; i < n; i++) { const t = i / SR; d[i] = noise() * Math.min(1, t / 0.008) * Math.exp(-t / 0.07); } lp1(d, 0.09); lp1(d, 0.2); normalize(d, 0.7); });
+  A.buf.match = mkBuf(0.7, (d, n) => {
+    for (let i = 0; i < n; i++) { const t = i / SR; d[i] = noise() * (Math.exp(-t / 0.03) * 0.8 + Math.exp(-Math.abs(t - 0.12) / 0.12) * 0.35 * smooth(0.04, 0.1, t)); }
+    lp1(d, 0.18); hp1(d, 0.96); normalize(d, 0.5);
+  });
   A.buf.rope = mkBuf(0.6, (d, n) => { for (let i = 0; i < n; i++) { const t = i / SR; d[i] = noise() * Math.min(1, t / 0.05) * Math.exp(-t / 0.15); } bp2(d, 700, 1.4); lp1(d, 0.3); normalize(d, 0.6); });
 }
 
@@ -4089,6 +4351,7 @@ function audioInit() {
   A.carve = loop(A.buf.noise, 3600, 0.9);
   A.wind = loop(A.buf.noise, 420, 0.6);
   A.whistle = loop(A.buf.noise, 1900, 9);
+  A.rumble = loop(A.buf.noise, 95, 0.7);          // the train on its rails, on the far side
   // the pad: two quiet voices that follow the chord
   A.pad = [0, 1, 2].map((i) => {
     const o = c.createOscillator(); o.type = 'triangle';
@@ -4164,6 +4427,39 @@ AUDIO.peal = function (n) {
   for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.05 + Math.min(0.12, n * 0.012), cut: 700 + n * 350, delay: 1.2 + i * 0.42, wet: 1, pan: Math.sin(i * 1.3) * 0.5, travel: false });
 };
 // morning: the lake's last answer opens out into D major
+// ---- the far side ----
+// coming up: the bells of the church on this side, close and clear
+AUDIO.osArrive = function () {
+  const A = AUDIO; if (!A.on) return;
+  for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.12, cut: 5200, delay: 2.2 + i * 0.52, wet: 1, pan: Math.sin(i * 1.3) * 0.4, travel: false });
+  for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.09, cut: 4200, delay: 5.6 + i * 0.52, wet: 1, pan: Math.sin(i * 1.7) * 0.4, travel: false });
+};
+AUDIO.osWhistle = function (pos) { const A = AUDIO; if (!A.on) return; play(A.buf.whistle, { pos, gain: 0.32, ref: 60, wet: 0.75, travel: true }); };
+// the train: its chuffs, quick as it gathers speed, running together; its weight on the rails; the joints
+AUDIO.osTrain = function (pos, v, dt) {
+  const A = AUDIO; if (!A.on || !A.rumble) return;
+  const now = A.ctx.currentTime;
+  if (!pos) { A.rumble.g.gain.setTargetAtTime(0, now, 0.5); return; }
+  const L = A.listener, dx = pos[0] - L.pos[0], dz = pos[2] - L.pos[2], d = Math.hypot(dx, dz);
+  const pan = clamp((dx * L.right[0] + dz * L.right[2]) / Math.max(d, 1), -1, 1) * 0.8;
+  A.rumble.g.gain.setTargetAtTime(sat(v / 9) * 0.12 / (1 + d / 25), now, 0.2);
+  A.rumble.pan.pan.setTargetAtTime(pan, now, 0.2);
+  A.rumble.f.frequency.setTargetAtTime(80 + v * 6, now, 0.3);
+  if (v < 0.2) return;
+  A.chuffT = (A.chuffT || 0) - dt;
+  if (A.chuffT <= 0) { A.chuffT = Math.max(0.12, 3.9 / (4 * v)); play(A.buf.chuff, { pos, gain: 0.3 * (1 - 0.6 * sat((v - 5) / 8)), ref: 30, rate: 0.9 + Math.random() * 0.2, wet: 0.5, travel: true }); }
+  A.jointS = (A.jointS || 0) + v * dt;
+  if (A.jointS > 18) { A.jointS = 0; for (const k of [0, 0.11]) play(pick(A.buf.crack), { pos, gain: 0.1, ref: 25, rate: 0.55, wet: 0.3, delay: k, travel: true }); }
+};
+// from under the ice, a knock: someone's knuckles on it, the other side
+AUDIO.osKnock = function (pos) { const A = AUDIO; if (!A.on) return; play(pick(A.buf.iceNear), { pos, gain: 0.9, ref: 6, rate: 1.06, wet: 0.45, travel: false }); };
+// a match, and the candle taking
+AUDIO.osCandle = function (pos) {
+  const A = AUDIO; if (!A.on) return;
+  play(A.buf.match, { pos, gain: 0.16, ref: 6, wet: 0.3, travel: false });
+  play(A.buf.glass[DAWN_CHORD.tones[0]], { gain: 0.07, delay: 0.6, wet: 0.9, bus: A.music, travel: false });
+};
+AUDIO.osEnd = function () { AUDIO.morning(); };
 AUDIO.morning = function () {
   const A = AUDIO; if (!A.on) return;
   DAWN_CHORD.tones.forEach((m, i) => play(A.buf.glass[m], { gain: 0.12, delay: 2 + i * 0.7, wet: 0.9, bus: A.music, pan: (i / 5 - 0.5) * 0.6, travel: false }));
@@ -4296,9 +4592,9 @@ function lightState() {
   const U = R.U, s = G.maxS, here = G.s;
   const dusk = 1 - smooth(0, 700, s);
   const night = smooth(120, 900, s);
-  const storm = smooth(2430, 2530, here) * (1 - smooth(2690, 2790, here)) * (1 - G.dawn);
+  const storm = smooth(2430, 2530, here) * (1 - smooth(2690, 2790, here)) * (1 - G.dawn) * (OS.on ? 0 : 1);
   G.storm = lerp(G.storm, storm, 0.02);
-  const aur = smooth(1260, 1760, s) * (1 - smooth(2050, 2350, s) * 0.85) * (1 - G.dawn * 0.85);
+  const aur = smooth(1260, 1760, s) * (1 - smooth(2050, 2350, s) * 0.85) * (1 - G.dawn * 0.85) * (OS.on ? 0 : 1);
   G.aurora = lerp(G.aurora, aur, 0.01);
   const dawn = G.dawn;
   U.time = G.time; U.dusk = dusk; U.night = night; U.storm = G.storm; U.aurora = G.aurora; U.dawn = dawn;
@@ -4322,7 +4618,11 @@ function lightState() {
   U.fog = [...vlerp(vlerp([0.0035, 0.0045, 0.0075], [0.03, 0.028, 0.034], dusk), [0.014, 0.0155, 0.018], G.storm), (0.00055 + dusk * 0.0002) * (1 - 0.75 * dawn) + G.storm * 0.045];
   const fl = 1 + 0.035 * Math.sin(G.time * 11.3) + 0.025 * Math.sin(G.time * 23.7 + 1.3) + 0.02 * vnoise(G.time * 6, 3.3);
   let lk = fl * (SK.fallen ? Math.max(0, 1 - G.fallT * 0.55) : 1);
-  U.lanternCol = vmul([1.0, 0.6, 0.29], 3.2 * lk);
+  // on the far side of the ice your lantern burns cold
+  U.lanternCol = OS.on ? vmul([0.55, 0.68, 1.0], 2.4 * lk) : vmul([1.0, 0.6, 0.29], 3.2 * lk);
+  U.lantCol2 = OS.on ? [1.0, 0.62, 0.3] : [0.55, 0.68, 1.0];
+  // from the far side the ice is a window: the world you left, its morning, dimmed
+  U.mirrorBoost = OS.on ? 0.22 : 0; U.reflGain = OS.on ? 0.2 : 1; U.mirrorGain = OS.on ? 0.55 : 1;
   // the light is the lantern's globe; when the ice lets you in it goes down with you
   if (SK.fallen) U.lantern = [FALL.x, Math.max(-6, 0.3 - G.fallT * G.fallT * 1.6), FALL.z];
   else U.lantern = SK.joints ? SK.joints.lantC.slice() : [SK.x, 1, SK.z];
@@ -4337,6 +4637,8 @@ function lightState() {
   U.drown = DEEP.drown; U.outR = DEEP.outR; U.towerXZ = [TOWER.x, TOWER.z];
   U.deep = [W.x, W.y, W.z, W.on ? W.k * 5.0 : 0]; U.deepCol = [1.0, 0.55, 0.22];
   U.reflect = 0;
+  // the one who comes looking: their lantern lights them, in the mirror
+  if (OS.on && OS.seek && OS.seek.B.joints) { const c = OS.seek.B.joints.lantC; U.lant2 = [c[0], c[1], c[2], 0.6 * OS.seek.k]; }
 }
 
 function cameraStep(dt, mdy) {
@@ -4345,8 +4647,10 @@ function cameraStep(dt, mdy) {
   // the camera follows where you face, a little behind where you are going
   let want = S.h;
   if (S.speed > 1.5) { const va = Math.atan2(S.vx, S.vz); want = S.h + wrapAngle(va - S.h) * 0.35; }
-  C.yaw += wrapAngle(want - C.yaw) * expDecay(S.fallen ? 1 : 7.5, dt);
-  C.pitch = lerp(C.pitch, S.fallen ? 0.95 : G.pitchIn, expDecay(S.fallen ? 2 : 12, dt));
+  // (coming up on the far side the camera turns slowly, from the hole you came out of to the way ahead)
+  const slow = 1 - 0.92 * (OS.camSlow || 0);
+  C.yaw += wrapAngle(want - C.yaw) * expDecay(S.fallen ? 1 : 7.5 * slow, dt);
+  C.pitch = lerp(C.pitch, S.fallen ? 0.95 : G.pitchIn, expDecay(S.fallen ? 2 : 12 * slow, dt));
   const sp = S.speed;
   C.dist = lerp(C.dist, 5.0 + sp * 0.14 + (S.fallen ? 1.5 : 0), expDecay(3, dt));
   C.fov = lerp(C.fov, 60 + Math.min(sp, 12) * 0.9, expDecay(3, dt));
@@ -4423,6 +4727,14 @@ function buildView() {
 
 // where you come back to after the ice lets you in
 function respawn() {
+  if (OS.on) {
+    // on the far side: back up the way a little, facing on down it
+    const p = routeAt(clamp(G.s + 24, 1300, 3040));
+    skaterReset(p.x, p.z, p.dir + PI);
+    G.cam.yaw = p.dir + PI; G.cam.look = [p.x, 1.2, p.z];
+    ICE.stress = 0; ICE.danger = 0; G.fade = 1;
+    return;
+  }
   let cp = CHECKPOINTS[0];
   for (const c of CHECKPOINTS) if (c.s <= G.cpS + 1) cp = c;
   const p = routeAt(Math.max(0, cp.s - 3));
@@ -4439,6 +4751,8 @@ function gameStep(dt, inp) {
     // fixed small steps for the body so the feel does not depend on the frame rate
     const n = Math.max(1, Math.ceil(dt / (1 / 240)));
     const h = dt / n;
+    // while they kneel to you, you stand still
+    if (OS.hold) { inp = { turn: 0, turnKey: 0, skate: false, stop: false, hop: false, lookY: 0 }; const k = Math.exp(-dt * 1.6); SK.vx *= k; SK.vz *= k; }
     for (let i = 0; i < n; i++) {
       skaterStep(h, { turn: inp.turn / n, turnKey: inp.turnKey, skate: inp.skate, stop: inp.stop, hop: inp.hop && i === 0 });
       iceStep(h);
@@ -4453,12 +4767,19 @@ function gameStep(dt, inp) {
     if (Math.abs(q.d) < 40) G.maxS = Math.max(G.maxS, q.s);
     for (const c of CHECKPOINTS) if (c.s <= G.maxS && Math.hypot(SK.x - c.x, SK.z - c.z) < 14 && c.s > (G.cpS ?? -1)) G.cpS = c.s;
     if (SK.fallen) { G.state = 'fall'; G.fallT = 0; }
-    G.fade = Math.max(0, G.fade - dt * 0.8);
+    G.fade = OS.end.t > 9 ? G.fade : Math.max(0, G.fade - dt * (OS.on && OS.t < 4 ? 0.35 : 0.8));
     storyStep(dt, inp);
+    osStep(dt, inp);
   } else if (G.state === 'fall') {
     G.fallT += dt;
-    if (G.fallT > 1.9) G.fade = Math.min(1, G.fade + dt * 1.4);
-    if (G.fallT > 3.0) { respawn(); G.state = 'play'; updateHoles(); }
+    if (OS.phase === 'sinking') {
+      // through for good: down, a long dark, and then the far side
+      if (G.fallT > 1.7) G.fade = Math.min(1, G.fade + dt * 0.8);
+      if (G.fallT > 5.6) { osArrive(); updateHoles(); }
+    } else {
+      if (G.fallT > 1.9) G.fade = Math.min(1, G.fade + dt * 1.4);
+      if (G.fallT > 3.0) { respawn(); G.state = 'play'; updateHoles(); }
+    }
     squallStep(dt);
   } else if (G.state === 'morning') {
     // standing outside the tower while the morning comes
@@ -4482,12 +4803,10 @@ function gameStep(dt, inp) {
   otherStep(dt);
   cracksStep(dt);
   partsStep(dt);
-  if (G.ending) { morningCamera(dt, inp); pathDecal(); }
+  if (G.ending) morningCamera(dt, inp);
   else if (G.state === 'tower') towerCamera(dt);
-  else {
-    if (G.morningFree) { MORNING.t += dt; pathDecal(); }
-    cameraStep(dt, inp.lookY);
-  }
+  else if (OS.on && OS.seek && OS.seek.phase !== 'come') osCamera(dt);
+  else cameraStep(dt, inp.lookY);
   // the card lifts when you skate, or after a while
   if (MORNING.cardT >= 0) {
     MORNING.cardT += dt;
@@ -4540,6 +4859,8 @@ const DEEP = {
 const stillLitAt = (x, z) => (DEEP.outR <= 0 ? 1 : smooth(DEEP.outR - 3, DEEP.outR + 3, Math.hypot(x - TOWER.x, z - TOWER.z)));
 
 function deepStep(dt) {
+  // on the far side nothing is drowned, and nothing shows in the ice of it
+  if (OS.on) { DEEP.farm = DEEP.village = DEEP.drown = DEEP.hum = 0; DEEP.eerie = 0.25; DEEP.walker.on = false; return; }
   const s = G.maxS, dawn = G.dawn;
   DEEP.farm = smooth(240, 420, s) * (1 - smooth(820, 980, s)) * (1 - dawn);
   DEEP.village = smooth(1500, 1720, s) * (1 - dawn);
@@ -4694,6 +5015,8 @@ function buildDeepGlows(camRight, camUp) {
   }
   const W = DEEP.walker;
   if (W.on && W.k > 0.01) { const p = [W.x, W.y, W.z]; quad(p, 3.8, throughWater(p, [0.9 * W.k, 0.45 * W.k, 0.15 * W.k], cam, 0.5)); quad(p, 0.9, throughWater(p, [1.2 * W.k, 0.75 * W.k, 0.32 * W.k], cam, 0.5)); }
+  // the candle they left, seen from under it: a warm glow in the ice at your feet
+  if (OS.candle) { const k = OS.candle.k, p = [OS.candle.x, -0.12, OS.candle.z]; quad(p, 0.9, [0.5 * k, 0.28 * k, 0.1 * k]); quad(p, 0.22, [1.2 * k, 0.8 * k, 0.4 * k]); }
   streamUpload(S);
 }
 
@@ -4774,6 +5097,7 @@ function otherLeadWay(s0, house) {
 function otherStep(dt) {
   const O = OTHER;
   R.U.lant2 = [0, 0, 0, 0];
+  if (OS.on) { O.phase = 'gone'; O.k = 0; return; }
   if (G.dawn > 0 || STORY.ended) { if (O.phase !== 'off' && O.phase !== 'gone') { O.k = Math.max(0, O.k - dt * 0.5); if (O.k <= 0) O.phase = 'gone'; } }
   // far off in the fields, once: someone skating across your way, in the ice and nowhere else
   if (O.phase === 'off' && G.state === 'play' && G.maxS > 262 && G.maxS < 640) {
@@ -5185,12 +5509,12 @@ function morningCamera(dt, inp) {
   C.fov = lerp(C.fov, t > MORNING_END - 2.5 ? 60 : 56, expDecay(1.5, dt));
   if (t >= MORNING_END && (!MORNING.skip || MORNING.skipT >= 0.9)) { G.fade = 0; handOver(); }
 }
-// the camera is behind you again: skate on, in the morning
+// the camera is behind you again, in the morning, on the rotten ice at the tower's foot; it will not hold you
 function handOver() {
   const C = G.cam;
   G.ending = false; G.state = 'play'; G.morningFree = true; G.dawn = 1;
   C.yaw = PI; C.pitch = G.pitchIn; C.dist = 5.0;
-  STORY.card = true; MORNING.cardT = 0; showCard();
+  osBrink();
 }
 function showCard() {
   const el = $('card'); if (!el) return;
@@ -5235,6 +5559,7 @@ function smokeStep(dt) {
 
 function storyStep(dt, inp) {
   pathStep();
+  if (OS.on) return;
   smokeStep(dt);
   squallStep(dt);
   drawdownStep(dt);
@@ -5242,6 +5567,513 @@ function storyStep(dt, inp) {
   if (G.state === 'play' && inLead(SK.x, SK.z) && !SK.air) fallThrough();
   if (G.state === 'play' && inTower(SK.x, SK.z) && !G.ending && !G.morningFree) { G.state = 'tower'; BELL.inside = true; SK.vx *= 0.2; SK.vz *= 0.2; }
 }
+
+// ---- 77-otherside.js ----
+// The other side. After the bell, morning comes for the world you skated across, and the rotten ice at the tower's foot
+// will not hold you: you go through, and come up on the far side of the ice, where it is still night and nothing was
+// drowned. The church stands whole beside the tower, a lane runs to the village, every house is up with its lamps lit
+// and smoke going up, the last train waits at the halt and pulls out as you come. You skate it as you skated the lake.
+// The ice still shows the other world, the one you left: its morning, no village in it, and no you in it. Past the halt
+// someone comes over the ice on that side with a lantern, looking; they stop over where you are, kneel, and leave a
+// candle on the ice for you, like the ones you passed on the way.
+const OS = {
+  on: false, phase: 'off', t: 0,        // off, brink, sinking, way
+  colliders: [], lights: [], smoke: [], glows: [],
+  train: { u: 0, v: 0, go: false, gone: false, col: null, chuffT: 0, whistled: false },
+  seek: null, candle: null, hold: 0, camSlow: 0, wayT: 0,
+  end: { t: -1, card: false },
+  lightsU: { pos: new Float32Array(64), col: new Float32Array(48), n: 0 },
+  streamU: { seg: new Float32Array(160), w: new Float32Array(40), n: 0 },
+};
+const LINE = { z0: 1560, yaw: 0.18 };
+// a point on the railway: lx metres along it (east), off metres across it (north), y up
+function lineAt(lx, off = 0, y = 0) {
+  const c = Math.cos(LINE.yaw), s = Math.sin(LINE.yaw);
+  return [routeX(LINE.z0) + lx * c + off * s, y, LINE.z0 - lx * s + off * c];
+}
+
+// ---- building it: everything stands on the ice, at y = 0 ----
+function buildOtherside() {
+  const b = new MB(), r = rng(9090);
+  b.rand = r;
+  const C = OS.colliders, Lt = OS.lights;
+  const placed = [];       // footprints, so nothing is built into anything else
+  const free = (x, z, rad) => placed.every((p) => Math.hypot(p[0] - x, p[1] - z) > p[2] + rad);
+  const H = (x, z, yaw, o) => {
+    const w = o.w, d = o.d;
+    placed.push([x, z, Math.hypot(w, d) / 2]);
+    house(b, x, z, yaw, Object.assign({ rand: r, floor: 0, whole: true, roof: 'kept', gable: 1.9, colliders: C, lights: Lt, smoke: OS.smoke, group: 'os', lit: 0.7, garden: 0, col: r() < 0.4 ? WASH[Math.floor(r() * 3)] : STONE[Math.floor(r() * 5)] }, o));
+  };
+  const lamp = (x, z, yaw) => {
+    const m = rgb(0x22282a, 0.4);
+    b.cyl(m4trs([x, 0, z], 0, 0, 0, [0.075, 3.9, 0.075]), m, 7, 0.7);
+    b.cyl(m4between([x, 3.85, z], [x + Math.sin(yaw) * 0.7, 3.95, z + Math.cos(yaw) * 0.7], [1, 0, 0], 0.035), m, 5);
+    const hx = x + Math.sin(yaw) * 0.75, hz = z + Math.cos(yaw) * 0.75;
+    b.box(m4trs([hx, 3.86, hz], yaw, 0, 0, [0.3, 0.14, 0.38]), m);
+    b.box(m4trs([hx, 3.73, hz], yaw, 0, 0, [0.2, 0.13, 0.27]), LIT(14));
+    Lt.push({ p: [hx, 3.45, hz], c: [2.6, 1.6, 0.75], r: 17 });
+    OS.glows.push([hx, 3.7, hz, 1.1, 0.24, 0.13, 0.05]);
+    C.push({ x, z, r: 0.14 });
+  };
+  const wallC = (a, c, h, col, t = 0.55) => {
+    b.wall(a, c, 0, h, t, col);
+    const L = Math.hypot(c[0] - a[0], c[1] - a[1]);
+    if (L > 0.2) C.push({ x: (a[0] + c[0]) / 2, z: (a[1] + c[1]) / 2, hx: t / 2 + 0.05, hz: L / 2, yaw: Math.atan2(c[0] - a[0], c[1] - a[1]), top: h });
+  };
+
+  // ---- the church, whole beside the tower: its windows lit, its door open ----
+  const T = TOWER, x0 = T.x + T.w / 2, z0 = T.z, L = 19, W = 8.4, Hn = 6.4;
+  {
+    const st = rgb(0x77715f), slate = rgb(0x34373d, 0.12);
+    b.jit = 0.12;
+    const win = []; for (let i = 0; i < 4; i++) win.push([2.5 + i * 4.2, 3.6 + i * 4.2, 1.7, 4.9]);
+    const southHoles = win.concat([[4.35, 5.95, 0, 2.7]]);
+    b.wall([x0, z0 - W / 2], [x0 + L, z0 - W / 2], 0, Hn, 0.8, st, southHoles);
+    b.wall([x0 + L, z0 + W / 2], [x0, z0 + W / 2], 0, Hn, 0.8, st, win.map(([a, c, v0, v1]) => [L - c, L - a, v0, v1]));
+    b.wall([x0 + L, z0 - W / 2], [x0 + L, z0 + W / 2], 0, Hn, 0.9, st, [[W / 2 - 1.3, W / 2 + 1.3, 1.6, 5.6]]);
+    for (const [za, zb] of [[z0 - W / 2, z0 - T.w / 2], [z0 + T.w / 2, z0 + W / 2]]) b.wall([x0, za], [x0, zb], 0, Hn, 0.8, st);
+    b.prism(m4trs([x0 + L / 2, Hn, z0], PI / 2, 0, 0, [W + 1.0, 4.2, L + 0.7]), slate);
+    for (const [px, pz] of [[x0 + L, z0 - W / 2], [x0 + L, z0 + W / 2]]) b.box(m4trs([px, Hn * 0.45, pz], PI / 4, 0, 0, [1.0, Hn * 0.9, 1.0]), st);
+    b.jit = 0;
+    // the glass: amber, red and blue in lead, lit from inside
+    const glassCols = [[1.0, 0.62, 0.26], [0.95, 0.24, 0.14], [0.32, 0.42, 0.95], [0.9, 0.78, 0.4]];
+    const pane = (cx, cy, cz, wd, ht, alongX, k, side) => {
+      const n = 3;
+      for (let i = 0; i < n; i++) {
+        const gc = glassCols[(i + Math.floor(cx * 3 + cz)) % glassCols.length];
+        const off = (i - (n - 1) / 2) * wd / n;
+        const p = alongX ? [cx + off, cy, cz] : [cx, cy, cz + off];
+        b.box(m4trs(p, alongX ? 0 : PI / 2, 0, 0, alongX ? [wd / n - 0.03, ht, 0.06] : [wd / n - 0.03, ht, 0.06]), [gc[0], gc[1], gc[2], -k]);
+      }
+      for (const yy of [cy - ht * 0.25, cy + ht * 0.2]) b.box(m4trs([cx, yy, cz], alongX ? 0 : PI / 2, 0, 0, [wd, 0.05, 0.08]), rgb(0x141414, 0.3));
+      const out = alongX ? [0, 0, side * 1.1] : [side * 1.1, 0, 0];
+      Lt.push({ p: [cx + out[0], cy - 0.6, cz + out[2]], c: [0.55, 0.4, 0.3], r: 9 });
+    };
+    for (let i = 0; i < 4; i++) {
+      const cx = x0 + 3.05 + i * 4.2;
+      pane(cx, 3.3, z0 - W / 2, 1.05, 3.1, true, 2.2, -1);
+      pane(cx, 3.3, z0 + W / 2, 1.05, 3.1, true, 1.6, 1);
+    }
+    pane(x0 + L, 3.6, z0, 2.5, 3.9, false, 2.8, 1);
+    // the porch, its door open and the nave lit beyond it
+    const pz = z0 - W / 2;
+    b.wall([x0 + 3.9, pz], [x0 + 3.9, pz - 2.8], 0, 2.7, 0.45, st);
+    b.wall([x0 + 6.4, pz - 2.8], [x0 + 6.4, pz], 0, 2.7, 0.45, st);
+    b.prism(m4trs([x0 + 5.15, 2.7, pz - 1.4], 0, 0, 0, [3.3, 1.3, 3.2]), slate);
+    b.box(m4trs([x0 + 5.15, 1.35, pz + 0.05], 0, 0, 0, [1.55, 2.65, 0.06]), LIT(2.4));
+    Lt.push({ p: [x0 + 5.15, 1.4, pz - 1.6], c: [1.2, 0.8, 0.42], r: 9 });
+    OS.glows.push([x0 + 5.15, 1.5, pz - 0.4, 2.2, 0.16, 0.1, 0.05]);
+    C.push({ x: x0 + L / 2, z: z0, hx: L / 2 + 0.45, hz: W / 2 + 0.45, yaw: 0 });
+    C.push({ x: x0 + 3.9, z: pz - 1.4, hx: 0.28, hz: 1.45, yaw: 0 }, { x: x0 + 6.4, z: pz - 1.4, hx: 0.28, hz: 1.45, yaw: 0 });
+    placed.push([x0 + L / 2, z0, 12]);
+  }
+
+  // ---- the churchyard: the stones standing, lights on the graves, the yew, the wall and its gate ----
+  const gx = routeX(2996), yard = [x0 - 20, 2996, x0 + 36, z0 + 28];
+  {
+    const sx = FALLPOINT[0], sz = FALLPOINT[1];
+    const onPath = (x, z) => {
+      // the way from where you come up to the gate, kept clear
+      const ax = sx, az = sz - 2, bx = gx, bz = 2994, ux = bx - ax, uz = bz - az, t = clamp(((x - ax) * ux + (z - az) * uz) / (ux * ux + uz * uz), 0, 1);
+      return Math.hypot(x - ax - ux * t, z - az - uz * t) < 3.4 || Math.hypot(x - sx, z - sz) < 6.5;
+    };
+    for (let i = 0; i < 140; i++) {
+      const x = yard[0] + 2.5 + r() * (yard[2] - yard[0] - 5), z = yard[1] + 2.5 + r() * (yard[3] - yard[1] - 5);
+      if (x > x0 - 3 && x < x0 + L + 2.5 && z > z0 - W / 2 - 4.5 && z < z0 + W / 2 + 2.5) continue;
+      if (Math.abs(x - T.x) < 5.5 && Math.abs(z - T.z) < 5.5) continue;
+      if (onPath(x, z) || Math.hypot(x - (x0 + 24), z - (z0 + 14)) < 4) continue;
+      if (!free(x, z, 0.7)) continue;
+      placed.push([x, z, 0.6]);
+      const yaw = (r() - 0.5) * 0.16 + PI;
+      gravestone(b, x, 0, z, yaw, r);
+      C.push({ x, z, r: 0.48, top: 1.5 });
+      if (r() < 0.42) {
+        const cx = x + Math.sin(yaw) * 0.45, cz = z + Math.cos(yaw) * 0.45;
+        b.box(m4trs([cx, 0.09, cz], yaw, 0, 0, [0.1, 0.18, 0.1]), [1.0, 0.28, 0.12, -5]);
+        Lt.push({ p: [cx, 0.3, cz], c: [0.16, 0.05, 0.02], r: 3.2 });
+        OS.glows.push([cx, 0.12, cz, 0.35, 0.12, 0.035, 0.015]);
+      }
+    }
+    spruce(b, x0 + 24, 0, z0 + 14, 8.5, { tiers: 9, seg: 18, width: 0.62, lift: 1.4, rand: r, col: rgb(0x16231b, 0.04) });
+    C.push({ x: x0 + 24, z: z0 + 14, r: 1.6 });
+    placed.push([x0 + 24, z0 + 14, 3]);
+    const stone = STONE[2];
+    wallC([yard[0], yard[1]], [gx - 3.2, yard[1]], 1.15, stone);
+    wallC([gx + 3.2, yard[1]], [yard[2], yard[1]], 1.15, stone);
+    wallC([yard[2], yard[1]], [yard[2], yard[3]], 1.15, stone);
+    wallC([yard[2], yard[3]], [yard[0], yard[3]], 1.15, stone);
+    wallC([yard[0], yard[3]], [yard[0], yard[1]], 1.15, stone);
+    // the lychgate: two oak posts each side and a little roof over the way in
+    for (const dx of [-3.0, 3.0]) for (const dz of [-0.9, 0.9]) { b.box(m4trs([gx + dx, 1.2, yard[1] + dz], 0, 0, 0, [0.22, 2.4, 0.22]), DARKWOOD); C.push({ x: gx + dx, z: yard[1] + dz, r: 0.18 }); }
+    b.prism(m4trs([gx, 2.4, yard[1]], 0, 0, 0, [7.0, 1.4, 2.6]), rgb(0x34373d, 0.12));
+    lamp(gx - 4.2, yard[1] - 1.5, PI / 2);
+  }
+
+  // ---- the lane from the churchyard to the village: walls, lamps, a cottage now and then ----
+  {
+    for (let z = 2985; z > 2528; z -= 6) {
+      const F0 = routeFrame(z), F1 = routeFrame(z - 6);
+      for (const side of [-1, 1]) {
+        if (((z / 6) | 0) % 11 === (side > 0 ? 3 : 8)) continue;      // field gates
+        const o = 5.4;
+        wallC([F0.x + F0.rx * side * o, F0.z + F0.rz * side * o], [F1.x + F1.rx * side * o, F1.z + F1.rz * side * o], 0.95, STONE[(z | 0) % 5], 0.5);
+      }
+    }
+    for (let z = 2970, i = 0; z > 2540; z -= 34, i++) { const F = routeFrame(z), side = i % 2 ? 1 : -1; lamp(F.x + F.rx * side * 4.3, F.z + F.rz * side * 4.3, F.yaw + (side > 0 ? PI / 2 : -PI / 2)); }
+    for (const [z, side, off] of [[2932, 1, 17], [2866, -1, 18], [2770, 1, 16], [2684, -1, 19], [2600, 1, 15], [2566, -1, 16]]) {
+      const F = routeFrame(z), x = F.x + F.rx * side * off, zz = F.z + F.rz * side * off;
+      H(x, zz, F.yaw + (side > 0 ? PI / 2 : -PI / 2), { w: 7 + r() * 2, d: 5.4, wallH: r() < 0.5 ? 5.3 : 3.1, lit: 0.75 });
+    }
+    for (let z = 2960; z > 2540; z -= 23 + r() * 10) { const F = routeFrame(z), side = r() < 0.5 ? 1 : -1, x = F.x + F.rx * side * 7.5, zz = F.z + F.rz * side * 7.5; if (free(x, zz, 1.5)) { deadTree(b, x, 0, zz, 0.9 + r() * 0.5, r); C.push({ x, z: zz, r: 0.3 }); } }
+  }
+
+  // ---- the village: the same houses, whole, and more behind them; lamps on both sides of the street ----
+  {
+    const front = SCENE.houses.filter((h) => h.group === 'village');
+    for (const h of front) {
+      const big = h.w > 12, yardW = Math.abs(routeNear(h.x, h.z).d) - 4.2 - h.d / 2;
+      H(h.x, h.z, h.yaw + PI, { w: h.w, d: h.d, wallH: big ? 4.4 : r() < 0.5 ? 5.4 : 3.3, gable: big ? 1.6 : 1.9, lit: big ? 0.9 : 0.72, garden: big ? 0 : Math.max(0, yardW - 0.4) });
+    }
+    // a second row behind the first, its roofs over the street's
+    for (const h of front) {
+      if (h.w > 12 || r() > 0.62) continue;
+      // (the drowned house's own +z points away from the street)
+      const s = Math.sin(h.yaw), c = Math.cos(h.yaw), d2 = 5 + r() * 1.5, w2 = 6 + r() * 3.5, back = h.d / 2 + 4.5 + d2 / 2 + r() * 3;
+      const x = h.x + s * back, z = h.z + c * back;
+      if (!free(x, z, Math.hypot(w2, d2) / 2) || heightAt(x, z) > -0.3 || Math.abs(routeNear(x, z).d) < 10 + d2) continue;
+      H(x, z, h.yaw + PI + (r() - 0.5) * 0.1, { w: w2, d: d2, wallH: r() < 0.6 ? 5.6 : 3.4, lit: 0.6 });
+    }
+    // the street: kerbs flush with the ice, lamps on both sides, twice as many as there were
+    for (let z = 1748; z < 2518; z += 3) {
+      const F = routeFrame(z);
+      for (const side of [-1, 1]) b.box(m4trs([F.x + F.rx * side * 3.6, 0.02, z + 1.5 + F.rz * side * 3.6], F.yaw, 0, 0, [0.28, 0.04, 3.0]), rgb(0x76736b));
+    }
+    for (let z = 1760, i = 0; z < 2510; z += 19, i++) { const F = routeFrame(z), side = i % 2 ? 1 : -1; lamp(F.x + F.rx * side * 3.95, F.z + F.rz * side * 3.95, F.yaw + (side > 0 ? PI / 2 : -PI / 2)); }
+    // what stood in the street
+    const at = (z, side, off) => { const F = routeFrame(z); return [F.x + F.rx * side * off, F.z + F.rz * side * off, F.yaw]; };
+    { const [x, zz, yaw] = at(1812, -1, 5.2); b.wall([x - 1.2, zz - 0.8], [x - 1.2, zz + 1.4], 0, 2.2, 0.1, rgb(0x3b4044, 0.4)); b.box(m4trs([x, 2.25, zz + 0.3], yaw, 0, 0, [1.2, 0.08, 2.6]), rgb(0x3b4044, 0.4)); C.push({ x, z: zz + 0.3, hx: 0.7, hz: 1.4, yaw }); }
+    { const [x, zz, yaw] = at(1905, 1, 9.5); playground(b, x, 0, zz, yaw); C.push({ x, z: zz, r: 3.2 }); }
+    { const [x, zz] = at(1968, 1, 6.2); memorial(b, x, 0, zz); C.push({ x, z: zz, hx: 1.15, hz: 1.15, yaw: 0 }); }
+    { const [x, zz, yaw] = at(1990, -1, 3.0); car(b, x, 0.02, zz, yaw + 0.04, rgb(0x5a6a58, 0.5)); C.push({ x, z: zz, hx: 0.85, hz: 2.0, yaw: yaw + 0.04 }); }
+    { const [x, zz, yaw] = at(2036, 1, 4.6); phoneBox(b, x, 0, zz, yaw); b.box(m4trs([x, 2.0, zz], yaw, 0, 0, [0.5, 0.12, 0.5]), LIT(6)); Lt.push({ p: [x, 1.6, zz], c: [0.55, 0.5, 0.4], r: 6 }); C.push({ x, z: zz, hx: 0.55, hz: 0.55, yaw }); }
+    { const [x, zz, yaw] = at(2044, -1, 6.4); bicycle(b, x, 0, zz, yaw + 0.05); }
+    { const [x, zz, yaw] = at(2052, -1, 5.0); b.cyl(m4trs([x, 0, zz], 0, 0, 0, [0.08, 3.4, 0.08]), rgb(0x2a2622), 6); b.box(m4trs([x + Math.sin(yaw + PI / 2) * 0.55, 3.1, zz + Math.cos(yaw + PI / 2) * 0.55], yaw, 0, 0, [0.05, 0.75, 0.9]), rgb(0x5a3020, 0.2)); C.push({ x, z: zz, r: 0.12 }); }
+    { const [x, zz] = at(2110, 1, 4.6); b.cyl(m4trs([x, 0, zz], 0, 0, 0, [0.26, 1.3, 0.26]), RED, 12); b.sphere(m4trs([x, 1.3, zz], 0, 0, 0, [0.27, 0.16, 0.27]), RED, 10, 5); C.push({ x, z: zz, r: 0.3 }); }
+    // the lane east toward the river, from the far kerb (under the ice its walls run across the street)
+    { const [x, zz] = at(1968, -1, 4.6); for (let i = 0; i < 6; i++) { wallC([x + i * 12, zz - 3], [x + (i + 1) * 12, zz - 3.3], 1.1, STONE[i % 5]); wallC([x + i * 12, zz + 3], [x + (i + 1) * 12, zz + 3.2], 1.1, STONE[(i + 2) % 5]); } }
+  }
+  // the vigils' places are here too, as they were: the house where the bed is, the gate where the pram is
+  for (const v of VIGILS) {
+    if (v.s < 1380) continue;
+    const c = Math.cos(v.yaw), s = Math.sin(v.yaw), Wp = (lx, lz) => [v.x + c * lx + s * lz, v.z - s * lx + c * lz];
+    if (v.kind === 'bed' && free(v.x, v.z, 4)) H(v.x, v.z, v.yaw, { w: 7.0, d: 6.0, wallH: 5.4, lit: 0.85 });
+    if (v.kind === 'pram') {
+      H(...Wp(0, -6.8), v.yaw, { w: 7.5, d: 5.6, wallH: 3.2, lit: 0.9 });
+      for (const lx of [-1.0, 1.0]) { const q = Wp(lx, -1.4); b.box(m4trs([q[0], 0.65, q[1]], v.yaw, 0, 0, [0.26, 1.3, 0.26]), STONE[2]); C.push({ x: q[0], z: q[1], r: 0.2 }); }
+      wallC(Wp(-6, -1.4), Wp(-1.13, -1.4), 1.0, STONE[1], 0.45); wallC(Wp(1.13, -1.4), Wp(6, -1.4), 1.0, STONE[0], 0.45);
+      const q = Wp(0.2, 0.4), nb = rgb(0x22304a, 0.15);
+      b.box(m4trs([q[0], 0.56, q[1]], v.yaw, 0, 0, [0.5, 0.32, 0.86]), nb);
+      b.sphere(m4trs([q[0] - s * 0.3, 0.7, q[1] - c * 0.3], v.yaw, 0, 0, [0.25, 0.26, 0.24]), nb, 10, 6);
+      for (const [lx, lz] of [[-0.28, -0.34], [0.28, -0.34], [-0.28, 0.36], [0.28, 0.36]]) { const w = Wp(0.2 + lx, 0.4 + lz); b.torus(m4trs([w[0], 0.2, w[1]], v.yaw + PI / 2, 0, PI / 2, 1), rgb(0x161616, 0.3), 0.18, 0.02, 14, 4); }
+      C.push({ x: q[0], z: q[1], r: 0.55 });
+    }
+  }
+
+  // ---- the halt: the line laid across the ice, the platform and its lamp, the waiting room ----
+  {
+    for (let lx = -430; lx < 430; lx += 0.66) {
+      const p = lineAt(lx);
+      if (heightAt(p[0], p[2]) > -0.25) continue;
+      b.box(m4trs([p[0], 0.012, p[2]], LINE.yaw, 0, 0, [0.22, 0.03, 2.4]), DARKWOOD);
+    }
+    for (let lx = -430; lx < 430; lx += 8) {
+      const p = lineAt(lx + 4);
+      if (heightAt(p[0], p[2]) > -0.25) continue;
+      for (const off of [-0.72, 0.72]) { const q = lineAt(lx + 4, off); b.box(m4trs([q[0], 0.05, q[2]], LINE.yaw, 0, 0, [8.02, 0.07, 0.07]), rgb(0x6a5040, 0.7)); }
+    }
+    const pc = lineAt(30, 3.7);
+    b.box(m4trs([pc[0], 0.45, pc[2]], LINE.yaw, 0, 0, [18, 0.9, 3.2]), rgb(0x67625a));
+    b.box(m4trs([pc[0], 0.92, pc[2]], LINE.yaw, 0, 0, [18.1, 0.06, 3.3]), rgb(0x8a857a));
+    C.push({ x: pc[0], z: pc[2], hx: 9.05, hz: 1.65, yaw: LINE.yaw, top: 0.95 });
+    { const q = lineAt(24, 4.4); b.cyl(m4trs([q[0], 0.9, q[2]], 0, 0, 0, [0.07, 3.4, 0.07]), rgb(0x22282a, 0.4), 7, 0.7); b.box(m4trs([q[0], 4.3, q[2]], LINE.yaw, 0, 0, [0.34, 0.3, 0.34]), LIT(12)); Lt.push({ p: [q[0], 3.9, q[2]], c: [2.2, 1.4, 0.65], r: 15 }); OS.glows.push([q[0], 4.3, q[2], 1.3, 0.24, 0.13, 0.05]); }
+    { const q = lineAt(34, 4.8); b.box(m4trs([q[0], 2.6, q[2]], LINE.yaw, 0, 0, [2.4, 0.7, 0.08]), rgb(0x23313a, 0.3)); for (const dl of [-1.0, 1.0]) { const w = lineAt(34 + dl, 4.8); b.cyl(m4trs([w[0], 0.92, w[2]], 0, 0, 0, [0.05, 1.4, 0.05]), rgb(0x222222), 5); } }
+    { const q = lineAt(37, 4.6); b.box(m4trs([q[0], 2.0, q[2]], LINE.yaw, 0, 0, [3.6, 2.2, 2.2]), rgb(0x5a4a3a, 0.08)); C.push({ x: q[0], z: q[2], hx: 1.9, hz: 1.2, yaw: LINE.yaw }); b.prism(m4trs([q[0], 3.1, q[2]], LINE.yaw + PI / 2, 0, 0, [2.6, 0.9, 4.0]), rgb(0x34373d, 0.12)); const wq = lineAt(37, 3.48); b.box(m4trs([wq[0], 2.0, wq[2]], LINE.yaw + PI / 2, 0, 0, [0.04, 0.6, 1.0]), LIT(3)); Lt.push({ p: [wq[0], 1.8, wq[2] - 0.6], c: [0.5, 0.33, 0.16], r: 6 }); }
+    // where the way crosses the line, a sign
+    { const q = lineAt(-6, 5); b.cyl(m4trs([q[0], 0, q[2]], 0, 0, 0, [0.05, 2.4, 0.05]), rgb(0x222222), 5); for (const a of [0.7, -0.7]) b.box(m4trs([q[0], 2.3, q[2]], LINE.yaw, 0, a, [1.0, 0.12, 0.03]), rgb(0xd8d4cc, 0.2)); C.push({ x: q[0], z: q[2], r: 0.1 }); }
+  }
+  R.osMesh = uploadMesh(b.build());
+  R.osTrain = uploadMesh(osTrainMesh());
+  OS.train.col = { x: 0, z: 0, hx: 30.6, hz: 1.6, yaw: LINE.yaw, train: true };
+  osTrainPlace();
+  // the candle that will be left for you, and the jar it is in
+  { const cb = new MB();
+    cb.lathe(m4(), rgb(0x8e9aa2, 0.95), [[0.0, 0.0], [0.045, 0.004], [0.05, 0.02], [0.05, 0.06], [0.044, 0.07]], 12);
+    cb.cyl(m4trs([0, 0.07, 0], 0, 0, 0, [0.026, 0.025, 0.026]), rgb(0xe8e0cc, 0.2), 8);
+    SKM.osJar = uploadMesh(cb.build());
+    SKM.osFlame = uploadMesh(new MB().lathe(m4trs([0, 0.095, 0]), LIT(30), [[0.0, 0.0], [0.009, 0.008], [0.006, 0.026], [0.0, 0.042]], 6).build()); }
+}
+// where you come up: the spot outside the tower where the morning leaves you
+const FALLPOINT = [TOWER.x, TOWER.z - 9.5];
+
+// the last train, in its own frame: x along the line (the engine at +x), z across, y up from the ice
+function osTrainMesh() {
+  const b = new MB(), r = rng(31);
+  const dark = rgb(0x18191b, 0.3), glass = rgb(0x0b0c0e, 0.6), maroon = rgb(0x4a2a26, 0.2), shade = rgb(0x0d0b0a, 0.05);
+  const B = (lx, off, y, sx, sy, sz, col) => b.box(m4trs([lx, y, off], 0, 0, 0, [sx, sy, sz]), col);
+  const y0 = 0.68;
+  for (const [c0, c1] of [[-24.5, -9.5], [-8.5, 6.5], [7.5, 22.5]]) {
+    const lm = (c0 + c1) / 2, L = c1 - c0;
+    B(lm, 0, y0 + 1.3, L, 2.6, 2.8, maroon);
+    b.prism(m4trs([lm, y0 + 2.6, 0], PI / 2, 0, 0, [2.9, 0.32, L + 0.1]), rgb(0x1c1d20, 0.2));
+    B(lm, 0, y0 - 0.05, L - 0.4, 0.18, 2.4, dark);
+    for (const e of [c0 + 2.2, c1 - 2.2]) {
+      B(e, 0, y0 - 0.3, 2.6, 0.42, 2.0, dark);
+      for (const dl of [-0.8, 0.8]) for (const side of [-1, 1]) b.cyl(m4trs([e + dl, 0.42, side * 0.72], 0, PI / 2, 0, [0.4, 0.08, 0.4]), rgb(0x141414, 0.5), 12);
+    }
+    for (let i = 0; i < 9; i++) for (const side of [-1, 1]) {
+      const lw = c0 + 1.7 + i * (L - 3.4) / 8, lit = r() < 0.85;
+      B(lw, side * 1.415, y0 + 1.55, 0.85, 0.72, 0.04, lit ? LIT(1.8 + r() * 1.4) : glass);
+      if (lit && r() < 0.3) { b.sphere(m4trs([lw + (r() - 0.5) * 0.3, y0 + 1.6, side * 1.44], 0, 0, 0, [0.1, 0.12, 0.04]), shade, 8, 5); B(lw, side * 1.44, y0 + 1.3, 0.38, 0.3, 0.03, shade); }
+    }
+    for (const e of [c0 + 0.55, c1 - 0.55]) for (const side of [-1, 1]) B(e, side * 1.415, y0 + 1.15, 0.7, 1.9, 0.04, dark);
+    B(c1 + 0.5, 0, y0 + 0.4, 1.0, 0.2, 0.3, dark);
+  }
+  B(25.5, 0, y0 + 1.45, 3.2, 2.9, 2.8, rgb(0x1e2124, 0.3));
+  B(25.5, 0, y0 + 2.95, 3.5, 0.15, 3.0, dark);
+  b.cyl(m4between([27, y0 + 1.35, 0], [35.5, y0 + 1.35, 0], [0, 1, 0], 0.85), rgb(0x23272a, 0.35), 14);
+  b.cyl(m4trs([34.4, y0 + 2.1, 0], 0, 0, 0, [0.22, 0.75, 0.22]), dark, 10);
+  B(30, 0, y0 - 0.15, 10, 0.5, 2.3, dark);
+  for (const dl of [27.5, 30.2, 32.9]) for (const side of [-1, 1]) b.cyl(m4trs([dl, 0.62, side * 0.72], 0, PI / 2, 0, [0.62, 0.1, 0.62]), rgb(0x141414, 0.5), 14);
+  B(35.6, 0, y0 + 0.9, 0.12, 0.34, 0.34, LIT(14));
+  for (const side of [-1, 1]) B(25.5, side * 1.415, y0 + 1.9, 0.9, 0.7, 0.04, LIT(2.5));
+  return b.build();
+}
+function osTrainPlace() {
+  const T = OS.train, c = lineAt(T.u + 5.5);
+  T.col.x = T.gone ? 1e6 : c[0]; T.col.z = T.gone ? 1e6 : c[2];
+}
+
+// ---- the crossing ----
+// out of the tower, morning: the ice here is rotten and you are standing on it
+function osBrink() { OS.phase = 'brink'; OS.t = 0; OS.cracked = 0; }
+function osArrive() {
+  OS.on = true; OS.phase = 'way'; OS.t = 0; OS.wayT = 0; OS.camSlow = 1;
+  if (!BODY.layers2) buildBody2();
+  G.state = 'play'; G.dawn = 0; G.storm = 0; G.aurora = 0; G.fade = 1; G.fallT = 0; G.morningFree = true;
+  LEADS.length = 0; R.decals.n = 0; streamUpload(R.decals);
+  ICE.stress = 0; ICE.danger = 0; ICE.drop = 0;
+  // what the living put on the ice is not here; what stood here is
+  OS.livingCols = COLLIDERS.filter((c) => c.living);
+  const keep = COLLIDERS.filter((c) => !c.living);
+  COLLIDERS.length = 0; COLLIDERS.push(...keep, ...OS.colliders, OS.train.col);
+  // up beside the hole you went through, facing the village; the camera looks back at the hole first
+  let ux = FALL.x + 0.4, uz = FALL.z - 3.6;
+  if (collide(ux, uz, 0.6, 0) || Math.hypot(ux - TOWER.x, uz - TOWER.z) < 6) { ux = FALLPOINT[0] + 0.4; uz = FALLPOINT[1] - 3.6; }
+  skaterReset(ux, uz, PI);
+  G.cam.yaw = 0.15; G.cam.pitch = 0.5; G.cam.look = [FALL.x, 0.5, FALL.z]; G.pitchIn = 0.24;
+  G.cpS = 3040;
+  AUDIO.osArrive && AUDIO.osArrive();
+}
+
+function osStep(dt, inp) {
+  if (OS.phase === 'brink') {
+    OS.t += dt;
+    // it creaks under you, it cracks out from where you stand, and then it lets you in
+    ICE.danger = Math.max(ICE.danger, smooth(0.2, 2.0, OS.t) * 0.85);
+    if (OS.cracked === 0 && OS.t > 0.7) { OS.cracked = 1; crackBurst(SK.x, SK.z, 5, 5, { bright: 0.13, depth: 0.06 }); G.cam.shake = Math.max(G.cam.shake, 0.35); }
+    if (OS.cracked === 1 && OS.t > 1.5) { OS.cracked = 2; crackBurst(SK.x, SK.z, 8, 8, { bright: 0.16, depth: 0.08 }); G.cam.shake = Math.max(G.cam.shake, 0.6); }
+    if (OS.t > 2.3 && !SK.fallen) { fallThrough(); FALL.count = Math.max(0, FALL.count - 1); OS.phase = 'sinking'; OS.t = 0; }
+    return;
+  }
+  if (!OS.on) return;
+  OS.t += dt; OS.wayT += dt;
+  OS.camSlow = Math.max(0, OS.camSlow - dt * 0.28);
+  const T = OS.train;
+  // the train goes as you come down the street toward it
+  const tc = lineAt(T.u + 5.5), dT = Math.hypot(tc[0] - SK.x, tc[2] - SK.z);
+  if (!T.go && G.state === 'play' && (G.s < 1735 || dT < 120)) { T.go = true; AUDIO.osWhistle && AUDIO.osWhistle(lineAt(T.u + 33, 0, 3)); }
+  if (T.go && !T.gone) {
+    T.v = Math.min(13.5, T.v + dt * (T.v < 3 ? 0.45 : 0.8));
+    T.u += T.v * dt;
+    if (T.u > 470) T.gone = true;
+    osTrainPlace();
+    // steam from the chimney, more as it works harder
+    if (Math.random() < dt * (6 + T.v * 2)) { const p = lineAt(T.u + 34.4, 0, 3.6); spray(p[0], p[1], p[2], (Math.random() - 0.5) * 0.4 - Math.cos(LINE.yaw) * T.v * 0.3, 1.2 + Math.random() * 0.6, (Math.random() - 0.5) * 0.4 + Math.sin(LINE.yaw) * T.v * 0.3, 3 + Math.random() * 2, 0.5 + Math.random() * 0.4, [0.09, 0.09, 0.1], 2, 0.4, -0.15, 0.3); }
+  } else if (!T.go && Math.random() < dt * 3) { const p = lineAt(34.4, 0, 3.6); spray(p[0], p[1], p[2], (Math.random() - 0.5) * 0.2, 0.6, (Math.random() - 0.5) * 0.2, 4, 0.45, [0.08, 0.08, 0.09], 2, 0.3, -0.1, 0.3); }
+  if (AUDIO.osTrain) AUDIO.osTrain(T.gone ? null : lineAt(T.u + 20, 0, 1.5), T.v, dt);
+  // smoke from the chimneys near you; snow coming down, slowly
+  const Cp = G.cam.pos;
+  for (const p of OS.smoke) {
+    if (Math.abs(p[0] - Cp[0]) > 120 || Math.abs(p[2] - Cp[2]) > 120 || Math.random() > dt * 5) continue;
+    spray(p[0] + (Math.random() - 0.5) * 0.1, p[1], p[2] + (Math.random() - 0.5) * 0.1, (Math.random() - 0.5) * 0.12 + 0.12, 0.45 + Math.random() * 0.25, (Math.random() - 0.5) * 0.12, 5 + Math.random() * 3, 0.35 + Math.random() * 0.2, [0.06, 0.062, 0.068], 2, 0.15, -0.02, 0.4);
+  }
+  for (let i = 0, n = dt * 110; i < n; i++) {
+    const a = Math.random() * TAU, rr = 2 + Math.random() * 26;
+    spray(Cp[0] + Math.sin(a) * rr, 3 + Math.random() * 7, Cp[2] + Math.cos(a) * rr, (Math.random() - 0.5) * 0.3, -0.5 - Math.random() * 0.4, (Math.random() - 0.5) * 0.3, 9, 0.006 + Math.random() * 0.006, [0.25, 0.26, 0.28], 3, 0.2, 0.0, 0.1);
+  }
+  // past the halt, someone comes looking
+  if (!OS.seek && T.go && G.state === 'play' && (G.s < 1480 || OS.wayT > 240)) osSeekStart();
+  if (OS.seek) osSeekStep(dt);
+  osEndStep(dt, inp);
+}
+
+// ---- the one who comes looking for you, on the other side of the ice ----
+function osSeekStart() {
+  const [fx, fz] = fwdOf(SK.h);
+  let x = SK.x + fx * 85, z = SK.z + fz * 85;
+  if (heightAt(x, z) > -0.8) { const p = routeAt(Math.max(40, G.s - 85)); x = p.x + 6; z = p.z; }
+  const B = otherBody(x, z, Math.atan2(SK.x - x, SK.z - z));
+  OS.seek = { B, phase: 'come', t: 0, v: 3.5, look: 0, pauseT: 7, kt: 0, k: 0, way: [] };
+  AUDIO.otherCome && AUDIO.otherCome([x, 0, z], 0.8);
+}
+function osSeekStep(dt) {
+  const Q = OS.seek, B = Q.B;
+  Q.t += dt;
+  const dx = SK.x - B.x, dz = SK.z - B.z, d = Math.hypot(dx, dz);
+  let want = 0;
+  if (Q.phase === 'come') {
+    // over the ice toward where you are, not fast, stopping now and then to look round
+    Q.k = Math.min(1, Q.k + dt * 0.35);
+    Q.pauseT -= dt;
+    if (Q.pauseT < 0 && d > 18) { Q.look = 2.4; Q.pauseT = 7 + Math.random() * 5; }
+    if (Q.look > 0) { Q.look -= dt; B.h += Math.cos(Q.look * 2.6) * dt * 1.1; }
+    else { want = d > 30 ? 4.4 : lerp(1.2, 3.8, sat((d - 4) / 26)); B.h += wrapAngle(Math.atan2(dx, dz) - B.h) * expDecay(1.4, dt); }
+    if (d < 3.4 || (d < 12 && SK.speed < 2.4 && Q.t > 5)) { Q.phase = 'kneel'; Q.kt = 0; OS.hold = 1; }
+    // left far behind (you went on past them): gone a moment, then there again, ahead of you on the ice
+    if (d > 80 && G.state === 'play') {
+      const [fx, fz] = fwdOf(SK.h), x = SK.x + fx * 70, z = SK.z + fz * 70;
+      if (heightAt(x, z) < -0.8) { B.x = x; B.z = z; B.h = Math.atan2(SK.x - x, SK.z - z); Q.k = 0; Q.v = 2; }
+    }
+  } else if (Q.phase === 'kneel') {
+    // to a stop just in front of you, turned to you; down on one knee; the candle; a hand on the ice; up again
+    Q.kt += dt;
+    const [fx, fz] = fwdOf(SK.h);
+    const tx = SK.x + fx * 0.95, tz = SK.z + fz * 0.95;
+    if (Q.kt < 1.8) { B.x = lerp(B.x, tx, expDecay(1.6, dt)); B.z = lerp(B.z, tz, expDecay(1.6, dt)); }
+    B.h += wrapAngle(SK.h + PI - B.h) * expDecay(2.2, dt);
+    B.kneel = smooth(1.5, 2.7, Q.kt) * (1 - smooth(6.9, 8.1, Q.kt));
+    B.reach = smooth(2.2, 2.9, Q.kt) * (1 - smooth(6.4, 7.0, Q.kt));
+    if (!OS.candle && Q.kt > 2.9) {
+      const [bx, bz] = fwdOf(B.h);
+      OS.candle = { x: B.x + bx * 0.5, z: B.z + bz * 0.5, k: 0 };
+      AUDIO.osCandle && AUDIO.osCandle([OS.candle.x, 0, OS.candle.z]);
+    }
+    if (Q.kt > 3.8 && !Q.knock1) { Q.knock1 = true; AUDIO.osKnock && AUDIO.osKnock([SK.x, -0.2, SK.z]); }
+    if (Q.kt > 4.25 && !Q.knock2) { Q.knock2 = true; AUDIO.osKnock && AUDIO.osKnock([SK.x, -0.2, SK.z]); }
+    if (Q.kt > 10) { Q.phase = 'go'; Q.gt = 0; Q.goH = Math.atan2(B.x - SK.x, B.z - SK.z); OS.end.t = 0; AUDIO.osEnd && AUDIO.osEnd(); }
+  } else if (Q.phase === 'go') {
+    // and away, back the way they came, slowly
+    Q.gt += dt;
+    B.h += wrapAngle(Q.goH - B.h) * expDecay(1.2, dt);
+    want = Q.gt > 1.2 ? 3.0 : 0;
+    Q.k = 1 - smooth(9, 16, Q.gt);
+  }
+  Q.v = lerp(Q.v, want, expDecay(want > Q.v ? 1.3 : 2.4, dt));
+  if (Q.phase !== 'kneel') { const [fx, fz] = fwdOf(B.h); B.x += fx * Q.v * dt; B.z += fz * Q.v * dt; }
+  B.vx = Math.sin(B.h) * Q.v; B.vz = Math.cos(B.h) * Q.v; B.speed = Q.v;
+  B.turnRate = 0;
+  B.pushT += dt; if (B.pushLeft > 0) B.pushLeft -= dt;
+  if (Q.v > 1.6 && B.pushT > lerp(TUNE.periodSlow, TUNE.periodFast, sat(Q.v / TUNE.vmax)) + 0.12) {
+    B.pushT = 0; B.pushSide = -B.pushSide; B.pushLeft = TUNE.pushTime;
+    AUDIO.otherPush && AUDIO.otherPush([B.x, 0, B.z], Q.k * 0.8, 0);
+  }
+  B.landT += dt;
+  skaterAnimate(dt, B);
+  skaterPose(B);
+  if (OS.candle) OS.candle.k = Math.min(1, OS.candle.k + dt * 1.4);
+}
+// the searcher and the candle, in the mirror only: they are in the world you left
+function osDraws() {
+  const D = [];
+  if (!OS.on) return D;
+  const T = OS.train;
+  if (!T.gone) D.push({ mesh: R.osTrain, m: m4trs(lineAt(T.u), LINE.yaw, 0, 0), lk: 0.6, os: true });
+  const Q = OS.seek;
+  if (Q && Q.B.joints && Q.k > 0.01 && BODY.layers2) {
+    const J = Q.B.joints, bones = bodySkin(J, Q.raw || (Q.raw = new Float32Array(12 * 16))).slice();
+    for (const mesh of BODY.layers2) D.push({ mesh, bones, lk: 0.2, bright: 1.0, mirror: Q.k, cast: false });
+    for (const L of J.legs) D.push({ mesh: SKM.boot, m: m4trs([L.foot[0], L.foot[1] - 0.004, L.foot[2]], L.yaw, 0, 0), lk: 0.2, bright: 1.0, mirror: Q.k, cast: false });
+    const yv = vmul(J.hang, -1), xv = vnorm(vcross(yv, J.F)), zv = vcross(xv, yv);
+    const LM = new Float32Array([xv[0], xv[1], xv[2], 0, yv[0], yv[1], yv[2], 0, zv[0], zv[1], zv[2], 0, J.lantC[0], J.lantC[1], J.lantC[2], 1]);
+    D.push({ mesh: SKM.lantern, m: LM, lk: 0.2, bright: 1.0, mirror: Q.k, cast: false });
+    D.push({ mesh: SKM.globe, m: LM, mirror: Q.k, cast: false });
+    D.push({ mesh: SKM.flame, m: LM, mirror: Q.k, cast: false });
+  }
+  if (OS.candle && SKM.osJar) {
+    const m = m4trs([OS.candle.x, 0, OS.candle.z], 0, 0, 0, 2.2);
+    D.push({ mesh: SKM.osJar, m, lk: 0.2, bright: 1.0, mirror: 1, cast: false });
+    D.push({ mesh: SKM.osFlame, m: m4trs([OS.candle.x, 0, OS.candle.z], 0, 0, 0, [2.2, 2.2 * (0.3 + 0.7 * OS.candle.k), 2.2]), mirror: OS.candle.k, cast: false });
+  }
+  return D;
+}
+
+// ---- the end: the camera goes up off you, the candle burning in the ice at your feet; dark; the card ----
+function osEndStep(dt, inp) {
+  const E = OS.end;
+  if (E.t < 0) return;
+  E.t += dt;
+  if (E.t > 9) G.fade = Math.min(1, G.fade + dt * 0.3);
+  if (E.t > 13 && !E.card) { E.card = true; showCard(); }
+  if (E.card && E.t > 16 && (INP.skate || INP.stop || INP.keys.has('Space') || INP.keys.has('Enter'))) location.reload();
+}
+// the camera while they kneel: low over your shoulder, looking down at the ice in front of you; then up and away
+function osCamera(dt) {
+  const C = G.cam, Q = OS.seek, E = OS.end;
+  const [fx, fz] = fwdOf(SK.h), [rx, rz] = rightOf(SK.h);
+  const k = smooth(0, 1.6, Q.kt || 0);
+  const up = E.t < 0 ? 0 : smooth(1.0, 12, E.t);
+  // to one side of you, low, so you see yourself standing and, under your feet in the ice, them kneeling
+  const side = OS.camSide || (OS.camSide = 1);
+  const pos = [SK.x + rx * side * lerp(4.2, 1.2, up) + fx * 0.5, lerp(0.95, 15, up), SK.z + rz * side * lerp(4.2, 1.2, up) + fz * 0.5];
+  const c = OS.candle || { x: SK.x + fx * 0.6, z: SK.z + fz * 0.6 };
+  const look = [lerp(SK.x + fx * 0.45, c.x, up), lerp(0.3, -0.2, up), lerp(SK.z + fz * 0.45, c.z, up)];
+  C.pos = vlerp(C.pos, pos, expDecay(1.2 * k + 0.25, dt));
+  C.look = vlerp(C.look, look, expDecay(1.5 * k + 0.3, dt));
+  C.fov = lerp(C.fov, 56, expDecay(1, dt));
+  C.yaw = Math.atan2(C.look[0] - C.pos[0], C.look[2] - C.pos[2]);
+}
+
+// ---- lamps and streams for the shaders: the nearest few to where you are ----
+function osLightsFrame() {
+  const U = OS.lightsU, cam = G.cam.pos, me = [SK.x, 1, SK.z];
+  let list;
+  if (OS.on) {
+    list = OS.lights.slice();
+    const T = OS.train;
+    if (!T.gone) for (const [lx, off] of [[-17, 2.4], [-1, -2.4], [15, 2.4], [-9, -2.4], [7, 2.4]]) list.push({ p: lineAt(T.u + lx, off, 2.0), c: [0.6, 0.4, 0.2], r: 9 });
+    if (OS.candle) list.push({ p: [OS.candle.x, -0.08, OS.candle.z], c: vmul([0.5, 0.3, 0.12], OS.candle.k), r: 5 });
+  } else {
+    list = [];
+    for (const l of SCENE.lamps) list.push({ p: l, c: [0.5, 0.3, 0.14], r: 9 });
+    for (const l of SCENE.candles) list.push({ p: l, c: vmul([0.2, 0.12, 0.05], l[3]), r: 5 });
+  }
+  const scored = [];
+  for (const L of list) {
+    const d = Math.min(Math.hypot(L.p[0] - cam[0], L.p[2] - cam[2]), Math.hypot(L.p[0] - me[0], L.p[2] - me[2]));
+    if (d > L.r + 70) continue;
+    scored.push([(L.c[0] + L.c[1]) * L.r / (d * d + 30), L]);
+  }
+  scored.sort((a, b) => b[0] - a[0]);
+  U.n = Math.min(16, scored.length);
+  for (let i = 0; i < U.n; i++) { const L = scored[i][1]; U.pos.set([L.p[0], L.p[1], L.p[2], L.r], i * 4); U.col.set(L.c, i * 3); }
+  // the frozen streams
+  const S = OS.streamU, near = [];
+  for (const q of STREAM_SEGS) { const mx = (q[0] + q[2]) / 2, mz = (q[1] + q[3]) / 2, d = Math.hypot(mx - cam[0], mz - cam[2]); if (d < 260) near.push([d, q]); }
+  near.sort((a, b) => a[0] - b[0]);
+  S.n = Math.min(40, near.length);
+  for (let i = 0; i < S.n; i++) { const q = near[i][1]; S.seg.set([q[0], q[1], q[2], q[3]], i * 4); S.w[i] = q[4]; }
+}
+
+// the mirror, from the far side: the world you left, in the morning the bell brought it; your light is not in it
+function osMirrorEnter(U) {
+  const keys = ['dawn', 'night', 'dusk', 'aurora', 'storm', 'moonCol', 'sunDir', 'sunCol', 'skyAmb', 'groundAmb', 'fog', 'lanternCol', 'drown', 'deep', 'sunSh'];
+  const saved = {}; for (const k of keys) saved[k] = U[k];
+  Object.assign(U, { dawn: 1, aurora: 0, storm: 0, dusk: 0, moonCol: [0, 0, 0], sunDir: vnorm([0.75, 0.16, -0.6]), sunCol: [0.9, 0.6, 0.39],
+    skyAmb: [0.1, 0.117, 0.155], groundAmb: [0.055, 0.064, 0.085], fog: [0.0035, 0.0045, 0.0075, 0.00014], lanternCol: [0, 0, 0], drown: 0, deep: [0, 0, 0, 0], sunSh: [0, 0, 0, 0] });
+  R.lampsOff = true;
+  return saved;
+}
+function osMirrorLeave(U, saved) { Object.assign(U, saved); R.lampsOff = false; }
 
 // ---- 90-main.js ----
 // Start-up, input, the loop.
@@ -5253,7 +6085,18 @@ const SPEED = clamp(Number(Q.get('speed')) || 1, 0.1, 8);
 // a stand-in pilot for checking: follows the marked way, hops the ridges and the lead, rings the bell
 const BOT = { on: Q.has('bot'), pulled: false, follow: Q.has('follow') };
 function botInput(inp) {
-  if (G.ending) return;
+  if (G.ending || OS.phase === 'brink') return;
+  if (OS.on) {
+    // the far side: on down the way, south; wait for the one who comes, and let them
+    if (G.state !== 'play' || OS.hold || OS.seek) { inp.skate = false; inp.stop = SK.speed > 0.6 && !OS.hold; inp.turn = 0; return; }
+    const q = routeAt(Math.max(5, G.s - 10 - SK.speed * 0.9));
+    const T = OS.train;
+    if (T.go && !T.gone && T.u < 40 && Math.abs(G.s - 1560) < 26) { inp.skate = false; inp.stop = SK.speed > 0.5; return; }
+    const want = Math.atan2(q.x - SK.x, q.z - SK.z);
+    inp.turn = clamp(wrapAngle(SK.h - want), -0.06 * SPEED, 0.06 * SPEED);
+    inp.skate = true; inp.stop = false;
+    return;
+  }
   if (G.state === 'tower') { inp.skate = BELL.held ? BELL.pullT > 0 : Math.abs(BELL.a) < 0.15; return; }
   if (G.state !== 'play') return;
   const look = G.s + 10 + SK.speed * 0.9;
@@ -5380,18 +6223,25 @@ function loop(t) {
   INP.mdx = 0; INP.mdy = 0; INP.hop = false;
   if (!paused) gameStep(dt, inp);
   lightState();
+  osLightsFrame();
   const V = buildView();
   R.U.cam = V.cam;
   R.U.fade = G.fade;
   R.U.underwater = 0;
   const glows = [];
-  for (const l of SCENE.lamps) glows.push([l[0], l[1], l[2], 0.35, 0.2, 0.11, 0.05]);
-  for (const h of HUTS) glows.push([h.window[0], h.window[1], h.window[2], 0.9, 0.09, 0.05, 0.02]);
+  if (OS.on) { const C = G.cam.pos; for (const g of OS.glows) if (Math.abs(g[0] - C[0]) < 260 && Math.abs(g[2] - C[2]) < 260) glows.push(g); }
+  else {
+    for (const l of SCENE.lamps) glows.push([l[0], l[1], l[2], 0.35, 0.2, 0.11, 0.05]);
+    for (const h of HUTS) glows.push([h.window[0], h.window[1], h.window[2], 0.9, 0.09, 0.05, 0.02]);
+    for (const c of SCENE.candles) { glows.push([c[0], c[1] + 0.02, c[2], 0.22, 0.14 * c[3], 0.07 * c[3], 0.025 * c[3]]); glows.push([c[0], c[1] + 0.05, c[2], 0.9, 0.03 * c[3], 0.016 * c[3], 0.006 * c[3]]); }
+  }
   if (SCENE.damLamps) for (const l of SCENE.damLamps) glows.push([l[0], l[1], l[2], 2.4, 0.5, 0.22, 0.06]);
   buildSprites(V.right, V.up, glows);
   AUDIO.update(dt);
   buildDeepGlows(V.right, V.up);
-  const draws = (G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws()).concat(deepDraws(), otherDraws());
+  const mine = G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws();
+  if (OS.on) for (const d of mine) d.self = true;
+  const draws = mine.concat(deepDraws(), otherDraws(), osDraws());
   otherTrailDecal();
   if (Math.hypot(G.cam.pos[0] - TOWER.x, G.cam.pos[2] - TOWER.z) < 600) draws.push(...bellDraws());
   renderFrame({ ...V, skaterDraws: draws });
@@ -5437,6 +6287,10 @@ window.__ice = {
   key(code, down) { if (down) INP.keys.add(code); else INP.keys.delete(code); },
   FALL, AUDIO, BODY, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, DEEP, morning: () => startMorning(), BELL, LEADS, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
   OTHER, maxS: (s) => (G.maxS = s), MORNING_T: () => (G.ending || G.morningFree ? MORNING.t : -1),
+  OS, VIGILS, STREAMS,
+  // straight to the far side, for checking it
+  cross() { STORY.ended = true; G.morningFree = true; G.maxS = 3066; G.dawn = 0; DRAW.on = true; DRAW.t = 99; FALL.x = FALLPOINT[0]; FALL.z = FALLPOINT[1]; BELL.strikes = 5; osArrive(); },
+  os: () => ({ on: OS.on, phase: OS.phase, train: +OS.train.u.toFixed(1), seek: OS.seek ? OS.seek.phase : null, kt: OS.seek ? +(OS.seek.kt || 0).toFixed(1) : 0, end: +OS.end.t.toFixed(1), card: OS.end.card, cols: COLLIDERS.length, lights: OS.lightsU.n }),
 };
 boot();
 
