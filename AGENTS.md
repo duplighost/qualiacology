@@ -76,6 +76,7 @@ Old copies and retired folders are in `D:\Archive`; never copy from there.
 | tinbound | `node tools/build-site-copy.mjs <this repo>`; it copies the runtime, card and link-preview image. The offline single-file build stays separate. |
 | black-lacquer | `node tools/build-site-copy.mjs <this repo>`; it copies the finished runtime, gameplay card and link-preview image. Never hand-edit the site copy. |
 | the-wake | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy |
+| no-shore | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy. The card and link-preview image come from `node tools/card.mjs <this repo>` |
 | in-every-direction | `node tools/build-site-copy.mjs <this repo>` (it writes the card too); never hand-edit the site copy |
 | the-way-i-came | `node tools/build-site-copy.mjs <this repo>`; never hand-edit the site copy |
 | threshold | `node tools/build-site-copy.mjs <this repo>` (it copies the link-preview image too); never hand-edit the site copy. Alex's Halloween game for his psychopharmacology Discord; not on the hub pages |
