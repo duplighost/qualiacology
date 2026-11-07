@@ -50,19 +50,21 @@ export class Boss {
   get targetable() { return !this.intangible && this.state !== 'finished' && this.state !== 'gone'; }
   get hpK() { return this.hp / this.maxHp; }
 
-  place(x, z, facing) { this.x = x; this.z = z; if (facing !== undefined) this.facing = facing; this.move = null; this._sync(); }
+  // pinned: her bar is empty and she's down on her knees for the finale; the script's moves and one-shots wait
+  place(x, z, facing) { if (this.pinned) return; this.x = x; this.z = z; if (facing !== undefined) this.facing = facing; this.move = null; this._sync(); }
   _sync() { this.root.position.set(this.x, this.root.position.y, this.z); this.root.rotation.y = this.facing; }
 
   // move to (x, z) over dur seconds (game time); returns the arrival time
   moveTo(x, z, dur, { easing = 'inOut', face = true, now = this._now } = {}) {
+    if (this.pinned) return now + dur;
     this.move = { fx: this.x, fz: this.z, tx: x, tz: z, t0: now, dur: Math.max(0.01, dur), ease: ease[easing] || ease.inOut, face };
     return now + dur;
   }
   stop() { this.move = null; }
 
   // play a clip fitted so that `at` (0..1 of the clip window) lands at song time `impactT`
-  perform(clip, { from = 0, to = 1, duration, then = 'idle', fade = 0.1, speed } = {}) {
-    if (!this.rig) return;
+  perform(clip, { from = 0, to = 1, duration, then = 'idle', fade = 0.1, speed, force = false } = {}) {
+    if (!this.rig || (this.pinned && !force)) return;
     this.rig.once(clip, { from, to, duration, speed, fade, then: then === 'idle' ? this.idleClip : then });
     const c = this.rig.kit.clips[clip];
     const len = duration || (c ? c.duration * (to - from) / (speed || 1) : 0.5);
@@ -75,8 +77,20 @@ export class Boss {
     const lead = Math.max(0.12, at - (this._now || 0));
     this.perform(clip, { from, to, duration: lead / Math.max(0.05, hit), then, fade: 0.06 });
   }
-  loop(clip, opts = {}) { if (this.rig) this.rig.play(clip, { fade: 0.2, ...opts }); }
-  set idle(c) { this.idleClip = c; }
+  loop(clip, opts = {}) { if (this.rig && (!this.pinned || opts.force)) this.rig.play(clip, { fade: 0.2, ...opts }); }
+  // down on her knees for the finale's last bars. Some tracks play clips straight on her rig: while she's pinned those
+  // wait too (all but the one she's down in)
+  pin(clip = 'Crouch_Idle_Loop') {
+    const rig = this.rig; this.pinned = true; this.idleClip = clip; this.busyUntil = 0;
+    if (rig && !rig._pinWrap) {
+      const play = rig.play.bind(rig), once = rig.once.bind(rig);
+      rig._pinWrap = true;
+      rig.play = (c, o) => (this.pinned && c !== this.idleClip ? undefined : play(c, o));
+      rig.once = (c, o) => (this.pinned ? undefined : once(c, o));
+    }
+    if (rig) rig.play(clip, { fade: 0.3 });
+  }
+  set idle(c) { if (!this.pinned) this.idleClip = c; }
   get idle() { return this.idleClip; }
 
   // ---------- being hit ----------

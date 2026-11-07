@@ -5,6 +5,7 @@
 // 4 / 6 units), plus: o.onCancel when YOU's spotlight took it, a quieter white for room-sized shapes, no impact flash
 // on them (the attack draws its own: the hem's whip), meshes that fly along a lob.
 import * as THREE from 'three';
+import { blockable } from '../../game/kinds.js';
 
 export const TAU = Math.PI * 2;
 export const toward = (a, b) => Math.atan2(b.x - a.x, b.z - a.z);
@@ -18,6 +19,7 @@ export const U = 11;
 // ------------------------------------------------------------------------------------------------ the resolver
 // like patterns.area, plus: o.onCancel when the spotlight took it, o.cueKind for the sound, o.y lifts the shape
 export function area(f, o) {
+  o = blockable(o);
   const sh = { shape: o.shape, x: o.x, z: o.z, angle: o.angle || 0, w: o.w, h: o.h ?? o.w, param: o.param ?? 0.5 };
   let g = null;
   if (!o.noTele) {
@@ -142,7 +144,7 @@ export function lob(f, o) {
     if (p && kind === 'pink' && !o.silent) f.sfx.fire && f.sfx.fire(o.shape || 'card', f.pan(s.x), kind);
   };
   fly();
-  return area(f, { shape: 'circle', x: at.x, z: at.z, w: r, kind, start: t0, end: t1, damage: o.damage ?? 1, silent: o.silentCue, sound: o.sound,
+  return area(f, { shape: 'circle', x: at.x, z: at.z, w: r, kind, hard: kind === 'white', start: t0, end: t1, damage: o.damage ?? 1, silent: o.silentCue, sound: o.sound,
     onCancel: () => { if (p) p.dead = true; if (mesh) dropMesh(f, mesh); },
     onImpact: (hit, sh) => {
       if (p) p.dead = true;

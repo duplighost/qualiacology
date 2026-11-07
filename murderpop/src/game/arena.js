@@ -715,6 +715,9 @@ vArenaW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
 
   /** Call once per frame before rendering. camera: the game camera (default arena.camera). focus: where point keys
    *  aim for characters (default the room's middle). */
+  // the room breathes with the song: its lamps and neon brighten on each beat (k: how much, 0 = as baked)
+  setBeat(k) { const v = 1 + k; for (const e of this.emissive) e.mat.emissiveIntensity = v; }
+
   update(dt, camera = this.camera, focus = null) {
     this.time += dt;
     if (camera) { this.camera = camera; this.prepareCamera(camera); camera.updateMatrixWorld(); }

@@ -5,6 +5,7 @@
 //   shot: a WHITE lane that fills to the release, then a fast projectile crosses it
 //   hazard: a shape that hurts for a while (fire, the key's lane, frozen floor)
 import * as THREE from 'three';
+import { blockable } from '../../game/kinds.js';
 import { inShape } from '../../game/choreo.js';
 import { FEEL } from '../../game/player.js';
 
@@ -17,6 +18,7 @@ export { clampTo };
 // o: { shape, x, z, angle, w, h, param, kind, start, end, owner, damage, melee, onImpact(hit, sh), silent, sound,
 //      follow, noHurt, cue }
 export function zone(f, o) {
+  o = blockable(o);
   const C = f.court;
   const owner = o.owner || 'her';
   const sh = { shape: o.shape, x: o.x, z: o.z, angle: o.angle || 0, w: o.w, h: o.h ?? o.w, param: o.param ?? 0.5 };

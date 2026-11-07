@@ -6,6 +6,8 @@
 // f provides: t, beat, after(sec, fn), player, boss, proj (Projectiles), tele (Telegraphs), area(shape, opts),
 //             sfx, fx, bounds
 
+import { blockable } from './kinds.js';
+
 const TAU = Math.PI * 2;
 const toward = (from, to) => Math.atan2(to.x - from.x, to.z - from.z);
 
@@ -178,7 +180,7 @@ export function lob(f, o = {}) {
   const p = f.proj.spawn({ x: sx, z: sz, y: sy, angle: 0, speed: 0, kind, shape: o.shape || 'card', size: o.size ?? 0.45, color: o.color, life: dur + 0.08, owner: 'deco', spin: o.spin ?? 2.5, parryable: false,
     fn: (q) => { const k = Math.min(1, Math.max(0, (f.t - t0) / dur)); place(q, k); if (mesh) { mesh.position.set(q.x, q.y, q.z); mesh.rotation.y += 0.05; mesh.rotation.x = Math.sin(k * Math.PI) * 0.6; } } });
   if (kind === 'pink' && !o.silent) f.sfx.fire && f.sfx.fire(o.shape || 'card', f.pan(sx), kind);
-  return area(f, { shape: 'circle', x: at.x, z: at.z, w: r, kind, start: t0, end: t1, damage: o.damage ?? 1, silent: o.silentCue, sound: o.sound,
+  return area(f, { shape: 'circle', x: at.x, z: at.z, w: r, kind, hard: kind === 'white', start: t0, end: t1, damage: o.damage ?? 1, silent: o.silentCue, sound: o.sound,
     onFizzle: () => { if (p) p.dead = true; if (mesh) f.scene.remove(mesh); },
     onImpact: (hit, sh) => {
       if (p) p.dead = true;
@@ -197,6 +199,7 @@ export function lob(f, o = {}) {
 // an area that lands at `end`: draws its telegraph from `start`; at `end` hurts the player if inside,
 // unless they dash through it (near miss) or, if PINK, catch/parry at the impact.
 export function area(f, o) {
+  o = blockable(o);
   const sh = { shape: o.shape, x: o.x, z: o.z, angle: o.angle || 0, w: o.w, h: o.h ?? o.w, param: o.param ?? 0.5 };
   let g = null;
   if (!o.noTele) {

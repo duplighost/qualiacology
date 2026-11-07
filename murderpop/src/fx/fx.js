@@ -242,6 +242,25 @@ export class FX {
   // the meter's full: the spotlight is yours to take
   meterFull(pl) { this.glitter(pl.x, 1.3, pl.z, new THREE.Color(3.2, 2.2, 0.7), 22, 0.7); this.sx.ring(pl.x, pl.z, SX_GOLD, 1.6, 0.4); }
   soloBeats(left, n, pulse, pl) { this.sx.soloBeats(left, n, pulse, pl, this._dt || 1 / 60); }
+  // gold motes from what earned the spotlight to YOU's ring: you see where it comes from
+  mote(from, pl, n = 3) {
+    for (let i = 0; i < n; i++) {
+      const m = { p: new THREE.Vector3(from.x + (Math.random() - 0.5) * 0.4, (from.y ?? 1) + (Math.random() - 0.5) * 0.3, from.z + (Math.random() - 0.5) * 0.4), t: -i * 0.05, pl };
+      m.from = m.p.clone();
+      m.trail = this.trail(() => m.p, { w: 0.07, color: new THREE.Color(3.2, 1.95, 0.5), len: 10, life: 0.15 });
+      (this.motes ||= []).push(m);
+    }
+  }
+  _updateMotes(dt) {
+    if (!this.motes) return;
+    for (let i = this.motes.length - 1; i >= 0; i--) {
+      const m = this.motes[i]; m.t += dt; if (m.t < 0) continue;
+      const k = Math.min(1, m.t / 0.42), e = k * k * (3 - 2 * k);
+      m.p.set(m.from.x + (m.pl.x - m.from.x) * e, m.from.y + (0.25 - m.from.y) * e + Math.sin(k * Math.PI) * 0.9, m.from.z + (m.pl.z - m.from.z) * e);
+      if (k >= 1) { m.trail.live = false; this.glitter(m.pl.x, 0.3, m.pl.z, new THREE.Color(3.2, 2.2, 0.7), 3, 0.25); this.motes.splice(i, 1); }
+    }
+  }
+  drawTargets(list, pulse) { this.sx.drawTargets(list, pulse); }
 
   // ---------- screen ----------
   flash(color, k = 1) { this.flashC.r = Math.max(this.flashC.r, color.r * k); this.flashC.g = Math.max(this.flashC.g, color.g * k); this.flashC.b = Math.max(this.flashC.b, color.b * k); }
@@ -257,6 +276,7 @@ export class FX {
     if (this._swing && (!player || player.state !== 'strike' || player.strike !== this._swing.s)) this._endSwing();
     this.sx.update(dt);
     this.sx.updateGuard(dt, player, this._time);
+    this._updateMotes(dt);
     // catch ring
     if (player) {
       this.catchRing.position.set(player.x, 0.05, player.z);
@@ -279,5 +299,5 @@ export class FX {
     this.caK *= Math.exp(-dt * 7);
   }
 
-  clear() { this.p.length = 0; for (const t of this.trails) { this.scene.remove(t.mesh); t.g.dispose(); } this.trails.length = 0; this._swing = null; this._dashTrail = null; this.sx.clear(); }
+  clear() { this.p.length = 0; for (const t of this.trails) { this.scene.remove(t.mesh); t.g.dispose(); } this.trails.length = 0; this._swing = null; this._dashTrail = null; this.motes = []; this.sx.clear(); }
 }

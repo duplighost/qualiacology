@@ -82,7 +82,13 @@ export class Player {
   _sync() { this.root.position.set(this.x, 0, this.z); this.root.rotation.y = this.facing; }
 
   heal(n = 1) { this.hearts = Math.min(this.maxHearts || FEEL.hearts, this.hearts + n); }
-  addMeter(k) { if (this.solo) return; const was = this.meter; this.meter = Math.min(1, this.meter + k); if (was < 1 && this.meter >= 1) this._meterFull = true; }
+  // the spotlight's meter: faster the hotter your combo is; from: where it was earned (gold motes fly from there to you)
+  addMeter(k, from) {
+    if (this.solo) return;
+    const was = this.meter; this.meter = Math.min(1, this.meter + k * (1 + 0.1 * (this.heat || 0)));
+    if (from && this._fx && this.meter > was && was < 1) this._fx.mote(from, this, k >= 0.1 ? 4 : 2);
+    if (was < 1 && this.meter >= 1) this._meterFull = true;
+  }
 
   // judgement of an action at song time t against the beat grid (the ring throw, and anything else that asks)
   // on: on a beat; big: on the felt beat (the strike grid)
@@ -100,17 +106,17 @@ export class Player {
     const bm = ctx.beats; if (!bm) return null;
     const tHit = ctx.t + su0;
     if (this.solo) {
-      for (const sub of [2, 4]) { const g = bm.timeOf(Math.ceil(bm.beatAt(tHit - 0.05) * sub) / sub); if (g - tHit <= 0.13 || sub === 4) return { g, on: true, big: true }; }
+      for (const sub of [2, 4]) { const g = bm.timeOf(Math.ceil(bm.beatAt(tHit - 0.05) * sub) / sub); if (g - tHit <= 0.13 || sub === 4) return { g, on: true, big: true, beat: g }; }
     }
     const j = this.beatJudge(ctx, pressT);
     if (!j.on) return null;
-    return { g: Math.max(j.time, ctx.t + su0 * 0.55), on: true, big: j.big };
+    return { g: Math.max(j.time, ctx.t + su0 * 0.55), on: true, big: j.big, beat: j.time };
   }
 
   update(ctx) {
     const { dt, input } = ctx;
     const now = performance.now();
-    this.st += dt; this.clock += dt;
+    this.st += dt; this.clock += dt; this._fx = ctx.fx;
     if (this.inv > 0) this.inv -= dt;
     if (this.counterT > 0) this.counterT -= dt;
     if (this.catchT >= 0) this.catchT += dt;
@@ -249,7 +255,7 @@ export class Player {
     }
     // the beat: pressed on one, the hit lands on it
     const su0 = s.dur * s.hitAt, bt = this._beatTime(ctx, pressT, su0);
-    s.on = !!(bt && bt.on); s.big = !!(bt && bt.big);
+    s.on = !!(bt && bt.on); s.big = !!(bt && bt.big); s.beatT = bt ? bt.beat : null; s.pressT = pressT;   // the beat it was pressed on, and when
     if (bt) { const su = clamp(bt.g - ctx.t, su0 * 0.55, su0 + 0.16); s.dur = su / s.hitAt; }
     // three on the beat: the third is the finisher
     this.streak = s.on ? this.streak + 1 : 0;
@@ -280,6 +286,7 @@ export class Player {
     let dmg = s.dmg;
     const on = s.on || s.riposte;
     if (!s.riposte) dmg *= this.solo ? FEEL.dmgSolo : s.finisher ? FEEL.dmgFinisher : s.big ? FEEL.dmgBig : s.on ? FEEL.dmgOn : FEEL.dmgOff;
+    dmg *= 1 + 0.06 * (this.heat || 0);           // a hot combo hits harder
     const counter = this.counterT > 0 && !s.riposte; if (counter) { dmg *= 1.5; this.counterT = 0; }
     const big = !!(s.heavy || counter || s.finisher || s.riposte);
     const res = b.takeHit({ dmg, kind: 'strike', heavy: big, from: this, onBeat: on, bigBeat: !!(s.big || s.finisher || this.solo), x: this.x, z: this.z, ang: this._strikeAng, finisher: !!s.finisher, riposte: !!s.riposte });
@@ -288,8 +295,9 @@ export class Player {
       if (s.finisher) this.stats.finishers++;
       if (s.riposte) this.stats.ripostes++;
       this.rig.hitStop(s.riposte ? 0.13 : s.finisher ? 0.12 : big ? 0.085 : on ? 0.065 : 0.045);
-      if (on && !s.riposte) this.addMeter(FEEL.meter.onBeatHit);
-      if (s.finisher) this.addMeter(FEEL.meter.finisher);
+      const at = { x: b.x, y: 1.3, z: b.z };
+      if (on && !s.riposte) this.addMeter(FEEL.meter.onBeatHit, s.big ? at : null);
+      if (s.finisher) this.addMeter(FEEL.meter.finisher, at);
       ctx.onPlayerLanded && ctx.onPlayerLanded(s, res, on, counter);
     } else if (res && res.deflected) this.streak = 0;
   }
@@ -338,7 +346,7 @@ export class Player {
   }
   caught(q, ctx) {
     this.stats.catches++; if (q === 'perfect') this.stats.perfect++;
-    this.addMeter(q === 'perfect' ? FEEL.meter.perfectCatch : FEEL.meter.goodCatch);
+    this.addMeter(q === 'perfect' ? FEEL.meter.perfectCatch : FEEL.meter.goodCatch, { x: this.x + Math.sin(this.facing) * 0.8, y: 1.2, z: this.z + Math.cos(this.facing) * 0.8 });
     this.rig.hitStop(q === 'perfect' ? 0.1 : 0.06);
     this.blockK = 1;
     this.catchT = FEEL.catchGood + 0.001; // one catch per press...
@@ -351,7 +359,7 @@ export class Player {
     this.rig.hitStop(0.05);
     this.rig.flinch = Math.max(this.rig.flinch, 0.45); this.rig.flinchDir.set(Math.sin(a), 0, Math.cos(a));
     this.stats.blocks++; this.blockK = 1;
-    this.addMeter(FEEL.meter.block);
+    this.addMeter(FEEL.meter.block, { x: this.x - Math.sin(a) * 0.8, y: 1.1, z: this.z - Math.cos(a) * 0.8 });
   }
 
   // ---------- ring throw ----------
@@ -403,7 +411,7 @@ export class Player {
   _ringHit(ctx, r) {
     const on = r.judge && r.judge.on;
     const res = ctx.boss.takeHit({ dmg: FEEL.ringDmg * (on ? 1.25 : 1), kind: 'ring', heavy: false, from: this, onBeat: on, x: r.pos.x, z: r.pos.z, ang: 0 });
-    if (res && res.landed) { this.stats.ringHits++; this.addMeter(FEEL.meter.ringHit); ctx.onPlayerLanded && ctx.onPlayerLanded({ name: 'ring' }, res, on, false, r.pos); }
+    if (res && res.landed) { this.stats.ringHits++; this.addMeter(FEEL.meter.ringHit, on ? r.pos : null); ctx.onPlayerLanded && ctx.onPlayerLanded({ name: 'ring' }, res, on, false, r.pos); }
   }
   _ringHome(ctx, r) {
     r.state = 'hand';
@@ -429,7 +437,7 @@ export class Player {
   nearMiss(ctx) {
     if (this._nmCool > ctx.t) return;
     this._nmCool = ctx.t + 0.25;
-    this.stats.nearMiss++; this.addMeter(FEEL.meter.nearMiss); this.counterT = 0.7;
+    this.stats.nearMiss++; this.addMeter(FEEL.meter.nearMiss, { x: this.x, y: 1.6, z: this.z }); this.counterT = 0.7;
     ctx.sfx && ctx.sfx.nearMiss && ctx.sfx.nearMiss(this);
     ctx.fx && ctx.fx.nearMiss && ctx.fx.nearMiss(this);
   }

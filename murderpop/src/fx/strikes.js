@@ -119,6 +119,11 @@ export class StrikeFX {
     this.pips = new THREE.Mesh(QUAD, mat(PIPS_FS, { uC: { value: SX_GOLD.clone() }, uN: { value: 8 }, uLeft: { value: 0 }, uPulse: { value: 0 }, uA: { value: 0 } }));
     this.pips.rotation.x = -Math.PI / 2; this.pips.scale.setScalar(2.7); this.pips.renderOrder = 3; this.pips.visible = false; this.group.add(this.pips);
     this.pipsK = 0;
+    // the finale's rings round her, and the line at her outline they close to
+    this.targets = [];
+    for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(QUAD, mat(RING_FS, { uC: { value: SX_GOLD.clone() }, uR: { value: 0.5 }, uW: { value: 0.05 }, uA: { value: 0 } })); m.rotation.x = -Math.PI / 2; m.renderOrder = 3; m.frustumCulled = false; m.visible = false; this.group.add(m); this.targets.push(m); }
+    this.targetLine = new THREE.Mesh(QUAD, mat(RING_FS, { uC: { value: new THREE.Color(2.6, 2.4, 2.1) }, uR: { value: 0.8 }, uW: { value: 0.02 }, uA: { value: 0 } }));
+    this.targetLine.rotation.x = -Math.PI / 2; this.targetLine.renderOrder = 3; this.targetLine.frustumCulled = false; this.targetLine.visible = false; this.group.add(this.targetLine);
     // made now, hidden, so their shaders compile with the rest at load
     for (let i = 0; i < 6; i++) this._mkSlash();
     for (let i = 0; i < 8; i++) this._mkStar();
@@ -193,6 +198,29 @@ export class StrikeFX {
     U.uA.value = this.guardK * (pl.catching ? 1.4 : 1); U.uHit.value = hit; U.uTime.value = t;
   }
 
+  // ---------- the finale ----------
+  // list: [{ x, z, r, a, last, hit, rT }] from Finale.drawList(); pulse: the beat
+  drawTargets(list, pulse = 0) {
+    for (let i = 0; i < this.targets.length; i++) {
+      const m = this.targets[i], d = list[i];
+      if (!d || d.a <= 0.01) { m.visible = false; continue; }
+      m.visible = true;
+      const S = (Math.max(d.r, d.rT) + 0.35) * 1.15;
+      m.position.set(d.x, 0.055, d.z); m.scale.setScalar(S);
+      const U = m.material.uniforms;
+      U.uR.value = d.r / S; U.uW.value = (d.last ? 0.13 : 0.075) / S;
+      U.uA.value = d.a * (d.hit ? 1.15 : d.last ? 1.1 : 0.8);
+      U.uC.value.copy(d.hit ? SX_GOLD : d.last ? SX_WHITE : SX_GOLD);
+    }
+    const on = list.length > 0;
+    this.targetLine.visible = on;
+    if (on) {
+      const d = list[0], S = d.rT * 1.4;
+      this.targetLine.position.set(d.x, 0.05, d.z); this.targetLine.scale.setScalar(S);
+      const U = this.targetLine.material.uniforms; U.uR.value = d.rT / S; U.uW.value = 0.022 / S; U.uA.value = 0.35 + 0.5 * pulse;
+    }
+  }
+
   // ---------- the solo ----------
   soloBeats(left, n, pulse, pl, dt = 1 / 60) {
     this.pipsK += ((left > 0 ? 1 : 0) - this.pipsK) * Math.min(1, dt * 8);
@@ -215,5 +243,5 @@ export class StrikeFX {
     }
   }
 
-  clear() { for (const e of this.live) { e.m.visible = false; e.m.userData.busy = false; } this.live.length = 0; this.guardK = 0; this.shield.visible = false; this.pipsK = 0; this.pips.visible = false; }
+  clear() { for (const e of this.live) { e.m.visible = false; e.m.userData.busy = false; } this.live.length = 0; this.guardK = 0; this.shield.visible = false; this.pipsK = 0; this.pips.visible = false; for (const m of this.targets) m.visible = false; this.targetLine.visible = false; }
 }

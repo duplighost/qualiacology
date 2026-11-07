@@ -3,6 +3,7 @@
 // times: a rewind that lands inside one restarts it with its telegraph at the right fill. Her poses, her face, her
 // sceptre, the slap she gives anyone who stands in her face, and YOU's exit from the casket live here too.
 import * as THREE from 'three';
+import { blockable } from '../../game/kinds.js';
 import { inShape } from '../../game/choreo.js';
 import { aimSceptre } from './mourner.js';
 import { handGeometry, mats } from './props.js';
@@ -144,6 +145,7 @@ export class Director {
   // hazards draw grey and can't hurt you either (nothing she does keeps hurting you after her bar is gone).
   area(o) {
     const f = this.f;
+    o = blockable(o);
     if (this.dead && !o.keep) { this.tele({ ...o, start: o.start ?? f.t }); return null; }
     const sh = { shape: o.shape, x: o.x, z: o.z, angle: o.angle || 0, w: o.w, h: o.h ?? o.w, param: o.param ?? 0.5 };
     const gen = this.gen || 0, keep = !!o.keep, grey = this.dead;
