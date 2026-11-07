@@ -202,10 +202,22 @@ class App {
     this.lastTrack = meta.id;
     this.screen = 'loading'; this.menuDom.mode('hidden');
     this.screens.veil(true, meta.title, 0);
-    const mod = await meta.load();
-    const fight = mod.default.kind === 'walk' ? new Walk(this, mod.default) : new Fight(this, mod.default);
-    fight.manual = this.capture;
-    await fight.load((k) => this.screens.veil(true, meta.title, k));
+    let fight;
+    try {
+      const mod = await meta.load();
+      fight = mod.default.kind === 'walk' ? new Walk(this, mod.default) : new Fight(this, mod.default);
+      fight.manual = this.capture;
+      await fight.load((k) => this.screens.veil(true, meta.title, k));
+    } catch (e) {
+      // a song that can't load never leaves you on the loading bar: say so, then back to the record
+      console.error('could not load', meta.id, e);
+      try { fight && fight.dispose && fight.dispose(); } catch (e2) { /* half-built */ }
+      this.fight = null;
+      this.screens.veil(true, `${meta.title} didn't load`, 0);
+      setTimeout(() => { this.screens.veil(false); this.toRecord(); }, 2200);
+      return;
+    }
+    const mod = { default: fight.track };
     if (Q.has('auto') && fight.kind === 'walk' && mod.default.tour) { this.auto = new WalkBot(fight, mod.default.tour); fight.input = this.auto; }
     if (Q.has('auto') && fight.kind !== 'walk') { this.auto = new Autopilot(fight, Q.get('auto') === 'bad' ? { react: 0.3, jitter: 0.12, miss: 0.35, greed: 0.6 } : {}); fight.input = this.auto; }
     this.fight = fight;
