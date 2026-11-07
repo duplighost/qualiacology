@@ -212,7 +212,7 @@ function compileShader(type, src, name) {
 const PROGRAMS = [];
 // Programs are compiled in parallel by the driver (KHR_parallel_shader_compile): link everything, then check.
 function makeProgram(name, vs, fs) {
-  const head = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n';
+  const head = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nprecision highp samplerCubeShadow;\nprecision highp sampler2DArrayShadow;\nprecision highp sampler2DShadow;\n';
   const vsrc = head + vs, fsrc = head + '#define FRAG 1\n' + fs;
   const v = compileShader(gl.VERTEX_SHADER, vsrc, name), f = compileShader(gl.FRAGMENT_SHADER, fsrc, name);
   const p = gl.createProgram();
@@ -247,7 +247,7 @@ function finishProgram(P) {
     u[nm] = { loc: gl.getUniformLocation(p, info.name), type: info.type, size: info.size, unit: -1 };
   }
   let unit = 0;
-  for (const k in u) if (u[k].type === gl.SAMPLER_2D || u[k].type === gl.SAMPLER_3D || u[k].type === gl.SAMPLER_2D_ARRAY) u[k].unit = unit++;
+  for (const k in u) if (samplerTarget(u[k].type)) u[k].unit = unit++;
   P.u = u; P.ready = true;
   gl.deleteShader(P.v); gl.deleteShader(P.f);
   return P;
@@ -258,6 +258,14 @@ function allProgramsDone() {
   return PROGRAMS.every((P) => P.ready || gl.getProgramParameter(P.prog, ext.COMPLETION_STATUS_KHR));
 }
 
+// which texture target a sampler uniform of this type reads, or 0 if it is not a sampler
+function samplerTarget(t) {
+  if (t === gl.SAMPLER_2D || t === gl.SAMPLER_2D_SHADOW) return gl.TEXTURE_2D;
+  if (t === gl.SAMPLER_CUBE || t === gl.SAMPLER_CUBE_SHADOW) return gl.TEXTURE_CUBE_MAP;
+  if (t === gl.SAMPLER_2D_ARRAY || t === gl.SAMPLER_2D_ARRAY_SHADOW) return gl.TEXTURE_2D_ARRAY;
+  if (t === gl.SAMPLER_3D) return gl.TEXTURE_3D;
+  return 0;
+}
 let CUR = null;
 function use(P) { if (!P.ready) finishProgram(P); gl.useProgram(P.prog); CUR = P; return P; }
 // set uniforms on the current program: set({uTime: 1, uTex: texture, ...}); unknown names are ignored
@@ -275,11 +283,13 @@ function set(obj) {
       case gl.FLOAT_MAT4: gl.uniformMatrix4fv(e.loc, false, v); break;
       case gl.FLOAT_MAT3: gl.uniformMatrix3fv(e.loc, false, v); break;
       case gl.INT: case gl.BOOL: if (e.size > 1) gl.uniform1iv(e.loc, v); else gl.uniform1i(e.loc, v); break;
-      case gl.SAMPLER_2D: case gl.SAMPLER_3D: case gl.SAMPLER_2D_ARRAY:
+      default: {
+        const tgt = samplerTarget(e.type);
+        if (!tgt) break;
         gl.activeTexture(gl.TEXTURE0 + e.unit);
-        gl.bindTexture(e.type === gl.SAMPLER_2D ? gl.TEXTURE_2D : e.type === gl.SAMPLER_3D ? gl.TEXTURE_3D : gl.TEXTURE_2D_ARRAY, v && v.tex ? v.tex : v);
+        gl.bindTexture(tgt, v && v.tex ? v.tex : v);
         gl.uniform1i(e.loc, e.unit); break;
-      default: break;
+      }
     }
   }
 }
@@ -344,6 +354,46 @@ function freeTarget(T) {
   for (const c of T.colors) { if (c.rb) gl.deleteRenderbuffer(c.rb); if (c.tex) gl.deleteTexture(c.tex); }
   if (T.depth) { if (T.depth.rb) gl.deleteRenderbuffer(T.depth.rb); if (T.depth.tex) gl.deleteTexture(T.depth.tex); }
   gl.deleteFramebuffer(T.fb);
+}
+// Shadow maps: depth textures read with hardware comparison. A cube for the lantern (one framebuffer per face) and a
+// layered 2D array for the moon or the sun (one framebuffer per cascade).
+function depthCompare(target) {
+  gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(target, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(target, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+  gl.texParameteri(target, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+}
+function depthOnlyFB(attach) {
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  attach();
+  gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+  const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (st !== gl.FRAMEBUFFER_COMPLETE) throw new Error('shadow framebuffer incomplete ' + st);
+  return fb;
+}
+function makeShadowCube(size) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_CUBE_MAP, tex);
+  gl.texStorage2D(gl.TEXTURE_CUBE_MAP, 1, gl.DEPTH_COMPONENT24, size, size);
+  depthCompare(gl.TEXTURE_CUBE_MAP);
+  const fbs = [];
+  for (let i = 0; i < 6; i++) fbs.push(depthOnlyFB(() => gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, tex, 0)));
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, size, fbs };
+}
+function makeShadowArray(size, layers) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.DEPTH_COMPONENT24, size, size, layers);
+  depthCompare(gl.TEXTURE_2D_ARRAY);
+  const fbs = [];
+  for (let i = 0; i < layers; i++) fbs.push(depthOnlyFB(() => gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, tex, 0, i)));
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, size, fbs };
 }
 function bindTarget(T) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, T ? T.fb : null);
@@ -789,10 +839,11 @@ const WASH = [rgb(0xb8b2a3), rgb(0xa8a497), rgb(0xc2b9a5)];
 const SLATE = rgb(0x3a3d42, 0.1), WOOD = rgb(0x4a3a2c, 0.07), DARKWOOD = rgb(0x2c231b, 0.07), RUST = rgb(0x6a3c22, 0.2);
 const RED = rgb(0x8e1f1a, 0.3), BLACKP = rgb(0x141414, 0.3);
 const LIT = (k) => [1.0, 0.66, 0.34, -k];            // a lit window, k times as bright as its colour
+const DROWN = (k) => [1.0, 0.48, 0.18, -(100 + k)];  // a light left on under the ice: it flickers, the bell puts it out
 const CHECKPOINTS = [];                              // {s, x, z, lamp: [x,y,z]}
 const HUTS = [];                                     // {x, z, yaw, chimney: [x,y,z], window: [x,y,z]}
 const FISH_HOLES = [];                               // {x, z, r}
-const SCENE = { tower: null, bell: null, ropeTop: null, smoke: [], lamps: [], windows: [] };
+const SCENE = { tower: null, bell: null, ropeTop: null, smoke: [], lamps: [], windows: [], houses: [], lampPosts: [], deepLamps: [], church: null };
 
 function routeFrame(z) {
   const x = routeX(z), x2 = routeX(z + 1);
@@ -932,6 +983,25 @@ function house(b, x, z, yaw, o) {
   b.jit = 0;
   // a doorstep
   b.box(M(0, 0.06, d / 2 + 0.35, 1.3, 0.12, 0.5), rgbS(col, 0.7));
+  SCENE.houses.push({ x, z, yaw, w, d, wallH, group: o.group || '' });
+  // a light left on: a pane in some windows, embers in the hearth, a candle on the table
+  if (o.lit) {
+    const lr = rng(Math.floor(Math.abs(x) * 13 + Math.abs(z) * 7) + 1);
+    let any = false;
+    const panes = (P, Q, holes) => {
+      const L = Math.hypot(Q[0] - P[0], Q[1] - P[1]), ux = (Q[0] - P[0]) / L, uz = (Q[1] - P[1]) / L, wy = Math.atan2(ux, uz);
+      for (const [u0, u1, v0, v1] of holes) {
+        if (v0 < 0.4 || lr() > o.lit) continue;
+        any = true;
+        b.box(m4trs([P[0] + ux * (u0 + u1) / 2, base + (v0 + v1) / 2, P[1] + uz * (u0 + u1) / 2], wy, 0, 0, [0.06, v1 - v0 - 0.06, u1 - u0 - 0.06]), DROWN(1.2 + lr() * 1.6));
+      }
+    };
+    panes(A, B, front); panes(C, D, back);
+    if (any || lr() < o.lit) {
+      b.box(M(w / 2 - t / 2 - 0.14, 0.38, 0, 0.1, 0.16, 0.8), DROWN(3));
+      b.box(M(-w / 4, 1.06, -0.3, 0.05, 0.1, 0.05), DROWN(8));
+    }
+  }
 }
 function stoneWall(b, a, c, floor, h = 1.15) {
   b.jit = 0.25;
@@ -944,12 +1014,47 @@ function stoneWall(b, a, c, floor, h = 1.15) {
   }
   b.jit = 0;
 }
-function pine(b, x, y, z, s, col) {
-  b.cyl(m4trs([x, y, z], 0, 0, 0, [0.12 * s, 1.2 * s, 0.12 * s]), rgb(0x2b2017), 6, 0.6, false);
-  for (let i = 0; i < 4; i++) {
-    const k = i / 4, rr = (1.0 - k * 0.72) * 0.75 * s;
-    b.cyl(m4trs([x, y + (0.6 + k * 2.1) * s, z], i * 0.7, 0, 0, [rr, 1.1 * s * (1 - k * 0.3), rr]), col, 7, 0.0, true);
+// a spruce: tiers of drooping branches, each a ragged skirt, narrower toward the top, a leader at the crown. Stands at
+// (x, y, z), h tall. The flatter tops of the tiers take the snow (the shader lays it where a surface faces up).
+function spruce(b, x, y, z, h, o = {}) {
+  const r = o.rand || rng(1), tiers = o.tiers || 10, seg = o.seg || 20, W = o.width || 0.3;
+  const green = o.col || rgb(0x18261b, 0.04), dark = rgbS(green, 0.62), bark = rgb(0x2b2017, 0.02);
+  b.cyl(m4trs([x, y, z], 0, 0, 0, [h * 0.024, h * 0.55, h * 0.024]), bark, 6, 0.5, false);
+  // the dense middle of the tree, so the tiers are not plates with air between
+  if (!o.lod) b.cyl(m4trs([x, y + h * 0.1, z], r() * TAU, 0, 0, [h * W * 0.42, h * 0.84, h * W * 0.42]), dark, 9, 0.05, false);
+  const V = b.v;
+  for (let t = 0; t < tiers; t++) {
+    const k = t / tiers;
+    const yb = y + h * (0.12 + 0.8 * Math.pow(k, 0.9)), gap = h * 0.8 / tiers;
+    const rad = h * W * Math.pow(1 - k, 1.08) * (0.86 + 0.28 * r()) + h * 0.018;
+    const lift = gap * (o.lift || 1.15) * (0.85 + 0.35 * r()), droop = rad * (0.22 + 0.2 * r());
+    // the branch seen side-on, from the trunk out along the top, the tip, and back in underneath
+    const prof = o.lod ? [[0.05, lift], [0.7, lift * 0.2 - droop * 0.45], [1.0, -droop], [0.08, -gap * 0.3]]
+      : [[0.04, lift], [0.42, lift * 0.55 - droop * 0.12], [0.8, lift * 0.1 - droop * 0.55], [1.0, -droop], [0.62, -droop * 0.85 - gap * 0.08], [0.06, -gap * 0.25]];
+    const P = prof.length, cols = prof.map((q, j) => (j < P - 2 ? green : dark));
+    // every other spoke a branch reaching out, the ones between drawn in: the skirt's edge is ragged
+    const jag = []; for (let i = 0; i < seg; i++) jag.push(i % 2 === 0 ? 1.0 + (r() - 0.5) * 0.34 : 0.62 + r() * 0.16); jag.push(jag[0]);
+    const rot = r() * TAU, base = b.n, tx = (r() - 0.5) * 0.16, tz = (r() - 0.5) * 0.16;
+    for (let i = 0; i <= seg; i++) {
+      const a = rot + (i / seg) * TAU, c = Math.cos(a), sn = Math.sin(a);
+      for (let j = 0; j < P; j++) {
+        const [pr, py] = prof[j], q0 = prof[Math.max(0, j - 1)], q1 = prof[Math.min(P - 1, j + 1)];
+        const rr = rad * pr * (1 + (jag[i] - 1) * pr);
+        const dr = (q1[0] - q0[0]) * rad, dy = q1[1] - q0[1], L = Math.hypot(dr, dy) || 1;
+        b.vert([x + c * rr, yb + py + (c * tx + sn * tz) * rr, z + sn * rr], [(-dy / L) * c, dr / L, (-dy / L) * sn], cols[j]);
+      }
+    }
+    for (let i = 0; i < seg; i++) for (let j = 0; j < P - 1; j++) {
+      const a0 = base + i * P + j, a1 = a0 + P, b0 = a0 + 1, b1 = a1 + 1;
+      // wind each quad so it faces the way its normals do
+      const e1 = [V[a1 * 10] - V[a0 * 10], V[a1 * 10 + 1] - V[a0 * 10 + 1], V[a1 * 10 + 2] - V[a0 * 10 + 2]];
+      const e2 = [V[b0 * 10] - V[a0 * 10], V[b0 * 10 + 1] - V[a0 * 10 + 1], V[b0 * 10 + 2] - V[a0 * 10 + 2]];
+      const fn = vcross(e1, e2), nn = [V[a0 * 10 + 3] + V[b1 * 10 + 3], V[a0 * 10 + 4] + V[b1 * 10 + 4], V[a0 * 10 + 5] + V[b1 * 10 + 5]];
+      if (vdot(fn, nn) > 0) b.quad(a0, a1, b1, b0); else b.quad(a0, b0, b1, a1);
+    }
   }
+  b.cyl(m4trs([x, y + h * 0.88, z], 0, 0, 0, [h * 0.014, h * 0.14, h * 0.014]), green, 5, 0.0, false);
+  return b;
 }
 function deadTree(b, x, y, z, s, rand) {
   const col = rgb(0x3a3127);
@@ -1030,6 +1135,9 @@ function lampPost(b, x, y, z, yaw) {
   b.cyl(m4trs([x, y, z], 0, 0, 0, [0.07, 3.9, 0.07]), m, 7, 0.7);
   b.cyl(m4between([x, y + 3.85, z], [x + Math.sin(yaw) * 0.7, y + 3.95, z + Math.cos(yaw) * 0.7], [1, 0, 0], 0.035), m, 5);
   b.box(m4trs([x + Math.sin(yaw) * 0.75, y + 3.82, z + Math.cos(yaw) * 0.75], yaw, 0, 0, [0.28, 0.2, 0.36]), m);
+  const hx = x + Math.sin(yaw) * 0.75, hz = z + Math.cos(yaw) * 0.75;
+  if (y + 3.7 < -0.3) { b.box(m4trs([hx, y + 3.67, hz], yaw, 0, 0, [0.16, 0.1, 0.22]), DROWN(8)); SCENE.deepLamps.push([hx, y + 3.55, hz]); }
+  SCENE.lampPosts.push([x, y, z, yaw]);
 }
 
 // a fishing hut on the ice: painted boards, a lit window, a stovepipe; a hole beside it
@@ -1054,9 +1162,8 @@ function hut(b, x, z, yaw, col) {
 }
 // a marker: a little spruce stuck in the ice; some hold a lantern (the places you come back to)
 function marker(b, x, z, lamp) {
-  const g = rgb(0x1f2d22, 0.02);
-  b.cyl(m4trs([x, -0.2, z], 0, 0, 0, [0.03, 1.5, 0.03]), rgb(0x2b2017), 5);
-  for (let i = 0; i < 4; i++) { const k = i / 4; b.cyl(m4trs([x, 0.35 + k * 0.85, z], i, 0, 0, [0.32 * (1 - k * 0.7), 0.55, 0.32 * (1 - k * 0.7)]), g, 6, 0, true); }
+  b.cyl(m4trs([x, -0.2, z], 0, 0, 0, [0.03, 0.6, 0.03]), rgb(0x2b2017), 5);
+  spruce(b, x, 0.02, z, 1.6, { tiers: 10, seg: 16, width: 0.24, lift: 1.7, rand: rng(Math.floor(Math.abs(x * 31 + z * 7)) + 3), col: rgb(0x1d2c21, 0.04) });
   if (lamp) {
     b.cyl(m4between([x, 1.15, z], [x + 0.32, 1.2, z], [0, 0, 1], 0.012), rgb(0x222222), 4);
     b.lathe(m4trs([x + 0.32, 0.98, z]), rgb(0x2a2523, 0.5), [[0, -0.09], [0.05, -0.09], [0.05, -0.07]], 8);
@@ -1119,6 +1226,7 @@ function tower(b) {
 function church(b) {
   // the nave runs east from the tower, roofless, its walls standing to just under the ice
   const x0 = TOWER.x + TOWER.w / 2, z0 = TOWER.z, L = 19, W = 8.4, fl = TOWER.base + 0.2;
+  SCENE.church = { x0, z0, L, W };
   const st = rgb(0x6f6a5c);
   b.jit = 0.15;
   const win = [];
@@ -1143,11 +1251,19 @@ function church(b) {
   b.box(m4trs([x0 + L - 2, fl + 0.2, z0], 0, 0, 0, [2.0, 0.4, W - 1.8]), rgb(0x7d786b));
   b.box(m4trs([x0 + L - 1.4, fl + 0.9, z0], 0, 0, 0, [0.9, 1.0, 2.2]), rgb(0x8d887a));
   // the churchyard: stones in rows, a yew, the wall and lychgate
+  const cr = rng(808);
   for (let i = 0; i < 70; i++) {
     const gx = x0 - 18 + r() * 52, gz = z0 - 24 + r() * 50;
     if (gx > x0 - 4 && gx < x0 + L + 2 && gz > z0 - W / 2 - 4 && gz < z0 + W / 2 + 2) continue;
     if (Math.abs(gx - TOWER.x) < 5 && Math.abs(gz - TOWER.z) < 5) continue;
-    gravestone(b, gx, heightAt(gx, gz), gz, (r() - 0.5) * 0.2 + (r() < 0.5 ? 0 : PI), r);
+    const gy = heightAt(gx, gz), gyaw = (r() - 0.5) * 0.2 + (r() < 0.5 ? 0 : PI);
+    gravestone(b, gx, gy, gz, gyaw, r);
+    // a grave light left burning in front of some: a candle in a red glass
+    if (cr() < 0.45) {
+      const cx = gx + Math.sin(gyaw) * 0.42, cz = gz + Math.cos(gyaw) * 0.42;
+      b.box(m4trs([cx, gy + 0.09, cz], gyaw, 0, 0, [0.09, 0.16, 0.09]), cr() < 0.6 ? [1.0, 0.25, 0.12, -105.5] : DROWN(5));
+      SCENE.deepLamps.push([cx, gy + 0.12, cz, 0.55]);
+    }
   }
   deadTree(b, x0 + 24, heightAt(x0 + 24, z0 + 14), z0 + 14, 1.5, r);
   const yard = [[x0 - 20, z0 - 26], [x0 + 36, z0 - 26], [x0 + 36, z0 + 28], [x0 - 20, z0 + 28]];
@@ -1170,7 +1286,7 @@ function village(b) {
     const x = F.x + F.rx * side * setback, zz = F.z + F.rz * side * setback;
     const yaw = F.yaw + (side > 0 ? -PI / 2 : PI / 2) + (r() - 0.5) * 0.06;
     const col = extra.col || (r() < 0.35 ? WASH[Math.floor(r() * 3)] : STONE[Math.floor(r() * 5)]);
-    house(b, x, zz, yaw, { rand: r, floor: heightAt(x, zz) + 0.05, w, d, wallH: extra.wallH || (2.9 + r() * 0.6), gable: 1.6, roof: extra.roof || (r() < 0.25 ? 'kept' : r() < 0.6 ? 'ribs' : 'none'), col, garden: yard - 0.4 });
+    house(b, x, zz, yaw, { rand: r, floor: heightAt(x, zz) + 0.05, w, d, wallH: extra.wallH || (2.9 + r() * 0.6), gable: 1.6, roof: extra.roof || (r() < 0.25 ? 'kept' : r() < 0.6 ? 'ribs' : 'none'), col, garden: yard - 0.4, group: 'village', lit: 0.12 + 0.5 * smooth(1770, 2480, z) });
     used.push({ z, side });
     return { x, z: zz, yaw, F };
   };
@@ -1198,7 +1314,7 @@ function village(b) {
   // landmarks
   const at = (z, side, off) => { const F = routeFrame(z); return [F.x + F.rx * side * off, F.z + F.rz * side * off, F.yaw]; };
   { const [x, zz, yaw] = at(1812, -1, 5.2); b.wall([x - 1.2, zz - 0.8], [x - 1.2, zz + 1.4], fl, 2.2, 0.1, rgb(0x3b4044, 0.4)); b.box(m4trs([x, fl + 2.25, zz + 0.3], yaw, 0, 0, [1.2, 0.08, 2.6]), rgb(0x3b4044, 0.4)); }
-  { const [x, zz, yaw] = at(1905, 1, 22); house(b, x, zz, yaw - PI / 2, { rand: r, floor: fl, w: 14, d: 7.5, wallH: 3.6, gable: 1.2, roof: 'ribs', col: rgb(0x7b6f5e) }); const [px, pz] = at(1905, 1, 9.5); playground(b, px, fl, pz, yaw); }
+  { const [x, zz, yaw] = at(1905, 1, 22); house(b, x, zz, yaw - PI / 2, { rand: r, floor: fl, w: 14, d: 7.5, wallH: 3.6, gable: 1.2, roof: 'ribs', col: rgb(0x7b6f5e), group: 'village', lit: 0.3 }); const [px, pz] = at(1905, 1, 9.5); playground(b, px, fl, pz, yaw); }
   { const [x, zz] = at(1968, 1, 6.2); memorial(b, x, fl, zz); }
   { const [x, zz, yaw] = at(1990, -1, 3.0); car(b, x, fl + 0.05, zz, yaw + 0.04, rgb(0x5a6a58, 0.5)); }
   { const [x, zz, yaw] = at(2036, 1, 4.6); phoneBox(b, x, fl, zz, yaw); }
@@ -1206,7 +1322,7 @@ function village(b) {
   { const [x, zz, yaw] = at(2052, -1, 5.0); b.cyl(m4trs([x, fl, zz], 0, 0, 0, [0.08, 3.4, 0.08]), rgb(0x2a2622), 6); b.box(m4trs([x + Math.sin(yaw + PI / 2) * 0.55, fl + 3.1, zz + Math.cos(yaw + PI / 2) * 0.55], yaw, 0, 0, [0.05, 0.75, 0.9]), rgb(0x5a3020, 0.2)); }
   { const [x, zz] = at(2110, 1, 4.6); b.cyl(m4trs([x, fl, zz], 0, 0, 0, [0.26, 1.3, 0.26]), RED, 12); b.sphere(m4trs([x, fl + 1.3, zz], 0, 0, 0, [0.27, 0.16, 0.27]), RED, 10, 5); }
   for (let zz = 1790; zz < 2480; zz += 38) { const [x, z2, yaw] = at(zz, zz % 76 < 38 ? 1 : -1, 3.9); lampPost(b, x, fl, z2, yaw + (zz % 76 < 38 ? PI / 2 : -PI / 2)); }
-  { const [x, zz, yaw] = at(2300, -1, 26); house(b, x, zz, yaw + PI / 2, { rand: r, floor: heightAt(x, zz), w: 16, d: 9, wallH: 3.9, gable: 0.4, roof: 'none', col: rgb(0x5f584c) }); }
+  { const [x, zz, yaw] = at(2300, -1, 26); house(b, x, zz, yaw + PI / 2, { rand: r, floor: heightAt(x, zz), w: 16, d: 9, wallH: 3.9, gable: 0.4, roof: 'none', col: rgb(0x5f584c), group: 'village', lit: 0.5 }); }
   // a lane east toward the river, walled
   { const [x, zz] = at(1968, 1, 4.5); for (let i = 0; i < 6; i++) { stoneWall(b, [x + i * 12, zz - 3], [x + (i + 1) * 12, zz - 3.3], fl); stoneWall(b, [x + i * 12, zz + 3], [x + (i + 1) * 12, zz + 3.2], fl); } }
 }
@@ -1243,8 +1359,8 @@ function fields(b) {
     deadTree(b, x, heightAt(x, z), z, 0.75 + r() * 0.35, r);
   }
   // a farm: house and barn, west of the track
-  { const F = routeFrame(560), x = F.x - F.rx * 30, z = F.z - F.rz * 30; house(b, x, z, F.yaw + PI / 2, { rand: r, floor: heightAt(x, z), w: 8, d: 6, wallH: 3.2, gable: 1.5, roof: 'ribs', col: STONE[1] });
-    const x2 = x - Math.sin(F.yaw) * 14, z2 = z - Math.cos(F.yaw) * 14; house(b, x2, z2, F.yaw, { rand: r, floor: heightAt(x2, z2), w: 12, d: 7, wallH: 3.6, gable: 1.0, roof: 'none', col: STONE[3] }); }
+  { const F = routeFrame(560), x = F.x - F.rx * 30, z = F.z - F.rz * 30; house(b, x, z, F.yaw + PI / 2, { rand: r, floor: heightAt(x, z), w: 8, d: 6, wallH: 3.2, gable: 1.5, roof: 'ribs', col: STONE[1], group: 'farm' });
+    const x2 = x - Math.sin(F.yaw) * 14, z2 = z - Math.cos(F.yaw) * 14; house(b, x2, z2, F.yaw, { rand: r, floor: heightAt(x2, z2), w: 12, d: 7, wallH: 3.6, gable: 1.0, roof: 'none', col: STONE[3], group: 'farm' }); }
   // the bridge where the way crosses the old river (z ~ 780): three arches, parapets
   { const z = 780, F = routeFrame(z), bx = F.x, bz = z, yaw = F.yaw, fl = -8.4;
     const deck = -3.6;
@@ -1259,9 +1375,9 @@ function fields(b) {
       const x = routeX(z0) + lx * Math.cos(yaw), z = z0 - lx * Math.sin(yaw);
       const g = heightAt(x, z); if (g > -1.6) continue;
       const top = Math.max(g + 1.4, -4.4);
-      b.box(m4trs([x, (g + top) / 2 - 0.2, z], PI / 2 - yaw, 0, 0, [4.2, top - g + 0.4, 6.8]), rgb(0x4a4640));
-      for (let k = 0; k < 6; k++) b.box(m4trs([x + Math.cos(yaw) * (k - 2.5) * 0.66, top + 0.06, z - Math.sin(yaw) * (k - 2.5) * 0.66], PI / 2 - yaw, 0, 0, [0.22, 0.12, 2.4]), DARKWOOD);
-      for (const off of [-0.72, 0.72]) b.box(m4trs([x + Math.sin(yaw) * off, top + 0.16, z + Math.cos(yaw) * off], PI / 2 - yaw, 0, 0, [4.0, 0.12, 0.08]), rgb(0x5a3a28, 0.6));
+      b.box(m4trs([x, (g + top) / 2 - 0.2, z], yaw, 0, 0, [4.2, top - g + 0.4, 6.8]), rgb(0x4a4640));
+      for (let k = 0; k < 6; k++) b.box(m4trs([x + Math.cos(yaw) * (k - 2.5) * 0.66, top + 0.06, z - Math.sin(yaw) * (k - 2.5) * 0.66], yaw, 0, 0, [0.22, 0.12, 2.4]), DARKWOOD);
+      for (const off of [-0.72, 0.72]) b.box(m4trs([x + Math.sin(yaw) * off, top + 0.16, z + Math.cos(yaw) * off], yaw, 0, 0, [4.0, 0.12, 0.08]), rgb(0x5a3a28, 0.6));
     }
     const px = routeX(z0) + 26 * Math.cos(yaw) + 6, pz = z0 - 26 * Math.sin(yaw) + 6;
     b.box(m4trs([px, -4.4, pz], PI / 2 - yaw, 0, 0, [18, 1.2, 3.2]), rgb(0x67625a));
@@ -1269,6 +1385,38 @@ function fields(b) {
     b.box(m4trs([px - 4, -2.6, pz + 1.2], PI / 2 - yaw, 0, 0, [2.2, 0.7, 0.08]), rgb(0x23313a, 0.3));
     b.cyl(m4trs([px - 4.9, -3.8, pz + 1.2], 0, 0, 0, [0.05, 1.3, 0.05]), rgb(0x222222), 5);
     b.cyl(m4trs([px - 3.1, -3.8, pz + 1.2], 0, 0, 0, [0.05, 1.3, 0.05]), rgb(0x222222), 5);
+    train(b, z0, yaw);
+  }
+}
+// the last train, stopped at the halt: three carriages and the engine, its windows still lit, its lamp on
+function train(b, z0, yaw) {
+  const r = rng(31);
+  const ux = Math.cos(yaw), uz = -Math.sin(yaw), nx = Math.sin(yaw), nz = Math.cos(yaw);   // along the line, across it
+  const at = (lx, off = 0, y = 0) => [routeX(z0) + lx * ux + nx * off, y, z0 + lx * uz + nz * off];
+  const railY = (lx) => { const p = at(lx); return Math.max(heightAt(p[0], p[2]) + 1.4, -4.4) + 0.22; };
+  const dark = rgb(0x18191b, 0.3), glass = rgb(0x0b0c0e, 0.6);
+  const B = (lx, off, y, sx, sy, sz, col) => b.box(m4trs(at(lx, off, y), yaw, 0, 0, [sx, sy, sz]), col);
+  for (const [c0, c1] of [[-24.5, -9.5], [-8.5, 6.5], [7.5, 22.5]]) {
+    const lm = (c0 + c1) / 2, L = c1 - c0, y0 = railY(lm) + 0.55;
+    B(lm, 0, y0 + 1.3, L, 2.6, 2.8, rgb(0x3a2624, 0.18));                       // the body, maroon
+    B(lm, 0, y0 + 2.68, L + 0.1, 0.18, 2.9, rgb(0x1c1d20, 0.2));                 // its roof
+    for (const e of [c0 + 2.2, c1 - 2.2]) B(e, 0, y0 - 0.25, 2.6, 0.55, 2.2, dark);   // bogies
+    for (let i = 0; i < 9; i++) for (const side of [-1, 1]) {
+      const lw = c0 + 1.7 + i * (L - 3.4) / 8;
+      B(lw, side * 1.415, y0 + 1.55, 0.85, 0.72, 0.04, r() < 0.75 ? DROWN(1.3 + r() * 1.5) : glass);
+    }
+    for (const e of [c0 + 0.55, c1 - 0.55]) for (const side of [-1, 1]) B(e, side * 1.415, y0 + 1.15, 0.7, 1.9, 0.04, dark);   // doors
+  }
+  // the engine, facing on down the line
+  { const y0 = railY(30) + 0.55;
+    B(25.5, 0, y0 + 1.45, 3.2, 2.9, 2.8, rgb(0x1e2124, 0.3));                    // the cab
+    B(25.5, 0, y0 + 2.95, 3.5, 0.15, 3.0, dark);
+    b.cyl(m4between(at(27, 0, y0 + 1.35), at(35.5, 0, y0 + 1.35), [0, 1, 0], 0.85), rgb(0x23272a, 0.35), 14);   // the boiler
+    b.cyl(m4trs(at(34.4, 0, y0 + 2.1), 0, 0, 0, [0.22, 0.75, 0.22]), dark, 10);    // the chimney
+    B(30, 0, y0 - 0.15, 10, 0.5, 2.3, dark);
+    B(35.6, 0, y0 + 0.9, 0.12, 0.34, 0.34, DROWN(12));                           // its lamp
+    SCENE.deepLamps.push(at(36, 0, y0 + 0.9));
+    for (const side of [-1, 1]) B(25.5, side * 1.415, y0 + 1.9, 0.9, 0.7, 0.04, DROWN(2));
   }
 }
 
@@ -1375,9 +1523,8 @@ function ridge(b, s, half, gaps) {
 
 // ---- the forest on the shores ----
 function buildTrees() {
-  const b = new MB();
-  pine(b, 0, 0, 0, 1, rgb(0x1a2a20, 0.02));
-  const mesh = uploadMesh(b.build());
+  R.treeLod = [uploadMesh(spruce(new MB(), 0, 0, 0, 1, { tiers: 11, seg: 20, rand: rng(5) }).build()),
+    uploadMesh(spruce(new MB(), 0, 0, 0, 1, { tiers: 6, seg: 8, rand: rng(5), lod: 1 }).build())];
   const inst = [];
   const r = rng(11);
   for (let i = 0; i < 26000 && inst.length < 7000 * 8; i++) {
@@ -1389,11 +1536,28 @@ function buildTrees() {
     const e = 2, gx = heightAt(x + e, z) - heightAt(x - e, z), gz = heightAt(x, z + e) - heightAt(x, z - e);
     if (Math.hypot(gx, gz) / (2 * e) > 0.6) continue;
     if (Math.hypot(x - CABIN.x, z - CABIN.z) < 9) continue;
-    const s = 2.2 + r() * 3.4;
-    inst.push(x, g - 0.3, z, s, r() * TAU, r(), 0, 0);
+    const s = (2.2 + r() * 3.4) * 3.3;
+    inst.push(x, g - 0.3, z, s, r() * TAU, r(), 0.82 + r() * 0.34, 0);
   }
-  addInstances(mesh, new Float32Array(inst));
-  R.trees = mesh;
+  R.treeInst = new Float32Array(inst);
+  for (const M of R.treeLod) { addInstances(M, R.treeInst); M.instances = 0; }
+  R.treeAt = null;
+  R.treeCells = new Set();
+  for (let i = 0; i < inst.length; i += 8) R.treeCells.add(Math.floor(inst[i] / 64) + ',' + Math.floor(inst[i + 2] / 64));
+}
+// split the forest between the near tree and the far one, again whenever the camera has gone some way
+function treeLodUpdate(cam) {
+  if (!R.treeLod || (R.treeAt && Math.hypot(cam[0] - R.treeAt[0], cam[2] - R.treeAt[2]) < 20)) return;
+  R.treeAt = cam.slice();
+  const I = R.treeInst, n = I.length / 8;
+  if (!R.treeBufs) R.treeBufs = [new Float32Array(I.length), new Float32Array(I.length)];
+  const [A, B] = R.treeBufs; let na = 0, nb = 0;
+  for (let i = 0; i < n; i++) {
+    const near = Math.hypot(I[i * 8] - cam[0], I[i * 8 + 2] - cam[2]) < 170;
+    const D = near ? A : B, k = (near ? na++ : nb++) * 8;
+    for (let j = 0; j < 8; j++) D[k + j] = I[i * 8 + j];
+  }
+  [[R.treeLod[0], A, na], [R.treeLod[1], B, nb]].forEach(([M, D, m]) => { gl.bindBuffer(gl.ARRAY_BUFFER, M.ibuf); if (m) gl.bufferSubData(gl.ARRAY_BUFFER, 0, D, 0, m * 8); M.instances = m; });
 }
 
 function buildScene() {
@@ -1406,6 +1570,7 @@ function buildScene() {
   R.meshes.push({ mesh: uploadMesh(under.build()), snowy: false, under: true });
   R.meshes.push({ mesh: uploadMesh(above.build()), snowy: true, under: false });
   buildTrees();
+  buildGhosts();
 }
 
 // ---- 30-glsl.js ----
@@ -1424,7 +1589,19 @@ uniform float uReflect;
 uniform vec4 uFog;          // rgb colour, density
 uniform vec3 uBell;         // where the tower's light is (lit window)
 uniform float uUnderBoost;  // the lantern carries further under the ice than physics allows, so the village shows
-const vec3 SIGMA = vec3(0.105, 0.056, 0.052);
+uniform float uDrown;       // the lights left on in the drowned village, 0..1
+uniform float uOutR;        // the bell has put them out this far from the tower
+uniform vec2 uTowerXZ;
+uniform vec4 uDeep;         // a lantern walking under the ice: where, and how bright
+uniform vec3 uDeepCol;
+// shadows: the lantern's (a cube of depth round it) and the moon's or, at dawn, the sun's (two cascades round you)
+uniform highp samplerCubeShadow uLShadow; uniform vec3 uLShadowNF;      // near, far, on
+uniform highp sampler2DArrayShadow uSunShadow; uniform mat4 uSunVP0; uniform mat4 uSunVP1;
+uniform vec4 uSunSh;        // texel size of each cascade in metres, on, strength
+uniform vec3 uShadowDir;    // toward the light that casts them
+uniform vec2 uScat;         // how much the air and the water under the ice scatter the lantern's light
+const vec3 SIGMA = vec3(0.086, 0.052, 0.05);
+const vec3 SIGMA_L = vec3(0.06, 0.05, 0.05);    // the lantern's light on its way down: kept warmer than physics would
 const float APP = 0.78;     // under the ice things look nearer the surface than they are
 uint uhash(uvec2 v) { uint h = (v.x * 0x27d4eb2du) ^ (v.y * 0x165667b1u); h = (h ^ (h >> 15)) * 0x2c1b3c6du; h = (h ^ (h >> 12)) * 0x297a2d39u; return h ^ (h >> 15); }
 float h12(vec2 p) { return float(uhash(uvec2(ivec2(floor(p))))) * (1.0 / 4294967296.0); }
@@ -1443,6 +1620,33 @@ vec3 cells(vec2 p) {
     if (d < d1) { d2 = d1; d1 = d; id = h12(ip + g + 7.0); } else if (d < d2) d2 = d;
   }
   return vec3(d1, d2, id);
+}
+// the nearest feature point: xy = the way to it (cell units), z = how far, w = its cell's hash; d2 = the second nearest
+vec4 cellsN(vec2 p, out float d2) {
+  vec2 ip = floor(p), fp = p - ip, bo = vec2(0.0); float d1 = 9.0, id = 0.0; d2 = 9.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec2 g = vec2(i, j), r = g + h22(ip + g) - fp; float d = dot(r, r);
+    if (d < d1) { d2 = d1; d1 = d; bo = r; id = h12(ip + g + 7.0); } else if (d < d2) d2 = d;
+  }
+  d2 = sqrt(d2);
+  return vec4(bo, sqrt(d1), id);
+}
+// the two nearest feature points: their distances and their cells' hashes (an edge is where the two are equal)
+vec4 cells2(vec2 p) {
+  vec2 ip = floor(p), fp = p - ip; float d1 = 9.0, d2 = 9.0, i1 = 0.0, i2 = 0.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec2 g = vec2(i, j), r = g + h22(ip + g) - fp; float d = dot(r, r), h = h12(ip + g + 7.0);
+    if (d < d1) { d2 = d1; i2 = i1; d1 = d; i1 = h; } else if (d < d2) { d2 = d; i2 = h; }
+  }
+  return vec4(sqrt(d1), sqrt(d2), i1, i2);
+}
+// a crystal in each cell, each turned its own way: it flashes when it catches the light toward the eye
+float glint(vec2 q, float scale, vec3 V, vec3 L, float tilt) {
+  vec2 c = floor(q * scale), f = fract(q * scale) - 0.5;
+  float a = h12(c), b = h12(c + 17.3);
+  vec3 fn = normalize(vec3((a - 0.5) * tilt, 1.0, (b - 0.5) * tilt));
+  float g = pow(max(dot(fn, normalize(L + V)), 0.0), 1400.0);
+  return g * smoothstep(0.32, 0.05, length(f - (vec2(b, a) - 0.5) * 0.5));
 }
 vec2 wuv(vec2 xz) { return (xz - uWorld.xy) * uWorld.w; }
 float groundH(vec2 xz) { return texture(uHeight, wuv(xz)).r; }
@@ -1468,9 +1672,13 @@ vec3 starField(vec3 rd) {
   }
   // the milky way: a soft band of dust and faint stars
   vec3 axis = normalize(vec3(0.35, 0.55, -0.76));
-  float band = exp(-pow(dot(rd, axis) * 3.4, 2.0));
-  float n = fbm4(vec2(atan(rd.z, rd.x) * 3.0, rd.y * 6.0) * 1.6);
-  col += vec3(0.10, 0.11, 0.15) * band * (0.35 + 0.65 * smoothstep(-0.3, 0.6, n)) * 0.18;
+  float ab = dot(rd, axis), band = exp(-ab * ab * 11.0), core = exp(-ab * ab * 40.0);
+  vec2 mq = vec2(atan(rd.z, rd.x) * 3.0, rd.y * 6.0) * 1.6;
+  float n = fbm4(mq), rift = smoothstep(0.05, 0.35, fbm4(mq * 2.3 + vec2(ab * 9.0, 3.1)) + ab * 1.8);
+  col += vec3(0.10, 0.105, 0.14) * (band * 0.6 + core * 0.7) * (0.3 + 0.7 * smoothstep(-0.3, 0.6, n)) * (0.35 + 0.65 * rift) * 0.15;
+  // the faint crowd of stars along it
+  vec3 sp = rd * 900.0, si = floor(sp); float sh = h31(si);
+  col += vec3(0.8, 0.85, 1.0) * step(1.0 - 0.09 * band * (0.5 + rift), sh) * smoothstep(0.35, 0.0, length(sp - si - 0.5)) * 0.45 * band;
   return col;
 }
 vec3 auroraSky(vec3 rd) {
@@ -1482,8 +1690,10 @@ vec3 auroraSky(vec3 rd) {
 #else
   float jit = 0.5;
 #endif
+  int N = uReflect > 0.5 ? 14 : 26;
   for (int i = 0; i < 26; i++) {
-    float fi = (float(i) + jit) / 26.0;
+    if (i >= N) break;
+    float fi = (float(i) + jit) / float(N);
     float h = 1.0 + fi * 0.9;
     vec2 p = rd.xz / (rd.y + 0.06) * h * 0.55;
     vec2 q = p + vec2(0.0, 3.6);
@@ -1496,7 +1706,7 @@ vec3 auroraSky(vec3 rd) {
     col = mix(col, vec3(0.2, 0.9, 0.7), smoothstep(0.0, 0.15, fi) * (1.0 - smoothstep(0.15, 0.3, fi)) * 0.5);
     acc += col * c * (1.0 - fi * 0.7);
   }
-  return acc * uAurora * 0.075 * smoothstep(0.0, 0.18, rd.y);
+  return acc * (26.0 / float(N)) * uAurora * 0.075 * smoothstep(0.0, 0.18, rd.y);
 }
 // the sky without stars, moon or aurora: cheap, for fog
 vec3 skyBase(vec3 rd) {
@@ -1536,30 +1746,141 @@ vec3 skyColor(vec3 rd) {
   // the moon
   float md = dot(rd, uMoonDir);
   float moonVis = (1.0 - uStorm) * (1.0 - uDawn * 0.7);
-  col += vec3(0.95, 0.95, 1.0) * smoothstep(0.99994, 0.99997, md) * 3.5 * moonVis;
-  col += vec3(0.12, 0.14, 0.2) * pow(max(md, 0.0), 300.0) * 0.35 * moonVis + vec3(0.02, 0.024, 0.036) * pow(max(md, 0.0), 16.0) * moonVis;
+  if (md > 0.999) {
+    vec3 t1 = normalize(cross(uMoonDir, vec3(0, 1, 0))), t2 = cross(t1, uMoonDir);
+    vec2 mu = vec2(dot(rd, t1), dot(rd, t2)) / 0.0088;
+    float r = length(mu), aa = 0.05;
+#ifdef FRAG
+    aa = fwidth(r) * 1.2 + 0.01;
+#endif
+    float disc = smoothstep(1.0 + aa, 1.0 - aa, r);
+    float z = sqrt(max(1.0 - r * r, 0.0));
+    float seas = smoothstep(-0.05, 0.35, fbm4(mu * 1.7 + vec2(3.1, -1.4)));
+    float crat = smoothstep(0.12, 0.02, cells(mu * 5.0 + 9.0).x) * 0.15;
+    vec3 face = vec3(1.0, 0.97, 0.92) * (0.62 + 0.38 * z) * (1.0 - 0.3 * seas) * (1.0 - crat);
+    col = mix(col, face * 1.15, disc * moonVis);
+  }
+  col += vec3(0.5, 0.52, 0.58) * pow(max(md, 0.0), 9000.0) * 0.5 * moonVis;
+  col += vec3(0.1, 0.12, 0.17) * pow(max(md, 0.0), 600.0) * 0.18 * moonVis + vec3(0.016, 0.02, 0.03) * pow(max(md, 0.0), 40.0) * moonVis;
+  float ma = acos(clamp(md, -1.0, 1.0)), ring = exp(-pow((ma - 0.386) / 0.016, 2.0)) * smoothstep(0.355, 0.39, ma) + exp(-pow((ma - 0.4) / 0.04, 2.0)) * 0.5;
+  col += mix(vec3(0.026, 0.02, 0.016), vec3(0.016, 0.02, 0.028), smoothstep(0.375, 0.41, ma)) * ring * moonVis * (1.0 - uDusk * 0.8) * 0.22 * (0.7 + 0.3 * vnoise(vec2(atan(dot(rd, cross(uMoonDir, vec3(0, 1, 0))), rd.y) * 6.0, 1.0)));
   col += auroraSky(rd) * (1.0 - uStorm);
   // the squall: low grey cloud full of snow
   vec3 storm = mix(vec3(0.03, 0.035, 0.042), vec3(0.012, 0.014, 0.018), smoothstep(-0.1, 0.5, y));
   col = mix(col, storm, uStorm);
-  if (y < 0.0) col = mix(col, vec3(0.002, 0.003, 0.005), smoothstep(0.0, -0.2, y));
+  // below the horizon the sky goes dark; not in the mirror, where a sliver of it shows at the waterline
+  if (y < 0.0 && uReflect < 0.5) col = mix(col, vec3(0.002, 0.003, 0.005), smoothstep(0.0, -0.2, y));
   return col;
+}
+
+// ---- shadows ----
+// how much of the lantern reaches p: soft, from a few looks into the cube round the lantern
+float lanternShadow(vec3 p, vec3 n) {
+  if (uLShadowNF.z < 0.5) return 1.0;
+  vec3 d = p - uLantern;
+  float dist = length(d);
+  float N = uLShadowNF.x, F = uLShadowNF.y;
+  if (dist > F * 0.98) return 1.0;
+  d += n * (0.012 + dist * 0.0065);
+  vec3 ad = abs(d); float a = max(ad.x, max(ad.y, ad.z));
+  if (d.y > 0.0 && ad.y >= a) return 1.0;            // nothing is drawn above the lantern
+  float ref = ((F + N) / (F - N) - 2.0 * F * N / ((F - N) * a)) * 0.5 + 0.5;
+  vec3 dn = d / length(d);
+  vec3 t1 = normalize(cross(dn, abs(dn.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0))), t2 = cross(dn, t1);
+  float s = texture(uLShadow, vec4(dn, ref));
+  for (int i = 0; i < 8; i++) {
+    float fi = float(i), rr = sqrt((fi + 0.5) / 8.0) * 0.016, th = fi * 2.39996 + 0.6;
+    s += texture(uLShadow, vec4(dn + (t1 * cos(th) + t2 * sin(th)) * rr, ref));
+  }
+  return s / 9.0;
+}
+float sunPCF(vec3 s, float layer, float r) {
+  float v = texture(uSunShadow, vec4(s.xy, layer, s.z)) * 2.0;
+  for (int i = 0; i < 6; i++) { float th = float(i) * 1.0472 + 0.3; v += texture(uSunShadow, vec4(s.xy + vec2(cos(th), sin(th)) * r, layer, s.z)); }
+  return v / 8.0;
+}
+// how much of the moon (or the sun) reaches p. Under the ice: whatever stands on the ice where its light came in
+float sunShadow(vec3 p, vec3 n) {
+  if (uSunSh.z < 0.5) return 1.0;
+  if (p.y < 0.0) { vec3 t = refract(-uShadowDir, vec3(0, 1, 0), 0.752); p -= t * (p.y / min(t.y, -0.05)); n = vec3(0, 1, 0); }
+  vec4 l0 = uSunVP0 * vec4(p + n * uSunSh.x * 2.5, 1.0); vec3 s0 = l0.xyz * 0.5 + 0.5;
+  float e0 = max(abs(s0.x - 0.5), abs(s0.y - 0.5));
+  float w0 = smoothstep(0.49, 0.42, e0) * step(s0.z, 0.999);
+  float sh = 1.0;
+  if (w0 > 0.0) sh = sunPCF(s0, 0.0, 1.4 / 2048.0);
+  if (w0 < 1.0) {
+    vec4 l1 = uSunVP1 * vec4(p + n * uSunSh.y * 2.0, 1.0); vec3 s1 = l1.xyz * 0.5 + 0.5;
+    float e1 = max(abs(s1.x - 0.5), abs(s1.y - 0.5));
+    float sh1 = e1 < 0.5 && s1.z < 0.999 ? mix(sunPCF(s1, 1.0, 1.2 / 2048.0), 1.0, smoothstep(0.42, 0.5, e1)) : 1.0;
+    sh = mix(sh1, sh, w0);
+  }
+  return mix(1.0, sh, uSunSh.w);
+}
+
+// one look into the lantern's cube, for marching through the water
+float lanternShadow1(vec3 p) {
+  vec3 d = p - uLantern; vec3 ad = abs(d); float a = max(ad.x, max(ad.y, ad.z));
+  float N = uLShadowNF.x, F = uLShadowNF.y;
+  if (uLShadowNF.z < 0.5 || a > F * 0.98 || (d.y > 0.0 && ad.y >= a)) return 1.0;
+  return texture(uLShadow, vec4(d, ((F + N) / (F - N) - 2.0 * F * N / ((F - N) * a)) * 0.5 + 0.5 - 0.0004));
+}
+float ign(vec2 q) { return fract(52.9829189 * fract(dot(q, vec2(0.06711056, 0.00583715)))); }
+// the lantern's light caught in the air between the eye and what it sees, t metres along rd: no disc, no edge, and
+// hidden by whatever stands in front of it
+vec3 lanternHaze(vec3 rd, float t) {
+  vec3 m = uLantern - uCam; float b = dot(m, rd), h = sqrt(max(dot(m, m) - b * b, 0.0016));
+  return uLanternCol * uScat.x * (atan((t - b) / h) + atan(b / h)) / h;
+}
+// and in the water: marched from where the view goes under the ice (s) down to p, with the shadows in it, so the
+// light hangs in the water round you and your shadow cuts it
+vec3 waterScatter(vec3 s, vec3 p) {
+  if (uScat.y <= 0.0 || uLShadowNF.z < 0.5) return vec3(0.0);
+  vec3 seg = p - s; float len = length(seg);
+  if (len < 0.01) return vec3(0.0);
+  vec3 dir = seg / len;
+  float tb = clamp(dot(uLantern - s, dir), 0.0, len), t0 = max(0.0, tb - 16.0), t1 = min(len, tb + 16.0);
+  if (t1 <= t0) return vec3(0.0);
+  float dt = (t1 - t0) / 8.0, jit;
+#ifdef FRAG
+  jit = ign(gl_FragCoord.xy);
+#else
+  jit = 0.5;
+#endif
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    float t = t0 + (float(i) + jit) * dt;
+    vec3 x = s + dir * t, L = uLantern - x; float d2 = dot(L, L), d = sqrt(d2);
+    float fw = (-x.y) / max(uLantern.y - x.y, 0.01);
+    acc += exp(-SIGMA_L * d * fw - SIGMA * t) * lanternShadow1(x) / (d2 + 0.8);
+  }
+  return uLanternCol * acc * dt * uScat.y;
 }
 
 // ---- lighting ----
 // light from the lantern reaching p (true position), through the ice and water if p is under it
-vec3 lanternAt(vec3 p, vec3 n) {
+vec3 deepAt(vec3 p, vec3 n) {
+  if (uDeep.w <= 0.0 || p.y > -0.05) return vec3(0.0);
+  vec3 L = uDeep.xyz - p; float d2 = dot(L, L), d = sqrt(d2);
+  float ndl = max(dot(n, L / max(d, 1e-3)), 0.0) * 0.8 + 0.2;
+  return uDeepCol * uDeep.w * exp(-SIGMA * d) * ndl / (d2 * 0.5 + 1.2) * smoothstep(24.0, 7.0, d);
+}
+// still burning: out where the bell has rung
+float stillLit(vec3 p) { return uOutR <= 0.0 ? 1.0 : smoothstep(uOutR - 3.0, uOutR + 3.0, length(p.xz - uTowerXZ)); }
+vec3 lanternRaw(vec3 p, vec3 n) {
   vec3 L = uLantern - p; float d2 = dot(L, L), d = sqrt(d2); vec3 l = L / d;
   float ndl = max(dot(n, l), 0.0) * 0.85 + 0.15 * max(dot(n, l) * 0.5 + 0.5, 0.0);
   float att = 1.0 / (d2 + 0.6) * smoothstep(46.0, 14.0, d);
   vec3 T = vec3(1.0);
   // under the ice the light falls off more gently than it should, so the village shows round you
-  if (p.y < 0.0) { float fw = (-p.y) / max(uLantern.y - p.y, 0.01); T = exp(-SIGMA * d * fw) * 0.9 * mix(1.0, uUnderBoost, smoothstep(0.3, 2.5, -p.y)); att = mix(att, 1.0 / (d2 * 0.55 + 3.0) * smoothstep(52.0, 16.0, d), smoothstep(0.3, 2.5, -p.y)); }
+  if (p.y < 0.0) { float fw = (-p.y) / max(uLantern.y - p.y, 0.01); T = exp(-SIGMA_L * d * fw) * 0.9 * mix(1.0, uUnderBoost, smoothstep(0.3, 2.5, -p.y)); att = mix(att, 1.0 / (d2 * 0.55 + 3.0) * smoothstep(52.0, 16.0, d), smoothstep(0.3, 2.5, -p.y)); }
   return uLanternCol * att * ndl * T;
 }
-vec3 skyLight(vec3 p, vec3 n) {
+// with its shadow already known (sh), or looked up here
+vec3 lanternAtS(vec3 p, vec3 n, float sh) { return lanternRaw(p, n) * sh + deepAt(p, n); }
+vec3 lanternAt(vec3 p, vec3 n) { return lanternAtS(p, n, lanternShadow(p, n)); }
+vec3 skyLightS(vec3 p, vec3 n, float sh) {
   vec3 amb = mix(uGroundAmb, uSkyAmb, n.y * 0.5 + 0.5);
-  float ml = max(dot(n, uMoonDir), 0.0), sl = max(dot(n, uSunDir), 0.0);
+  float ml = max(dot(n, uMoonDir), 0.0) * sh, sl = max(dot(n, uSunDir), 0.0) * sh;
   vec3 c = amb + uMoonCol * ml + uSunCol * sl;
   if (p.y < 0.0) {
     float dep = -p.y;
@@ -1569,6 +1890,7 @@ vec3 skyLight(vec3 p, vec3 n) {
   }
   return c;
 }
+vec3 skyLight(vec3 p, vec3 n) { return skyLightS(p, n, sunShadow(p, n)); }
 // the view through the water: absorb what is behind, add a little scattered light
 vec3 underwaterView(vec3 col, vec3 p) {
   if (p.y >= 0.0 || uCam.y <= 0.0) return col;
@@ -1579,13 +1901,15 @@ vec3 underwaterView(vec3 col, vec3 p) {
   vec3 scat = vec3(0.0025, 0.007, 0.009) * (min(uSkyAmb.b, 0.02) * 40.0 + 0.15) + (uSkyAmb + uSunCol * 0.25) * vec3(0.05, 0.11, 0.12) * uDawn;
   vec3 ld = uLantern - mid; float ldd = dot(ld, ld);
   scat += uLanternCol * vec3(0.03, 0.06, 0.06) / (ldd + 4.0) * 0.5;
-  return col * T + scat * (1.0 - T);
+  if (uDeep.w > 0.0) { vec3 dd = uDeep.xyz - mid; scat += uDeepCol * uDeep.w * vec3(0.05, 0.11, 0.1) / (dot(dd, dd) * 0.6 + 2.0); }
+  vec3 s = mix(uCam, p, uCam.y / max(uCam.y - p.y, 0.01));
+  return col * T + scat * (1.0 - T) + waterScatter(s, p);
 }
 vec3 airFog(vec3 col, vec3 p, vec3 rd) {
   float d = length(p - uCam);
   float f = 1.0 - exp(-d * uFog.w);
   vec3 fc = uFog.rgb + skyBase(normalize(vec3(rd.x, max(rd.y, 0.02), rd.z))) * 0.35;
-  return mix(col, fc, f);
+  return mix(col, fc, f) + lanternHaze(rd, d);
 }
 `;
 
@@ -1597,7 +1921,7 @@ in vec2 vUv; uniform mat4 uInvVP; out vec4 o;
 void main() {
   vec4 a = uInvVP * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
   vec3 rd = normalize(a.xyz / a.w - uCam);
-  o = vec4(skyColor(rd), 1.0);
+  o = vec4(skyColor(rd) + lanternHaze(rd, 1e4), 1.0);
 }`;
 
 // The ground: one height map for the lake bed and the shores. `uLevel` grids are nested, the coarser ones skip what a
@@ -1616,50 +1940,139 @@ void main() {
 }`;
 const GROUND_FS = COMMON + `
 in vec3 vP; uniform vec4 uHole; uniform float uDetail; out vec4 o;
+// the small swells the vertex shader adds to the bed, so the light can find them
+float bedSwell(vec2 xz) { return fbm3(xz * 0.35) * 0.22 + vnoise(xz * 1.7) * 0.05; }
+// wind-driven snow: ridges lying across the wind, long along it
+float sastrugi(vec2 q) {
+  vec2 w = vec2(0.94, 0.34), c = vec2(-w.y, w.x);
+  vec2 r = vec2(dot(q, w), dot(q, c));
+  float fine = smoothstep(0.08, 0.02, length(fwidth(q)));
+  return fbm3(r * vec2(0.55, 2.6)) * 0.7 + vnoise(r * vec2(1.6, 7.0)) * 0.3 * fine;
+}
 void main() {
   vec3 p = vP;
+  // bed or shore by the true height, not the drawn one: far off the ground is drawn coarse, and near the waterline
+  // its triangles dip under the ice where the land is really above it
+  float th = groundH(p.xz);
   // the mirror shows only what stands above the ice: wet silt at the waterline would show as a brown line
-  if (uReflect > 0.5 && p.y < 0.03) discard;
+  if (uReflect > 0.5 && th < 0.0) discard;
   if (p.x > uHole.x && p.x < uHole.z && p.z > uHole.y && p.z < uHole.w) discard;
   float e = 0.6;
   float hx = groundH(p.xz + vec2(e, 0.0)) - groundH(p.xz - vec2(e, 0.0));
   float hz = groundH(p.xz + vec2(0.0, e)) - groundH(p.xz - vec2(0.0, e));
   vec3 n = normalize(vec3(-hx, 2.0 * e, -hz));
   vec3 rd = normalize(p - uCam);
+  float dc = length(p - uCam);
   vec3 col;
-  if (p.y < 0.0) {
-    // the bed: silt over everything, stones and gravel where water ran, dead weed
-    vec2 q = p.xz;
-    float near = smoothstep(70.0, 40.0, length(p - uCam));
-    vec3 c = near > 0.0 ? cells(q * 1.3) : vec3(0.5, 0.8, 0.5);
-    float stones = smoothstep(0.36, 0.16, c.x) * step(0.45, c.z) * smoothstep(0.35, 0.75, fbm2(q * 0.06)) * near;
-    float rip = sin(q.x * 3.1 + fbm2(q * 0.4) * 5.0) * 0.5 + 0.5;
-    vec3 silt = vec3(0.33, 0.28, 0.21) * (0.75 + 0.35 * fbm3(q * 0.6));
-    vec3 alb = mix(silt, vec3(0.44, 0.41, 0.37) * (0.6 + 0.7 * c.z) * smoothstep(0.0, 0.25, c.y - c.x + 0.05), stones);
-    alb *= 0.9 + 0.12 * rip * smoothstep(-3.0, -1.0, p.y);
-    float weed = smoothstep(0.25, 0.65, fbm3(q * 0.21 + 4.0)) * smoothstep(-7.5, -3.0, p.y);
-    alb = mix(alb, vec3(0.12, 0.15, 0.07), weed * 0.55);
-    // fallen leaves and twigs from the old trees, sunk and dark
+  vec2 q = p.xz;
+  if (th < 0.0 && p.y < 0.0) {
+    // ---- the bed. It was meadow, track and garden; now silt lies over it, with gravel where the water runs,
+    // stones, the leaves and sticks of the trees that stood here, and dead weed ----
+    float near = smoothstep(75.0, 28.0, dc) * step(0.5, uDetail);
+    float mGrav = smoothstep(0.18, 0.5, fbm3(q * 0.03 + 7.0));
+    float mMead = smoothstep(-0.15, 0.25, fbm3(q * 0.018 - 3.0)) * (1.0 - mGrav);
+    vec3 alb = vec3(0.26, 0.205, 0.155) * (0.8 + 0.32 * fbm3(q * 0.45));
+    vec2 nb = vec2(0.0);
     if (near > 0.0) {
-      vec3 lc = cells(q * 4.0 + 13.0);
-      alb = mix(alb, vec3(0.16, 0.09, 0.05) * (0.7 + 0.6 * lc.z), smoothstep(0.22, 0.12, lc.x) * step(0.55, lc.z) * 0.8 * near);
+      // the swells
+      float ee = 0.18;
+      nb -= vec2(bedSwell(q + vec2(ee, 0.0)) - bedSwell(q - vec2(ee, 0.0)), bedSwell(q + vec2(0.0, ee)) - bedSwell(q - vec2(0.0, ee))) / (2.0 * ee);
+      // grass laid flat by the water, all one way in a patch, silted over
+      float ang = fbm2(q * 0.025) * 1.6 + 0.7;
+      vec2 ax = vec2(cos(ang), sin(ang)), ay = vec2(-ax.y, ax.x);
+      float fib = vnoise(vec2(dot(q, ax) * 2.2, dot(q, ay) * 34.0)) * 0.6 + vnoise(vec2(dot(q, ax) * 4.4, dot(q, ay) * 71.0)) * 0.4;
+      alb = mix(alb, vec3(0.33, 0.28, 0.19) * (0.72 + 0.55 * fib), mMead * 0.6 * near);
+      // ripples in the silt where the water moves
+      float rp = smoothstep(0.25, 0.6, fbm2(q * 0.045 + 11.0)) * (1.0 - mMead);
+      float ph = dot(q, vec2(0.8, 0.6)) * 4.2 + fbm2(q * 0.45) * 3.0;
+      nb += vec2(0.8, 0.6) * cos(ph) * 0.3 * rp;
+      alb *= 1.0 + 0.1 * sin(ph) * rp;
+      // gravel, each stone domed, dark between them
+      float d2;
+      vec4 g = cellsN(q * 6.5, d2);
+      // pebbles, wet and dark, each its own size, many of them half under the silt
+      float gr = mix(0.26, 0.44, h12(floor(q * 6.5) + 11.0)), gon = step(0.3, g.w) * smoothstep(-0.1, 0.4, vnoise(q * 1.7) + 0.15);
+      float peb = smoothstep(gr, gr - 0.12, g.z) * mGrav * gon * smoothstep(60.0, 25.0, dc);
+      vec3 pc = mix(vec3(0.25, 0.235, 0.215), vec3(0.14, 0.13, 0.12), g.w) * (0.8 + 0.4 * h12(floor(q * 6.5) + 3.0));
+      alb = mix(alb * (1.0 - 0.25 * mGrav * gon * smoothstep(gr - 0.05, gr + 0.08, g.z) * smoothstep(gr + 0.2, gr + 0.08, g.z)), pc, peb * 0.85);
+      nb -= g.xy * peb * 1.3;
+      // stones here and there, each its own size and not quite round, silt settled on their tops
+      vec2 sq = q * 0.85 + 3.7 + vec2(vnoise(q * 2.3), vnoise(q * 2.3 + 5.0)) * 0.07;
+      vec4 S = cellsN(sq, d2);
+      vec2 scell = floor(sq);
+      float sr = mix(0.05, 0.2, pow(h12(scell + 5.0), 2.2)), son = step(0.86 - 0.25 * mGrav, S.w);
+      float st = smoothstep(sr, sr * 0.8, S.z) * son;
+      // wet stone, darker than the silt round it, a dusting of silt on some
+      vec3 sc = mix(vec3(0.2, 0.195, 0.185), vec3(0.12, 0.115, 0.11), h12(scell + 9.0)) * (0.85 + 0.3 * vnoise(q * 9.0));
+      sc = mix(sc, alb * 0.9, smoothstep(sr * 0.8, sr * 0.1, S.z) * 0.3 * h12(scell + 3.0) * smoothstep(0.0, 0.6, vnoise(q * 11.0) + 0.3));
+      alb = mix(alb * (1.0 - 0.22 * son * smoothstep(sr * 0.85, sr * 1.15, S.z) * smoothstep(sr * 1.7, sr * 1.15, S.z)), sc, st);
+      nb -= S.xy / sr * st * 0.4;
+      // leaves: drifted together, each lying its own way, a rib down the middle
+      vec4 Lf = cellsN(q * 3.3 + 13.0, d2);
+      float la = Lf.w * 6.2832, ca = cos(la), sa = sin(la);
+      vec2 lr = mat2(ca, -sa, sa, ca) * (-Lf.xy);
+      float drift = smoothstep(0.05, 0.45, fbm3(q * 0.13 + 2.0)) * (1.0 - 0.6 * mGrav);
+      float leaf = smoothstep(1.0, 0.75, length(lr / vec2(0.17, 0.075))) * step(0.5, h12(floor(q * 3.3 + 13.0) + 2.0)) * drift;
+      vec3 lcol = mix(mix(vec3(0.2, 0.11, 0.05), vec3(0.3, 0.17, 0.07), Lf.w), vec3(0.13, 0.09, 0.06), step(0.7, fract(Lf.w * 7.3)));
+      lcol *= 1.0 - 0.35 * smoothstep(0.012, 0.0, abs(lr.y)) * step(abs(lr.x), 0.15);
+      alb = mix(alb, lcol, leaf * 0.85);
+      // sticks and branches, sunk where they fell
+      vec2 tcell = floor(q * 0.6);
+      for (int k = 0; k < 2; k++) {
+        vec2 tc = tcell + vec2(float(k) * 31.0, 0.0);
+        if (h12(tc + 5.0) > 0.74) {
+          vec2 tf = fract(q * 0.6) - 0.5 - (h22(tc + 1.0) - 0.5) * 0.4;
+          float ta = h12(tc + 9.0) * 3.1416; vec2 td = vec2(cos(ta), sin(ta));
+          float along = dot(tf, td), across = dot(tf, vec2(-td.y, td.x)) + sin(along * 9.0 + ta) * 0.012;
+          float w = mix(0.009, 0.003, smoothstep(-0.3, 0.35, along));
+          float tw = smoothstep(w, w * 0.4, abs(across)) * step(abs(along - 0.02), 0.33);
+          alb = mix(alb, vec3(0.1, 0.075, 0.05), tw * 0.75);
+          nb += vec2(-td.y, td.x) * sign(across) * tw * 0.6;
+        }
+      }
+      // dead weed in the deeper parts: dark strands
+      float wd = smoothstep(0.3, 0.7, fbm3(q * 0.21 + 4.0)) * smoothstep(-7.5, -2.8, p.y);
+      float ws = vnoise(vec2(dot(q, ay) * 3.0, dot(q, ax) * 24.0)) * 0.5 + 0.5;
+      alb = mix(alb, vec3(0.1, 0.09, 0.055) * (0.7 + 0.6 * ws), wd * 0.6 * near);
     }
-    float twig = smoothstep(0.035, 0.0, abs(fract(dot(q, vec2(0.83, 0.55)) * 0.7 + h12(floor(q * 0.5)) * 7.0) - 0.5) * 0.3) * step(0.86, h12(floor(q * 0.5) + 3.0));
-    alb = mix(alb, vec3(0.12, 0.08, 0.05), twig * 0.7);
-    n = normalize(n + vec3(c.x - 0.3, 0.0, c.y - 0.5) * stones * 0.6 * uDetail);
+    n = normalize(n + vec3(nb.x, 0.0, nb.y) * near);
     col = alb * (lanternAt(p, n) + skyLight(p, n));
     col = underwaterView(col, p);
   } else {
-    // the shore: snow over everything; rock where it is steep
+    // ---- the shore: snow, drifted and scoured by the wind; rock and heather where it is steep or blown bare ----
     float steep = 1.0 - n.y;
-    vec3 snow = vec3(0.82, 0.86, 0.92) * (0.92 + 0.08 * vnoise(p.xz * 2.0));
-    vec3 rock = vec3(0.16, 0.15, 0.14) * (0.7 + 0.5 * vnoise(p.xz * 0.7));
-    vec3 alb = mix(snow, rock, smoothstep(0.32, 0.55, steep + 0.1 * vnoise(p.xz * 0.3)));
-    vec3 li = lanternAt(p, n) + skyLight(p, n);
+    float near = smoothstep(160.0, 40.0, dc);
+    vec2 nb = vec2(0.0);
+    float sa = 0.0;
+    if (near > 0.0) {
+      float ee = 0.12;
+      sa = sastrugi(q);
+      nb = -vec2(sastrugi(q + vec2(ee, 0.0)) - sa, sastrugi(q + vec2(0.0, ee)) - sa) / ee * 0.09 * near;
+    }
+    float bare = smoothstep(0.3, 0.52, steep + 0.12 * fbm3(q * 0.08) + 0.08 * vnoise(q * 0.9)) ;
+    float thin = smoothstep(0.25, 0.75, fbm3(q * 0.012 + 5.0) * 0.6 + steep * 1.5) * (1.0 - bare);
+    vec3 snow = vec3(0.86, 0.89, 0.94) * (0.93 + 0.07 * vnoise(q * 1.7) + 0.05 * sa);
+    vec3 heath = mix(vec3(0.14, 0.12, 0.1), vec3(0.2, 0.17, 0.12), vnoise(q * 1.3) * 0.5 + 0.5);
+    vec3 rock = vec3(0.17, 0.165, 0.16) * (0.65 + 0.55 * fbm3(q * 0.6)) * (0.85 + 0.3 * vnoise(q * 6.0));
+    vec3 alb = mix(snow, mix(heath, snow, 0.55 + 0.35 * vnoise(q * 2.3)), thin * 0.6);
+    alb = mix(alb, rock, bare);
+    // snow caught on the flatter parts of the rock
+    alb = mix(alb, snow * 0.9, bare * smoothstep(0.72, 0.9, n.y + 0.2 * vnoise(q * 3.0)));
+    vec3 ns = normalize(n + vec3(nb.x, 0.0, nb.y) * (1.0 - bare));
+    float lsh = lanternShadow(p, n), ssh = sunShadow(p, n);
+    vec3 li = lanternAtS(p, ns, lsh) + skyLightS(p, ns, ssh);
+    // snow in shadow is blue with the sky
+    li += uSkyAmb * vec3(0.15, 0.3, 0.6) * (1.0 - bare) * (1.0 - ssh * 0.7);
     col = alb * li;
-    // sparkle in the snow near the light
-    float sp = pow(h12(floor(p.xz * 40.0)), 60.0) * 6.0 * smoothstep(45.0, 12.0, length(p - uCam));
-    col += sp * (length(lanternAt(p, vec3(0, 1, 0))) * 0.6 + uMoonCol * 0.6) * smoothstep(0.35, 0.0, steep);
+    // glints: crystals catching the lantern and the moon
+    if (near > 0.0) {
+      vec3 V = -rd;
+      float snowy = (1.0 - bare) * smoothstep(0.35, 0.05, steep);
+      vec3 Ll = uLantern - p; float dl = length(Ll);
+      float gl = glint(q, 38.0, V, Ll / dl, 0.62) + glint(q + 0.37, 61.0, V, Ll / dl, 0.9) * 0.6;
+      float gm = glint(q, 38.0, V, uMoonDir, 0.62) + glint(q + 0.37, 61.0, V, uMoonDir, 0.9) * 0.6;
+      col += snowy * near * (gl * uLanternCol * lsh * 3.0 / (dl * dl + 1.0) + gm * (uMoonCol * 22.0 + uSunCol * 6.0) * ssh);
+    }
     col = airFog(col, p, rd);
   }
   o = vec4(col, 1.0);
@@ -1689,7 +2102,7 @@ void main() {
   gl_Position = uVP * vec4(q, 1.0);
 }`;
 const OBJ_FS = COMMON + `
-in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; uniform float uLanternK; uniform float uStone; out vec4 o;
+in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; uniform float uLanternK; uniform float uStone; uniform float uGhostK; out vec4 o;
 void main() {
   vec3 p = vP;
   if (uReflect > 0.5 && p.y < -0.01) discard;
@@ -1697,22 +2110,44 @@ void main() {
   vec3 alb = vC.rgb; float m = vC.a;
   vec3 rd = normalize(p - uCam);
   vec3 col;
-  if (m < -0.001) {
+  if (m < -99.0) {
+    // a light left on in the drowned village: it flickers, and the bell puts it out
+    float fl = 0.7 + 0.3 * vnoise(vec2(floor(p.x * 0.4) * 1.7 + floor(p.z * 0.4) * 3.1 + uTime * 1.4, floor(p.y)));
+    col = alb * (-m - 100.0) * uDrown * fl * stillLit(p);
+  } else if (m < -0.001) {
     col = alb * (-m);
   } else {
     // stone shows its courses, under the ice and above it (built things only: not the skater, the rope, the bell)
+    // each course its own run of stones, each stone its own length and colour and weathering, the mortar dark and
+    // set back between them, the edges turned in so the light finds them
     if (uStone > 0.5 && m < 0.06 && abs(n.y) < 0.5) {
-      float row = floor(p.y / 0.27);
-      float u = (abs(n.x) > abs(n.z) ? p.z : p.x) / 0.52 + row * 0.5 + h12(vec2(row, 3.0)) * 0.3;
-      float mort = max(smoothstep(0.08, 0.0, abs(fract(p.y / 0.27) - 0.5) - 0.42), smoothstep(0.06, 0.0, abs(fract(u) - 0.5) - 0.44));
-      alb *= (0.75 + 0.45 * h12(vec2(floor(u), row))) * (1.0 - mort * 0.55);
+      bool alongZ = abs(n.x) > abs(n.z);
+      float u = alongZ ? p.z : p.x;
+      float v = (p.y + 0.05 * sin(p.y * 3.1) + 0.03 * sin(p.y * 7.7)) / 0.27, row = floor(v), fv = fract(v);
+      float len = 0.34 + 0.44 * h12(vec2(row, 3.0));
+      float uu = u / len + h12(vec2(row, 5.0)) * 7.0, ci = floor(uu), fu = fract(uu);
+      float id = h12(vec2(ci, row));
+      float du = min(fu, 1.0 - fu) * len, dv = min(fv, 1.0 - fv) * 0.27, dj = min(du, dv);
+      float mortar = smoothstep(0.016, 0.007, dj), bevel = smoothstep(0.045, 0.01, dj) * (1.0 - mortar);
+      float wear = fbm3(vec2(u, p.y) * 4.0 + id * 13.0);
+      vec3 sc = alb * (0.62 + 0.62 * id) * (0.8 + 0.36 * wear);
+      sc *= mix(vec3(1.0), mix(vec3(1.08, 1.0, 0.88), vec3(0.9, 0.95, 1.02), step(0.5, fract(id * 3.1))), step(0.6, fract(id * 7.3)) * 0.7);
+      // stains run down from the joints
+      sc *= 1.0 - 0.22 * smoothstep(0.3, 0.8, vnoise(vec2(u * 7.0, p.y * 0.9))) * smoothstep(0.6, 0.0, fv);
+      alb = mix(sc, alb * 0.34, mortar);
+      vec3 tu = alongZ ? vec3(0, 0, 1) : vec3(1, 0, 0);
+      vec2 wg = vec2(vnoise(vec2(u, p.y) * 9.0 + id * 5.0), vnoise(vec2(u, p.y) * 9.0 + id * 5.0 + 3.3));
+      n = normalize(n + (du < dv ? tu * (fu < 0.5 ? -1.0 : 1.0) : vec3(0, fv < 0.5 ? -1.0 : 1.0, 0)) * bevel * 0.32 + (tu * wg.x + vec3(0, wg.y, 0)) * 0.12 * (1.0 - mortar));
     }
     if (p.y < 0.0) {
-      // drowned: silt settles on everything that faces up, weed darkens the rest
-      float up = smoothstep(0.35, 0.85, n.y);
-      alb = mix(alb, vec3(0.31, 0.27, 0.2), up * 0.7 + 0.08);
-      alb = mix(alb, alb * vec3(0.8, 0.9, 0.72), 0.3);
-      alb *= 0.85 + 0.3 * vnoise(p.xz * 3.0 + p.y);
+      // drowned: silt settles on whatever faces up, thicker in the hollows; down the walls the dark streaks of what
+      // grows in the water
+      float up = smoothstep(0.3, 0.85, n.y);
+      float silt = up * (0.6 + 0.35 * smoothstep(-0.2, 0.5, fbm2(p.xz * 0.7))) + 0.06;
+      vec3 siltC = vec3(0.26, 0.21, 0.16) * (0.86 + 0.24 * fbm2(p.xz * 2.1 + p.y));
+      float streak = smoothstep(-0.2, 0.6, vnoise(vec2((p.x + p.z) * 5.0, p.y * 0.7))) * (1.0 - up);
+      alb = mix(alb, alb * vec3(0.6, 0.57, 0.48), streak * 0.55);
+      alb = mix(alb, siltC, clamp(silt, 0.0, 1.0));
     } else if (uSnowy > 0.5) {
       float cap = smoothstep(0.55, 0.9, n.y + 0.15 * vnoise(p.xz * 5.0));
       alb = mix(alb, vec3(0.84, 0.88, 0.94), cap);
@@ -1727,8 +2162,13 @@ void main() {
       col += uMoonCol * pow(max(dot(n, hm), 0.0), 40.0 + 200.0 * m) * m * 0.6;
     }
   }
-  col = p.y < 0.0 ? underwaterView(col, p) : airFog(col, p, rd);
-  o = vec4(col, 1.0);
+  // what stands only in the reflection: gone when you come near, and where the bell has rung
+  float alpha = 1.0;
+  if (uGhostK > 0.0) alpha = uGhostK * smoothstep(25.0, 110.0, length(p - uCam)) * stillLit(p) * (m < -0.001 ? 1.0 : 0.75);
+  // the drowned lights lose less of their red on the way up than the stone round them does, so they stay warm
+  if (m < -99.0 && p.y < 0.0) col = underwaterView(mix(col, col * vec3(2.6, 1.15, 0.9), 0.6), p);
+  else col = p.y < 0.0 ? underwaterView(col, p) : airFog(col, p, rd);
+  o = vec4(col, alpha);
 }`;
 // trees on the shore, instanced: aI0 = x, y, z, scale; aI1 = yaw, tint
 const TREE_VS = COMMON + `
@@ -1737,11 +2177,18 @@ uniform mat4 uVP;
 out vec3 vP; out vec3 vN; out vec4 vC;
 void main() {
   float c = cos(aI1.x), s = sin(aI1.x);
-  vec3 lp = aPos * aI0.w;
+  vec3 lp = aPos * aI0.w; lp.xz *= aI1.z;
   vec3 w = vec3(c * lp.x + s * lp.z, lp.y, -s * lp.x + c * lp.z) + aI0.xyz;
   vP = w; vN = vec3(c * aNrm.x + s * aNrm.z, aNrm.y, -s * aNrm.x + c * aNrm.z);
   vC = vec4(aCol.rgb * (0.8 + 0.4 * aI1.y), aCol.a);
   gl_Position = uVP * vec4(w, 1.0);
+}`;
+const SH_TREE_VS = `
+in vec3 aPos; in vec4 aI0; in vec4 aI1; uniform mat4 uSVP;
+void main() {
+  float c = cos(aI1.x), s = sin(aI1.x);
+  vec3 lp = aPos * aI0.w; lp.xz *= aI1.z;
+  gl_Position = uSVP * vec4(vec3(c * lp.x + s * lp.z, lp.y, -s * lp.x + c * lp.z) + aI0.xyz, 1.0);
 }`;
 
 // The ice. It replaces what is under it: the view down into the water (refracted), the sky and shore in it (reflected,
@@ -1751,28 +2198,67 @@ in vec3 aPos; uniform mat4 uVP; uniform vec4 uQuad; out vec3 vP;
 void main() { vec2 xz = mix(uQuad.xy, uQuad.zw, aPos.xz); vP = vec3(xz.x, 0.0, xz.y); gl_Position = uVP * vec4(vP, 1.0); }`;
 const ICE_FS = COMMON + `
 in vec3 vP; uniform sampler2D uUnder; uniform sampler2D uRefl; uniform vec4 uSag; uniform vec4 uHoles[8];
-uniform float uIceVis;
 out vec4 o;
-vec3 bubbleLayer(vec3 p, vec3 rd, float depth, float scale, float dens, float seed) {
-  // where the view ray, bent into the ice, reaches this depth
-  vec3 rr = refract(rd, vec3(0, 1, 0), 1.0 / 1.31);
-  vec2 q = p.xz + rr.xz / max(-rr.y, 0.2) * depth;
-  vec3 c = cells(q * scale + seed);
-  float on = step(1.0 - dens, c.z);
-  float r = mix(0.035, 0.16, pow(fract(c.z * 13.7), 3.0));
-  // a bubble is a bright speck with a softer skirt; far away they fade rather than shimmer
-  float px = fwidth(q.x * scale) * 1.5;
-  float core = smoothstep(r + px, r * 0.3, c.x) * on;
-  vec3 qp = vec3(q.x, -depth, q.y);
-  vec3 li = lanternAt(qp, vec3(0, 1, 0)) * 1.2 + uMoonCol * 0.35 + uSkyAmb * 2.0 + uSunCol * 0.3;
-  return li * core * 0.35 * smoothstep(0.5, 0.12, px);
+// where the view, bent into the ice, has got to at this depth under the surface
+vec2 inIce(vec2 xz, vec3 rr, float depth) { return xz + rr.xz / max(-rr.y, 0.22) * depth; }
+// bubbles frozen in columns: a column to a cell, a bubble at some of the depths down it, so they line up as you look in.
+// Bright at the rim, where they turn the light back
+vec3 bubbleCols(vec2 xz, vec3 rr, float dens, float scale, float rmin, float rmax, float dz, vec3 li) {
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    vec2 q = inIce(xz, rr, 0.012 + fi * dz) * scale;
+    float d2; vec4 c = cellsN(q, d2);
+    float on = step(1.0 - dens, c.w) * step(0.3, fract(c.w * 23.71 + fi * 0.618));
+    float r = mix(rmin, rmax, fract(c.w * 7.13 + fi * 0.291)), px = fwidth(q.x) * 1.3;
+    float body = smoothstep(r + px, r - px, c.z);
+    float spec = smoothstep(r * 0.45, 0.0, length(c.xy + vec2(0.3, 0.3) * r));
+    acc += li * (body * (0.35 + 0.35 * smoothstep(r * 0.4, r * 0.95, c.z)) + spec * 1.2 * body) * on * smoothstep(1.2, 0.3, px / r) * (1.0 - fi * 0.11);
+  }
+  return acc;
+}
+// methane from the rotting fields, frozen as it rose: white discs stacked under one another
+vec3 methane(vec2 xz, vec3 rr, float k, vec3 li, vec3 amb) {
+  vec3 acc = vec3(0.0); float cover = 0.0;
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    vec2 q = inIce(xz, rr, 0.03 + fi * 0.036) * 2.2;
+    float d2; vec4 c = cellsN(q, d2);
+    float on = step(1.0 - k, c.w) * step(0.22, fract(c.w * 13.3 + fi * 0.71));
+    float r = mix(0.12, 0.38, fract(c.w * 5.7 + fi * 0.37)) * (1.0 - fi * 0.1), px = fwidth(q.x);
+    float disc = smoothstep(r + px, r - px * 2.0, c.z) * on;
+    float edge = smoothstep(r * 0.55, r, c.z);
+    acc += (li * (0.45 + 1.1 * edge) + amb) * disc * (1.0 - cover) * (1.0 - fi * 0.13);
+    cover = max(cover, disc * 0.6);
+  }
+  return acc;
+}
+// old breaks that froze again: white sheets standing down through the ice. Only some edges between cells have broken.
+// Where the view crosses one inside the ice it is lit, bright at the top and fading down, so it reads as a sheet;
+// x = how much of it, y = the thin line where it meets the surface
+vec2 crackSheet(vec2 xz, vec3 rr, float scale, float width, float depth, float seed, float keep) {
+  vec2 q0 = xz * scale + seed, q1 = inIce(xz, rr, depth) * scale + seed;
+  q0 += vec2(vnoise(q0 * 1.3), vnoise(q0 * 1.3 + 4.1)) * 0.11;
+  q1 += vec2(vnoise(q1 * 1.3), vnoise(q1 * 1.3 + 4.1)) * 0.11;
+  vec4 a = cells2(q0), b = cells2(q1);
+  float pa = fract((a.z + a.w) * 53.7 + a.z * a.w * 117.3);
+  float on = step(1.0 - keep, pa) * smoothstep(0.0, 0.35, vnoise(q0 * 0.9 + seed) + 0.25);
+  float crossed = step(abs(a.z - b.w) + abs(a.w - b.z), 0.0001);
+  float ea = a.y - a.x, eb = b.y - b.x;
+  float t = ea / max(ea + eb, 1e-5);
+  float sheet = crossed * (1.0 - 0.65 * t) * on;
+  float px = fwidth(q0.x);
+  float line = smoothstep(width + px, width * 0.2, ea) * on * smoothstep(6.0, 1.5, px / width);
+  return vec2(sheet * smoothstep(1.0, 0.25, px * 8.0 / scale), line);
 }
 void main() {
   vec3 p = vP;
   vec4 id = iceAt(p.xz);
-  if (groundH(p.xz) > 0.04) discard;          // land: the ice runs right up to the true waterline
+  // land: the ice runs right up to the true waterline and under the shore as snow. Far off, the ground is drawn
+  // coarse and dips below the ice at the waterline; there the ice shows as the snow it meets, not as a dark seam
+  float land = smoothstep(0.0, 0.05, groundH(p.xz));
   float thick = id.r * 255.0 / 6.0, white = id.g, snow = id.b, cur = id.a;
-  vec3 rd = normalize(p - uCam);
+  vec3 rd = normalize(p - uCam), V = -rd, up = vec3(0, 1, 0);
   // open water: fishing holes and where the ice has gone through
   float hole = 0.0;
   for (int i = 0; i < 8; i++) { vec4 hh = uHoles[i]; if (hh.z <= 0.0) continue; float d = length(p.xz - hh.xy); hole = max(hole, smoothstep(hh.z, hh.z * 0.82, d + vnoise(p.xz * 6.0 + hh.w) * hh.z * 0.12)); }
@@ -1781,31 +2267,38 @@ void main() {
   vec2 sd = p.xz - uSag.xy; float sr = length(sd);
   if (uSag.z > 0.0) { float wv = sin(sr * 1.6 - uSag.w) * exp(-sr * 0.12) * uSag.z; g += (sd / max(sr, 0.01)) * wv * 0.06; }
   vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
-  float cosT = max(dot(-rd, n), 0.0);
+  float cosT = max(dot(V, n), 0.0);
   float F = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
   vec2 uv = gl_FragCoord.xy / uRes;
   float dist = length(p - uCam);
   vec2 dis = n.xz * (0.9 / (1.0 + dist * 0.08));
-  vec3 refl = texture(uRefl, vec2(uv.x, uv.y) + dis * vec2(0.02, 0.04)).rgb;
+  vec3 refl = texture(uRefl, uv + dis * vec2(0.02, 0.04)).rgb;
   vec3 under = texture(uUnder, uv + dis * vec2(0.012, 0.012)).rgb;
-  // ice body
-  vec3 tint = mix(vec3(0.9, 0.96, 0.98), vec3(0.75, 0.84, 0.9), white);
-  vec3 li = lanternAt(p + vec3(0, 0.01, 0), vec3(0, 1, 0)) + skyLight(p, vec3(0, 1, 0));
-  vec3 whiteCol = vec3(0.55, 0.62, 0.68) * li * (0.85 + 0.15 * fbm2(p.xz * 3.0));
+  vec3 rr = refract(rd, up, 1.0 / 1.31);
+  float lsh = lanternShadow(p + vec3(0, 0.01, 0), up), ssh = sunShadow(p, up);
+  vec3 lanL = lanternAtS(p + vec3(0, 0.01, 0), up, lsh);
+  vec3 li = lanL + skyLightS(p, up, ssh);
+  // what is in the ice is lit from all round: the lantern, the moon, the sky
+  vec3 liIn = lanL * 1.1 + (uMoonCol * 0.45 + uSunCol * 0.3) * ssh + uSkyAmb * 1.6;
+  vec3 tint = mix(vec3(0.88, 0.95, 0.98), vec3(0.75, 0.84, 0.9), white);
+  vec3 whiteCol = vec3(0.7, 0.76, 0.82) * (li + uSkyAmb * 0.8) * (0.8 + 0.2 * fbm3(p.xz * 2.4));
   float op = white * 0.72;
-  // bubbles: denser in white ice and thick ice
-  vec3 bub = vec3(0.0);
-  if (dist < 42.0) {
-    float bd = mix(0.05, 0.4, white) * smoothstep(5.0, 14.0, thick) * (0.4 + 0.6 * smoothstep(-0.2, 0.5, fbm2(p.xz * 0.12)));
-    if (bd > 0.01) bub = bubbleLayer(p, rd, 0.02, 14.0, bd, 1.0) + bubbleLayer(p, rd, 0.07, 9.0, bd * 0.8, 9.0) + bubbleLayer(p, rd, 0.14, 6.0, bd * 0.5, 23.0);
-    // here and there stacks of bigger flat bubbles, where the old fields rot under the ice
-    float meth = smoothstep(0.6, 0.85, fbm2(p.xz * 0.045 + 3.0)) * (1.0 - white);
-    if (meth > 0.0) bub += (bubbleLayer(p, rd, 0.05, 2.6, 0.5 * meth, 40.0) + bubbleLayer(p, rd, 0.11, 2.4, 0.45 * meth, 41.0) + bubbleLayer(p, rd, 0.17, 2.2, 0.4 * meth, 42.0)) * 1.5;
-    bub *= smoothstep(42.0, 30.0, dist);
-  }
-  // thin ice is black and wet; moving water under it drags grey slush along; old hair cracks show in it
   float thin = 1.0 - smoothstep(3.5, 10.0, thick);
-  vec3 col = under * tint * (1.0 - op) + whiteCol * op + bub * (1.0 - thin);
+  vec3 inside = vec3(0.0); float cover = 0.0;
+  if (dist < 75.0) {
+    float bd = mix(0.035, 0.3, white) * smoothstep(5.0, 14.0, thick) * smoothstep(0.0, 0.55, fbm2(p.xz * 0.1) + 0.25);
+    if (bd > 0.01 && dist < 42.0) inside += bubbleCols(p.xz, rr, bd, 7.0, 0.05, 0.15, 0.026, liIn) * 0.32 * smoothstep(42.0, 28.0, dist);
+    float meth = smoothstep(0.56, 0.8, fbm2(p.xz * 0.045 + 3.0)) * (1.0 - white) * (1.0 - thin);
+    if (meth > 0.0) inside += methane(p.xz, rr, 0.6 * meth, liIn, uSkyAmb * 2.0) * 0.5;
+    vec2 ck = crackSheet(p.xz, rr, 0.03, 0.0016, thick * 0.01, 3.0, 0.34);
+    if (dist < 32.0) ck += crackSheet(p.xz, rr, 0.17, 0.004, thick * 0.007, 17.0, 0.22) * smoothstep(32.0, 14.0, dist) * 0.7;
+    vec3 cl = lanL * 0.55 / (1.0 + length(lanL) * 0.35) + (uMoonCol * 0.5 + uSunCol * 0.12) * ssh + uSkyAmb * 0.9;
+    inside += cl * (ck.x * 0.16 + ck.y * 0.24);
+    cover = min(0.5, ck.x * 0.35 + ck.y * 0.3);
+    inside *= smoothstep(75.0, 45.0, dist);
+  }
+  vec3 col = under * tint * (1.0 - op) * (1.0 - cover) + whiteCol * op + inside * (1.0 - op * 0.5) * (1.0 - thin * 0.6);
+  // thin ice is black and wet; moving water under it drags grey slush along; old hair cracks show in it
   col = mix(col, col * 0.18, thin * 0.85);
   float streak = fbm3(vec2(p.x * 0.9, p.z * 0.12) + vec2(0.0, uTime * 0.02));
   float slush = cur * smoothstep(0.05, 0.55, streak) * (0.6 + 0.4 * vnoise(p.xz * 3.0));
@@ -1817,15 +2310,28 @@ void main() {
     col += hair * (li * 0.8 + uMoonCol * 0.6 + uSkyAmb * 4.0) * smoothstep(60.0, 40.0, dist);
   }
   F = mix(F, min(1.0, F * 1.6 + 0.02), thin);
-  // snow lying on the ice
-  float sn = smoothstep(0.25, 0.75, snow + 0.25 * fbm3(p.xz * 1.1));
-  vec3 snowCol = vec3(0.84, 0.88, 0.93) * li;
-  float spark = pow(h12(floor(p.xz * 55.0)), 70.0) * 9.0 * smoothstep(40.0, 10.0, dist);
-  snowCol += spark * (length(lanternAt(p, vec3(0, 1, 0))) * 0.5 + uMoonCol * 0.7 + uSunCol * 0.4);
-  // the reflection, strongest at a glance
-  float Fs = F * (1.0 - sn) * (1.0 - op * 0.7);
+  // snow lying on the ice: drifted in streaks along the wind, a dusting of grains at its edges
+  vec2 w = vec2(0.94, 0.34);
+  float sk = fbm3(vec2(dot(p.xz, w) * 0.45, dot(p.xz, vec2(-w.y, w.x)) * 2.2));
+  float sn = max(smoothstep(0.4, 0.62, snow + 0.22 * sk + 0.12 * fbm3(p.xz * 1.3)), land);
+  float dust = 0.0;
+  if (dist < 26.0) { float dg; vec4 gr = cellsN(p.xz * 24.0, dg); dust = smoothstep(0.06, 0.36, snow + 0.3 * sk) * (1.0 - sn) * smoothstep(0.34, 0.16, gr.z) * step(0.45, gr.w) * smoothstep(26.0, 8.0, dist); }
+  vec3 snowCol = vec3(0.85, 0.89, 0.94) * li + uSkyAmb * vec3(0.15, 0.3, 0.6) * (1.0 - ssh * 0.7);
+  // the light on the surface: frost crystals and snow grains flashing as you pass, a soft sheen round the lantern
+  vec3 Lv = uLantern - p; float dl = length(Lv); vec3 Ll = Lv / dl;
+  float frost = smoothstep(0.4, 0.8, fbm2(p.xz * 0.28 + 9.0)) * (1.0 - thin) * 0.8 + sn + dust;
+  float gl = 0.0, gm = 0.0;
+  if (dist < 45.0 && frost > 0.01) {
+    gl = glint(p.xz, 52.0, V, Ll, 0.55) + glint(p.xz + 0.31, 83.0, V, Ll, 0.8) * 0.6;
+    gm = glint(p.xz, 52.0, V, uMoonDir, 0.55) + glint(p.xz + 0.31, 83.0, V, uMoonDir, 0.8) * 0.6;
+  }
+  vec3 sparkle = min(frost, 1.0) * smoothstep(45.0, 20.0, dist) * (gl * uLanternCol * lsh * 3.5 / (dl * dl + 1.0) + gm * (uMoonCol * 26.0 + uSunCol * 8.0) * ssh);
+  float Fs = F * (1.0 - sn) * (1.0 - op * 0.35);
   col = mix(col, refl, Fs);
+  vec3 Hl = normalize(Ll + V);
+  col += uLanternCol * lsh * (pow(max(dot(n, Hl), 0.0), 2400.0) * 2.5 + pow(max(dot(n, Hl), 0.0), 260.0) * 0.25) * (0.2 + F) / (dl * dl + 0.5) * (1.0 - sn) * (1.0 - hole);
   col = mix(col, snowCol, sn);
+  col += snowCol * dust * 0.3 + sparkle;
   // holes: black water with a rim of slush
   vec3 water = under * vec3(0.3, 0.42, 0.45) * 0.4 + refl * 0.1;
   col = mix(col, water, hole);
@@ -1841,7 +2347,7 @@ const MARK_FS = COMMON + `
 in vec3 vP; in vec4 vC; out vec4 o;
 void main() {
   vec3 L = uLantern - vP; float d2 = dot(L, L);
-  float lit = 1.0 / (d2 * 0.35 + 1.0) * smoothstep(40.0, 8.0, sqrt(d2));
+  float lit = 1.0 / (d2 * 0.35 + 1.0) * smoothstep(40.0, 8.0, sqrt(d2)) * lanternShadow(vP, vec3(0, 1, 0));
   vec3 c = vC.rgb * (uLanternCol * lit * 0.6 + uMoonCol * 1.4 + uSkyAmb * 6.0 + uSunCol * 0.8);
   c += vC.rgb * vC.a;        // a mark can glow on its own (fresh cracks)
   vec3 rd = normalize(vP - uCam);
@@ -1880,7 +2386,22 @@ void main() { vC = aCol; vQ = vec2(float((gl_VertexID % 6 == 1) || (gl_VertexID 
   vec3 q = aPos; if (q.y < 0.0) q.y *= 0.78; gl_Position = uVP * vec4(q, 1.0); }`;
 const SPRITE_FS = `
 in vec4 vC; in vec2 vQ; out vec4 o;
-void main() { float r = length(vQ); float a = vC.a > 2.5 ? smoothstep(1.0, 0.0, abs(vQ.y)) * smoothstep(1.0, 0.3, abs(vQ.x)) : vC.a > 1.5 ? exp(-r * r * 3.0) * (1.0 - smoothstep(0.8, 1.0, r)) : smoothstep(1.0, 0.2, r); o = vec4(vC.rgb * a, 1.0); }`;
+void main() { float r = length(vQ); float a = vC.a > 2.5 ? smoothstep(1.0, 0.0, abs(vQ.y)) * smoothstep(1.0, 0.3, abs(vQ.x)) : vC.a > 1.5 ? (exp(-r * r * 9.0) * 0.75 + exp(-r * r * 3.2) * 0.25) * smoothstep(1.0, 0.6, r) : smoothstep(1.0, 0.2, r); o = vec4(vC.rgb * a, 1.0); }`;
+
+// ---- shadow maps: depth only, true positions (no apparent depth) ----
+const SH_FS = `void main() {}`;
+const SH_OBJ_VS = `
+in vec3 aPos; uniform mat4 uSVP; uniform mat4 uModel;
+void main() { gl_Position = uSVP * (uModel * vec4(aPos, 1.0)); }`;
+const SH_SKIN_VS = `
+in vec3 aPos; in vec4 aBi; in vec4 aBw; uniform mat4 uSVP; uniform mat4 uBones[12];
+void main() {
+  mat4 M = uBones[int(aBi.x)] * aBw.x + uBones[int(aBi.y)] * aBw.y + uBones[int(aBi.z)] * aBw.z + uBones[int(aBi.w)] * aBw.w;
+  gl_Position = uSVP * (M * vec4(aPos, 1.0));
+}`;
+const SH_GROUND_VS = COMMON + `
+in vec3 aPos; uniform mat4 uSVP; uniform vec3 uGrid;
+void main() { vec2 xz = uGrid.xy + aPos.xz * uGrid.z; gl_Position = uSVP * vec4(xz.x, groundH(xz), xz.y, 1.0); }`;
 
 // ---- post ----
 const POST_VS = SKY_VS;
@@ -1917,11 +2438,22 @@ void main() {
   c = mix(c, b, uBloomK);
   c *= uExposure;
   if (uUnderwater > 0.0) c = mix(c, vec3(dot(c, vec3(0.2, 0.5, 0.3))) * vec3(0.3, 0.8, 0.9), uUnderwater * 0.7);
+  // a touch more colour before the tone curve
+  float l0 = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = max(mix(vec3(l0), c, 1.1), 0.0);
   c = aces(c);
-  vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.55;
+  // the grade: the cold of the night down in the shadows, the lantern's warmth kept in the light, a gentle S
+  float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c += vec3(-0.006, 0.0015, 0.014) * (1.0 - smoothstep(0.0, 0.3, L)) * smoothstep(0.0, 0.04, L);
+  c *= mix(vec3(1.0), vec3(1.035, 1.0, 0.95), smoothstep(0.35, 0.85, L));
+  c = clamp(c, 0.0, 1.0);
+  c = mix(c, c * c * (3.0 - 2.0 * c), 0.22);
+  vec2 q = vUv - 0.5; q.x *= uRes.x / uRes.y * 0.62;
+  c *= 1.0 - smoothstep(0.18, 0.85, length(q)) * 0.46;
   c = pow(c, vec3(1.0 / 2.2));
+  // grain, a little more in the dark, as in a photograph taken at night
   float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime * 7.13) * 91.0, vec2(12.9898, 78.233))) * 43758.5453);
-  c += (n - 0.5) / 255.0 * 1.5;
+  c += (n - 0.5) / 255.0 * (1.5 + 3.0 * (1.0 - smoothstep(0.0, 0.4, L)));
   c *= 1.0 - uFade;
   o = vec4(c, 1.0);
 }`;
@@ -1964,6 +2496,11 @@ function renderInit() {
   R.P.down = makeProgram('down', POST_VS, DOWN_FS);
   R.P.up = makeProgram('up', POST_VS, UP_FS);
   R.P.final = makeProgram('final', POST_VS, FINAL_FS);
+  R.P.shObj = makeProgram('shObj', SH_OBJ_VS, SH_FS);
+  R.P.shTree = makeProgram('shTree', SH_TREE_VS, SH_FS);
+  R.P.shSkin = makeProgram('shSkin', SH_SKIN_VS, SH_FS);
+  R.P.shGround = makeProgram('shGround', SH_GROUND_VS, SH_FS);
+  R.SH = { cube: makeShadowCube(1024), sun: makeShadowArray(2048, 2) };
 
   // the world's data as textures
   const N = WORLD.res;
@@ -1981,6 +2518,7 @@ function renderInit() {
   R.sprites = makeStream(60000);
   R.decals = makeStream(12000);
   R.pathS = makeStream(60000);
+  R.deep = makeStream(3000);
 }
 
 function resizeTargets(w, h) {
@@ -1992,7 +2530,9 @@ function resizeTargets(w, h) {
   R.T.main = makeTarget(w, h, { msaa: samples, colors: [hf] });
   R.T.under = makeTarget(w, h, { colors: [hf], depth: false });
   R.T.res = makeTarget(w, h, { colors: [hf], depth: false });
-  R.T.refl = makeTarget(Math.max(2, w >> 1), Math.max(2, h >> 1), { colors: [hf] });
+  // the mirror image at full size and smoothed, so the far shore, the stars and the lights in it stay sharp
+  R.T.reflMS = makeTarget(w, h, { msaa: Math.min(2, samples), colors: [hf] });
+  R.T.refl = makeTarget(w, h, { colors: [hf], depth: false });
   R.T.bloom = [];
   let bw = w >> 1, bh = h >> 1;
   for (let i = 0; i < 6 && bw > 4 && bh > 4; i++) { R.T.bloom.push(makeTarget(bw, bh, { colors: [hf], depth: false })); bw >>= 1; bh >>= 1; }
@@ -2006,7 +2546,10 @@ function common(extra) {
     uMoonDir: U.moonDir, uMoonCol: U.moonCol, uSunDir: U.sunDir, uSunCol: U.sunCol, uSkyAmb: U.skyAmb, uGroundAmb: U.groundAmb,
     uNight: U.night, uAurora: U.aurora, uDawn: U.dawn, uStorm: U.storm, uDusk: U.dusk,
     uWorld: U.world, uHeight: R.heightTex, uIceTex: R.iceTex, uReflect: U.reflect, uFog: U.fog, uUnderBoost: U.underBoost,
-    uBell: U.bell,
+    uBell: U.bell, uDrown: U.drown, uOutR: U.outR, uTowerXZ: U.towerXZ, uDeep: U.deep, uDeepCol: U.deepCol,
+    uLShadow: R.SH.cube, uLShadowNF: U.lshadow || [0.04, 56, 0], uSunShadow: R.SH.sun, uSunVP0: U.sunVP0 || IDENT, uSunVP1: U.sunVP1 || IDENT,
+    uSunSh: U.sunSh || [0, 0, 0, 0], uShadowDir: U.shadowDir || [0, 1, 0],
+    uScat: U.scat || [0, 0],
   });
   if (extra) set(extra);
 }
@@ -2038,14 +2581,21 @@ function drawObjects(vp, reflect, extraDraws) {
     set({ uSnowy: B.snowy ? 1 : 0 });
     drawMesh(B.mesh);
   }
-  if (R.trees) {
+  if (R.treeLod) {
     use(R.P.tree);
-    common({ uVP: vp, uSnowy: 1, uBright: 1, uLanternK: 1, uStone: 1 });
-    drawMesh(R.trees, R.trees.instances);
+    common({ uVP: vp, uSnowy: 1, uBright: 1, uLanternK: 1, uStone: 0 });
+    for (const M of R.treeLod) if (M.instances) drawMesh(M, M.instances);
     use(R.P.obj);
     common({ uVP: vp, uSnowy: 0, uBright: 1 });
   }
   set({ uSnowy: 0, uStone: 0 });
+  // in the mirror only: the farm and the village as they stood
+  if (reflect) {
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    for (const [mesh, k] of [[R.ghostFarm, DEEP.farm], [R.ghostVillage, DEEP.village]]) if (mesh && k > 0.003) { set({ uModel: m4(), uGhostK: k, uLanternK: 0, uBright: 1 }); drawMesh(mesh); }
+    gl.disable(gl.BLEND); gl.depthMask(true);
+    set({ uGhostK: 0 });
+  }
   if (!extraDraws) return;
   for (const d of extraDraws) if (!d.bones) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh); }
   let skin = false;
@@ -2062,6 +2612,79 @@ function drawSprites(vp) {
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);
   drawStream(R.sprites);
   gl.depthMask(true); gl.disable(gl.BLEND);
+}
+
+// ---- shadow maps ----
+const IDENT = m4();
+const CUBE_FACES = [[[1, 0, 0], [0, -1, 0]], [[-1, 0, 0], [0, -1, 0]], [[0, 1, 0], [0, 0, 1]], [[0, -1, 0], [0, 0, -1]], [[0, 0, 1], [0, -1, 0]], [[0, 0, -1], [0, -1, 0]]];
+function m4ortho(l, r, b, t, n, f) {
+  const m = new Float32Array(16);
+  m[0] = 2 / (r - l); m[5] = 2 / (t - b); m[10] = -2 / (f - n);
+  m[12] = -(r + l) / (r - l); m[13] = -(t + b) / (t - b); m[14] = -(f + n) / (f - n); m[15] = 1;
+  return m;
+}
+// any trees within r of c (the forest is one instanced draw; most of the way it is too far off to matter)
+function treesNear(c, r) {
+  if (!R.treeCells) return false;
+  for (let i = Math.floor((c[0] - r) / 64); i <= Math.floor((c[0] + r) / 64); i++)
+    for (let j = Math.floor((c[2] - r) / 64); j <= Math.floor((c[2] + r) / 64); j++) if (R.treeCells.has(i + ',' + j)) return true;
+  return false;
+}
+// everything that throws a shadow, into the bound depth target
+function drawCasters(vp, o, draws) {
+  use(R.P.shObj); set({ uSVP: vp, uModel: IDENT });
+  for (const B of R.meshes) drawMesh(B.mesh);
+  if (o.ground) { use(R.P.shGround); common({ uSVP: vp }); const Gd = R.grids[2]; set({ uGrid: [WORLD.x0, WORLD.z0, Gd.step] }); drawMesh(Gd.mesh); }
+  if (R.treeLod && o.trees) { use(R.P.shTree); set({ uSVP: vp }); for (const M of R.treeLod) if (M.instances) drawMesh(M, M.instances); }
+  if (!draws) return;
+  use(R.P.shObj); set({ uSVP: vp });
+  for (const d of draws) if (!d.bones && d.cast !== false && !(o.lantern && d.light)) { set({ uModel: d.m }); drawMesh(d.mesh); }
+  let sk = false;
+  for (const d of draws) if (d.bones && d.cast !== false) { if (!sk) { use(R.P.shSkin); set({ uSVP: vp }); sk = true; } set({ uBones: d.bones }); drawMesh(d.mesh); }
+}
+function lanternShadowPass(draws) {
+  const U = R.U, S = R.SH.cube, L = U.lantern, N = 0.04, F = 56;
+  const on = U.lanternCol && vlen(U.lanternCol) > 0.02 ? 1 : 0;
+  U.lshadow = [N, F, on];
+  if (!on) return;
+  const proj = m4persp(PI / 2, 1, N, F), trees = treesNear(L, F);
+  gl.viewport(0, 0, S.size, S.size);
+  gl.depthMask(true); gl.enable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.3, 2.0);
+  for (let i = 0; i < 6; i++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, S.fbs[i]);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    if (i === 2) continue;        // nothing above the lantern needs its shadow
+    const [dir, up] = CUBE_FACES[i];
+    drawCasters(m4mul(proj, m4lookAt(L, vadd(L, dir), up)), { lantern: true, trees }, draws);
+  }
+  gl.disable(gl.POLYGON_OFFSET_FILL); gl.enable(gl.CULL_FACE);
+}
+// two cascades looking down the light: a near one round where the camera looks, a wide one out ahead of it.
+// Their centres move in whole texels, so the edges do not crawl as you skate.
+function sunShadowPass(draws) {
+  const U = R.U, S = R.SH.sun, dir = U.shadowDir, k = U.sunShK ?? 0;
+  if (!dir || k <= 0.001) { U.sunSh = [0, 0, 0, 0]; return; }
+  const up = Math.abs(dir[1]) > 0.95 ? [0, 0, 1] : [0, 1, 0];
+  const xA = vnorm(vcross(up, dir)), yA = vcross(dir, xA);
+  const C = G.cam, fwd = vnorm([C.look[0] - C.pos[0], 0, C.look[2] - C.pos[2]]);
+  const centres = [C.look, vadd(C.pos, vmul(fwd, 260))], RAD = [52, 720], DIST = [420, 2600], vps = [];
+  gl.viewport(0, 0, S.size, S.size);
+  gl.depthMask(true); gl.enable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.5, 3.0);
+  for (let c = 0; c < 2; c++) {
+    const r = RAD[c], tx = 2 * r / S.size, ce = centres[c];
+    const cx = Math.round(vdot(ce, xA) / tx) * tx, cy = Math.round(vdot(ce, yA) / tx) * tx, cz = vdot(ce, dir);
+    const sc = vadd(vadd(vmul(xA, cx), vmul(yA, cy)), vmul(dir, cz));
+    const vp = m4mul(m4ortho(-r, r, -r, r, 1, DIST[c] * 2), m4lookAt(vadd(sc, vmul(dir, DIST[c])), sc, up));
+    vps.push(vp);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, S.fbs[c]);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    drawCasters(vp, { trees: true, ground: c === 1 }, draws);
+  }
+  gl.disable(gl.POLYGON_OFFSET_FILL); gl.enable(gl.CULL_FACE);
+  U.sunVP0 = vps[0]; U.sunVP1 = vps[1];
+  U.sunSh = [2 * RAD[0] / S.size, 2 * RAD[1] / S.size, 1, k];
 }
 
 // view: {vp, invVP, cam, reflVP, reflInvVP, reflCam, skaterDraws}
@@ -2090,12 +2713,19 @@ function renderFrame(view) {
 function renderFrameInner(view) {
   const U = R.U;
   R.stats.draws = 0;
+  // 0. shadows: the lantern's cube, the moon's (or the sun's) cascades
+  treeLodUpdate(U.cam);
+  lanternShadowPass(view.skaterDraws);
+  sunShadowPass(view.skaterDraws);
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
 
   // 1. what the ice reflects: the world mirrored in y = 0
-  bindTarget(R.T.refl);
+  bindTarget(R.T.reflMS);
   gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  // the ice only ever shows the mirror below the horizon: draw no more of it than that
+  const hy = view.horizon === undefined ? R.H : Math.ceil(clamp(view.horizon * 0.5 + 0.5, 0, 1) * R.H + R.H * 0.04 + 4);
+  gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, R.W, Math.min(R.H, hy));
   gl.frontFace(gl.CW);
   const camSave = U.cam; U.cam = view.reflCam; U.reflect = 1;
   gl.depthMask(false); use(R.P.sky); common({ uInvVP: view.reflInvVP }); gl.disable(gl.CULL_FACE); drawFullscreen(); gl.enable(gl.CULL_FACE); gl.depthMask(true);
@@ -2104,6 +2734,8 @@ function renderFrameInner(view) {
   gl.frontFace(gl.CCW);
   drawSprites(view.reflVP);
   U.cam = camSave; U.reflect = 0;
+  gl.disable(gl.SCISSOR_TEST);
+  resolveInto(R.T.reflMS, R.T.refl);
 
   // 2. the world
   bindTarget(R.T.main);
@@ -2111,6 +2743,13 @@ function renderFrameInner(view) {
   gl.depthMask(false); use(R.P.sky); common({ uInvVP: view.invVP }); gl.disable(gl.CULL_FACE); drawFullscreen(); gl.enable(gl.CULL_FACE); gl.depthMask(true);
   drawGround(view.vp, false);
   drawObjects(view.vp, false, view.skaterDraws);
+  // the glow round the lights under the ice, before the ice lies over them
+  if (R.deep.n) {
+    use(R.P.sprite); set({ uVP: view.vp });
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);
+    drawStream(R.deep);
+    gl.depthMask(true); gl.disable(gl.BLEND);
+  }
   // cracks live inside the ice: drawn before it so the ice sees them through itself
   if (R.cracks.n) {
     use(R.P.mark); common({ uVP: view.vp });
@@ -2125,7 +2764,9 @@ function renderFrameInner(view) {
   const qs = 4200;
   common({ uVP: view.vp, uQuad: [U.cam[0] - qs, U.cam[2] - qs, U.cam[0] + qs, U.cam[2] + qs], uUnder: R.T.under.colors[0], uRefl: R.T.refl.colors[0], uSag: U.sag, uHoles: R.holes });
   gl.disable(gl.CULL_FACE);
-  gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
+  // only a constant nudge back: a slope-scaled one pushes the far ice behind ground a few centimetres under it,
+  // which drew a dark seam along every distant shore
+  gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(0, 2);
   drawMesh(R.iceQuad);
   gl.disable(gl.POLYGON_OFFSET_FILL);
   // 4. scratches on the ice and everything that glows
@@ -2555,7 +3196,8 @@ function skaterDraws() {
   // the lantern is built at its own size: a rotation-only frame with +y up its bail
   const yv = vmul(J.hang, -1), xv = vnorm(vcross(yv, J.F)), zv = vcross(xv, yv);
   const M = new Float32Array([xv[0], xv[1], xv[2], 0, yv[0], yv[1], yv[2], 0, zv[0], zv[1], zv[2], 0, J.lantC[0], J.lantC[1], J.lantC[2], 1]);
-  D.push({ mesh: SKM.lantern, m: M }); D.push({ mesh: SKM.globe, m: M }); D.push({ mesh: SKM.flame, m: M });
+  // (light: the lantern does not throw its own shadow)
+  D.push({ mesh: SKM.lantern, m: M, light: true }); D.push({ mesh: SKM.globe, m: M, light: true }); D.push({ mesh: SKM.flame, m: M, light: true });
   // the scarf's loose end: a band of wool with a little thickness, striped, drawn as a smooth curve through its points
   {
     const b = new MB(), P = SK.scarf.map((q) => q.p), n = P.length;
@@ -3422,6 +4064,13 @@ function audioInit() {
     o.start(); o2.start();
     return { o, o2, g, f: fl };
   });
+  // the drowned lights' hum: two low sines a breath apart, so they beat slowly
+  A.hum = [NOTE(38), NOTE(45) + 0.35].map((f) => {
+    const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const g = c.createGain(); g.gain.value = 0;
+    o.connect(g); g.connect(A.music); g.connect(A.send); o.start();
+    return { o, g };
+  });
   A.on = true; A.started = true;
   A.nextBeat = c.currentTime + 0.5;
 }
@@ -3487,6 +4136,13 @@ AUDIO.morning = function () {
   DAWN_CHORD.tones.forEach((m, i) => play(A.buf.glass[m], { gain: 0.12, delay: 2 + i * 0.7, wet: 0.9, bus: A.music, pan: (i / 5 - 0.5) * 0.6, travel: false }));
   for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.16, cut: 4000, delay: 5.5 + i * 0.48, wet: 1, pan: Math.sin(i * 1.3) * 0.5, travel: false });
   for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.12, cut: 6000, delay: 9 + i * 0.48, wet: 1, pan: Math.sin(i * 1.7) * 0.5, travel: false });
+};
+// a step under the ice: whoever carries that lantern, muffled by the water, on the chord
+AUDIO.under = function (pos, k = 1) {
+  const A = AUDIO; if (!A.on) return;
+  const ch = AUDIO.chord(); A.underI = (A.underI || 0) + 1;
+  const m = ch.tones[(A.underI * 2) % ch.tones.length];
+  play(A.buf.glass[m], { pos, gain: 0.09 * k, ref: 14, rate: 0.5, cut: 1300, wet: 0.8, bus: A.music, travel: false });
 };
 AUDIO.plunge = function () { play(AUDIO.buf.plunge, { gain: 0.34, wet: 0.35 }); play(AUDIO.buf.boom, { gain: 0.22, rate: 0.7, wet: 0.5 }); };
 AUDIO.bell = function (k = 1, pos) { play(AUDIO.buf.tower, { pos: pos || SCENE.bell, gain: 0.42 * k, ref: 40, wet: 0.7, travel: true }); };
@@ -3556,6 +4212,7 @@ AUDIO.update = function (dt) {
     const x = SK.x + Math.sin(a) * r, z = SK.z + Math.cos(a) * r;
     if (heightAt(x, z) < -0.5) { if (Math.random() < 0.3) play(A.buf.boom, { pos: [x, 0, z], gain: 0.4, ref: 60, rate: 0.8 + Math.random() * 0.3, wet: 0.7 }); AUDIO.sing(x, z, 0.8); }
   }
+  if (A.hum) A.hum.forEach((v, i) => v.g.gain.setTargetAtTime(DEEP.hum * (i ? 0.016 : 0.026) * (1 - G.dawn), now, 1.5));
   // under the village, faint, the old peal going round
   const inVillage = smooth(1740, 1860, G.s) * (1 - smooth(2420, 2520, G.s));
   if (inVillage > 0.05 && G.state === 'play') {
@@ -3587,20 +4244,26 @@ function lightState() {
   const night = smooth(120, 900, s);
   const storm = smooth(2430, 2530, here) * (1 - smooth(2730, 2860, here)) * (1 - G.dawn);
   G.storm = lerp(G.storm, storm, 0.02);
-  const aur = smooth(1260, 1760, s) * (1 - G.dawn * 0.85);
+  const aur = smooth(1260, 1760, s) * (1 - smooth(2050, 2350, s) * 0.85) * (1 - G.dawn * 0.85);
   G.aurora = lerp(G.aurora, aur, 0.01);
   const dawn = G.dawn;
   U.time = G.time; U.dusk = dusk; U.night = night; U.storm = G.storm; U.aurora = G.aurora; U.dawn = dawn;
   U.world = [WORLD.x0, WORLD.z0, WORLD.size, 1 / WORLD.size];
   const stormK = 1 - G.storm * 0.85;
   U.moonDir = MOON_DIR;
-  U.moonCol = vmul([0.034, 0.04, 0.056], stormK * (1 - dusk * 0.6) * (1 - dawn));
+  const eerie = DEEP.eerie;
+  U.moonCol = vmul([0.034, 0.04, 0.056], stormK * (1 - dusk * 0.6) * (1 - dawn) * (1 - eerie * 0.6));
   const sun = vnorm([0.75, lerp(-0.08, 0.16, dawn), -0.6]);
   U.sunDir = sun;
   U.sunCol = vmul([1.4, 0.95, 0.62], smooth(0.2, 1, dawn) * 1.4);
+  // one light throws the long shadows: the moon, and as the morning comes the sun (never lower than this, or they
+  // would run off to the horizon)
+  { const k = smooth(0.12, 0.42, dawn), d = vnorm(vlerp(MOON_DIR, sun, k)); U.shadowDir = vnorm([d[0], Math.max(d[1], 0.14), d[2]]); }
+  U.sunShK = 1 - G.storm * 0.9;
   const aurAmb = [0.0006, 0.0028, 0.0016];
   U.skyAmb = vadd(vadd(vlerp([0.0036, 0.0048, 0.0085], [0.026, 0.025, 0.036], dusk), vmul(aurAmb, G.aurora)), vmul([0.16, 0.19, 0.25], dawn));
   U.skyAmb = vlerp(U.skyAmb, [0.006, 0.0065, 0.0075], G.storm);
+  U.skyAmb = vmul(U.skyAmb, 1 - eerie * 0.45);
   U.groundAmb = vmul(U.skyAmb, 0.55);
   U.fog = [...vlerp(vlerp([0.0035, 0.0045, 0.0075], [0.03, 0.028, 0.034], dusk), [0.014, 0.0155, 0.018], G.storm), (0.00055 + dusk * 0.0002) * (1 - 0.75 * dawn) + G.storm * 0.045];
   const fl = 1 + 0.035 * Math.sin(G.time * 11.3) + 0.025 * Math.sin(G.time * 23.7 + 1.3) + 0.02 * vnoise(G.time * 6, 3.3);
@@ -3610,10 +4273,15 @@ function lightState() {
   if (SK.fallen) U.lantern = [FALL.x, Math.max(-6, 0.3 - G.fallT * G.fallT * 1.6), FALL.z];
   else U.lantern = SK.joints ? SK.joints.lantC.slice() : [SK.x, 1, SK.z];
   U.underBoost = 4.2;
+  // the frost in the air holds a little of the lantern's light; the water under the ice holds more
+  U.scat = [0.0016 * (1 + G.storm * 3), 0.0042];
   U.exposure = lerp(lerp(2.1, 1.5, dusk), 1.05, dawn) * (G.state === 'tower' && !G.ending ? 0.7 : 1);
-  U.bloomK = 0.055;
+  U.bloomK = 0.065;
   U.sag = [SK.x, SK.z, ICE.danger * 0.9, ICE.sagPhase];
   U.bell = SCENE.bell || [0, 0, 0];
+  const W = DEEP.walker;
+  U.drown = DEEP.drown; U.outR = DEEP.outR; U.towerXZ = [TOWER.x, TOWER.z];
+  U.deep = [W.x, W.y, W.z, W.on ? W.k * 5.0 : 0]; U.deepCol = [1.0, 0.55, 0.22];
   U.reflect = 0;
 }
 
@@ -3663,16 +4331,6 @@ function towerCamera(dt) {
   C.shake = Math.max(0, C.shake - dt * 2.5);
   if (C.shake > 0) C.pos = vadd(C.pos, [(Math.random() - 0.5) * C.shake * 0.05, (Math.random() - 0.5) * C.shake * 0.05, 0]);
 }
-// after the card: the morning, skate where you like
-function skateOn() {
-  if (!STORY.card || G.state === 'play') return;
-  $('card').classList.remove('on');
-  G.ending = false; G.state = 'play'; BELL.inside = false;
-  G.dawn = 1;
-  skaterReset(TOWER.x, TOWER.z - TOWER.w / 2 - 2.2, PI);
-  G.cam.yaw = PI; G.cam.pos = [TOWER.x, 2.5, TOWER.z - TOWER.w / 2 - 8]; G.cam.look = [TOWER.x, 1, TOWER.z - 10];
-  G.morningFree = true;
-}
 
 function buildView() {
   const C = G.cam;
@@ -3683,7 +4341,9 @@ function buildView() {
   const mirror = new Float32Array([1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   const rvp = m4mul(vp, mirror);
   const right = [view[0], view[4], view[8]], up = [view[1], view[5], view[9]];
-  return { vp, invVP: m4inv(vp), reflVP: rvp, reflInvVP: m4inv(rvp), reflCam: [C.pos[0], -C.pos[1], C.pos[2]], cam: C.pos, right, up };
+  // where the horizon crosses the screen (NDC y), from how far the camera looks above or below level
+  const fwd = vnorm(vsub(C.look, C.pos)), horizon = Math.tan(Math.asin(clamp(-fwd[1], -0.999, 0.999))) / Math.tan(C.fov * PI / 360);
+  return { vp, invVP: m4inv(vp), reflVP: rvp, reflInvVP: m4inv(rvp), reflCam: [C.pos[0], -C.pos[1], C.pos[2]], cam: C.pos, right, up, horizon };
 }
 
 // where you come back to after the ice lets you in
@@ -3725,7 +4385,12 @@ function gameStep(dt, inp) {
     if (G.fallT > 1.9) G.fade = Math.min(1, G.fade + dt * 1.4);
     if (G.fallT > 3.0) { respawn(); G.state = 'play'; updateHoles(); }
     squallStep(dt);
-  } else if (G.state === 'tower') {
+  } else if (G.state === 'morning') {
+    // standing outside the tower while the morning comes
+    SK.vx = SK.vz = 0; SK.speed = 0;
+    skaterPose(); scarfStep(dt);
+  }
+  if (G.state === 'tower') {
     // stand under the rope, face it; any button takes the rope
     const tx = SCENE.bell[0] + 0.55, tz = SCENE.bell[2] - 0.42;
     SK.x = lerp(SK.x, tx, expDecay(3, dt)); SK.z = lerp(SK.z, tz, expDecay(3, dt));
@@ -3736,12 +4401,22 @@ function gameStep(dt, inp) {
     skaterPose(); scarfStep(dt);
     squallStep(dt);
   }
+  // the bell rings itself down once you have let go of it
+  if (STORY.ended && G.state !== 'tower') towerStep(dt, false);
+  deepStep(dt);
   cracksStep(dt);
   partsStep(dt);
-  if (G.ending) { morningCamera(dt); pathDecal(); }
-  else if (G.morningFree) { MORNING.t += dt; pathDecal(); }
+  if (G.ending) { morningCamera(dt, inp); pathDecal(); }
   else if (G.state === 'tower') towerCamera(dt);
-  else cameraStep(dt, inp.lookY);
+  else {
+    if (G.morningFree) { MORNING.t += dt; pathDecal(); }
+    cameraStep(dt, inp.lookY);
+  }
+  // the card lifts when you skate, or after a while
+  if (MORNING.cardT >= 0) {
+    MORNING.cardT += dt;
+    if (MORNING.cardT > 9 || (MORNING.cardT > 0.8 && (inp.skate || inp.stop))) { $('card').classList.remove('on'); MORNING.cardT = -1; }
+  }
   streamUpload(R.scratches, R.scratches.uploaded);
   streamUpload(R.cracks, R.cracks.uploaded);
   if (Math.random() < dt * 2) updateHoles();
@@ -3771,6 +4446,168 @@ function gameEvents(dt) {
       spray(L.foot[0], 0.02, L.foot[2], S.vx * 0.55 + rx * side * (Math.random() - 0.2) * 1.5, 0.4 + Math.random() * 1.2, S.vz * 0.55 + rz * side * (Math.random() - 0.2) * 1.5, 0.35 + Math.random() * 0.5, 0.015 + Math.random() * 0.02, [0.62, 0.66, 0.72], 1, 2.2, 7);
     }
   }
+}
+
+// ---- 72-deep.js ----
+// What the ice shows that is not there, and what is under it that should not be lit. In the reflection the farm and the
+// village stand as they were, windows and street lamps lit; below the ice their ruins, a few windows and lamps still
+// burning, the last train at the halt, and a lantern walking the drowned street ahead of you to the church. The bell
+// puts them out, from the tower outward; then it is morning.
+const DEEP = {
+  farm: 0, village: 0,          // how much of each stands in the reflection
+  drown: 0,                     // the lights left on under the ice
+  eerie: 0,                     // the night closing in toward the village
+  outR: 0, outT: 0, outWait: 0, // put out this far from the tower, how far the bell has sent it, and when it goes
+  hum: 0,
+  walker: { on: false, s: 0, x: 0, y: -4, z: 0, lit: 0, k: 0, t: 0, stepT: 0, moving: false },
+};
+const stillLitAt = (x, z) => (DEEP.outR <= 0 ? 1 : smooth(DEEP.outR - 3, DEEP.outR + 3, Math.hypot(x - TOWER.x, z - TOWER.z)));
+
+function deepStep(dt) {
+  const s = G.maxS, dawn = G.dawn;
+  DEEP.farm = smooth(240, 420, s) * (1 - smooth(820, 980, s)) * (1 - dawn);
+  DEEP.village = smooth(1500, 1720, s) * (1 - dawn);
+  DEEP.drown = smooth(1360, 1520, s);           // until the bell's dark reaches each one
+  DEEP.eerie = smooth(1600, 2300, s) * (1 - dawn);
+  // the bell's answer goes out across the lake: slowly while it rings, at a run when it is done
+  // while it rings, only the lantern at the door goes out; once it is done, the dark spreads out from the tower,
+  // slowly through the churchyard and then faster, across the lake
+  if (DEEP.outWait > 0) DEEP.outWait -= dt;
+  else DEEP.outR = Math.min(DEEP.outT, DEEP.outR + (DEEP.outT > 400 ? 3 + DEEP.outR * 0.33 : 45) * dt);
+  walkerStep(dt);
+  // the drowned lights hum, low, when you are over them
+  const near = Math.max(smooth(170, 40, Math.abs(G.s - 1560)), smooth(1700, 1800, G.s) * (1 - smooth(2990, 3070, G.s)));
+  DEEP.hum = DEEP.drown * near * stillLitAt(SK.x, SK.z) * (G.state === 'play' || G.state === 'fall' ? 1 : 0.4);
+}
+
+// a lantern under the ice, carried along the drowned street toward the church: ahead of you, waiting if you fall behind
+function walkerStep(dt) {
+  const W = DEEP.walker;
+  if (!W.on) {
+    if (G.state !== 'play' || G.s < 1735 || G.s > 2900 || STORY.ended) return;
+    W.on = true; W.s = Math.max(1775, G.s + 34); W.lit = 0; W.t = 0;
+  }
+  W.t += dt;
+  const end = WORLD.routeLen - 9;
+  let v = 0;
+  if (G.state === 'play') {
+    // further ahead the faster you come, so it is always out in front of you, not under you
+    const want = Math.min(end, G.s + 21 + SK.speed * 2);
+    if (want > W.s && G.s > W.s - 75) v = clamp((want - W.s) * 1.1, 1.1, 16);
+  }
+  W.s = Math.min(end, W.s + v * dt);
+  W.moving = v > 0.3;
+  const p = routeAt(W.s), [rx, rz] = rightOf(p.dir);
+  const sway = Math.sin(W.t * 0.7) * 0.8 * (1 - smooth(end - 40, end, W.s));
+  let x = p.x + rx * sway, z = p.z + rz * sway;
+  // at the end of the way it goes to the tower's door, and waits
+  const k = smooth(end - 34, end, W.s);
+  x = lerp(x, TOWER.x + 0.5, k); z = lerp(z, TOWER.z - TOWER.w / 2 - 1.3, k);
+  W.x = x; W.z = z; W.y = heightAt(x, z) + 1.05 + Math.sin(W.t * 2.2) * 0.05;
+  W.lit = Math.min(1, W.lit + dt * 0.4);
+  W.k = W.lit * stillLitAt(x, z) * (1 - G.dawn) * (0.86 + 0.14 * Math.sin(W.t * 7.3) * Math.sin(W.t * 3.1));
+  if (W.moving && W.k > 0.25) { W.stepT -= dt; if (W.stepT <= 0) { W.stepT = 1.3; AUDIO.under([W.x, W.y, W.z], W.k); } }
+}
+
+// ---- the reflection's village: drawn only in the ice's mirror, so it is there when you look across and gone when you
+// look down ----
+function buildGhosts() {
+  const wall = rgb(0x2a2e34, 0.05), roof = rgb(0x17181c, 0.08), glass = rgb(0x0a0b0d, 0.5), door = rgb(0x1a1612, 0.1);
+  const house = (b, h, r) => {
+    const { x, z, yaw, w, d } = h, H = Math.max(3.0, h.wallH) + 0.3, G2 = 2.1;
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const M = (lx, ly, lz, sx, sy, sz, ry = 0) => m4trs([x + c * lx + s * lz, ly, z - s * lx + c * lz], yaw + ry, 0, 0, [sx, sy, sz]);
+    b.box(M(0, H / 2, 0, w, H, d), wall);
+    b.prism(M(0, H, 0, d + 0.5, G2, w + 0.4, PI / 2), roof);
+    b.box(M(w / 2 - 0.7, H + G2 * 0.6, 0, 0.6, G2 * 0.9, 0.8), wall);                  // the chimney
+    // a window: lit or dark, and if lit, its glazing bars across it
+    const win = (lx, ly, lz, sx, sy, sz, lit) => {
+      b.box(M(lx, ly, lz, sx, sy, sz), lit ? LIT(lit) : glass);
+      if (!lit) return;
+      const ox = sz < sx ? 0 : Math.sign(lx) * 0.02, oz = sz < sx ? Math.sign(lz) * 0.02 : 0;
+      b.box(M(lx + ox, ly, lz + oz, sz < sx ? 0.06 : sx + 0.01, sy, sz < sx ? sz + 0.01 : 0.06), door);
+      b.box(M(lx + ox, ly + sy * 0.08, lz + oz, sz < sx ? sx : sx + 0.01, 0.06, sz < sx ? sz + 0.01 : sz), door);
+    };
+    for (const lz of [d / 2 + 0.03, -d / 2 - 0.03]) {
+      for (const lx of [-w / 2 + 1.15, w / 2 - 1.15]) win(lx, 1.45, lz, 0.9, 1.05, 0.05, r() < 0.6 ? 1.6 + r() * 2.6 : 0);
+      if (w > 9) win(0, 1.45, lz, 0.9, 1.05, 0.05, r() < 0.5 ? 1.6 + r() * 2.2 : 0);
+    }
+    b.box(M(0, 1.05, d / 2 + 0.04, 1.0, 2.0, 0.05), door);
+    // the ends, which face up and down the street: a window each, and one up in the gable
+    for (const lx of [w / 2 + 0.03, -w / 2 - 0.03]) {
+      win(lx, 1.45, 0, 0.05, 1.05, 0.9, r() < 0.55 ? 1.6 + r() * 2.6 : 0);
+      if (r() < 0.6) b.box(M(lx, H + 0.75, 0, 0.05, 0.62, 0.5), r() < 0.5 ? LIT(1.4 + r() * 1.8) : glass);
+    }
+  };
+  const build = (group) => {
+    const b = new MB(), r = rng(group === 'farm' ? 3 : 4);
+    for (const h of SCENE.houses) if (h.group === group) house(b, h, r);
+    if (group === 'village') {
+      // the street lamps, lit
+      for (const [x, , z, yaw] of SCENE.lampPosts) {
+        if (z < 1700 || z > 2600) continue;
+        b.cyl(m4trs([x, 0, z], 0, 0, 0, [0.07, 3.9, 0.07]), wall, 6, 0.7);
+        b.box(m4trs([x + Math.sin(yaw) * 0.75, 3.78, z + Math.cos(yaw) * 0.75], yaw, 0, 0, [0.24, 0.18, 0.32]), LIT(16));
+      }
+      // the church whole again, its windows lit, beside the tower that is really there
+      const C = SCENE.church;
+      if (C) {
+        const H = 7, cx = C.x0 + C.L / 2;
+        b.box(m4trs([cx, H / 2, C.z0], 0, 0, 0, [C.L, H, C.W]), wall);
+        b.prism(m4trs([cx, H, C.z0], PI / 2, 0, 0, [C.W + 0.8, 4.2, C.L + 0.5]), roof);
+        for (let i = 0; i < 4; i++) for (const side of [-1, 1]) {
+          const wx = C.x0 + 3.2 + i * 4.2, wz = C.z0 + side * (C.W / 2 + 0.04);
+          b.box(m4trs([wx, 3.6, wz], 0, 0, 0, [1.1, 3.0, 0.06]), LIT((side < 0 ? 2.2 : 1.5) * (0.8 + 0.4 * r())));
+          b.box(m4trs([wx, 3.6, wz + side * 0.02], 0, 0, 0, [0.07, 3.0, 0.07]), door);
+          for (const yy of [2.7, 3.6, 4.5]) b.box(m4trs([wx, yy, wz + side * 0.02], 0, 0, 0, [1.1, 0.06, 0.07]), door);
+        }
+        b.box(m4trs([C.x0 + C.L + 0.04, 3.8, C.z0], 0, 0, 0, [0.06, 3.6, 2.4]), LIT(3.6));
+        for (const zz of [-0.6, 0, 0.6]) b.box(m4trs([C.x0 + C.L + 0.06, 3.8, C.z0 + zz], 0, 0, 0, [0.07, 3.6, 0.07]), door);
+        b.box(m4trs([C.x0 + 6.5, 1.6, C.z0 - C.W / 2 - 1.6], 0, 0, 0, [3.2, 3.2, 3.2]), wall);   // the porch
+      }
+    }
+    return b.n ? uploadMesh(b.build()) : null;
+  };
+  R.ghostFarm = build('farm');
+  R.ghostVillage = build('village');
+  SKM.deepLamp = uploadMesh(new MB().sphere(m4(), LIT(40), 10, 7).build());
+}
+
+// the walker's lantern, for the frame
+function deepDraws() {
+  const W = DEEP.walker;
+  return W.on && W.k > 0.01 ? [{ mesh: SKM.deepLamp, m: m4trs([W.x, W.y, W.z], 0, 0, 0, 0.075 * Math.sqrt(W.k)), lk: 0, cast: false }] : [];
+}
+
+// light seen through the water: dimmer and bluer the more water it comes through on its way up to you
+function throughWater(p, col, cam, kk = 1) {
+  const depth = -p[1];
+  if (depth <= 0) return col;
+  const fw = depth / Math.max(cam[1] + depth, 0.01);
+  const Lw = Math.hypot(p[0] - cam[0], p[1] - cam[1], p[2] - cam[2]) * fw;
+  return [col[0] * Math.exp(-0.086 * Lw * kk), col[1] * Math.exp(-0.052 * Lw * kk), col[2] * Math.exp(-0.05 * Lw * kk)];
+}
+// soft glows round the lights under the ice, drawn before the ice so it lies over them
+function buildDeepGlows(camRight, camUp) {
+  const S = R.deep; S.n = 0;
+  const cam = G.cam.pos, D = S.data;
+  const quad = (p, s, c) => {
+    if (S.n + 6 > S.max) return;
+    const C = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
+    let k = S.n * 7;
+    for (const [a, b] of C) { D[k++] = p[0] + camRight[0] * s * a + camUp[0] * s * b; D[k++] = p[1] + camRight[1] * s * a + camUp[1] * s * b; D[k++] = p[2] + camRight[2] * s * a + camUp[2] * s * b; D[k++] = c[0]; D[k++] = c[1]; D[k++] = c[2]; D[k++] = 2; }
+    S.n += 6;
+  };
+  if (DEEP.drown > 0.01) {
+    SCENE.deepLamps.forEach((l, i) => {
+      if (Math.hypot(l[0] - cam[0], l[2] - cam[2]) > 320) return;
+      const k = DEEP.drown * stillLitAt(l[0], l[2]) * (0.8 + 0.2 * Math.sin(G.time * (1.3 + (i % 5) * 0.4) + i));
+      if (k > 0.01) quad(l, 1.6 * (l[3] || 1), throughWater(l, [0.3 * k, 0.15 * k, 0.05 * k], cam, 0.7));
+    });
+  }
+  const W = DEEP.walker;
+  if (W.on && W.k > 0.01) { const p = [W.x, W.y, W.z]; quad(p, 3.8, throughWater(p, [0.9 * W.k, 0.45 * W.k, 0.15 * W.k], cam, 0.5)); quad(p, 0.9, throughWater(p, [1.2 * W.k, 0.75 * W.k, 0.32 * W.k], cam, 0.5)); }
+  streamUpload(S);
 }
 
 // ---- 75-story.js ----
@@ -3901,7 +4738,7 @@ function towerStep(dt, held) {
     B.strikes++;
     const k = sat((Math.abs(B.a) - 0.5) / 0.9);
     AUDIO.bell(0.45 + k * 0.6);
-    G.cam.shake = Math.max(G.cam.shake, 0.15 + k * 0.2);
+    if (G.state === 'tower') G.cam.shake = Math.max(G.cam.shake, 0.15 + k * 0.2);
     // the lake answers
     for (let i = 0; i < 2 + B.strikes; i++) {
       const a = Math.random() * TAU, r = 60 + Math.random() * 600;
@@ -3909,7 +4746,8 @@ function towerStep(dt, held) {
       if (heightAt(x, z) < -0.5) setTimeout(() => AUDIO.sing(x, z, 0.9), 200 + Math.random() * 1500);
     }
     if (B.strikes >= 3) AUDIO.peal(B.strikes);
-    if (B.strikes >= 8 && !G.ending) startMorning();
+    if (!STORY.ended) DEEP.outT = [0, 6, 6, 6, 6][Math.min(4, B.strikes)];
+    if (B.strikes >= 5 && !G.ending) startMorning();
   }
   B.rope = -Math.sin(B.a) * 0.9;
 }
@@ -3927,41 +4765,80 @@ function bellDraws() {
 }
 
 // ---- morning ----
-const MORNING = { t: 0, keys: null };
+// up past the bell and out through the belfry; the lights going out across the village below as the light comes; the
+// whole way you came, drawn on the ice; then down to you, standing outside the tower, to skate on. Any press goes
+// straight to you.
+const MORNING = { t: 0, keys: null, moved: false, armed: false, cardT: -1, end: null };
+const MORNING_END = 11;
+function behindCam(x, z, h, pitch, dist) {
+  const look = [x + Math.sin(h) * 0.9, 1.05, z + Math.cos(h) * 0.9];
+  const cp = Math.cos(pitch), sp = Math.sin(pitch), dir = [Math.sin(h) * cp, -sp, Math.cos(h) * cp];
+  return { pos: vsub(look, vmul(dir, dist)), look };
+}
 function startMorning() {
   if (STORY.ended) return;
   STORY.ended = true;
-  G.ending = true; MORNING.t = 0;
-  const T = TOWER;
-  // up the inside of the tower, out of the belfry, back over the lake to see it all
-  // up the inside of the tower and out of the belfry; down over the drowned church; south along the old street, looking
-  // down through the ice; then up, to see the whole valley and the way you came
-  const vz = (z) => [routeX(z), z];
+  G.ending = true; Object.assign(MORNING, { t: 0, moved: false, armed: false, cardT: -1, skip: false, skipT: 0 });
+  DEEP.outT = 4200; DEEP.outWait = 3.0;
+  const T = TOWER, C = G.cam;
+  MORNING.end = behindCam(T.x, T.z - 9.5, PI, G.pitchIn, 5.0);
+  // up past the bell to the belfry's south opening and out through it; round and down over the drowned church and its
+  // churchyard as the grave lights go out, from the tower outward; then down to you, outside, your way home drawn on
+  // the ice in front of you
+  const E = SCENE.church ? SCENE.church.x0 + 9 : T.x + 12;
   MORNING.keys = [
-    { t: 0, pos: [T.x - 0.9, 1.5, T.z - 0.8], look: [T.x + 0.2, 10, T.z + 0.3] },
-    { t: 6, pos: [T.x - 0.2, 10.5, T.z - 0.6], look: [T.x - 1, 13, T.z - 12] },
-    { t: 13, pos: [T.x - 6, 24, T.z - 24], look: [T.x + 10, -6, T.z + 4] },
-    { t: 22, pos: [vz(2700)[0] - 12, 30, 2700], look: [vz(2560)[0], -6, 2560] },
-    { t: 32, pos: [vz(2250)[0] - 16, 34, 2250], look: [vz(2120)[0] + 4, -6, 2120] },
-    { t: 42, pos: [vz(2010)[0] - 20, 46, 2010], look: [vz(1880)[0], -6, 1880] },
-    { t: 60, pos: [vz(1900)[0] - 140, 260, 2150], look: [vz(700)[0], -4, 700] },
+    { t: 0, pos: C.pos.slice(), look: C.look.slice() },
+    { t: 1.8, pos: [T.x - 0.85, 7.4, T.z - 1.15], look: [T.x + 0.2, 10.9, T.z - 0.2] },
+    { t: 3.2, pos: [T.x + 0.05, 10.75, T.z - 1.8], look: [T.x, 9.2, T.z - 14] },
+    { t: 4.0, pos: [T.x, 11.2, T.z - 4.4], look: [T.x + 3, 2, T.z - 24] },
+    { t: 6.2, pos: [T.x + 9, 17, T.z - 19], look: [E, -3.5, T.z - 1] },
+    { t: 8.4, pos: [E + 20, 24, T.z - 13], look: [E - 4, -4, T.z + 2] },
+    { t: MORNING_END, pos: MORNING.end.pos, look: MORNING.end.look },
   ];
   AUDIO.morning();
 }
-function morningCamera(dt) {
+// a smooth path through timed keys: each key's speed takes account of how long the neighbouring stretches are, so the
+// flight neither stops at a key nor swings wide of it; at rest at both ends
+function keyPath(K, t, f) {
+  let i = 0; while (i < K.length - 2 && K[i + 1].t <= t) i++;
+  const a = K[i], b = K[i + 1], D = b.t - a.t, u = clamp((t - a.t) / D, 0, 1);
+  const vel = (j) => (j <= 0 || j >= K.length - 1 ? [0, 0, 0] : vmul(vsub(K[j + 1][f], K[j - 1][f]), 1 / (K[j + 1].t - K[j - 1].t)));
+  const va = vel(i), vb = vel(i + 1), u2 = u * u, u3 = u2 * u;
+  const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+  return [0, 1, 2].map((k) => h00 * a[f][k] + h10 * D * va[k] + h01 * b[f][k] + h11 * D * vb[k]);
+}
+function morningCamera(dt, inp) {
   MORNING.t += dt;
-  const K = MORNING.keys, t = MORNING.t;
-  let i = 0; while (i < K.length - 2 && K[i + 1].t < t) i++;
-  const a = K[i], b = K[i + 1];
-  // a Catmull-Rom through the keys, so the flight does not stop at each one
-  const i0 = K[Math.max(0, i - 1)], i3 = K[Math.min(K.length - 1, i + 2)];
-  const u = clamp((t - a.t) / (b.t - a.t), 0, 1);
-  const cr = (p0, p1, p2, p3) => p1.map((_, k) => 0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * u + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * u * u + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * u * u * u));
-  G.cam.pos = cr(i0.pos, a.pos, b.pos, i3.pos);
-  G.cam.look = vlerp(G.cam.look, cr(i0.look, a.look, b.look, i3.look), expDecay(3, dt));
-  G.cam.fov = lerp(G.cam.fov, 56, expDecay(0.5, dt));
-  G.dawn = smooth(3, 24, t);
-  if (t > 46 && !STORY.card) { STORY.card = true; showCard(); }
+  const C = G.cam;
+  // a fresh press goes straight to you (the press that rang the bell does not count)
+  const pressed = inp && (inp.skate || inp.stop || inp.hop);
+  if (!pressed) MORNING.armed = true;
+  else if (MORNING.armed && MORNING.t > 0.6 && !MORNING.skip) { MORNING.skip = true; MORNING.skipT = 0; }
+  if (MORNING.skip) {
+    // a breath of dark, then you
+    MORNING.skipT += dt;
+    G.fade = MORNING.skipT < 0.35 ? smooth(0, 0.35, MORNING.skipT) : 1 - smooth(0.35, 0.9, MORNING.skipT);
+    if (MORNING.skipT >= 0.35 && MORNING.t < MORNING_END) MORNING.t = MORNING_END - 1e-3;
+  }
+  const t = MORNING.t;
+  // out of the tower while no one is looking: you are standing outside it, facing back the way you came
+  if (!MORNING.moved && t > 2.4) {
+    MORNING.moved = true; BELL.inside = false;
+    skaterReset(TOWER.x, TOWER.z - 9.5, PI);
+    G.state = 'morning';
+  }
+  G.dawn = Math.max(G.dawn, smooth(2.5, 11, t));
+  C.pos = keyPath(MORNING.keys, Math.min(t, MORNING_END), 'pos');
+  C.look = keyPath(MORNING.keys, Math.min(t, MORNING_END), 'look');
+  C.fov = lerp(C.fov, t > MORNING_END - 2.5 ? 60 : 56, expDecay(1.5, dt));
+  if (t >= MORNING_END && (!MORNING.skip || MORNING.skipT >= 0.9)) { G.fade = 0; handOver(); }
+}
+// the camera is behind you again: skate on, in the morning
+function handOver() {
+  const C = G.cam;
+  G.ending = false; G.state = 'play'; G.morningFree = true; G.dawn = 1;
+  C.yaw = PI; C.pitch = G.pitchIn; C.dist = 5.0;
+  STORY.card = true; MORNING.cardT = 0; showCard();
 }
 function showCard() {
   const el = $('card'); if (!el) return;
@@ -3974,13 +4851,13 @@ function pathDecal() {
   const S = R.pathS; S.n = 0;
   if (PATH.length < 2) return;
   const C = G.cam.pos;
-  const k = smooth(8, 22, MORNING.t);
-  const col = [1.0 * k, 0.78 * k, 0.5 * k, -1];
+  const k = smooth(3.5, 7, MORNING.t);
+  const col = [0.48 * k, 0.33 * k, 0.17 * k, -1];
   for (let i = 0; i < PATH.length - 1 && S.n + 6 < S.max; i++) {
     const a = PATH[i], b = PATH[i + 1];
     if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 8) continue;           // a jump back to a lantern after falling in
     const d = Math.hypot(a[0] - C[0], C[1], a[1] - C[2]);
-    pushQuadFlat(S, a, b, 0.0022 * d + 0.03, col, 0.01);
+    pushQuadFlat(S, a, b, 0.0032 * d + 0.035, col, 0.01);
   }
   streamUpload(S);
 }
@@ -4015,6 +4892,7 @@ const SPEED = clamp(Number(Q.get('speed')) || 1, 0.1, 8);
 // a stand-in pilot for checking: follows the marked way, hops the ridges and the lead, rings the bell
 const BOT = { on: Q.has('bot'), pulled: false };
 function botInput(inp) {
+  if (G.ending) return;
   if (G.state === 'tower') { inp.skate = BELL.held ? BELL.pullT > 0 : Math.abs(BELL.a) < 0.15; return; }
   if (G.state !== 'play') return;
   const look = G.s + 10 + SK.speed * 0.9;
@@ -4143,13 +5021,13 @@ function loop(t) {
   R.U.fade = G.fade;
   R.U.underwater = 0;
   const glows = [];
-  if (SK.joints && !SK.fallen) { const c = SK.joints.lantC; glows.push([c[0], c[1], c[2], 0.5, 0.26, 0.14, 0.05]); }
   for (const l of SCENE.lamps) glows.push([l[0], l[1], l[2], 0.35, 0.2, 0.11, 0.05]);
   for (const h of HUTS) glows.push([h.window[0], h.window[1], h.window[2], 0.9, 0.09, 0.05, 0.02]);
   if (SCENE.damLamps) for (const l of SCENE.damLamps) glows.push([l[0], l[1], l[2], 2.4, 0.5, 0.22, 0.06]);
   buildSprites(V.right, V.up, glows);
   AUDIO.update(dt);
-  const draws = G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws();
+  buildDeepGlows(V.right, V.up);
+  const draws = (G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws()).concat(deepDraws());
   if (Math.hypot(G.cam.pos[0] - TOWER.x, G.cam.pos[2] - TOWER.z) < 600) draws.push(...bellDraws());
   renderFrame({ ...V, skaterDraws: draws });
 }
@@ -4157,7 +5035,6 @@ function loop(t) {
 // ---- input ----
 canvas.addEventListener('mousedown', (e) => {
   if (G.state === 'title') { if (G.ready) { start(); canvas.requestPointerLock && canvas.requestPointerLock(); } return; }
-  if (STORY.card && G.ending) { skateOn(); return; }
   if (!INP.locked && canvas.requestPointerLock) canvas.requestPointerLock();
   if (paused) { paused = false; $('pause').classList.remove('on'); }
   if (e.button === 0) INP.skate = true;
@@ -4193,8 +5070,8 @@ window.__ice = {
   tp(s, off = 0) { const p = routeAt(s); const [rx, rz] = rightOf(p.dir); skaterReset(p.x + rx * off, p.z + rz * off, p.dir); G.cam.yaw = p.dir; G.maxS = Math.max(G.maxS, s); G.cpS = s; },
   hold(k) { INP.skate = !!k; }, stopHold(k) { INP.stop = !!k; }, turn(dx) { INP.mdx += dx; }, pitch(dy) { G.pitchIn = dy; },
   key(code, down) { if (down) INP.keys.add(code); else INP.keys.delete(code); },
-  FALL, AUDIO, BODY, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, skateOn, morning: () => startMorning(), BELL, LEAD, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
-  maxS: (s) => (G.maxS = s),
+  FALL, AUDIO, BODY, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, DEEP, morning: () => startMorning(), BELL, LEAD, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
+  maxS: (s) => (G.maxS = s), MORNING_T: () => (G.ending || G.morningFree ? MORNING.t : -1),
 };
 boot();
 
