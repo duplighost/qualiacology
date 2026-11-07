@@ -983,7 +983,8 @@ function house(b, x, z, yaw, o) {
   b.jit = 0;
   // a doorstep
   b.box(M(0, 0.06, d / 2 + 0.35, 1.3, 0.12, 0.5), rgbS(col, 0.7));
-  SCENE.houses.push({ x, z, yaw, w, d, wallH, group: o.group || '' });
+  const rec = { x, z, yaw, w, d, wallH, group: o.group || '', lit: false };
+  SCENE.houses.push(rec);
   // a light left on: a pane in some windows, embers in the hearth, a candle on the table
   if (o.lit) {
     const lr = rng(Math.floor(Math.abs(x) * 13 + Math.abs(z) * 7) + 1);
@@ -997,6 +998,7 @@ function house(b, x, z, yaw, o) {
       }
     };
     panes(A, B, front); panes(C, D, back);
+    rec.lit = any;
     if (any || lr() < o.lit) {
       b.box(M(w / 2 - t / 2 - 0.14, 0.38, 0, 0.1, 0.16, 0.8), DROWN(3));
       b.box(M(-w / 4, 1.06, -0.3, 0.05, 0.1, 0.05), DROWN(8));
@@ -1600,6 +1602,7 @@ uniform highp sampler2DArrayShadow uSunShadow; uniform mat4 uSunVP0; uniform mat
 uniform vec4 uSunSh;        // texel size of each cascade in metres, on, strength
 uniform vec3 uShadowDir;    // toward the light that casts them
 uniform vec2 uScat;         // how much the air and the water under the ice scatter the lantern's light
+uniform vec4 uLant2; uniform vec3 uLantCol2;   // the cold lantern of the one in the ice (lights only them)
 const vec3 SIGMA = vec3(0.086, 0.052, 0.05);
 const vec3 SIGMA_L = vec3(0.06, 0.05, 0.05);    // the lantern's light on its way down: kept warmer than physics would
 const float APP = 0.78;     // under the ice things look nearer the surface than they are
@@ -2102,7 +2105,7 @@ void main() {
   gl_Position = uVP * vec4(q, 1.0);
 }`;
 const OBJ_FS = COMMON + `
-in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; uniform float uLanternK; uniform float uStone; uniform float uGhostK; out vec4 o;
+in vec3 vP; in vec3 vN; in vec4 vC; uniform float uSnowy; uniform float uBright; uniform float uLanternK; uniform float uStone; uniform float uGhostK; uniform float uMirrorK; out vec4 o;
 void main() {
   vec3 p = vP;
   if (uReflect > 0.5 && p.y < -0.01) discard;
@@ -2165,6 +2168,12 @@ void main() {
   // what stands only in the reflection: gone when you come near, and where the bell has rung
   float alpha = 1.0;
   if (uGhostK > 0.0) alpha = uGhostK * smoothstep(25.0, 110.0, length(p - uCam)) * stillLit(p) * (m < -0.001 ? 1.0 : 0.75);
+  if (uMirrorK > 0.0) {
+    alpha = uMirrorK;
+    // lit by their own cold lantern
+    vec3 L2 = uLant2.xyz - p; float d22 = dot(L2, L2);
+    col += alb * uLantCol2 * uLant2.w * (max(dot(n, L2 * inversesqrt(d22)), 0.0) * 0.8 + 0.2) / (d22 * 2.0 + 0.3) + alb * uLantCol2 * 0.03 * uLant2.w;
+  }
   // the drowned lights lose less of their red on the way up than the stone round them does, so they stay warm
   if (m < -99.0 && p.y < 0.0) col = underwaterView(mix(col, col * vec3(2.6, 1.15, 0.9), 0.6), p);
   else col = p.y < 0.0 ? underwaterView(col, p) : airFog(col, p, rd);
@@ -2272,7 +2281,8 @@ void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   float dist = length(p - uCam);
   vec2 dis = n.xz * (0.9 / (1.0 + dist * 0.08));
-  vec3 refl = texture(uRefl, uv + dis * vec2(0.02, 0.04)).rgb;
+  vec4 reflA = texture(uRefl, uv + dis * vec2(0.02, 0.04));
+  vec3 refl = reflA.rgb;
   vec3 under = texture(uUnder, uv + dis * vec2(0.012, 0.012)).rgb;
   vec3 rr = refract(rd, up, 1.0 / 1.31);
   float lsh = lanternShadow(p + vec3(0, 0.01, 0), up), ssh = sunShadow(p, up);
@@ -2313,7 +2323,7 @@ void main() {
   // snow lying on the ice: drifted in streaks along the wind, a dusting of grains at its edges
   vec2 w = vec2(0.94, 0.34);
   float sk = fbm3(vec2(dot(p.xz, w) * 0.45, dot(p.xz, vec2(-w.y, w.x)) * 2.2));
-  float sn = max(smoothstep(0.4, 0.62, snow + 0.22 * sk + 0.12 * fbm3(p.xz * 1.3)), land);
+  float sn = max(smoothstep(0.45, 0.57, snow + 0.13 * sk + 0.1 * fbm3(p.xz * 1.3) + 0.06 * vnoise(p.xz * 6.0)), land);
   float dust = 0.0;
   if (dist < 26.0) { float dg; vec4 gr = cellsN(p.xz * 24.0, dg); dust = smoothstep(0.06, 0.36, snow + 0.3 * sk) * (1.0 - sn) * smoothstep(0.34, 0.16, gr.z) * step(0.45, gr.w) * smoothstep(26.0, 8.0, dist); }
   vec3 snowCol = vec3(0.85, 0.89, 0.94) * li + uSkyAmb * vec3(0.15, 0.3, 0.6) * (1.0 - ssh * 0.7);
@@ -2327,6 +2337,7 @@ void main() {
   }
   vec3 sparkle = min(frost, 1.0) * smoothstep(45.0, 20.0, dist) * (gl * uLanternCol * lsh * 3.5 / (dl * dl + 1.0) + gm * (uMoonCol * 26.0 + uSunCol * 8.0) * ssh);
   float Fs = F * (1.0 - sn) * (1.0 - op * 0.35);
+  Fs = max(Fs, clamp(reflA.a, 0.0, 1.0) * 0.82 * (1.0 - sn * 0.6));
   col = mix(col, refl, Fs);
   vec3 Hl = normalize(Ll + V);
   col += uLanternCol * lsh * (pow(max(dot(n, Hl), 0.0), 2400.0) * 2.5 + pow(max(dot(n, Hl), 0.0), 260.0) * 0.25) * (0.2 + F) / (dl * dl + 0.5) * (1.0 - sn) * (1.0 - hole);
@@ -2367,10 +2378,15 @@ void main() {
   vec3 rd = normalize(vP - uCam);
   vec3 c;
   if (vC.a > 0.99) {
-    float F = 0.02 + 0.98 * pow(1.0 - max(-rd.y, 0.0), 5.0);
+    // open water: black, moving; the sky in it broken up by the ripples, the lantern's light dancing on them
+    vec2 q = vP.xz;
+    vec2 g = vec2(vnoise(q * 2.2 + uTime * 0.5), vnoise(q * 2.2 - uTime * 0.45 + 3.0)) * 0.6 + vec2(vnoise(q * 7.0 - uTime * 1.1), vnoise(q * 7.0 + uTime * 0.9 + 5.0)) * 0.25;
+    vec3 n = normalize(vec3(g.x * 0.35, 1.0, g.y * 0.35));
+    float F = 0.02 + 0.98 * pow(1.0 - max(dot(-rd, n), 0.0), 5.0);
     vec2 uv = gl_FragCoord.xy / uRes;
-    vec2 w = vec2(vnoise(vP.xz * 2.0 + uTime * 0.3), vnoise(vP.xz * 2.0 - uTime * 0.25)) * 0.01;
-    c = texture(uRefl, uv + w).rgb * (F * 0.9 + 0.05) + vec3(0.0004, 0.0008, 0.001);
+    c = texture(uRefl, uv + n.xz * 0.03).rgb * (F * 0.5 + 0.02) + vec3(0.0003, 0.0006, 0.0008);
+    vec3 Lv = uLantern - vP; float dl = length(Lv); vec3 H = normalize(Lv / dl - rd);
+    c += uLanternCol * pow(max(dot(n, H), 0.0), 90.0) * 1.4 / (dl * dl + 0.6) + uMoonCol * pow(max(dot(n, normalize(uMoonDir - rd)), 0.0), 140.0) * 3.0;
   } else {
     vec3 li = lanternAt(vP + vec3(0, 0.02, 0), vec3(0, 1, 0)) + skyLight(vP, vec3(0, 1, 0));
     c = vC.rgb * li * (0.8 + 0.4 * vnoise(vP.xz * 9.0));
@@ -2516,9 +2532,10 @@ function renderInit() {
   R.cracks = makeStream(240000);
   R.scratches = makeStream(900000);
   R.sprites = makeStream(60000);
-  R.decals = makeStream(12000);
+  R.decals = makeStream(42000);
   R.pathS = makeStream(60000);
   R.deep = makeStream(3000);
+  R.trailS = makeStream(36000);
 }
 
 function resizeTargets(w, h) {
@@ -2549,7 +2566,7 @@ function common(extra) {
     uBell: U.bell, uDrown: U.drown, uOutR: U.outR, uTowerXZ: U.towerXZ, uDeep: U.deep, uDeepCol: U.deepCol,
     uLShadow: R.SH.cube, uLShadowNF: U.lshadow || [0.04, 56, 0], uSunShadow: R.SH.sun, uSunVP0: U.sunVP0 || IDENT, uSunVP1: U.sunVP1 || IDENT,
     uSunSh: U.sunSh || [0, 0, 0, 0], uShadowDir: U.shadowDir || [0, 1, 0],
-    uScat: U.scat || [0, 0],
+    uScat: U.scat || [0, 0], uLant2: U.lant2 || [0, 0, 0, 0], uLantCol2: [0.55, 0.68, 1.0],
   });
   if (extra) set(extra);
 }
@@ -2597,12 +2614,22 @@ function drawObjects(vp, reflect, extraDraws) {
     set({ uGhostK: 0 });
   }
   if (!extraDraws) return;
-  for (const d of extraDraws) if (!d.bones) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh); }
+  for (const d of extraDraws) if (!d.bones && !d.mirror) { set({ uModel: d.m, uSnowy: d.snowy ? 1 : 0, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh); }
   let skin = false;
-  for (const d of extraDraws) if (d.bones) {
+  for (const d of extraDraws) if (d.bones && !d.mirror) {
     if (!skin) { use(R.P.skin); common({ uVP: vp, uSnowy: 0, uStone: 0 }); skin = true; }
     set({ uBones: d.bones, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3 }); drawMesh(d.mesh);
   }
+  // in the mirror only, and see-through as it comes and goes: the one in the ice
+  if (!reflect || !extraDraws.some((d) => d.mirror)) return;
+  gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE); gl.colorMask(true, true, true, true); gl.depthMask(false);
+  use(R.P.obj); common({ uVP: vp, uSnowy: 0, uStone: 0 });
+  for (const d of extraDraws) if (d.mirror && !d.bones) { set({ uModel: d.m, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3, uMirrorK: d.mirror }); drawMesh(d.mesh); }
+  set({ uMirrorK: 0 });
+  use(R.P.skin); common({ uVP: vp, uSnowy: 0, uStone: 0 });
+  for (const d of extraDraws) if (d.mirror && d.bones) { set({ uBones: d.bones, uBright: d.bright || 1, uLanternK: d.lk ?? 0.3, uMirrorK: d.mirror }); drawMesh(d.mesh); }
+  set({ uMirrorK: 0 });
+  gl.disable(gl.BLEND); gl.depthMask(true); gl.colorMask(true, true, true, false);
 }
 
 function drawSprites(vp) {
@@ -2638,9 +2665,9 @@ function drawCasters(vp, o, draws) {
   if (R.treeLod && o.trees) { use(R.P.shTree); set({ uSVP: vp }); for (const M of R.treeLod) if (M.instances) drawMesh(M, M.instances); }
   if (!draws) return;
   use(R.P.shObj); set({ uSVP: vp });
-  for (const d of draws) if (!d.bones && d.cast !== false && !(o.lantern && d.light)) { set({ uModel: d.m }); drawMesh(d.mesh); }
+  for (const d of draws) if (!d.bones && d.cast !== false && !d.mirror && !(o.lantern && d.light)) { set({ uModel: d.m }); drawMesh(d.mesh); }
   let sk = false;
-  for (const d of draws) if (d.bones && d.cast !== false) { if (!sk) { use(R.P.shSkin); set({ uSVP: vp }); sk = true; } set({ uBones: d.bones }); drawMesh(d.mesh); }
+  for (const d of draws) if (d.bones && d.cast !== false && !d.mirror) { if (!sk) { use(R.P.shSkin); set({ uSVP: vp }); sk = true; } set({ uBones: d.bones }); drawMesh(d.mesh); }
 }
 function lanternShadowPass(draws) {
   const U = R.U, S = R.SH.cube, L = U.lantern, N = 0.04, F = 56;
@@ -2722,7 +2749,9 @@ function renderFrameInner(view) {
 
   // 1. what the ice reflects: the world mirrored in y = 0
   bindTarget(R.T.reflMS);
-  gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  // nothing writes the mirror's alpha but what is only in the mirror (it marks where the ice shows it whole)
+  gl.colorMask(true, true, true, false);
   // the ice only ever shows the mirror below the horizon: draw no more of it than that
   const hy = view.horizon === undefined ? R.H : Math.ceil(clamp(view.horizon * 0.5 + 0.5, 0, 1) * R.H + R.H * 0.04 + 4);
   gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, R.W, Math.min(R.H, hy));
@@ -2734,6 +2763,7 @@ function renderFrameInner(view) {
   gl.frontFace(gl.CCW);
   drawSprites(view.reflVP);
   U.cam = camSave; U.reflect = 0;
+  gl.colorMask(true, true, true, true);
   gl.disable(gl.SCISSOR_TEST);
   resolveInto(R.T.reflMS, R.T.refl);
 
@@ -2776,12 +2806,13 @@ function renderFrameInner(view) {
     drawStream(R.scratches);
     gl.depthMask(true); gl.disable(gl.BLEND);
   }
-  if (R.decals.n || R.pathS.n) {
+  if (R.decals.n || R.pathS.n || R.trailS.n) {
     use(R.P.decal); common({ uVP: view.vp, uRefl: R.T.refl.colors[0] });
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
     gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2, -4);
     if (R.decals.n) drawStream(R.decals);
     if (R.pathS.n) drawStream(R.pathS);
+    if (R.trailS.n) drawStream(R.trailS);
     gl.disable(gl.POLYGON_OFFSET_FILL);
     gl.depthMask(true); gl.disable(gl.BLEND);
   }
@@ -2976,8 +3007,7 @@ function ik2(hip, foot, a, b, bend) {
   let side = vsub(bend, vmul(dn, vdot(bend, dn))); side = vnorm(side);
   return { knee: vadd(vadd(hip, vmul(dn, x)), vmul(side, y)), foot: f };
 }
-function skaterAnimate(dt) {
-  const S = SK;
+function skaterAnimate(dt, S = SK) {
   const sp = S.speed, f = sat(sp / TUNE.vmax);
   // lean into turns (centripetal), crouch with speed and before a hop
   const latA = S.turnRate * sp;
@@ -2997,8 +3027,8 @@ function skaterAnimate(dt) {
 }
 
 // world-space joints for drawing and for where the light is
-function skaterPose() {
-  const S = SK;
+function skaterPose(S = SK) {
+  const inTower = S === SK && BELL.inside;
   // in a hockey stop the whole body turns side-on to the way it is sliding
   if (S.stopping < 0.05) S.stopSide = S.turnRate > 0.3 ? 1 : S.turnRate < -0.3 ? -1 : (S.stopSide || 1);
   const bodyH = S.h + S.stopping * S.stopSide * PI * 0.42;
@@ -3049,7 +3079,7 @@ function skaterPose() {
   let handL = vadd(shL, vadd(vadd(vmul(Rt, -0.14 - f * 0.08), vmul(F, swing + 0.02)), [0, -0.5 + Math.abs(swing) * 0.16, 0]));
   let handR = vadd(shR, vadd(vadd(vmul(Rt, 0.12), vmul(F, 0.3)), [0, -0.42, 0]));
   // in the tower both hands are on the rope's sally
-  if (BELL.inside && SCENE.bell) {
+  if (inTower && SCENE.bell) {
     const g = [SCENE.bell[0] + 0.55, 1.55 + BELL.rope + 0.2, SCENE.bell[2]];
     handL = vadd(g, [0, 0.16, 0]); handR = vadd(g, [0, -0.04, 0]);
   }
@@ -3062,7 +3092,7 @@ function skaterPose() {
   const hang = vnorm([Math.sin(L.b) * Rt[0] + Math.sin(L.a) * F[0], -Math.cos(L.a) * Math.cos(L.b), Math.sin(L.b) * Rt[2] + Math.sin(L.a) * F[2]]);
   let lantTop = vadd(handR, [0, -0.02, 0]);
   let lantC = vadd(lantTop, vmul(hang, 0.2));
-  if (BELL.inside) { lantC = at(0.55, 0.17, 0.25); lantTop = vadd(lantC, [0, 0.2, 0]); hang[0] = 0; hang[1] = -1; hang[2] = 0; }
+  if (inTower) { lantC = at(0.55, 0.17, 0.25); lantTop = vadd(lantC, [0, 0.2, 0]); hang[0] = 0; hang[1] = -1; hang[2] = 0; }
   const J = { pel, chest, neck, head, up, hipUp, skirtUp, F, Rt, legs, shL, shR, elL, elR, handL, handR, lantTop, lantC, hang, hintL, hintR, legHint,
     headYaw: bodyH - S.stopping * S.stopSide * 0.9, headPitch: 0.1 + S.crouch * 0.05, headRoll: -lean * 0.4 };
   J.frames = boneFrames(J);
@@ -3147,6 +3177,9 @@ function buildSkaterMeshes() {
     const fl = new MB();
     fl.sphere(m4trs([0, -0.01, 0], 0, 0, 0, [0.012, 0.03, 0.012]), [1.0, 0.75, 0.4, -60.0], 8, 6);
     SKM.flame = uploadMesh(fl.build());
+    // the one in the ice carries a colder light
+    SKM.globe2 = uploadMesh(new MB().lathe(m4(), [0.72, 0.84, 1.0, -7.5], [[0.04, -0.07], [0.058, -0.04], [0.062, 0.0], [0.055, 0.04], [0.036, 0.07]], 14).build());
+    SKM.flame2 = uploadMesh(new MB().sphere(m4trs([0, -0.01, 0], 0, 0, 0, [0.012, 0.03, 0.012]), [0.85, 0.92, 1.0, -45.0], 8, 6).build());
   }
   SKM.scarf = makeDynMesh(400, 2400);
   {
@@ -3678,8 +3711,8 @@ function buildBody() {
 }
 
 // skin matrices for the current pose (frames made in skaterPose)
-function bodySkin(J) {
-  const F = J.frames, out = BODY.skin, tmp = new Float32Array(16);
+function bodySkin(J, out = BODY.skin) {
+  const F = J.frames, tmp = new Float32Array(16);
   if (BODY.showBind) { const M = m4trs([SK.x, SK.y, SK.z], SK.bodyH); for (let b = 0; b < NBONE; b++) out.set(M, b * 16); return out; }   // checking: the body as modelled
   for (let b = 0; b < NBONE; b++) { m4mul(F[b], BODY.invBind[b], tmp); out.set(tmp, b * 16); }
   return out;
@@ -4144,6 +4177,27 @@ AUDIO.under = function (pos, k = 1) {
   const m = ch.tones[(A.underI * 2) % ch.tones.length];
   play(A.buf.glass[m], { pos, gain: 0.09 * k, ref: 14, rate: 0.5, cut: 1300, wet: 0.8, bus: A.music, travel: false });
 };
+// the one in the ice: their blades, quieter and further off than yours, and a note of their own between yours
+AUDIO.otherPush = function (pos, k = 1, near = 0) {
+  const A = AUDIO; if (!A.on || k < 0.05) return;
+  play(pick(A.buf.push), { pos, gain: 0.05 * k, rate: 1.12 + Math.random() * 0.1, wet: 0.55, ref: 10, travel: false });
+  const t = AUDIO.chord().tones; A.otherI = (A.otherI || 0) + 1;
+  const m = t[[5, 3, 4, 1, 5, 2][A.otherI % 6] % t.length];
+  play(A.buf.glass[m], { pos, gain: (0.022 + 0.05 * near) * k, wet: 0.9, bus: A.music, ref: 22, travel: false });
+};
+// someone out there: three notes falling, far off
+AUDIO.otherCome = function (pos, k = 1) {
+  const A = AUDIO; if (!A.on) return;
+  const t = AUDIO.chord().tones;
+  [5, 3, 1].forEach((j, i) => play(A.buf.glass[t[j % t.length]], { pos, gain: 0.1 * k, delay: 0.4 + i * 0.55, wet: 1, bus: A.music, ref: 40, travel: false }));
+};
+// they have gone: the notes come down to the root, and the old peal, far under you
+AUDIO.otherGo = function (pos) {
+  const A = AUDIO; if (!A.on) return;
+  const t = AUDIO.chord().tones;
+  [4, 2, 0].forEach((j, i) => play(A.buf.glass[t[j % t.length]], { pos, gain: 0.12, delay: i * 0.9, wet: 1, bus: A.music, ref: 30, travel: false }));
+  for (let i = 0; i < 6; i++) play(A.buf.peal[i], { gain: 0.07, cut: 900, delay: 2.4 + i * 0.5, wet: 1, pan: Math.sin(i * 1.3) * 0.5, travel: false });
+};
 AUDIO.plunge = function () { play(AUDIO.buf.plunge, { gain: 0.34, wet: 0.35 }); play(AUDIO.buf.boom, { gain: 0.22, rate: 0.7, wet: 0.5 }); };
 AUDIO.bell = function (k = 1, pos) { play(AUDIO.buf.tower, { pos: pos || SCENE.bell, gain: 0.42 * k, ref: 40, wet: 0.7, travel: true }); };
 
@@ -4160,6 +4214,8 @@ AUDIO.event = function (e) {
     const m = tones[seq[A.arpI % seq.length] % tones.length];
     A.arpI++;
     play(A.buf.glass[m], { gain: 0.09 + sat(sp / 11) * 0.05, wet: 0.7, bus: A.music, pan: (e.side || 0) * 0.25, travel: false });
+    // in the wake of the one in the ice, a second voice a third above yours
+    if (OTHER.near > 0.25) play(A.buf.glass[tones[(seq[(A.arpI - 1) % seq.length] + 2) % tones.length]], { gain: 0.045 * OTHER.near, wet: 0.85, bus: A.music, pan: -(e.side || 0) * 0.3, delay: 0.05, travel: false });
     // black ice answers a push with a tick that runs away from you
     if (iceThick(SK.x, SK.z) < 30 && Math.random() < 0.45) { const a = Math.random() * TAU, r = 8 + Math.random() * 30; AUDIO.sing(SK.x + Math.sin(a) * r, SK.z + Math.cos(a) * r, 0.35); }
   }
@@ -4242,7 +4298,7 @@ function lightState() {
   const U = R.U, s = G.maxS, here = G.s;
   const dusk = 1 - smooth(0, 700, s);
   const night = smooth(120, 900, s);
-  const storm = smooth(2430, 2530, here) * (1 - smooth(2730, 2860, here)) * (1 - G.dawn);
+  const storm = smooth(2430, 2530, here) * (1 - smooth(2690, 2790, here)) * (1 - G.dawn);
   G.storm = lerp(G.storm, storm, 0.02);
   const aur = smooth(1260, 1760, s) * (1 - smooth(2050, 2350, s) * 0.85) * (1 - G.dawn * 0.85);
   G.aurora = lerp(G.aurora, aur, 0.01);
@@ -4303,12 +4359,33 @@ function cameraStep(dt, mdy) {
   const dir = [Math.sin(C.yaw) * cp, -spch, Math.cos(C.yaw) * cp];
   let pos = vsub(C.look, vmul(dir, C.dist));
   if (pos[1] < 0.35) pos[1] = 0.35;
+  // never inside a wall: pulled in along its line to you, short of anything in the way (in fast, out slowly)
+  const clear = cameraClear(C.look, pos);
+  C.clearK = lerp(C.clearK ?? 1, clear, expDecay(clear < (C.clearK ?? 1) ? 25 : 3, dt));
+  pos = vlerp(C.look, pos, C.clearK);
   C.shake = Math.max(0, C.shake - dt * 2.5);
   const sh = C.shake * C.shake * 0.08 + ICE.danger * 0.012;
   if (sh > 0) pos = vadd(pos, [(Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh]);
   C.pos = pos;
   // for looking at the skater while checking: a fixed offset in the skater's own frame (right, up, forward)
   if (G.camOverride) { const o = G.camOverride, [fx, fz] = fwdOf(S.h), [rx, rz] = rightOf(S.h); C.pos = [S.x + rx * o[0] + fx * o[2], o[1], S.z + rz * o[0] + fz * o[2]]; C.look = [S.x + fx * (o[3] || 0), o[4] || 0.85, S.z + fz * (o[3] || 0)]; C.fov = o[5] || 40; }
+}
+// how far from a toward b the camera can go before something solid is in the way (0..1)
+function cameraClear(a, b) {
+  const near = COLLIDERS.filter((c) => Math.hypot(c.x - a[0], c.z - a[2]) < 14 + (c.r || Math.max(c.hx || 0, c.hz || 0)));
+  if (!near.length) return 1;
+  const pad = 0.3, N = 24;
+  for (let i = 1; i <= N; i++) {
+    const t = i / N, x = lerp(a[0], b[0], t), y = lerp(a[1], b[1], t), z = lerp(a[2], b[2], t);
+    for (const c of near) {
+      if (c.top !== undefined && y > c.top + pad) continue;
+      const dx = x - c.x, dz = z - c.z;
+      if (c.r) { if (Math.hypot(dx, dz) < c.r + pad) return Math.max(0.15, (i - 1) / N); continue; }
+      const cs = Math.cos(c.yaw || 0), sn = Math.sin(c.yaw || 0), lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+      if (Math.abs(lx) < c.hx + pad && Math.abs(lz) < c.hz + pad) return Math.max(0.15, (i - 1) / N);
+    }
+  }
+  return 1;
 }
 function titleCamera(dt) {
   const C = G.cam;
@@ -4404,6 +4481,7 @@ function gameStep(dt, inp) {
   // the bell rings itself down once you have let go of it
   if (STORY.ended && G.state !== 'tower') towerStep(dt, false);
   deepStep(dt);
+  otherStep(dt);
   cracksStep(dt);
   partsStep(dt);
   if (G.ending) { morningCamera(dt, inp); pathDecal(); }
@@ -4459,7 +4537,7 @@ const DEEP = {
   eerie: 0,                     // the night closing in toward the village
   outR: 0, outT: 0, outWait: 0, // put out this far from the tower, how far the bell has sent it, and when it goes
   hum: 0,
-  walker: { on: false, s: 0, x: 0, y: -4, z: 0, lit: 0, k: 0, t: 0, stepT: 0, moving: false },
+  walker: { on: false, s: 0, x: 0, y: -4, z: 0, lit: 0, k: 0, t: 0, stepT: 0, moving: false, door: null, s0: 0, slow: 0 },
 };
 const stillLitAt = (x, z) => (DEEP.outR <= 0 ? 1 : smooth(DEEP.outR - 3, DEEP.outR + 3, Math.hypot(x - TOWER.x, z - TOWER.z)));
 
@@ -4481,11 +4559,19 @@ function deepStep(dt) {
 }
 
 // a lantern under the ice, carried along the drowned street toward the church: ahead of you, waiting if you fall behind
+// out of the door of the house where the one in the ice stopped, a little light at first, at a walk
+function walkerFromDoor(house) {
+  const W = DEEP.walker;
+  Object.assign(W, { on: true, s: house.s, s0: house.s, door: house.door, lit: 0, t: 0, slow: 7, stepT: 0.6 });
+  // you are already past the house: the lantern is out on the street ahead of you instead
+  if (G.s > house.s - 6) Object.assign(W, { s: Math.max(1775, G.s + 34), door: null, slow: 0 });
+}
 function walkerStep(dt) {
   const W = DEEP.walker;
   if (!W.on) {
-    if (G.state !== 'play' || G.s < 1735 || G.s > 2900 || STORY.ended) return;
-    W.on = true; W.s = Math.max(1775, G.s + 34); W.lit = 0; W.t = 0;
+    // nobody came home to open a door (you got here some other way): the lantern is simply out on the street ahead
+    if (G.state !== 'play' || G.s < 1830 || G.s > 2900 || STORY.ended || OTHER.phase === 'lead' || OTHER.phase === 'home') return;
+    W.on = true; W.s = Math.max(1775, G.s + 34); W.lit = 0; W.t = 0; W.door = null;
   }
   W.t += dt;
   const end = WORLD.routeLen - 9;
@@ -4494,12 +4580,15 @@ function walkerStep(dt) {
     // further ahead the faster you come, so it is always out in front of you, not under you
     const want = Math.min(end, G.s + 21 + SK.speed * 2);
     if (want > W.s && G.s > W.s - 75) v = clamp((want - W.s) * 1.1, 1.1, 16);
+    // out of the door it walks, before it hurries on
+    if (W.slow > 0) { W.slow -= dt; v = Math.min(v, 1.3); }
   }
   W.s = Math.min(end, W.s + v * dt);
   W.moving = v > 0.3;
   const p = routeAt(W.s), [rx, rz] = rightOf(p.dir);
   const sway = Math.sin(W.t * 0.7) * 0.8 * (1 - smooth(end - 40, end, W.s));
   let x = p.x + rx * sway, z = p.z + rz * sway;
+  if (W.door) { const fd = 1 - smooth(0, 7, W.s - W.s0); x = lerp(x, W.door[0], fd); z = lerp(z, W.door[1], fd); }
   // at the end of the way it goes to the tower's door, and waits
   const k = smooth(end - 34, end, W.s);
   x = lerp(x, TOWER.x + 0.5, k); z = lerp(z, TOWER.z - TOWER.w / 2 - 1.3, k);
@@ -4610,10 +4699,230 @@ function buildDeepGlows(camRight, camUp) {
   streamUpload(S);
 }
 
+// ---- 73-other.js ----
+// The one in the ice: a skater who is there only in the reflection, smaller than you, carrying a colder light, nobody
+// above them. They cross your way once in the fields, far off. After the old bridge they come back and lead: weaving
+// over the open ice, round the fishing huts, over the ridge, along the last train from end to end, down the drowned
+// street to one house, where they stop. Their blade marks shine on the ice and fade, so to follow you have to keep up;
+// in their wake their notes and yours are in tune. At the house they go, and the lantern under the ice comes out of
+// its door and walks to the church.
+const OTHER = {
+  phase: 'off',          // off, glimpse, away, lead, home, gone
+  k: 0,                  // how much of them there is, as they come and go
+  path: null, u: 0, v: 0, B: null, lastS: 0,
+  trail: [[], []], last: [null, null],
+  near: 0,               // how close in their wake you are, 0..1
+  house: null, homeT: 0, goT: 0,
+  way: [],               // where they went, for the morning
+  bones: new Float32Array(12 * 16), raw: new Float32Array(12 * 16),
+};
+const OTHER_SCALE = 0.8;
+const RIDGES_S = [1336, 1668];
+
+function otherBody(x, z, h) {
+  return { x, z, y: 0, vx: 0, vz: 0, vy: 0, h, air: false, stopping: 0, skid: 0, speed: 0, pushT: 99, pushLeft: 0, pushAcc: 0,
+    pushSide: 1, nextPush: 0, pushing: 0, lean: 0, turnRate: 0, crouch: 0.3, sway: 0, bob: 0, phase: 0, landT: 9, hopT: 9,
+    lant: { a: 0, va: 0, b: 0, vb: 0 }, stopSide: 1, bodyH: h, joints: null };
+}
+// a way given as [route metres, metres to the right of the way], smoothed through and measured
+function otherPath(W) {
+  const P = W.map(([s, a]) => { const p = routeAt(s), [rx, rz] = rightOf(p.dir); return [p.x + rx * a, p.z + rz * a]; });
+  const pts = [];
+  for (let i = 0; i < P.length - 1; i++) {
+    const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+    const n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 0.5));
+    for (let j = 0; j < n; j++) {
+      const t = j / n, t2 = t * t, t3 = t2 * t;
+      pts.push([0, 1].map((k) => 0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3)));
+    }
+  }
+  pts.push(P[P.length - 1]);
+  const L = [0];
+  for (let i = 1; i < pts.length; i++) L.push(L[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  return { pts, L, len: L[L.length - 1], i: 0 };
+}
+// u metres along it: where, which way, and how sharply it bends (radians a metre)
+function otherAt(P, u) {
+  u = clamp(u, 0, P.len);
+  while (P.i < P.L.length - 2 && P.L[P.i + 1] < u) P.i++;
+  while (P.i > 0 && P.L[P.i] > u) P.i--;
+  const i = P.i, a = P.pts[i], b = P.pts[i + 1], t = clamp((u - P.L[i]) / (P.L[i + 1] - P.L[i] || 1), 0, 1);
+  const h = Math.atan2(b[0] - a[0], b[1] - a[1]);
+  const j = Math.min(P.pts.length - 1, i + 5), c = P.pts[j], h2 = Math.atan2(c[0] - b[0], c[1] - b[1]);
+  return { x: lerp(a[0], b[0], t), z: lerp(a[1], b[1], t), h, curv: wrapAngle(h2 - h) / Math.max(0.5, P.L[j] - P.L[i + 1]) };
+}
+// the house: the first on the street where a light was left on
+function otherHouse() {
+  const hs = SCENE.houses.filter((h) => h.group === 'village' && h.z > 1790 && h.z < 1920).sort((a, b) => a.z - b.z);
+  const h = hs.find((q) => q.lit) || hs[0];
+  if (!h) return null;
+  const door = [h.x + Math.sin(h.yaw) * (h.d / 2 + 0.35), h.z + Math.cos(h.yaw) * (h.d / 2 + 0.35)];
+  const q = routeNear(door[0], door[1]);
+  return { h, door, s: q.s, a: -q.d };
+}
+// their way: in from the side, weaving, round the huts (mostly on their far sides), over the ridge where it is high,
+// the lights, along the train and back, the second ridge, the village street, the house
+function otherLeadWay(s0, house) {
+  const W = [[s0 + 18, 18], [s0 + 32, 9], [852, -8], [875, 10], [898, -11], [921, 10], [944, -9], [966, 8], [986, -12], [1004, 12], [1021, -10], [1038, 7], [1058, -2]];
+  const huts = HUTS.map((h) => { const q = routeNear(h.x, h.z); return { s: q.s, a: -q.d }; }).filter((h) => h.s > 1065 && h.s < 1260).sort((p, q) => p.s - q.s);
+  huts.forEach((h, i) => { const sg = Math.sign(h.a) || 1, a = h.a + sg * (i % 3 === 2 ? -6 : 6.5); W.push([h.s - 9, (W[W.length - 1][1] + a) * 0.5], [h.s + 1, a]); });
+  W.push([1272, 0], [1300, 5], [1318, 9], [1336, 8], [1356, 3]);
+  W.push([1400, -14], [1440, 12], [1480, -10], [1518, 2], [1544, -22], [1555, -12], [1554, 6], [1551, 22], [1549, 33], [1567, 31], [1590, 13], [1620, -4], [1648, 2], [1668, 1], [1700, -6], [1735, 0], [1762, 0]);
+  if (house) W.push([house.s - 16, 0], [house.s - 6, house.a * 0.4], [house.s, house.a]);
+  // begun late (you came another way): only what is still ahead
+  return W.filter((w, i) => i < 2 || w[0] > s0 + 36);
+}
+
+function otherStep(dt) {
+  const O = OTHER;
+  R.U.lant2 = [0, 0, 0, 0];
+  if (G.dawn > 0 || STORY.ended) { if (O.phase !== 'off' && O.phase !== 'gone') { O.k = Math.max(0, O.k - dt * 0.5); if (O.k <= 0) O.phase = 'gone'; } }
+  // far off in the fields, once: someone skating across your way, in the ice and nowhere else
+  if (O.phase === 'off' && G.state === 'play' && G.maxS > 262 && G.maxS < 640) {
+    O.phase = 'glimpse'; O.u = 0; O.v = 7.5; O.k = 0;
+    O.path = otherPath([[G.s + 34, 30], [G.s + 44, 16], [G.s + 54, 2], [G.s + 64, -14], [G.s + 78, -34]]);
+    const p = otherAt(O.path, 0); O.B = otherBody(p.x, p.z, p.h); O.lastS = G.s + 34;
+    AUDIO.otherCome([p.x, 0, p.z], 0.6);
+  }
+  // after the bridge they come back for you
+  if ((O.phase === 'off' || O.phase === 'away') && G.state === 'play' && G.maxS > 812 && G.maxS < 1680) {
+    O.house = otherHouse();
+    O.path = otherPath(otherLeadWay(Math.max(G.s, 800), O.house)); O.u = 0; O.v = Math.max(6, SK.speed); O.phase = 'lead'; O.k = 0;
+    const p = otherAt(O.path, 0); O.B = otherBody(p.x, p.z, p.h); O.lastS = Math.max(G.s, 800);
+    AUDIO.otherCome([p.x, 0, p.z], 1);
+  }
+  if (!O.B || O.phase === 'off' || O.phase === 'away' || O.phase === 'gone') return;
+  const B = O.B, P = O.path;
+  const here = otherAt(P, O.u);
+  const d = Math.hypot(here.x - SK.x, here.z - SK.z), sNow = routeNear(here.x, here.z).s, ahead = sNow - G.s;
+  // their pace: a few lengths ahead of you, waiting if you drop back, past you again if you go by
+  let want = 7.5;
+  if (O.phase === 'lead') {
+    if (G.state !== 'play' || SK.fallen) want = 0.6;
+    else if (ahead < 4) want = 15;
+    else if (d > 42) want = 0.6;
+    else {
+      want = clamp(SK.speed + (15 - d) * 0.7, 2.5, 11.6);
+      want = Math.min(want, Math.max(3.5, Math.sqrt(TUNE.grip * 0.95 / Math.max(Math.abs(here.curv), 1e-3))));
+    }
+    // coming home they slow, so you see them stop
+    want = Math.min(want, 0.6 + (P.len - O.u) * 0.42);
+  } else if (O.phase === 'home') want = 0;
+  O.v = lerp(O.v, want, expDecay(want > O.v ? 1.6 : 2.4, dt));
+  O.u = Math.min(P.len, O.u + O.v * dt);
+  // left far behind (you went on and did not follow): gone a moment, then there again, ahead of you
+  if (O.phase === 'lead' && ahead < -22 && G.state === 'play') {
+    let u = O.u;
+    while (u < P.len - 1 && routeNear(otherAt(P, u).x, otherAt(P, u).z).s < G.s + 20) u += 4;
+    O.u = u; O.k = 0; O.trail[0].length = 0; O.trail[1].length = 0; O.last = [null, null];
+  }
+  const np = otherAt(P, O.u);
+  B.vx = (np.x - B.x) / Math.max(dt, 1e-4); B.vz = (np.z - B.z) / Math.max(dt, 1e-4);
+  B.x = np.x; B.z = np.z; B.speed = O.v;
+  if (O.phase !== 'home') B.h += wrapAngle(np.h - B.h) * expDecay(14, dt);
+  B.turnRate = lerp(B.turnRate, np.curv * O.v, expDecay(8, dt));
+  // strides while they are going; a glide while they wait
+  B.pushT += dt;
+  if (B.pushLeft > 0) B.pushLeft -= dt;
+  if (O.v > 2.5 && !B.air && B.pushT > lerp(TUNE.periodSlow, TUNE.periodFast, sat(O.v / TUNE.vmax)) + 0.06) {
+    B.pushT = 0; B.pushSide = -B.pushSide; B.pushLeft = TUNE.pushTime; B.pushAcc = 3;
+    AUDIO.otherPush([B.x, 0, B.z], O.k, O.near);
+  }
+  // over the ridges they hop, where the ice is heaved up
+  for (const r of RIDGES_S) if (O.lastS < r - 1.1 && sNow >= r - 1.1 && !B.air && O.v > 3) { B.air = true; B.vy = TUNE.hopV; B.hopT = 0; }
+  O.lastS = sNow;
+  if (B.air) { B.vy -= TUNE.gravity * dt; B.y += B.vy * dt; B.hopT += dt; if (B.y <= 0) { B.y = 0; B.vy = 0; B.air = false; B.landT = 0; } }
+  B.landT += dt;
+  skaterAnimate(dt, B);
+  skaterPose(B);
+  { const c = B.joints.lantC, s = OTHER_SCALE; R.U.lant2 = [B.x + (c[0] - B.x) * s, c[1] * s, B.z + (c[2] - B.z) * s, 1.6 * O.k]; }
+  // coming and going
+  if (O.phase === 'glimpse') {
+    O.k = Math.min(sat(O.u / 10), 1 - smooth(P.len - 16, P.len, O.u));
+    if (O.u >= P.len) { O.phase = 'away'; O.k = 0; }
+  } else if (O.phase === 'lead') {
+    O.k = Math.min(1, O.k + dt * 0.7);
+    if (O.u >= P.len - 0.05) { O.phase = 'home'; O.homeT = 0; O.goT = 0; }
+  } else if (O.phase === 'home') {
+    // stopped over the door, turned to the house, until you are there; then they go, and below the door opens
+    O.homeT += dt;
+    if (O.house) B.h += wrapAngle(Math.atan2(O.house.h.x - B.x, O.house.h.z - B.z) - B.h) * expDecay(2, dt);
+    const dh = Math.hypot(SK.x - B.x, SK.z - B.z);
+    O.nearT = dh < 16 ? (O.nearT || 0) + dt : 0;
+    if (O.goT > 0 || (dh < 16 && (SK.speed < 4 || O.nearT > 2.5)) || O.homeT > 18 || G.s > O.house.s + 40) O.goT += dt;
+    O.k = 1 - smooth(0.5, 3.4, O.goT);
+    if (O.goT > 1.2 && O.house && !DEEP.walker.on) { walkerFromDoor(O.house); AUDIO.otherGo([B.x, 0, B.z]); }
+    if (O.goT > 3.5) O.phase = 'gone';
+  }
+  // their marks: two blades, shining where they bit
+  if (B.joints && !B.air) B.joints.legs.forEach((L, i) => {
+    if (L.foot[1] > 0.14 || O.v < 1) { O.last[i] = null; return; }
+    const p = [L.foot[0], L.foot[2]], q = O.last[i];
+    if (q && Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.18) return;
+    O.trail[i].push([p[0], p[1], G.time, q ? 1 : 0]);
+    if (O.trail[i].length > 700) O.trail[i].shift();
+    O.last[i] = p;
+  });
+  const w = O.way[O.way.length - 1];
+  if (O.k > 0.3 && (!w || Math.hypot(B.x - w[0], B.z - w[1]) > 1.5)) O.way.push([B.x, B.z]);
+  // in their wake: close behind on their marks, going their way
+  let best = 1e9;
+  for (const T of O.trail) for (let i = T.length - 1; i >= Math.max(0, T.length - 160); i -= 2) { const q = T[i]; if (G.time - q[2] > 6) break; best = Math.min(best, (q[0] - SK.x) ** 2 + (q[1] - SK.z) ** 2); }
+  const inWake = O.phase === 'lead' && best < 2.4 * 2.4 && d < 32 && SK.speed > 3 && G.state === 'play';
+  O.near = lerp(O.near, inWake ? 1 : 0, expDecay(inWake ? 1.4 : 0.7, dt));
+}
+
+// their marks for the frame: they shine where they are fresh, more when you are in their wake, and fade
+function otherTrailDecal() {
+  const S = R.trailS; S.n = 0;
+  const O = OTHER, glow = 0.55 + 0.6 * O.near, C = G.cam.pos;
+  for (const T of O.trail) for (let i = 1; i < T.length; i++) {
+    const a = T[i - 1], b = T[i];
+    if (!b[3]) continue;
+    const age = G.time - b[2]; if (age > 9) continue;
+    const k = Math.exp(-age / 2.6) * glow * (1 - G.dawn);
+    if (k < 0.01) continue;
+    const dc = Math.hypot(a[0] - C[0], C[1], a[1] - C[2]);
+    pushQuadFlat(S, a, b, Math.max(0.024, dc * 0.0014), [0.07 * k, 0.1 * k, 0.16 * k, -1], 0.006);
+  }
+  // where they are, a cold light lies on the ice with nobody above it
+  const B = O.B;
+  if (B && O.k > 0.01 && S.n + 160 < S.max) {
+    const c = [B.x, 0.007, B.z], k = O.k * (0.6 + 0.4 * O.near) * (1 - G.dawn) * 0.32, R0 = 3.2, D = S.data;
+    const tri = (p, col) => { let q = S.n * 7; D[q] = p[0]; D[q + 1] = p[1]; D[q + 2] = p[2]; D[q + 3] = col[0]; D[q + 4] = col[1]; D[q + 5] = col[2]; D[q + 6] = -1; S.n++; };
+    const C0 = [0.05 * k, 0.065 * k, 0.1 * k], C1 = [0.012 * k, 0.016 * k, 0.026 * k], Z = [0, 0, 0];
+    const at = (a, r) => [B.x + Math.cos(a) * r, 0.007, B.z + Math.sin(a) * r];
+    for (let i = 0; i < 16; i++) {
+      const a0 = (i / 16) * TAU, a1 = ((i + 1) / 16) * TAU;
+      tri(c, C0); tri(at(a1, R0 * 0.4), C1); tri(at(a0, R0 * 0.4), C1);
+      tri(at(a0, R0 * 0.4), C1); tri(at(a1, R0 * 0.4), C1); tri(at(a1, R0), Z);
+      tri(at(a0, R0 * 0.4), C1); tri(at(a1, R0), Z); tri(at(a0, R0), Z);
+    }
+  }
+  streamUpload(S);
+}
+
+// their body for the frame, in the mirror only: your body at a child's size, its own pose, its own cold lantern
+function otherDraws() {
+  const O = OTHER, B = O.B;
+  if (!B || !B.joints || O.k < 0.01) return [];
+  const J = B.joints, s = OTHER_SCALE, M = new Float32Array([s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, B.x * (1 - s), 0, B.z * (1 - s), 1]);
+  const raw = bodySkin(J, O.raw), tmp = new Float32Array(16);
+  for (let b = 0; b < 12; b++) { m4mul(M, raw.subarray(b * 16, b * 16 + 16), tmp); O.bones.set(tmp, b * 16); }
+  const alpha = O.k * (0.8 + 0.2 * O.near), D = [];
+  for (const mesh of BODY.layers) D.push({ mesh, bones: O.bones, lk: 0.5, bright: 2.2, mirror: alpha, cast: false });
+  for (const L of J.legs) D.push({ mesh: SKM.boot, m: m4mul(M, m4trs([L.foot[0], L.foot[1] - 0.004, L.foot[2]], L.yaw, 0, 0)), lk: 0.5, bright: 2, mirror: alpha, cast: false });
+  const yv = vmul(J.hang, -1), xv = vnorm(vcross(yv, J.F)), zv = vcross(xv, yv);
+  const LM = m4mul(M, new Float32Array([xv[0], xv[1], xv[2], 0, yv[0], yv[1], yv[2], 0, zv[0], zv[1], zv[2], 0, J.lantC[0], J.lantC[1], J.lantC[2], 1]));
+  D.push({ mesh: SKM.lantern, m: LM, lk: 0.5, bright: 2, mirror: alpha, cast: false });
+  D.push({ mesh: SKM.globe2, m: LM, mirror: Math.min(1, alpha * (1.1 + O.near * 0.4)), cast: false });
+  D.push({ mesh: SKM.flame2, m: LM, mirror: Math.min(1, alpha * 1.2), cast: false });
+  return D;
+}
+
 // ---- 75-story.js ----
 // The night's events: the squall, the water being let out at the dam, the tower and its bell, and morning.
 const PATH = [];                      // where you have been, every metre and a half, for the morning
-const LEAD = { on: false, t: 0, a: null, b: null, w: 0, maxW: 2.0 };
 const DRAW = { on: false, t: 0, booms: [] };
 const BELL = { a: 0, w: 0, strikes: 0, lastSide: 0, rope: 0, grab: 0, energy: 0, inside: false, held: false, pullT: 0 };
 const STORY = { squallBellT: 3, ended: false, endT: 0, card: false };
@@ -4645,70 +4954,115 @@ function squallStep(dt) {
   }
 }
 
-// ---- the drawdown: below the dam they let water out; the ice drops and breaks across the lake ----
+// ---- the drawdown: below the dam they let water out; the ice drops and breaks across the lake. It breaks in rows
+// across the way as you come, each crack running in from a shore and opening into black water, each row leaving one
+// gap, the gaps on alternate sides: weave through them while it goes. The last break runs right across: hop it ----
+const LEADS = [];       // {s, a, b, w, maxW, t, run, last}: route metres, ends (a the shore end), width, its age, how far it has run
+const LEAD_ROWS = [[2810, 1], [2834, -1], [2858, 1]];   // route metres, the side its long break comes from (+ right)
+function makeLead(s, a0, a1, maxW, last = false) {
+  const p = routeAt(s), [rx, rz] = rightOf(p.dir);
+  return { s, a0, a1, a: [p.x + rx * a0, p.z + rz * a0], b: [p.x + rx * a1, p.z + rz * a1], w: 0, maxW, t: -1, run: 0, last };
+}
+// each time the water has you, the gaps are a little wider when you come back (while it is dark, so nothing is seen to move)
+function widenGaps(by) {
+  for (const L of LEADS) {
+    if (L.last) continue;
+    const p = routeAt(L.s), [rx, rz] = rightOf(p.dir), a1 = L.a1 + Math.sign(L.a0) * by;
+    L.b = [p.x + rx * a1, p.z + rz * a1];
+  }
+}
+// where the gap in a row is, metres right of the way
+const leadGap = (sg) => -sg * 9;
 function drawdownStep(dt) {
-  if (!DRAW.on && G.state === 'play' && G.s > 2775 && G.s < 2900) {
+  if (!DRAW.on && G.state === 'play' && G.s > 2772 && G.s < 2900) {
     DRAW.on = true; DRAW.t = 0;
-    for (let i = 0; i < 9; i++) DRAW.booms.push({ t: 0.2 + i * 0.45 + Math.random() * 0.3, done: false });
+    for (let i = 0; i < 6; i++) DRAW.booms.push({ t: 0.2 + i * 0.5 + Math.random() * 0.3, done: false });
+    for (const [rs, sg] of LEAD_ROWS) {
+      LEADS.push(makeLead(rs, sg * 85, -sg * 3, 1.9));          // from the shore on one side to past the middle
+      LEADS.push(makeLead(rs + 1.2, -sg * 85, -sg * 15, 1.7));  // and from the far shore in to the gap
+    }
+    LEADS.push(makeLead(2878, -70, 70, 2.0, true));
   }
   if (!DRAW.on) return;
   DRAW.t += dt;
+  if (DRAW.falls0 === undefined) DRAW.falls0 = FALL.count;
+  if (G.state === 'fall' && G.fade > 0.9) widenGaps(Math.min(3, FALL.count - DRAW.falls0) * 2.2);
+  // far booms first, up the lake and coming nearer
   for (const b of DRAW.booms) {
     if (b.done || DRAW.t < b.t) continue;
     b.done = true;
-    // the boom starts far up the lake and runs toward you, cracks racing across the ice
-    const k = DRAW.booms.indexOf(b) / DRAW.booms.length;
-    const ang = (Math.random() - 0.5) * 1.2;
-    const dist = lerp(260, 25, k);
+    const k = DRAW.booms.indexOf(b) / DRAW.booms.length, ang = (Math.random() - 0.5) * 1.2, dist = lerp(300, 90, k);
     const x = SK.x + Math.sin(ang) * dist + (Math.random() - 0.5) * 30, z = SK.z + Math.cos(ang) * dist;
     if (heightAt(x, z) < -0.3) {
-      crack(x, z, { ang: Math.atan2(SK.x - x, SK.z - z) + (Math.random() - 0.5) * 0.8, max: 60 + Math.random() * 90, speed: 140 + Math.random() * 120, depth: 0.07, bright: 0.13, branch: 0.05, wob: 0.18 });
-      crack(x, z, { ang: Math.random() * TAU, max: 30 + Math.random() * 50, speed: 120, depth: 0.06, bright: 0.11, branch: 0.06, wob: 0.25 });
+      crack(x, z, { ang: Math.random() * TAU, max: 40 + Math.random() * 60, speed: 120, depth: 0.06, bright: 0.11, branch: 0.06, wob: 0.25 });
       AUDIO.crack(x, z, 1);
     }
-    G.cam.shake = Math.max(G.cam.shake, 0.35 + k * 0.5);
+    G.cam.shake = Math.max(G.cam.shake, 0.2 + k * 0.3);
   }
   ICE.drop = sat(DRAW.t / 3) * (1 - sat((DRAW.t - 14) / 6));
-  // the lead: a crack across the way that opens into black water
-  if (!LEAD.on && DRAW.t > 2.0) {
-    LEAD.on = true; LEAD.t = 0;
-    const s = 2872, p = routeAt(s), [rx, rz] = rightOf(p.dir);
-    LEAD.a = [p.x - rx * 70, p.z - rz * 70]; LEAD.b = [p.x + rx * 70, p.z + rz * 70];
-    LEAD.dir = p.dir;
-    crack(LEAD.a[0], LEAD.a[1], { ang: Math.atan2(rx, rz), max: 140, speed: 90, depth: 0.09, bright: 0.2, branch: 0.02, wob: 0.02 });
-    AUDIO.crack(p.x, p.z, 1);
-  }
-  if (LEAD.on) {
-    LEAD.t += dt;
-    LEAD.w = LEAD.maxW * smooth(1.2, 7, LEAD.t);
-    if (Math.random() < dt * 2) { const k = Math.random(); AUDIO.sing(lerp(LEAD.a[0], LEAD.b[0], k), lerp(LEAD.a[1], LEAD.b[1], k), 0.5); }
+  // each break goes as you come near it: the crack runs in from the shore, then it opens
+  for (const L of LEADS) {
+    if (L.t < 0) {
+      if (G.s < L.s - (L.last ? 60 : 44)) continue;
+      L.t = 0;
+      const len = Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]);
+      crack(L.a[0], L.a[1], { ang: Math.atan2(L.b[0] - L.a[0], L.b[1] - L.a[1]), max: len, speed: len / 0.75, depth: 0.09, bright: 0.2, branch: 0.03, wob: 0.03 });
+      AUDIO.crack(L.a[0], L.a[1], 0.8);
+      setTimeout(() => AUDIO.crack(L.b[0], L.b[1], 0.6), 700);
+      G.cam.shake = Math.max(G.cam.shake, 0.45);
+    }
+    L.t += dt;
+    L.run = sat(L.t / 0.75);
+    L.w = L.maxW * smooth(0.5, 2.2, L.t);
+    if (L.w > 0.4) {
+      const C = G.cam.pos, n = dt * 22 * L.run;
+      for (let i = 0; i < n; i++) {
+        const k = Math.random() * L.run, x = lerp(L.a[0], L.b[0], k) + (Math.random() - 0.5) * L.w * 0.6, z = lerp(L.a[1], L.b[1], k) + (Math.random() - 0.5) * L.w * 0.6;
+        if (Math.hypot(x - C[0], z - C[2]) > 70) continue;
+        spray(x, 0.04, z, (WEATHER.windX || 0) * 0.2 + (Math.random() - 0.5) * 0.2, 0.18 + Math.random() * 0.2, (Math.random() - 0.5) * 0.2, 2.5 + Math.random() * 2.5, 0.35 + Math.random() * 0.45, [0.05, 0.055, 0.06], 2, 0.4, -0.03, 0.3);
+      }
+    }
+    if (Math.random() < dt * 0.5) { const k = Math.random() * L.run; AUDIO.sing(lerp(L.a[0], L.b[0], k), lerp(L.a[1], L.b[1], k), 0.4); }
   }
 }
-function inLead(x, z) {
-  if (!LEAD.on || LEAD.w < 0.25) return false;
-  const ax = LEAD.b[0] - LEAD.a[0], az = LEAD.b[1] - LEAD.a[1], L2 = ax * ax + az * az;
-  const t = clamp(((x - LEAD.a[0]) * ax + (z - LEAD.a[1]) * az) / L2, 0, 1);
-  const px = LEAD.a[0] + ax * t, pz = LEAD.a[1] + az * t;
-  return Math.hypot(x - px, z - pz) < LEAD.w * 0.5 - 0.1;
+// in open water: a break that has run this far and opened this wide (or only the last one, for the pilot's hop)
+function inLead(x, z, onlyLast = false) {
+  for (const L of LEADS) {
+    if (L.w < 0.25 || (onlyLast && !L.last)) continue;
+    const ax = L.b[0] - L.a[0], az = L.b[1] - L.a[1], L2 = ax * ax + az * az;
+    const t = clamp(((x - L.a[0]) * ax + (z - L.a[1]) * az) / L2, 0, L.run);
+    if (Math.hypot(x - (L.a[0] + ax * t), z - (L.a[1] + az * t)) < L.w * 0.5 - 0.1) return true;
+  }
+  return false;
 }
-// the lead drawn as black water with ragged slush edges, lying on the ice
+// the breaks drawn as black water with ragged slush edges, lying on the ice, as far as each has run
 function leadDecal() {
-  if (!LEAD.on || LEAD.w < 0.02) return;
   const S = R.decals; S.n = 0;
-  const ax = LEAD.b[0] - LEAD.a[0], az = LEAD.b[1] - LEAD.a[1], L = Math.hypot(ax, az);
-  const ux = ax / L, uz = az / L, nx = -uz, nz = ux;
-  const N = 140;
-  for (let i = 0; i < N; i++) {
-    const t0 = i / N, t1 = (i + 1) / N;
-    const w0 = LEAD.w * 0.5 * (0.75 + 0.5 * vnoise(t0 * 40, 1)), w1 = LEAD.w * 0.5 * (0.75 + 0.5 * vnoise(t1 * 40, 1));
-    const o0 = vnoise(t0 * 9, 7) * 1.2, o1 = vnoise(t1 * 9, 7) * 1.2;
-    const c0 = [LEAD.a[0] + ax * t0 + nx * o0, LEAD.a[1] + az * t0 + nz * o0], c1 = [LEAD.a[0] + ax * t1 + nx * o1, LEAD.a[1] + az * t1 + nz * o1];
-    const q = (p, w, y) => [p[0] + nx * w, y, p[1] + nz * w];
-    const tri = (a, b, c, col) => { for (const v of [a, b, c]) { const k = S.n * 7; S.data[k] = v[0]; S.data[k + 1] = v[1]; S.data[k + 2] = v[2]; S.data[k + 3] = col[0]; S.data[k + 4] = col[1]; S.data[k + 5] = col[2]; S.data[k + 6] = col[3]; S.n++; } };
-    const water = [0.0, 0.0, 0.0, 1];
-    tri(q(c0, -w0, 0.006), q(c1, -w1, 0.006), q(c1, w1, 0.006), water); tri(q(c0, -w0, 0.006), q(c1, w1, 0.006), q(c0, w0, 0.006), water);
-    const rim = [0.55, 0.6, 0.65, 0.5];
-    for (const sg of [-1, 1]) { tri(q(c0, sg * w0, 0.007), q(c1, sg * w1, 0.007), q(c1, sg * (w1 + 0.18), 0.007), rim); tri(q(c0, sg * w0, 0.007), q(c1, sg * (w1 + 0.18), 0.007), q(c0, sg * (w0 + 0.22), 0.007), rim); }
+  for (const L of LEADS) {
+    if (L.w < 0.02 || L.run <= 0) continue;
+    const ax = L.b[0] - L.a[0], az = L.b[1] - L.a[1], Ln = Math.hypot(ax, az);
+    const ux = ax / Ln, uz = az / Ln, nx = -uz, nz = ux;
+    const N = Math.max(8, Math.ceil(Ln * L.run / 0.9)), seed = L.s * 0.37;
+    const tri = (a, b, c, col) => { for (const v of [a, b, c]) { if (S.n >= S.max) return; const k = S.n * 7; S.data[k] = v[0]; S.data[k + 1] = v[1]; S.data[k + 2] = v[2]; S.data[k + 3] = col[0]; S.data[k + 4] = col[1]; S.data[k + 5] = col[2]; S.data[k + 6] = col[3]; S.n++; } };
+    for (let i = 0; i < N; i++) {
+      const t0 = (i / N) * L.run, t1 = ((i + 1) / N) * L.run;
+      // narrower at the end it is still running to
+      const taper = (t) => sat((L.run - t) * Ln / 3 + (L.run >= 1 ? 1 : 0)) * sat(t * Ln / 1.5 + 0.2);
+      const w0 = L.w * 0.5 * (0.75 + 0.5 * vnoise(t0 * Ln * 0.45, seed)) * taper(t0), w1 = L.w * 0.5 * (0.75 + 0.5 * vnoise(t1 * Ln * 0.45, seed)) * taper(t1);
+      const o0 = vnoise(t0 * Ln * 0.1, seed + 7) * 1.6 + vnoise(t0 * Ln * 0.6, seed + 3) * 0.3, o1 = vnoise(t1 * Ln * 0.1, seed + 7) * 1.6 + vnoise(t1 * Ln * 0.6, seed + 3) * 0.3;
+      const c0 = [L.a[0] + ax * t0 + nx * o0, L.a[1] + az * t0 + nz * o0], c1 = [L.a[0] + ax * t1 + nx * o1, L.a[1] + az * t1 + nz * o1];
+      const q = (p, w, y) => [p[0] + nx * w, y, p[1] + nz * w];
+      const water = [0.0, 0.0, 0.0, 1];
+      tri(q(c0, -w0, 0.006), q(c1, -w1, 0.006), q(c1, w1, 0.006), water); tri(q(c0, -w0, 0.006), q(c1, w1, 0.006), q(c0, w0, 0.006), water);
+      // wet slush at the water's edge, then broken white ice heaped along it
+      const slush = [0.38, 0.42, 0.47, 0.7], rubble = [0.82, 0.86, 0.9, 0.85];
+      for (const sg of [-1, 1]) {
+        const r0 = 0.16 + 0.1 * vnoise(t0 * Ln * 1.7, seed + sg), r1 = 0.16 + 0.1 * vnoise(t1 * Ln * 1.7, seed + sg);
+        const e0 = r0 + 0.12 + 0.35 * Math.max(0, vnoise(t0 * Ln * 0.9, seed + 11 + sg)), e1 = r1 + 0.12 + 0.35 * Math.max(0, vnoise(t1 * Ln * 0.9, seed + 11 + sg));
+        tri(q(c0, sg * w0, 0.007), q(c1, sg * w1, 0.007), q(c1, sg * (w1 + r1), 0.007), slush); tri(q(c0, sg * w0, 0.007), q(c1, sg * (w1 + r1), 0.007), q(c0, sg * (w0 + r0), 0.007), slush);
+        tri(q(c0, sg * (w0 + r0), 0.008), q(c1, sg * (w1 + r1), 0.008), q(c1, sg * (w1 + e1), 0.008), rubble); tri(q(c0, sg * (w0 + r0), 0.008), q(c1, sg * (w1 + e1), 0.008), q(c0, sg * (w0 + e0), 0.008), rubble);
+      }
+    }
   }
   streamUpload(R.decals);
 }
@@ -4852,12 +5206,21 @@ function pathDecal() {
   if (PATH.length < 2) return;
   const C = G.cam.pos;
   const k = smooth(3.5, 7, MORNING.t);
-  const col = [0.48 * k, 0.33 * k, 0.17 * k, -1];
+  const col = [0.3 * k, 0.2 * k, 0.1 * k, -1];
   for (let i = 0; i < PATH.length - 1 && S.n + 6 < S.max; i++) {
     const a = PATH[i], b = PATH[i + 1];
     if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 8) continue;           // a jump back to a lantern after falling in
     const d = Math.hypot(a[0] - C[0], C[1], a[1] - C[2]);
     pushQuadFlat(S, a, b, 0.0032 * d + 0.035, col, 0.01);
+  }
+  // and with it, as far as the village, the way the one in the ice went
+  for (const [W, c] of [[OTHER.way, [0.14 * k, 0.19 * k, 0.28 * k, -1]]]) {
+    for (let i = 0; i < W.length - 1 && S.n + 6 < S.max; i++) {
+      const a = W[i], b = W[i + 1];
+      if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 8) continue;
+      const d = Math.hypot(a[0] - C[0], C[1], a[1] - C[2]);
+      pushQuadFlat(S, a, b, 0.0026 * d + 0.03, c, 0.012);
+    }
   }
   streamUpload(S);
 }
@@ -4890,19 +5253,22 @@ let lastT = 0, frames = 0, fpsT = 0, fps = 0, renderScale = clamp(Number(Q.get('
 let paused = false;
 const SPEED = clamp(Number(Q.get('speed')) || 1, 0.1, 8);
 // a stand-in pilot for checking: follows the marked way, hops the ridges and the lead, rings the bell
-const BOT = { on: Q.has('bot'), pulled: false };
+const BOT = { on: Q.has('bot'), pulled: false, follow: Q.has('follow') };
 function botInput(inp) {
   if (G.ending) return;
   if (G.state === 'tower') { inp.skate = BELL.held ? BELL.pullT > 0 : Math.abs(BELL.a) < 0.15; return; }
   if (G.state !== 'play') return;
   const look = G.s + 10 + SK.speed * 0.9;
-  const p = look > WORLD.routeLen - 3 ? { x: TOWER.x, z: TOWER.z } : routeAt(look);
+  let p = look > WORLD.routeLen - 3 ? { x: TOWER.x, z: TOWER.z } : routeAt(look);
+  if (BOT.follow && OTHER.phase === 'lead' && OTHER.B) p = { x: OTHER.B.x, z: OTHER.B.z };
+  // through the breaks: aim for the gap in the next row
+  if (DRAW.on) { const row = LEAD_ROWS.find(([rs]) => rs > G.s - 1.5 && rs < G.s + 36); if (row) { const q = routeAt(row[0] + 1), [rx, rz] = rightOf(q.dir); p = { x: q.x + rx * leadGap(row[1]), z: q.z + rz * leadGap(row[1]) }; } }
   const want = Math.atan2(p.x - SK.x, p.z - SK.z);
-  inp.turn = clamp(wrapAngle(SK.h - want), -0.06, 0.06);
+  inp.turn = clamp(wrapAngle(SK.h - want), -0.06 * SPEED, 0.06 * SPEED);
   inp.skate = true; inp.stop = false;
   const [fx, fz] = fwdOf(SK.h);
   const ax = SK.x + fx * (1.2 + SK.speed * 0.12), az = SK.z + fz * (1.2 + SK.speed * 0.12);
-  if (!SK.air && (COLLIDERS.some((c) => c.top !== undefined && c.top < 0.6 && Math.hypot(c.x - ax, c.z - az) < 0.9) || inLead(ax, az) || inLead(SK.x + fx * 2.6, SK.z + fz * 2.6))) inp.hop = true;
+  if (!SK.air && (COLLIDERS.some((c) => c.top !== undefined && c.top < 0.6 && Math.hypot(c.x - ax, c.z - az) < 0.9) || inLead(ax, az, true) || inLead(SK.x + fx * 2.6, SK.z + fz * 2.6, true))) inp.hop = true;
 }
 
 // for measuring the feel: run the body alone, at a fixed step, with scripted input; returns a trace
@@ -5027,7 +5393,8 @@ function loop(t) {
   buildSprites(V.right, V.up, glows);
   AUDIO.update(dt);
   buildDeepGlows(V.right, V.up);
-  const draws = (G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws()).concat(deepDraws());
+  const draws = (G.state === 'fall' && G.fallT > 0.6 ? [] : skaterDraws()).concat(deepDraws(), otherDraws());
+  otherTrailDecal();
   if (Math.hypot(G.cam.pos[0] - TOWER.x, G.cam.pos[2] - TOWER.z) < 600) draws.push(...bellDraws());
   renderFrame({ ...V, skaterDraws: draws });
 }
@@ -5070,8 +5437,8 @@ window.__ice = {
   tp(s, off = 0) { const p = routeAt(s); const [rx, rz] = rightOf(p.dir); skaterReset(p.x + rx * off, p.z + rz * off, p.dir); G.cam.yaw = p.dir; G.maxS = Math.max(G.maxS, s); G.cpS = s; },
   hold(k) { INP.skate = !!k; }, stopHold(k) { INP.stop = !!k; }, turn(dx) { INP.mdx += dx; }, pitch(dy) { G.pitchIn = dy; },
   key(code, down) { if (down) INP.keys.add(code); else INP.keys.delete(code); },
-  FALL, AUDIO, BODY, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, DEEP, morning: () => startMorning(), BELL, LEAD, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
-  maxS: (s) => (G.maxS = s), MORNING_T: () => (G.ending || G.morningFree ? MORNING.t : -1),
+  FALL, AUDIO, BODY, simulate, routeAt, routeNear, iceThick, inLead, COLLIDERS, start, DEEP, morning: () => startMorning(), BELL, LEADS, DRAW, STORY, PATH, look: (yaw, pitch) => { SK.h = yaw; G.cam.yaw = yaw; if (pitch !== undefined) G.pitchIn = pitch; },
+  OTHER, maxS: (s) => (G.maxS = s), MORNING_T: () => (G.ending || G.morningFree ? MORNING.t : -1),
 };
 boot();
 
