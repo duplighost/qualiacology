@@ -26,7 +26,7 @@ void main() {
 }`;
 
 const FS = /* glsl */`
-uniform float uTime; uniform float uFxK;
+uniform float uTime; uniform float uFxK; uniform float uBeat;
 varying vec2 vLocal; varying vec4 vShape; varying vec4 vState; varying vec3 vColor;
 float aaStep(float e, float x) { float w = fwidth(x) * 0.75; return smoothstep(e - w, e + w, x); }
 void main() {
@@ -71,7 +71,9 @@ void main() {
   // big shapes get a quieter fill so they never bloom into a blinding disc; the rim stays crisp
   float area = shape == 2 ? w * h : w * w;
   float quiet = 1.0 / (1.0 + area * 0.08);
-  float a = inside * (0.07 + 0.04 * hatch) + prog * (0.14 + 0.26 * near) * (0.45 + 0.55 * quiet) + edge * (0.6 + 0.4 * near);
+  // everything she has on the floor breathes with the beat: you can count it in
+  float beat = uBeat * (0.35 + 0.65 * near);
+  float a = inside * (0.07 + 0.04 * hatch) + prog * (0.14 + 0.26 * near) * (0.45 + 0.55 * quiet) * (1.0 + 0.2 * beat) + edge * (0.6 + 0.4 * near) * (1.0 + 0.4 * beat);
   a = clamp(a, 0.0, 1.0) * alpha;
   float rim = clamp(edge, 0.0, 1.0);
   vec3 col = vColor * (0.6 + 0.8 * near) + vec3(flash * (0.15 + 1.05 * quiet + 1.2 * rim));
@@ -88,7 +90,7 @@ export class Telegraphs {
     for (const a of [this.aShape, this.aState, this.aColor]) a.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('aShape', this.aShape); geo.setAttribute('aState', this.aState); geo.setAttribute('aColor', this.aColor);
     this.mat = new THREE.ShaderMaterial({
-      vertexShader: VS, fragmentShader: FS, uniforms: { uTime: { value: 0 }, uFxK: FXK },
+      vertexShader: VS, fragmentShader: FS, uniforms: { uTime: { value: 0 }, uFxK: FXK, uBeat: { value: 0 } },
       transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.CustomBlending,
       blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, polygonOffset: true, polygonOffsetFactor: -4,
     });
@@ -104,13 +106,14 @@ export class Telegraphs {
   // opts: {shape, x, z, angle (radians, 0 = +z), w, h, param, kind:'pink'|'white'|'gold', follow: fn()->{x,z,angle}, linger}
   add(o) {
     const t = { shape: SHAPE[o.shape] ?? o.shape ?? 0, x: o.x, z: o.z, angle: o.angle || 0, w: o.w || 1, h: o.h || o.w || 1, param: o.param || 0.5,
-      kind: o.kind || 'pink', color: (KIND[o.kind || 'pink'] || o.color).clone(), start: o.start, end: o.end, linger: o.linger ?? 0.14, follow: o.follow || null, y: o.y ?? this.y, flash: o.flash ?? 1, dead: false };
+      kind: o.kind || 'pink', color: (KIND[o.kind || 'pink'] || o.color).clone(), start: o.start, end: o.end, linger: o.linger ?? 0.14, follow: o.follow || null, y: o.y ?? this.y, flash: o.flash ?? 1, alphaK: o.alphaK ?? 1, dead: false };
     this.list.push(t);
     return t;
   }
   clear() { for (const g of this.list) g.dead = true; this.list.length = 0; this.mesh.count = 0; }
 
-  update(t) {
+  update(t, beat = 0) {
+    this.mat.uniforms.uBeat.value = beat;
     let n = 0;
     const A = this.aShape.array, S = this.aState.array, C = this.aColor.array;
     for (let i = this.list.length - 1; i >= 0; i--) {
@@ -131,7 +134,7 @@ export class Telegraphs {
       this._m.toArray(this.mesh.instanceMatrix.array, n * 16);
       const hh = g.shape === 2 ? g.h : g.h;
       A[n * 4] = g.shape; A[n * 4 + 1] = g.shape === 2 ? g.w : g.w; A[n * 4 + 2] = hh; A[n * 4 + 3] = g.param;
-      S[n * 4] = fill; S[n * 4 + 1] = alpha; S[n * 4 + 2] = flash * g.flash; S[n * 4 + 3] = 0;
+      S[n * 4] = fill; S[n * 4 + 1] = alpha * g.alphaK; S[n * 4 + 2] = flash * g.flash; S[n * 4 + 3] = 0;
       C[n * 3] = g.color.r; C[n * 3 + 1] = g.color.g; C[n * 3 + 2] = g.color.b;
       n++;
     }

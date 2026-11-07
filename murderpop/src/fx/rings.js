@@ -4,13 +4,15 @@ import * as THREE from 'three';
 
 const VS = 'varying vec2 vUv; void main(){ vUv = position.xy; gl_Position = projectionMatrix * (viewMatrix * (modelMatrix * vec4(position,1.0))); }';
 const FS = /* glsl */`
-uniform vec3 uCol; uniform float uR, uW, uShadow, uA, uPips, uPipK0, uPipK1, uFacing;
+uniform vec3 uCol; uniform float uR, uW, uShadow, uA, uPips, uPipK0, uPipK1, uFacing, uFull, uBeat;
 varying vec2 vUv;
 void main() {
   float d = length(vUv);
   float w = fwidth(d);
   float shadow = smoothstep(0.62, 0.0, d) * uShadow;
-  float ring = (1.0 - smoothstep(uW - w, uW + w, abs(d - uR))) * uA;
+  // the spotlight is ready: the ring is thicker and brighter, breathing with the beat
+  float ww = uW * (1.0 + 1.6 * uFull);
+  float ring = (1.0 - smoothstep(ww - w, ww + w, abs(d - uR))) * uA * (1.0 + 1.4 * uFull + 0.9 * uBeat);
   // dash pips: two small arcs behind you
   float pip = 0.0;
   if (uPips > 0.5) {
@@ -34,17 +36,20 @@ export class GroundMarks {
     const make = (col, r, w, shadow, a, pips) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, transparent: true, depthWrite: false,
         blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
-        uniforms: { uCol: { value: col }, uR: { value: r }, uW: { value: w }, uShadow: { value: shadow }, uA: { value: a }, uPips: { value: pips ? 1 : 0 }, uPipK0: { value: 1 }, uPipK1: { value: 1 }, uFacing: { value: 0 } } }));
+        uniforms: { uCol: { value: col }, uR: { value: r }, uW: { value: w }, uShadow: { value: shadow }, uA: { value: a }, uPips: { value: pips ? 1 : 0 }, uPipK0: { value: 1 }, uPipK1: { value: 1 }, uFacing: { value: 0 }, uFull: { value: 0 }, uBeat: { value: 0 } } }));
       m.rotation.x = -Math.PI / 2; m.renderOrder = 1; m.position.y = 0.025; scene.add(m); return m;
     };
     this.you = make(new THREE.Color(2.2, 1.45, 0.45), 0.62, 0.018, 0.55, 0.55, true);
     this.her = make(new THREE.Color(2.4, 0.35, 1.0), 0.9, 0.016, 0.5, 0.35, false);
     this.you.scale.setScalar(1.3); this.her.scale.setScalar(1.6);
   }
-  update(player, boss, dashCharges, dashCool, maxCharges, recharge) {
+  update(player, boss, dashCharges, dashCool, maxCharges, recharge, beatPulse = 0) {
     if (player) {
       this.you.position.set(player.x, 0.025, player.z);
       const u = this.you.material.uniforms;
+      u.uFull.value = player.meter >= 1 && !player.solo ? 0.45 + 0.55 * beatPulse : 0;
+      // YOU's ring ticks with the beat: the metronome at your feet
+      u.uBeat.value = player.state === 'dead' ? 0 : beatPulse * beatPulse;
       u.uFacing.value = player.facing;
       u.uPipK0.value = dashCharges >= 1 ? 1 : 0; u.uPipK1.value = dashCharges >= 2 ? 1 : (dashCharges === 1 ? 1 - Math.max(0, dashCool) / recharge : 0);
       this.you.visible = player.state !== 'dead';

@@ -202,7 +202,7 @@ export function area(f, o) {
   if (!o.noTele) {
     // ENCORE: the same impact on the same word, less warning
     const s0 = o.start ?? f.t, start = f.encoreMode ? o.end - (o.end - s0) * 0.72 : s0;
-    g = f.tele.add({ ...sh, kind: o.kind, start, end: o.end, follow: o.follow ? () => { const p = o.follow(); sh.x = p.x; sh.z = p.z; if (p.angle !== undefined) sh.angle = p.angle; return p; } : null });
+    g = f.tele.add({ ...sh, kind: o.kind, start, end: o.end, alphaK: o.alphaK, flash: o.flash, follow: o.follow ? () => { const p = o.follow(); sh.x = p.x; sh.z = p.z; if (p.angle !== undefined) sh.angle = p.angle; return p; } : null });
     if (!o.silent) f.cue(o.kind, sh);
     sh.tele = g;
   }

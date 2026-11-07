@@ -39,6 +39,9 @@ export class Boss {
     this.walkClip = 'Walk_Formal_Loop'; this.runClip = 'Jog_Fwd_Loop';
     this._lastX = 0; this._lastZ = 0; this._speed = 0; this._locoClip = '';
     this._now = 0; this.busyUntil = 0;     // song time of her last update (moves start from it), end of her one-shot
+    // hit her off the beat and keep at it and her glaze goes hard: strikes glance off it until one on the felt
+    // beat cracks it (or she's left alone a few seconds). Tracks can turn it off: boss.hardens = false
+    this.hard = 0; this.offRun = 0; this.hardT = 0; this.hardK = 0; this.beatPulse = 0;
   }
 
   on(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
@@ -67,6 +70,11 @@ export class Boss {
     this._locoClip = '';
   }
   get busy() { return (this._now || 0) < (this.busyUntil || 0); }
+  // a clip whose contact (fraction `hit` of the window [from, to]) lands at song time `at`, starting now
+  strikeAt(clip, at, { from = 0, to = 1, hit = 0.5, then = 'idle' } = {}) {
+    const lead = Math.max(0.12, at - (this._now || 0));
+    this.perform(clip, { from, to, duration: lead / Math.max(0.05, hit), then, fade: 0.06 });
+  }
   loop(clip, opts = {}) { if (this.rig) this.rig.play(clip, { fade: 0.2, ...opts }); }
   set idle(c) { this.idleClip = c; }
   get idle() { return this.idleClip; }
@@ -78,6 +86,13 @@ export class Boss {
     if (this.guard) {
       this.emit('deflect', info);
       return { landed: false, deflected: true };
+    }
+    // (her hard glaze: only a strike on the felt beat cracks it; anything else glances off while it's hard)
+    if (info.kind === 'strike' && !info.riposte && this.hardens !== false && this.hp > 0) {
+      if (this.hard && (info.bigBeat || this.blinded || this.state !== 'perform')) { this.hard = 0; this.offRun = 0; this.emit('crack', info); info = { ...info, dmg: info.dmg * 1.3, heavy: true, cracked: true }; }
+      else if (this.hard) { this.hardT = 0; this.emit('deflect', info); return { landed: false, deflected: true, hard: true }; }
+      else if (info.onBeat || this.blinded) this.offRun = 0;
+      else if (this.state === 'perform' && ++this.offRun >= 3) { this.hard = 1; this.offRun = 0; this.hardT = 0; this.emit('harden', info); }
     }
     let dmg = info.dmg;
     if (this.state === 'open' || this.state === 'stagger') dmg *= 1.35;
@@ -146,12 +161,19 @@ export class Boss {
     }
     this.flinchK *= Math.exp(-dt * 8);
     this.hitFlash *= Math.exp(-dt * 14);
+    // her hard glaze softens if she's left alone (or opened, staggered, beaten)
+    if (this.hard) { this.hardT += dt; if (this.hardT > 3.5 || this.state !== 'perform' || this.hp <= 0) { this.hard = 0; this.emit('soften'); } }
+    this.hardK += ((this.hard ? 1 : 0) - this.hardK) * Math.min(1, dt * (this.hard ? 14 : 6));
+    if (this.fig) this.fig.hardK = this.hardK * (0.55 + 0.45 * this.beatPulse);
     if (this.rig) {
       this.rig.flinch = Math.max(this.rig.flinch, this.flinchK * 0.6);
       if (player) this.rig.lookTarget = new THREE.Vector3(player.x, 1.4, player.z);
     }
     this._sync();
     if (this._bowT > 0) { this._bowT -= dt; const k = Math.sin(Math.min(1, 1 - this._bowT / 1.2) * Math.PI); if (this.rig) this.rig.lean.set(0, 0.9 * k); }
+    else if (this.rig && this.nodsToBeat !== false && (this.state === 'perform' || this.state === 'desperate') && !this.busy && this._speed < 1.5) this.rig.lean.set(this.rig.lean.x, 0.07 * (this.nod || 0));
+    else if (this.rig && this._nodded) this.rig.lean.set(this.rig.lean.x, 0);
+    this._nodded = this.rig && this.rig.lean.y !== 0;
     // a figurine runs its own rig (and its cracks, cloth and shards); a plain body is just a rig
     if (this.fig && this.fig.update) { this.fig.setDamage && this.fig.setDamage(this.damageK); this.fig.update(dt); }
     else if (this.rig) this.rig.update(dt);
@@ -176,6 +198,7 @@ export class Boss {
   restore(s) {
     Object.assign(this, { hp: s.hp, broken: s.broken, x: s.x, z: s.z, facing: s.facing, damageK: s.damageK, guard: s.guard, intangible: s.intangible });
     this.state = this.hp <= 0 ? 'desperate' : 'perform'; this.st = 0; this.move = null; this.openUntil = 0; this.busyUntil = 0;
+    this.hard = 0; this.offRun = 0; this.hardK = 0;
     if (this.fig && this.fig.restorePieces) this.fig.restorePieces(this.broken);
     if (this.rig && this.idleClip) this.rig.play(this.idleClip, { fade: 0.1, force: true });
     this._sync();

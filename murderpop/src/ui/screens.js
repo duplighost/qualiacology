@@ -12,9 +12,10 @@ export class Screens {
           <div class="mp-card-song"></div>
           <div class="mp-keys">
             <div><b>WASD</b><span>move</span></div><div><b>Mouse</b><span>aim</span></div>
-            <div><b>Left click</b><span>strike</span></div><div><b>Right click</b><span>catch it, send it back</span></div>
-            <div class="wide"><b>Hold right click, let go</b><span>throw a ring</span></div>
-            <div><b>Space</b><span>dash</span></div><div><b>Q</b><span>take the spotlight</span></div>
+            <div><b>Left click</b><span>strike</span></div><div><b>Hold right click</b><span>block</span></div>
+            <div class="wide"><b>Right click as it lands</b><span>send it back</span></div>
+            <div><b>E</b><span>throw a ring</span></div><div><b>Space</b><span>dash</span></div>
+            <div class="wide"><b>Q</b><span>take the spotlight</span></div>
             <div><b>F</b><span>full screen</span></div><div><b>M</b><span>mute</span></div>
           </div>
           <div class="mp-sliders">

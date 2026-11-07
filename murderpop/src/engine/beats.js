@@ -78,6 +78,16 @@ export class BeatMap {
     return { beat: nb, time: bt, offset: t - bt };
   }
 
+  // the beat you strike on: every beat, or every other one counted from the downbeat when the song's beat is quick
+  // (a song tracked at 180 is felt at 90). nearestStrike/nextStrike/strikePulse work on that grid.
+  get strikeStep() { return this.period < 0.45 ? 2 : 1; }
+  nearestStrike(t) {
+    const st = this.strikeStep, k = Math.round((this.beatAt(t) - this.downbeat) / st) * st + this.downbeat, bt = this.timeOf(k);
+    return { beat: k, time: bt, offset: t - bt, period: this.periodAt(t) * st };
+  }
+  nextStrike(t) { const st = this.strikeStep; return this.timeOf(Math.ceil((this.beatAt(t) - this.downbeat) / st) * st + this.downbeat); }
+  strikePulse(t, sharp = 6) { const B = (this.beatAt(t) - this.downbeat) / this.strikeStep; return Math.exp(-(B - Math.floor(B)) * sharp); }
+
   // 0..1 smooth pulse that peaks on each beat (for lights/UI breathing)
   pulse(t, sharp = 6) {
     const ph = this.beatAt(t); const f = ph - Math.floor(ph);
