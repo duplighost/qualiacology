@@ -22,14 +22,13 @@
 <meta name="twitter:description" content="Ten songs, ten boss fights. The song’s narrator is the boss, its setting is the room, and every attack lands on the word that names it. Learn them by ear. Catch what she throws and send it back. Keyboard and mouse.">
 <meta name="twitter:image" content="https://qualiacology.com/assets/games/murderpop-card-v20261107.jpg">
 <link rel="stylesheet" href="styles.css">
-
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/jsm/" } }
 </script>
 </head>
 <body>
 <canvas id="view"></canvas>
-<div id="hud"></div>
+<div id="hud" class="mp-hidden"></div>
 <div id="menu" class="mp-menu hidden"></div>
 <div id="screens"></div>
 <div id="reticle"><svg viewBox="-15 -15 30 30"><circle r="9" fill="none" stroke="#f2c25b" stroke-width="1.6" opacity=".9"/><circle r="1.8" fill="#fff"/><path d="M0 -14V-11M0 11V14M-14 0H-11M11 0H14" stroke="#f7efe4" stroke-width="1.4"/></svg></div>
