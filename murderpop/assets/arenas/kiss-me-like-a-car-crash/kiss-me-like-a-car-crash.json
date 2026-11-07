@@ -1,0 +1,935 @@
+{
+ "version": 1,
+ "name": "kiss-me-like-a-car-crash",
+ "glb": "kiss-me-like-a-car-crash.glb",
+ "frame": "three.js: x right, y up, z toward the camera; 2D floor coordinates are (x, z)",
+ "lightmap": {
+  "size": 4096,
+  "uv": 1,
+  "encoding": "lightmap rgb = (L/(1+L))^(1/2.2) -> L = e/(1-e) with e = rgb^2.2; radiance = albedo * L. keymap r = the fraction of L that is the key light, direct"
+ },
+ "bounds": {
+  "minX": -10.5,
+  "maxX": 10.9,
+  "minZ": -3.3,
+  "maxZ": 6.6
+ },
+ "room": {
+  "min": [
+   -17.0,
+   0.0,
+   -13.0
+  ],
+  "max": [
+   17.0,
+   16.0,
+   12.0
+  ]
+ },
+ "capture": [
+  0.0,
+  1.6,
+  1.5
+ ],
+ "colliders": [
+  {
+   "type": "box",
+   "x": 9.4,
+   "z": 5.6,
+   "hx": 0.75,
+   "hz": 1.25,
+   "rot": -0.0,
+   "tag": "board",
+   "h": 0.87
+  }
+ ],
+ "spawns": {
+  "player": {
+   "x": 7.9,
+   "z": 2.9,
+   "dir": [
+    -0.9926,
+    -0.1211
+   ]
+  },
+  "boss": {
+   "x": -4.4,
+   "z": 1.4,
+   "dir": [
+    0.9926,
+    0.1211
+   ]
+  }
+ },
+ "anchors": {
+  "krail_l2": {
+   "pos": [
+    -9.5,
+    0.0,
+    -3.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "krail_l2"
+  },
+  "krail_l1": {
+   "pos": [
+    -5.7,
+    0.0,
+    -3.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "krail_l1"
+  },
+  "krail_r1": {
+   "pos": [
+    5.7,
+    0.0,
+    -3.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "krail_r1"
+  },
+  "krail_r2": {
+   "pos": [
+    9.5,
+    0.0,
+    -3.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "krail_r2"
+  },
+  "board": {
+   "pos": [
+    9.4,
+    2.0,
+    5.8
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "cross": {
+   "pos": [
+    -1.6,
+    0.0,
+    6.45
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "slot1": {
+   "pos": [
+    -2.6,
+    0.0,
+    -0.9
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "slot2": {
+   "pos": [
+    1.4,
+    0.0,
+    4.1
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "slot3": {
+   "pos": [
+    -6.0,
+    0.0,
+    4.1
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "slot4": {
+   "pos": [
+    4.4,
+    0.0,
+    -1.5
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  }
+ },
+ "nodes": {
+  "krail_l2": {
+   "pivot": [
+    -9.5,
+    0.0,
+    -3.6
+   ]
+  },
+  "krail_l1": {
+   "pivot": [
+    -5.7,
+    0.0,
+    -3.6
+   ]
+  },
+  "krail_r1": {
+   "pivot": [
+    5.7,
+    0.0,
+    -3.6
+   ]
+  },
+  "krail_r2": {
+   "pivot": [
+    9.5,
+    0.0,
+    -3.6
+   ]
+  }
+ },
+ "materials": {
+  "amber_tab": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.4342,
+    0.0144
+   ]
+  },
+  "board_frame": {
+   "kind": "solid"
+  },
+  "board_yellow": {
+   "kind": "solid"
+  },
+  "cab_paint": {
+   "kind": "solid"
+  },
+  "car_glass": {
+   "kind": "solid"
+  },
+  "cross_wood": {
+   "kind": "solid"
+  },
+  "cruiser_black": {
+   "kind": "solid"
+  },
+  "cruiser_white": {
+   "kind": "solid"
+  },
+  "embankment": {
+   "kind": "solid"
+  },
+  "galvanised": {
+   "kind": "solid"
+  },
+  "grass": {
+   "kind": "solid"
+  },
+  "krail_concrete": {
+   "kind": "solid"
+  },
+  "lamp_pole": {
+   "kind": "solid"
+  },
+  "post_steel": {
+   "kind": "solid"
+  },
+  "reflector": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.8714,
+    0.6867
+   ]
+  },
+  "road": {
+   "kind": "solid"
+  },
+  "rose_plastic": {
+   "kind": "solid"
+  },
+  "sodium_glow0": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.3515,
+    0.0513
+   ]
+  },
+  "sodium_glow1": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.3515,
+    0.0513
+   ]
+  },
+  "sodium_glow2": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.3515,
+    0.0513
+   ]
+  },
+  "sodium_glow3": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.3515,
+    0.0513
+   ]
+  },
+  "strobe_blue": {
+   "kind": "emissive",
+   "emit": [
+    0.0284,
+    0.0908,
+    1.0
+   ]
+  },
+  "strobe_red": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.0232,
+    0.0423
+   ]
+  },
+  "truck_roses": {
+   "kind": "solid"
+  },
+  "truck_under": {
+   "kind": "solid"
+  },
+  "truck_white": {
+   "kind": "solid"
+  },
+  "tyre": {
+   "kind": "solid"
+  }
+ },
+ "states": [
+  {
+   "name": "sodium",
+   "lightmap": "kiss-me-like-a-car-crash.sodium.webp",
+   "keymap": "kiss-me-like-a-car-crash.sodium.key.webp",
+   "exposure": 1.6,
+   "key": {
+    "light": "sodium_key",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.3712,
+     0.0648
+    ],
+    "dir": [
+     -0.0,
+     0.8645,
+     -0.5026
+    ],
+    "intensity": 0.45,
+    "angle": 6.0
+   },
+   "emit": {
+    "amber_tab": [
+     1.2,
+     0.521,
+     0.0173
+    ],
+    "reflector": [
+     0.6,
+     0.5228,
+     0.412
+    ],
+    "sodium_glow0": [
+     26.0,
+     9.1398,
+     1.333
+    ],
+    "sodium_glow1": [
+     26.0,
+     9.1398,
+     1.333
+    ],
+    "sodium_glow2": [
+     26.0,
+     9.1398,
+     1.333
+    ],
+    "sodium_glow3": [
+     26.0,
+     9.1398,
+     1.333
+    ],
+    "strobe_blue": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_red": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.3712,
+    0.0648
+   ],
+   "sky": [
+    0.0028,
+    0.0028,
+    0.0173
+   ],
+   "stats": {
+    "floor": [
+     0.5595,
+     0.1975,
+     0.0432
+    ],
+    "floor_key": [
+     0.1042,
+     0.0352,
+     0.0065
+    ],
+    "floor_median_lum": 0.2517,
+    "mean": [
+     0.4299,
+     0.1513,
+     0.0344
+    ],
+    "mean_lum": 0.204
+   },
+   "mirror": 1.0
+  },
+  {
+   "name": "dark",
+   "lightmap": "kiss-me-like-a-car-crash.dark.webp",
+   "keymap": "kiss-me-like-a-car-crash.dark.key.webp",
+   "exposure": 1.9,
+   "key": {
+    "light": "moon",
+    "type": "sun",
+    "color": [
+     0.2016,
+     0.2623,
+     1.0
+    ],
+    "dir": [
+     0.2494,
+     0.798,
+     -0.5486
+    ],
+    "intensity": 0.05,
+    "angle": 3.0
+   },
+   "emit": {
+    "amber_tab": [
+     0.25,
+     0.1085,
+     0.0036
+    ],
+    "reflector": [
+     0.15,
+     0.1307,
+     0.103
+    ],
+    "sodium_glow0": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow1": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow2": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow3": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_blue": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_red": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.2016,
+    0.2623,
+    1.0
+   ],
+   "sky": [
+    0.0003,
+    0.0003,
+    0.0016
+   ],
+   "stats": {
+    "floor": [
+     0.0024,
+     0.0031,
+     0.0123
+    ],
+    "floor_key": [
+     0.0021,
+     0.0027,
+     0.0108
+    ],
+    "floor_median_lum": 0.0043,
+    "mean": [
+     0.0018,
+     0.0025,
+     0.0096
+    ],
+    "mean_lum": 0.0028
+   },
+   "mirror": 1.0
+  },
+  {
+   "name": "stopped",
+   "lightmap": "kiss-me-like-a-car-crash.stopped.webp",
+   "keymap": "kiss-me-like-a-car-crash.stopped.key.webp",
+   "exposure": 1.5,
+   "key": {
+    "light": "searchlight",
+    "type": "spot",
+    "color": [
+     0.9047,
+     0.9387,
+     1.0
+    ],
+    "pos": [
+     0.0,
+     26.0,
+     1.0
+    ],
+    "dir": [
+     0.0,
+     0.9998,
+     -0.0192
+    ],
+    "intensity": 1114.0846,
+    "decay": 2,
+    "aim": [
+     -0.0,
+     -0.9998,
+     0.0192
+    ],
+    "cone": 0.1134,
+    "blend": 0.3
+   },
+   "emit": {
+    "amber_tab": [
+     0.8,
+     0.3473,
+     0.0116
+    ],
+    "reflector": [
+     0.8,
+     0.6971,
+     0.5493
+    ],
+    "sodium_glow0": [
+     8.0,
+     2.8123,
+     0.4102
+    ],
+    "sodium_glow1": [
+     8.0,
+     2.8123,
+     0.4102
+    ],
+    "sodium_glow2": [
+     8.0,
+     2.8123,
+     0.4102
+    ],
+    "sodium_glow3": [
+     8.0,
+     2.8123,
+     0.4102
+    ],
+    "strobe_blue": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_red": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.9047,
+    0.9387,
+    1.0
+   ],
+   "sky": [
+    0.0034,
+    0.0002,
+    0.0006
+   ],
+   "stats": {
+    "floor": [
+     0.1024,
+     0.0466,
+     0.0223
+    ],
+    "floor_key": [
+     0.0136,
+     0.0141,
+     0.015
+    ],
+    "floor_median_lum": 0.0373,
+    "mean": [
+     0.0779,
+     0.0349,
+     0.0165
+    ],
+    "mean_lum": 0.0439
+   },
+   "mirror": 1.0
+  },
+  {
+   "name": "search",
+   "lightmap": "kiss-me-like-a-car-crash.search.webp",
+   "keymap": "kiss-me-like-a-car-crash.search.key.webp",
+   "exposure": 1.6,
+   "key": {
+    "light": "searchlight",
+    "type": "spot",
+    "color": [
+     0.9047,
+     0.9387,
+     1.0
+    ],
+    "pos": [
+     0.0,
+     26.0,
+     1.0
+    ],
+    "dir": [
+     0.0,
+     0.9998,
+     -0.0192
+    ],
+    "intensity": 1114.0846,
+    "decay": 2,
+    "aim": [
+     -0.0,
+     -0.9998,
+     0.0192
+    ],
+    "cone": 0.1134,
+    "blend": 0.3
+   },
+   "emit": {
+    "amber_tab": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "reflector": [
+     0.4,
+     0.3485,
+     0.2747
+    ],
+    "sodium_glow0": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow1": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow2": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow3": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_blue": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_red": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.9047,
+    0.9387,
+    1.0
+   ],
+   "sky": [
+    0.0017,
+    0.0001,
+    0.0003
+   ],
+   "stats": {
+    "floor": [
+     0.0142,
+     0.0142,
+     0.0151
+    ],
+    "floor_key": [
+     0.0136,
+     0.0141,
+     0.015
+    ],
+    "floor_median_lum": 0.0005,
+    "mean": [
+     0.009,
+     0.0088,
+     0.0094
+    ],
+    "mean_lum": 0.0091
+   },
+   "mirror": 1.0
+  },
+  {
+   "name": "fire",
+   "lightmap": "kiss-me-like-a-car-crash.fire.webp",
+   "keymap": "kiss-me-like-a-car-crash.fire.key.webp",
+   "exposure": 1.45,
+   "key": {
+    "light": "fire_key",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.1946,
+     0.0232
+    ],
+    "dir": [
+     0.1002,
+     0.4208,
+     -0.9016
+    ],
+    "intensity": 0.55,
+    "angle": 8.0
+   },
+   "emit": {
+    "amber_tab": [
+     1.2,
+     0.521,
+     0.0173
+    ],
+    "reflector": [
+     0.9,
+     0.7842,
+     0.618
+    ],
+    "sodium_glow0": [
+     26.0,
+     9.1398,
+     1.333
+    ],
+    "sodium_glow1": [
+     26.0,
+     9.1398,
+     1.333
+    ],
+    "sodium_glow2": [
+     26.0,
+     9.1398,
+     1.333
+    ],
+    "sodium_glow3": [
+     26.0,
+     9.1398,
+     1.333
+    ],
+    "strobe_blue": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_red": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.1946,
+    0.0232
+   ],
+   "sky": [
+    0.0051,
+    0.0006,
+    0.0017
+   ],
+   "stats": {
+    "floor": [
+     0.8745,
+     0.2386,
+     0.034
+    ],
+    "floor_key": [
+     0.048,
+     0.0103,
+     0.0013
+    ],
+    "floor_median_lum": 0.2344,
+    "mean": [
+     0.7505,
+     0.2015,
+     0.0287
+    ],
+    "mean_lum": 0.3132
+   },
+   "mirror": 1.0
+  },
+  {
+   "name": "dawn",
+   "lightmap": "kiss-me-like-a-car-crash.dawn.webp",
+   "keymap": "kiss-me-like-a-car-crash.dawn.key.webp",
+   "exposure": 1.25,
+   "key": {
+    "light": "dawn_sun",
+    "type": "sun",
+    "color": [
+     0.8879,
+     0.552,
+     0.3916
+    ],
+    "dir": [
+     0.972,
+     0.2138,
+     0.0972
+    ],
+    "intensity": 2.2,
+    "angle": 5.0
+   },
+   "emit": {
+    "amber_tab": [
+     0.4,
+     0.1737,
+     0.0058
+    ],
+    "reflector": [
+     0.2,
+     0.1743,
+     0.1373
+    ],
+    "sodium_glow0": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow1": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow2": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sodium_glow3": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_blue": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strobe_red": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.8879,
+    0.552,
+    0.3916
+   ],
+   "sky": [
+    0.3212,
+    0.2154,
+    0.3177
+   ],
+   "stats": {
+    "floor": [
+     0.381,
+     0.2264,
+     0.2836
+    ],
+    "floor_key": [
+     0.0952,
+     0.0617,
+     0.0449
+    ],
+    "floor_median_lum": 0.3181,
+    "mean": [
+     0.3417,
+     0.2049,
+     0.2442
+    ],
+    "mean_lum": 0.2412
+   },
+   "mirror": 1.0
+  }
+ ]
+}

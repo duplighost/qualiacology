@@ -1,0 +1,550 @@
+{
+ "version": 1,
+ "name": "your-car-is-at-the-bottom-of-the-lake",
+ "glb": "your-car-is-at-the-bottom-of-the-lake.glb",
+ "frame": "three.js: x right, y up, z toward the camera; 2D floor coordinates are (x, z)",
+ "lightmap": {
+  "size": 4096,
+  "uv": 1,
+  "encoding": "lightmap rgb = (L/(1+L))^(1/2.2) -> L = e/(1-e) with e = rgb^2.2; radiance = albedo * L. keymap r = the fraction of L that is the key light, direct"
+ },
+ "bounds": {
+  "minX": -11.0,
+  "maxX": 11.0,
+  "minZ": -7.0,
+  "maxZ": 7.0
+ },
+ "room": {
+  "min": [
+   -16.0,
+   -0.3,
+   -12.0
+  ],
+  "max": [
+   16.0,
+   12.0,
+   14.0
+  ]
+ },
+ "capture": [
+  0.0,
+  3.0,
+  -0.0
+ ],
+ "colliders": [],
+ "spawns": {
+  "player": {
+   "x": 0.0,
+   "z": 2.5,
+   "dir": [
+    -0.1168,
+    -0.9932
+   ]
+  },
+  "boss": {
+   "x": -1.0,
+   "z": -6.0,
+   "dir": [
+    0.1168,
+    0.9932
+   ]
+  }
+ },
+ "anchors": {
+  "door": {
+   "pos": [
+    -2.575,
+    0.45,
+    -6.88
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "door"
+  },
+  "topiary0": {
+   "pos": [
+    -8.5,
+    0.0,
+    -3.0
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "topiary0"
+  },
+  "topiary1": {
+   "pos": [
+    0.8,
+    0.0,
+    4.3
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "topiary1"
+  },
+  "porch": {
+   "pos": [
+    -1.0,
+    0.45,
+    -6.0
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "plaque": {
+   "pos": [
+    -1.0,
+    1.5,
+    -6.93
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "neon": {
+   "pos": [
+    8.8,
+    4.9,
+    -4.55
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "car_end": {
+   "pos": [
+    8.1582,
+    0.9,
+    6.1615
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  }
+ },
+ "nodes": {
+  "door": {
+   "pivot": [
+    -2.575,
+    0.45,
+    -6.88
+   ]
+  },
+  "topiary0": {
+   "pivot": [
+    -8.5,
+    0.0,
+    -3.0
+   ]
+  },
+  "topiary1": {
+   "pivot": [
+    0.8,
+    0.0,
+    4.3
+   ]
+  }
+ },
+ "materials": {
+  "awning_pink": {
+   "kind": "solid"
+  },
+  "awning_white": {
+   "kind": "solid"
+  },
+  "bank": {
+   "kind": "solid"
+  },
+  "boathouse_clap": {
+   "kind": "solid"
+  },
+  "brass": {
+   "kind": "solid"
+  },
+  "carrara": {
+   "kind": "solid"
+  },
+  "clapboard": {
+   "kind": "solid"
+  },
+  "cushion": {
+   "kind": "solid"
+  },
+  "gate_pink": {
+   "kind": "solid"
+  },
+  "geranium": {
+   "kind": "solid"
+  },
+  "haint_blue": {
+   "kind": "solid"
+  },
+  "hedge": {
+   "kind": "solid"
+  },
+  "house_gold": {
+   "kind": "solid"
+  },
+  "lake": {
+   "kind": "water",
+   "flow": [
+    0.012,
+    0.006
+   ]
+  },
+  "lantern_glass": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.2747,
+    0.4342
+   ]
+  },
+  "lawn": {
+   "kind": "solid"
+  },
+  "mint_door": {
+   "kind": "solid"
+  },
+  "picket_white": {
+   "kind": "solid"
+  },
+  "pier_boards": {
+   "kind": "solid"
+  },
+  "pine": {
+   "kind": "solid"
+  },
+  "porch_boards": {
+   "kind": "solid"
+  },
+  "porch_lamp": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.4564,
+    0.1441
+   ]
+  },
+  "road": {
+   "kind": "solid"
+  },
+  "shingles": {
+   "kind": "solid"
+  },
+  "shutters": {
+   "kind": "solid"
+  },
+  "swing_white": {
+   "kind": "solid"
+  },
+  "white_trim": {
+   "kind": "solid"
+  },
+  "window": {
+   "kind": "window",
+   "emit": [
+    1.0,
+    0.5841,
+    0.2623
+   ]
+  }
+ },
+ "states": [
+  {
+   "name": "night",
+   "lightmap": "your-car-is-at-the-bottom-of-the-lake.night.webp",
+   "keymap": "your-car-is-at-the-bottom-of-the-lake.night.key.webp",
+   "exposure": 1.25,
+   "key": {
+    "light": "moon",
+    "type": "sun",
+    "color": [
+     0.521,
+     0.6514,
+     1.0
+    ],
+    "dir": [
+     -0.451,
+     0.7517,
+     -0.4811
+    ],
+    "intensity": 1.5,
+    "angle": 1.0
+   },
+   "emit": {
+    "lantern_glass": [
+     6.0,
+     1.6481,
+     2.6049
+    ],
+    "porch_lamp": [
+     7.0,
+     3.1949,
+     1.0089
+    ],
+    "window": [
+     1.8,
+     1.0513,
+     0.4721
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.521,
+    0.6514,
+    1.0
+   ],
+   "sky": [
+    0.0093,
+    0.0151,
+    0.0722
+   ],
+   "stats": {
+    "floor": [
+     0.1299,
+     0.1595,
+     0.2775
+    ],
+    "floor_key": [
+     0.1135,
+     0.1417,
+     0.218
+    ],
+    "floor_median_lum": 0.2506,
+    "mean": [
+     0.1452,
+     0.1202,
+     0.1823
+    ],
+    "mean_lum": 0.1342
+   }
+  },
+  {
+   "name": "dark",
+   "lightmap": "your-car-is-at-the-bottom-of-the-lake.dark.webp",
+   "keymap": "your-car-is-at-the-bottom-of-the-lake.dark.key.webp",
+   "exposure": 1.5,
+   "key": {
+    "light": "porch",
+    "type": "point",
+    "color": [
+     1.0,
+     0.4564,
+     0.1441
+    ],
+    "pos": [
+     -1.05,
+     2.25,
+     -6.55
+    ],
+    "dir": [
+     -0.1499,
+     0.3212,
+     -0.9351
+    ],
+    "intensity": 12.2549,
+    "decay": 2
+   },
+   "emit": {
+    "lantern_glass": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "porch_lamp": [
+     10.0,
+     4.5641,
+     1.4413
+    ],
+    "window": [
+     0.35,
+     0.2044,
+     0.0918
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.4564,
+    0.1441
+   ],
+   "sky": [
+    0.0014,
+    0.0017,
+    0.0046
+   ],
+   "stats": {
+    "floor": [
+     0.0289,
+     0.0348,
+     0.0555
+    ],
+    "floor_key": [
+     0.0003,
+     0.0001,
+     0.0
+    ],
+    "floor_median_lum": 0.0531,
+    "mean": [
+     0.0711,
+     0.0426,
+     0.0404
+    ],
+    "mean_lum": 0.0493
+   }
+  },
+  {
+   "name": "under",
+   "lightmap": "your-car-is-at-the-bottom-of-the-lake.under.webp",
+   "keymap": "your-car-is-at-the-bottom-of-the-lake.under.key.webp",
+   "exposure": 1.35,
+   "key": {
+    "light": "shafts",
+    "type": "sun",
+    "color": [
+     0.3916,
+     1.0,
+     0.8714
+    ],
+    "dir": [
+     -0.0984,
+     0.9841,
+     -0.1476
+    ],
+    "intensity": 1.25,
+    "angle": 3.0
+   },
+   "emit": {
+    "lantern_glass": [
+     2.5,
+     0.6867,
+     1.0854
+    ],
+    "porch_lamp": [
+     7.0,
+     3.1949,
+     1.0089
+    ],
+    "window": [
+     0.25,
+     0.146,
+     0.0656
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.3916,
+    1.0,
+    0.8714
+   ],
+   "sky": [
+    0.0011,
+    0.0207,
+    0.0162
+   ],
+   "stats": {
+    "floor": [
+     0.1015,
+     0.2695,
+     0.2328
+    ],
+    "floor_key": [
+     0.1,
+     0.255,
+     0.2223
+    ],
+    "floor_median_lum": 0.354,
+    "mean": [
+     0.0896,
+     0.1731,
+     0.1488
+    ],
+    "mean_lum": 0.159
+   }
+  },
+  {
+   "name": "dawn",
+   "lightmap": "your-car-is-at-the-bottom-of-the-lake.dawn.webp",
+   "keymap": "your-car-is-at-the-bottom-of-the-lake.dawn.key.webp",
+   "exposure": 0.95,
+   "key": {
+    "light": "dawn",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.5395,
+     0.3515
+    ],
+    "dir": [
+     -0.4969,
+     0.3478,
+     0.795
+    ],
+    "intensity": 2.0,
+    "angle": 6.0
+   },
+   "emit": {
+    "lantern_glass": [
+     0.6,
+     0.1648,
+     0.2605
+    ],
+    "porch_lamp": [
+     3.0,
+     1.3692,
+     0.4324
+    ],
+    "window": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.5395,
+    0.3515
+   ],
+   "sky": [
+    0.4675,
+    0.3393,
+    0.5796
+   ],
+   "stats": {
+    "floor": [
+     0.4469,
+     0.2962,
+     0.4226
+    ],
+    "floor_key": [
+     0.1415,
+     0.0762,
+     0.0497
+    ],
+    "floor_median_lum": 0.508,
+    "mean": [
+     0.3971,
+     0.2406,
+     0.3094
+    ],
+    "mean_lum": 0.2768
+   }
+  }
+ ]
+}

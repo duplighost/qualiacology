@@ -1,0 +1,865 @@
+{
+ "version": 1,
+ "name": "ptsdream-girl",
+ "glb": "ptsdream-girl.glb",
+ "frame": "three.js: x right, y up, z toward the camera; 2D floor coordinates are (x, z)",
+ "lightmap": {
+  "size": 2048,
+  "uv": 1,
+  "encoding": "lightmap rgb = (L/(1+L))^(1/2.2) -> L = e/(1-e) with e = rgb^2.2; radiance = albedo * L. keymap r = the fraction of L that is the key light, direct"
+ },
+ "bounds": {
+  "minX": -11.0,
+  "maxX": 11.0,
+  "minZ": -7.0,
+  "maxZ": 7.0
+ },
+ "room": {
+  "min": [
+   -12.0,
+   0.0,
+   -8.6
+  ],
+  "max": [
+   12.0,
+   9.5,
+   8.0
+  ]
+ },
+ "capture": [
+  0.0,
+  1.5,
+  -0.3
+ ],
+ "colliders": [],
+ "spawns": {
+  "player": {
+   "x": -9.4,
+   "z": 3.2,
+   "dir": [
+    1.0,
+    -0.0
+   ]
+  },
+  "boss": {
+   "x": 0.0,
+   "z": -6.4,
+   "dir": [
+    0.0,
+    1.0
+   ]
+  }
+ },
+ "anchors": {
+  "centre": {
+   "pos": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  }
+ },
+ "nodes": {},
+ "materials": {
+  "ptsd_cyc": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  "ptsd_floor": {
+   "kind": "solid"
+  },
+  "ptsd_foot": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.624,
+    0.3231
+   ]
+  },
+  "ptsd_gold": {
+   "kind": "solid"
+  },
+  "ptsd_lip": {
+   "kind": "solid"
+  },
+  "ptsd_steel": {
+   "kind": "solid"
+  },
+  "ptsd_velour": {
+   "kind": "solid"
+  }
+ },
+ "states": [
+  {
+   "name": "trigger",
+   "lightmap": "ptsdream-girl.trigger.webp",
+   "keymap": "ptsdream-girl.trigger.key.webp",
+   "exposure": 1.6,
+   "key": {
+    "light": "hall",
+    "type": "spot",
+    "color": [
+     1.0,
+     0.4564,
+     0.1413
+    ],
+    "pos": [
+     -11.4,
+     2.1,
+     3.2
+    ],
+    "dir": [
+     -0.9415,
+     0.1734,
+     0.289
+    ],
+    "intensity": 111.4085,
+    "decay": 2,
+    "aim": [
+     0.8804,
+     -0.3773,
+     -0.2875
+    ],
+    "cone": 0.6109,
+    "blend": 0.7
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.0005,
+     0.0009,
+     0.0025
+    ],
+    "ptsd_foot": [
+     0.25,
+     0.156,
+     0.0808
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.4564,
+    0.1413
+   ],
+   "sky": [
+    0.0003,
+    0.0004,
+    0.0007
+   ],
+   "stats": {
+    "floor": [
+     0.0773,
+     0.0245,
+     0.0093
+    ],
+    "floor_key": [
+     0.0516,
+     0.0236,
+     0.0073
+    ],
+    "floor_median_lum": 0.0059,
+    "mean": [
+     0.0514,
+     0.0147,
+     0.0059
+    ],
+    "mean_lum": 0.0219
+   }
+  },
+  {
+   "name": "night",
+   "lightmap": "ptsdream-girl.night.webp",
+   "keymap": "ptsdream-girl.night.key.webp",
+   "exposure": 1.35,
+   "key": {
+    "light": "moon",
+    "type": "sun",
+    "color": [
+     0.4793,
+     0.5776,
+     0.7454
+    ],
+    "dir": [
+     0.4963,
+     0.7444,
+     -0.4467
+    ],
+    "intensity": 0.9,
+    "angle": 1.5
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.0021,
+     0.0045,
+     0.0176
+    ],
+    "ptsd_foot": [
+     0.6,
+     0.3744,
+     0.1939
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.4793,
+    0.5776,
+    0.7454
+   ],
+   "sky": [
+    0.0026,
+    0.0046,
+    0.0116
+   ],
+   "stats": {
+    "floor": [
+     0.1223,
+     0.1044,
+     0.1121
+    ],
+    "floor_key": [
+     0.0463,
+     0.0562,
+     0.072
+    ],
+    "floor_median_lum": 0.1237,
+    "mean": [
+     0.0788,
+     0.0693,
+     0.0781
+    ],
+    "mean_lum": 0.0724
+   }
+  },
+  {
+   "name": "store",
+   "lightmap": "ptsdream-girl.store.webp",
+   "keymap": "ptsdream-girl.store.key.webp",
+   "exposure": 0.9,
+   "key": {
+    "light": "storekey",
+    "type": "spot",
+    "color": [
+     0.8228,
+     1.0,
+     0.8879
+    ],
+    "pos": [
+     0.0,
+     6.5,
+     -0.5
+    ],
+    "dir": [
+     0.0,
+     0.9995,
+     -0.0308
+    ],
+    "intensity": 334.2254,
+    "decay": 2,
+    "aim": [
+     -0.0,
+     -0.9971,
+     0.0767
+    ],
+    "cone": 0.9599,
+    "blend": 0.9
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.2496,
+     0.3228,
+     0.2863
+    ],
+    "ptsd_foot": [
+     0.4,
+     0.2496,
+     0.1293
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.8228,
+    1.0,
+    0.8879
+   ],
+   "sky": [
+    0.412,
+    0.5228,
+    0.4655
+   ],
+   "stats": {
+    "floor": [
+     1.7929,
+     2.225,
+     1.9471
+    ],
+    "floor_key": [
+     0.2778,
+     0.3387,
+     0.2997
+    ],
+    "floor_median_lum": 1.3173,
+    "mean": [
+     1.1223,
+     1.3992,
+     1.2195
+    ],
+    "mean_lum": 1.3194
+   }
+  },
+  {
+   "name": "alarm",
+   "lightmap": "ptsdream-girl.alarm.webp",
+   "keymap": "ptsdream-girl.alarm.key.webp",
+   "exposure": 1.05,
+   "key": {
+    "light": "alarmkey",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.0052,
+     0.0296
+    ],
+    "dir": [
+     0.0,
+     0.8619,
+     0.507
+    ],
+    "intensity": 2.4,
+    "angle": 2.0
+   },
+   "emit": {
+    "ptsd_cyc": [
+     2.2,
+     0.0227,
+     0.0931
+    ],
+    "ptsd_foot": [
+     1.4,
+     0.8735,
+     0.4524
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.0052,
+    0.0296
+   ],
+   "sky": [
+    0.0139,
+    0.0007,
+    0.0031
+   ],
+   "stats": {
+    "floor": [
+     1.5951,
+     0.0409,
+     0.1845
+    ],
+    "floor_key": [
+     0.4208,
+     0.0022,
+     0.0127
+    ],
+    "floor_median_lum": 0.3189,
+    "mean": [
+     1.1465,
+     0.028,
+     0.1255
+    ],
+    "mean_lum": 0.2728
+   }
+  },
+  {
+   "name": "october",
+   "lightmap": "ptsdream-girl.october.webp",
+   "keymap": "ptsdream-girl.october.key.webp",
+   "exposure": 1.3,
+   "key": {
+    "light": "sodium",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.3515,
+     0.0513
+    ],
+    "dir": [
+     0.6084,
+     0.3549,
+     -0.7098
+    ],
+    "intensity": 1.6,
+    "angle": 1.2
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.0205,
+     0.0043,
+     0.0007
+    ],
+    "ptsd_foot": [
+     0.5,
+     0.312,
+     0.1616
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.3515,
+    0.0513
+   ],
+   "sky": [
+    0.0041,
+    0.0015,
+    0.0007
+   ],
+   "stats": {
+    "floor": [
+     0.0353,
+     0.0114,
+     0.0019
+    ],
+    "floor_key": [
+     0.0064,
+     0.0023,
+     0.0003
+    ],
+    "floor_median_lum": 0.0036,
+    "mean": [
+     0.0438,
+     0.0145,
+     0.0024
+    ],
+    "mean_lum": 0.0201
+   }
+  },
+  {
+   "name": "office",
+   "lightmap": "ptsdream-girl.office.webp",
+   "keymap": "ptsdream-girl.office.key.webp",
+   "exposure": 1.35,
+   "key": {
+    "light": "officelamp",
+    "type": "point",
+    "color": [
+     1.0,
+     0.5271,
+     0.162
+    ],
+    "pos": [
+     -3.6,
+     1.45,
+     -4.8
+    ],
+    "dir": [
+     -0.6058,
+     0.244,
+     -0.7573
+    ],
+    "intensity": 33.4225,
+    "decay": 2
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.0051,
+     0.0021,
+     0.0008
+    ],
+    "ptsd_foot": [
+     0.5,
+     0.312,
+     0.1616
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.5271,
+    0.162
+   ],
+   "sky": [
+    0.024,
+    0.0096,
+    0.0036
+   ],
+   "stats": {
+    "floor": [
+     0.245,
+     0.1725,
+     0.1142
+    ],
+    "floor_key": [
+     0.1262,
+     0.0667,
+     0.0204
+    ],
+    "floor_median_lum": 0.127,
+    "mean": [
+     0.1857,
+     0.128,
+     0.0822
+    ],
+    "mean_lum": 0.1372
+   }
+  },
+  {
+   "name": "journal",
+   "lightmap": "ptsdream-girl.journal.webp",
+   "keymap": "ptsdream-girl.journal.key.webp",
+   "exposure": 0.95,
+   "key": {
+    "light": "topkey",
+    "type": "spot",
+    "color": [
+     0.9216,
+     0.8796,
+     0.8228
+    ],
+    "pos": [
+     0.0,
+     7.5,
+     -1.0
+    ],
+    "dir": [
+     0.0,
+     0.9957,
+     -0.0929
+    ],
+    "intensity": 238.7324,
+    "decay": 2,
+    "aim": [
+     -0.0,
+     -0.9912,
+     0.1322
+    ],
+    "cone": 1.0472,
+    "blend": 0.9
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.4035,
+     0.3727,
+     0.3154
+    ],
+    "ptsd_foot": [
+     0.4,
+     0.2496,
+     0.1293
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.9216,
+    0.8796,
+    0.8228
+   ],
+   "sky": [
+    0.4523,
+    0.4357,
+    0.4035
+   ],
+   "stats": {
+    "floor": [
+     1.371,
+     1.3169,
+     1.2145
+    ],
+    "floor_key": [
+     0.2544,
+     0.2435,
+     0.2273
+    ],
+    "floor_median_lum": 1.1955,
+    "mean": [
+     0.9714,
+     0.9328,
+     0.8592
+    ],
+    "mean_lum": 0.9335
+   }
+  },
+  {
+   "name": "head",
+   "lightmap": "ptsdream-girl.head.webp",
+   "keymap": "ptsdream-girl.head.key.webp",
+   "exposure": 1.5,
+   "key": {
+    "light": "headmoon",
+    "type": "sun",
+    "color": [
+     0.1441,
+     0.1946,
+     0.4793
+    ],
+    "dir": [
+     -0.0,
+     0.9138,
+     -0.4061
+    ],
+    "intensity": 0.8,
+    "angle": 2.5
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.0013,
+     0.0024,
+     0.0179
+    ],
+    "ptsd_foot": [
+     0.15,
+     0.0936,
+     0.0485
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.1441,
+    0.1946,
+    0.4793
+   ],
+   "sky": [
+    0.0006,
+    0.0012,
+    0.0046
+   ],
+   "stats": {
+    "floor": [
+     0.0239,
+     0.0328,
+     0.0827
+    ],
+    "floor_key": [
+     0.0234,
+     0.0318,
+     0.077
+    ],
+    "floor_median_lum": 0.0485,
+    "mean": [
+     0.0141,
+     0.0193,
+     0.0493
+    ],
+    "mean_lum": 0.0207
+   }
+  },
+  {
+   "name": "morning",
+   "lightmap": "ptsdream-girl.morning.webp",
+   "keymap": "ptsdream-girl.morning.key.webp",
+   "exposure": 1.0,
+   "key": {
+    "light": "sunrise",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.6867,
+     0.3515
+    ],
+    "dir": [
+     -0.5433,
+     0.3951,
+     -0.7408
+    ],
+    "intensity": 1.8,
+    "angle": 1.0
+   },
+   "emit": {
+    "ptsd_cyc": [
+     1.1,
+     0.3555,
+     0.5021
+    ],
+    "ptsd_foot": [
+     0.4,
+     0.2496,
+     0.1293
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.6867,
+    0.3515
+   ],
+   "sky": [
+    0.8,
+    0.5493,
+    0.4217
+   ],
+   "stats": {
+    "floor": [
+     0.6677,
+     0.4258,
+     0.3833
+    ],
+    "floor_key": [
+     0.0078,
+     0.0054,
+     0.0027
+    ],
+    "floor_median_lum": 0.4875,
+    "mean": [
+     0.5785,
+     0.3662,
+     0.3214
+    ],
+    "mean_lum": 0.4082
+   }
+  },
+  {
+   "name": "dark",
+   "lightmap": "ptsdream-girl.dark.webp",
+   "keymap": "ptsdream-girl.dark.key.webp",
+   "exposure": 1.8,
+   "key": {
+    "light": "exit",
+    "type": "point",
+    "color": [
+     1.0,
+     0.0103,
+     0.0232
+    ],
+    "pos": [
+     0.0,
+     2.6,
+     -7.6
+    ],
+    "dir": [
+     0.0,
+     0.3355,
+     -0.942
+    ],
+    "intensity": 7.162,
+    "decay": 2
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "ptsd_foot": [
+     0.05,
+     0.0312,
+     0.0162
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.0103,
+    0.0232
+   ],
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "stats": {
+    "floor": [
+     0.0198,
+     0.0002,
+     0.0005
+    ],
+    "floor_key": [
+     0.0175,
+     0.0002,
+     0.0004
+    ],
+    "floor_median_lum": 0.0011,
+    "mean": [
+     0.0208,
+     0.0002,
+     0.0005
+    ],
+    "mean_lum": 0.0046
+   }
+  },
+  {
+   "name": "dream",
+   "lightmap": "ptsdream-girl.dream.webp",
+   "keymap": "ptsdream-girl.dream.key.webp",
+   "exposure": 1.2,
+   "key": {
+    "light": "dreamspot",
+    "type": "spot",
+    "color": [
+     0.4342,
+     0.0685,
+     1.0
+    ],
+    "pos": [
+     0.0,
+     7.5,
+     0.5
+    ],
+    "dir": [
+     0.0,
+     0.9944,
+     0.1061
+    ],
+    "intensity": 254.6479,
+    "decay": 2,
+    "aim": [
+     -0.0,
+     -0.9992,
+     0.04
+    ],
+    "cone": 0.5236,
+    "blend": 0.8
+   },
+   "emit": {
+    "ptsd_cyc": [
+     0.1009,
+     0.0101,
+     0.3039
+    ],
+    "ptsd_foot": [
+     0.6,
+     0.3744,
+     0.1939
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.4342,
+    0.0685,
+    1.0
+   ],
+   "sky": [
+    0.0031,
+    0.0007,
+    0.0089
+   ],
+   "stats": {
+    "floor": [
+     0.2561,
+     0.0172,
+     0.1891
+    ],
+    "floor_key": [
+     0.0412,
+     0.0065,
+     0.0951
+    ],
+    "floor_median_lum": 0.0415,
+    "mean": [
+     0.1678,
+     0.011,
+     0.1231
+    ],
+    "mean_lum": 0.0525
+   }
+  }
+ ]
+}

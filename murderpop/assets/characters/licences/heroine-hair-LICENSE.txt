@@ -1,0 +1,17 @@
+Strawberry Cloud Hair
+Creator: Cortu / Cortu Johnstone
+License: CC0-1.0
+Official asset-pack listing (verified 25 October 2026):
+https://static.makehumancommunity.org/assets/assetpacks/hair01.html
+License reference: https://creativecommons.org/publicdomain/zero/1.0/
+
+The official listing explicitly identifies cortu_strawberry_cloud_hair by Cortu
+as CC0. The .mhclo and .mhmat also state "Cortu Johnstone - CC0". The OBJ retains
+an obsolete generic MakeClothes exporter AGPL comment; the specific creator and
+official asset-pack license above are the provenance used for this graphical
+asset. Original files are preserved here, unmodified.
+
+Momentum proof modifications are authored in tools/character/hair.py: fit to
+the new heroine's actual skull, shoulder-length asymmetric shaping, auburn PBR
+material treatment, and skin weights for the new head and secondary hair rig.
+This is a licensed construction asset, not an original-from-scratch hair mesh.

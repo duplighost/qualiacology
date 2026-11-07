@@ -1,0 +1,110 @@
+// Beat math over a song's beat map (SIDECHAIN's data/beats/<id>.json format):
+// { duration, bpm, key, keyRoot, keyMode, downbeat, beats: [t...], energy:[], low:[], high:[] }
+// Beats follow the drums (the tempo drifts), so everything here interpolates the real beat times.
+// Bars are 4 beats; bar 1 beat 1 is beats[downbeat]. Bars/beats are 1-based like the musicians count;
+// bars before the first downbeat are 0 or negative.
+
+export class BeatMap {
+  constructor(data) {
+    this.data = data;
+    this.beats = data.beats;
+    this.n = this.beats.length;
+    this.bpm = data.bpm;
+    this.period = 60 / data.bpm;
+    this.downbeat = data.downbeat || 0;
+    this.duration = data.duration;
+    this.energy = data.energy || [];
+    this.low = data.low || [];
+    this.high = data.high || [];
+    this.keyRoot = data.keyRoot ?? 0;
+    this.keyMode = data.keyMode || 'min';
+    this._last = 0;
+  }
+
+  // fractional beat index at time t (extrapolates before the first and after the last beat)
+  beatAt(t) {
+    const b = this.beats, n = this.n;
+    if (t <= b[0]) return (t - b[0]) / this.period;
+    if (t >= b[n - 1]) return n - 1 + (t - b[n - 1]) / this.period;
+    let i = this._last;
+    if (i >= n - 1 || b[i] > t || b[i + 1] <= t) {
+      let lo = 0, hi = n - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (b[m] <= t) lo = m; else hi = m; }
+      i = lo;
+    }
+    this._last = i;
+    return i + (t - b[i]) / (b[i + 1] - b[i]);
+  }
+
+  // time of a fractional beat index
+  timeOf(beat) {
+    const b = this.beats, n = this.n;
+    if (beat <= 0) return b[0] + beat * this.period;
+    if (beat >= n - 1) return b[n - 1] + (beat - (n - 1)) * this.period;
+    const i = Math.floor(beat), f = beat - i;
+    return b[i] + f * (b[i + 1] - b[i]);
+  }
+
+  // local beat length around time t (seconds)
+  periodAt(t) {
+    const i = Math.max(0, Math.min(this.n - 2, Math.floor(this.beatAt(t))));
+    return this.beats[i + 1] - this.beats[i];
+  }
+
+  // beat index of bar.beat (bar 1 beat 1 = downbeat), fractional beats allowed: (17, 2.5)
+  beatOfBar(bar, beat = 1) { return this.downbeat + (bar - 1) * 4 + (beat - 1); }
+  timeOfBar(bar, beat = 1) { return this.timeOf(this.beatOfBar(bar, beat)); }
+
+  // "17:3" or "17:3.5" or 17 -> time
+  t(pos) {
+    if (typeof pos === 'number') return this.timeOfBar(pos, 1);
+    const [bar, beat] = String(pos).split(':').map(Number);
+    return this.timeOfBar(bar, beat || 1);
+  }
+
+  // { bar, beat, phase } at time t; beat is 1..4 (fractional), phase 0..1 within the beat
+  barAt(t) {
+    const B = this.beatAt(t) - this.downbeat;
+    const bar = Math.floor(B / 4) + 1;
+    const inBar = B - (bar - 1) * 4;
+    return { bar, beat: inBar + 1, phase: B - Math.floor(B) };
+  }
+
+  // nearest beat time to t, and the signed offset (t - beat) in seconds
+  nearest(t, subdivision = 1) {
+    const B = this.beatAt(t) * subdivision;
+    const nb = Math.round(B) / subdivision;
+    const bt = this.timeOf(nb);
+    return { beat: nb, time: bt, offset: t - bt };
+  }
+
+  // 0..1 smooth pulse that peaks on each beat (for lights/UI breathing)
+  pulse(t, sharp = 6) {
+    const ph = this.beatAt(t); const f = ph - Math.floor(ph);
+    return Math.exp(-f * sharp);
+  }
+
+  // per-beat energy (0..1) at time t, interpolated
+  energyAt(t, arr = this.energy) {
+    if (!arr.length) return 0.5;
+    const B = Math.max(0, Math.min(arr.length - 1, this.beatAt(t)));
+    const i = Math.floor(B), f = B - i;
+    return arr[i] * (1 - f) + (arr[Math.min(arr.length - 1, i + 1)] ?? arr[i]) * f;
+  }
+
+  // frequency (Hz) of a scale degree in the song's key, for sounds that sit in the song
+  // degree 0 = tonic; octave offsets via degree +/- 7
+  note(degree = 0, octave = 4) {
+    const major = [0, 2, 4, 5, 7, 9, 11], minor = [0, 2, 3, 5, 7, 8, 10];
+    const sc = this.keyMode === 'maj' ? major : minor;
+    const o = Math.floor(degree / 7), d = ((degree % 7) + 7) % 7;
+    const semis = this.keyRoot + sc[d] + 12 * (octave + o - 4);
+    return 261.6256 * Math.pow(2, (semis - 0) / 12); // C4 = 261.63 Hz, keyRoot 0 = C
+  }
+}
+
+export async function loadBeatMap(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('beat map ' + url + ' ' + r.status);
+  return new BeatMap(await r.json());
+}

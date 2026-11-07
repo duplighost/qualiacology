@@ -1,0 +1,79 @@
+These recordings are by Kenney (www.kenney.nl), CC0 1.0 (public domain). Cut, filtered and levelled by tools/sfx-render.mjs --assets:
+  punch-0.ogg  from  impact-sounds/Audio/impactPunch_heavy_000.ogg
+  punch-1.ogg  from  impact-sounds/Audio/impactPunch_heavy_001.ogg
+  punch-2.ogg  from  impact-sounds/Audio/impactPunch_heavy_002.ogg
+  punch-3.ogg  from  impact-sounds/Audio/impactPunch_heavy_003.ogg
+  latch.ogg  from  rpg-audio/Audio/metalLatch.ogg
+  cloth-0.ogg  from  rpg-audio/Audio/cloth3.ogg
+  cloth-1.ogg  from  rpg-audio/Audio/cloth4.ogg
+  cloth-2.ogg  from  rpg-audio/Audio/cloth2.ogg
+  page-0.ogg  from  rpg-audio/Audio/bookFlip3.ogg
+  page-1.ogg  from  rpg-audio/Audio/bookFlip2.ogg
+
+The original licence texts:
+
+---- impact-sounds ----
+Impact Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 19-12-2019
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL
+
+---- interface-sounds ----
+Interface Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 11-02-2020
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL
+
+---- rpg-audio ----
+RPG Audio
+
+	by  Kenney Vleugels (Kenney.nl)
+
+			------------------------------
+
+	License (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You may use these assets in personal and commercial projects.
+	Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+
+	Follow on Twitter for updates:
+	@KenneyNL
