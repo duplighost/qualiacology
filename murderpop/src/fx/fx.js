@@ -72,7 +72,7 @@ export class FX {
     this.spotCone = new THREE.Mesh(cone, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
       uniforms: { uK: { value: 0 }, uCol: { value: new THREE.Color(1.6, 1.4, 1.1) }, uFxK: FXK },
       vertexShader: `varying float vY; varying vec3 vN; varying vec3 vV; void main(){ vY = position.y; vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `uniform float uK; uniform vec3 uCol; uniform float uFxK; varying float vY; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 1.5); float h = smoothstep(-14.0, -10.0, vY) * smoothstep(0.0, -3.0, vY); float a = (0.08 + 0.34 * (1.0 - f)) * h * uK; gl_FragColor = vec4(uCol * a * uFxK, a); }` }));
+      fragmentShader: `uniform float uK; uniform vec3 uCol; uniform float uFxK; varying float vY; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 1.5); float h = smoothstep(-14.0, -10.0, vY) * smoothstep(0.0, -3.0, vY); float a = (0.03 + 0.12 * (1.0 - f)) * h * uK; gl_FragColor = vec4(uCol * a * uFxK, a); }` }));
     this.spotCone.position.set(0, 14, 0); this.spotCone.visible = false; scene.add(this.spotCone);
     // the light's pool on the floor: soft, a little brighter at its rim, like a real follow-spot
     this.spotPool = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 4.6), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -275,7 +275,7 @@ export class FX {
     const fx = this.post.fx;
     fx.flash.copy(this.flashC);
     this.flashC.multiplyScalar(Math.exp(-dt * 12));
-    fx.ca = (fx.caBase ?? 0.0015) + this.caK * 0.006;
+    fx.ca = (fx.caBase ?? 0) + this.caK * 0.0025;
     this.caK *= Math.exp(-dt * 7);
   }
 
