@@ -1,7 +1,9 @@
 // Floor telegraphs: every attack draws its shape on the floor before it lands, and the shape fills
 // to the exact moment of impact (the beat). One instanced mesh, shapes drawn as distance fields.
 // Shapes: 0 circle, 1 ring, 2 rect (a lane / line), 3 cone (a wedge of a circle), 4 arc band.
-// Colours say what to do: PINK = can be parried, WHITE = dodge it, GOLD = yours (the player's).
+// Colours say what to do: PINK = block it (or send it back as it lands), WHITE = dodge it, GOLD = yours (the
+// player's). And the pattern says it too, for eyes that don't split pink from white: pink is a clean soft fill,
+// white has warning stripes running across it and a doubled edge.
 import * as THREE from 'three';
 import { FXK } from '../engine/post.js';
 
@@ -65,15 +67,25 @@ void main() {
     prog = inside * (1.0 - aaStep(prm * fill, ang));
   }
   if (inside < 0.002 && edge < 0.002) discard;
-  // a faint hatch inside, the filled part brighter, the rim brightest, all pulsing a little as it nears
-  float hatch = 0.5 + 0.5 * sin((p.x + p.y) * 9.0);
+  // pink: a clean fill; white (dodge it): bold stripes running across it, and a second line inside the rim
+  float dodge = vState.w;
+  float stripes = step(0.5, fract((p.x - p.y) * 1.15 - uTime * 1.4));
+  float hatch = mix(0.25, stripes * 2.2, dodge);
   float near = smoothstep(0.6, 1.0, fill);
   // big shapes get a quieter fill so they never bloom into a blinding disc; the rim stays crisp
   float area = shape == 2 ? w * h : w * w;
   float quiet = 1.0 / (1.0 + area * 0.08);
   // everything she has on the floor breathes with the beat: you can count it in
   float beat = uBeat * (0.35 + 0.65 * near);
-  float a = inside * (0.07 + 0.04 * hatch) + prog * (0.14 + 0.26 * near) * (0.45 + 0.55 * quiet) * (1.0 + 0.2 * beat) + edge * (0.6 + 0.4 * near) * (1.0 + 0.4 * beat);
+  float a = inside * (0.07 + 0.04 * hatch) + prog * (0.14 + 0.26 * near) * (0.45 + 0.55 * quiet) * (1.0 + 0.2 * beat) * (1.0 - 0.35 * dodge * (1.0 - stripes)) + edge * (0.6 + 0.4 * near) * (1.0 + 0.4 * beat);
+  // the white's second edge: a line a little inside the rim (circles, lanes, cones)
+  if (dodge > 0.5 && shape != 1 && shape != 4) {
+    float inner2 = 0.0;
+    if (shape == 0) { float d = length(p); inner2 = 1.0 - smoothstep(0.0, 0.05, abs(d - (w - 0.22))); }
+    else if (shape == 2) { inner2 = (1.0 - smoothstep(0.0, 0.05, abs(abs(p.x) - (w - 0.2)))) * step(0.0, p.y) * step(p.y, h); }
+    else if (shape == 3) { float d = length(p); inner2 = (1.0 - smoothstep(0.0, 0.05, abs(d - (w - 0.25)))) * (1.0 - step(prm, abs(atan(p.x, p.y)))); }
+    a += inner2 * inside * 0.45;
+  }
   a = clamp(a, 0.0, 1.0) * alpha;
   float rim = clamp(edge, 0.0, 1.0);
   vec3 col = vColor * (0.6 + 0.8 * near) + vec3(flash * (0.15 + 1.05 * quiet + 1.2 * rim));
@@ -106,7 +118,8 @@ export class Telegraphs {
   // opts: {shape, x, z, angle (radians, 0 = +z), w, h, param, kind:'pink'|'white'|'gold', follow: fn()->{x,z,angle}, linger}
   add(o) {
     const t = { shape: SHAPE[o.shape] ?? o.shape ?? 0, x: o.x, z: o.z, angle: o.angle || 0, w: o.w || 1, h: o.h || o.w || 1, param: o.param || 0.5,
-      kind: o.kind || 'pink', color: (KIND[o.kind || 'pink'] || o.color).clone(), start: o.start, end: o.end, linger: o.linger ?? 0.14, follow: o.follow || null, y: o.y ?? this.y, flash: o.flash ?? 1, alphaK: o.alphaK ?? 1, dead: false };
+      kind: o.kind || 'pink', color: (KIND[o.kind || 'pink'] || o.color).clone(), start: o.start, end: o.end, linger: o.linger ?? 0.14, follow: o.follow || null, y: o.y ?? this.y, flash: o.flash ?? 1, alphaK: o.alphaK ?? 1, dead: false,
+      dodge: o.kind === 'white' || o.kind === 'whiteq' };
     this.list.push(t);
     return t;
   }
@@ -134,7 +147,7 @@ export class Telegraphs {
       this._m.toArray(this.mesh.instanceMatrix.array, n * 16);
       const hh = g.shape === 2 ? g.h : g.h;
       A[n * 4] = g.shape; A[n * 4 + 1] = g.shape === 2 ? g.w : g.w; A[n * 4 + 2] = hh; A[n * 4 + 3] = g.param;
-      S[n * 4] = fill; S[n * 4 + 1] = alpha * g.alphaK; S[n * 4 + 2] = flash * g.flash; S[n * 4 + 3] = 0;
+      S[n * 4] = fill; S[n * 4 + 1] = alpha * g.alphaK; S[n * 4 + 2] = flash * g.flash; S[n * 4 + 3] = g.dodge ? 1 : 0;
       C[n * 3] = g.color.r; C[n * 3 + 1] = g.color.g; C[n * 3 + 2] = g.color.b;
       n++;
     }

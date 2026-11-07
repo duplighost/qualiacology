@@ -110,6 +110,8 @@ export class Projectiles {
   //     damage=1, owner:'boss'|'player', homing: turn rate rad/s, target: fn->{x,z}, accel, curve (rad/s),
   //     wave: {amp, freq}, delay (s before it moves), parryable (default: kind==='pink'), spin, onDeath}
   spawn(o) {
+    // (src/game/kinds.js) her shots can be blocked or sent back: a white one is pink unless a track marks it hard
+    if ((o.owner || 'boss') === 'boss' && o.kind === 'white' && !o.hard) o = { ...o, kind: 'pink' };
     if (this.list.length >= MAX) return null;
     const speed = o.speed ?? Math.hypot(o.vx || 0, o.vz || 0);
     const angle = o.angle ?? Math.atan2(o.vx || 0, o.vz || 1);

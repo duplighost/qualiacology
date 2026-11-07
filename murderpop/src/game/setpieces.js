@@ -198,6 +198,7 @@ export class SetPieces {
     if (!this.on) return;
     const f = this.f, b = f.boss, pl = f.player;
     if (this.kickCool > 0) this.kickCool -= dt;
+    this.beat = f.bm ? f.bm.pulse(f.t, 7) : 0;
     this._kickCheck();
     for (const p of this.list) {
       if (p.state === 'gone') continue;
@@ -218,7 +219,11 @@ export class SetPieces {
         p.spin *= Math.exp(-dt * 4);
         g.rotation.y += p.spin * dt;
         const wob = p.state === 'tell' ? Math.sin(p.t * 40) * 0.12 : (p.vx || p.vz ? Math.sin(p.t * 18) * 0.15 : 0);
-        g.position.set(p.x, 0, p.z); g.rotation.z = wob;
+        // they dance to it: a hop on every beat, higher the hotter your combo
+        const hop = this.beat * this.beat * (0.06 + 0.05 * (f.heat || 0)), sq = this.beat * (0.05 + 0.02 * (f.heat || 0));
+        g.position.set(p.x, hop, p.z); g.rotation.z = wob;
+        const s0 = g.userData.s0 ?? (g.userData.s0 = g.scale.x);
+        g.scale.set(s0 * (1 + sq * 0.5), s0 * (1 - sq), s0 * (1 + sq * 0.5));
       } else if (p.state === 'fly') {
         // yours, toward her: a short hop and in (she's gone: it carries on the way it was going)
         const sp = 17, k = Math.min(1, p.t / 0.6);

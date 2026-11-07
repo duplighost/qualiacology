@@ -79,6 +79,8 @@ export class Screens {
       ['Ring hits', `${s.ringHits}`], ['Hits you took', `${s.hurt}`],
       ['Rewinds', `${r.rewinds}`], ['Encores', `${r.encores}`],
     ];
+    // the finale: its points (doubled if YOU took her keepsake back), and the rings landed as they closed
+    if (r.finale) rows.push(['Finale' + (r.finale.kept ? ' \u00d72' : ''), r.finale.bonus.toLocaleString('en-US')], ['Rings', `${r.finale.rings} / ${r.finale.of}${r.finale.finalBlow ? ' + the last' : ''}`]);
     this.el('.mp-res-stats').innerHTML = rows.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('');
     this.el('.mp-res-keep').textContent = meta.keepsake ? `Kept: ${meta.keepsake}` : '';
   }

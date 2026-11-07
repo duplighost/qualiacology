@@ -7,6 +7,7 @@ import { inShape } from '../../game/choreo.js';
 import { FEEL } from '../../game/player.js';
 import { FLOOR, LANE_Z } from './road.js';
 import { looseGrenade } from './her.js';
+import { blockable } from '../../game/kinds.js';
 
 export const U = 2.2;   // the design's damage units in this game's (YOU's strikes here hit about 2.2x the design's numbers)
 export const UC = 4.0;  // ...and what the road does to her weighs more: the rule is the fight (strikes on her are halved, see track.js)
@@ -28,6 +29,7 @@ const sameLight = (ep) => !WREF || (WREF.ep === ep && !WREF.f.suppress);
 function cue(f, kind, at, world) { if (world && f.suppress) { f.sfx.cue && f.sfx.cue(kind || 'white', f.pan(at.x ?? 0)); } else f.cue(kind, at); }
 // the kit's area() (src/game/patterns.js), spotlight-aware: o.world shapes are the road's, never swept away
 export function area(f, o) {
+  if (!o.world) o = blockable(o, 'pink');
   const sh = { shape: o.shape, x: o.x, z: o.z, angle: o.angle || 0, w: o.w, h: o.h ?? o.w, param: o.param ?? 0.5 };
   const world = !!o.world;
   if (!world && blind(f)) return sh;

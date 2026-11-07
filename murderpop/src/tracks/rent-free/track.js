@@ -5,6 +5,7 @@
 // Files: house.js (the set, its light and its rooms by song time), claims.js (her things: cracks, bursts, the
 // lease-thread), tenant.js (the figurine and her habits), props.js (things), paint.js (canvas paint), sound.js.
 import * as THREE from 'three';
+import { blockable } from '../../game/kinds.js';
 import { CharacterKit } from '../../engine/character.js';
 import { Claims, U, mats, kissDecal } from './claims.js';
 import { buildTenant, Tenant, clampX, clampZ } from './tenant.js';
@@ -957,6 +958,7 @@ function flatGeo() { const g = new THREE.BufferGeometry(); g.setAttribute('posit
 // a zone: a telegraph that fills from start to end and lands at end; it can aim (follow) until `lock`
 // o: { shape, x, z, angle, w, h, param, kind, start, end, lock, aim: () => ({x, z, angle?}), damage, melee, onImpact, silent, sound, hold }
 function zone(f, o) {
+  o = blockable(o, 'pink');
   const sh = { shape: o.shape, x: o.x ?? f.player.x, z: o.z ?? f.player.z, angle: o.angle || 0, w: o.w, h: o.h ?? o.w, param: o.param ?? 0.5 };
   if (o.aim) Object.assign(sh, o.aim());
   const lock = o.lock ?? o.end;

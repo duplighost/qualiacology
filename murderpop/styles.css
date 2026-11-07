@@ -57,6 +57,33 @@ body.menu canvas#view { cursor: default; }
 .mp-pops { position: absolute; inset: 0; }
 .mp-pop { position: absolute; transform: translate(-50%, -50%); font: 700 14px var(--ui); color: var(--gold); letter-spacing: .08em; text-shadow: 0 0 8px rgba(0,0,0,.8); animation: mpPop .9s ease-out forwards; white-space: nowrap; }
 .mp-pop.big { font-family: var(--display); font-size: 22px; color: #fff; text-shadow: 0 0 14px var(--pink), 0 0 2px #000; }
+.mp-pop.gold { font-family: var(--display); font-size: 20px; color: var(--gold); text-shadow: 0 0 14px rgba(242,194,91,.8), 0 2px 0 rgba(0,0,0,.6); }
+.mp-pop.huge { font-family: var(--display); font-size: clamp(30px, 3.4vw, 60px); color: #fff; text-shadow: 0 0 24px var(--gold), 0 0 40px var(--pink), 0 3px 0 rgba(0,0,0,.5); animation-duration: 1.6s; }
+/* your combo: big at the bottom, its multiplier beside it */
+.mp-chain { position: absolute; left: 50%; bottom: 6.5vh; transform: translateX(-50%); display: flex; align-items: baseline; gap: .35em; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.mp-chain.on { opacity: 1; }
+.mp-chain-n { font-family: var(--display); font-weight: 400; font-size: clamp(28px, 3vw, 54px); color: var(--gold); text-shadow: 0 0 18px rgba(242,194,91,.65), 0 3px 0 rgba(0,0,0,.55); font-variant-numeric: tabular-nums; }
+.mp-chain-x { font-style: normal; font-family: var(--display); font-size: clamp(16px, 1.5vw, 27px); color: var(--ivory); text-shadow: 0 2px 0 rgba(0,0,0,.6); }
+.mp-chain.hot .mp-chain-n { color: #fff; text-shadow: 0 0 22px var(--gold), 0 0 32px var(--pink), 0 3px 0 rgba(0,0,0,.5); }
+.mp-chain.up { animation: mpChainUp .38s cubic-bezier(.2,1.6,.4,1); }
+@keyframes mpChainUp { 0% { transform: translateX(-50%) scale(1.45); } 100% { transform: translateX(-50%) scale(1); } }
+.mp-chain.broke .mp-chain-n { animation: mpChainBroke .6s ease-in forwards; }
+@keyframes mpChainBroke { 0% { color: var(--pink); transform: translateY(0) rotate(0); opacity: 1; } 100% { color: var(--pink); transform: translateY(30px) rotate(-12deg); opacity: 0; } }
+/* the finale: its points under her (empty) bar */
+.mp-bonus { position: absolute; left: 50%; top: 10.5vh; transform: translateX(-50%); display: none; align-items: baseline; gap: .4em; pointer-events: none; }
+.mp-bonus.on { display: flex; animation: mpBonusIn .5s cubic-bezier(.2,1.5,.4,1); }
+@keyframes mpBonusIn { 0% { transform: translateX(-50%) scale(.6); opacity: 0; } 100% { transform: translateX(-50%) scale(1); opacity: 1; } }
+.mp-bonus-n { font-family: var(--display); font-size: clamp(30px, 3.4vw, 62px); color: var(--gold); text-shadow: 0 0 22px rgba(242,194,91,.8), 0 3px 0 rgba(0,0,0,.55); font-variant-numeric: tabular-nums; }
+.mp-bonus-x { font-style: normal; font-family: var(--display); font-size: clamp(18px, 1.7vw, 30px); color: var(--ivory); text-shadow: 0 2px 0 rgba(0,0,0,.6); }
+.mp-bonus-k { font-style: normal; font-family: var(--display); font-size: clamp(16px, 1.5vw, 26px); color: #fff; padding: .05em .45em; border: 2px solid var(--gold); border-radius: 6px; box-shadow: 0 0 16px rgba(242,194,91,.85); display: none; }
+.mp-bonus.kept .mp-bonus-k { display: inline-block; animation: mpChainUp .5s cubic-bezier(.2,1.6,.4,1); }
+.mp-bonus.up .mp-bonus-x { display: inline-block; animation: mpXUp .4s cubic-bezier(.2,1.6,.4,1); color: var(--gold); }
+@keyframes mpXUp { 0% { transform: scale(1.7); } 100% { transform: scale(1); } }
+.mp-bonus.down .mp-bonus-x { display: inline-block; animation: mpXDown .45s ease-out; color: var(--pink); }
+@keyframes mpXDown { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 45% { transform: translateX(5px); } 70% { transform: translateX(-3px); } }
+/* the spotlight is yours: Q over YOU's head */
+.mp-keycap { position: absolute; transform: translate(-50%, -100%); font: 700 clamp(16px, 1.25vw, 22px) var(--ui); line-height: 1; color: var(--ink); background: var(--gold); border-radius: 7px; padding: .3em .55em; box-shadow: 0 0 calc(10px + 22px * var(--pulse, 0)) rgba(242,194,91,.95), 0 3px 0 #8a5d10; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.mp-keycap.on { opacity: 1; }
 @keyframes mpPop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.7); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -160%) scale(1); } }
 .mp-banner { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(.9); font-family: var(--display); font-size: clamp(32px, 5vw, 88px); letter-spacing: .14em; color: var(--ivory);
   text-shadow: 0 0 40px rgba(255, 46, 136, .9), 0 4px 0 rgba(0,0,0,.5); opacity: 0; transition: opacity .25s, transform .4s cubic-bezier(.2,1.4,.4,1); white-space: nowrap; }

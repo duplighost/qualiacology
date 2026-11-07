@@ -20,6 +20,7 @@ import { FXK } from '../engine/post.js';
 import { trackById } from '../tracks/index.js';
 import { makeKeepsake, KEEPSAKE_SIZE } from '../ui/keepsakes.js';
 import { SetPieces } from './setpieces.js';
+import { Finale } from './finale.js';
 
 const WAVE_GEO = new THREE.CircleGeometry(1, 128);
 function waveMaterial(color) {
@@ -36,8 +37,9 @@ const GOLD = new THREE.Color(3.2, 2.0, 0.55), PINK = new THREE.Color(4, 0.6, 1.7
 const SOLO_BEATS = 8;
 // her health under the shared rules (hits sent back, finishers, the solo, the room's ornaments), on top of each track's
 // own: set so the good bot empties her bar at about 40% of the song (it plays on the beat and catches everything)
-const HEALTH = { 'sexy-trauma-costume': 1.75, 'rent-free': 1.36, 'makeup-sex-at-your-funeral': 1.39, 'try-me-free': 1.1, 'ptsdream-girl': 1.21,
-  'reverse-psychology-degree': 1.21, 'pretty-until-proven-guilty': 1.3, 'kiss-me-like-a-car-crash': 1.15 };
+const HEALTH = { 'sexy-trauma-costume': 2.17, 'rent-free': 1.47, 'makeup-sex-at-your-funeral': 1.75, 'try-me-free': 1.55, 'ptsdream-girl': 1.45,
+  'reverse-psychology-degree': 1.46, 'pretty-until-proven-guilty': 1.38, 'kiss-me-like-a-car-crash': 1.19, 'i-fucked-your-dad': 1.3,
+  'your-car-is-at-the-bottom-of-the-lake': 1.15 };
 const _SP = new THREE.Vector3(), _SOLO_LIT = new THREE.Color(1.0, 0.82, 0.6);
 const toward = (a, b) => Math.atan2(b.x - a.x, b.z - a.z);
 
@@ -123,6 +125,7 @@ export class Fight {
     this.lastHit = tr.lastHit ?? this._findLastHit();
     this.finalChorus = this.T.sections.find((s) => s.final) || this.T.sections[this.T.sections.length - 2] || this.T.sections[0];
     this.setPieces = new SetPieces(this);
+    this.finale = new Finale(this); this.heat = 0;
     this.boss.on('hit', (h) => this._bossHit(h));
     this.boss.on('break', (b) => this._bossBreak(b));
     this.boss.on('deflect', (h) => this._deflect(h));
@@ -190,6 +193,8 @@ export class Fight {
     // once her bar is empty she's beaten: her attacks are gone, and nothing (a set's own hazard included) takes your last heart
     this.harmless = this.boss.hp <= 0;
     this.player.minHearts = this.harmless ? 1 : 0;
+    // (practice from a section where she's already beaten: the finale is on from the start)
+    if (this.harmless && !this.finale.on && this.state === 'play' && this.boss.state !== 'finished') this.finale.start();
     if (this.audio.sfxDuck && this.songEnv) this.audio.sfxDuck.gain.setTargetAtTime(this.audio.duckAt(this.songEnv, this.t), this.audio.ctx.currentTime, 0.12);
     // entities
     this.player.update(ctx);
@@ -198,6 +203,7 @@ export class Fight {
     this.boss.nod = this.bm.strikePulse(this.t, 5);
     this.boss.update(dt, this.t, this.beat, this.player);
     this.setPieces.update(dt);
+    this.finale.update();
     this.proj.update(dt, this.bounds, (p) => this._projHit(p, ctx));
     this._waves(dt, ctx); this._beams(ctx);
     this.tele.update(this.t, this.bm.pulse(this.t, 7));
@@ -223,6 +229,18 @@ export class Fight {
     this.fx.update(dt, this.cam.cam.position, this.player);
     if (this.chain > 0 && this.t - this._lastGood > 4) { this.chain = Math.max(0, this.chain - 1); this._lastGood = this.t; this._mult(); }
     this.hud.update(dt, { hpK: this.boss.hpK, empty: this.boss.state === 'desperate', hearts: this.player.hearts, maxHearts: this.maxHearts, meter: this.player.meter, spot: this.spotUntil > 0, score: this.score, mult: this.mult, beatPulse: this.bm.pulse(this.t) });
+    // your combo's heat (0..4): it raises your damage and how fast the spotlight fills, and how hard the room dances
+    this.heat = Math.max(0, [1, 2, 4, 6, 8].indexOf(this.mult)); this.player.heat = this.heat;
+    this.hud.chain(this.chain, this.mult);
+    this.hud.finale(this.finale.on && this.state !== 'done', this.finale.bank, this.finale.mult, this.finale.kept, this.t - this.finale.dropT < 0.5 ? -1 : this.t - this.finale.upT < 0.5 ? 1 : 0);
+    // the spotlight is yours to take: a Q over YOU's head, on the beat
+    if (this.player.meter >= 1 && this.spotUntil <= 0 && this.state === 'play') { const sp = this.cam.toScreen(_SP.set(this.player.x, 2.05, this.player.z)); this.hud.keycap(true, sp.x, sp.y, this.bm.strikePulse(this.t, 5)); }
+    else this.hud.keycap(false);
+    this.fx.drawTargets(this.finale.on && (this.state === 'play' || this.state === 'finishing') && this.boss.state !== 'finished' ? this.finale.drawList() : [], this.bm.strikePulse(this.t, 6));
+    // the room's lamps and neon brighten on the beat, more the hotter your combo
+    const A = this.arena && (this.arena.arena || this.arena);
+    const heatK = this.finale.down ? 4 : this.heat;
+    if (A && A.setBeat) A.setBeat(this.state === 'play' || this.state === 'finishing' ? (0.2 + 0.12 * heatK) * this.bm.pulse(this.t, 6) * (0.55 + 0.45 * this.bm.strikePulse(this.t, 3)) : 0);
     if (this._finishT !== undefined && this.cam.override) {
       this._finishT += dt;
       const k = this._finishT < 0.35 ? this._finishT / 0.35 : this._finishT < 3.2 ? 1 : Math.max(0, 1 - (this._finishT - 3.2) / 1.2);
@@ -288,6 +306,7 @@ export class Fight {
           this.sfx.catch && this.sfx.catch(q, this.pan(p.x));
           this._glimmer(q === 'perfect' ? 2 : 1, true);
           this._good(q === 'perfect' ? 120 : 70);
+          this._pop('+' + Math.round((q === 'perfect' ? 120 : 70) * this.mult).toLocaleString('en-US'), pl.x, 2.5, pl.z, q === 'perfect' ? 'gold' : '');
           return;
         }
       }
@@ -329,6 +348,8 @@ export class Fight {
         this._good(q === 'perfect' ? 150 : 90);
         // a hit of her body, turned on her: a cut if she's close, the gold back at her if she isn't
         if (o.melee || o.counter) this._sendBack(q);
+        this._pop('+' + Math.round((q === 'perfect' ? 150 : 90) * this.mult).toLocaleString('en-US'), pl.x, 2.5, pl.z, q === 'perfect' ? 'gold' : '');
+        if (q === 'perfect') this.fx.ring && this.fx.ring(pl.x, pl.z, GOLD, 1.8);
         return 'parried';
       }
     }
@@ -392,7 +413,15 @@ export class Fight {
     this.fx.sparks(this.player.x, 1.1, this.player.z, PINK, 14);
     this.sfx.hurt && this.sfx.hurt(this.pan(this.player.x), this.player.hearts);
   }
-  _good(points) { this.chain++; this._lastGood = this.t; this._mult(); this.score += Math.round(points * this.mult); }
+  _good(points) { const was = this.mult; this.chain++; this._chainMax = Math.max(this._chainMax || 0, this.chain); this._lastGood = this.t; this._mult(); this.score += Math.round(points * this.mult); if (this.mult > was) this._tierUp(); }
+  // the combo's multiplier goes up: a ring of gold off YOU and the chord climbing
+  _tierUp() {
+    const pl = this.player;
+    this.fx.ring && this.fx.ring(pl.x, pl.z, GOLD, 2.4); this.fx.glitter(pl.x, 1.3, pl.z, GOLD, 16, 0.6);
+    this._glimmer(2, false); this.after(0.08, () => this._glimmer(3, false));
+  }
+  // points as they're scored, where they were scored
+  _pop(text, x, y, z, cls = '') { const sp = this.cam.toScreen(_SP.set(x, y, z)); this.hud.pop(text, sp.x, sp.y, cls); }
   _mult() { this.mult = this.chain >= 40 ? 8 : this.chain >= 24 ? 6 : this.chain >= 14 ? 4 : this.chain >= 6 ? 2 : 1; }
 
   _landed(s, res, on, counter, at) {
@@ -404,20 +433,36 @@ export class Fight {
     if (s.name !== 'ring' && !big && b.state === 'perform' && !pl.solo) (this._landedAt ||= []).push(this.t);
     // on the beat it's gold, loud and heavy; off the beat it's a small grey knock: you can see and hear which
     const fat = on && (s.big || s.name === 'ring' || pl.solo);
-    this.fx.sparks(x, 1.3, z, on ? GOLD : new THREE.Color(1.5, 1.4, 1.3), big ? 40 : fat ? 26 : on ? 16 : 7, dir);
-    this.fx.chips(x, 1.3, z, PORCELAIN, big ? 22 : fat ? 12 : on ? 8 : 4, dir);
-    if (on) this.fx.glitter(x, 1.4, z, GOLD, big ? 26 : fat ? 10 : 5, big ? 0.8 : 0.3);
-    this.fx.impact && this.fx.impact(x, 1.25, z, dir, { gold: on, power: big ? 2.2 : heavy && on ? 1.5 : fat ? 1.25 : on ? 0.95 : 0.5 });
+    // the finale: the rings are the event; strikes between them are small (she's already beaten)
+    const fin = this.finale.on && s.name !== 'ring' && !s.finaleDone ? this.finale.struck(s, on, this.t) : null, small = fin && !fin.perfect;
+    const fk = small ? 0.45 : 1;
+    this.fx.sparks(x, 1.3, z, on ? GOLD : new THREE.Color(1.5, 1.4, 1.3), Math.round((big ? 40 : fat ? 26 : on ? 16 : 7) * fk), dir);
+    this.fx.chips(x, 1.3, z, PORCELAIN, Math.round((big ? 22 : fat ? 12 : on ? 8 : 4) * fk), dir);
+    if (on && !small) this.fx.glitter(x, 1.4, z, GOLD, big ? 26 : fat ? 10 : 5, big ? 0.8 : 0.3);
+    this.fx.impact && this.fx.impact(x, 1.25, z, dir, { gold: on, power: small ? 0.55 : big ? 2.2 : heavy && on ? 1.5 : fat ? 1.25 : on ? 0.95 : 0.5 });
     // her body stops for a moment with yours: the hit has weight
     if (b.rig && b.rig.hitStop) b.rig.hitStop(big ? 0.13 : fat ? 0.075 : on ? 0.055 : 0.025);
     this.cam.shake(big ? 1.0 : heavy && on ? 0.55 : fat ? 0.42 : on ? 0.3 : 0.14, big ? 0.2 : 0.12);
     if (heavy && on) this.cam.kick(big ? 2.4 : 0.9);
-    if (big) { this.fx.flash(new THREE.Color(0.16, 0.11, 0.03), 1); this.fx.aberrate(1.8); }
+    if (big && !small) { this.fx.flash(new THREE.Color(0.16, 0.11, 0.03), 1); this.fx.aberrate(1.8); }
     this.sfx.hit && this.sfx.hit({ heavy: heavy && on, onBeat: on, kind: s.name, pan: this.pan(x), crit: big, soft: !on });
     if (big) this.sfx.goldBurst && this.sfx.goldBurst(this.pan(x));
-    if (on) this._glimmer(big ? 2 : fat ? 1 : 0, false);
-    this._good(big ? 120 : fat ? 50 : on ? 35 : 12);
-    b.fig && b.fig.hitAt && b.fig.hitAt(new THREE.Vector3(x, 1.3, z), new THREE.Vector3(Math.sin(dir), 0, Math.cos(dir)), { power: big ? 2.2 : heavy && on ? 1.6 : fat ? 1.3 : on ? 1.05 : 0.6, chips: on });
+    if (on && !this.finale.on) this._glimmer(big ? 2 : fat ? 1 : 0, false);
+    this._good(fin ? 0 : big ? 120 : fat ? 50 : on ? 35 : 12);   // (in the finale the points are the finale's)
+    if (big && !this.finale.on) this._pop('+' + Math.round(120 * this.mult).toLocaleString('en-US'), x, 2.3, z, 'gold');
+    // the finale: a ring closing on her as you land it is the big points (the last one, the final blow); a strike off
+    // the beat takes a step of its multiplier
+    if (fin && fin.last) this._finaleLast(fin);
+    else if (fin) {
+      this.score += fin.pts;
+      if (fin.perfect || fin.pts >= 100) this._pop('+' + fin.pts.toLocaleString('en-US'), x + (Math.random() - 0.5) * 0.6, 2.4, z, fin.perfect ? 'gold' : '');
+      if (fin.perfect) {
+        this.fx.glitter(b.x, 1.5, b.z, GOLD, 14, 0.5);
+        this._glimmer(this.finale.streak % 4, true); this.sfx.goldBurst && this.sfx.goldBurst(this.pan(b.x)); this.cam.kick(1.0);
+      }
+      if (fin.broke) this.sfx.deflect && this.sfx.deflect(this.pan(x));
+    }
+    b.fig && b.fig.hitAt && b.fig.hitAt(new THREE.Vector3(x, 1.3, z), new THREE.Vector3(Math.sin(dir), 0, Math.cos(dir)), { power: small ? 0.42 : fin ? 1.8 : big ? 2.2 : heavy && on ? 1.6 : fat ? 1.3 : on ? 1.05 : 0.6, chips: on && !small });
     // the finisher and a hit sent back throw her into the room
     if (big) { this._knock(s.riposte ? 1.9 : 1.5, dir); if (s.finisher) b.open(0.6); }
   }
@@ -474,7 +519,7 @@ export class Fight {
   // she's thrown a little way; a wall or a prop in the way stops her hard: it hurts her, and breaks what it can
   _knock(dist, ang) {
     const b = this.boss, A = this.arena;
-    if (this.track.knockback === false || b.move || !b.targetable || b.state === 'finished' || b.lockPos) return;
+    if (this.track.knockback === false || b.move || b.pinned || !b.targetable || b.state === 'finished' || b.lockPos) return;
     const res = (x, z) => (A && A.resolve ? A.resolve(x, z, b.radius * 0.8) : { x, z });
     // standing somewhere the room keeps you out of (a stage, behind a counter): she stays put
     const here = res(b.x, b.z); if (Math.hypot(here.x - b.x, here.z - b.z) > 0.04) return;
@@ -567,6 +612,32 @@ export class Fight {
     for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
     this.hud.banner('', ''); this.sfx.empty && this.sfx.empty(); this.track.onEmpty && this.track.onEmpty(this);
     this._dropKeepsake();
+    // the finale: a gold ring closes on her through every bar from here to the last hit
+    this.finale.start();
+  }
+  // the last ring, landed on the last hit: its points, and the shatter is yours (gold, now, or as she shatters)
+  _finaleLast(res) {
+    const b = this.boss;
+    this.score += res.pts;
+    this._pop('+' + res.pts.toLocaleString('en-US'), b.x, 2.6, b.z, 'huge');
+    if (this.state === 'play') this._blowAtShatter = true; else this._finalBlowFx();
+  }
+  _finalBlowFx() {
+    const b = this.boss;
+    this.fx.flash(new THREE.Color(0.3, 0.22, 0.06), 1); this.fx.glitter(b.x, 1.6, b.z, GOLD, 120, 2.0); this.cam.kick(4);
+    this.sfx.goldBurst && this.sfx.goldBurst(this.pan(b.x)); this._glimmer(3, true);
+  }
+  // the song's last bars: she goes down on her knees, somewhere YOU can get to her, and stays down to the last hit
+  _finaleDown() {
+    const b = this.boss; if (this.track.finalePin === false || b.state === 'finished' || b.hp > 0) return;
+    let x = b.x, z = b.z; const A = this.arena, bd = this.bounds, r = b.radius || 0.8;
+    if (bd) { x = Math.max(bd.minX + r + 0.4, Math.min(bd.maxX - r - 0.4, x)); z = Math.max(bd.minZ + r + 0.4, Math.min(bd.maxZ - r - 0.4, z)); }
+    if (A && A.resolve) { const q = A.resolve(x, z, r); x = q.x; z = q.z; }
+    b.move = null; b.busyUntil = 0; b.intangible = false;
+    if (Math.hypot(x - b.x, z - b.z) > 0.05) b.moveTo(x, z, 0.28, { easing: 'out' });
+    b.pin('Crouch_Idle_Loop');
+    this.fx.dust && this.fx.dust(x, z, 10); this.cam.shake(0.45, 0.14);
+    this.sfx.breakProp && this.sfx.breakProp(this.pan(x));
   }
 
   // ---------------- what she leaves ----------------
@@ -587,17 +658,21 @@ export class Fight {
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (viewMatrix * (modelMatrix * vec4(position, 1.0))); }',
       fragmentShader: 'uniform float uK; uniform float uFxK; varying vec2 vUv; void main(){ float a = (1.0 - vUv.y) * (1.0 - vUv.y) * 0.3 * uK; gl_FragColor = vec4(vec3(3.0, 2.0, 0.6) * a * uFxK, a); }' }));
     col.position.y = 3.5; col.renderOrder = 6; col.frustumCulled = false;
-    // she drops it off to one side of her, a few steps from YOU: you see it land, and go for it
+    // she drops it off to one side of her, a few steps from YOU, somewhere YOU can walk to in a straight line: you
+    // see it land, and go for it
     const b = this.boss, pl = this.player, a = Math.atan2(pl.x - b.x, pl.z - b.z), A = this.arena;
-    let tx = b.x, tz = b.z;
-    for (const side of [1, -1, 0.5, -0.5, 0]) {
-      const aa = a + side * 1.7;
-      let x = b.x + Math.sin(aa) * 2.4, z = b.z + Math.cos(aa) * 2.4;
+    const free = (x, z) => { if (!A || !A.resolve) return true; const r = A.resolve(x, z, 0.5); return Math.hypot(r.x - x, r.z - z) < 0.02; };
+    const clear = (x, z) => { const n = Math.ceil(Math.hypot(x - pl.x, z - pl.z) / 0.3); for (let i = 1; i <= n; i++) { const k = i / n; if (!free(pl.x + (x - pl.x) * k, pl.z + (z - pl.z) * k)) return false; } return true; };
+    let tx = pl.x + Math.sin(a + Math.PI) * 0, tz = pl.z, best = -1e9;
+    for (const R of [2.4, 1.8, 3.2]) for (const side of [1.7, -1.7, 1.0, -1.0, 2.4, -2.4, 0.4, -0.4]) {
+      let x = b.x + Math.sin(a + side) * R, z = b.z + Math.cos(a + side) * R;
       const bd = this.bounds; if (bd) { x = Math.max(bd.minX + 1, Math.min(bd.maxX - 1, x)); z = Math.max(bd.minZ + 1, Math.min(bd.maxZ - 1, z)); }
-      if (A && A.resolve) { const r = A.resolve(x, z, 0.5); x = r.x; z = r.z; }
-      tx = x; tz = z;
-      if (Math.hypot(x - pl.x, z - pl.z) > 2.2) break;
+      if (!free(x, z)) continue;
+      const dY = Math.hypot(x - pl.x, z - pl.z);
+      const score = (clear(x, z) ? 10 : 0) + (dY > 2.0 ? 3 : 0) - Math.abs(dY - 3) * 0.4;
+      if (score > best) { best = score; tx = x; tz = z; }
     }
+    if (best < 10) { const aa = Math.atan2(b.x - pl.x, b.z - pl.z); tx = pl.x + Math.sin(aa + 1.2) * 2.5; tz = pl.z + Math.cos(aa + 1.2) * 2.5; if (!free(tx, tz)) { tx = pl.x; tz = pl.z; } }
     this.ks = { g, col, kind, t: 0, from: new THREE.Vector3(b.x, 1.5, b.z), at: new THREE.Vector3(tx, 0, tz), state: 'fall', glint: 0 };
     this.fx.glitter(b.x, 1.5, b.z, GOLD, 30, 0.6);
     this.sfx.goldBurst && this.sfx.goldBurst(this.pan(b.x));
@@ -615,7 +690,8 @@ export class Fight {
       g.position.set(k.at.x, 0.36 + Math.sin(k.t * 3) * 0.06, k.at.z); g.rotation.set(0.25, g.rotation.y + dt * 1.6, 0);
       k.col.material.uniforms.uK.value = Math.min(1, k.t * 3) * (0.75 + 0.25 * this.bm.pulse(this.t, 5));
       if ((k.glint -= dt) <= 0) { k.glint = 0.5; this.fx.glitter(k.at.x, 0.5, k.at.z, GOLD, 4, 0.25); if (this.fx.ring) this.fx.ring(k.at.x, k.at.z, GOLD, 0.9); }
-      if (Math.hypot(pl.x - k.at.x, pl.z - k.at.z) < 1.0 || this.state === 'finishing') { k.state = 'take'; k.t = 0; k.from = g.position.clone(); this.scene.remove(k.col); pl.rig.upperOnce('Interact', { duration: 0.45, from: 0.1, to: 0.6, fade: 0.05 }); }
+      // walk over it to take it back (and if you don't come for it, it comes to you after a few beats)
+      if (Math.hypot(pl.x - k.at.x, pl.z - k.at.z) < 1.0 || this.state === 'finishing' || k.t > 6) { k.state = 'take'; k.t = 0; k.from = g.position.clone(); this.scene.remove(k.col); pl.rig.upperOnce('Interact', { duration: 0.45, from: 0.1, to: 0.6, fade: 0.05 }); }
     } else if (k.state === 'take') {
       const hand = pl.rig.bones.hand_r, to = hand ? hand.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(pl.x, 1.1, pl.z);
       const u = Math.min(1, k.t / 0.24);
@@ -624,7 +700,9 @@ export class Fight {
         k.state = 'gone'; this.scene.remove(g); this.kept = k.kind;
         this.fx.glitter(to.x, to.y, to.z, GOLD, 26, 0.4); this.fx.ring && this.fx.ring(pl.x, pl.z, GOLD, 1.6);
         this._glimmer(2, true); this.after(0.12, () => this._glimmer(3, true));
-        this.score += 2500 * this.mult;
+        // what it does: everything the finale's worth, doubled (the x2 by its points says so)
+        this.finale.kept = 2;
+        this._pop('\u00d72', pl.x, 2.8, pl.z, 'huge');
       }
     }
   }
@@ -675,7 +753,7 @@ export class Fight {
     // and the room's glow breathes a little with the beat (the same way: on top of whatever the room set)
     if (this._bloomLast === undefined || Math.abs(post.bloom - this._bloomLast) > 1e-6) this._bloomBase = post.bloom;
     const bp = this.state === 'play' ? this.bm.pulse(this.t, 7) : 0;
-    post.bloom = this._bloomBase * (1 + 0.1 * bp * bp); this._bloomLast = post.bloom;
+    post.bloom = this._bloomBase * (1 + (0.06 + 0.04 * this.heat) * bp * bp); this._bloomLast = post.bloom;
     if (k > 0.002) {
       const sp = this.cam.toScreen(_SP.set(this.player.x, 1.0, this.player.z));
       post.focus.set(sp.x, 1 - sp.y);
@@ -726,8 +804,10 @@ export class Fight {
     for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
     for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
     if (this.spotUntil > 0) this._endSpotlight();
+    this.boss.pinned = false;
     this.boss.restore(cp.boss);
     this.boss._now = cp.t; this.boss.busyUntil = 0;
+    if (this.boss.hp > 0) this.finale.reset();
     this.score = cp.score;            // a rewind takes back what you scored since the checkpoint
     this.hud.restoreNotches(this.boss.broken);
     this.player.revive();
@@ -755,6 +835,8 @@ export class Fight {
     this.fx.chips(this.boss.x, 1.4, this.boss.z, PORCELAIN, 90); this.fx.glitter(this.boss.x, 1.5, this.boss.z, GOLD, 80, 1.4);
     this.boss.state = 'finished';
     this.score += 5000 * this.mult;
+    // the final blow: the last ring landed on the last hit (the shatter was yours)
+    if (this._blowAtShatter) { this._blowAtShatter = false; this._finalBlowFx(); }
     // the camera leans in on the two of you (you keep control), then lets go
     const bx = this.boss.x, bz = this.boss.z, px = this.player.x, pz = this.player.z;
     const mx = (bx + px) / 2, mz = (bz + pz) / 2;
@@ -790,7 +872,9 @@ export class Fight {
   _done(won) {
     this.state = 'done'; this.hud.show(false);
     const st = this.player.stats;
-    const result = { won, score: this.score, rewinds: this.rewinds, encores: this.encores, stats: st, grade: this.grade() };
+    const fi = this.finale;
+    const result = { won, score: this.score, rewinds: this.rewinds, encores: this.encores, stats: st, grade: this.grade(),
+      finale: fi.on ? { bonus: fi.bank, rings: fi.perfect, of: fi.total, finalBlow: fi.finalBlow, kept: fi.kept > 1 } : null };
     this.resultCb && this.resultCb(result);
   }
   grade() {
@@ -822,6 +906,9 @@ export class Fight {
     if (this._expBase !== undefined) this.app.post.fx.exposure = this._expBase;
     if (this._bloomBase !== undefined) this.app.post.fx.bloom = this._bloomBase;
     this.app.post.fx.focusK = 0; this.cam.soloK = 0;
+    const A = this.arena && (this.arena.arena || this.arena); if (A && A.setBeat) A.setBeat(0);
+    this.hud.keycap(false); this.hud.finale(false); this.hud.chain(0, 1);
+    this.fx.drawTargets && this.fx.drawTargets([]);
     this.sfx.detach && this.sfx.detach();
     this.proj.clear(); this.tele.clear(); this.fx.clear();
     this.scene.remove(this.proj.mesh, this.proj.dots, this.tele.mesh);

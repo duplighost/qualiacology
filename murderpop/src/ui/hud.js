@@ -1,6 +1,7 @@
 // The fight HUD: minimal and honest. Her name and bar top centre (lost health lingers, then drains; gold
 // notches crack when broken), your hearts bottom left (they shatter when lost), the spotlight meter under
-// them, score and combo small in the top right. No words that explain anything.
+// them, score small in the top right, your combo big at the bottom (its multiplier is what everything's worth),
+// the finale's points under her bar once it's empty, and a Q over YOU's head when the spotlight is yours to take.
 
 const HEART = '<svg viewBox="0 0 32 30"><path d="M16 29 C6 21 1 15.5 1 9.5 C1 4.8 4.8 1 9.4 1 C12.3 1 14.7 2.6 16 5 C17.3 2.6 19.7 1 22.6 1 C27.2 1 31 4.8 31 9.5 C31 15.5 26 21 16 29 Z"/></svg>';
 
@@ -18,12 +19,18 @@ export class HUD {
       </div>
       <div class="mp-score"><div class="mp-score-n">0</div><div class="mp-combo"><span class="mp-combo-x">×</span><span class="mp-combo-n">1</span></div></div>
       <div class="mp-pops"></div>
+      <div class="mp-chain"><b class="mp-chain-n">0</b><i class="mp-chain-x">×1</i></div>
+      <div class="mp-bonus"><b class="mp-bonus-n">0</b><i class="mp-bonus-x">×1</i><i class="mp-bonus-k">×2</i></div>
+      <div class="mp-keycap">Q</div>
       <div class="mp-banner"></div>`;
     this.el = {
       boss: root.querySelector('.mp-boss'), name: root.querySelector('.mp-boss-name'), fill: root.querySelector('.mp-bar-fill'), ghost: root.querySelector('.mp-bar-ghost'),
       notches: root.querySelector('.mp-notches'), hearts: root.querySelector('.mp-hearts'), meter: root.querySelector('.mp-meter'), meterFill: root.querySelector('.mp-meter-fill'),
       score: root.querySelector('.mp-score-n'), combo: root.querySelector('.mp-combo'), comboN: root.querySelector('.mp-combo-n'), pops: root.querySelector('.mp-pops'), banner: root.querySelector('.mp-banner'),
+      chain: root.querySelector('.mp-chain'), chainN: root.querySelector('.mp-chain-n'), chainX: root.querySelector('.mp-chain-x'),
+      bonus: root.querySelector('.mp-bonus'), bonusN: root.querySelector('.mp-bonus-n'), bonusX: root.querySelector('.mp-bonus-x'), key: root.querySelector('.mp-keycap'),
     };
+    this._chain = 0; this._mult = 1; this._bonus = 0;
     this.ghostK = 1; this.shownK = 1; this.ghostHold = 0; this.lastHearts = -1; this.shownScore = 0;
   }
 
@@ -47,13 +54,41 @@ export class HUD {
   pop(text, x, y, cls = '') {
     const d = document.createElement('div'); d.className = 'mp-pop ' + cls; d.textContent = text;
     d.style.left = (x * 100) + '%'; d.style.top = (y * 100) + '%';
-    this.el.pops.appendChild(d); setTimeout(() => d.remove(), 900);
+    this.el.pops.appendChild(d); setTimeout(() => d.remove(), /huge/.test(cls) ? 1600 : 900);
   }
   banner(text, cls = '', ms = 1600) {
     const b = this.el.banner; b.textContent = text; b.className = 'mp-banner show ' + cls;
     clearTimeout(this._bt); this._bt = setTimeout(() => { b.className = 'mp-banner'; }, ms);
   }
   show(on) { this.root.classList.toggle('mp-hidden', !on); }
+
+  // your combo: shown from 3; it pops when its multiplier goes up, and falls apart when you're hit
+  chain(n, mult) {
+    const el = this.el;
+    if (n !== this._chain) {
+      if (n < this._chain && this._chain >= 5) { el.chain.classList.remove('broke'); void el.chain.offsetWidth; el.chain.classList.add('broke'); }
+      if (n >= 3) { el.chainN.textContent = String(n); el.chain.classList.remove('broke'); }
+      this._chain = n;
+    }
+    if (mult !== this._mult) { if (mult > this._mult) { el.chain.classList.remove('up'); void el.chain.offsetWidth; el.chain.classList.add('up'); } el.chainX.textContent = '\u00d7' + mult; this._mult = mult; }
+    el.chain.classList.toggle('on', n >= 3 || el.chain.classList.contains('broke')); el.chain.classList.toggle('hot', mult >= 4);
+  }
+  // the finale: its points, its multiplier, and the keepsake's x2 once YOU has it
+  finale(on, bank, mult, kept, move = 0) {
+    const el = this.el;
+    el.bonus.classList.toggle('on', on);
+    if (!on) { this._bonus = 0; return; }
+    if (move !== this._bonusMove) { el.bonus.classList.remove('up', 'down'); if (move) { void el.bonus.offsetWidth; el.bonus.classList.add(move > 0 ? 'up' : 'down'); } this._bonusMove = move; }
+    this._bonus += (bank - this._bonus) * 0.25; if (Math.abs(bank - this._bonus) < 1) this._bonus = bank;
+    el.bonusN.textContent = Math.round(this._bonus).toLocaleString('en-US');
+    el.bonusX.textContent = '\u00d7' + mult;
+    el.bonus.classList.toggle('kept', kept > 1);
+  }
+  // the key, over YOU's head (x, y: 0..1 of the screen)
+  keycap(on, x = 0.5, y = 0.5, pulse = 0) {
+    const k = this.el.key; k.classList.toggle('on', on);
+    if (on) { k.style.left = (x * 100) + '%'; k.style.top = (y * 100) + '%'; k.style.setProperty('--pulse', String(pulse)); }
+  }
 
   update(dt, { hpK, empty, hearts, maxHearts, meter, spot, score, mult, beatPulse }) {
     // bar: fill snaps, the ghost waits a moment then drains
