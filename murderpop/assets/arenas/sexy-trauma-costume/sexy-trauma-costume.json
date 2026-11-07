@@ -1,0 +1,913 @@
+{
+ "version": 1,
+ "name": "sexy-trauma-costume",
+ "glb": "sexy-trauma-costume.glb",
+ "frame": "three.js: x right, y up, z toward the camera; 2D floor coordinates are (x, z)",
+ "lightmap": {
+  "size": 2048,
+  "uv": 1,
+  "encoding": "lightmap rgb = (L/(1+L))^(1/2.2) -> L = e/(1-e) with e = rgb^2.2; radiance = albedo * L. keymap r = the fraction of L that is the key light, direct"
+ },
+ "bounds": {
+  "minX": -11.0,
+  "maxX": 11.0,
+  "minZ": -7.0,
+  "maxZ": 7.0
+ },
+ "room": {
+  "min": [
+   -11.0,
+   0.0,
+   -10.5
+  ],
+  "max": [
+   11.0,
+   5.2,
+   7.4
+  ]
+ },
+ "capture": [
+  0.0,
+  1.5,
+  -1.55
+ ],
+ "colliders": [
+  {
+   "type": "box",
+   "x": 0.0,
+   "z": -6.05,
+   "hx": 3.15,
+   "hz": 0.5,
+   "rot": -0.0,
+   "tag": "counter",
+   "h": 0.99
+  },
+  {
+   "type": "box",
+   "x": -10.0,
+   "z": -5.4,
+   "hx": 1.0,
+   "hz": 0.06,
+   "rot": -0.0,
+   "tag": "booth",
+   "h": 2.6
+  },
+  {
+   "type": "box",
+   "x": -10.0,
+   "z": -1.8,
+   "hx": 1.0,
+   "hz": 0.06,
+   "rot": -0.0,
+   "tag": "booth",
+   "h": 2.6
+  },
+  {
+   "type": "box",
+   "x": -10.0,
+   "z": 1.8,
+   "hx": 1.0,
+   "hz": 0.06,
+   "rot": -0.0,
+   "tag": "booth",
+   "h": 2.6
+  },
+  {
+   "type": "box",
+   "x": -10.0,
+   "z": 5.4,
+   "hx": 1.0,
+   "hz": 0.06,
+   "rot": -0.0,
+   "tag": "booth",
+   "h": 2.6
+  },
+  {
+   "type": "box",
+   "x": -8.7,
+   "z": -5.5,
+   "hx": 1.45,
+   "hz": 0.35,
+   "rot": -0.7854,
+   "tag": "mirror",
+   "h": 2.8
+  },
+  {
+   "type": "box",
+   "x": 10.72,
+   "z": -4.875,
+   "hx": 0.28,
+   "hz": 2.125,
+   "rot": -0.0,
+   "tag": "shelving",
+   "h": 4.5
+  },
+  {
+   "type": "box",
+   "x": 10.72,
+   "z": 4.875,
+   "hx": 0.28,
+   "hz": 2.125,
+   "rot": -0.0,
+   "tag": "shelving",
+   "h": 4.5
+  },
+  {
+   "type": "box",
+   "x": -6.05,
+   "z": 6.6,
+   "hx": 4.45,
+   "hz": 0.35,
+   "rot": -0.0,
+   "tag": "case",
+   "h": 0.45
+  },
+  {
+   "type": "box",
+   "x": 6.05,
+   "z": 6.6,
+   "hx": 4.45,
+   "hz": 0.35,
+   "rot": -0.0,
+   "tag": "case",
+   "h": 0.45
+  }
+ ],
+ "spawns": {
+  "player": {
+   "x": 0.0,
+   "z": 5.6,
+   "dir": [
+    0.0,
+    -1.0
+   ]
+  },
+  "boss": {
+   "x": 0.0,
+   "z": -6.85,
+   "dir": [
+    0.0,
+    -1.0
+   ]
+  }
+ },
+ "anchors": {
+  "counter": {
+   "pos": [
+    0.0,
+    1.05,
+    -6.05
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "register": {
+   "pos": [
+    1.8,
+    1.05,
+    -6.1
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "mirror": {
+   "pos": [
+    -8.6,
+    0.0,
+    -5.4
+   ],
+   "dir": [
+    0.7071,
+    0.7071
+   ],
+   "node": null
+  },
+  "riser": {
+   "pos": [
+    0.0,
+    0.6,
+    -8.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  },
+  "bay": {
+   "pos": [
+    13.0,
+    0.0,
+    0.0
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  }
+ },
+ "nodes": {},
+ "materials": {
+  "stc_bay": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.0232,
+    0.0103
+   ]
+  },
+  "stc_black": {
+   "kind": "solid"
+  },
+  "stc_brass": {
+   "kind": "solid"
+  },
+  "stc_bulbs": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.7605,
+    0.4342
+   ]
+  },
+  "stc_ceiling": {
+   "kind": "solid"
+  },
+  "stc_chrome": {
+   "kind": "solid"
+  },
+  "stc_concrete": {
+   "kind": "solid"
+  },
+  "stc_exit": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.0144,
+    0.0144
+   ]
+  },
+  "stc_floor": {
+   "kind": "solid"
+  },
+  "stc_glass": {
+   "kind": "glass"
+  },
+  "stc_gold": {
+   "kind": "solid"
+  },
+  "stc_lamp": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.4342,
+    0.117
+   ]
+  },
+  "stc_orange": {
+   "kind": "solid"
+  },
+  "stc_porcelain": {
+   "kind": "solid"
+  },
+  "stc_riser": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.2542,
+    0.0467
+   ]
+  },
+  "stc_runner": {
+   "kind": "solid"
+  },
+  "stc_salecard": {
+   "kind": "solid"
+  },
+  "stc_tube_a": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.9047,
+    0.7605
+   ]
+  },
+  "stc_tube_b": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.9047,
+    0.7605
+   ]
+  },
+  "stc_tube_c": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.9047,
+    0.7605
+   ]
+  },
+  "stc_velvet": {
+   "kind": "solid"
+  },
+  "stc_wallpaper": {
+   "kind": "solid"
+  }
+ },
+ "states": [
+  {
+   "name": "till",
+   "lightmap": "sexy-trauma-costume.till.webp",
+   "keymap": "sexy-trauma-costume.till.key.webp",
+   "exposure": 1.35,
+   "key": {
+    "light": "register",
+    "type": "point",
+    "color": [
+     1.0,
+     0.3231,
+     0.0452
+    ],
+    "pos": [
+     2.65,
+     1.45,
+     -6.1
+    ],
+    "dir": [
+     0.4852,
+     0.2655,
+     -0.8331
+    ],
+    "intensity": 19.0986,
+    "decay": 2
+   },
+   "emit": {
+    "stc_bay": [
+     4.0,
+     0.0926,
+     0.0413
+    ],
+    "stc_bulbs": [
+     0.6,
+     0.4563,
+     0.2605
+    ],
+    "stc_exit": [
+     3.0,
+     0.0433,
+     0.0433
+    ],
+    "stc_lamp": [
+     6.0,
+     2.6049,
+     0.7018
+    ],
+    "stc_riser": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_a": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_b": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_c": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.3231,
+    0.0452
+   ],
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "stats": {
+    "floor": [
+     0.0893,
+     0.0576,
+     0.0423
+    ],
+    "floor_key": [
+     0.0125,
+     0.0041,
+     0.0006
+    ],
+    "floor_median_lum": 0.0719,
+    "mean": [
+     0.0705,
+     0.0334,
+     0.0221
+    ],
+    "mean_lum": 0.0405
+   }
+  },
+  {
+   "name": "shop",
+   "lightmap": "sexy-trauma-costume.shop.webp",
+   "keymap": "sexy-trauma-costume.shop.key.webp",
+   "exposure": 1.0,
+   "key": {
+    "light": "shopsun",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.8632,
+     0.6867
+    ],
+    "dir": [
+     -0.2683,
+     0.8944,
+     -0.3578
+    ],
+    "intensity": 2.4,
+    "angle": 8.0
+   },
+   "emit": {
+    "stc_bay": [
+     4.0,
+     0.0926,
+     0.0413
+    ],
+    "stc_bulbs": [
+     1.6,
+     1.2168,
+     0.6946
+    ],
+    "stc_exit": [
+     3.0,
+     0.0433,
+     0.0433
+    ],
+    "stc_lamp": [
+     4.0,
+     1.7366,
+     0.4679
+    ],
+    "stc_riser": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_a": [
+     5.0,
+     4.5233,
+     3.8026
+    ],
+    "stc_tube_b": [
+     5.0,
+     4.5233,
+     3.8026
+    ],
+    "stc_tube_c": [
+     5.0,
+     4.5233,
+     3.8026
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.8632,
+    0.6867
+   ],
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "stats": {
+    "floor": [
+     1.4096,
+     1.0378,
+     0.8863
+    ],
+    "floor_key": [
+     0.0201,
+     0.0173,
+     0.0138
+    ],
+    "floor_median_lum": 1.2542,
+    "mean": [
+     0.7339,
+     0.5131,
+     0.4327
+    ],
+    "mean_lum": 0.5552
+   }
+  },
+  {
+   "name": "uv",
+   "lightmap": "sexy-trauma-costume.uv.webp",
+   "keymap": "sexy-trauma-costume.uv.key.webp",
+   "exposure": 1.3,
+   "key": {
+    "light": "uvsun",
+    "type": "sun",
+    "color": [
+     0.1946,
+     0.0452,
+     1.0
+    ],
+    "dir": [
+     0.0,
+     1.0,
+     -0.0
+    ],
+    "intensity": 3.2,
+    "angle": 10.0
+   },
+   "emit": {
+    "stc_bay": [
+     4.0,
+     0.0926,
+     0.0413
+    ],
+    "stc_bulbs": [
+     0.8,
+     0.6084,
+     0.3473
+    ],
+    "stc_exit": [
+     3.0,
+     0.0433,
+     0.0433
+    ],
+    "stc_lamp": [
+     1.0,
+     0.4342,
+     0.117
+    ],
+    "stc_riser": [
+     8.0,
+     2.0332,
+     0.3733
+    ],
+    "stc_tube_a": [
+     0.9731,
+     0.2259,
+     5.0
+    ],
+    "stc_tube_b": [
+     0.9731,
+     0.2259,
+     5.0
+    ],
+    "stc_tube_c": [
+     0.9731,
+     0.2259,
+     5.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.1946,
+    0.0452,
+    1.0
+   ],
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "stats": {
+    "floor": [
+     0.3889,
+     0.068,
+     2.4744
+    ],
+    "floor_key": [
+     0.0027,
+     0.0006,
+     0.0139
+    ],
+    "floor_median_lum": 0.3455,
+    "mean": [
+     0.2184,
+     0.0366,
+     1.1868
+    ],
+    "mean_lum": 0.1588
+   }
+  },
+  {
+   "name": "mirror",
+   "lightmap": "sexy-trauma-costume.mirror.webp",
+   "keymap": "sexy-trauma-costume.mirror.key.webp",
+   "exposure": 1.2,
+   "key": {
+    "light": "mirrorbulbs",
+    "type": "point",
+    "color": [
+     1.0,
+     0.7605,
+     0.4342
+    ],
+    "pos": [
+     -8.0,
+     1.8,
+     -4.8
+    ],
+    "dir": [
+     -0.907,
+     0.2041,
+     -0.3685
+    ],
+    "intensity": 33.4225,
+    "decay": 2
+   },
+   "emit": {
+    "stc_bay": [
+     3.0,
+     0.0695,
+     0.031
+    ],
+    "stc_bulbs": [
+     6.0,
+     4.5631,
+     2.6049
+    ],
+    "stc_exit": [
+     3.0,
+     0.0433,
+     0.0433
+    ],
+    "stc_lamp": [
+     1.5,
+     0.6512,
+     0.1755
+    ],
+    "stc_riser": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_a": [
+     1.4,
+     1.2665,
+     1.0647
+    ],
+    "stc_tube_b": [
+     1.4,
+     1.2665,
+     1.0647
+    ],
+    "stc_tube_c": [
+     1.4,
+     1.2665,
+     1.0647
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.7605,
+    0.4342
+   ],
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "stats": {
+    "floor": [
+     0.4984,
+     0.3854,
+     0.2864
+    ],
+    "floor_key": [
+     0.0726,
+     0.0554,
+     0.0316
+    ],
+    "floor_median_lum": 0.4055,
+    "mean": [
+     0.2921,
+     0.209,
+     0.1495
+    ],
+    "mean_lum": 0.2228
+   }
+  },
+  {
+   "name": "dark",
+   "lightmap": "sexy-trauma-costume.dark.webp",
+   "keymap": "sexy-trauma-costume.dark.key.webp",
+   "exposure": 1.5,
+   "key": {
+    "light": "topspot",
+    "type": "spot",
+    "color": [
+     1.0,
+     0.9216,
+     0.8228
+    ],
+    "pos": [
+     0.0,
+     9.0,
+     3.0
+    ],
+    "dir": [
+     0.0,
+     0.8924,
+     0.4512
+    ],
+    "intensity": 5.9683,
+    "decay": 2,
+    "aim": [
+     -0.0,
+     -0.9138,
+     -0.4061
+    ],
+    "cone": 0.2618,
+    "blend": 0.6
+   },
+   "emit": {
+    "stc_bay": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_bulbs": [
+     2.0,
+     1.521,
+     0.8683
+    ],
+    "stc_exit": [
+     1.5,
+     0.0217,
+     0.0217
+    ],
+    "stc_lamp": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_riser": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_a": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_b": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_c": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.9216,
+    0.8228
+   ],
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "stats": {
+    "floor": [
+     0.0227,
+     0.015,
+     0.0083
+    ],
+    "floor_key": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "floor_median_lum": 0.0014,
+    "mean": [
+     0.0246,
+     0.0162,
+     0.0089
+    ],
+    "mean_lum": 0.0175
+   }
+  },
+  {
+   "name": "hell",
+   "lightmap": "sexy-trauma-costume.hell.webp",
+   "keymap": "sexy-trauma-costume.hell.key.webp",
+   "exposure": 1.1,
+   "key": {
+    "light": "hellsun",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.0103,
+     0.0103
+    ],
+    "dir": [
+     0.0953,
+     0.9535,
+     -0.286
+    ],
+    "intensity": 1.6,
+    "angle": 8.0
+   },
+   "emit": {
+    "stc_bay": [
+     4.0,
+     0.0926,
+     0.0413
+    ],
+    "stc_bulbs": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_exit": [
+     3.0,
+     0.0433,
+     0.0433
+    ],
+    "stc_lamp": [
+     3.0,
+     1.3025,
+     0.3509
+    ],
+    "stc_riser": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "stc_tube_a": [
+     5.0,
+     0.0722,
+     0.0259
+    ],
+    "stc_tube_b": [
+     5.0,
+     0.0722,
+     0.0259
+    ],
+    "stc_tube_c": [
+     5.0,
+     0.0722,
+     0.0259
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.0103,
+    0.0103
+   ],
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "stats": {
+    "floor": [
+     0.9781,
+     0.0125,
+     0.0096
+    ],
+    "floor_key": [
+     0.0117,
+     0.0001,
+     0.0001
+    ],
+    "floor_median_lum": 0.2444,
+    "mean": [
+     0.5104,
+     0.0082,
+     0.0051
+    ],
+    "mean_lum": 0.115
+   }
+  }
+ ]
+}

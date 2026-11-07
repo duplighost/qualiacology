@@ -166,3 +166,7 @@
 
 /noshore  /no-shore/  302
 /dive  /no-shore/  302
+
+# MURDERPOP
+/murderpop.html  /murderpop/  301!
+/murder-pop  /murderpop/  302

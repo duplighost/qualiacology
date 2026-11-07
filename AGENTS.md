@@ -86,6 +86,7 @@ Old copies and retired folders are in `D:\Archive`; never copy from there.
 | al-dente | copy `src/` (and `vendor/` only if three.js changes) into `al-dente/`; keep the site's index.html shell (it self-hosts the fonts and three.js). Included in PASTA and still reachable from the original /spaghetti/ opening. |
 | rally, rocket-shoes | plain copies; compare dates both ways before copying |
 | starstruck | `node tools/build-site-copy.mjs --site=<this repo>` writes `starstruck/`; never hand-edit the site copy |
+| murderpop | `node tools/build-site-copy.mjs <this repo>` (it copies the card too); never hand-edit the site copy |
 | sill | the page here (`sill/index.html`) is hand-written. The game is a Windows desktop app built in `D:\Projects\sill`; its download is `SILL-windows.zip` on this repo's GitHub release `sill-v1.0.0` |
 | everything else | none: the site copy here is the only source |
 

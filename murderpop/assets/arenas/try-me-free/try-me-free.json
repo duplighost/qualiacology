@@ -1,0 +1,738 @@
+{
+ "version": 1,
+ "name": "try-me-free",
+ "glb": "try-me-free.glb",
+ "frame": "three.js: x right, y up, z toward the camera; 2D floor coordinates are (x, z)",
+ "lightmap": {
+  "size": 2048,
+  "uv": 1,
+  "encoding": "lightmap rgb = (L/(1+L))^(1/2.2) -> L = e/(1-e) with e = rgb^2.2; radiance = albedo * L. keymap r = the fraction of L that is the key light, direct"
+ },
+ "bounds": {
+  "minX": -11.4,
+  "maxX": 11.0,
+  "minZ": -6.7,
+  "maxZ": 7.0
+ },
+ "room": {
+  "min": [
+   -16.0,
+   0.0,
+   -22.0
+  ],
+  "max": [
+   34.0,
+   16.0,
+   8.0
+  ]
+ },
+ "capture": [
+  0.0,
+  2.0,
+  -0.0
+ ],
+ "colliders": [
+  {
+   "type": "circle",
+   "x": -25.5,
+   "z": -0.0,
+   "r": 15.5,
+   "tag": "bowl",
+   "h": 2.0
+  }
+ ],
+ "spawns": {
+  "player": {
+   "x": 0.0,
+   "z": 4.2,
+   "dir": [
+    0.0,
+    -1.0
+   ]
+  },
+  "boss": {
+   "x": 0.0,
+   "z": -5.6,
+   "dir": [
+    0.0,
+    1.0
+   ]
+  }
+ },
+ "anchors": {
+  "herobox": {
+   "pos": [
+    0.0,
+    1.2,
+    -7.3
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "herobox"
+  },
+  "box_ppg": {
+   "pos": [
+    -6.0,
+    1.2,
+    -7.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_ppg"
+  },
+  "box_ifyd": {
+   "pos": [
+    6.5,
+    1.2,
+    -7.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_ifyd"
+  },
+  "box_msayf": {
+   "pos": [
+    12.0,
+    1.2,
+    -7.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_msayf"
+  },
+  "box_rent": {
+   "pos": [
+    17.5,
+    1.2,
+    -7.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_rent"
+  },
+  "box_stc": {
+   "pos": [
+    23.0,
+    1.2,
+    -7.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_stc"
+  },
+  "box_lake": {
+   "pos": [
+    28.5,
+    1.2,
+    -7.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_lake"
+  },
+  "box_kmlacc": {
+   "pos": [
+    -16.5,
+    1.2,
+    -16.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_kmlacc"
+  },
+  "box_rpd": {
+   "pos": [
+    -22.0,
+    1.2,
+    -16.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_rpd"
+  },
+  "box_ptsd": {
+   "pos": [
+    -27.5,
+    1.2,
+    -16.6
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": "box_ptsd"
+  },
+  "tv_screen": {
+   "pos": [
+    -10.1,
+    2.62,
+    -7.85
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  }
+ },
+ "nodes": {
+  "herobox": {
+   "pivot": [
+    0.0,
+    1.2,
+    -7.3
+   ]
+  },
+  "box_ppg": {
+   "pivot": [
+    -6.0,
+    1.2,
+    -7.6
+   ]
+  },
+  "box_ifyd": {
+   "pivot": [
+    6.5,
+    1.2,
+    -7.6
+   ]
+  },
+  "box_msayf": {
+   "pivot": [
+    12.0,
+    1.2,
+    -7.6
+   ]
+  },
+  "box_rent": {
+   "pivot": [
+    17.5,
+    1.2,
+    -7.6
+   ]
+  },
+  "box_stc": {
+   "pivot": [
+    23.0,
+    1.2,
+    -7.6
+   ]
+  },
+  "box_lake": {
+   "pivot": [
+    28.5,
+    1.2,
+    -7.6
+   ]
+  },
+  "box_kmlacc": {
+   "pivot": [
+    -16.5,
+    1.2,
+    -16.6
+   ]
+  },
+  "box_rpd": {
+   "pivot": [
+    -22.0,
+    1.2,
+    -16.6
+   ]
+  },
+  "box_ptsd": {
+   "pivot": [
+    -27.5,
+    1.2,
+    -16.6
+   ]
+  }
+ },
+ "materials": {
+  "bowl_band": {
+   "kind": "solid"
+  },
+  "bowl_glaze": {
+   "kind": "solid"
+  },
+  "box_ifyd": {
+   "kind": "solid"
+  },
+  "box_kmlacc": {
+   "kind": "solid"
+  },
+  "box_lake": {
+   "kind": "solid"
+  },
+  "box_msayf": {
+   "kind": "solid"
+  },
+  "box_ppg": {
+   "kind": "solid"
+  },
+  "box_ptsd": {
+   "kind": "solid"
+  },
+  "box_rent": {
+   "kind": "solid"
+  },
+  "box_rpd": {
+   "kind": "solid"
+  },
+  "box_stc": {
+   "kind": "solid"
+  },
+  "chrome_stand": {
+   "kind": "solid"
+  },
+  "hero_box": {
+   "kind": "solid"
+  },
+  "hero_inside": {
+   "kind": "solid"
+  },
+  "loop_0": {
+   "kind": "solid"
+  },
+  "loop_1": {
+   "kind": "solid"
+  },
+  "loop_2": {
+   "kind": "solid"
+  },
+  "loop_3": {
+   "kind": "solid"
+  },
+  "loop_4": {
+   "kind": "solid"
+  },
+  "loop_5": {
+   "kind": "solid"
+  },
+  "milk": {
+   "kind": "solid"
+  },
+  "price_strip": {
+   "kind": "solid"
+  },
+  "rig_black": {
+   "kind": "solid"
+  },
+  "riser_card": {
+   "kind": "solid"
+  },
+  "studio_floor": {
+   "kind": "solid"
+  },
+  "table_edge": {
+   "kind": "solid"
+  },
+  "table_under": {
+   "kind": "solid"
+  },
+  "tile_floor": {
+   "kind": "solid"
+  },
+  "tv_bezel": {
+   "kind": "solid"
+  },
+  "tv_wood": {
+   "kind": "solid"
+  }
+ },
+ "states": [
+  {
+   "name": "offair",
+   "lightmap": "try-me-free.offair.webp",
+   "keymap": "try-me-free.offair.key.webp",
+   "exposure": 1.5,
+   "key": {
+    "light": "tube",
+    "type": "point",
+    "color": [
+     0.8148,
+     0.8796,
+     1.0
+    ],
+    "pos": [
+     0.0,
+     4.25,
+     -7.9
+    ],
+    "dir": [
+     0.0,
+     0.4738,
+     -0.8806
+    ],
+    "intensity": 9.5493,
+    "decay": 2
+   },
+   "emit": {},
+   "shafts": 0.0,
+   "shaft_color": [
+    0.8148,
+    0.8796,
+    1.0
+   ],
+   "sky": [
+    0.0001,
+    0.0002,
+    0.0004
+   ],
+   "stats": {
+    "floor": [
+     0.0119,
+     0.0118,
+     0.0126
+    ],
+    "floor_key": [
+     0.0093,
+     0.01,
+     0.0114
+    ],
+    "floor_median_lum": 0.0055,
+    "mean": [
+     0.0108,
+     0.0092,
+     0.009
+    ],
+    "mean_lum": 0.0096
+   }
+  },
+  {
+   "name": "commercial",
+   "lightmap": "try-me-free.commercial.webp",
+   "keymap": "try-me-free.commercial.key.webp",
+   "exposure": 1.0,
+   "key": {
+    "light": "key_comm",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.8796,
+     0.7454
+    ],
+    "dir": [
+     -0.4494,
+     0.799,
+     0.3995
+    ],
+    "intensity": 4.2,
+    "angle": 2.0
+   },
+   "emit": {},
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.8796,
+    0.7454
+   ],
+   "sky": [
+    0.3907,
+    0.5591,
+    0.75
+   ],
+   "stats": {
+    "floor": [
+     1.2207,
+     1.1715,
+     1.1554
+    ],
+    "floor_key": [
+     0.7905,
+     0.6943,
+     0.5854
+    ],
+    "floor_median_lum": 1.4685,
+    "mean": [
+     1.0407,
+     1.0324,
+     1.0342
+    ],
+    "mean_lum": 1.0347
+   }
+  },
+  {
+   "name": "court",
+   "lightmap": "try-me-free.court.webp",
+   "keymap": "try-me-free.court.key.webp",
+   "exposure": 1.05,
+   "key": {
+    "light": "key_court",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.5841,
+     0.2542
+    ],
+    "dir": [
+     0.5415,
+     0.8123,
+     -0.2166
+    ],
+    "intensity": 3.8,
+    "angle": 1.5
+   },
+   "emit": {},
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.5841,
+    0.2542
+   ],
+   "sky": [
+    0.25,
+    0.1198,
+    0.0635
+   ],
+   "stats": {
+    "floor": [
+     0.9354,
+     0.4987,
+     0.2245
+    ],
+    "floor_key": [
+     0.654,
+     0.3752,
+     0.1652
+    ],
+    "floor_median_lum": 0.7749,
+    "mean": [
+     0.8308,
+     0.4245,
+     0.1943
+    ],
+    "mean_lum": 0.4929
+   }
+  },
+  {
+   "name": "funeral",
+   "lightmap": "try-me-free.funeral.webp",
+   "keymap": "try-me-free.funeral.key.webp",
+   "exposure": 1.1,
+   "key": {
+    "light": "key_fun",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.4342,
+     0.117
+    ],
+    "dir": [
+     -0.2978,
+     0.4467,
+     0.8437
+    ],
+    "intensity": 3.3,
+    "angle": 2.5
+   },
+   "emit": {},
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.4342,
+    0.117
+   ],
+   "sky": [
+    0.1444,
+    0.0635,
+    0.0171
+   ],
+   "stats": {
+    "floor": [
+     0.591,
+     0.2293,
+     0.0607
+    ],
+    "floor_key": [
+     0.3453,
+     0.1525,
+     0.0408
+    ],
+    "floor_median_lum": 0.3478,
+    "mean": [
+     0.5093,
+     0.2109,
+     0.0868
+    ],
+    "mean_lum": 0.2638
+   }
+  },
+  {
+   "name": "suburb",
+   "lightmap": "try-me-free.suburb.webp",
+   "keymap": "try-me-free.suburb.key.webp",
+   "exposure": 1.25,
+   "key": {
+    "light": "moon",
+    "type": "sun",
+    "color": [
+     0.3231,
+     0.4793,
+     1.0
+    ],
+    "dir": [
+     -0.6189,
+     0.722,
+     -0.3094
+    ],
+    "intensity": 1.9,
+    "angle": 1.5
+   },
+   "emit": {},
+   "shafts": 0.0,
+   "shaft_color": [
+    0.3231,
+    0.4793,
+    1.0
+   ],
+   "sky": [
+    0.0076,
+    0.0123,
+    0.0457
+   ],
+   "stats": {
+    "floor": [
+     0.2902,
+     0.2131,
+     0.3154
+    ],
+    "floor_key": [
+     0.0752,
+     0.1108,
+     0.2338
+    ],
+    "floor_median_lum": 0.2518,
+    "mean": [
+     0.2085,
+     0.1693,
+     0.2771
+    ],
+    "mean_lum": 0.1861
+   }
+  },
+  {
+   "name": "tile",
+   "lightmap": "try-me-free.tile.webp",
+   "keymap": "try-me-free.tile.key.webp",
+   "exposure": 0.95,
+   "key": {
+    "light": "key_tile",
+    "type": "sun",
+    "color": [
+     0.8879,
+     0.9387,
+     1.0
+    ],
+    "dir": [
+     0.0,
+     0.9889,
+     0.1483
+    ],
+    "intensity": 4.0,
+    "angle": 8.0
+   },
+   "emit": {},
+   "shafts": 0.0,
+   "shaft_color": [
+    0.8879,
+    0.9387,
+    1.0
+   ],
+   "sky": [
+    0.4992,
+    0.633,
+    0.8
+   ],
+   "stats": {
+    "floor": [
+     1.3582,
+     1.4452,
+     1.603
+    ],
+    "floor_key": [
+     0.8769,
+     0.9063,
+     0.9762
+    ],
+    "floor_median_lum": 1.7394,
+    "mean": [
+     1.1559,
+     1.2489,
+     1.3824
+    ],
+    "mean_lum": 1.2271
+   }
+  },
+  {
+   "name": "sunset",
+   "lightmap": "try-me-free.sunset.webp",
+   "keymap": "try-me-free.sunset.key.webp",
+   "exposure": 1.05,
+   "key": {
+    "light": "key_sun",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.3231,
+     0.1441
+    ],
+    "dir": [
+     0.4969,
+     0.3478,
+     0.795
+    ],
+    "intensity": 3.8,
+    "angle": 1.5
+   },
+   "emit": {},
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.3231,
+    0.1441
+   ],
+   "sky": [
+    0.0409,
+    0.0169,
+    0.1017
+   ],
+   "stats": {
+    "floor": [
+     0.5604,
+     0.1648,
+     0.1354
+    ],
+    "floor_key": [
+     0.3469,
+     0.1135,
+     0.0513
+    ],
+    "floor_median_lum": 0.2591,
+    "mean": [
+     0.4913,
+     0.161,
+     0.1262
+    ],
+    "mean_lum": 0.2301
+   }
+  }
+ ]
+}

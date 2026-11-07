@@ -1,0 +1,573 @@
+// A fight: one song, start to finish. The song is the clock. This runs the track's timeline, YOU, the boss,
+// projectiles, telegraphs, waves and beams; resolves every hit; heals a heart at each new section; rewinds the
+// record to the section's start when you die; lands the finish on the song's last hit, or calls an ENCORE.
+import * as THREE from 'three';
+import { BeatMap } from '../engine/beats.js';
+import { Timeline, inShape } from './choreo.js';
+import * as PAT from './patterns.js';
+import { Projectiles, COLORS } from './projectiles.js';
+import { Telegraphs } from '../fx/telegraphs.js';
+import { FEEL } from './player.js';
+import { GroundMarks } from '../fx/rings.js';
+import { Signs } from '../fx/signs.js';
+import { Vocal } from './vocal.js';
+import { LAYER } from './arena.js';
+import { FXK } from '../engine/post.js';
+
+const WAVE_GEO = new THREE.CircleGeometry(1, 128);
+function waveMaterial(color) {
+  return new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uC: { value: color }, uInner: { value: 0.9 }, uOuter: { value: 1 }, uA: { value: 1 }, uFxK: FXK },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = position.xy; gl_Position = projectionMatrix * (viewMatrix * (modelMatrix * vec4(position,1.0))); }',
+    fragmentShader: `uniform vec3 uC; uniform float uInner, uOuter, uA, uFxK; varying vec2 vUv;
+      void main(){ float d = length(vUv); float w = fwidth(d);
+        float band = smoothstep(uInner - w, uInner + w, d) * (1.0 - smoothstep(uOuter - w, uOuter + w, d));
+        float edge = (1.0 - smoothstep(0.0, w * 3.0, abs(d - uOuter))) ;
+        float a = (band * 0.55 + edge * 0.9) * uA; if (a < 0.01) discard; gl_FragColor = vec4(uC * a * uFxK, a); }` });
+}
+const GOLD = new THREE.Color(3.2, 2.0, 0.55), PINK = new THREE.Color(4, 0.6, 1.7), WHITE = new THREE.Color(2.6, 2.9, 3.4), PORCELAIN = new THREE.Color(2.2, 2.1, 2.0);
+
+export class Fight {
+  // app: { renderer, post, scene, cam (ArenaCamera), input, audio, sfx, hud, fx }
+  constructor(app, track) {
+    this.app = app; this.track = track;
+    this.scene = app.scene; this.cam = app.cam; this.input = app.input; this.audio = app.audio; this.sfx = app.sfx; this.hud = app.hud; this.fx = app.fx;
+    this.pat = PAT;
+    this.t = 0; this.dt = 0; this.beat = 0.5;
+    this.state = 'loading';      // loading | intro | play | dying | rewinding | finishing | encore | done | paused
+    this.waves = []; this.beams = [];
+    this.score = 0; this.mult = 1; this.chain = 0;
+    this.rewinds = 0; this.encores = 0;
+    this.suppress = false; this.spotUntil = -1;
+    this.manual = false;          // stepped clock (capture/tests)
+    this.events = [];             // hooks for tracks: onSection, onBreak...
+    this.lastSection = null;
+    this.resultCb = null;
+    // ENCORE (after the finale): three hearts and none back, she's sturdier, her telegraphs come later
+    this.encoreMode = !!(app.settings && app.settings.encore && app.progress && app.progress.encore);
+    this.maxHearts = this.encoreMode ? 3 : FEEL.hearts;
+  }
+
+  // ---------------- loading ----------------
+  async load(onProgress = () => {}) {
+    const tr = this.track;
+    const [bm, chords] = await Promise.all([
+      fetch(`data/beats/${tr.beats}.json`).then((r) => r.json()),
+      fetch(`data/chords/${tr.beats}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
+    this.bm = new BeatMap(bm); this.chords = chords;
+    this.sfx.attach && this.sfx.attach(this);
+    this.duration = tr.duration || this.bm.duration;
+    onProgress(0.1);
+    const songP = this.audio.loadSong(`assets/music/${tr.beats}`, this.bm.duration, (k) => onProgress(0.1 + k * 0.5));
+    // the world
+    this.proj = new Projectiles(this.scene);
+    this.tele = new Telegraphs(this.scene);
+    this.marks = new GroundMarks(this.scene);
+    this.signs = new Signs(this.scene);
+    this.vocal = await Vocal.load(tr.beats);
+    // while the spotlight is on her she can't attack, and once her bar is empty she's beaten: nothing she does can
+    // hurt you any more (Alex: "It would feel awful to lose after the boss is already defeated"). Her spawns and
+    // telegraphs fizzle.
+    const spawn = this.proj.spawn.bind(this.proj), tadd = this.tele.add.bind(this.tele);
+    this.proj.spawn = (o) => ((o.owner || 'boss') === 'boss' && (this.suppress || this.harmless) ? null : spawn(o));
+    this.tele.add = (o) => ((this.suppress || this.harmless) && o.kind !== 'gold' ? { dead: true } : tadd(o));
+    this.player = this.app.player;
+    // a material a track throws away mid-song keeps its shader until the fight ends: otherwise the next thing made
+    // the same way compiles it again, and the game stops for a moment (each such stop was 60-150 ms)
+    const MP = THREE.Material.prototype, deferred = this._deferredDispose = [];
+    this._matDispose = MP.dispose;
+    MP.dispose = function () { deferred.push(this); };
+    this.arena = await tr.buildArena(this);
+    // floor telegraphs and shot shadows are decals: drawn, but not doubled in a mirror floor
+    this.cam.cam.layers.enable(LAYER.NO_REFLECT); this.tele.mesh.layers.set(LAYER.NO_REFLECT); this.proj.dots.layers.set(LAYER.NO_REFLECT);
+    this.bounds = this.arena.bounds;
+    this.cam.bounds = this.bounds;
+    const room = this.arena.room || (this.arena.arena && this.arena.arena.room);
+    this.cam.roomMaxZ = room && room.max ? room.max.z : undefined;
+    onProgress(0.7);
+    this.boss = await tr.buildBoss(this);
+    this.player = this.app.player;
+    this.player.arena = this.arena;
+    if (this.encoreMode) { this.boss.maxHp = Math.round(this.boss.maxHp * 1.25); this.boss.hp = this.boss.maxHp; }
+    onProgress(0.8);
+    // a porcelain figurine's shaders (glaze, cracks, the shatter) compile now, not on the first hit
+    if (this.boss.fig && this.boss.fig.prepare) { try { await this.boss.fig.prepare(this.app.renderer, this.cam.cam, this.scene); } catch (e) { console.warn('figurine prepare', e.message); } }
+    onProgress(0.85);
+    this.buffer = await songP;
+    // the game sounds' level for this song (tracks that duck the sfx bus put it back to f.sfxLevel), and the song's
+    // loudness over time: the effects step back in its quiet passages
+    this.sfxLevel = this.audio.levelFor ? this.audio.levelFor(this.buffer) : 0.6;
+    this.audio.sfx.gain.value = this.sfxLevel;
+    this.songEnv = this.audio.loudness ? this.audio.loudness(this.buffer) : null;
+    // the script
+    this.T = new Timeline(this.bm);
+    tr.script(this.T, this);
+    this.T.compile();
+    this.lastHit = tr.lastHit ?? this._findLastHit();
+    this.finalChorus = this.T.sections.find((s) => s.final) || this.T.sections[this.T.sections.length - 2] || this.T.sections[0];
+    this.boss.on('hit', (h) => this._bossHit(h));
+    this.boss.on('break', (b) => this._bossBreak(b));
+    this.boss.on('deflect', (h) => this._deflect(h));
+    this.boss.on('empty', () => this._bossEmpty());
+    onProgress(1);
+  }
+
+  _findLastHit() {
+    // the loudest beat in the last 12 seconds, as a default for the finish
+    const n = this.bm.n, e = this.bm.energy;
+    let best = n - 1, bv = -1;
+    for (let i = n - 1; i >= 0 && this.bm.beats[i] > this.bm.duration - 12; i--) if ((e[i] || 0) > bv) { bv = e[i]; best = i; }
+    return this.bm.beats[best];
+  }
+
+  // ---------------- run ----------------
+  start(at = 0) {
+    this.state = 'play';
+    this.player.walk = false; this.player.maxHearts = this.maxHearts; this.player.minHearts = 0;
+    this.player.revive(); this.player.inv = 0; this.player.hearts = Math.min(this.player.hearts, this.maxHearts);
+    const sp = this.track.spawn || { player: [0, 4.5, Math.PI], boss: [0, -3.5, 0] };
+    if (at <= 0.01) { this.player.place(...sp.player); this.boss.place(...sp.boss); this.track.onStart && this.track.onStart(this); }
+    this.cam.snap(this.player, this.boss);
+    this.boss._now = at; this.boss.busyUntil = 0;
+    this.T.seek(at);
+    this.checkpoint = { t: this.T.sectionAt(at)?.t0 ?? 0, boss: this.boss.snapshot(), score: this.score };
+    this.lastSection = this.T.sectionAt(at);
+    this.t = at;
+    if (!this.manual) this.audio.play(this.buffer, at, at > 0 ? 0.05 : 0);
+    this.hud.setBoss(this.boss.name, this.boss.notches);
+    this.hud.show(true);
+    this.app.post.fx.fade = 1; this.app.post.fx.fadeColor.set(0, 0, 0); this._fadeIn = 1;
+  }
+
+  // f.after(seconds, fn): run fn that many song seconds from now
+  after(sec, fn) { this.T.after(this.t + sec, fn); }
+  at(t, fn) { this.T.after(t, fn); }
+  sign(text, o = {}) { const t0 = o.at !== undefined ? this.T.time(o.at) : this.t; const t1 = o.until !== undefined ? this.T.time(o.until) : t0 + (o.hold ?? 4); return this.signs.add({ text, ...o, t0, t1 }); }
+  pan(x) { return Math.max(-1, Math.min(1, (x - this.cam.focus.x) / 11)); }
+  cue(kind, at) { if (this.suppress || this.harmless) return; this.sfx.cue && this.sfx.cue(kind || 'white', this.pan(at?.x ?? 0)); }
+  get bpmBeat() { return this.beat; }
+
+  update(now, dtReal) {
+    const dt = Math.min(0.05, dtReal);
+    this.dt = dt;
+    if (this.state === 'paused' || this.state === 'loading' || this.state === 'done') return;
+    // the song clock
+    if (this.manual) { if (this.state === 'play' || this.state === 'intro') this.t += dt; }
+    else if (this.state === 'play') this.t = this.audio.time(now);
+    this.beat = this.bm.periodAt(this.t);
+    const ctx = this._ctx(dt);
+
+    if (this.state === 'play') {
+      // sections: checkpoint, heal
+      const sec = this.T.sectionAt(this.t);
+      if (sec && sec !== this.lastSection) this._enterSection(sec);
+      // spotlight ends
+      if (this.spotUntil > 0 && this.t >= this.spotUntil) this._endSpotlight();
+      this.T.advance(this.t, this);
+    }
+    // once her bar is empty she's beaten: her attacks are gone, and nothing (a set's own hazard included) takes your last heart
+    this.harmless = this.boss.hp <= 0;
+    this.player.minHearts = this.harmless ? 1 : 0;
+    if (this.audio.sfxDuck && this.songEnv) this.audio.sfxDuck.gain.setTargetAtTime(this.audio.duckAt(this.songEnv, this.t), this.audio.ctx.currentTime, 0.12);
+    // entities
+    this.player.update(ctx);
+    if (this.player.aiming) this.fx.setAim(this.player.x, this.player.z, ctx.aim.x, ctx.aim.z, FEEL.ringRange);
+    this.boss.update(dt, this.t, this.beat, this.player);
+    this.proj.update(dt, this.bounds, (p) => this._projHit(p, ctx));
+    this._waves(dt, ctx); this._beams(ctx);
+    this.tele.update(this.t);
+    this.proj.draw(this.t);
+    this.signs.update(this.t);
+    this.marks.update(this.player, this.boss, this.player.dashCharges, this.player.dashCool, FEEL.dashCharges, FEEL.dashRecharge);
+    if (this.boss.fig && this.boss.fig.setMouth) this.boss.fig.setMouth(this.state === 'play' ? this.vocal.at(this.t, dt) : 0);
+    this.arena.update && this.arena.update(dt, this.t, this);
+    this.track.update && this.track.update(this, dt);
+    // death
+    if (this.player.state === 'dead' && this.state === 'play') this._die();
+    // the end of the song
+    if (this.state === 'play' && this.t >= this.lastHit - 0.005 && !this._ended) this._songEnd();
+    // camera, fx, hud
+    this.cam.closeK += ((this.lastSection && this.lastSection.close ? 1 : 0) - this.cam.closeK) * Math.min(1, dt * 2);
+    this.cam.update(dt, this.player, this.boss.state === 'gone' ? null : this.boss);
+    this.fx.update(dt, this.cam.cam.position, this.player);
+    if (this.chain > 0 && this.t - this._lastGood > 4) { this.chain = Math.max(0, this.chain - 1); this._lastGood = this.t; this._mult(); }
+    this.hud.update(dt, { hpK: this.boss.hpK, empty: this.boss.state === 'desperate', hearts: this.player.hearts, maxHearts: this.maxHearts, meter: this.player.meter, spot: this.spotUntil > 0, score: this.score, mult: this.mult, beatPulse: this.bm.pulse(this.t) });
+    if (this._finishT !== undefined && this.cam.override) {
+      this._finishT += dt;
+      const k = this._finishT < 0.35 ? this._finishT / 0.35 : this._finishT < 3.2 ? 1 : Math.max(0, 1 - (this._finishT - 3.2) / 1.2);
+      this.cam.override.k = 0.7 * k * k * (3 - 2 * k);
+      this.app.post.fx.letterbox = 0.5 * k;
+      if (k <= 0 && this._finishT > 3.2) { this.cam.override = null; this.app.post.fx.letterbox = 0; this._finishT = undefined; }
+    }
+    // the picture comes up fast: the first beat of the song is yours (the loading veil is fading over it too)
+    this._firstDraws();
+    if (this._fadeIn > 0) { this._fadeIn = Math.max(0, this._fadeIn - dt / 0.2); this.app.post.fx.fade = this._fadeIn * this._fadeIn; }
+    this.audio.muffle(this._muffle > 0 ? 0.6 : 0);
+    if (this._muffle > 0) this._muffle -= dt;
+  }
+
+  // something new in the picture (made mid-song: a thrown package, a set piece) has never been drawn: its shader
+  // compiles in the background while it stays out of the picture for a frame or two, instead of the whole game
+  // stopping 60-200 ms to compile it on the spot. (Things that exist at load compile then, in main.js _warm.)
+  _firstDraws() {
+    const r = this.app.renderer, cam = this.cam.cam, scene = this.scene;
+    if (!r.compileAsync) return;
+    const held = this._held ||= new Map();
+    scene.traverseVisible((o) => {
+      if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite) || held.has(o) || !o.layers.test(cam.layers)) return;
+      const ms = Array.isArray(o.material) ? o.material : [o.material];
+      let wait = false;
+      for (const m of ms) {
+        if (!m || m._mpReady) continue;
+        const pr = r.properties.get(m);
+        if (pr.programs && pr.programs.size) { m._mpReady = true; continue; }
+        wait = true;
+      }
+      if (!wait) return;
+      held.set(o, o.layers.mask); o.layers.mask = 0;
+      const prev = r.getRenderTarget(); r.setRenderTarget(this.app.post.target);
+      let job; try { job = r.compileAsync(o, cam, scene); } catch (e) { job = Promise.resolve(); }
+      r.setRenderTarget(prev);
+      job.catch(() => {}).then(() => { for (const m of ms) if (m) m._mpReady = true; if (held.has(o)) { o.layers.mask = held.get(o); held.delete(o); } });
+    });
+  }
+  _ctx(dt) {
+    const m = this.input.mouse;
+    if (!this._aim) this._aim = new THREE.Vector3();
+    this.cam.floorPoint(m.x, m.y, this._aim);
+    return { dt, t: this.t, input: this.input, aim: this._aim, boss: this.boss, projectiles: this.proj, beats: this.bm, fx: this.fx, sfx: this.sfx, arena: this.arena, hud: this.hud,
+      onSpotlight: () => this._spotlight(), onPlayerLanded: (s, res, on, counter, at) => this._landed(s, res, on, counter, at),
+      onStrikeArc: (x, z, ang, range, arc, s) => this.arena.strikeArc && this.arena.strikeArc(x, z, ang, range, arc, s, this) };
+  }
+
+  // ---------------- hits ----------------
+  _projHit(p, ctx) {
+    if (p.owner === 'deco') return;   // things in the air that only look (a lob's package)
+    const pl = this.player;
+    if (p.owner === 'boss') {
+      const d = Math.hypot(p.x - pl.x, p.z - pl.z);
+      // the catch reaches a little further than your body
+      if (p.parryable && pl.catching && d < FEEL.catchRadius) {
+        const q = pl.tryCatch();
+        if (q) {
+          pl.caught(q, ctx);
+          this.proj.reflect(p, this.boss, { speed: q === 'perfect' ? 1.7 : 1.35, damage: q === 'perfect' ? 2 : 1.4 });
+          p.dmgBack = (q === 'perfect' ? 22 : 15);
+          this.fx.caught(p.x, p.y, p.z, q === 'perfect');
+          this.sfx.catch && this.sfx.catch(q, this.pan(p.x));
+          this._glimmer(q === 'perfect' ? 2 : 1, true);
+          this._good(q === 'perfect' ? 120 : 70);
+          return;
+        }
+      }
+      if (d < p.radius + FEEL.radius) {
+        if (pl.invulnerable) { if (pl.state === 'dash' && !p._nm) { p._nm = true; pl.nearMiss(ctx); this._good(60); } return; }
+        if (pl.hurt(ctx, p.damage, p.x, p.z, 'shot')) { this._hurt(p.x, p.z); }
+        p.dead = true;
+      }
+    } else {
+      const b = this.boss;
+      if (!b.targetable) return;
+      if (Math.hypot(p.x - b.x, p.z - b.z) < p.radius + b.radius) {
+        const res = b.takeHit({ dmg: p.dmgBack || 14, kind: 'return', heavy: (p.dmgBack || 0) > 20, from: pl, x: p.x, z: p.z, onBeat: false });
+        if (res.landed) { this._good(90); this.sfx.returnHit && this.sfx.returnHit(this.pan(p.x)); }
+        p.dead = true;
+      }
+    }
+  }
+
+  // an area landing now: returns 'hit' | 'parried' | 'dodged' | 'miss'
+  resolveArea(sh, o = {}) {
+    if (this.suppress || this.harmless) return 'miss';
+    if (o.tele && o.tele.dead) return 'miss';   // its telegraph was cleared: nothing lands that you can't see
+    const pl = this.player;
+    if (!inShape(sh, pl.x, pl.z, FEEL.radius * 0.8)) return 'miss';
+    if (o.kind === 'pink' && pl.catching) {
+      const q = pl.tryCatch();
+      if (q) {
+        this.lastCatch = q;
+        pl.caught(q, this._ctx(0));
+        if (o.melee) this.boss.open(q === 'perfect' ? 1.4 : 0.9);
+        this.fx.caught(pl.x, 1.2, pl.z, q === 'perfect');
+        this.sfx.parry && this.sfx.parry(q, this.pan(pl.x));
+        this._glimmer(q === 'perfect' ? 2 : 1, true);
+        this._good(q === 'perfect' ? 150 : 90);
+        return 'parried';
+      }
+    }
+    if (pl.invulnerable) { if (pl.state === 'dash') { pl.nearMiss(this._ctx(0)); this._good(70); } return 'dodged'; }
+    if (pl.hurt(this._ctx(0), o.damage ?? 1, sh.x, sh.z, o.melee ? 'melee' : 'area')) { this._hurt(sh.x, sh.z); return 'hit'; }
+    return 'miss';
+  }
+
+  addWave(w) { if (!this.suppress && !this.harmless) this.waves.push(w); }
+  _waves(dt, ctx) {
+    const pl = this.player;
+    for (let i = this.waves.length - 1; i >= 0; i--) {
+      const w = this.waves[i];
+      w.r += w.speed * dt;
+      if (!w.mesh) {
+        const pool = (this._wavePool ||= { pink: [], white: [] })[w.kind === 'pink' ? 'pink' : 'white'];
+        w.mesh = new THREE.Mesh(WAVE_GEO, pool.pop() || waveMaterial(w.kind === 'pink' ? PINK : WHITE));
+        w.mesh.rotation.x = -Math.PI / 2; w.mesh.position.set(w.x, 0.06, w.z); w.mesh.renderOrder = 4; this.scene.add(w.mesh);
+      }
+      w.mesh.scale.setScalar(w.r + 0.1);
+      const u = w.mesh.material.uniforms; u.uInner.value = Math.max(0, (w.r - w.band) / (w.r + 0.1)); u.uOuter.value = w.r / (w.r + 0.1); u.uA.value = Math.max(0, 1 - w.r / w.max);
+      const d = Math.hypot(pl.x - w.x, pl.z - w.z);
+      if (!w.hit && Math.abs(d - (w.r - w.band / 2)) < w.band / 2 + FEEL.radius * 0.6) {
+        if (pl.invulnerable) { if (pl.state === 'dash' && !w.nm) { w.nm = true; pl.nearMiss(ctx); this._good(60); } }
+        else { w.hit = true; if (pl.hurt(ctx, w.damage, w.x, w.z, 'wave')) this._hurt(w.x, w.z); }
+      }
+      if (w.r > w.max) { this._dropWave(w); this.waves.splice(i, 1); }
+    }
+  }
+  _dropWave(w) { if (!w.mesh) return; this.scene.remove(w.mesh); (this._wavePool ||= { pink: [], white: [] })[w.kind === 'pink' ? 'pink' : 'white'].push(w.mesh.material); w.mesh = null; }
+  addBeam(b) { if (!this.suppress && !this.harmless) this.beams.push(b); }
+  _beams(ctx) {
+    const pl = this.player;
+    for (let i = this.beams.length - 1; i >= 0; i--) {
+      const b = this.beams[i];
+      if (this.t > b.tOff) { if (b.mesh) { this.scene.remove(b.mesh); b.mesh.geometry.dispose(); } this.beams.splice(i, 1); continue; }
+      if (this.t < b.tOn) continue;
+      const k = (this.t - b.tOn) / (b.tOff - b.tOn), a = b.a0 + (b.a1 - b.a0) * k;
+      if (!b.mesh) {
+        const g = new THREE.PlaneGeometry(b.w * 2, b.h); g.translate(0, b.h / 2, 0); g.rotateX(Math.PI / 2);
+        b.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: b.kind === 'pink' ? PINK : WHITE, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+        b.mesh.position.set(b.src.x, 0.08, b.src.z); this.scene.add(b.mesh);
+        this.sfx.beam && this.sfx.beam(this.pan(b.src.x));
+      }
+      b.mesh.rotation.y = a; b.mesh.material.opacity = 0.85 * Math.min(1.2, FXK.value);
+      const sh = { shape: 'rect', x: b.src.x, z: b.src.z, angle: a, w: b.w, h: b.h };
+      if ((b.cool || 0) <= this.t && inShape(sh, pl.x, pl.z, FEEL.radius * 0.7)) {
+        if (pl.invulnerable) { if (pl.state === 'dash') pl.nearMiss(ctx); }
+        else if (pl.hurt(ctx, b.damage, b.src.x, b.src.z, 'beam')) { this._hurt(b.src.x, b.src.z); b.cool = this.t + 0.8; }
+      }
+    }
+  }
+
+  // ---------------- feedback ----------------
+  _hurt(x, z) {
+    this._muffle = 0.35; this.chain = 0; this._mult();
+    this.cam.shake(1.0, 0.22); this.cam.kick(1.5);
+    this.fx.flash(new THREE.Color(0.42, 0.14, 0.24), 1); this.fx.aberrate(2.2);
+    this.fx.sparks(this.player.x, 1.1, this.player.z, PINK, 14);
+    this.sfx.hurt && this.sfx.hurt(this.pan(this.player.x), this.player.hearts);
+  }
+  _good(points) { this.chain++; this._lastGood = this.t; this._mult(); this.score += Math.round(points * this.mult); }
+  _mult() { this.mult = this.chain >= 40 ? 8 : this.chain >= 24 ? 6 : this.chain >= 14 ? 4 : this.chain >= 6 ? 2 : 1; }
+
+  _landed(s, res, on, counter, at) {
+    const b = this.boss;
+    const x = at ? at.x : b.x, z = at ? at.z : b.z;
+    const dir = Math.atan2(b.x - this.player.x, b.z - this.player.z);
+    this.fx.sparks(x, 1.3, z, on ? GOLD : new THREE.Color(2.4, 2.2, 2.0), on ? 22 : 14, dir);
+    this.fx.chips(x, 1.3, z, PORCELAIN, res.dmg > 15 ? 12 : 7, dir);
+    if (on) this.fx.glitter(x, 1.4, z, GOLD, 8, 0.3);
+    this.cam.shake(s.heavy || counter ? 0.55 : 0.28, 0.12);
+    if (s.heavy || counter) this.cam.kick(0.9);
+    this.sfx.hit && this.sfx.hit({ heavy: !!(s.heavy || counter), onBeat: on, kind: s.name, pan: this.pan(x) });
+    if (on) this._glimmer(0, false);
+    this._good(on ? 40 : 25);
+    b.fig && b.fig.hitAt && b.fig.hitAt(new THREE.Vector3(x, 1.3, z), new THREE.Vector3(Math.sin(dir), 0, Math.cos(dir)), { power: s.heavy || counter ? 1.6 : on ? 1.2 : 1 });
+  }
+  _glimmer(level, isCatch) {
+    // a quiet note of the chord that's sounding; a combo climbs it
+    if (!this.chords || !this.sfx.glimmer) return;
+    const i = Math.max(0, Math.min(this.chords.beats.length - 1, Math.floor(this.bm.beatAt(this.t))));
+    const [root, q] = this.chords.beats[i];
+    this._gStep = (this.t - (this._gLast || -9) < 1.2) ? (this._gStep + 1) % 4 : 0; this._gLast = this.t;
+    this.sfx.glimmer(root, q, isCatch ? 3 : this._gStep, level);
+  }
+  _bossHit(h) {}
+  _bossBreak(b) {
+    this.hud.breakNotch(b.index);
+    this.cam.shake(1.2, 0.3); this.cam.kick(2.2);
+    this.fx.flash(new THREE.Color(0.35, 0.3, 0.28), 1); this.fx.aberrate(2.5);
+    this.fx.chips(this.boss.x, 1.6, this.boss.z, PORCELAIN, 40);
+    this.fx.glitter(this.boss.x, 1.6, this.boss.z, GOLD, 30, 1.0);
+    this.sfx.break && this.sfx.break(this.pan(this.boss.x));
+    this.score += 1000 * this.mult;
+    this.track.onBreak && this.track.onBreak(this, b.index);
+  }
+  _deflect(h) {
+    // striking her while she's guarded costs your combo: you can see it go, and hear the thud
+    if (this.chain > 0) { this.chain = 0; this._mult(); }
+    this.sfx.deflect && this.sfx.deflect(this.pan(this.boss.x));
+    this.fx.sparks(this.boss.x, 1.3, this.boss.z, WHITE, 8);
+    this.player.rig.hitStop(0.04);
+  }
+  _bossEmpty() {
+    // she's beaten: everything of hers in the air and on the floor goes, at once (the song plays on to the finish)
+    this.harmless = true; this.player.minHearts = 1;
+    this.proj.clear('boss'); for (const g of this.tele.list) if (g.kind !== 'gold') g.dead = true;
+    for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
+    for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
+    this.hud.banner('', ''); this.sfx.empty && this.sfx.empty(); this.track.onEmpty && this.track.onEmpty(this);
+  }
+
+  // ---------------- spotlight ----------------
+  _spotlight() {
+    const pl = this.player;
+    if (pl.meter < 1 || this.spotUntil > 0 || this.state !== 'play') return;
+    pl.meter = 0;
+    const nb = this.bm.nearest(this.t, 1);
+    const start = nb.time > this.t ? nb.time : this.bm.timeOf(nb.beat + 1);
+    this.spotUntil = start + this.bm.periodAt(this.t) * 4;
+    this.suppress = true; this.boss.blinded = true;
+    this.proj.clear('boss'); this.tele.clear();
+    for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
+    for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
+    this.fx.spotlight(true);
+    this.app.post.fx.focusK = 0.6;
+    this.sfx.spotlight && this.sfx.spotlight();
+    this.track.onSpotlight && this.track.onSpotlight(this, true);
+    pl.speedMul = 1.25;
+    this.boss.open(this.spotUntil - this.t);
+  }
+  _endSpotlight() {
+    this.spotUntil = -1; this.suppress = false; this.boss.blinded = false;
+    this.fx.spotlight(false); this.app.post.fx.focusK = 0; this.player.speedMul = 1;
+    this.track.onSpotlight && this.track.onSpotlight(this, false);
+  }
+
+  // ---------------- sections, death, the end ----------------
+  _enterSection(sec) {
+    const prev = this.lastSection;
+    this.lastSection = sec;
+    if (prev && !this.encoreMode) this.player.heal(1);
+    this.checkpoint = { t: sec.t0, boss: this.boss.snapshot(), score: this.score };
+    this.track.onSection && this.track.onSection(this, sec, prev);
+  }
+
+  _die() {
+    this.state = 'dying'; this.rewinds++;
+    const tDeath = this.t;
+    this.chain = 0; this._mult();
+    if (!this.manual) this.audio.tapeStop(tDeath, 0.7);
+    this.sfx.death && this.sfx.death();
+    this.app.post.fx.desat = 0;
+    const cp = this.checkpoint;
+    // tape stop -> VHS rewind back to the checkpoint -> go
+    this._seq([
+      [0.0, () => {}],
+      [0.75, () => { this.state = 'rewinding'; this._rewindFx(true); if (!this.manual) this.audio.rewind(tDeath, cp.t, 1.25); this.sfx.rewind && this.sfx.rewind(1.25); }],
+      [2.05, () => {
+        this._rewindFx(false);
+        this._resetTo(cp);
+        this.state = 'play';
+        if (this.manual) this.t = cp.t;
+      }],
+    ]);
+  }
+  _rewindFx(on) { const fx = this.app.post.fx; fx.vhs = on ? 1 : 0; fx.desat = on ? 0.55 : 0; }
+  _resetTo(cp) {
+    this.proj.clear(); this.tele.clear(); this.fx.clear();
+    for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
+    for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
+    if (this.spotUntil > 0) this._endSpotlight();
+    this.boss.restore(cp.boss);
+    this.boss._now = cp.t; this.boss.busyUntil = 0;
+    this.score = cp.score;            // a rewind takes back what you scored since the checkpoint
+    this.hud.restoreNotches(this.boss.broken);
+    this.player.revive();
+    this.T.seek(cp.t);
+    this.t = cp.t;
+    this.lastSection = this.T.sectionAt(cp.t);
+    this.track.onRewind && this.track.onRewind(this, cp.t);
+  }
+
+  _songEnd() {
+    this._ended = true;
+    if (this.boss.state === 'desperate' || this.boss.hp <= 0) this._finish();
+    else this._encore();
+  }
+  _finish() {
+    if (this.spotUntil > 0) this._endSpotlight();
+    this.state = 'finishing';
+    this.sfx.shatter && this.sfx.shatter(this.pan(this.boss.x));
+    this.fx.flash(new THREE.Color(1.1, 1.0, 0.95), 1); this.fx.aberrate(3);
+    this.hud.show(false);
+    this.cam.shake(1.6, 0.45); this.cam.kick(3);
+    this.proj.clear('boss'); this.tele.clear();
+    if (this.boss.fig && this.boss.fig.shatter) this.boss.fig.shatter(); else this.boss.root.visible = false;
+    this.fx.chips(this.boss.x, 1.4, this.boss.z, PORCELAIN, 90); this.fx.glitter(this.boss.x, 1.5, this.boss.z, GOLD, 80, 1.4);
+    this.boss.state = 'finished';
+    this.score += 5000 * this.mult;
+    // the camera leans in on the two of you (you keep control), then lets go
+    const bx = this.boss.x, bz = this.boss.z, px = this.player.x, pz = this.player.z;
+    const mx = (bx + px) / 2, mz = (bz + pz) / 2;
+    this.cam.override = { pos: new THREE.Vector3(mx + 1.5, 6.5, mz + 7.5), look: new THREE.Vector3(mx, 1.0, mz), k: 0 };
+    this._finishT = 0;
+    this.track.onFinish && this.track.onFinish(this);
+    // the song plays out; then results
+    this._seq([[Math.max(1.5, this.duration - this.t + 0.4), () => this._done(true)]]);
+  }
+  _encore() {
+    if (this.spotUntil > 0) this._endSpotlight();
+    this.encores++;
+    this.state = 'encore';
+    this.hud.banner('ENCORE', 'gold', 1800);
+    this.boss.bow && this.boss.bow(1.2);
+    this.track.onEncore && this.track.onEncore(this);
+    const to = this.finalChorus.t0;
+    this._seq([
+      [0.9, () => { this._rewindFx(true); if (!this.manual) this.audio.rewind(this.t, to, 1.1); }],
+      [2.0, () => {
+        this._rewindFx(false); this._ended = false; this.proj.clear(); this.tele.clear();
+        for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
+        for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
+        this.T.seek(to); this.t = to; this.lastSection = this.T.sectionAt(to);
+        this.boss._now = to; this.boss.busyUntil = 0; this.boss.move = null;
+        this.track.onRewind && this.track.onRewind(this, to);
+        this.checkpoint = { t: to, boss: this.boss.snapshot(), score: this.score };
+        this.state = 'play'; this.player.heal(2);
+      }],
+    ]);
+  }
+  _done(won) {
+    this.state = 'done'; this.hud.show(false);
+    const st = this.player.stats;
+    const result = { won, score: this.score, rewinds: this.rewinds, encores: this.encores, stats: st, grade: this.grade() };
+    this.resultCb && this.resultCb(result);
+  }
+  grade() {
+    // a par from the track (expected score for a strong run), forgiving (Alex: make the grading easier)
+    const par = this.track.par || 60000;
+    let k = this.score / par;
+    k -= this.rewinds * 0.08 + this.encores * 0.12;
+    return k >= 0.85 ? 'S' : k >= 0.62 ? 'A' : k >= 0.42 ? 'B' : k >= 0.25 ? 'C' : 'D';
+  }
+
+  // run a sequence of [delaySeconds, fn] in real time (sequences ignore the song clock)
+  _seq(steps) {
+    const t0 = performance.now();
+    for (const [d, fn] of steps) {
+      if (this.manual) { (this._manualSeq ||= []).push({ at: this._mt + d, fn }); }
+      else setTimeout(fn, d * 1000);
+    }
+  }
+  stepManual(dt) { this._mt = (this._mt || 0) + dt; if (this._manualSeq) { for (let i = this._manualSeq.length - 1; i >= 0; i--) if (this._manualSeq[i].at <= this._mt) { const s = this._manualSeq.splice(i, 1)[0]; s.fn(); } } }
+
+  pause(on) {
+    if (on && this.state === 'play') { this._prePause = this.state; this.state = 'paused'; this.audio.pause(this.t); }
+    else if (!on && this.state === 'paused') { this.state = this._prePause || 'play'; this.audio.resumeAt(this.t); }
+  }
+
+  dispose() {
+    this.cam.roomMaxZ = undefined;
+    this.sfx.detach && this.sfx.detach();
+    this.proj.clear(); this.tele.clear(); this.fx.clear();
+    this.scene.remove(this.proj.mesh, this.proj.dots, this.tele.mesh);
+    this.marks.dispose(this.scene); this.signs.dispose();
+    for (const w of this.waves) this._dropWave(w);
+    for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh);
+    if (this._wavePool) for (const k in this._wavePool) for (const m of this._wavePool[k]) m.dispose();
+    this.arena && this.arena.dispose && this.arena.dispose();
+    this.boss && this.scene.remove(this.boss.root);
+    this.audio.stop();
+    this.audio.sfx.gain.value = 0.6;
+    if (this._matDispose) { THREE.Material.prototype.dispose = this._matDispose; for (const m of this._deferredDispose.splice(0)) m.dispose(); this._matDispose = null; }
+    if (this.audio.sfxDuck) { this.audio.sfxDuck.gain.cancelScheduledValues(0); this.audio.sfxDuck.gain.value = 1; }
+  }
+}

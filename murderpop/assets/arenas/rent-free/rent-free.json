@@ -1,0 +1,612 @@
+{
+ "version": 1,
+ "name": "rent-free",
+ "glb": "rent-free.glb",
+ "frame": "three.js: x right, y up, z toward the camera; 2D floor coordinates are (x, z)",
+ "lightmap": {
+  "size": 2048,
+  "uv": 1,
+  "encoding": "lightmap rgb = (L/(1+L))^(1/2.2) -> L = e/(1-e) with e = rgb^2.2; radiance = albedo * L. keymap r = the fraction of L that is the key light, direct"
+ },
+ "bounds": {
+  "minX": -11.0,
+  "maxX": 11.0,
+  "minZ": -7.0,
+  "maxZ": 7.0
+ },
+ "room": {
+  "min": [
+   -11.0,
+   0.0,
+   -7.0
+  ],
+  "max": [
+   11.0,
+   6.0,
+   7.0
+  ]
+ },
+ "capture": [
+  0.0,
+  1.6,
+  -0.0
+ ],
+ "colliders": [
+  {
+   "type": "box",
+   "x": 0.0,
+   "z": 7.2,
+   "hx": 11.0,
+   "hz": 0.2,
+   "rot": -0.0,
+   "tag": "rail",
+   "h": 0.9
+  }
+ ],
+ "spawns": {
+  "player": {
+   "x": 0.0,
+   "z": 3.2,
+   "dir": [
+    0.0,
+    -1.0
+   ]
+  },
+  "boss": {
+   "x": 0.0,
+   "z": -4.0,
+   "dir": [
+    0.0,
+    1.0
+   ]
+  }
+ },
+ "anchors": {
+  "door": {
+   "pos": [
+    0.0,
+    0.0,
+    -7.0
+   ],
+   "dir": [
+    0.0,
+    1.0
+   ],
+   "node": null
+  },
+  "centre": {
+   "pos": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "dir": [
+    1.0,
+    -0.0
+   ],
+   "node": null
+  }
+ },
+ "nodes": {},
+ "materials": {
+  "rf_floor": {
+   "kind": "solid"
+  },
+  "rf_footlamp": {
+   "kind": "emissive",
+   "emit": [
+    1.0,
+    0.6939,
+    0.3916
+   ]
+  },
+  "rf_gilt": {
+   "kind": "solid"
+  },
+  "rf_shell": {
+   "kind": "solid"
+  },
+  "rf_slab": {
+   "kind": "solid"
+  }
+ },
+ "states": [
+  {
+   "name": "foyer",
+   "lightmap": "rent-free.foyer.webp",
+   "keymap": "rent-free.foyer.key.webp",
+   "exposure": 1.35,
+   "key": {
+    "light": "door_light",
+    "type": "area",
+    "color": [
+     1.0,
+     0.4508,
+     0.7913
+    ],
+    "pos": [
+     0.0,
+     3.4,
+     -9.6
+    ],
+    "dir": [
+     0.0,
+     0.3338,
+     -0.9426
+    ],
+    "intensity": 222.8169,
+    "decay": 2,
+    "aim": [
+     -0.0,
+     -0.519,
+     0.8548
+    ]
+   },
+   "emit": {
+    "rf_footlamp": [
+     3.0,
+     2.0816,
+     1.1747
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.4508,
+    0.7913
+   ],
+   "sky": [
+    0.2397,
+    0.1438,
+    0.2614
+   ],
+   "stats": {
+    "floor": [
+     0.3819,
+     0.2148,
+     0.3781
+    ],
+    "floor_key": [
+     0.1228,
+     0.0554,
+     0.0974
+    ],
+    "floor_median_lum": 0.2072,
+    "mean": [
+     0.3541,
+     0.1995,
+     0.3453
+    ],
+    "mean_lum": 0.2427
+   }
+  },
+  {
+   "name": "day",
+   "lightmap": "rent-free.day.webp",
+   "keymap": "rent-free.day.key.webp",
+   "exposure": 0.95,
+   "key": {
+    "light": "sun",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.8796,
+     0.6724
+    ],
+    "dir": [
+     -0.5535,
+     0.7547,
+     -0.3522
+    ],
+    "intensity": 1.8,
+    "angle": 1.0
+   },
+   "emit": {
+    "rf_footlamp": [
+     1.5,
+     1.0408,
+     0.5874
+    ]
+   },
+   "shafts": 0.3,
+   "shaft_color": [
+    1.0,
+    0.8796,
+    0.6724
+   ],
+   "sky": [
+    0.2689,
+    0.206,
+    0.3
+   ],
+   "stats": {
+    "floor": [
+     0.5784,
+     0.4645,
+     0.4837
+    ],
+    "floor_key": [
+     0.2813,
+     0.2428,
+     0.1857
+    ],
+    "floor_median_lum": 0.6258,
+    "mean": [
+     0.5182,
+     0.4102,
+     0.4329
+    ],
+    "mean_lum": 0.4298
+   }
+  },
+  {
+   "name": "dusk",
+   "lightmap": "rent-free.dusk.webp",
+   "keymap": "rent-free.dusk.key.webp",
+   "exposure": 1.25,
+   "key": {
+    "light": "low_sun",
+    "type": "sun",
+    "color": [
+     1.0,
+     0.3419,
+     0.1946
+    ],
+    "dir": [
+     -0.8817,
+     0.3942,
+     -0.2593
+    ],
+    "intensity": 3.0,
+    "angle": 1.0
+   },
+   "emit": {
+    "rf_footlamp": [
+     2.5,
+     1.7347,
+     0.9789
+    ]
+   },
+   "shafts": 0.45,
+   "shaft_color": [
+    1.0,
+    0.3419,
+    0.1946
+   ],
+   "sky": [
+    0.2039,
+    0.1055,
+    0.2421
+   ],
+   "stats": {
+    "floor": [
+     0.4096,
+     0.1717,
+     0.2609
+    ],
+    "floor_key": [
+     0.1397,
+     0.0474,
+     0.0274
+    ],
+    "floor_median_lum": 0.1631,
+    "mean": [
+     0.4277,
+     0.1732,
+     0.2545
+    ],
+    "mean_lum": 0.2307
+   }
+  },
+  {
+   "name": "ball",
+   "lightmap": "rent-free.ball.webp",
+   "keymap": "rent-free.ball.key.webp",
+   "exposure": 1.0,
+   "key": {
+    "light": "chandelier1",
+    "type": "point",
+    "color": [
+     1.0,
+     0.6939,
+     0.3515
+    ],
+    "pos": [
+     0.0,
+     6.4,
+     -1.0
+    ],
+    "dir": [
+     0.0,
+     0.988,
+     -0.1544
+    ],
+    "intensity": 41.3803,
+    "decay": 2
+   },
+   "emit": {
+    "rf_footlamp": [
+     3.0,
+     2.0816,
+     1.1747
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.6939,
+    0.3515
+   ],
+   "sky": [
+    0.1598,
+    0.0959,
+    0.1743
+   ],
+   "stats": {
+    "floor": [
+     0.5787,
+     0.389,
+     0.349
+    ],
+    "floor_key": [
+     0.1023,
+     0.071,
+     0.036
+    ],
+    "floor_median_lum": 0.4185,
+    "mean": [
+     0.5643,
+     0.3729,
+     0.3313
+    ],
+    "mean_lum": 0.4097
+   }
+  },
+  {
+   "name": "hall",
+   "lightmap": "rent-free.hall.webp",
+   "keymap": "rent-free.hall.key.webp",
+   "exposure": 1.6,
+   "key": {
+    "light": "lantern",
+    "type": "point",
+    "color": [
+     1.0,
+     0.5395,
+     0.1946
+    ],
+    "pos": [
+     0.0,
+     4.2,
+     -0.0
+    ],
+    "dir": [
+     0.0,
+     1.0,
+     -0.0
+    ],
+    "intensity": 54.1127,
+    "decay": 2
+   },
+   "emit": {
+    "rf_footlamp": [
+     1.2,
+     0.8326,
+     0.4699
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.5395,
+    0.1946
+   ],
+   "sky": [
+    0.039,
+    0.0109,
+    0.0656
+   ],
+   "stats": {
+    "floor": [
+     0.2585,
+     0.1232,
+     0.0936
+    ],
+    "floor_key": [
+     0.1813,
+     0.0978,
+     0.0353
+    ],
+    "floor_median_lum": 0.1095,
+    "mean": [
+     0.2321,
+     0.1077,
+     0.0858
+    ],
+    "mean_lum": 0.1326
+   }
+  },
+  {
+   "name": "moon",
+   "lightmap": "rent-free.moon.webp",
+   "keymap": "rent-free.moon.key.webp",
+   "exposure": 1.7,
+   "key": {
+    "light": "moon",
+    "type": "sun",
+    "color": [
+     0.3372,
+     0.4678,
+     1.0
+    ],
+    "dir": [
+     -0.198,
+     0.6931,
+     -0.6931
+    ],
+    "intensity": 1.6,
+    "angle": 2.0
+   },
+   "emit": {
+    "rf_footlamp": [
+     0.6,
+     0.4163,
+     0.2349
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.3372,
+    0.4678,
+    1.0
+   ],
+   "sky": [
+    0.0127,
+    0.0119,
+    0.0486
+   ],
+   "stats": {
+    "floor": [
+     0.1778,
+     0.1657,
+     0.2873
+    ],
+    "floor_key": [
+     0.0682,
+     0.0957,
+     0.1999
+    ],
+    "floor_median_lum": 0.1923,
+    "mean": [
+     0.1618,
+     0.1423,
+     0.2383
+    ],
+    "mean_lum": 0.1534
+   }
+  },
+  {
+   "name": "fire",
+   "lightmap": "rent-free.fire.webp",
+   "keymap": "rent-free.fire.key.webp",
+   "exposure": 1.5,
+   "key": {
+    "light": "fire",
+    "type": "point",
+    "color": [
+     1.0,
+     0.3005,
+     0.0802
+    ],
+    "pos": [
+     10.75,
+     0.55,
+     -2.0
+    ],
+    "dir": [
+     0.9819,
+     0.0502,
+     -0.1827
+    ],
+    "intensity": 71.6197,
+    "decay": 2
+   },
+   "emit": {
+    "rf_footlamp": [
+     0.8,
+     0.5551,
+     0.3133
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    1.0,
+    0.3005,
+    0.0802
+   ],
+   "sky": [
+    0.0171,
+    0.0071,
+    0.0268
+   ],
+   "stats": {
+    "floor": [
+     0.3843,
+     0.1151,
+     0.0752
+    ],
+    "floor_key": [
+     0.2557,
+     0.0774,
+     0.0206
+    ],
+    "floor_median_lum": 0.0407,
+    "mean": [
+     0.3745,
+     0.1135,
+     0.0683
+    ],
+    "mean_lum": 0.1699
+   }
+  },
+  {
+   "name": "dark",
+   "lightmap": "rent-free.dark.webp",
+   "keymap": "rent-free.dark.key.webp",
+   "exposure": 2.2,
+   "key": {
+    "light": "front_fill",
+    "type": "sun",
+    "color": [
+     0.521,
+     0.6584,
+     1.0
+    ],
+    "dir": [
+     0.0,
+     0.5145,
+     0.8575
+    ],
+    "intensity": 0.0875,
+    "angle": 8.0
+   },
+   "emit": {
+    "rf_footlamp": [
+     0.4,
+     0.2775,
+     0.1566
+    ]
+   },
+   "shafts": 0.0,
+   "shaft_color": [
+    0.521,
+    0.6584,
+    1.0
+   ],
+   "sky": [
+    0.0187,
+    0.0052,
+    0.0315
+   ],
+   "stats": {
+    "floor": [
+     0.0243,
+     0.014,
+     0.0403
+    ],
+    "floor_key": [
+     0.0065,
+     0.0082,
+     0.0121
+    ],
+    "floor_median_lum": 0.0194,
+    "mean": [
+     0.0232,
+     0.0132,
+     0.0382
+    ],
+    "mean_lum": 0.017
+   }
+  }
+ ]
+}
