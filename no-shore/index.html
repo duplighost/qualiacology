@@ -11019,7 +11019,8 @@ const Journal = {
 // vents and seeps, the deep hum and its far clicks, whales over the blue, dolphins in warm water. Every layer follows the
 // biome weights (Env.bwS) and depth, so a crossing between biomes is a slow fade, never a switch.
 // Events: discover (a swell voiced for the place), scatter (a school bolting), torch (the switch).
-// All of it is muffled, sent into a long generated reverb, compressed gently and held under -1 dBFS by a soft ceiling.
+// All of it is heard as from under water: dark and slow, the highs gone (two lowpasses on the master, lower with depth),
+// sent into a long dark reverb that sways a little, compressed gently and held under -1 dBFS by a soft ceiling.
 const Audio2 = (() => {
   const R = Math.random;
   const rnd = (a, b) => a + (b - a) * R();
@@ -11029,13 +11030,13 @@ const Audio2 = (() => {
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
   // levels (dB, before the master); tuned by measuring with tools/listen.mjs
   const LV = {
-    master: -5,
-    bedLo: -19, bedHi: -19, swell: -11, fizz: -26, sand: -20, shrimp: -16, snap: -21, rush: -9, flow: -8,
-    rumble: -15, hiss: -16, hum: -12.5, humTone: -45,
-    inhale: -15, burst: -19, rise: -17, fin: -13.5, bump: -17, slosh: -13,
-    creak: -7, sealion: -13.5, groan: -28, crack: -16, seal: -36, seep: -18, tok: -19, dgroan: -29,
-    crunch: -9, grunt: -14, toad: -34, wave: -13, whale: -31.5, whistle: -39.5, clicks: -9,
-    discover: -29.5, scatter: -10.5, click: -19,
+    master: -3.5,
+    bedLo: -15.5, bedHi: -20.5, swell: -12, fizz: -36, sand: -26, shrimp: -23.5, snap: -27, rush: -12, flow: -8,
+    rumble: -16, hiss: -19, hum: -14, humTone: -45,
+    inhale: -22, burst: -24, rise: -23, fin: -16, bump: -18.5, slosh: -14,
+    creak: -7, sealion: -15, groan: -28, crack: -16, seal: -39, seep: -20, tok: -19, dgroan: -34,
+    crunch: -12, grunt: -19, toad: -36, wave: -17, whale: -34, whistle: -32, clicks: -11,
+    discover: -33, scatter: -11.5, click: -19,
   };
 
   let ctx = null, sr = 48000, muted = false, paused = false, sleepT = 0, failed = false;
@@ -11128,24 +11129,27 @@ const Audio2 = (() => {
     }
     return b;
   }
-  // the reverb: decorrelated decaying noise through a lowpass that falls as it dies, so the highs go first and the
-  // tail is dark (nothing is boosted: the lows simply keep the envelope); a slow watery sway; unit energy per channel
+  // the reverb: the water all round, long and dark. Decorrelated noise that swells in over the first tenth of a second
+  // and dies through a lowpass that falls as it goes (three poles: the highs leave first and the tail is a low wash;
+  // nothing is boosted, the lows simply keep the envelope); a slow sway; a few soft returns off the floor and the
+  // underside of the surface. Each channel carries 0.56 of unit energy (0.75 in level): a dark tail packs its energy
+  // into the lows, and at full energy it came back heavy there.
   function impulse(sec, rt) {
-    const n = Math.round(sec * sr), b = ctx.createBuffer(2, n, sr), pd = Math.round(0.016 * sr);
+    const n = Math.round(sec * sr), b = ctx.createBuffer(2, n, sr), pd = Math.round(0.022 * sr);
     for (let c = 0; c < 2; c++) {
       const d = b.getChannelData(c), ph = R() * TAU;
-      let l1 = 0, l2 = 0;
+      let l1 = 0, l2 = 0, l3 = 0;
       for (let i = pd; i < n; i++) {
-        const t = (i - pd) / sr, fc = 260 + 4200 * Math.exp(-t * 1.4), a = 1 - Math.exp(-TAU * fc / sr);
-        const e = Math.exp(-t * 6.91 / rt) * Math.min(1, t / 0.04) * (1 + 0.22 * Math.sin(TAU * 0.55 * t + ph) * Math.min(1, t * 2));
-        l1 += a * ((R() * 2 - 1) * e - l1); l2 += a * (l1 - l2); d[i] = l2;
+        const t = (i - pd) / sr, fc = 160 + 2100 * Math.exp(-t * 1.5), a = 1 - Math.exp(-TAU * fc / sr);
+        const e = Math.exp(-t * 6.91 / rt) * Math.min(1, t / 0.08) * (1 + 0.24 * Math.sin(TAU * 0.4 * t + ph) * Math.min(1, t * 2));
+        l1 += a * ((R() * 2 - 1) * e - l1); l2 += a * (l1 - l2); l3 += a * (l2 - l3); d[i] = l3;
       }
-      // a few early returns off the floor and the underside of the surface
       for (let k = 0; k < 6; k++) {
-        const i0 = pd + Math.round(rnd(0.005, 0.075) * sr), a = rnd(0.4, 1.2) * (R() < 0.5 ? -1 : 1);
-        for (let j = 0; j < 64 && i0 + j < n; j++) d[i0 + j] += a * Math.exp(-j / 12) * (R() * 2 - 1);
+        const i0 = pd + Math.round(rnd(0.008, 0.09) * sr), a = rnd(0.25, 0.7) * (R() < 0.5 ? -1 : 1), al = 1 - Math.exp(-TAU * 1300 / sr);
+        let l = 0;
+        for (let j = 0; j < 200 && i0 + j < n; j++) { l += al * ((R() * 2 - 1) * Math.exp(-j / 45) - l); d[i0 + j] += a * l; }
       }
-      normRms(d, 1 / Math.sqrt(n));
+      normRms(d, 0.75 / Math.sqrt(n));
     }
     return b;
   }
@@ -11278,7 +11282,7 @@ const Audio2 = (() => {
   function makeWave(h) { const re = new Float32Array(h.length + 1), im = new Float32Array(h.length + 1); h.forEach((a, i) => { im[i + 1] = a; }); return ctx.createPeriodicWave(re, im); }
   function makeBuffers() {
     B.whiteM = noise(1, 3, 0); B.pinkM = noise(1, 4, 1); B.white2 = noise(2, 3.3, 0); B.pink2 = noise(2, 4.7, 1); B.brown2 = noise(2, 6.1, 2);
-    B.ir = impulse(3.6, 3.1);
+    B.ir = impulse(5.4, 4.4);
     B.snaps = makeSnaps(); B.crackA = crackle(7.3, 330); B.crackB = crackle(9.1, 260);
     B.burst = [0, 1, 2, 3].map(makeBurst); B.rise = [0, 1, 2, 3].map(makeRise); B.seep = [0, 1, 2].map(makeSeep);
     B.clicks = [makeClicks(false), makeClicks(false), makeClicks(true)]; B.tok = makeTok();
@@ -11296,17 +11300,26 @@ const Audio2 = (() => {
   function build() {
     N = {};
     N.pre = gainN(1);
-    N.tone = filt('lowpass', 7000, 0.5);
+    // under water: two lowpasses in a row (24 dB an octave), set lower as the light goes and inside rock (control)
+    N.tone = filt('lowpass', 3700, 0.5); N.tone2 = filt('lowpass', 3700, 0.71);
     N.comp = ctx.createDynamicsCompressor();
     N.comp.threshold.value = -12; N.comp.knee.value = 8; N.comp.ratio.value = 4; N.comp.attack.value = 0.004; N.comp.release.value = 0.3;
     N.master = gainN(0);
     N.out = ctx.createWaveShaper(); N.out.curve = ceiling();
-    link(N.pre, filt('highpass', 24, 0.7), N.tone, N.comp, N.master, N.out, ctx.destination);
-    // the reverb
+    link(N.pre, filt('highpass', 24, 0.7), N.tone, N.tone2, N.comp, N.master, N.out, ctx.destination);
+    // the reverb: dark going in; on the way out a slow watery sway, two voices of it a few milliseconds late whose
+    // delay drifts so slowly that the pitch only wavers by a few cents
     N.rev = gainN(1);
     N.conv = ctx.createConvolver(); N.conv.normalize = false; N.conv.buffer = B.ir;
     N.revOut = gainN(1);
-    link(N.rev, filt('highpass', 90, 0.6), filt('lowpass', 3200, 0.6), N.conv, N.revOut, N.pre);
+    link(N.rev, filt('highpass', 105, 0.6), filt('lowpass', 1900, 0.6), N.conv, N.revOut);
+    link(N.revOut, gainN(0.75), N.pre);
+    for (const [base, rate, pan] of [[0.011, 0.13, -0.6], [0.017, 0.087, 0.6]]) {
+      const d = ctx.createDelay(0.05), lfo = osc('sine', rate), depth = gainN(0.0035), p = ctx.createStereoPanner();
+      d.delayTime.value = base; p.pan.value = pan;
+      link(lfo, depth); depth.connect(d.delayTime); lfo.start();
+      link(N.revOut, d, p, gainN(0.42), N.pre);
+    }
     // rock close around: two short echoes that only come up when the swimmer is enclosed
     N.enc = gainN(0);
     const elp = filt('lowpass', 1500, 0.6), eo = gainN(0.6);
@@ -11334,28 +11347,32 @@ const Audio2 = (() => {
       if (send) { const sg = gainN(send); g.connect(sg); sg.connect(N.rev); }
       return g;
     };
-    // the sea's low body and its far wash
-    L.bedLoF = filt('lowpass', 300, 0.7); L.bedLo = mk(B.brown2, 1, [filt('highpass', 32, 0.7), L.bedLoF], N.place, 0.3);
-    L.bedHiF = filt('bandpass', 700, 0.55); L.bedHi = mk(B.pink2, 1, [L.bedHiF], N.place, 0.35);
-    // the swell overhead rushing one way and back, a fizz of small bubbles under the waves, sand stirring on the floor
-    L.swellF = filt('lowpass', 400, 0.8); L.swellP = ctx.createStereoPanner(); L.swell = mk(B.pink2, 0.97, [L.swellF, L.swellP], N.place, 0.3);
-    L.fizz = mk(B.white2, 1, [filt('bandpass', 2600, 0.8)], N.place, 0.25);
-    L.sand = mk(B.white2, 0.93, [filt('bandpass', 3300, 1.2)], N.place, 0.15);
-    // snapping shrimp: two beds of different lengths and speeds, so the texture never lines up the same way twice
-    L.shrimpF = filt('lowpass', 5000, 0.6); L.shrimp = gainN(0);
-    const shp = filt('highpass', 1000, 0.6);
+    // the sea's low body, rising and falling slowly as swells pass over (two slow tides on its level that never line
+    // up), and its far wash: a soft low hush heard mostly through the reverb
+    L.bedLoF = filt('lowpass', 220, 0.6); L.bedLoM = gainN(1);
+    L.bedLo = mk(B.brown2, 1, [filt('highpass', 28, 0.7), L.bedLoF, L.bedLoM], N.place, 0.12);
+    for (const [r, a] of [[0.071, 0.2], [0.113, 0.13]]) { const o = osc('sine', r), g = gainN(a); link(o, g); g.connect(L.bedLoM.gain); o.start(); }
+    L.bedHiF = filt('bandpass', 300, 0.6); L.bedHi = mk(B.pink2, 1, [L.bedHiF, filt('lowpass', 900, 0.5)], N.place, 0.5);
+    // the swell overhead pushing one way and back, a faint fizz under the waves, sand stirring on the floor
+    L.swellF = filt('lowpass', 200, 0.7); L.swellP = ctx.createStereoPanner(); L.swell = mk(B.pink2, 0.97, [L.swellF, L.swellP], N.place, 0.25);
+    L.fizz = mk(B.white2, 1, [filt('bandpass', 1500, 0.7)], N.place, 0.4);
+    L.sand = mk(B.white2, 0.93, [filt('bandpass', 1700, 0.9)], N.place, 0.25);
+    // snapping shrimp, far off and soft: two beds of different lengths and speeds, so the texture never lines up the
+    // same way twice; only the low part of each snap gets through (a patter, not a sizzle)
+    L.shrimpF = filt('lowpass', 1500, 0.6); L.shrimp = gainN(0);
+    const shp = filt('highpass', 600, 0.6);
     for (const [bb, r] of [[B.crackA, 1], [B.crackB, 0.94]]) { const s = bsrc(bb, true, r); s.start(ctx.currentTime, R() * bb.duration); s.connect(shp); }
-    link(shp, L.shrimpF, L.shrimp, N.place); { const sg = gainN(0.35); L.shrimp.connect(sg); sg.connect(N.rev); }
-    L.snapF = filt('lowpass', 5000, 0.6); L.snapF.connect(N.place); { const sg = gainN(0.3); L.snapF.connect(sg); sg.connect(N.rev); }
+    link(shp, L.shrimpF, L.shrimp, N.place); { const sg = gainN(0.55); L.shrimp.connect(sg); sg.connect(N.rev); }
+    L.snapF = filt('lowpass', 1700, 0.6); L.snapF.connect(N.place); { const sg = gainN(0.5); L.snapF.connect(sg); sg.connect(N.rev); }
     // water rushing past the ears
-    L.rushF = filt('bandpass', 400, 0.7); L.rushT = gainN(1); L.rush = mk(B.pink2, 1.03, [L.rushF, filt('lowpass', 2600, 0.6), L.rushT], N.body, 0.08);
+    L.rushF = filt('bandpass', 300, 0.7); L.rushT = gainN(1); L.rush = mk(B.pink2, 1.03, [L.rushF, filt('lowpass', 1100, 0.6), L.rushT], N.body, 0.12);
     // a river of current: the moving water roaring low over the ground, from upstream
     L.flowF = filt('bandpass', 260, 0.7); L.flowM = gainN(1); L.flowP = ctx.createStereoPanner();
     L.flow = mk(B.pink2, 0.9, [L.flowF, filt('lowpass', 900, 0.6), L.flowM, L.flowP], N.place, 0.3);
     modulate(L.flowM.gain, 0.06, 0.5);
     // vents: a deep rumble that swells, a hiss that boils
     L.rumbleM = gainN(1); L.rumble = mk(B.brown2, 0.9, [filt('highpass', 28, 0.7), filt('lowpass', 105, 1.0), L.rumbleM], N.place, 0.3);
-    L.hissM = gainN(1); L.hiss = mk(B.white2, 1, [filt('bandpass', 1700, 0.9), filt('lowpass', 3600, 0.6), L.hissM], N.place, 0.3);
+    L.hissM = gainN(1); L.hiss = mk(B.white2, 1, [filt('bandpass', 1200, 0.8), filt('lowpass', 2200, 0.6), L.hissM], N.place, 0.4);
     modulate(L.rumbleM.gain, 0.012, 0.55); modulate(L.hissM.gain, 0.11, 0.6);
     // the deep: a hum felt more than heard
     L.humF = filt('bandpass', 62, 1.3); L.hum = mk(B.brown2, 0.8, [L.humF], N.place, 0.2);
@@ -11408,36 +11425,36 @@ const Audio2 = (() => {
   }
   function inhale(t0, dur, d) {
     // the demand valve opens: a soft hiss that rises, holds and falls away
-    const f = rnd(950, 1250) * (1 + 0.25 * d), s = bsrc(B.whiteM, true), bp = filt('bandpass', f, rnd(0.8, 1.1)), pk = filt('peaking', rnd(1900, 2500), 5, 4), lp = filt('lowpass', 2700 + 800 * d, 0.6), g = gainN(0);
+    const f = rnd(650, 820) * (1 + 0.25 * d), s = bsrc(B.whiteM, true), bp = filt('bandpass', f, rnd(0.8, 1.0)), pk = filt('peaking', rnd(1300, 1600), 1.6, 2.5), lp = filt('lowpass', 1600 + 600 * d, 0.6), g = gainN(0);
     link(s, bp, pk, lp, g);
     bp.frequency.setValueAtTime(f * 0.9, t0); bp.frequency.linearRampToValueAtTime(f * 1.15, t0 + dur);
     const end = env(g.gain, t0, db(LV.inhale + 3 * d + rnd(-1.5, 1.5)), dur * 0.38, dur * 0.3, dur * 0.5);
-    const nodes = [s, bp, pk, lp, g]; route(g, N.body, 0.1, rnd(-0.04, 0.04), nodes);
+    const nodes = [s, bp, pk, lp, g]; route(g, N.body, 0.15, rnd(-0.04, 0.04), nodes);
     s.start(t0, R() * 2); voice([s], nodes, end);
     return { g, end };
   }
   function exhale(t0, dur, d) {
     const nodes = [];
     // the exhaust: a gulping burst of big bubbles for as long as the breath lasts
-    const s1 = bsrc(pick(B.burst), false, rnd(0.88, 1.12)), f1 = filt('lowpass', 1500 + 700 * d, 0.7), g1 = gainN(0);
+    const s1 = bsrc(pick(B.burst), false, rnd(0.88, 1.12)), f1 = filt('lowpass', 1100 + 500 * d, 0.7), g1 = gainN(0);
     link(s1, f1, g1); nodes.push(s1, f1, g1);
     const end1 = env(g1.gain, t0 + 0.05, db(LV.burst + 2 * d + rnd(-1.5, 1)), 0.07, Math.max(0.1, dur - 0.35), 0.35);
-    route(g1, N.body, 0.18, rnd(-0.08, 0.08), nodes);
+    route(g1, N.body, 0.25, rnd(-0.08, 0.08), nodes);
     // then they rise past the ears and away overhead
-    const s2 = bsrc(pick(B.rise), false, rnd(0.9, 1.1)), f2 = filt('lowpass', 3400, 0.6), g2 = gainN(0), t2 = t0 + Math.min(0.6, dur * 0.35);
+    const s2 = bsrc(pick(B.rise), false, rnd(0.9, 1.1)), f2 = filt('lowpass', 2200, 0.6), g2 = gainN(0), t2 = t0 + Math.min(0.6, dur * 0.35);
     link(s2, f2, g2); nodes.push(s2, f2, g2);
     const end2 = env(g2.gain, t2, db(LV.rise + 2 * d + rnd(-1.5, 1.5)), 0.15, 0.5, 1.6);
-    route(g2, N.body, 0.25, rnd(-0.1, 0.1), nodes);
+    route(g2, N.body, 0.35, rnd(-0.1, 0.1), nodes);
     s1.start(t0 + 0.05); s2.start(t2); voice([s1, s2], nodes, Math.max(end1, end2));
   }
   function stroke(t0, e, amt, period) {
     // a fin pushes water: a low swish whose band sweeps up as the stroke bites
-    const f = rnd(280, 340) * (1 + 0.5 * e), s = bsrc(B.pinkM, true), bp = filt('bandpass', f, rnd(0.5, 0.65)), lp = filt('lowpass', 750 + 550 * e, 0.6), g = gainN(0);
+    const f = rnd(280, 340) * (1 + 0.5 * e), s = bsrc(B.pinkM, true), bp = filt('bandpass', f, rnd(0.5, 0.65)), lp = filt('lowpass', 600 + 400 * e, 0.6), g = gainN(0);
     link(s, bp, lp, g);
     bp.frequency.setValueAtTime(f * 0.8, t0); bp.frequency.linearRampToValueAtTime(f * 1.2, t0 + period * 0.32);
     const end = env(g.gain, t0, db(LV.fin + 7 * e + rnd(-1.5, 1.5)) * amt, period * 0.26, period * 0.05, period * 0.55);
     S.side = -S.side;
-    const nodes = [s, bp, lp, g]; route(g, N.body, 0.1, S.side * rnd(0.08, 0.2), nodes);
+    const nodes = [s, bp, lp, g]; route(g, N.body, 0.2, S.side * rnd(0.08, 0.2), nodes);
     s.start(t0, R() * 3.5); voice([s], nodes, end);
   }
   function bump(t0, k) {
@@ -11585,7 +11602,7 @@ const Audio2 = (() => {
   function crunch(t0, near) {
     // a parrotfish biting coral, a few bites at a time
     const n = 2 + (R() * 4 | 0), g = gainN(db(LV.crunch) * rnd(0.4, 1) * (0.4 + 0.6 * near)), nodes = [g], srcs = [];
-    route(g, N.place, 0.25, rnd(-0.85, 0.85), nodes);
+    route(g, N.place, 0.4, rnd(-0.85, 0.85), nodes);
     let t = t0;
     for (let i = 0; i < n; i++) { const s = bsrc(pick(B.crunch), false, rnd(0.85, 1.2)), gi = gainN(rnd(0.6, 1)); link(s, gi, g); s.start(t); srcs.push([s, t + 0.09]); nodes.push(s, gi); t += rnd(0.12, 0.32); }
     voice(srcs, nodes, t + 0.1);
@@ -11597,7 +11614,7 @@ const Audio2 = (() => {
     for (let i = 0, n = 1 + (R() * 3 | 0); i < n; i++) {
       const o = osc('square', rate * rnd(0.95, 1.05)), bp = filt('bandpass', fc, 4), g = gainN(0); link(o, bp, g);
       const end = env(g.gain, t, db(LV.grunt) * k, 0.012, rnd(0.04, 0.22), 0.07);
-      const nodes = [o, bp, g]; route(g, N.place, 0.3, pan, nodes);
+      const nodes = [o, bp, g]; route(g, N.place, 0.35, pan, nodes);
       o.start(t); voice([o], nodes, end); t = end + rnd(0.05, 0.25);
     }
     return t;
@@ -11611,14 +11628,14 @@ const Audio2 = (() => {
     o.start(t); voice([o], nodes, end);
   }
   function wave(t0, k) {
-    // a wave breaking overhead, heard from below: a slow muffled roar and the fizz it leaves
-    const dur = rnd(2.5, 4.5), pan = rnd(-0.5, 0.5), att = rnd(0.5, 1.0), nodes = [];
-    const s = bsrc(B.pink2, true), lp = filt('lowpass', 320, 0.7), g = gainN(0), s2 = bsrc(B.white2, true), bp = filt('bandpass', 2600, 0.7), g2 = gainN(0);
+    // a wave breaking overhead, heard from below: a slow muffled roll and the faint fizz it leaves
+    const dur = rnd(3.5, 6), pan = rnd(-0.4, 0.4), att = rnd(1.0, 1.8), nodes = [];
+    const s = bsrc(B.pink2, true), lp = filt('lowpass', 180, 0.7), g = gainN(0), s2 = bsrc(B.white2, true), bp = filt('bandpass', 1400, 0.7), g2 = gainN(0);
     link(s, lp, g); link(s2, bp, g2);
-    lp.frequency.setValueAtTime(320, t0); lp.frequency.exponentialRampToValueAtTime(rnd(700, 1100), t0 + dur * 0.25); lp.frequency.exponentialRampToValueAtTime(300, t0 + dur);
-    const end = env(g.gain, t0, db(LV.wave) * k * rnd(0.5, 1), att, 0.2, dur);
-    env(g2.gain, t0 + att * 0.6, db(LV.wave - 14) * k, 0.6, 0.3, dur * 0.8);
-    nodes.push(s, lp, g, s2, bp, g2); route(g, N.place, 0.45, pan, nodes); route(g2, N.place, 0.45, pan, nodes);
+    lp.frequency.setValueAtTime(180, t0); lp.frequency.exponentialRampToValueAtTime(rnd(380, 520), t0 + att + 0.3); lp.frequency.exponentialRampToValueAtTime(160, t0 + att + dur);
+    const end = env(g.gain, t0, db(LV.wave) * k * rnd(0.55, 1), att, 0.4, dur);
+    env(g2.gain, t0 + att * 0.7, db(LV.wave - 20) * k, 0.8, 0.3, dur * 0.8);
+    nodes.push(s, lp, g, s2, bp, g2); route(g, N.place, 0.6, pan, nodes); route(g2, N.place, 0.6, pan, nodes);
     s.start(t0, R() * 3); s2.start(t0, R() * 2); voice([s, s2], nodes, end + 0.2);
   }
 
@@ -11715,29 +11732,29 @@ const Audio2 = (() => {
     const enc = S.enc, lid = 1 - 0.6 * enc;   // rock overhead muffles the surface
     const lv = S.lv, set = (name, node, v, tc) => { if (S.solo && !S.solo.has(name)) v = 0; ease(node.gain, v, tc); lv[name] = v > 1e-6 ? +(20 * Math.log10(v)).toFixed(1) : -120; S.byName[name] = node; };
     // the bed
-    set('bedLo', L.bedLo, db(LV.bedLo + S.wk[0] * 2.5) * (0.7 + 0.3 * sun), 1.2);
-    ease(L.bedLoF.frequency, 130 + 330 * sun + 60 * (w.kelp + w.tempsand), 1.5);
-    set('bedHi', L.bedHi, db(LV.bedHi + S.wk[1] * 3) * (0.12 + 0.88 * sun * sun) * (1 + 0.6 * (w.lagoon + w.tempsand) + 0.3 * w.reef) * lid, 1.2);
-    ease(L.bedHiF.frequency, 420 + 520 * sun, 1.5);
-    // the swell: water swings one way and back with the surge the plants sway in; it rushes past as it moves
+    set('bedLo', L.bedLo, db(LV.bedLo + S.wk[0] * 2) * (0.75 + 0.25 * sun), 1.2);
+    ease(L.bedLoF.frequency, 110 + 150 * sun + 50 * (w.kelp + w.tempsand), 1.5);
+    set('bedHi', L.bedHi, db(LV.bedHi + S.wk[1] * 2.5) * (0.3 + 0.7 * sun) * (1 + 0.35 * (w.lagoon + w.tempsand) + 0.15 * w.reef) * lid, 1.5);
+    ease(L.bedHiF.frequency, 220 + 150 * sun, 1.5);
+    // the swell: water swings one way and back with the surge the plants sway in; a low push as it moves
     const u = Math.min(1, Math.abs(Env.surge) / (0.75 * sh + 1e-4)), yaw = Player.yaw;
-    set('swell', L.swell, db(LV.swell) * sh * (0.22 + 0.78 * u * u) * lid, 0.5);
-    ease(L.swellF.frequency, 190 + 520 * u, 0.5);
-    ease(L.swellP.pan, Math.sign(Env.surge) * (0.871 * Math.cos(yaw) - 0.49 * Math.sin(yaw)) * 0.55 * u, 0.6);
-    set('fizz', L.fizz, db(LV.fizz) * surf * surf * (0.4 + 0.6 * u) * lid, 0.8);
+    set('swell', L.swell, db(LV.swell) * sh * (0.3 + 0.7 * u * u) * lid, 0.9);
+    ease(L.swellF.frequency, 120 + 260 * u, 0.9);
+    ease(L.swellP.pan, Math.sign(Env.surge) * (0.871 * Math.cos(yaw) - 0.49 * Math.sin(yaw)) * 0.35 * u, 1.0);
+    set('fizz', L.fizz, db(LV.fizz) * surf * surf * (0.4 + 0.6 * u) * lid, 1.0);
     const sandy = w.lagoon + 0.8 * w.tempsand + 0.3 * w.reef + 0.2 * w.kelp + 0.15 * w.polar;
     set('sand', L.sand, db(LV.sand) * sandy * Math.exp(-below / 5) * sh * (0.15 + 0.85 * u), 0.5);
     // snapping shrimp: thick on warm reefs and rock, thinner deeper and further from the floor, busier at night
     const night = Env.night || 0, dark = Env.dark || 0;
     const shrimp = (w.reef + 0.85 * w.karst + 0.7 * w.volcanic + 0.55 * w.lagoon + 0.45 * w.kelp + 0.35 * w.meso + 0.12 * w.tempsand + 0.2 * w.coldreef + 0.1 * w.sponge) * (1 - 0.75 * smooth(30, 160, floorD)) * (1 + 0.35 * night);
     set('shrimp', L.shrimp, db(LV.shrimp + S.wk[2] * 2) * shrimp * (0.3 + 0.7 * nearF), 1.5);
-    const bright = (1500 + 1600 * nearF) * (1 - 0.35 * deepZ);   // crackle, not sizzle
+    const bright = (900 + 700 * nearF) * (1 - 0.3 * deepZ);   // a patter, not a sizzle
     ease(L.shrimpF.frequency, bright, 1.5); ease(L.snapF.frequency, bright * 1.1, 1.5);
-    S.snapRate = 24 * shrimp * nearF; lv.snapRate = +S.snapRate.toFixed(1);
+    S.snapRate = 9 * shrimp * nearF; lv.snapRate = +S.snapRate.toFixed(1);
     // speed
     const s = clamp(Player.speed / 7.4, 0, 1.2);
     set('rush', L.rush, db(LV.rush) * Math.pow(s, 2.2), 0.12);
-    ease(L.rushF.frequency, 260 + 1100 * s, 0.15);
+    ease(L.rushF.frequency, 200 + 480 * s, 0.2);
     ease(L.rushT.gain, s > 0.25 ? rnd(0.75, 1.15) : 1, 0.06);
     // a river (Env.flow, where the world has them): louder and a little brighter as it runs faster
     const fl = Env.flow, fs = fl ? Math.hypot(fl[0], fl[2]) : 0;
@@ -11753,9 +11770,10 @@ const Audio2 = (() => {
     ease(L.humF.frequency, 58 + 12 * (1 - smooth(100, 400, depth)), 3);
     set('humTone', L.humT, db(LV.humTone) * deep * smooth(110, 330, depth), 3);
     // space: more reverb over open water and inside rock, darker with depth
-    ease(N.revOut.gain, 0.8 + 0.5 * open + 0.6 * enc, 1.5);
+    ease(N.revOut.gain, 0.8 + 0.5 * open + 0.5 * enc, 1.5);
     ease(N.enc.gain, 0.45 * enc, 0.4);
-    ease(N.tone.frequency, 7000 - 2600 * (1 - sun) - 900 * dark * sun - 1200 * enc, 2);
+    const tone = 3700 - 1500 * (1 - sun) - 500 * dark * sun - 900 * enc;
+    ease(N.tone.frequency, tone, 2); ease(N.tone2.frequency, tone, 2);
     lv.enc = +enc.toFixed(2); lv.open = +open.toFixed(2); lv.exhales = S.br.exN || 0;
     N.meter.getFloatTimeDomainData(N.meterBuf);
     let ms = 0; for (let i = 0; i < N.meterBuf.length; i++) ms += N.meterBuf[i] * N.meterBuf[i];
@@ -11776,7 +11794,7 @@ const Audio2 = (() => {
     if (hz('crunch', dtc, (w.reef + 0.6 * w.karst + 0.4 * w.volcanic + 0.3 * w.meso + 0.3 * w.lagoon) * nearF / 14, 4)) crunch(t0, nearF);
     if (hz('grunt', dtc, (0.7 * w.reef + 0.4 * w.lagoon + 0.5 * w.kelp + 0.6 * w.meso + 0.6 * w.sponge + 0.5 * w.tempsand + 0.5 * w.karst + 0.3 * w.coldreef) * (0.4 + 0.6 * nearF) * (1 + 0.8 * night) / 11, 3)) grunt(t0);
     if (hz('toad', dtc, (w.tempsand + 0.7 * w.sponge + 0.3 * w.kelp) * (1 + night) / 40, 15)) toad(t0);
-    if (hz('wave', dtc, surf * lid / 11, 5)) wave(t0, surf);
+    if (hz('wave', dtc, surf * lid / 14, 6)) wave(t0, surf);
     whales(dtc, Math.max(open, 0.6 * (w.meso + w.twilight + w.abyss) + 0.4 * w.polar) * (1 - 0.6 * enc));
     dolphins(dtc, (w.reef + w.lagoon + w.karst + w.volcanic + 0.7 * w.meso) * (1 - smooth(25, 80, depth)) * (0.35 + 0.65 * open) * (1 - 0.7 * enc) * (1 - 0.5 * night));
   }
