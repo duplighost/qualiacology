@@ -3,7 +3,9 @@
 // them, score small in the top right, your combo big at the bottom (its multiplier is what everything's worth),
 // the finale's points under her bar once it's empty, and a Q over YOU's head when the spotlight is yours to take.
 
-const HEART = '<svg viewBox="0 0 32 30"><path d="M16 29 C6 21 1 15.5 1 9.5 C1 4.8 4.8 1 9.4 1 C12.3 1 14.7 2.6 16 5 C17.3 2.6 19.7 1 22.6 1 C27.2 1 31 4.8 31 9.5 C31 15.5 26 21 16 29 Z"/></svg>';
+const HEART_PATH = '<path d="M16 29 C6 21 1 15.5 1 9.5 C1 4.8 4.8 1 9.4 1 C12.3 1 14.7 2.6 16 5 C17.3 2.6 19.7 1 22.6 1 C27.2 1 31 4.8 31 9.5 C31 15.5 26 21 16 29 Z"/>';
+// a heart is its empty shape with the pink on top: half a heart shows the pink on its left half
+const HEART = `<svg class="h-bg" viewBox="0 0 32 30">${HEART_PATH}</svg><svg class="h-fg" viewBox="0 0 32 30">${HEART_PATH}</svg>`;
 
 export class HUD {
   constructor(root) {
@@ -40,12 +42,14 @@ export class HUD {
     this.ghostK = this.shownK = 1;
     this.el.boss.classList.remove('mp-empty', 'mp-gone');
   }
+  // hearts in halves: a hit takes half of one
   setHearts(n, max) {
     if (this.el.hearts.children.length !== max) this.el.hearts.innerHTML = Array.from({ length: max }, () => `<b class="mp-heart">${HEART}</b>`).join('');
     const hs = this.el.hearts.children;
-    for (let i = 0; i < max; i++) hs[i].classList.toggle('lost', i >= n);
-    if (this.lastHearts > n && n >= 0) { const h = hs[n]; if (h) { h.classList.remove('break'); void h.offsetWidth; h.classList.add('break'); } }
-    if (this.lastHearts >= 0 && n > this.lastHearts) { const h = hs[n - 1]; if (h) { h.classList.remove('gain'); void h.offsetWidth; h.classList.add('gain'); } }
+    for (let i = 0; i < max; i++) { const k = n - i; hs[i].classList.toggle('lost', k <= 0.01); hs[i].classList.toggle('half', k > 0.01 && k < 0.99); }
+    const at = (v) => hs[Math.max(0, Math.ceil(v - 0.01) - 1)];
+    if (this.lastHearts > n + 0.01 && n >= 0) { const h = at(this.lastHearts); if (h) { h.classList.remove('break'); void h.offsetWidth; h.classList.add('break'); } }
+    if (this.lastHearts >= 0 && n > this.lastHearts + 0.01) { const h = at(n); if (h) { h.classList.remove('gain'); void h.offsetWidth; h.classList.add('gain'); } }
     this.lastHearts = n;
   }
   breakNotch(i) { const n = this.el.notches.querySelector(`[data-i="${i}"]`); if (n) n.classList.add('broken'); this.el.boss.classList.remove('mp-shake'); void this.el.boss.offsetWidth; this.el.boss.classList.add('mp-shake'); }

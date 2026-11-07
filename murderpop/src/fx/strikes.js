@@ -124,6 +124,10 @@ export class StrikeFX {
     for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(QUAD, mat(RING_FS, { uC: { value: SX_GOLD.clone() }, uR: { value: 0.5 }, uW: { value: 0.05 }, uA: { value: 0 } })); m.rotation.x = -Math.PI / 2; m.renderOrder = 3; m.frustumCulled = false; m.visible = false; this.group.add(m); this.targets.push(m); }
     this.targetLine = new THREE.Mesh(QUAD, mat(RING_FS, { uC: { value: new THREE.Color(2.6, 2.4, 2.1) }, uR: { value: 0.8 }, uW: { value: 0.02 }, uA: { value: 0 } }));
     this.targetLine.rotation.x = -Math.PI / 2; this.targetLine.renderOrder = 3; this.targetLine.frustumCulled = false; this.targetLine.visible = false; this.group.add(this.targetLine);
+    // stunned: gold stars round her head, one for each counter in a row
+    this.dazeS = [];
+    for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(QUAD, mat(STAR_FS, { uC: { value: SX_GOLD.clone() }, uA: { value: 0 }, uRot: { value: i } }, VS_BILL)); m.renderOrder = 9; m.frustumCulled = false; m.visible = false; this.group.add(m); this.dazeS.push(m); }
+    this.daze = null;
     // made now, hidden, so their shaders compile with the rest at load
     for (let i = 0; i < 6; i++) this._mkSlash();
     for (let i = 0; i < 8; i++) this._mkStar();
@@ -221,6 +225,24 @@ export class StrikeFX {
     }
   }
 
+  // ---------- stunned ----------
+  dazeStars(b, n, dur) { this.daze = { b, n: Math.max(1, Math.min(3, n)), t: 0, dur }; }
+  _updateDaze(dt) {
+    const d = this.daze;
+    if (!d) { for (const m of this.dazeS) m.visible = false; return; }
+    d.t += dt;
+    const left = d.dur - d.t, a = Math.min(1, d.t / 0.08) * Math.min(1, Math.max(0, left / 0.25));
+    if (left <= 0 || !d.b.root.visible) { this.daze = null; for (const m of this.dazeS) m.visible = false; return; }
+    const y = d.b.root.position.y + 2.15, spin = d.t * 7;
+    for (let i = 0; i < this.dazeS.length; i++) {
+      const m = this.dazeS[i]; m.visible = i < d.n;
+      if (!m.visible) continue;
+      const an = spin + i * Math.PI * 2 / d.n;
+      m.position.set(d.b.x + Math.cos(an) * 0.42, y + Math.sin(an * 2) * 0.05, d.b.z + Math.sin(an) * 0.42);
+      m.scale.setScalar(0.27 + 0.05 * Math.sin(d.t * 18 + i)); m.material.uniforms.uA.value = a * 1.2; m.material.uniforms.uRot.value = d.t * 4 + i;
+    }
+  }
+
   // ---------- the solo ----------
   soloBeats(left, n, pulse, pl, dt = 1 / 60) {
     this.pipsK += ((left > 0 ? 1 : 0) - this.pipsK) * Math.min(1, dt * 8);
@@ -232,6 +254,7 @@ export class StrikeFX {
   }
 
   update(dt) {
+    this._updateDaze(dt);
     for (let i = this.live.length - 1; i >= 0; i--) {
       const e = this.live[i];
       e.t += dt;
@@ -243,5 +266,5 @@ export class StrikeFX {
     }
   }
 
-  clear() { for (const e of this.live) { e.m.visible = false; e.m.userData.busy = false; } this.live.length = 0; this.guardK = 0; this.shield.visible = false; this.pipsK = 0; this.pips.visible = false; for (const m of this.targets) m.visible = false; this.targetLine.visible = false; }
+  clear() { this.daze = null; for (const m of this.dazeS) m.visible = false; for (const e of this.live) { e.m.visible = false; e.m.userData.busy = false; } this.live.length = 0; this.guardK = 0; this.shield.visible = false; this.pipsK = 0; this.pips.visible = false; for (const m of this.targets) m.visible = false; this.targetLine.visible = false; }
 }

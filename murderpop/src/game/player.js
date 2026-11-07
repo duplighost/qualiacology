@@ -27,7 +27,8 @@ export const FEEL = {
   comboWindow: 0.55, strikeRange: 2.4, strikeArc: 1.35, magnetRange: 4.2, magnetArc: 1.1, stopShort: 1.05,
   // the beat: how early / late a press can be and still be on it (seconds, and at most this share of the beat), and
   // what it's worth: on the felt beat (big), on a beat between, off the beat, the finisher, in the solo
-  early: 0.08, late: 0.055, earlyK: 0.2, lateK: 0.14, dmgBig: 1.8, dmgOn: 1.1, dmgOff: 0.45, dmgFinisher: 3.0, dmgSolo: 1.6,
+  // (Alex, 7 Nov: the bosses felt "bullet spongey": a strike takes a real piece of her now)
+  early: 0.08, late: 0.055, earlyK: 0.2, lateK: 0.14, dmgBig: 2.6, dmgOn: 1.6, dmgOff: 0.6, dmgFinisher: 4.3, dmgSolo: 1.6,
   // the guard: a press opens the window (perfect / good: the hit lands this soon after the press); holding blocks
   catchPerfect: 0.11, catchGood: 0.2, catchRadius: 1.7, catchCooldown: 0.3, guardMin: 0.24, blockPush: 5.5,
   // sending it back: a hit of hers turned on her, when she's close enough to reach
@@ -35,6 +36,7 @@ export const FEEL = {
   dashTime: 0.16, dashSpeed: 34, dashIframes: 0.15, dashCharges: 2, dashRecharge: 0.55,
   ringSpeed: 30, ringReturn: 38, ringRange: 13, ringHang: 0.14, ringDmg: 9, ringRadius: 1.15,
   hearts: 5, hurtStun: 0.24, hurtInv: 1.05, knock: 9,
+  heartPerHit: 0.5,   // a hit takes half a heart (Alex, 7 Nov: "a little more health for the player character")
   // the spotlight fills mostly from defence: what you send back, what you slip past, a little from the beat
   meter: { perfectCatch: 0.2, goodCatch: 0.1, block: 0.03, nearMiss: 0.1, onBeatHit: 0.012, ringHit: 0.015, finisher: 0.06 },
 };
@@ -447,7 +449,8 @@ export class Player {
     if (this.invulnerable) { if (this.state === 'dash') this.nearMiss(ctx); return false; }
     // a white hit goes through the guard: it breaks, you can see it
     if (this.guarding && ctx.fx && ctx.fx.guardBreak) ctx.fx.guardBreak(this);
-    this.hearts = Math.max(this.minHearts || 0, this.hearts - dmg); this.inv = FEEL.hurtInv; this.stats.hurt++;
+    this.hearts = Math.max(this.minHearts || 0, this.hearts - dmg * FEEL.heartPerHit); this.inv = FEEL.hurtInv; this.stats.hurt++;
+    if (this.hearts < 1e-6) this.hearts = 0;
     const a = Math.atan2(this.x - fromX, this.z - fromZ);
     this.vx = Math.sin(a) * FEEL.knock; this.vz = Math.cos(a) * FEEL.knock;
     this.aiming = false; this.guarding = false; this._pose(false); this.streak = 0;

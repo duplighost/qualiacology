@@ -261,6 +261,7 @@ export class FX {
     }
   }
   drawTargets(list, pulse) { this.sx.drawTargets(list, pulse); }
+  dazeStars(b, n, dur) { this.sx.dazeStars(b, n, dur); }
 
   // ---------- screen ----------
   flash(color, k = 1) { this.flashC.r = Math.max(this.flashC.r, color.r * k); this.flashC.g = Math.max(this.flashC.g, color.g * k); this.flashC.b = Math.max(this.flashC.b, color.b * k); }
