@@ -13,8 +13,9 @@ export class Screens {
           <div class="mp-keys">
             <div><b>WASD</b><span>move</span></div><div><b>Mouse</b><span>aim</span></div>
             <div><b>Left click</b><span>strike</span></div><div><b>Right click</b><span>catch it, send it back</span></div>
-            <div><b>Hold right, let go</b><span>throw a ring</span></div><div><b>Space</b><span>dash</span></div>
-            <div><b>Q</b><span>take the spotlight</span></div><div><b>F</b><span>full screen</span></div><div><b>M</b><span>mute</span></div>
+            <div class="wide"><b>Hold right click, let go</b><span>throw a ring</span></div>
+            <div><b>Space</b><span>dash</span></div><div><b>Q</b><span>take the spotlight</span></div>
+            <div><b>F</b><span>full screen</span></div><div><b>M</b><span>mute</span></div>
           </div>
           <div class="mp-sliders">
             <label>Music <input type="range" min="0" max="100" value="100" data-k="music"></label>

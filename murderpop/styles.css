@@ -87,6 +87,7 @@ body.menu #reticle { display: none; }
 .mp-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 26px; margin-bottom: 24px; }
 .mp-keys div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; border-bottom: 1px solid rgba(247,239,228,.08); padding-bottom: 6px; }
 .mp-keys b { font-weight: 700; color: var(--gold); white-space: nowrap; }
+.mp-keys .wide { grid-column: 1 / -1; }
 .mp-keys span { color: rgba(247, 239, 228, .78); text-align: right; }
 .mp-sliders { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; font-size: 14px; color: rgba(247,239,228,.8); }
 .mp-sliders label { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
