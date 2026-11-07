@@ -326,16 +326,41 @@ function WORLDLIB(W) {
   const B = {}; BIOMES.forEach((n, i) => (B[n] = i));
   W.BIOMES = BIOMES; W.B = B; W.NB = NB;
 
+  // ---------------- the compass ----------------
+  // The sea changes with the way you swim, as the seasons do in IN EVERY DIRECTION. +z is north; the sun rises toward -x
+  // (east), stands in the south (-z) at noon and sets toward +x (west) (Env.sunAz). Warm reefs hold the middle and go on
+  // for ever toward sunrise. The north turns cold: kelp from about 1.6 km out, ice from about 3.4 km. The south turns to
+  // fire: black volcanic rock from about 1.5 km. Toward sunset the shelf ends about 1 km out and the floor falls away
+  // in benches and walls for kilometres: the abyssal plain, 4 to 5 km down, from about 3.7 km out, cut by canyons and
+  // trenches and broken by seamounts. None has a far side, and each edge wanders hundreds of metres, so none is ever a
+  // line on the map. Where the cold or the fire reaches over the deep, both hold: cold deep water in the north-west, a
+  // volcanic ridge with its vents in the south-west.
+  //   cp[0] cold (north): below 0 none, 0.6..1.6 the edge into the temperate sea, 2.4..3.4 the edge into the ice
+  //   cp[1] fire (south): below 0.3 none, 0.3..1.3 the edge into the volcanic
+  //   cp[2] deep (west): below 0 the shelf, then a step down the staircase about every 0.55 (macroDepth)
+  function compass(x, z, cp) {
+    const wx = x + 420 * n2(x * 0.00029 + 4.1, z * 0.00029 - 2.3);
+    cp[0] = (z - 1150) / 800 + 0.5 * fbm2(wx * 0.0004 + 11.3, z * 0.0004 - 7.1, 3) + 0.16 * n2(x * 0.0016 - 3.3, z * 0.0016 + 9.9);
+    const wx2 = x + 440 * n2(x * 0.00027 + 8.9, z * 0.00027 + 6.6);
+    cp[1] = (-z - 1300) / 800 + 0.5 * fbm2(wx2 * 0.0004 - 4.4, z * 0.0004 + 13.7, 3) + 0.16 * n2(x * 0.0016 - 8.1, z * 0.0016 + 4.2);
+    const wz = z + 420 * n2(x * 0.00031 - 6.1, z * 0.00031 + 3.7);
+    cp[2] = (x - 950) / 820 + 0.5 * fbm2(x * 0.0004 - 9.7, wz * 0.0004 + 5.3, 3) + 0.16 * n2(x * 0.0016 + 7.7, z * 0.0016 - 1.9);
+    return cp;
+  }
+  W.compass = (x, z) => compass(x, z, new Float32Array(3));
+
   // ---------------- the three axes ----------------
-  // temperature (polar..tropical), the shape of the sea floor (depth), and its character (flat sand .. rugged rock,
-  // limestone .. volcanic). Each varies over a kilometre or more, so a crossing between two biomes is a long, slow change.
-  function climate(x, z, out) {
-    const r2 = x * x + z * z, home = exp(-r2 / (1400 * 1400));
-    let t = 0.5 + 0.62 * fbm2(x / 3300 + 17.3, z / 3300 - 41.7, 3);
+  // temperature (polar..tropical) from the cold, the shape of the sea floor (depth) from the deep, and its character
+  // (flat sand .. rugged rock, limestone .. volcanic): the volcanic from the fire, the rest from regional noise. Each
+  // varies over a kilometre or more, so a crossing between two biomes is a long, slow change.
+  function climate(x, z, cp, out) {
+    const r2 = x * x + z * z, home = exp(-r2 / (1400 * 1400)), cold = cp[0];
+    let t = 0.86 + 0.04 * n2(x / 2900 + 17.3, z / 2900 - 41.7) - 0.2 * sm(-0.3, 0.6, cold) - 0.22 * clamp(cold - 0.6, 0, 1) - 0.24 * clamp(cold - 2.4, 0, 1);
     t = mix(t, 0.86, home);
     let rug = 0.5 + 0.75 * fbm2(x / 760 - 3.3, z / 760 + 9.1, 3);
+    rug += 0.16 * sm(0.4, 1.6, cp[2]) * sm(3.4, 2.6, cp[2]);   // the slope is rockier: coral and sponge on its walls
     rug = mix(rug, 0.55, home * 0.6);
-    let volc = 0.5 + 0.7 * fbm2(x / 2100 + 61.1, z / 2100 + 23.9, 2);
+    let volc = 0.58 + 0.14 * clamp(cp[1] - 0.3, -1.5, 1) + 0.03 * n2(x / 1700 + 61.1, z / 1700 + 23.9);
     volc = mix(volc, 0.2, home);
     let karst = 0.5 + 0.7 * fbm2(x / 1300 - 77.7, z / 1300 + 5.5, 2);
     karst = mix(karst, 0.45, home * 0.7);
@@ -343,37 +368,90 @@ function WORLDLIB(W) {
     return out;
   }
 
-  // Macro shape: a smooth staircase of plateaus (sunlit shelf, mesophotic terrace, twilight slope, abyss) with
-  // drops between them that are sometimes gentle slopes and sometimes sheer walls.
-  function macroDepth(x, z) {
-    const r2 = x * x + z * z;
-    let e = fbm2(x / 2600 + 3.1, z / 2600 - 8.7, 4) * 1.35;
-    e += 0.85 * exp(-r2 / (1150 * 1150));                     // the opening is on a sunny shelf
+  // Macro shape. Toward sunset a staircase: the sunlit shelf, the mesophotic terrace, the twilight bench, then the
+  // slope in steps (upper, middle, lower), the rise, and the abyssal plain; each step is a gentle slope in some places
+  // and a sheer wall in others, and the benches between tilt a little outward. Every shelf also has its own basins:
+  // blue holes and channels down to the mesophotic, now and then the twilight. Canyons cut the slope, trenches the
+  // plain; a ridge runs through the south-west deep; seamounts rise out of it all, some nearly to the surface.
+  // [where D reaches it, its depth, its noise term, how wide a gentle slope is (in D)]
+  const STEPS = [[0.0, 46, 32, 0.13], [0.55, 150, 90, 0.16], [1.1, 430, 220, 0.22], [1.65, 950, 400, 0.26], [2.2, 1750, 550, 0.3], [2.75, 2800, 500, 0.34], [3.3, 3900, 300, 0.38]];
+  function macroDepth(x, z, cp) {
+    const r2 = x * x + z * z, home = exp(-r2 / (1150 * 1150));
+    const e = fbm2(x / 2600 + 3.1, z / 2600 - 8.7, 4) * 1.35 + 0.85 * home;
+    const D = max(cp[2], clamp((-e - 0.42) * 2.4, -1, 0.82)) - 2.2 * home;   // the opening is on a sunny shelf
     const wall = sm(0.15, 0.75, 0.5 + 0.8 * n2(x / 1500 + 9.9, z / 1500 - 2.2));   // 0 gentle slope .. 1 sheer wall
-    const w = mix(0.13, 0.012, wall);
-    const st = (e0) => sm(0, 1, (e - e0) / w + 0.5);
     const a = 0.5 + 0.5 * n2(x / 700 + 1.7, z / 700 + 4.4), b = 0.5 + 0.5 * n2(x / 900 - 6.1, z / 900 - 1.3);
-    const dShelf = 4.5 + 19 * a * a + 4 * b, dMeso = 46 + 32 * b, dTwi = 128 + 70 * a, dDeep = 300 + 140 * b;
-    let d = dDeep;
-    d += (dTwi - d) * st(-0.45);
-    d += (dMeso - d) * st(-0.25);
-    d += (dShelf - d) * st(-0.05);
-    // seamounts rising out of deep water
-    if (d > 90) {
-      const cs = 640, ci = floor(x / cs), cj = floor(z / cs);
+    // the deep levels vary over kilometres, not hundreds of metres: an abyssal plain is about the flattest ground there is
+    const a2 = 0.5 + 0.5 * n2(x / 2300 + 5.3, z / 2300 - 2.9), b2 = 0.5 + 0.5 * n2(x / 2900 - 3.7, z / 2900 + 6.1);
+    let d = 4.5 + 19 * a * a + 4 * b;
+    for (let k = 0; k < STEPS.length; k++) {
+      const s = STEPS[k];
+      if (D < s[0] - 0.3) break;
+      const dd = s[1] + s[2] * (k < 2 ? (k & 1 ? a : b) : (k & 1 ? a2 : b2)), w = mix(s[3], 0.012, wall);
+      d += (dd - d) * sm(0, 1, (D - s[0]) / w + 0.5);
+    }
+    if (D > 0) d += 55 * min(D, 3.3);                                   // the benches tilt outward
+    if (D > 3.0) {                                                      // the plain: sinking slowly, in long low hills
+      d += min(700, 50 * max(0, D - 3.3)) + 60 * fbm2(x / 1700 - 2.2, z / 1700 + 8.8, 2) * sm(3.0, 3.6, D);
+    }
+    // canyons down the slope (only some of the lines run)
+    if (D > -0.35 && D < 3.5) {
+      const cz = z + 320 * n2(x / 1300 + 2.2, z / 1300 - 7.7);
+      const k = sm(0.12, 0.0, abs(n2(x / 2600 - 5.5, cz / 760 + 1.9))) * sm(0.1, 0.35, n2(x / 3000 + 4.4, z / 3000 - 9.1)) * sm(-0.35, 0.25, D) * sm(3.5, 2.7, D);
+      if (k > 0.001) d += k * k * (45 + 230 * clamp(D, 0, 2.8));
+    }
+    // where a trench runs (cut last, after the seamounts, which give way to it)
+    let kt = 0;
+    if (D > 3.7) {
+      const tz = z + 900 * n2(x / 4200 + 3.3, z / 4200 + 8.1);
+      kt = sm(0.16, 0.04, abs(n2(x / 11000 - 1.1, tz / 4200 + 4.4))) * sm(0.3, 0.5, n2(x / 9000 + 7.3, z / 9000 - 2.6)) * sm(3.7, 4.7, D);
+    }
+    // the ridge where the fire reaches over the deep: a long crest with a rift down its spine. The vents are in the
+    // rift and at hot spots off it (hot: column() keeps the vents biome only there)
+    let hot = 0;
+    if (cp[1] > 0.2 && D > 2.3) {
+      const rz = z + 700 * n2(x / 2600 + 1.3, z / 2600 + 6.2), rn = abs(n2(x / 7000 + 7.7, rz / 4200 - 3.3));
+      const k = sm(0.42, 0.06, rn) * sm(0.2, 0.9, cp[1]) * sm(2.3, 3.1, D);
+      if (k > 0.001) { d = mix(d, 2350 + 350 * b2, k * 0.85) + sm(0.07, 0.0, rn) * k * 160; hot = sm(0.12, 0.02, rn) * k; }
+    }
+    if (D > 0.3) hot = max(hot, sm(0.48, 0.72, n2(x / 820 + 13.1, z / 820 - 4.7)));
+    // pinnacles on the twilight bench and the upper slope
+    if (d > 90 && d < 1000) {
+      const d1 = d, cs = 640, ci = floor(x / cs), cj = floor(z / cs), up = sm(1000, 700, d1);
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         const i = ci + di, j = cj + dj;
         if (hash3(i, j, 91) > 0.38) continue;
         const sx = (i + 0.2 + 0.6 * hash3(i, j, 92)) * cs, sz = (j + 0.2 + 0.6 * hash3(i, j, 93)) * cs;
-        const R = 130 + 110 * hash3(i, j, 94), peak = 10 + 28 * hash3(i, j, 95);
-        const dx = x - sx, dz = z - sz; const dist = sqrt(dx * dx + dz * dz) * (1 + 0.25 * n2(x / 90, z / 90));
+        const R = (130 + 110 * hash3(i, j, 94)) * (1 + d1 / 700), peak = 10 + 28 * hash3(i, j, 95);
+        const dx = x - sx, dz = z - sz; const dist = sqrt(dx * dx + dz * dz) * (1 + 0.1 * n2(x / 180, z / 180));
         if (dist < R * 1.6) {
-          const prof = peak + (d - peak) * Math.pow(sm(0, R * 1.6, dist), 0.7);
+          const prof = mix(d1, peak + (d1 - peak) * Math.pow(sm(0, R * 1.6, dist), 0.7), up);
           if (prof < d) d = prof;
         }
       }
     }
-    return { d, wall, e };
+    // seamounts out of the deep: a few nearly to the surface (reefs or kelp on top, kilometres of blue below), more
+    // with their tops in the twilight (coral gardens), the rest far down; the tall ones with flat tops
+    if (d > 600 && kt < 0.98) {
+      const d0 = d, cs = 2800, ci = floor(x / cs), cj = floor(z / cs);
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const i = ci + di, j = cj + dj;
+        if (hash3(i, j, 191) > 0.16) continue;
+        const sx = (i + 0.2 + 0.6 * hash3(i, j, 192)) * cs, sz = (j + 0.2 + 0.6 * hash3(i, j, 193)) * cs, h = hash3(i, j, 195), h2 = hash3(i, j, 196);
+        const peak = h < 0.3 ? 7 + 22 * h2 : h < 0.7 ? 180 + 600 * h2 : 1200 + 1500 * h2;
+        if (peak > d0 - 150) continue;
+        const R = min(1200, 380 + 0.25 * (d0 - peak)) * (0.85 + 0.3 * hash3(i, j, 194));
+        const dx = x - sx, dz = z - sz; const dist = sqrt(dx * dx + dz * dz) * (1 + 0.04 * n2(x / 700, z / 700) + 0.012 * n2(x / 150, z / 150));
+        if (dist < R * 1.6) {
+          const prof = peak + (d0 - peak) * Math.pow(sm(R * 0.14, R * 1.6, dist), 0.8);
+          if (prof < d) d = prof;
+        }
+      }
+      if (kt > 0) d = mix(d, d0, sm(0.0, 0.6, kt));
+    }
+    // trenches through the plain: flat floors, and each wall a stair of six great ledges
+    if (kt > 0.001) { const f = kt * 6, i = floor(f); d += (i + sm(0.55, 0.95, f - i)) / 6 * (2300 + 1500 * a2); }
+    return { d, wall, e: D, hot };
   }
 
   // Biome weights from the axes + the local floor depth.
@@ -385,7 +463,7 @@ function WORLDLIB(W) {
     const nv = 1 - volc, nk = 1 - karst;
     out[B.reef] = trop * shallow * (mid + rough * 0.7 + flat * 0.12) * nv * nk;
     out[B.lagoon] = trop * shallow * flat * nv * nk;
-    out[B.karst] = (trop + temp * 0.55) * (shallow + meso * 0.8) * karst * nv * (0.35 + rough + mid * 0.6);
+    out[B.karst] = trop * (shallow + meso * 0.8) * karst * nv * (0.35 + rough + mid * 0.6);
     out[B.volcanic] = (trop + temp * 0.8) * (shallow + meso * 0.7) * volc;
     out[B.kelp] = temp * shallow * (mid + rough + flat * 0.25) * nv * (1 - karst * 0.6);
     out[B.tempsand] = temp * shallow * flat * nv * (1 - karst * 0.6);
@@ -393,7 +471,7 @@ function WORLDLIB(W) {
     out[B.meso] = trop * meso * nv * (1 - karst * 0.5);
     out[B.sponge] = (temp * (1 - karst * 0.4) + pol * 0.4) * meso * nv;
     out[B.twilight] = twi * (flat + mid + rough * 0.3) * nv * 0.9 + twi * volc * 0.2;
-    out[B.coldreef] = twi * rough * 0.8 * nv + deep * rough * 0.45 * nv;
+    out[B.coldreef] = twi * rough * 0.8 * nv + deep * rough * 0.8 * nv * sm(2400, 1200, fd);   // deep corals thin out below 2 km
     out[B.vents] = (twi * 0.25 + deep) * volc;
     out[B.abyss] = deep * nv * (flat + mid + rough * 0.25);
     let s = 0; for (let i = 0; i < NB; i++) s += out[i];
@@ -436,11 +514,13 @@ function WORLDLIB(W) {
   // Layout of a packed column record (Float32): see COL_*.
   const C_FLOOR = 0, C_AMP = 1, C_WALL = 2, C_T = 3, C_RUG = 4, C_VOLC = 5, C_KARST = 6, C_REL = 7, C_BW = 8, CSTRIDE = 8 + NB;
   W.CSTRIDE = CSTRIDE; W.C_FLOOR = C_FLOOR; W.C_AMP = C_AMP; W.C_BW = C_BW;
-  const _cl = new Float32Array(4), _bw = new Float32Array(NB), _rel = { h: 0, amp3: 0 };
+  const _cl = new Float32Array(4), _cp = new Float32Array(3), _bw = new Float32Array(NB), _rel = { h: 0, amp3: 0 };
   function column(x, z, out, o) {
-    climate(x, z, _cl);
-    const m = macroDepth(x, z);
+    compass(x, z, _cp);
+    climate(x, z, _cp, _cl);
+    const m = macroDepth(x, z, _cp);
     biomeWeights(m.d, _cl, _bw);
+    if (m.d > 260 && _bw[B.vents] > 0) { const v = _bw[B.vents], keep = 0.1 + 0.9 * m.hot; _bw[B.vents] = v * keep; _bw[B.abyss] += v * (1 - keep); }
     relief(x, z, _bw, _rel);
     let fy = -m.d + _rel.h;
     if (fy > -2.2) fy = -2.2 - 0.3 * sm(-2.2, 2, fy);        // the floor never reaches the air: no shore anywhere
@@ -465,7 +545,7 @@ function WORLDLIB(W) {
   W.PT = PT;
   W.definePlace = (name, def) => { PT[name] = Object.assign({ name, w: 1, r: 40 }, def); };
   const placeCache = new Map();
-  const _pc = new Float32Array(CSTRIDE);
+  const _pc = new Float32Array(CSTRIDE), _pc2 = new Float32Array(CSTRIDE), PI = Math.PI;
   function placeAtCell(i, j) {
     const key = i * 100003 + j;
     let p = placeCache.get(key);
@@ -478,12 +558,16 @@ function WORLDLIB(W) {
       if (x * x + z * z > 160 * 160) {
         column(x, z, _pc, 0);
         const fd = -_pc[C_FLOOR];
+        // how far the floor falls across the middle of the cell, near (40 m out) and wider (80 m out): a place made for
+        // open ground keeps off a wall, where its flattened bed would stand out of the slope as a shelf of fill
+        const fall = [40, 80].map((r) => { let lo = 1e9, hi = -1e9; for (let q = 0; q < 4; q++) { const a = q * PI / 2; const f = column(x + r * Math.cos(a), z + r * Math.sin(a), _pc2, 0)[C_FLOOR]; lo = min(lo, f); hi = max(hi, f); } return hi - lo; });
         // weight every template by how well its biomes match here
         let tot = 0; const cand = [];
         for (const k in PT) {
           const t = PT[k]; if (!t.biomes) continue;
           if (t.minD !== undefined && fd < t.minD) continue;
           if (t.maxD !== undefined && fd > t.maxD) continue;
+          if (!t.steep) { const rr = t.r * 0.7, f = rr < 60 ? fall[0] * rr / 40 : fall[1] * rr / 80; if (f > max(14, 0.9 * rr)) continue; }
           let s = 0; for (const b in t.biomes) s += t.biomes[b] * _pc[C_BW + B[b]];
           s = s * t.w; if (s > 0.02) { cand.push(t, s); tot += s; }
         }
@@ -630,18 +714,18 @@ function WORLDLIB(W) {
     { n: 'understory', b: { kelp: 0.22, polar: 0.03, tempsand: 0.02 }, sub: 'rock', ny: 0.3, up: 0.8, d: [0, 40], s: [0.6, 1.5], cl: 0.6, sky: 0.3 },
     { n: 'plumose', b: { kelp: 0.035, sponge: 0.06, polar: 0.03, twilight: 0.01 }, sub: 'rock', ny: -0.2, up: 0.6, d: [4, 200], s: [0.6, 1.4], cl: 0.75, sky: 0.0 },
     { n: 'urchin', b: { kelp: 0.06, reef: 0.02, volcanic: 0.06, polar: 0.03, karst: 0.01 }, sub: 'rock', ny: 0.3, up: 0.3, d: [0, 60], s: [0.6, 1.3], cl: 0.8, sky: 0.0 },
-    { n: 'star', b: { kelp: 0.02, reef: 0.008, lagoon: 0.006, polar: 0.03, tempsand: 0.01, sponge: 0.01, abyss: 0.003 }, sub: 'any', ny: 0.2, up: 0, d: [0, 600], s: [0.6, 1.4], cl: 0.5, sky: 0.0 },
+    { n: 'star', b: { kelp: 0.02, reef: 0.008, lagoon: 0.006, polar: 0.03, tempsand: 0.01, sponge: 0.01, abyss: 0.003 }, sub: 'any', ny: 0.2, up: 0, d: [0, 6000], s: [0.6, 1.4], cl: 0.5, sky: 0.0 },
     { n: 'polarsponge', b: { polar: 0.06, sponge: 0.03 }, sub: 'any', ny: 0.4, up: 0.85, d: [5, 200], s: [0.6, 2.0], cl: 0.5, sky: 0.0 },
-    { n: 'glasssponge', b: { twilight: 0.03, coldreef: 0.02, abyss: 0.004, sponge: 0.01 }, sub: 'any', ny: 0.4, up: 0.85, d: [60, 900], s: [0.6, 1.8], cl: 0.5, sky: 0.0 },
-    { n: 'lophelia', b: { coldreef: 0.32, twilight: 0.01 }, sub: 'rock', ny: 0.0, up: 0.6, d: [70, 900], s: [0.6, 1.6], cl: 0.7, sky: 0.0 },
-    { n: 'seapen', b: { twilight: 0.06, abyss: 0.02, sponge: 0.02 }, sub: 'sand', ny: 0.6, up: 1, d: [40, 900], s: [0.6, 1.5], cl: 0.7, sky: 0.0, glow: 1 },
-    { n: 'bamboo', b: { twilight: 0.02, coldreef: 0.04, abyss: 0.006 }, sub: 'rock', ny: -0.1, up: 0.5, d: [80, 900], s: [0.8, 2.0], cl: 0.5, sky: 0.0, fan: 1, glow: 1 },
-    { n: 'tubeworm', b: { vents: 0.5 }, sub: 'any', ny: 0.3, up: 0.9, d: [60, 900], s: [0.6, 1.6], cl: 0.85, sky: 0.0 },
-    { n: 'crinoid', b: { meso: 0.02, twilight: 0.015, coldreef: 0.02, reef: 0.004, polar: 0.01 }, sub: 'rock', ny: -0.2, up: 0.5, d: [8, 900], s: [0.6, 1.3], cl: 0.5, sky: 0.0 },
+    { n: 'glasssponge', b: { twilight: 0.03, coldreef: 0.02, abyss: 0.004, sponge: 0.01 }, sub: 'any', ny: 0.4, up: 0.85, d: [60, 3200], s: [0.6, 1.8], cl: 0.5, sky: 0.0 },
+    { n: 'lophelia', b: { coldreef: 0.32, twilight: 0.01 }, sub: 'rock', ny: 0.0, up: 0.6, d: [70, 1300], s: [0.6, 1.6], cl: 0.7, sky: 0.0 },
+    { n: 'seapen', b: { twilight: 0.06, abyss: 0.02, sponge: 0.02 }, sub: 'sand', ny: 0.6, up: 1, d: [40, 6000], s: [0.6, 1.5], cl: 0.7, sky: 0.0, glow: 1 },
+    { n: 'bamboo', b: { twilight: 0.02, coldreef: 0.04, abyss: 0.006 }, sub: 'rock', ny: -0.1, up: 0.5, d: [80, 4200], s: [0.8, 2.0], cl: 0.5, sky: 0.0, fan: 1, glow: 1 },
+    { n: 'tubeworm', b: { vents: 0.5 }, sub: 'any', ny: 0.3, up: 0.9, d: [60, 4600], s: [0.6, 1.6], cl: 0.85, sky: 0.0 },
+    { n: 'crinoid', b: { meso: 0.02, twilight: 0.015, coldreef: 0.02, reef: 0.004, polar: 0.01 }, sub: 'rock', ny: -0.2, up: 0.5, d: [8, 6000], s: [0.6, 1.3], cl: 0.5, sky: 0.0 },
     { n: 'platecoral', b: { meso: 0.18, karst: 0.02 }, sub: 'rock', ny: -0.3, up: 0.35, d: [18, 90], s: [0.7, 2.0], cl: 0.6, sky: 0.0 },
     { n: 'whip', b: { meso: 0.05, reef: 0.01, karst: 0.02, twilight: 0.01 }, sub: 'rock', ny: 0.2, up: 0.85, d: [8, 140], s: [0.7, 1.6], cl: 0.6, sky: 0.0 },
     { n: 'cucumber', b: { abyss: 0.02, lagoon: 0.01, tempsand: 0.006, twilight: 0.005 }, sub: 'sand', ny: 0.7, up: 0, d: [0, 900], s: [0.7, 1.4], cl: 0.3, sky: 0.0 },
-    { n: 'rubble', b: { reef: 0.06, lagoon: 0.03, karst: 0.04, volcanic: 0.05, kelp: 0.05, polar: 0.05, twilight: 0.02, abyss: 0.01, tempsand: 0.02, coldreef: 0.04, vents: 0.04, meso: 0.03, sponge: 0.03 }, sub: 'any', ny: 0.5, up: 0, d: [0, 900], s: [0.4, 1.6], cl: 0.4, sky: 0.0 },
+    { n: 'rubble', b: { reef: 0.06, lagoon: 0.03, karst: 0.04, volcanic: 0.05, kelp: 0.05, polar: 0.05, twilight: 0.02, abyss: 0.01, tempsand: 0.02, coldreef: 0.04, vents: 0.04, meso: 0.03, sponge: 0.03 }, sub: 'any', ny: 0.5, up: 0, d: [0, 9000], s: [0.4, 1.6], cl: 0.4, sky: 0.0 },
   ];
   W.SPECIES = SPECIES;
   let NS = SPECIES.length;
@@ -846,7 +930,7 @@ function WORLDLIB(W) {
         cr += w * PAL.crust[b][0]; cg += w * PAL.crust[b][1]; cb += w * PAL.crust[b][2];
       }
       // dim caves get colourful encrusting sponges (orange, red, purple) like real cave walls
-      const cave = sm(0.45, 0.05, sky) * (1 - sand);
+      const cave = sm(0.45, 0.05, sky) * (1 - sand) * sm(600, 250, -y);   // the deep is dim everywhere, not cave-dim
       const hue = n2(x / 2.6 + 5, z / 2.6 + y / 3);
       if (cave > 0.01) { cr = mix(cr, hue > 0.1 ? 0.85 : hue > -0.3 ? 0.62 : 0.5, cave * 0.7); cg = mix(cg, hue > 0.1 ? 0.42 : hue > -0.3 ? 0.22 : 0.28, cave * 0.7); cb = mix(cb, hue > 0.1 ? 0.22 : hue > -0.3 ? 0.28 : 0.55, cave * 0.7); crust = max(crust, cave * 0.75); }
       const varr = 0.85 + 0.3 * (0.5 + 0.5 * n2(x / 1.3 + 2, z / 1.3 + y / 1.1));
@@ -991,7 +1075,7 @@ function SPECIES_MORE(W) {
   // plate corals stand out from walls as level shelves, so they grow mostly upright
   add({ n: 'platecoral', b: { meso: 0.18, karst: 0.02 }, sub: 'rock', ny: -0.2, up: 0.85, d: [18, 90], s: [0.7, 2.0], cl: 0.6, sky: 0.0 });
   // sea pens also stand in temperate sand (Ptilosarcus) and on polar sediment
-  add({ n: 'seapen', b: { twilight: 0.06, abyss: 0.02, sponge: 0.02, tempsand: 0.015, polar: 0.01 }, sub: 'sand', ny: 0.6, up: 1, d: [8, 900], s: [0.6, 1.5], cl: 0.7, sky: 0.0, glow: 1 });
+  add({ n: 'seapen', b: { twilight: 0.06, abyss: 0.025, sponge: 0.02, tempsand: 0.015, polar: 0.01 }, sub: 'sand', ny: 0.6, up: 1, d: [8, 6000], s: [0.6, 1.5], cl: 0.7, sky: 0.0, glow: 1 });
   // shallow sea cucumbers; the abyss has its own (sea pigs, below)
   add({ n: 'cucumber', b: { lagoon: 0.01, tempsand: 0.008, kelp: 0.003 }, sub: 'sand', ny: 0.7, up: 0, d: [0, 60], s: [0.7, 1.4], cl: 0.3, sky: 0.0 });
 
@@ -999,33 +1083,33 @@ function SPECIES_MORE(W) {
   // red algal turf and jointed coralline on the rocks under the canopy
   add({ n: 'turf', b: { kelp: 0.45, polar: 0.03, tempsand: 0.04 }, sub: 'rock', ny: -0.3, up: 0.25, d: [0, 45], s: [0.6, 1.5], cl: 0.6, sky: 0.15 });
   // tube anemones in soft sediment, shallow and deep
-  add({ n: 'tubeanemone', b: { tempsand: 0.025, twilight: 0.008, abyss: 0.006, sponge: 0.004 }, sub: 'sand', ny: 0.7, up: 1, d: [6, 900], s: [0.7, 1.3], cl: 0.6, sky: 0.0 });
+  add({ n: 'tubeanemone', b: { tempsand: 0.025, twilight: 0.008, abyss: 0.012, sponge: 0.004 }, sub: 'sand', ny: 0.7, up: 1, d: [6, 5000], s: [0.7, 1.3], cl: 0.6, sky: 0.0 });
 
   // ---- polar and cold sponge gardens ----
   // the giant polar sponges, a little smaller on average so they don't crowd out everything else
   add({ n: 'polarsponge', b: { polar: 0.06, sponge: 0.025 }, sub: 'any', ny: 0.4, up: 0.85, d: [5, 200], s: [0.5, 1.6], cl: 0.5, sky: 0.0 });
   add({ n: 'fingersponge', b: { sponge: 0.07, polar: 0.015, kelp: 0.004, coldreef: 0.004 }, sub: 'rock', ny: 0.2, up: 0.7, d: [12, 220], s: [0.7, 1.6], cl: 0.6, sky: 0.0 });
-  add({ n: 'brittlestars', b: { polar: 0.05, sponge: 0.01, twilight: 0.01, abyss: 0.012 }, sub: 'any', ny: 0.6, up: 0, d: [5, 900], s: [0.7, 1.5], cl: 0.8, sky: 0.0 });
+  add({ n: 'brittlestars', b: { polar: 0.05, sponge: 0.01, twilight: 0.01, abyss: 0.03 }, sub: 'any', ny: 0.6, up: 0, d: [5, 9000], s: [0.7, 1.5], cl: 0.8, sky: 0.0 });
   // black coral trees from the sponge gardens down the slope
-  add({ n: 'blackcoral', b: { sponge: 0.015, meso: 0.012, twilight: 0.008, coldreef: 0.01 }, sub: 'rock', ny: -0.3, up: 0.6, d: [25, 600], s: [0.7, 2.0], cl: 0.5, sky: 0.0 });
+  add({ n: 'blackcoral', b: { sponge: 0.015, meso: 0.012, twilight: 0.008, coldreef: 0.01 }, sub: 'rock', ny: -0.3, up: 0.6, d: [25, 2800], s: [0.7, 2.0], cl: 0.5, sky: 0.0 });
 
   // ---- twilight slope and cold-water reefs ----
   // more glowing bamboo candelabras on the slope, a few less glass sponges, so the fans and the lights lead
-  add({ n: 'bamboo', b: { twilight: 0.035, coldreef: 0.04, abyss: 0.006 }, sub: 'rock', ny: -0.1, up: 0.5, d: [80, 900], s: [0.8, 2.0], cl: 0.5, sky: 0.0, fan: 1, glow: 1 });
-  add({ n: 'glasssponge', b: { twilight: 0.022, coldreef: 0.02, abyss: 0.004, sponge: 0.01 }, sub: 'any', ny: 0.4, up: 0.85, d: [60, 900], s: [0.6, 1.8], cl: 0.5, sky: 0.0 });
-  add({ n: 'bubblegum', b: { coldreef: 0.03, twilight: 0.008 }, sub: 'rock', ny: -0.1, up: 0.6, d: [90, 900], s: [0.8, 2.2], cl: 0.5, sky: 0.0, fan: 1 });
-  add({ n: 'sealily', b: { twilight: 0.02, coldreef: 0.015, abyss: 0.002 }, sub: 'any', ny: 0.3, up: 0.8, d: [100, 900], s: [0.7, 1.4], cl: 0.75, sky: 0.0, fan: 1 });
+  add({ n: 'bamboo', b: { twilight: 0.035, coldreef: 0.04, abyss: 0.006 }, sub: 'rock', ny: -0.1, up: 0.5, d: [80, 4200], s: [0.8, 2.0], cl: 0.5, sky: 0.0, fan: 1, glow: 1 });
+  add({ n: 'glasssponge', b: { twilight: 0.022, coldreef: 0.02, abyss: 0.008, sponge: 0.01 }, sub: 'any', ny: 0.4, up: 0.85, d: [60, 3200], s: [0.6, 1.8], cl: 0.5, sky: 0.0 });
+  add({ n: 'bubblegum', b: { coldreef: 0.03, twilight: 0.008 }, sub: 'rock', ny: -0.1, up: 0.6, d: [90, 2200], s: [0.8, 2.2], cl: 0.5, sky: 0.0, fan: 1 });
+  add({ n: 'sealily', b: { twilight: 0.02, coldreef: 0.015, abyss: 0.01 }, sub: 'any', ny: 0.3, up: 0.8, d: [100, 6500], s: [0.7, 1.4], cl: 0.75, sky: 0.0, fan: 1 });
 
   // ---- hydrothermal vents ----
   // tube worms come in big bushes now: fewer of them across the biome, crowded near the chimneys by the ventfield place
-  add({ n: 'tubeworm', b: { vents: 0.14 }, sub: 'any', ny: 0.3, up: 0.9, d: [60, 900], s: [0.6, 1.6], cl: 0.9, sky: 0.0 });
-  add({ n: 'mussels', b: { vents: 0.06 }, sub: 'any', ny: 0.3, up: 0.2, d: [60, 900], s: [0.7, 1.4], cl: 0.85, sky: 0.0 });
-  add({ n: 'bacmat', b: { vents: 0.07, abyss: 0.002 }, sub: 'any', ny: 0.2, up: 0, d: [60, 900], s: [0.7, 1.8], cl: 0.7, sky: 0.0 });
+  add({ n: 'tubeworm', b: { vents: 0.14 }, sub: 'any', ny: 0.3, up: 0.9, d: [60, 4600], s: [0.6, 1.6], cl: 0.9, sky: 0.0 });
+  add({ n: 'mussels', b: { vents: 0.06 }, sub: 'any', ny: 0.3, up: 0.2, d: [60, 4600], s: [0.7, 1.4], cl: 0.85, sky: 0.0 });
+  add({ n: 'bacmat', b: { vents: 0.07, abyss: 0.002 }, sub: 'any', ny: 0.2, up: 0, d: [60, 4600], s: [0.7, 1.8], cl: 0.7, sky: 0.0 });
 
   // ---- the abyssal plain ----
-  add({ n: 'seapig', b: { abyss: 0.03, twilight: 0.006 }, sub: 'sand', ny: 0.7, up: 0.1, d: [150, 900], s: [1.1, 1.7], cl: 0.92, sky: 0.0 });
-  add({ n: 'xeno', b: { abyss: 0.05, twilight: 0.004 }, sub: 'sand', ny: 0.7, up: 0.3, d: [200, 900], s: [0.7, 1.6], cl: 0.5, sky: 0.0 });
-  add({ n: 'stalksponge', b: { abyss: 0.012, twilight: 0.006 }, sub: 'sand', ny: 0.6, up: 0.9, d: [150, 900], s: [0.8, 1.4], cl: 0.6, sky: 0.0 });
+  add({ n: 'seapig', b: { abyss: 0.035, twilight: 0.006 }, sub: 'sand', ny: 0.7, up: 0.1, d: [150, 7500], s: [1.1, 1.7], cl: 0.92, sky: 0.0 });
+  add({ n: 'xeno', b: { abyss: 0.06, twilight: 0.004 }, sub: 'sand', ny: 0.7, up: 0.3, d: [200, 9000], s: [0.7, 1.6], cl: 0.5, sky: 0.0 });
+  add({ n: 'stalksponge', b: { abyss: 0.025, twilight: 0.006 }, sub: 'sand', ny: 0.6, up: 0.9, d: [150, 6500], s: [0.8, 1.4], cl: 0.6, sky: 0.0 });
 }
 
 // ---- 11b-species-reef.js ----
@@ -1349,7 +1433,7 @@ function PLACES(W) {
 
   // ---------- sea fan forest on a wall ----------
   def('fanwall', {
-    r: 34, w: 1.1, biomes: { karst: 1, meso: 1.6, reef: 0.5, volcanic: 0.5, twilight: 0.3 }, minD: 8, maxD: 120,
+    steep: true, r: 34, w: 1.1, biomes: { karst: 1, meso: 1.6, reef: 0.5, volcanic: 0.5, twilight: 0.3 }, minD: 8, maxD: 120,
     init(p, R) { p.yaw = R() * PI * 2; p.H = Math.max(5, Math.min(18 + 12 * R(), -p.floor - 3.5)); p.yMin = p.floor - 3; p.yMax = Math.min(-2, p.floor + p.H + 2); },
     density(p, x, y, z, d, dx, dz) {
       const [lx, lz] = rot(p, dx, dz);
@@ -3085,7 +3169,7 @@ function PLACES_COLD(W) {
 
   // ---------- strawberry-anemone wall: a cliff carpeted in clones of pink, red, orange and lilac ----------
   def('anemonewall', {
-    r: 42, w: 1.1, biomes: { kelp: 1.4, tempsand: 0.5, sponge: 0.3 }, minD: 9, maxD: 34,
+    steep: true, r: 42, w: 1.1, biomes: { kelp: 1.4, tempsand: 0.5, sponge: 0.3 }, minD: 9, maxD: 34,
     init(p, R) { if (handOff(p, R)) return;
       frame(p, R() * TAU); p.kw = matchOf(p, this.biomes);
       p.Lw = 18 + 9 * R(); p.H = min(-p.floor - 3.5, 10 + 7 * R()); p.lean = 1 + 1.5 * R(); p.base = p.floor - 1;
@@ -3510,7 +3594,7 @@ function PLACES_COLD(W) {
 
   // ---------- an iceberg wall: a tabular berg two hundred metres long, floating, room to swim under its keel ----------
   def('icebergwall', {
-    r: 125, w: 1.4, biomes: { polar: 2.2 }, minD: 22, maxD: 75,
+    steep: true, r: 125, w: 1.4, biomes: { polar: 2.2 }, minD: 22, maxD: 75,
     init(p, R) { if (handOff(p, R)) return;
       frame(p, R() * TAU); p.ice = polarOK(p);
       p.hx = 62 + 30 * R(); p.hz = 30 + 18 * R(); p.r = hypot(p.hx, p.hz) + 8;
@@ -3787,7 +3871,7 @@ function PLACES_COLD(W) {
 
   // ---------- a seamount crown: rock pinnacles standing up out of the deep toward the light ----------
   def('seamountspires', {
-    r: 58, w: 1.1, biomes: { sponge: 1, twilight: 1.3, coldreef: 1.1 }, minD: 65, maxD: 260,
+    steep: true, r: 58, w: 1.1, biomes: { sponge: 1, twilight: 1.3, coldreef: 1.1 }, minD: 65, maxD: 260,
     init(p, R) {
       p.pk = []; const n = 3 + floor(R() * 4);
       for (let i = 0; i < n; i++) {
@@ -3822,7 +3906,7 @@ function PLACES_COLD(W) {
 
   // ---------- the canyon (Alex's reference): stepped walls, a roof with a hole that lets a shaft of light in, fans on every ledge ----------
   def('deepcanyon', {
-    r: 130, w: 1.4, biomes: { sponge: 1.2, twilight: 1.4, coldreef: 1, meso: 0.3 }, minD: 40, maxD: 210,
+    steep: true, r: 130, w: 1.4, biomes: { sponge: 1.2, twilight: 1.4, coldreef: 1, meso: 0.3 }, minD: 40, maxD: 210,
     init(p, R) {
       // run it downslope, as real submarine canyons do
       const gx = W.floorAt(p.x + 30, p.z) - W.floorAt(p.x - 30, p.z), gz = W.floorAt(p.x, p.z + 30) - W.floorAt(p.x, p.z - 30);
@@ -3885,7 +3969,7 @@ function PLACES_COLD(W) {
 
   // ---------- the edge of the abyss: a shelf of sea pens ends at a lip; beyond it the floor is gone ----------
   def('abyssedge', {
-    r: 85, w: 1.1, biomes: { twilight: 1.3, abyss: 0.7, coldreef: 0.6 }, minD: 110,
+    steep: true, r: 85, w: 1.1, biomes: { twilight: 1.3, abyss: 0.7, coldreef: 0.6 }, minD: 110, maxD: 1200,
     init(p, R) {
       // look for a natural drop; if there is none, make one
       let best = 0, drop = 0;
@@ -4237,8 +4321,8 @@ function PLACES_COLD(W) {
 // ---- 15-stream.js ----
 // Background workers build terrain chunks; this keeps the ones near the camera loaded and drops the far ones.
 const World = {};
-// world modules, always run in this order (main thread and workers): SPECIES_MORE (11), PLACES (12), PLACES_WARM (13), PLACES_COLD (14)
-const PLACE_MODULES = [typeof SPECIES_MORE === 'function' ? SPECIES_MORE : null, typeof SPECIES_REEF === 'function' ? SPECIES_REEF : null, PLACES, typeof PLACES_WARM === 'function' ? PLACES_WARM : null, typeof PLACES_COLD === 'function' ? PLACES_COLD : null].filter(Boolean);
+// world modules, always run in this order (main thread and workers): SPECIES_MORE (11), PLACES (12), PLACES_WARM (13), PLACES_COLD (14), PLACES_DEEP (16)
+const PLACE_MODULES = [typeof SPECIES_MORE === 'function' ? SPECIES_MORE : null, typeof SPECIES_REEF === 'function' ? SPECIES_REEF : null, PLACES, typeof PLACES_WARM === 'function' ? PLACES_WARM : null, typeof PLACES_COLD === 'function' ? PLACES_COLD : null, typeof PLACES_DEEP === 'function' ? PLACES_DEEP : null].filter(Boolean);
 WORLDLIB(World); for (const m of PLACE_MODULES) m(World);
 
 function workerMain(W) {
@@ -4342,6 +4426,946 @@ const Stream = {
     return tot ? ok / tot : 0;
   },
 };
+
+// ---- 16-places-deep.js ----
+// Hand-made places for the deep: the slope's benches and walls (400-1500 m), the lower slope, the rise and the ridge
+// (1500-3500 m), the abyssal plain (3500-5500 m) and the trenches (5500 m down). Each kind is zoned by depth.
+// Runs in the workers: self-contained. Props are species with no biome rates, put down with plant() or inst(); their
+// meshes are in src/67-props-deep.js and their names start with dp_. In the deep the only light is the torch (20-30 m)
+// and what lives there makes, so every place carries something that glows or catches the torch close up.
+// The current runs toward +x (a little +z) everywhere in the deep (Env.current): things that face it use DOWN.
+function PLACES_DEEP(W) {
+  'use strict';
+  const abs = Math.abs, sqrt = Math.sqrt, min = Math.min, max = Math.max, cos = Math.cos, sin = Math.sin, PI = Math.PI;
+  const floor = Math.floor, atan2 = Math.atan2, hypot = Math.hypot, TAU = PI * 2;
+  const n2 = W.n2, n3 = W.n3, hash3 = W.hash3;
+  const { smax, smin, sm, mix, clamp } = W.shape;
+  const def = W.definePlace;
+  const prop = (n, o) => W.addSpecies(Object.assign({ n, b: {} }, o || {}));
+  const DOWN = [0.923, 0.385], DOWNA = atan2(DOWN[1], DOWN[0]);   // the current's heading (downstream)
+  const G = {};   // scratch for per-voxel geometry (one worker = one thread)
+
+  // ---------- helpers (as in 14-places-cold.js) ----------
+  const tot = (rates) => { let t = 0; for (let i = 0; i < rates.length; i++) t += rates[i]; return t; };
+  const scaleAll = (rates, k) => { for (let i = 0; i < rates.length; i++) rates[i] *= k; };
+  const frame = (p, yaw) => { p.yaw = yaw; p.c = cos(yaw); p.s = sin(yaw); };
+  const toWorld = (p, lx, lz) => [p.x + p.c * lx - p.s * lz, p.z + p.s * lx + p.c * lz];
+  const LX = (p, dx, dz) => p.c * dx + p.s * dz, LZ = (p, dx, dz) => -p.s * dx + p.c * dz;
+  // the slope of the floor across a place (in its frame), so a bed can lie in it; p.tilt: rise over run, the steepest way
+  function slopes(p, L) {
+    const f = (lx, lz) => { const [x, z] = toWorld(p, lx, lz); return W.floorAt(x, z); };
+    if (p.c === undefined) frame(p, 0);
+    p.gx = clamp((f(L, 0) - f(-L, 0)) / (2 * L), -0.6, 0.6); p.gz = clamp((f(0, L) - f(0, -L)) / (2 * L), -0.6, 0.6);
+    p.tilt = hypot(p.gx, p.gz);
+  }
+  const planeAt = (p, lx, lz) => p.floor + p.gx * lx + p.gz * lz;
+  // A place that needs gentler (or steeper) ground than its cell gives hands the cell on, chosen as placeAtCell chooses
+  // (biome match x weight) among the templates that suit the depth and the ground: on a wall (by the same test as
+  // placeAtCell) only those that can stand on one (steep), never one that needs a wall (wall: it takes only the cells
+  // placeAtCell gives it), and none that wants gentler ground than this (maxTilt). Returns true if the place is now
+  // something else (its new template has run its init).
+  function handOff(p, R) {
+    if ((p._handed = (p._handed || 0) + 1) > 4) return false;
+    const fd = -p.floor, t0 = p.t, tilt = p.tilt || 0;
+    W.biomeAt(p.x, p.z, _bw);
+    const fall = [40, 80].map((r) => { let lo = 1e9, hi = -1e9; for (let q = 0; q < 4; q++) { const f = W.floorAt(p.x + r * cos(q * PI / 2), p.z + r * sin(q * PI / 2)); lo = min(lo, f); hi = max(hi, f); } return hi - lo; });
+    const cand = []; let total = 0;
+    for (const k in W.PT) {
+      const t = W.PT[k]; if (!t.biomes || t === t0 || t._tried === p.id) continue;
+      if ((t.minD !== undefined && fd < t.minD) || (t.maxD !== undefined && fd > t.maxD)) continue;
+      if (t.maxTilt !== undefined && tilt > t.maxTilt) continue;
+      if (!t.steep) { const rr = t.r * 0.7, f = rr < 60 ? fall[0] * rr / 40 : fall[1] * rr / 80; if (f > max(14, 0.9 * rr)) continue; }
+      else if (t.wall) continue;   // the wall places take only the cells placeAtCell gives them
+      let s = 0; for (const b in t.biomes) s += t.biomes[b] * _bw[W.B[b]];
+      s *= t.w; if (s > 0.02) { cand.push(t, s); total += s; }
+    }
+    if (!total) return false;
+    t0._tried = p.id;
+    let r = R() * total, t = cand[0];
+    for (let i = 0; i < cand.length; i += 2) { r -= cand[i + 1]; if (r <= 0) { t = cand[i]; break; } }
+    p.t = t; p.type = t.name; p.r = t.r;
+    if (t.init) t.init(p, R, W);
+    return true;
+  }
+  // the floor along a line through a place, sampled and smoothed
+  function profile(p, L, step) {
+    const n = Math.ceil((2 * L) / step) + 1, raw = new Float32Array(n), out = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const [x, z] = toWorld(p, -L + i * step, 0); raw[i] = W.floorAt(x, z); }
+    for (let i = 0; i < n; i++) { let s = 0, w = 0; for (let k = -2; k <= 2; k++) { const j = clamp(i + k, 0, n - 1), ww = 3 - abs(k); s += raw[j] * ww; w += ww; } out[i] = s / w; }
+    return { L, step, v: out, lo: Math.min(...out), hi: Math.max(...out) };
+  }
+  const profAt = (pr, lx) => { const f = clamp((lx + pr.L) / pr.step, 0, pr.v.length - 1.001), i = floor(f), t = f - i; return pr.v[i] + (pr.v[i + 1] - pr.v[i]) * t; };
+  // seeds that pick an emitted prop's mesh variant (0..2) and palette (0..3): see the flora vertex shader
+  const SEEDS = [];
+  for (let v = 0; v < 3; v++) { SEEDS.push([[], [], [], []]); for (let i = 1; i < 300; i++) { const s = (v + i / 301) / 3; SEEDS[v][floor(((s * 7.31) % 1) * 4)].push(s); } }
+  const seedOf = (v, k, j) => { const a = SEEDS[v][k & 3]; return a[(j || 0) % a.length]; };
+  // the yaw that makes an emitted prop's local +x point along T when its up is U (mirrors the flora vertex shader)
+  function yawFor(T, U) {
+    const ul = hypot(U[0], U[1], U[2]); const ux = U[0] / ul, uy = U[1] / ul, uz = U[2] / ul;
+    let tx, tz;
+    if (abs(uy) < 0.95) { const l = hypot(uz, ux); tx = [uz / l, 0, -ux / l]; tz = [tx[1] * uz - tx[2] * uy, tx[2] * ux - tx[0] * uz, tx[0] * uy - tx[1] * ux]; }
+    else { const l = hypot(uz, uy); tz = [0, -uz / l, uy / l]; tx = [uy * tz[2] - uz * tz[1], uz * tz[0] - ux * tz[2], ux * tz[1] - uy * tz[0]]; }
+    return atan2(T[0] * tz[0] + T[1] * tz[1] + T[2] * tz[2], T[0] * tx[0] + T[1] * tx[1] + T[2] * tx[2]);
+  }
+  // the frame the flora vertex shader gives an instance with up U and yaw: [X, Z], its local +x and +z in the world
+  function floraFrame(U, yaw) {
+    const ul = hypot(U[0], U[1], U[2]), u = [U[0] / ul, U[1] / ul, U[2] / ul];
+    const cr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const nz = (v) => { const l = hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+    let tx, tz;
+    if (abs(u[1]) < 0.95) { tx = nz(cr([0, 1, 0], u)); tz = cr(tx, u); } else { tz = nz(cr([1, 0, 0], u)); tx = cr(u, tz); }
+    const c = cos(yaw), s = sin(yaw);
+    return [[tx[0] * c + tz[0] * s, tx[1] * c + tz[1] * s, tx[2] * c + tz[2] * s], [-tx[0] * s + tz[0] * c, -tx[1] * s + tz[1] * c, -tx[2] * s + tz[2] * c]];
+  }
+  // the real ground under (x, z), all sculpture included (slow: use it in inst() lists, which are cached per place)
+  const _gc = new Float32Array(W.CSTRIDE);
+  function groundY(x, z, top) {
+    W.column(x, z, _gc, 0);
+    const pl = W.placesNear(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 0);
+    const D = (y) => W.densityRaw(x, y, z, _gc, 0, pl);
+    let y = min(top !== undefined ? top : _gc[W.C_FLOOR] + _gc[W.C_FLOOR + 1] + 3, -0.4);
+    for (let k = 0; k < 60 && D(y) > 0; k++) y += 1;
+    for (let k = 0; k < 400; k++) {
+      const y2 = y - 0.6;
+      if (D(y2) > 0) { let a = y, b = y2; for (let i = 0; i < 6; i++) { const m = (a + b) * 0.5; if (D(m) > 0) b = m; else a = m; } return (a + b) * 0.5; }
+      y = y2;
+    }
+    return y;
+  }
+  // the ground's normal at a point just found with groundY (finite differences of the density)
+  function groundN(x, y, z) {
+    W.column(x, z, _gc, 0);
+    const pl = W.placesNear(x - 1, z - 1, x + 1, z + 1, 0), e = 0.35;
+    const D = (a, b, c) => { W.column(a, c, _gc, 0); return W.densityRaw(a, b, c, _gc, 0, pl); };
+    const gx = D(x + e, y, z) - D(x - e, y, z), gy = D(x, y + e, z) - D(x, y - e, z), gz = D(x, y, z + e) - D(x, y, z - e);
+    const l = hypot(gx, gy, gz) || 1;
+    return [-gx / l, -gy / l, -gz / l];
+  }
+  // a straight piece (a trail, a line) from a to b: +x along it, up as near world up as it can be
+  function piece(L, name, a, b, sc, seed) {
+    const T = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], l = hypot(T[0], T[1], T[2]); T[0] /= l; T[1] /= l; T[2] /= l;
+    const U = [-T[0] * T[1], 1 - T[1] * T[1], -T[2] * T[1]], ul = hypot(U[0], U[1], U[2]) || 1; U[0] /= ul; U[1] /= ul; U[2] /= ul;
+    L.push([name, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2, sc, yawFor(T, U), U, seed]);
+  }
+  // flatten the ground toward a level (with a little ripple), weight k
+  const flatten = (d, y, level, k, x, z) => mix(d, level - y + 0.1 * n2(x / 3.3, z / 3.3), k);
+  // emitted instances are listed once per place (per worker) and replayed for every chunk
+  const replay = (build) => function (p, emit) {
+    const L = p._inst || (p._inst = build(p));
+    for (let i = 0; i < L.length; i++) { const e = L[i]; emit(e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[7]); }
+  };
+  // how well the biomes at a place's centre match its affinities (0..1)
+  const _bw = new Float32Array(W.NB);
+  function matchOf(p, aff) { W.biomeAt(p.x, p.z, _bw); let s = 0, m = 0; for (const b in aff) { s += aff[b] * _bw[W.B[b]]; m = max(m, aff[b]); } return sm(0.12, 0.55, s / m); }
+  const bwAt = (p, b) => { W.biomeAt(p.x, p.z, _bw); return _bw[W.B[b]]; };
+  // a regular prism of n faces about the y axis: > 0 inside (a: the distance from the axis to a face)
+  function prismD(px, pz, n, a, th) {
+    const sec = TAU / n; let ang = atan2(pz, px) - th; ang -= sec * floor(ang / sec);
+    return a - hypot(px, pz) * cos(ang - sec / 2);
+  }
+  // put a level prop down on the real ground: [name, x, y, z, sc, yaw, up, seed]
+  const onGround = (L, name, x, z, lift, sc, yaw, seed, top) => { const y = groundY(x, z, top); L.push([name, x, y + lift, z, sc, yaw, [0, 1, 0], seed]); return y; };
+
+  // ---------- walls ----------
+  // Where the floor falls fastest from a place's centre and by how much (over 25 m): [heading, drop]
+  function fallLine(p) {
+    let best = 0, drop = -1e9;
+    for (let i = 0; i < 24; i++) { const a = i / 24 * TAU, f = W.floorAt(p.x + cos(a) * 25, p.z + sin(a) * 25), dd = p.floor - f; if (dd > drop) { drop = dd; best = a; } }
+    return [best, drop];
+  }
+  // A table of where the wall stands: for lines across the place (lz) and heights in a band round its centre's depth,
+  // the distance down the fall line (lx) at which the floor drops below that height. The place's frame is set first,
+  // +x down the fall line. wallAt(p, lz, y) is then how far in from the wall's face a point at lx lies: wallAt - lx.
+  function wallTable(p, half, band, dy) {
+    const nz = 13, zs = (2 * half) / (nz - 1), ny = Math.round((2 * band) / dy) + 1, T = new Float32Array(nz * ny);
+    const xs = [], X0 = -p.r, X1 = p.r;
+    for (let k = 0; k < nz; k++) {
+      const lz = -half + k * zs, F = [];
+      for (let lx = X0; lx <= X1; lx += 1) { const [x, z] = toWorld(p, lx, lz); F.push(W.floorAt(x, z)); }
+      for (let j = 0; j < ny; j++) {
+        const y = p.floor - band + j * dy;
+        let at = F[0] < y ? X0 : X1;
+        for (let i = 1; i < F.length; i++) if (F[i - 1] >= y && F[i] < y) { at = X0 + i - 1 + (F[i - 1] - y) / (F[i - 1] - F[i]); break; }
+        T[k * ny + j] = at;
+      }
+      xs.push(lz);
+    }
+    p.wt = { T, nz, ny, zs, half, band, dy };
+  }
+  function wallAt(p, lz, y) {
+    const w = p.wt, fz = clamp((lz + w.half) / w.zs, 0, w.nz - 1.001), fy = clamp((y - p.floor + w.band) / w.dy, 0, w.ny - 1.001);
+    const i = floor(fz), j = floor(fy), tz = fz - i, ty = fy - j, T = w.T, n = w.ny;
+    const a = T[i * n + j] + (T[i * n + j + 1] - T[i * n + j]) * ty, b = T[(i + 1) * n + j] + (T[(i + 1) * n + j + 1] - T[(i + 1) * n + j]) * ty;
+    return a + (b - a) * tz;
+  }
+  // notches cut into a wall: each a groove of height h and depth D at a height y0 (its floor a ledge, its roof an overhang).
+  // Only ever removes rock. Returns how far inside the nearest notch the point is (> 0 inside).
+  function notchIn(p, x, y, z, lx, lz) {
+    let s = -1e9;
+    for (const q of p.notch) {
+      const ey = y - q[0]; if (ey < -0.6 || ey > q[1] + 0.6) continue;
+      const depth = wallAt(p, lz, q[0] + q[1] * 0.5) - lx, D = q[2] * (0.75 + 0.35 * n2(lz / 9 + q[3], q[0] * 0.1)) + 0.4 * n3(x / 2.2, y / 2.2, z / 2.2);
+      s = max(s, min(D - depth, ey + 0.15 * n2(x / 1.7, z / 1.7), q[1] - ey + 0.3 * n3(x / 1.5, y / 1.1, z / 1.5)));
+    }
+    // gullies down the fall line, so the face between the ledges stands in buttresses
+    if (p.gully) for (const g of p.gully) {
+      const a = abs(lz - g[0] - 0.8 * sin(y * 0.21 + g[3])); if (a > g[1] + 1) continue;
+      const depth = wallAt(p, lz, y) - lx;
+      s = max(s, min(g[1] - a + 0.3 * n3(x / 1.6, y / 2.4, z / 1.6), g[2] - depth));
+    }
+    return s;
+  }
+  // gullies at intervals across a wall: [lz, half width, depth, phase]
+  function gullies(p, R, every, wid, dep) { p.gully = []; for (let lz = -30 + every * R(); lz < 30; lz += every * (0.7 + 0.6 * R())) p.gully.push([lz, wid * (0.6 + 0.8 * R()), dep * (0.6 + 0.8 * R()), R() * 9]); }
+
+  // ======================================================================================================
+  // THE ABYSSAL PLAIN (3500-5500 m)
+  // ======================================================================================================
+
+  // ---------- the written plain: soft level mud, and in it the tracks of everything that lives on it, each leading to
+  // the animal that made it; tripodfish stand on their fins facing into the current; a few tall sea pens glow ----------
+  prop('dp_trail');     // a 1.2 m piece of a feeding track along +x: 0 a sea cucumber's, 1 a herd's trampled road, 2 fresh
+  prop('dp_trace');     // marks in the mud: 0 an acorn worm's spiral cast with the worm, 1 a spoon worm's star, 2 a net of holes
+  prop('dp_tripod');    // a tripodfish standing on its three fin rays, nose into the current
+  prop('dp_maker');     // the makers: 0 a gummy squirrel (Psychropotes), 1 Benthodytes, 2 Peniagone
+  def('tracks', {
+    r: 50, w: 1.4, biomes: { abyss: 1.6 }, minD: 3300, maxD: 6300, maxTilt: 0.18,
+    init(p, R) {
+      frame(p, R() * TAU); slopes(p, 36);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.yMin = p.floor - 4 - p.tilt * 50; p.yMax = p.floor + 4 + p.tilt * 50;
+      // each track comes in from outside the place and wanders to where its maker is now
+      p.tr = [];
+      const n = 6 + floor(R() * 4);
+      for (let i = 0; i < n; i++) {
+        const a0 = R() * TAU, r0 = 30 + 16 * R();
+        let x = cos(a0) * r0, z = sin(a0) * r0, a = a0 + PI + (R() - 0.5) * 1.4;
+        const pts = [[x, z]], kind = i === 0 ? 1 : i < 3 ? 2 : 0, wob = 0.18 + 0.3 * R(), len = 24 + 40 * R(), ph = R() * 9;
+        for (let s = 0; s < len; s += 1.2) {
+          a += (R() - 0.5) * wob + 0.1 * sin(s * 0.11 + ph);
+          x += cos(a) * 1.2; z += sin(a) * 1.2;
+          if (x * x + z * z > 47 * 47) break;
+          pts.push([x, z]);
+        }
+        if (pts.length > 4) p.tr.push({ pts, kind, a });
+      }
+    },
+    density(p, x, y, z, d, dx, dz) {   // soft level mud, its bumps settled out
+      if (abs(d) > 3) return d;
+      const r = hypot(dx, dz); if (r > 49) return d;
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz);
+      return mix(d, planeAt(p, lx, lz) - y + 0.1 * n2(x / 7, z / 7), 0.88 * (1 - sm(30, 49, r)));
+    },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const r = hypot(dx, dz); if (r > 49) return tot(rates);
+      const k = 1 - sm(32, 49, r);
+      // the mud is open and clean, so the tracks show
+      scaleAll(rates, 1 - 0.75 * k);
+      if (sand > 0.4 && ny > 0.8) { rates[S.xeno] = mix(rates[S.xeno], 0.015, k); rates[S.brittlestars] *= 0.3; }
+      return tot(rates);
+    },
+    inst: replay((p) => {
+      const L = [], R = W.rng(p.seed + 0.41);
+      const at = (lx, lz) => toWorld(p, lx, lz);
+      for (const t of p.tr) {
+        // the track, piece by piece, lying on the mud
+        let prev = null;
+        for (let i = 0; i < t.pts.length; i++) {
+          const [x, z] = at(t.pts[i][0], t.pts[i][1]), pt = [x, groundY(x, z) + 0.025, z];
+          if (prev) piece(L, 'dp_trail', prev, pt, 1, seedOf(t.kind, t.kind === 1 ? 1 : 0, i));
+          prev = pt;
+        }
+        // and at its end, the animal that made it, facing on along its way
+        const e = t.pts[t.pts.length - 1], e0 = t.pts[t.pts.length - 2], [x, z] = at(e[0], e[1]);
+        const hx = e[0] - e0[0], hz = e[1] - e0[1], [wx, wz] = [p.c * hx - p.s * hz, p.s * hx + p.c * hz], ha = atan2(wz, wx);
+        if (t.kind === 1) {
+          // a herd of sea pigs on their trampled road
+          for (let k = 0; k < 7; k++) { const q = R() * 2.6, s = (R() - 0.5) * 1.4, qx = x - cos(ha) * q - sin(ha) * s, qz = z - sin(ha) * q + cos(ha) * s; onGround(L, 'seapig', qx, qz, 0, 1.2 + 0.5 * R(), ha + (R() - 0.5) * 0.6, R()); }
+        } else onGround(L, 'dp_maker', x, z, 0.01, 0.9 + 0.3 * R(), ha, seedOf(R() < 0.6 ? 0 : R() < 0.5 ? 1 : 2, floor(R() * 4)));
+      }
+      // marks in the mud: spiral casts, stars round burrows, nets of holes
+      for (let i = 0; i < 26; i++) {
+        const a = R() * TAU, d = sqrt(R()) * 40, [x, z] = at(cos(a) * d, sin(a) * d), v = i < 9 ? 0 : i < 19 ? 1 : 2;
+        onGround(L, 'dp_trace', x, z, 0.012, 0.8 + 0.5 * R(), R() * TAU, seedOf(v, v === 0 ? floor(R() * 2) : 2 + floor(R() * 2)));
+      }
+      // tripodfish, each standing alone on its stilts, all facing into the current
+      for (let i = 0; i < 9; i++) {
+        const a = R() * TAU, d = 6 + 34 * sqrt(R()), [x, z] = at(cos(a) * d, sin(a) * d);
+        onGround(L, 'dp_tripod', x, z, 0, 0.9 + 0.35 * R(), DOWNA + PI + (R() - 0.5) * 0.35, seedOf(floor(R() * 3), floor(R() * 4)));
+      }
+      // tall sea pens, lamps on the plain
+      for (let i = 0; i < 6; i++) { const a = R() * TAU, d = 8 + 34 * sqrt(R()), [x, z] = at(cos(a) * d, sin(a) * d); onGround(L, 'cp_umbellula', x, z, -0.05, 1 + 0.4 * R(), R() * TAU, R()); }
+      return L;
+    }),
+    fauna: ['grenadier', 'jellies?'],
+  });
+
+  // ---------- basalt pillars: columns of black rock standing up out of the mud, each top a garden of glass sponges,
+  // white anemones and sea lilies, the only hard ground for kilometres ----------
+  prop('dp_relicanthus', { s: [0.7, 1.3], up: 0.3 });   // a giant pale anemone of hard ground (Relicanthus daphneae)
+  prop('dp_brisingid', { s: [0.7, 1.4], up: 0.2 });     // a brisingid sea star, its arms raised into the current
+  prop('dp_column');    // a drum of a hexagonal basalt column (circumradius 1, 1.5 tall): 0 whole, 1 chipped, 2 the broken top, open
+  const DRUM = 1.5;
+  def('pillars', {
+    r: 46, w: 1.3, biomes: { abyss: 1.3, coldreef: 0.6, vents: 0.4 }, minD: 3200, maxD: 5900, maxTilt: 0.4,
+    init(p, R) {
+      frame(p, R() * TAU); slopes(p, 30);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.cols = [];
+      const n = 5 + floor(R() * 4);
+      for (let t = 0; p.cols.length < n && t < 120; t++) {
+        const main = p.cols.length === 0, a = R() * TAU, d = main ? 3 * R() : 8 + 24 * sqrt(R());
+        const cx = cos(a) * d, cz = sin(a) * d;
+        if (p.cols.some((c) => hypot(c.x - cx, c.z - cz) < c.R + 7)) continue;
+        const Rr = main ? 2.4 + 0.7 * R() : 1.3 + 1.3 * R(), want = main ? 22 + 9 * R() : 4 + 18 * R() * R() + 3;
+        const nd = max(2, Math.round(want / (DRUM * Rr))), lean = [(R() - 0.5) * 0.08, (R() - 0.5) * 0.08];
+        p.cols.push({ x: cx, z: cz, R: Rr, nd, H: nd * DRUM * Rr, th: R() * TAU, lx: lean[0], lz: lean[1] });
+      }
+      // a column that fell: its drums lie scattered in a line across the mud
+      const f = p.cols[p.cols.length - 1], fa = R() * TAU;
+      p.fallen = { x: f.x + cos(fa) * (f.R + 2), z: f.z + sin(fa) * (f.R + 2), a: fa, R: f.R * 0.9, n: 3 + floor(R() * 3), ph: R() * TAU };
+      // each column's middle in the world (offset from the place) and its foot, 1.2 m sunk in the bed
+      for (const c of p.cols) { c.wx = p.c * c.x - p.s * c.z; c.wz = p.s * c.x + p.c * c.z; c.y0 = planeAt(p, c.x, c.z) - 1.2; }
+      p.top = Math.max(...p.cols.map((c) => c.H));
+      p.yMin = p.floor - 5 - p.tilt * 46; p.yMax = p.floor + p.top + 5 + p.tilt * 46;
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y > p.yMax || y < p.yMin) return d;
+      let dd = d;
+      const base = planeAt(p, LX(p, dx, dz), LZ(p, dx, dz));
+      for (const c of p.cols) {
+        const h = y - c.y0;
+        if (h > c.H + 1 || h < -3) continue;
+        // a hidden core just inside the drums (their skins are props), its top the column's top, where things grow
+        const px = dx - c.wx - c.lx * h, pz = dz - c.wz - c.lz * h;
+        if (abs(px) > c.R + 4 || abs(pz) > c.R + 4) continue;
+        let s = min(prismD(px, pz, 6, c.R * 0.86 * cos(PI / 6), c.th), c.H - 0.08 - h);
+        // a skirt of fallen blocks round its foot
+        const rho = hypot(px, pz);
+        s = max(s, base + 0.9 - 0.4 * max(0, rho - c.R) - y + 0.5 * n3(x / 1.4, y / 1.2, z / 1.4));
+        dd = max(dd, s);
+      }
+      return dd;
+    },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const hi = y - p.floor;
+      if (hi < 1.5) { if (hypot(dx, dz) < 40) { rates[S.xeno] *= 1.5; rates[S.cp_umbellula] = sand > 0.5 && ny > 0.8 ? 0.004 : 0; } return tot(rates); }
+      let on = null;
+      for (const c of p.cols) if (hypot(dx - c.wx, dz - c.wz) < c.R + 1.5) { on = c; break; }
+      if (!on) return tot(rates);
+      scaleAll(rates, 0);
+      // the tops: the richest ground on the plain, crowded with things that sieve the current (the faces are the props')
+      if (ny > 0.55 && hi > on.H - 3.5) {
+        rates[S.glasssponge] = 0.3; rates[S.stalksponge] = 0.18; rates[S.dp_relicanthus] = 0.12; rates[S.dp_brisingid] = 0.14;
+        rates[S.sealily] = 0.45; rates[S.crinoid] = 0.1; rates[S.bamboo] = 0.07; rates[S.blackcoral] = 0.05; rates[S.brittlestars] = 0.12;
+      }
+      return tot(rates);
+    },
+    inst: replay((p) => {
+      const L = [], R = W.rng(p.seed + 0.53);
+      for (const c of p.cols) {
+        // the drums stacked up the column's axis, corners lined up with the core's (both measured in the world from th)
+        const x = p.x + c.wx, z = p.z + c.wz, ul = hypot(c.lx, 1, c.lz), up = [c.lx / ul, 1 / ul, c.lz / ul];
+        for (let k = 0; k < c.nd; k++) {
+          const t = k * DRUM * c.R, v = k === c.nd - 1 ? 2 : R() < 0.3 ? 1 : 0;
+          L.push(['dp_column', x + up[0] * t, c.y0 + up[1] * t, z + up[2] * t, c.R, c.th, up, seedOf(v, floor(R() * 4))]);
+        }
+        // a few things holding on at the joints of the faces, turned out from them
+        for (let i = 0; i < 4; i++) {
+          const k = 1 + floor(R() * max(1, c.nd - 1)), a = c.th + PI / 6 + floor(R() * 6) * PI / 3, h = k * DRUM * c.R + 0.25, fr = c.R * cos(PI / 6) * 1.02;
+          L.push([R() < 0.6 ? 'dp_brisingid' : 'bamboo', x + c.lx * h + cos(a) * fr, c.y0 + h, z + c.lz * h + sin(a) * fr, 0.7 + 0.4 * R(), R() * TAU, [cos(a), 0.3, sin(a)], R()]);
+        }
+      }
+      // the fallen drums, lying where they rolled
+      const F = p.fallen;
+      for (let i = 0; i < F.n; i++) {
+        const d = F.R + i * F.R * DRUM * 1.15 + R() * 0.8, [x, z] = toWorld(p, F.x + cos(F.a) * d, F.z + sin(F.a) * d);
+        const along = F.a + p.yaw + (R() - 0.5) * 0.5, up = [cos(along), 0.05, sin(along)];
+        L.push(['dp_column', x - up[0] * F.R * DRUM * 0.5, groundY(x, z) + F.R * 0.62, z - up[2] * F.R * DRUM * 0.5, F.R, F.ph + i, up, seedOf(R() < 0.5 ? 1 : 0, floor(R() * 4))]);
+      }
+      return L;
+    }),
+    fauna: ['grenadier', 'jellies', 'anglerfish?'],
+  });
+
+  // ======================================================================================================
+  // THE SLOPE'S BENCHES AND WALLS (400-1500 m)
+  // ======================================================================================================
+
+  // ---------- a sea-lily meadow: a rocky crest across the current, every crown on it bent into the same parachute ----------
+  prop('dp_lily', { s: [0.7, 1.45], up: 0.85, fan: 1 });       // the stalked sea lily, built to lean downstream (local +x)
+  prop('dp_bathycrinus', { s: [0.8, 1.4], up: 0.95, fan: 1 }); // a tall thin-stalked crinoid, its little crown bent downstream
+  def('sealilies', {
+    r: 48, w: 1.6, biomes: { coldreef: 1.6, abyss: 1.0, twilight: 0.6 }, minD: 350, maxD: 1700, maxTilt: 0.35,
+    init(p, R) {
+      // the crest runs across the current; local +z points upstream
+      frame(p, DOWNA + PI / 2 + (R() - 0.5) * 0.3); slopes(p, 30);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.L = 30 + 8 * R(); p.H = 5 + 5 * R(); p.Wd = 11 + 4 * R(); p.ph = R() * 30;
+      p.bo = []; for (let i = 0; i < 9; i++) p.bo.push([(R() * 2 - 1) * p.L * 0.8, (R() - 0.4) * p.Wd * 0.6, 0.8 + 1.4 * R()]);
+      p.yMin = p.floor - 3 - p.tilt * 48; p.yMax = p.floor + p.H + 5 + p.tilt * 48;
+    },
+    crest(p, lx) { return p.H * (1 - sm(p.L * 0.5, p.L, abs(lx))) * (0.85 + 0.15 * sin(lx * 0.11 + p.ph)); },
+    height(p, lx, lz) {
+      const h = this.crest(p, lx), q = lz / (lz > 0 ? p.Wd : p.Wd * 0.75);   // the lee side (downstream, -z) steeper
+      return h * Math.pow(max(0, 1 - q * q), 0.7);
+    },
+    density(p, x, y, z, d, dx, dz) {
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz);
+      if (abs(lx) > p.L + 6 || abs(lz) > p.Wd + 6 || y > p.yMax) return d;
+      const base = planeAt(p, lx, lz), h = this.height(p, lx, lz);
+      if (h < 0.05) return d;
+      const ledge = 0.5 * sm(0.45, 0.9, sin((y - base) * 1.3 + lx * 0.09) * 0.5 + 0.5);
+      let dd = smax(d, base + h - y + 0.9 * n3(x / 3.4, y / 2.6, z / 3.4) + 0.3 * n3(x / 1.2, y / 1.1, z / 1.2) + ledge * sm(0.5, 3, h), 1.4);
+      for (const b of p.bo) { const ex = lx - b[0], ez = lz - b[1]; if (abs(ex) > b[2] + 1 || abs(ez) > b[2] + 1) continue; const by = base + this.height(p, b[0], b[1]) + b[2] * 0.3; dd = smax(dd, b[2] - hypot(ex, (y - by) * 1.3, ez) + 0.25 * n3(x / 0.9, y / 0.9, z / 0.9), 0.4); }
+      return dd;
+    },
+    rel(p, x, z, dx, dz, rel) { const lx = LX(p, dx, dz), lz = LZ(p, dx, dz); return this.height(p, lx, lz) > 1 ? 4 : rel; },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz);
+      if (abs(lx) > p.L + 4 || abs(lz) > p.Wd + 4) return tot(rates);
+      const h = this.height(p, lx, lz), hi = y - planeAt(p, lx, lz);
+      if (h < 0.6 || hi < 0.4) return tot(rates);
+      // a meadow: dense on the crest and the upstream flank, where the current comes over it
+      const top = sm(0.3, 0.85, hi / p.H), up = lz > 0 ? 1 : 0.55, patch = sm(-0.6, 0.2, n2(x / 6 + p.ph, z / 6));
+      // only the lilies, a few of their tall cousins, and the stars that climb the high points with them
+      scaleAll(rates, 0.08);
+      if (ny > 0.35) {
+        rates[S.sealily] = 0; rates[S.dp_lily] = (0.2 + 0.85 * top) * up * patch; rates[S.dp_bathycrinus] = 0.03 + 0.06 * top;
+        rates[S.dp_brisingid] = 0.02; rates[S.bamboo] = 0.008; rates[S.brittlestars] = 0.06;
+      } else { rates[S.dp_lily] = 0.1 * patch; rates[S.dp_brisingid] = 0.015; }
+      return tot(rates);
+    },
+    fauna: ['school:lanternfish', 'jellies:comb', 'grenadier'],
+  });
+
+  // ---------- the giant siphonophore: a colony forty metres long laid out in a spiral over the mud, fishing, a galaxy of
+  // small lights a metre and a half off the bottom (as the one seen off Ningaloo in 2020) ----------
+  prop('dp_apolemia');  // one third of the spiral each (0, 1, 2), centred on its own middle (see the props)
+  const APO = [[1.62, 3.24], [-4.01, 0.31], [1.94, -2.92]];   // where each third's middle lies from the spiral's centre (local)
+  def('apolemia', {
+    r: 34, w: 2.0, biomes: { abyss: 1.1, coldreef: 0.7, twilight: 0.3 }, minD: 450, maxD: 2600, maxTilt: 0.24,
+    init(p, R) {
+      frame(p, R() * TAU); slopes(p, 20);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.yMin = p.floor - 3 - p.tilt * 34; p.yMax = p.floor + 6 + p.tilt * 34;
+    },
+    density(p, x, y, z, d, dx, dz) { const r = hypot(dx, dz); if (r > 26 || abs(d) > 4) return d; return flatten(d, y, planeAt(p, LX(p, dx, dz), LZ(p, dx, dz)), 0.75 * (1 - sm(12, 26, r)), x, z); },
+    plant(p, x, y, z, dx, dz, rates, S) { const r = hypot(dx, dz); if (r < 12) scaleAll(rates, 0.25 + 0.75 * sm(6, 12, r)); return tot(rates); },
+    inst: replay((p) => {
+      // the spiral lies in the slope of the ground: all three pieces share one frame tilted to the plane, so they meet
+      const gx = p.c * p.gx - p.s * p.gz, gz = p.s * p.gx + p.c * p.gz, ul = hypot(gx, 1, gz), up = [-gx / ul, 1 / ul, -gz / ul];
+      const [X, Z] = floraFrame(up, p.yaw), L = [];
+      for (let v = 0; v < 3; v++) {
+        const ax = APO[v][0], az = APO[v][1], x = p.x + X[0] * ax + Z[0] * az, z = p.z + X[2] * ax + Z[2] * az;
+        L.push(['dp_apolemia', x, p.floor + gx * (x - p.x) + gz * (z - p.z), z, 1, p.yaw, up, seedOf(v, 0)]);
+      }
+      return L;
+    }),
+    fauna: ['jellies', 'siphonophore', 'jellies:comb'],
+  });
+
+  // ---------- the lantern hall: a great dome of rock on the bench, hollow, entered by three low arches; its walls hung with
+  // glowing bamboo corals, its floor with sea pens, jellies drifting inside; from above, a hole in the roof shows the light ----------
+  def('lanternhall', {
+    r: 42, w: 2.2, biomes: { coldreef: 1.6, abyss: 0.9, twilight: 0.5 }, minD: 350, maxD: 1900, maxTilt: 0.3,
+    init(p, R) {
+      frame(p, R() * TAU); slopes(p, 30);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.Rc = 27 + 3 * R(); p.Hw = 11 + 2 * R(); p.Ht = 21 + 3 * R(); p.Rm = 39; p.Hm = p.Ht + 4.5;
+      // on a slope the hall's level floor is sunk halfway into it: cut into the hill above, a step up out of it below
+      p.hf = p.floor - 0.5 * p.tilt * p.Rc;
+      // three arches; on a slope they open to the downhill side and across it, never into the hill
+      p.ent = []; const a0 = R() * TAU, ad = atan2(-p.gz, -p.gx);
+      for (let k = 0; k < 3; k++) p.ent.push(p.tilt > 0.05 ? ad + (k - 1) * (1.0 + 0.25 * R()) + (R() - 0.5) * 0.3 : a0 + k * TAU / 3 + (R() - 0.5) * 0.6);
+      p.pil = []; for (let k = 0; k < 2; k++) { const a = R() * TAU, d = 9 + 8 * R(); p.pil.push([cos(a) * d, sin(a) * d, 1.6 + 1.2 * R()]); }
+      p.ocx = (R() - 0.5) * 6; p.ocz = (R() - 0.5) * 6; p.cr = bwAt(p, 'coldreef');
+      p.yMin = p.floor - 3 - p.tilt * 42; p.yMax = p.hf + p.Hm + 3;
+    },
+    // the hall's inner radius at height h above its floor: three set-back ledges up the wall, then the vault
+    inner(p, h) {
+      if (h < p.Hw) { const st = h / 3.6, f = st - floor(st); return p.Rc + 1.1 * (floor(st) + sm(0.75, 1, f)); }
+      const q = (h - p.Hw) / (p.Ht - p.Hw), r0 = p.Rc + 1.1 * (p.Hw / 3.6);
+      return r0 * sqrt(max(0, 1 - q * q));
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y > p.yMax) return d;
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz), rho = hypot(lx, lz);
+      if (rho > p.Rm) return d;
+      // the mound lies in the slope of the ground; the hall inside it is level
+      const base = planeAt(p, lx, lz), h = y - p.hf;
+      const mh = (p.Hm + p.hf - base) * Math.pow(max(0, 1 - (rho / p.Rm) ** 2), 0.55), top = base + mh;
+      if (h > 10 && y > top + 4.5) return d;                          // well above the mound and its arches: just the ground
+      if (h < -3 && y < top - 4.5) return max(d, top - y - 2.1);      // deep in the mound's rock, under the hall
+      const fade = 1 - sm(p.Rm - 9, p.Rm, rho);
+      let s = smax(d, base + mh - y + (1.6 * n3(x / 6, y / 5, z / 6) + 0.5 * n3(x / 2, y / 2, z / 2)) * fade, 1.5);
+      // the hall inside it
+      const ri = this.inner(p, h) + 0.7 * n3(x / 4, y / 3, z / 4) + 0.25 * n3(x / 1.3, y / 1.3, z / 1.3);
+      let cav = min(ri - rho, h - 0.2 * n2(x / 5, z / 5));
+      if (h > p.Ht * 0.7) cav = max(cav, min(4.2 - hypot(lx - p.ocx, lz - p.ocz) + 0.6 * n3(x / 2, y / 2, z / 2), h));   // the roof's hole
+      // three arches through the wall
+      for (const a of p.ent) {
+        const ca = cos(a), sa = sin(a), al = ca * lx + sa * lz, ac = -sa * lx + ca * lz;
+        if (al < p.Rc - 4) continue;
+        const arch = 4.2 - hypot(ac, max(0, h - 4.5) * 0.8) + 0.4 * n3(x / 2, y / 2, z / 2);
+        cav = max(cav, min(arch, h + 0.1));
+      }
+      s = min(s, -cav);
+      // two pillars holding the roof up (ending in the roof's rock, not through it)
+      if (h < p.Ht + 1.5) for (const q of p.pil) { const e = hypot(lx - q[0], lz - q[1]); if (e > q[2] + 4) continue; s = max(s, q[2] * (1 + 0.5 * sm(p.Ht * 0.5, 0, h) + 0.6 * sm(p.Ht * 0.6, p.Ht, h)) - e + 0.5 * n3(x / 1.8, y / 1.8, z / 1.8)); }
+      return s;
+    },
+    rel(p, x, z, dx, dz, rel) { return hypot(dx, dz) < p.Rm - 3 ? 4 : rel; },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz), h = y - p.hf, rho = hypot(lx, lz);
+      if (rho > p.Rm) return tot(rates);
+      const inside = rho < this.inner(p, max(0, h)) + 1.5 && h < p.Ht + 0.5;
+      if (inside) {
+        scaleAll(rates, 0);
+        // the floor's sea pens grow in meadows with dark ground between; the lights on the walls in drifts
+        const mead = sm(-0.3, 0.35, n2(x / 7 + 3, z / 7)), drift = sm(-0.4, 0.3, n2(x / 5, y / 4 + z / 5));
+        if (ny < -0.45) rates[S.dp_hangsponge] = 0.05;                                       // the vault: a few glass chandeliers
+        else if (ny < 0.5) {                                                                 // the walls and the pillars
+          rates[S.bamboo] = 0.17 * drift; rates[S.blackcoral] = 0.02; rates[S.glasssponge] = 0.02; rates[S.crinoid] = 0.03;
+          rates[S.cp_basketstar] = 0.012; rates[S.lophelia] = 0.06 * p.cr;
+        } else if (h > 1.5) { rates[S.seapen] = 0.3 * mead; rates[S.bamboo] = 0.03; rates[S.cp_umbellula] = 0.02; }   // the ledges
+        else { rates[S.seapen] = 0.6 * mead; rates[S.cp_umbellula] = 0.03; rates[S.tubeanemone] = 0.06; rates[S.brittlestars] = 0.03; }   // the floor
+      } else if (h > 1) { scaleAll(rates, 0.6); rates[S.crinoid] = 0.02; rates[S.glasssponge] = 0.015; rates[S.bamboo] = 0.015; }
+      return tot(rates);
+    },
+    fauna: ['jellies', 'jellies:comb', 'siphonophore', 'school:lanternfish'],
+  });
+
+  // ---------- a wall garden: a band of the cliff between two benches, cut by ledges and overhangs and hung with deep corals
+  // and glass sponges. By its seed: lanterns (glowing bamboo corals), gold (gold, spiral and bubblegum corals) or glass
+  // (glass sponges, hanging like chandeliers under the overhangs); below about 2500 m the pale garden of stalked crinoids ----------
+  prop('dp_goldcoral', { s: [0.8, 1.5], up: 0.5, fan: 1 });   // 0, 1 a gold coral fan (Kulamanamana); 2 a spiral coral (Iridogorgia)
+  prop('dp_hangsponge', { s: [0.7, 1.5], up: 0 });            // glass sponges hanging from the roof of an overhang
+  def('wallgarden', {
+    steep: true, wall: true, r: 44, w: 1.5, biomes: { coldreef: 1.5, abyss: 1.0, vents: 0.3 }, minD: 450, maxD: 3600,
+    init(p, R) {
+      const [a, drop] = fallLine(p); p.tilt = drop / 25;
+      if (drop < 12 && handOff(p, R)) return;   // no wall here after all
+      frame(p, a); wallTable(p, 36, 34, 1.5);
+      p.kind = -p.floor > 2500 ? 3 : floor(R() * 3);
+      p.notch = []; for (let y = p.floor - 26 + 3 * R(); y < p.floor + 24; y += 5 + 4 * R()) p.notch.push([y, 1.4 + 1.4 * R(), 1.8 + 1.8 * R(), R() * 20]);
+      gullies(p, R, 11, 1.2, 1.8);
+      p.yMin = p.floor - 40; p.yMax = p.floor + 40;
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y < p.floor - 30 || y > p.floor + 30 || d > 40 || d < -40) return d;
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz); if (abs(lz) > 38) return d;
+      const s = notchIn(p, x, y, z, lx, lz) - 4 * sm(26, 38, abs(lz));
+      return s > 0 ? min(d, -s) : d;
+    },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const ey = abs(y - p.floor); if (ey > 32) return tot(rates);
+      const lz = LZ(p, dx, dz); if (abs(lz) > 40) return tot(rates);
+      const k = (1 - sm(16, 30, ey + 6 * n2(x / 11, z / 11))) * (1 - sm(28, 40, abs(lz)));
+      if (k <= 0.02) return tot(rates);
+      // in patches with bare rock between, densest along the ledges' lips, where the current runs
+      const lo = 1 - sm(1800, 2800, -y), g = k * sm(-0.25, 0.45, n2(x / 6 + 3, y / 4 + z / 6));
+      scaleAll(rates, 1 - 0.9 * k);
+      if (ny > 0.55) {          // the ledges, their floors silted
+        rates[S.seapen] += 0.3 * g; rates[S.cp_umbellula] += 0.02 * g; rates[S.dp_brisingid] += 0.04 * g; rates[S.crinoid] += 0.03 * g; rates[S.glasssponge] += 0.03 * g; rates[S.sealily] += 0.08 * g;
+      } else if (ny > -0.45) {  // the faces: each wall its own few things
+        if (p.kind === 0) { rates[S.bamboo] += 0.2 * g; rates[S.blackcoral] += 0.03 * g; rates[S.crinoid] += 0.02 * g; }
+        else if (p.kind === 1) { rates[S.dp_goldcoral] += 0.08 * g * lo + 0.02 * g; rates[S.bubblegum] += 0.04 * g * lo; rates[S.bamboo] += 0.05 * g; rates[S.lophelia] += 0.1 * g * lo; }
+        else if (p.kind === 2) { rates[S.glasssponge] += 0.18 * g; rates[S.crinoid] += 0.04 * g; rates[S.bamboo] += 0.04 * g; }
+        else { rates[S.dp_bathycrinus] += 0.08 * g; rates[S.glasssponge] += 0.07 * g; rates[S.bamboo] += 0.04 * g; rates[S.dp_brisingid] += 0.03 * g; }
+      } else rates[S.dp_hangsponge] += (p.kind === 2 ? 0.45 : 0.12) * g;   // under the overhangs
+      return tot(rates);
+    },
+    fauna: ['jellies', 'siphonophore', 'school:lanternfish', 'anglerfish?'],
+  });
+
+  // ---------- a seep on the wall: where fluid seeps out of a cliff at its joints (as at the foot of the Florida Escarpment,
+  // 3300 m), every ledge below a seep is crowded with mussels and bushes of tube worms, and white mats hang down the face
+  // under it like curtains; the faces between are bare ----------
+  def('seepwall', {
+    steep: true, wall: true, r: 44, w: 1.1, biomes: { abyss: 1.0, vents: 0.6, coldreef: 0.4 }, minD: 1200, maxD: 3900,
+    init(p, R) {
+      const [a, drop] = fallLine(p); p.tilt = drop / 25;
+      if (drop < 12 && handOff(p, R)) return;
+      frame(p, a); wallTable(p, 36, 34, 1.5);
+      p.notch = []; for (let y = p.floor - 26 + 3 * R(); y < p.floor + 24; y += 6 + 5 * R()) p.notch.push([y, 1.6 + 1.4 * R(), 2.2 + 2.2 * R(), R() * 20]);
+      gullies(p, R, 13, 1.4, 2.0);
+      // the seeps: where along the wall the fluid comes out
+      p.seep = []; for (let i = 0; i < 3 + floor(R() * 3); i++) p.seep.push([(R() * 2 - 1) * 26, 4 + 5 * R()]);
+      p.yMin = p.floor - 40; p.yMax = p.floor + 40;
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y < p.floor - 30 || y > p.floor + 30 || d > 40 || d < -40) return d;
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz); if (abs(lz) > 38) return d;
+      const s = notchIn(p, x, y, z, lx, lz) - 4 * sm(26, 38, abs(lz));
+      return s > 0 ? min(d, -s) : d;
+    },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const ey = abs(y - p.floor); if (ey > 32) return tot(rates);
+      const lz = LZ(p, dx, dz); if (abs(lz) > 40) return tot(rates);
+      const k = (1 - sm(16, 30, ey + 6 * n2(x / 11, z / 11))) * (1 - sm(28, 40, abs(lz)));
+      if (k <= 0.02) return tot(rates);
+      let near = 0; for (const q of p.seep) near = max(near, 1 - sm(q[1] * 0.4, q[1], abs(lz - q[0])));
+      scaleAll(rates, 1 - 0.9 * k);
+      const g = k * near, patch = sm(-0.3, 0.35, n2(x / 3, y / 3 + z / 3));
+      if (ny > 0.5) { rates[S.mussels] += 1.7 * g * (0.4 + 0.6 * patch); rates[S.tubeworm] += 0.42 * g * (1 - patch); rates[S.bacmat] += 0.3 * g; rates[S.cp_sulfide] += 0.05 * g; }
+      else if (ny > -0.45) { rates[S.bacmat] += 0.9 * g * (0.3 + 0.7 * sm(-0.2, 0.5, n2(lz * 0.6, y * 0.08))); rates[S.tubeworm] += 0.05 * g; rates[S.dp_bathycrinus] += 0.02 * k * (1 - near); }
+      return tot(rates);
+    },
+    fauna: ['eelpouts', 'hagfish', 'grenadier', 'jellies?'],
+  });
+
+  // ======================================================================================================
+  // THE LOWER SLOPE, THE RISE AND THE RIDGE (1500-3500 m)
+  // ======================================================================================================
+  const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > PI) d -= TAU; if (d < -PI) d += TAU; return d; };
+
+  // ---------- a mud volcano: a grey cone on the rise, its crater brimming with warm mud that has spilled over one side in
+  // tongues; white and orange mats and ice-white gas hydrate round the rim, tube worms and mussels where it seeps at its foot ----------
+  prop('dp_mudpool');                               // the mud in the crater: a heavy grey 6 m tile
+  prop('dp_hydrate', { s: [0.6, 1.4], up: 0.7 });   // gas hydrate: ice-white lumps, stained orange with oil, worms living in it
+  def('mudvolcano', {
+    r: 54, w: 1.4, biomes: { abyss: 1.4, coldreef: 0.4, vents: 0.3 }, minD: 1300, maxD: 3800, maxTilt: 0.22,
+    init(p, R) {
+      frame(p, R() * TAU); slopes(p, 40);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.Rb = 34 + 8 * R(); p.H = 9 + 5 * R(); p.Rc = 6.5 + 2 * R(); p.Dc = 2.4 + 0.8 * R(); p.ph = R() * 9;
+      p.breach = R() * TAU;
+      p.flows = [];
+      for (let k = 0; k < 3; k++) p.flows.push({ a: p.breach + (k ? (R() - 0.5) * 2.6 : 0), L: (k ? 12 : 20) + 10 * R(), w: (k ? 3.2 : 5) + 2 * R(), bend: (R() - 0.5) * 0.5, T: k ? 0.7 : 1.1 });
+      p.rimY = p.floor + p.H; p.poolY = p.rimY - p.Dc + 0.55;
+      p.bubbles = [[p.x, p.poolY, p.z]];   // where gas would rise (for a bubble stream, if the main thread ever draws one)
+      p.yMin = p.floor - 3 - p.tilt * 54; p.yMax = p.rimY + 4 + p.tilt * 54;
+    },
+    flowAt(p, f, rho, a) { return angDiff(a, f.a + f.bend * sm(p.Rc, p.Rc + f.L, rho)); },
+    // the cone's height above its bed: the flank, the rim with its breach, the crater, and the tongues of mud on the flank
+    height(p, lx, lz) {
+      const rho = hypot(lx, lz), a = atan2(lz, lx), br = 1.15 * Math.exp(-(angDiff(a, p.breach) ** 2) / 0.08);
+      let h;
+      if (rho < p.Rc) h = p.H - br - p.Dc * (1 - Math.pow(rho / p.Rc, 4));
+      else h = (p.H - br * (1 - sm(p.Rc, p.Rc + 8, rho))) * Math.pow(1 - sm(p.Rc, p.Rb, rho), 1.25) + 0.35 * sin(rho * 0.9 + a * 3 + p.ph) * sm(p.Rc + 2, p.Rc + 6, rho) * (1 - sm(p.Rb * 0.6, p.Rb, rho));
+      for (const f of p.flows) {
+        const s = rho - p.Rc; if (s < -1 || s > f.L + f.w) continue;
+        const lat = abs(this.flowAt(p, f, rho, a)) * rho, wd = f.w * (0.6 + 0.4 * sm(0, f.L, s)) * (1 + 0.15 * sin(s * 0.7 + f.a * 5));
+        if (lat > wd + 1) continue;
+        const along = s < f.L ? 1 : 1 - sm(0, f.w * 0.8, s - f.L);
+        h += f.T * along * (1 - sm(wd * 0.6, wd + 1, lat)) * (1 + 0.4 * sm(f.L * 0.8, f.L, s)) * sm(-1, 0.5, s);
+      }
+      return h;
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y > p.yMax) return d;
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz), rho = hypot(lx, lz);
+      if (rho > p.Rb + 5) return d;
+      // the crater is level; the flanks lie in the slope of the ground
+      const bed = mix(p.floor, planeAt(p, lx, lz), sm(p.Rc, p.Rc + 10, rho));
+      return smax(d, bed + this.height(p, lx, lz) + 0.15 * n2(x / 2.3, z / 2.3) - y, 0.3 + 1.4 * sm(p.Rc, p.Rc + 5, rho));
+    },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz), rho = hypot(lx, lz);
+      if (rho > p.Rb + 4) return tot(rates);
+      if (rho < p.Rc && y < p.poolY + 0.2) return 0;   // under the mud
+      const a = atan2(lz, lx), s = rho - p.Rc;
+      let onFlow = false;
+      for (const f of p.flows) if (s > -1 && s < f.L + f.w * 0.5 && abs(this.flowAt(p, f, rho, a)) * rho < f.w * 0.75) onFlow = true;
+      scaleAll(rates, onFlow ? 0.02 : 0.3);            // the fresh mud: nothing lives on it yet
+      if (onFlow) return tot(rates);
+      const rim = Math.exp(-((rho - p.Rc * 1.18) ** 2) / 5), foot = Math.exp(-((rho - p.Rb * 0.85) ** 2) / 30), patch = sm(-0.3, 0.4, n2(x / 4 + p.ph, z / 4));
+      rates[S.bacmat] += 1.1 * rim * patch + 0.08 * foot;
+      rates[S.dp_hydrate] += 0.08 * rim * (1 - patch);
+      rates[S.tubeworm] += 0.55 * foot * patch + 0.08 * rim;
+      rates[S.mussels] += (ny > 0.5 ? 0.5 : 0.1) * foot * (1 - patch);
+      return tot(rates);
+    },
+    inst: replay((p) => {
+      const L = [], T = 6;
+      for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
+        const lx = i * T, lz = j * T; if (hypot(lx, lz) > p.Rc + 3) continue;
+        const [x, z] = toWorld(p, lx, lz); L.push(['dp_mudpool', x, p.poolY, z, 1, p.yaw, [0, 1, 0], seedOf((i + j + 6) % 3, 0)]);
+      }
+      return L;
+    }),
+    fauna: ['eelpouts', 'hagfish', 'grenadier', 'jellies?'],
+  });
+
+  // ---------- an octopus garden: a knoll of black rock where warm water seeps out of the cracks, and packed round every crack
+  // hundreds of pale purple octopuses brooding their eggs (as at Davidson Seamount, 3200 m); a ghost octopus out on the mud ----------
+  prop('dp_octopus', { s: [0.85, 1.25], up: 0.6 });   // a brooding octopus: 0 turned over, arms raised; 1 hunched over its eggs; 2 tucked in a crack
+  prop('dp_casper');                                  // a ghost octopus: small and white, sitting up on its arms on the mud
+  def('octopusgarden', {
+    r: 40, w: 2.4, biomes: { abyss: 1.0, vents: 1.2, coldreef: 0.6 }, minD: 2300, maxD: 3900, maxTilt: 0.3,
+    init(p, R) {
+      frame(p, R() * TAU); slopes(p, 30);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.Rk = 17 + 6 * R(); p.Hk = 5 + 4 * R(); p.k = floor(R() * 1e5); p.ph = R() * 9;
+      p.cr = []; for (let i = 0; i < 4; i++) { const a = R() * PI; p.cr.push([cos(a), sin(a), (R() - 0.5) * p.Rk * 0.9, 0.55 + 0.45 * R(), R() * 9]); }
+      p.yMin = p.floor - 4 - p.tilt * 40; p.yMax = p.floor + p.Hk + 5 + p.tilt * 40;
+    },
+    // across the nearest crack, and its half-width
+    crack(p, lx, lz) { let m = 1e9, w = 0.5; for (const c of p.cr) { const t = abs(-c[1] * lx + c[0] * lz - c[2] - 1.3 * sin((c[0] * lx + c[1] * lz) * 0.3 + c[4])); if (t < m) { m = t; w = c[3]; } } G.cw = w; return m; },
+    // a dome of jumbled blocks: the dome, and on it the block under this point (cells of the noise)
+    height(p, lx, lz) {
+      const q = (lx * lx + lz * lz) / (p.Rk * p.Rk); if (q > 1.3) return -9;
+      const h = p.Hk * sqrt(max(0, 1 - q)) - 0.5, cs = 2.4, gx = lx / cs, gz = lz / cs, ix = floor(gx), iz = floor(gz);
+      let f1 = 9, f2 = 9, hc = 0;
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+        const cx = ix + i, cz = iz + j, px = cx + 0.15 + 0.7 * hash3(cx, cz, p.k), pz = cz + 0.15 + 0.7 * hash3(cx, cz, p.k + 1), dd = hypot(gx - px, gz - pz);
+        if (dd < f1) { f2 = f1; f1 = dd; hc = hash3(cx, cz, p.k + 2); } else if (dd < f2) f2 = dd;
+      }
+      const t = clamp((f2 - f1) / 0.5, 0, 1);
+      return h + (0.9 * (0.5 + hc) * (1 - (1 - t) ** 3) - 0.3) * sm(-0.6, 0.4, h);
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y > p.yMax) return d;
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz);
+      if (lx * lx + lz * lz > (p.Rk * 1.2) ** 2) return d;
+      if (x !== p._hx || z !== p._hz) { p._hx = x; p._hz = z; p._hh = this.height(p, lx, lz); p._cd = this.crack(p, lx, lz); p._cw = G.cw; }
+      const h = p._hh; if (h < -8) return d;
+      const top = planeAt(p, lx, lz) + h;
+      let s = top - y + 0.25 * n3(x / 1.3, y / 1.3, z / 1.3);
+      // the cracks the warm water comes up through: slots a metre or two deep
+      const sc = min(p._cw - p._cd + 0.12 * n3(x / 0.9, y / 0.9, z / 0.9), y - (top - 1.8));
+      if (sc > 0) s = min(s, -sc);
+      return max(d, s);
+    },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz), q = (lx * lx + lz * lz) / (p.Rk * p.Rk);
+      if (q > 1.4) return tot(rates);
+      if (y - planeAt(p, lx, lz) < 0.4 || q > 1.05) { rates[S.xeno] *= 1.3; return tot(rates); }   // the mud round the knoll
+      const cd = this.crack(p, lx, lz), warm = 1 - sm(0.3, 1.7, cd);
+      scaleAll(rates, 0.15);
+      // the mothers crowd the lips of the warm cracks, packed close, in clusters
+      rates[S.dp_octopus] = (ny > 0.25 ? 1.6 : 0) * warm * sm(-0.35, 0.25, n2(x / 2.6 + p.ph, z / 2.6));
+      rates[S.bacmat] = 0.3 * (1 - sm(0.3, 1.3, cd));
+      rates[S.dp_relicanthus] = 0.015 * (1 - warm); rates[S.glasssponge] = 0.03 * (1 - warm); rates[S.dp_brisingid] = 0.03 * (1 - warm);
+      return tot(rates);
+    },
+    inst: replay((p) => {
+      const L = [], R = W.rng(p.seed + 0.7);
+      for (let i = 0; i < 2; i++) { const a = R() * TAU, d = p.Rk * 1.15 + 3 * R(), [x, z] = toWorld(p, cos(a) * d, sin(a) * d); onGround(L, 'dp_casper', x, z, 0, 0.9 + 0.3 * R(), R() * TAU, seedOf(floor(R() * 3), 0)); }
+      return L;
+    }),
+    fauna: ['eelpouts', 'grenadier', 'jellies?'],
+  });
+
+  // ---------- a fresh lava flow on the ridge: a fissure across the floor and pillows heaped along it, black glass, their
+  // rinds split where they swelled and the cracks still glowing; nothing lives here yet ----------
+  prop('dp_lavalobe');   // a fresh pillow, its rind split and glowing: 0 a sack, 1 a long lobe, 2 one breaking open
+  prop('dp_lavaglow');   // the glow far down in the fissure: a 2.2 m strip along +x
+  def('lavaflow', {
+    r: 48, w: 1.6, biomes: { vents: 2.6 }, minD: 1500, maxD: 4800, maxTilt: 0.3,
+    init(p, R) {
+      frame(p, R() * TAU); slopes(p, 34);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.L = 34 + 8 * R(); p.fw = 0.9 + 0.4 * R(); p.fd = 3.5 + 2 * R(); p.A = 2 + 2 * R(); p.k2 = TAU / (40 + 30 * R()); p.ph = R() * TAU;
+      p.Hp = 3.2 + 2.2 * R(); p.Wp = 8 + 4 * R(); p.k = floor(R() * 1e5); p.cs = 2.1 + 0.6 * R();
+      p.yMin = p.floor - p.fd - 3 - p.tilt * 48; p.yMax = p.floor + p.Hp + 4 + p.tilt * 48;
+    },
+    fz(p, lx) { return p.A * sin(lx * p.k2 + p.ph); },
+    // the heaped pillows along the fissure: a ridge, skinned with cellular sacks
+    height(p, lx, lz) {
+      const q = lz - this.fz(p, lx), along = 1 - sm(p.L * 0.75, p.L + 8, abs(lx));
+      const h = (p.Hp + 1.2 * n2(lx / 9, p.k)) * Math.exp(-(q * q) / (p.Wp * p.Wp * 0.5)) * along - 0.6;
+      if (h < -0.55) return h;
+      const gx = lx / p.cs, gz = lz / p.cs, ix = floor(gx), iz = floor(gz);
+      let f1 = 9, f2 = 9, hc = 0;
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+        const cx = ix + i, cz = iz + j, px = cx + 0.15 + 0.7 * hash3(cx, cz, p.k), pz = cz + 0.15 + 0.7 * hash3(cx, cz, p.k + 1), dd = hypot(gx - px, gz - pz);
+        if (dd < f1) { f2 = f1; f1 = dd; hc = hash3(cx, cz, p.k + 2); } else if (dd < f2) f2 = dd;
+      }
+      const t = clamp((f2 - f1) / 0.8, 0, 1);
+      return max(h, -0.6) + 1.15 * (0.7 + 0.5 * hc) * (1 - (1 - t) * (1 - t)) * sm(-0.6, 0.3, h);
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y > p.yMax || y < p.yMin) return d;
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz);
+      if (abs(lx) > p.L + 10) return d;
+      if (x !== p._hx || z !== p._hz) { p._hx = x; p._hz = z; p._hh = this.height(p, lx, lz); p._q = lz - this.fz(p, lx); }
+      const base = planeAt(p, lx, lz);
+      let s = max(d, base + p._hh - y + 0.12 * n3(x / 1.1, y / 1.1, z / 1.1));
+      // the fissure: a slot down through it all, narrowing toward its ends
+      const fw = p.fw * (1 - sm(p.L * 0.6, p.L, abs(lx))) + 0.15 * n3(x / 1.5, y / 1.5, z / 1.5);
+      const sl = min(fw - abs(p._q), y - (base - p.fd));
+      if (sl > 0) s = min(s, -sl);
+      return s;
+    },
+    plant(p, x, y, z, dx, dz, rates, S) {
+      if (abs(LX(p, dx, dz)) > p.L + 8) return tot(rates);
+      scaleAll(rates, 0.01);
+      rates[S.bacmat] += 0.02 * sm(0.2, 0.6, n2(x / 6, z / 6));   // the first mats
+      return tot(rates);
+    },
+    inst: replay((p) => {
+      const L = [], R = W.rng(p.seed + 0.37);
+      // glowing pillows heaped close along both sides of the fissure, and a few at the flow's front
+      for (let i = 0; i < 120; i++) {
+        const lx = (R() * 2 - 1) * p.L * 0.85, side = R() < 0.5 ? -1 : 1, lz = p.t.fz(p, lx) + side * (p.fw + 0.7 + p.Wp * 0.8 * R() * R()), [x, z] = toWorld(p, lx, lz);
+        // most have gone dark already; the ones still glowing are nearest the fissure
+        const v = abs(lz - p.t.fz(p, lx)) > p.fw + 2.5 || R() < 0.4 ? 0 : R() < 0.6 ? 1 : 2, a = R() * TAU, tl = 0.25 * R();
+        // on the heaped pillows (their height is known: no need to search for the ground)
+        const gy = max(planeAt(p, lx, lz) + p.t.height(p, lx, lz), W.floorAt(x, z));
+        L.push(['dp_lavalobe', x, gy - 0.2, z, 0.75 + 0.8 * R(), R() * TAU, [cos(a) * tl, 1, sin(a) * tl], seedOf(v, floor(R() * 4))]);
+      }
+      // the glow down in the fissure
+      for (let lx = -p.L * 0.6; lx < p.L * 0.6; lx += 2.2) {
+        const [x0, z0] = toWorld(p, lx, p.t.fz(p, lx)), [x1, z1] = toWorld(p, lx + 2.2, p.t.fz(p, lx + 2.2));
+        const y0 = planeAt(p, lx, p.t.fz(p, lx)) - p.fd + 0.25, y1 = planeAt(p, lx + 2.2, p.t.fz(p, lx + 2.2)) - p.fd + 0.25;
+        piece(L, 'dp_lavaglow', [x0, y0, z0], [x1, y1, z1], 1, seedOf(floor(R() * 3), 0));
+      }
+      return L;
+    }),
+    fauna: [],
+  });
+
+  // ======================================================================================================
+  // THE WRECK (2800-5400 m)
+  // ======================================================================================================
+  // ---------- a steamer that broke in two on her way down: her bow stands upright where it ploughed into the mud, the break
+  // open to her decks; her stern lies a long way behind, turned round and crushed; between them the trail of what fell out of
+  // her: boilers, benches, plating, a porthole, a pair of boots. Rusticles hang from all of it ----------
+  prop('dp_hull');      // the bow section, in pieces along +x from the break: 0 the fore part and stem, 1 the middle, 2 the break
+  prop('dp_stern');     // the stern section along +x toward her stern: 0 the counter, rudder and propeller, 1 a crushed part, 2 a heap of plating
+  prop('dp_debris');    // 0 a boiler, 1 a deck bench, 2 a tangle of plates and girders
+  prop('dp_bits');      // 0 a pair of boots, 1 a porthole fallen out, 2 a stack of plates
+  prop('dp_rusticle');  // rusticles in a bunch (emitted upside down, they hang)
+  // the bow's shape, as in the props: half-beam at X along the hull (from the break) and height y over the keel; the deck's height
+  const HULLX = [26, 12, 0], hullB = (X, y) => { const Xe = X - 0.26 * (y - 6); return Xe < 22 ? 6.5 : 6.5 * Math.pow(max(0, 1 - Math.pow((Xe - 22) / 18.5, 1.7)), 0.75); };
+  const hullD = (X) => 13 + 2.4 * sm(22, 41, X);
+  def('deepwreck', {
+    r: 72, w: 0.6, biomes: { abyss: 1.4 }, minD: 2800, maxD: 5400, maxTilt: 0.12,
+    init(p, R) {
+      frame(p, R() * TAU); slopes(p, 50);
+      if (p.tilt > this.maxTilt && handOff(p, R)) return;
+      p.bx = 4;                                                   // the break, on the place's axis; the bow runs on 42 m toward +x
+      p.bury = 6 + 1.4 * R(); p.pitch = 0.03 + 0.02 * R(); p.roll = (R() - 0.5) * 0.05;
+      p.sx = -46 - 10 * R(); p.sz = (R() - 0.5) * 16; p.syaw = PI * (0.8 + 0.4 * R()); p.sbury = 3.6;
+      // the bow's frame: +x along the hull, nose a little down; its origin the keel at the break
+      const th = p.pitch, X = [p.c * cos(th), -sin(th), p.s * cos(th)], U = [p.c * sin(th), cos(th), p.s * sin(th)], Z = [-p.s, 0, p.c];
+      const [ox, oz] = toWorld(p, p.bx, 0);
+      p.hb = { X, U, Z, O: [ox, planeAt(p, p.bx, 0) - p.bury, oz] };
+      const [sx, sz] = toWorld(p, p.sx, p.sz), sa = p.yaw + p.syaw;
+      p.hs = { X: [cos(sa), 0, sin(sa)], U: [0, 1, 0], Z: [-sin(sa), 0, cos(sa)], O: [sx, planeAt(p, p.sx, p.sz) - p.sbury, sz] };
+      p.yMin = p.floor - 14 - p.tilt * 72; p.yMax = p.floor + 12 + p.tilt * 72;
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y < p.yMin || y > p.yMax) return d;
+      let dd = d;
+      // the bow: a hidden core inside her plating, so she can be bumped and her chunks know how tall she stands
+      const H = p.hb, rx = x - H.O[0], ry = y - H.O[1], rz = z - H.O[2];
+      const X = rx * H.X[0] + ry * H.X[1] + rz * H.X[2];
+      if (X > -12 && X < 52) {
+        const Y = rx * H.U[0] + ry * H.U[1] + rz * H.U[2], Z = rx * H.Z[0] + rz * H.Z[2];
+        if (abs(Z) < 18) {
+          dd = max(dd, min(X - 7.2, 38 - X, hullB(X, Y) - 0.75 - abs(Z), hullD(X) - 0.8 - Y));   // behind the bulkhead at the break
+          // the mud she pushed up: a bow wave heaped at her stem, a berm along her sides
+          const lx = LX(p, dx, dz), lz = LZ(p, dx, dz), bed = planeAt(p, lx, lz);
+          const wave = 2.6 * Math.exp(-((X - 42) ** 2) / 18 - (Z * Z) / 30) + 0.9 * Math.exp(-((abs(Z) - 7.4) ** 2) / 3) * sm(-2, 6, X) * (1 - sm(36, 42, X));
+          if (wave > 0.05) dd = max(dd, bed + wave + 0.2 * n2(x / 2, z / 2) - y);
+        }
+      }
+      return dd;
+    },
+    plant(p, x, y, z, dx, dz, rates, S) { scaleAll(rates, 0.5); return tot(rates); },
+    inst: replay((p) => {
+      const L = [], R = W.rng(p.seed + 0.61), H = p.hb;
+      const at = (B, X, Y, Z) => [B.O[0] + B.X[0] * X + B.U[0] * Y + B.Z[0] * Z, B.O[1] + B.X[1] * X + B.U[1] * Y + B.Z[1] * Z, B.O[2] + B.X[2] * X + B.U[2] * Y + B.Z[2] * Z];
+      // the bow, piece by piece
+      for (let v = 0; v < 3; v++) { const q = at(H, HULLX[v], 0, 0); L.push(['dp_hull', q[0], q[1], q[2], 1, yawFor(H.X, H.U), H.U, seedOf(v, 0)]); }
+      // rusticles hanging from her rails and from the torn edges at the break; brisingid stars perched on the rail
+      for (const s of [-1, 1]) for (let X = 2; X < 39; X += 0.9 + 1.4 * R()) {
+        const y = hullD(X) + 1.05, q = at(H, X, y, s * (hullB(X, hullD(X)) + 0.05));
+        if (R() < 0.8) L.push(['dp_rusticle', q[0], q[1], q[2], 0.6 + 0.9 * R(), R() * TAU, [0, -1, 0], seedOf(floor(R() * 3), 0)]);
+        else if (R() < 0.5) L.push(['dp_brisingid', q[0], q[1] + 0.1, q[2], 0.8 + 0.3 * R(), R() * TAU, H.U, R()]);
+      }
+      for (let i = 0; i < 16; i++) { const y = 3 + 10 * R(), zz = (R() * 2 - 1) * 5.5, q = at(H, 0.5 + 2 * R(), y, zz); L.push(['dp_rusticle', q[0], q[1], q[2], 0.8 + 0.8 * R(), R() * TAU, [0, -1, 0], seedOf(floor(R() * 3), 0)]); }
+      // the stern, turned round, and beyond its torn end a heap of plating
+      const S = p.hs;
+      for (const [v, X] of [[1, 0], [0, 12]]) { const q = at(S, X, 0, 0); L.push(['dp_stern', q[0], q[1], q[2], 1, yawFor(S.X, S.U), S.U, seedOf(v, 0)]); }
+      { const q = at(S, -6, 0, 1.5); L.push(['dp_stern', q[0], groundY(q[0], q[2]) - 0.4, q[2], 1, R() * TAU, [0, 1, 0], seedOf(2, 0)]); }
+      // the trail between: the heavy things near the break, the small ones spread wide
+      const trail = (t, spread) => { const lx = p.bx - 6 + (p.sx + 4 - (p.bx - 6)) * t, lz = p.sz * t + (R() - 0.5) * spread * (0.4 + t); return toWorld(p, lx, lz); };
+      for (let i = 0; i < 3; i++) { const [x, z] = trail(0.15 + 0.25 * i + 0.1 * R(), 10); onGround(L, 'dp_debris', x, z, -0.6, 1, R() * TAU, seedOf(0, floor(R() * 4))); }
+      for (let i = 0; i < 14; i++) { const [x, z] = trail(R(), 20), v = R() < 0.4 ? 1 : 2, a = R() * TAU, tl = v === 2 ? 0.3 * R() : 0; L.push(['dp_debris', x, groundY(x, z) - 0.1, z, 0.8 + 0.4 * R(), R() * TAU, [cos(a) * tl, 1, sin(a) * tl], seedOf(v, floor(R() * 4))]); }
+      for (let i = 0; i < 16; i++) { const [x, z] = trail(R(), 26), v = i < 3 ? 0 : i < 8 ? 1 : 2; onGround(L, 'dp_bits', x, z, 0.005, 1, R() * TAU, seedOf(v, floor(R() * 4))); }
+      return L;
+    }),
+    fauna: ['grenadier', 'eelpouts', 'jellies?'],
+  });
+
+  // ======================================================================================================
+  // THE TRENCHES (5500 m down)
+  // ======================================================================================================
+
+  // ---------- trench ledges: the wall of a trench cut into ledges, each a pond of silt with its own herd of see-through sea
+  // cucumbers and giant single cells; stalked crinoids on the faces between; on one ledge a dead fish swarming with amphipods ----------
+  prop('dp_elpidia', { s: [1.1, 1.7], up: 0.15 });   // hadal sea cucumbers (Elpidia): small, pink, see-through, a few together
+  prop('dp_carcass');                                // a dead fish on a ledge: 0 swarming with amphipods, 1 picked to the bones, 2 a heap of them
+  def('trenchledges', {
+    steep: true, wall: true, r: 46, w: 2.0, biomes: { abyss: 2.0, vents: 0.5 }, minD: 5500,
+    init(p, R) {
+      const [a, drop] = fallLine(p); p.tilt = drop / 25;
+      if (drop < 12 && handOff(p, R)) return;
+      frame(p, a); wallTable(p, 36, 34, 1.5);
+      p.notch = []; for (let y = p.floor - 28 + 3 * R(); y < p.floor + 26; y += 8 + 4 * R()) p.notch.push([y, 2.6 + 1.6 * R(), 4 + 3 * R(), R() * 20]);
+      gullies(p, R, 9, 1.6, 2.6);
+      p.yMin = p.floor - 40; p.yMax = p.floor + 40;
+    },
+    density(p, x, y, z, d, dx, dz) {
+      if (y < p.floor - 30 || y > p.floor + 30 || d > 40 || d < -40) return d;
+      const lx = LX(p, dx, dz), lz = LZ(p, dx, dz); if (abs(lz) > 38) return d;
+      const s = notchIn(p, x, y, z, lx, lz) - 4 * sm(26, 38, abs(lz));
+      return s > 0 ? min(d, -s) : d;
+    },
+    plant(p, x, y, z, dx, dz, rates, S, sand, ny) {
+      const ey = abs(y - p.floor); if (ey > 32) return tot(rates);
+      const lz = LZ(p, dx, dz); if (abs(lz) > 40) return tot(rates);
+      const k = (1 - sm(18, 30, ey + 5 * n2(x / 11, z / 11))) * (1 - sm(28, 40, abs(lz)));
+      if (k <= 0.02) return tot(rates);
+      const g = k * (0.5 + 0.5 * sm(-0.5, 0.3, n2(x / 4 + 7, z / 4 + y / 6)));
+      scaleAll(rates, 1 - 0.8 * k);
+      if (ny > 0.5) { rates[S.xeno] += 0.6 * g; rates[S.dp_elpidia] += 0.9 * g * sm(-0.3, 0.3, n2(x / 6, z / 6 + y)); rates[S.brittlestars] += 0.05 * g; }
+      else if (ny > -0.45) { rates[S.dp_bathycrinus] += 0.07 * g; rates[S.glasssponge] += 0.015 * g; }
+      else rates[S.dp_hangsponge] += 0.05 * g;
+      return tot(rates);
+    },
+    inst: replay((p) => {
+      const L = [], R = W.rng(p.seed + 0.29);
+      // the dead fish: on the ledge nearest the centre's depth
+      let q = p.notch[0]; for (const n of p.notch) if (abs(n[0] - p.floor) < abs(q[0] - p.floor)) q = n;
+      const lz = (R() - 0.5) * 20, lx = wallAt(p, lz, q[0] + q[1] * 0.5) - q[2] * 0.45, [x, z] = toWorld(p, lx, lz);
+      onGround(L, 'dp_carcass', x, z, 0, 1, R() * TAU, seedOf(0, 0), q[0] + q[1] - 0.3);
+      return L;
+    }),
+    fauna: ['amphipods', 'snailfish'],
+  });
+
+  // ---------- the lander: an instrument frame someone sent down on its own and never brought up again, standing on the
+  // trench floor, its lamp still pulsing; the amphipods found its bait long ago ----------
+  prop('dp_lander');   // 0 the frame, its floats, glass spheres, camera and lamp; 1 the bait cage; 2 the release and a coil of line
+  def('lander', {
+    steep: true, r: 26, w: 1.3, biomes: { abyss: 1.5, vents: 0.3 }, minD: 5600,
+    init(p, R) {
+      // stand it on the flattest ground near the cell's middle, and make that the place's middle
+      let best = [0, 0], bs = 1e9;
+      for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) {
+        const x = p.x + i * 6, z = p.z + j * 6;
+        const s = (abs(W.floorAt(x + 2, z) - W.floorAt(x - 2, z)) + abs(W.floorAt(x, z + 2) - W.floorAt(x, z - 2))) / 4 + 0.004 * (i * i + j * j);
+        if (s < bs) { bs = s; best = [i * 6, j * 6]; }
+      }
+      p.x += best[0]; p.z += best[1]; p.floor = W.floorAt(p.x, p.z); p.y = p.floor;
+      frame(p, R() * TAU);
+      p.yMin = p.floor - 6; p.yMax = p.floor + 6;
+    },
+    inst: replay((p) => {
+      const L = [], y = groundY(p.x, p.z), N = groundN(p.x, y, p.z), ul = hypot(N[0], N[1] + 1.5, N[2]), up = [N[0] / ul, (N[1] + 1.5) / ul, N[2] / ul];
+      L.push(['dp_lander', p.x, y - 0.05, p.z, 1, p.yaw, up, seedOf(0, 0)]);
+      const [bx, bz] = toWorld(p, 2.4, 0.6); L.push(['dp_lander', bx, groundY(bx, bz) - 0.02, bz, 1, p.yaw + 0.4, [0, 1, 0], seedOf(1, 0)]);
+      const [cx, cz] = toWorld(p, -1.6, -2.2); L.push(['dp_lander', cx, groundY(cx, cz) - 0.03, cz, 1, p.yaw - 0.8, [0, 1, 0], seedOf(2, 0)]);
+      return L;
+    }),
+    fauna: ['amphipods', 'snailfish'],
+  });
+}
 
 // ---- 20-env.js ----
 // The water itself: its colour, clarity and light, blended from the biomes around the swimmer and their depth.
@@ -4510,7 +5534,7 @@ vec2 entryXZ(vec3 p) { return p.xz + uSunDir.xz / max(uSunDir.y, 0.25) * depthOf
 // caustic net on surfaces: sharp and bright near the surface, softening and fading with depth; slight colour split
 vec3 causticAt(vec3 p) {
   float z = depthOf(p);
-  vec2 q = entryXZ(p) * 0.16;
+  vec2 q = mod(entryXZ(p) * 0.16, 256.0);
   float lod = clamp(log2(1.0 + z * 0.12), 0.0, 6.0);
   vec2 sh = uSunDir.xz * 0.0025 * (1.0 + z * 0.05);
   vec3 c = vec3(textureLod(uCaustic, q - sh, lod).r, textureLod(uCaustic, q, lod).r, textureLod(uCaustic, q + sh, lod).r);
@@ -4669,12 +5693,17 @@ void main() { o = vec4(1.0); }
 uniform int uDbg;
 uniform float uAppear;
 vec3 srgb(vec3 c) { return pow(c, vec3(2.2)); }
+// The noise texture tiles every unit. A world point kilometres out or down would ask for a texel millions deep and the
+// detail would smear into streaks, so it is first reduced into one span of 256 tiles. The detail level is worked out once
+// per pixel from the unreduced point (lw: log2 of texels per metre at scale 1), so no seam shows where a span starts again.
+float lw;
+vec4 n3w(vec3 p, float s, vec3 off) { return textureLod(uNoise, mod(p, s * 256.0) / s + off, lw - log2(s)); }
 // bump from the noise texture: returns a perturbation of the normal
 vec3 nGrad(vec3 p, float s, int ch) {
   float e = 0.35 / 128.0 * 4.0;
-  vec3 q = p * s;
-  vec4 c0 = n3v(q);
-  vec4 cx = n3v(q + vec3(e, 0, 0)), cy = n3v(q + vec3(0, e, 0)), cz = n3v(q + vec3(0, 0, e));
+  vec3 q = mod(p, 256.0 / s) * s; float l = lw + log2(s);
+  vec4 c0 = textureLod(uNoise, q, l);
+  vec4 cx = textureLod(uNoise, q + vec3(e, 0, 0), l), cy = textureLod(uNoise, q + vec3(0, e, 0), l), cz = textureLod(uNoise, q + vec3(0, 0, e), l);
   float v = c0[ch];
   return vec3(cx[ch] - v, cy[ch] - v, cz[ch] - v) / e;
 }
@@ -4682,18 +5711,19 @@ void main() {
   if (uAppear < 1.0 && ign(gl_FragCoord.xy) > uAppear) discard;
   vec3 N = normalize(vN + vec3(0.0, 1e-5, 0.0));
   vec3 P = vP;
+  lw = log2(max(max(length(dFdx(P)), length(dFdy(P))) * 128.0, 1e-6));
   float sand = vMat.r, rock = vMat.g, crust = vMat.b, special = vMat.a;
   float ice = step(0.98, special);
   vec3 alb = srgb(vCol.rgb);
   float ao = vCol.a;
   // rock: pitted, knobbly; scales from boulders to pores
-  vec4 nA = n3v(P / 19.0), nB = n3v(P / 5.3), nC = n3v(P / 1.4);
+  vec4 nA = n3w(P, 19.0, vec3(0.0)), nB = n3w(P, 5.3, vec3(0.0)), nC = n3w(P, 1.4, vec3(0.0));
   float pores = (1.0 - smoothstep(0.05, 0.22, nC.a)) * 0.5 + (1.0 - smoothstep(0.06, 0.25, nB.a)) * 0.5;
   vec3 bump = (nGrad(P, 1.0 / 5.3, 1) * 0.010 + nGrad(P, 1.0 / 1.4, 2) * 0.0035 + nGrad(P, 1.0 / 19.0, 0) * 0.02) * rock * (1.0 - ice);
   // sand: ripples running across the prevailing surge, crests a little sharp, broken by noise
   vec2 rd = normalize(vec2(0.86, 0.5));
   float warp = (nA.r - 0.5) * 7.0 + (nB.g - 0.5) * 2.0;
-  float ph = dot(P.xz, rd) * 3.4 + warp;
+  float ph = mod(dot(P.xz, rd), 1892.3612) * 3.4 + warp;   // 1024 ripples: the phase stays small far out
   float rip = sin(ph);
   float ripA = sand * smoothstep(0.55, 0.9, N.y) * (0.55 + 0.45 * nA.g) * (1.0 - smoothstep(18.0, 45.0, depthOf(P)) * 0.7);
   vec3 sandB = vec3(rd.x, 0.0, rd.y) * cos(ph) * 3.4 * 0.055 * ripA + (nGrad(P, 1.0 / 1.4, 2) * 0.0025 + nGrad(P, 1.0 / 5.3, 1) * 0.004) * sand;
@@ -4705,7 +5735,7 @@ void main() {
   float cr2 = 1.0 - smoothstep(0.0, fw2 + 0.012, abs(nC.b - 0.5));
   float crack = cr1 * smoothstep(0.5, 0.8, nA.g) * rk * (0.35 + 0.65 * (1.0 - crust)) + cr2 * 0.0;
   // fine grain: the surface is rough at every scale down to the eye
-  vec4 nF = n3v(P / 0.33 + 1.7);
+  vec4 nF = n3w(P, 0.33, vec3(1.7));
   bump += nGrad(P, 1.0 / 0.33, 1) * 0.0016 * rk * smoothstep(9.0, 2.0, length(P - uCam.xyz));
   // strata on steep faces: layers of slightly different stone, a step at each
   float steep = 1.0 - smoothstep(0.35, 0.75, abs(N.y));
@@ -4723,16 +5753,31 @@ void main() {
   ao *= 1.0 - crack * 0.45;
   alb *= mix(1.0, 0.86 + 0.28 * nF.r, rk);
   alb *= 1.0 + sand * (rip * 0.06 + (nC.r - 0.5) * 0.12);
+  // the deep mud is written on: burrow holes with a lip of thrown-up mud, in patches, and the meandering trails of
+  // things that crawl over it (sea cucumbers, sea pigs), a groove with a pale edge
+  float mud = sand * smoothstep(500.0, 900.0, depthOf(P));
+  if (mud > 0.01) {
+    vec4 bu = n3w(P, 16.0, vec3(0.31, 0.77, 0.13)), pt = n3w(P, 60.0, vec3(0.6, 0.2, 0.4));
+    // only a random third of the cells hold a burrow, so they scatter instead of lining up like a printed screen
+    float pz = smoothstep(0.55, 0.7, pt.r) * step(0.64, n3w(P, 1.9, vec3(0.83, 0.41, 0.27)).g);
+    float hole = (1.0 - smoothstep(0.03, 0.045, bu.a)) * pz, lip = smoothstep(0.04, 0.055, bu.a) * (1.0 - smoothstep(0.055, 0.08, bu.a)) * pz;
+    vec4 tr = n3w(P, 23.0, vec3(0.5, 0.1, 0.85));
+    float tw = 0.006 + fwidth(tr.g) * 1.2, line = 1.0 - smoothstep(0.0, tw, abs(tr.g - 0.5));
+    float edge = smoothstep(tw * 0.8, tw * 1.6, abs(tr.g - 0.5)) * (1.0 - smoothstep(tw * 1.6, tw * 3.0, abs(tr.g - 0.5)));
+    float trail = smoothstep(0.62, 0.75, tr.b);   // only some of the lines are trails
+    alb *= 1.0 - mud * (0.42 * hole - 0.08 * lip + trail * (0.2 * line - 0.06 * edge));
+    ao *= 1.0 - mud * 0.5 * hole;
+  }
   // living rock: encrusting sponges, coralline algae, zoanthid mats and turf in patches at three scales,
   // all varied around the biome's own crust colour so every biome keeps its character
   float life = crust * (1.0 - ice) * (1.0 - sand);
   if (life > 0.01) {
-    vec4 q1 = n3v(P / 1.35 + 11.0), q2 = n3v(P / 0.48 + 3.0), q3 = n3v(P / 0.2);
+    vec4 q1 = n3w(P, 1.35, vec3(11.0)), q2 = n3w(P, 0.48, vec3(3.0)), q3 = n3w(P, 0.2, vec3(0.0));
     float sel = q1.r * 0.65 + q2.g * 0.35;
     vec3 base = alb;
     // each kind of growth has its own surface: coralline smooth with fine knobs, sponge pitted with pores,
     // turf fuzzy, crust chalky; the edges between them are ragged rather than drawn with a ruler
-    float rag = (q3.r - 0.5) * 0.07 + (n3v(P / 0.09).g - 0.5) * 0.03;
+    float rag = (q3.r - 0.5) * 0.07 + (n3w(P, 0.09, vec3(0.0)).g - 0.5) * 0.03;
     float s2 = sel + rag;
     float kV = smoothstep(0.34, 0.42, s2), kO = smoothstep(0.45, 0.52, s2), kG = smoothstep(0.55, 0.61, s2), kP = smoothstep(0.66, 0.72, s2);
     vec3 lc = base * vec3(1.28, 0.80, 1.05);                                    // pink coralline
@@ -4755,7 +5800,7 @@ void main() {
   vec3 col = alb * light;
   if (ice > 0.5) {
     // melt scallops: shallow dimples from the cells of the noise, at two sizes
-    vec4 s1 = n3v(P / 8.5), s2 = n3v(P / 3.2 + 4.0);
+    vec4 s1 = n3w(P, 8.5, vec3(0.0)), s2 = n3w(P, 3.2, vec3(4.0));
     vec3 g1 = nGrad(P, 1.0 / 8.5, 3), g2 = nGrad(P, 1.0 / 3.2, 3);
     vec3 Ni = normalize(N + (g1 * 0.32 + g2 * 0.12));
     float rim1 = smoothstep(0.25, 0.42, s1.a), rim2 = smoothstep(0.22, 0.4, s2.a);
@@ -4777,7 +5822,7 @@ void main() {
   if (uDbg == 5) o = vec4(vec3(vSky), 1.0);
   if (uDbg == 6) o = vec4(vec3(ao), 1.0);
   if (uDbg == 7) o = vec4(sunPart * 0.2, 1.0);
-  if (uDbg == 8) o = vec4(n3v(P / 5.3).rgb, 1.0);
+  if (uDbg == 8) o = vec4(n3w(P, 5.3, vec3(0.0)).rgb, 1.0);
 }
 #endif
 `;
@@ -5527,13 +6572,22 @@ const Player = {
     const dl = Math.hypot(dx, dy, dz);
     const moving = dl > 0.01;
     if (moving) { dx /= dl; dy /= dl; dz /= dl; }
-    const top = fast ? 7.4 : 3.3;
+    // a plunge: in open water, holding the way straight down (or up), you sink (or rise) faster and faster, heavy, and
+    // ease off as the floor (or the surface, or the ice under it) comes near. It is how the kilometres of the deep are
+    // crossed: about 11 m/s, or 25 with Shift.
+    const vy = moving ? dy : 0;
+    let clear = 0;
+    if (vy < -0.8) clear = this.pos[1] - (Env.floorY === undefined ? this.pos[1] : Env.floorY) - 20;
+    else if (vy > 0.8) clear = -this.pos[1] - 15 - 70 * (Env.bwS ? Env.bwS[World.B.polar] : 0);
+    const want = smooth(10, 110, clear);
+    this.plunge = (this.plunge || 0) + (want - (this.plunge || 0)) * (1 - Math.exp(-dt * (want > (this.plunge || 0) ? 0.55 : 3.5)));
+    const top = (fast ? 7.4 : 3.3) * (1 + this.plunge * 2.4);
     // kicks: thrust comes in strokes; their rate rises with effort
     this.effort += ((moving ? (fast ? 1 : 0.5) : 0) - this.effort) * (1 - Math.exp(-dt * 3));
     const rate = 0.9 + this.effort * 1.4;
     this.kickPhase += dt * rate * TAU;
     const stroke = Math.max(0, Math.sin(this.kickPhase));
-    const surge = moving ? 0.84 + 0.3 * stroke * stroke : 0;
+    const surge = moving ? 0.84 + 0.3 * stroke * stroke * (1 - this.plunge) + 0.16 * this.plunge : 0;
     const resp = moving ? 3.2 + 1.6 * stroke : 1.3;    // how fast velocity follows intent; coasting when there is none
     const k = 1 - Math.exp(-dt * resp);
     const tx = dx * top * surge, ty = dy * top * surge, tz = dz * top * surge;
@@ -5558,7 +6612,7 @@ const Player = {
     this.roll += (rollT - this.roll) * (1 - Math.exp(-dt * 4));
     this.cam[0] = this.pos[0]; this.cam[1] = this.pos[1] + this.bob[1]; this.cam[2] = this.pos[2];
     this.camLook = fwd;
-    this.fovK += ((fast && moving ? 1 : 0) - this.fovK) * (1 - Math.exp(-dt * 2.2));
+    this.fovK += (Math.max(fast && moving ? 1 : 0, this.plunge) - this.fovK) * (1 - Math.exp(-dt * 2.2));
   },
   collide() {
     const p = this.pos, R = 0.55;
@@ -9637,6 +10691,819 @@ Flora.def('leafcoral', {
   });
 })();
 
+// ---- 67-props-deep.js ----
+// Meshes for the props of the deep places (src/16-places-deep.js). Each build(mb, rnd, lod, variant) makes one at scale 1
+// in metres, +y up. Built with SpeciesKit.def, so both levels of detail of a variant take their shape from the same seed.
+// Palettes are [base, accent] pairs (sRGB); emitted props pick variant and palette by their seed (seedOf there).
+// Things that lean with the current are built leaning toward +x: planted with `fan`, their yaw turns +x downstream.
+(function () {
+  'use strict';
+  const K = SpeciesKit, WK = WarmKit, TAU = Math.PI * 2, PI = Math.PI;
+  const { abs, sin, cos, sqrt, hypot, min, max, floor } = Math;
+  const rr = (rnd, a, b) => a + (b - a) * rnd();
+  const P4 = (a, b) => [[a, b], [a, b], [a, b], [a, b]];
+  const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const P3 = (p, r) => ({ x: p[0], y: p[1], z: p[2], r });
+  // a flat decal on the mud: a grid over (u, w) in [0,1]^2, f(u, w) -> [x, z]; at(u, w) -> AT(); uv.y is how far
+  // from the decal's rim (0) toward its middle (1), for the ragged-edged mat kind (29)
+  function decal(mb, nu, nw, f, at, lift, rim) {
+    const base = mb.count;
+    for (let j = 0; j <= nw; j++) for (let i = 0; i <= nu; i++) {
+      const u = i / nu, w = j / nw, [x, z] = f(u, w), A = at(u, w);
+      mb.v(x, lift(u, w), z, 0, 1, 0, A.c, A.e, u, rim(u, w));
+    }
+    for (let j = 0; j < nw; j++) for (let i = 0; i < nu; i++) { const a = base + j * (nu + 1) + i; mb.quad(a, a + nu + 1, a + nu + 2, a + 1); }
+  }
+  // a small flat disc lying on the mud (a hole, a spot)
+  function disc(mb, x, y, z, r, n, at) {
+    const c = mb.v(x, y, z, 0, 1, 0, at.c, at.e, 0.5, 1);
+    const b = mb.count;
+    for (let k = 0; k <= n; k++) { const a = k / n * TAU; mb.v(x + cos(a) * r, y, z + sin(a) * r, 0, 1, 0, at.c, at.e, 0.5, 0.6); }
+    for (let k = 0; k < n; k++) mb.tri(c, b + k + 1, b + k);
+  }
+  // a feathery fringe along a centreline P (kind 21: n branchlets along it), its two vanes raised into a V about `up`
+  function fringe(mb, P, W, n, A, tilt, up) {
+    const m = P.length - 1;
+    for (const sg of [1, -1]) {
+      const sv = [];
+      for (let k = 0; k <= m; k++) {
+        const a = P[max(0, k - 1)], b = P[min(m, k + 1)];
+        const T = K.nrm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
+        let side = K.cross(T, up); if (hypot(side[0], side[1], side[2]) < 1e-3) side = K.cross(T, [1, 0, 0]);
+        side = K.nrm(side);
+        const nn = K.cross(side, T), c = cos(tilt), s = sin(tilt) * sg;
+        sv.push(K.nrm([side[0] * c + nn[0] * s, side[1] * c + nn[1] * s, side[2] * c + nn[2] * s]));
+      }
+      mb.ribbon(P.map((p) => ({ x: p[0], y: p[1], z: p[2] })), sv, W, (u) => { const a = A(u); a.e[2] = n / 255; a.e[3] = 21; return a; });
+    }
+  }
+
+  // ======================================================================================================
+  // THE WRITTEN PLAIN
+  // ======================================================================================================
+  // ---- a piece of a track in the mud, 1.2 m along +x: 0 a sea cucumber's feeding track, its foot marks across it;
+  // 1 the trampled road of a herd of sea pigs; 2 a fresh one, darker, the stirred mud not yet settled ----
+  K.def('dp_trail', {
+    size: 'small', d0: 10, d1: 42, shadow: false, alpha: true, noThin: true, sway: [0, 1, 0, 0], mat: [0, 0, 0, 0.05],
+    pal: [[[0.54, 0.52, 0.47], [0.45, 0.43, 0.39]], [[0.52, 0.50, 0.46], [0.43, 0.41, 0.38]], [[0.55, 0.53, 0.48], [0.47, 0.45, 0.41]], [[0.53, 0.51, 0.47], [0.44, 0.42, 0.39]]],
+    build(mb, rnd, lod, v) {
+      const W = v === 1 ? 0.36 : 0.12, nu = lod ? 3 : (v === 1 ? 14 : 18), nw = lod ? 2 : 4, k = rnd() * 9;
+      decal(mb, nu, nw, (u, w) => [(u - 0.5) * 1.27, (w - 0.5) * 2 * W * (1 + 0.12 * sin(u * 7 + k))],
+        (u, w) => {
+          const x = (u - 0.5) * 1.27, s = abs(w - 0.5) * 2;
+          const marks = v === 1 ? 0.5 + 0.5 * sin(x * 23 + 3 * sin(w * 9 + k)) * sin(w * 17) : 0.5 + 0.5 * sin(x * 34 + k);
+          return AT((v === 2 ? 0.82 : 0.94) - 0.06 * marks, sm(0.2, 1, 1 - s) * (v === 2 ? 1 : 0.7), 0.92, 0, 0, 0, 0, 29);
+        },
+        (u, w) => 0.003 + 0.006 * (1 - abs(w - 0.5) * 2),
+        (u, w) => 1 - abs(w - 0.5) * 2);
+    },
+  });
+  // ---- marks in the mud: 0 an acorn worm's spiral of cast mud, the worm itself at its end (accent: the worm);
+  // 1 the star a spoon worm grazes round its burrow; 2 a net of holes in a hexagonal grid (Paleodictyon) ----
+  K.def('dp_trace', {
+    size: 'small', d0: 9, d1: 36, shadow: false, alpha: true, noThin: true, sway: [0, 1, 0, 0], mat: [0.3, 0, 0, 0.25],
+    pal: [[[0.76, 0.73, 0.66], [0.56, 0.22, 0.52]], [[0.74, 0.71, 0.64], [0.88, 0.46, 0.40]], [[0.70, 0.67, 0.61], [0.25, 0.24, 0.22]], [[0.68, 0.65, 0.59], [0.30, 0.29, 0.27]]],
+    build(mb, rnd, lod, v) {
+      if (v === 0) {
+        const turns = rr(rnd, 3.6, 4.8), r0 = 0.035, r1 = rr(rnd, 0.24, 0.32), n = lod ? 36 : 150, pts = [];
+        const th = (t) => t * turns * TAU, R = (t) => r0 + (r1 - r0) * t;
+        for (let i = 0; i <= n; i++) { const t = i / n, a = th(t); pts.push({ x: cos(a) * R(t), y: 0.006, z: sin(a) * R(t), r: 0.011 * (0.75 + 0.5 * t) }); }
+        mb.tube(pts, lod ? 3 : 5, () => AT(0.98, 0, 0.75, 0, 0.1, 0, 0, 0));
+        // the worm, carrying on round from the end of its cast: a flat purple body, a rounded proboscis at its head
+        const a1 = th(1), wp = [];
+        for (let k = 0; k <= (lod ? 4 : 10); k++) { const q = k / (lod ? 4 : 10), a = a1 + q * 0.75, rad = r1 + 0.02 + 0.02 * q; wp.push({ x: cos(a) * rad, y: 0.012, z: sin(a) * rad, r: 0.017 * (q < 0.85 ? 1 : 1.3) }); }
+        mb.tube(wp, lod ? 4 : 8, (t) => AT(0.92, 1, 0.85, 0, 0.55, 0, 0, 28), { rmod: (t, a) => 1 - 0.45 * abs(cos(a)), capTip: true });
+      } else if (v === 1) {
+        const n = 9 + floor(rnd() * 6), L0 = rr(rnd, 0.28, 0.46);
+        disc(mb, 0, 0.004, 0, 0.032, 8, AT(0.25, 1, 0.3, 0, 0, 0, 0, 0));
+        for (let i = 0; i < n; i++) {
+          const a = i / n * TAU + rnd() * 0.3, L = L0 * rr(rnd, 0.65, 1.1), ca = cos(a), sa = sin(a);
+          decal(mb, lod ? 2 : 6, 2, (u, w) => { const r = 0.05 + L * u, s = (w - 0.5) * 0.075 * (1 - 0.5 * u); return [ca * r - sa * s, sa * r + ca * s]; },
+            (u) => AT(0.92, 0.5 - 0.25 * u, 0.85, 0, 0, 0, 0, 29), () => 0.003, (u, w) => (1 - abs(w - 0.5) * 2) * (1 - 0.4 * u));
+        }
+      } else {
+        const sp = 0.055, R = 0.2;
+        for (let j = -5; j <= 5; j++) for (let i = -5; i <= 5; i++) {
+          const x = (i + (j & 1) * 0.5) * sp, z = j * sp * 0.866;
+          if (x * x + z * z > R * R || (lod && (i + j) & 1)) continue;
+          disc(mb, x + (rnd() - 0.5) * 0.008, 0.003, z + (rnd() - 0.5) * 0.008, 0.008, lod ? 4 : 6, AT(0.3, 1, 0.4, 0, 0, 0, 0, 0));
+        }
+      }
+    },
+  });
+  // ---- a tripodfish (Bathypterois): standing a hand's breadth above the mud on two pelvic rays and the lower ray of its
+  // tail, nose into the current, the long rays of its breast fins held forward over its head to feel for drifting food ----
+  K.def('dp_tripod', {
+    size: 'small', d0: 12, d1: 46, shadow: false, sway: [0.004, 1.6, 0.6, 0.002], mat: [0.15, 0, 0, 0.35],
+    pal: [[[0.26, 0.24, 0.23], [0.82, 0.80, 0.76]], [[0.32, 0.28, 0.25], [0.86, 0.84, 0.80]], [[0.22, 0.22, 0.23], [0.78, 0.78, 0.78]], [[0.36, 0.32, 0.28], [0.88, 0.86, 0.82]]],
+    build(mb, rnd, lod, v) {
+      const L = rr(rnd, 0.27, 0.33), Hb = [0.4, 0.52, 0.34][v], segs = lod ? 6 : 14, sides = lod ? 5 : 9;
+      // the body, nose toward +x: deepest behind the head, a long tapering tail
+      const pts = [];
+      for (let k = 0; k <= segs; k++) {
+        const t = k / segs, x = (t - 0.6) * L;
+        const r = 0.035 * (t > 0.75 ? Math.pow(1 - (t - 0.75) / 0.25, 0.5) * 0.85 + 0.15 : 0.25 + 0.75 * sm(0, 0.75, t));
+        pts.push({ x, y: Hb + 0.006 * sin(t * 3), z: 0, r });
+      }
+      mb.tube(pts, sides, (t) => AT(0.9, 0, 0.7 + 0.3 * t, 0, 0.15, 0, 0, 0), { rmod: (t, a) => 1 - 0.3 * abs(sin(a)), capTip: true });
+      const ray = (P, r0, r1) => mb.tube(P.map((p, i) => P3(p, r0 + (r1 - r0) * i / (P.length - 1))), 3, (t) => AT(0.95, 1, 0.9, 0.3 * t, 0.3, 0, 0, 0));
+      // the stilts: two pelvic rays forward and out, the tail ray back
+      const px = L * 0.08, fx = px + rr(rnd, 0.14, 0.2);
+      for (const s of [-1, 1]) ray([[px, Hb - 0.025, s * 0.008], [px + (fx - px) * 0.5, Hb * 0.5, s * 0.07], [fx, 0, s * rr(rnd, 0.1, 0.13)]], 0.0045, 0.0022);
+      const tx = -0.6 * L;
+      ray([[tx, Hb, 0], [tx - 0.13, Hb * 0.45, 0], [tx - rr(rnd, 0.26, 0.34), 0, 0]], 0.005, 0.0025);
+      // the feelers: three long rays from each breast fin, forward, up and out
+      for (const s of [-1, 1]) for (let i = 0; i < (lod ? 1 : 3); i++) {
+        const sp = 0.06 + 0.05 * i, L2 = rr(rnd, 0.22, 0.32);
+        ray([[L * 0.12, Hb + 0.008, s * 0.022], [L * 0.12 + L2 * 0.45, Hb + 0.07 + 0.02 * i, s * (0.03 + sp * 0.5)], [L * 0.12 + L2, Hb + 0.11 + 0.035 * i, s * (0.04 + sp)]], 0.0022, 0.001);
+      }
+      // a small dorsal fin and the upper lobe of the tail
+      mb.tube([{ x: -0.05 * L, y: Hb + 0.03, z: 0, r: 0.004 }, { x: -0.12 * L, y: Hb + 0.07, z: 0, r: 0.002 }], 3, () => AT(0.8, 0.3, 0.8, 0.5, 0.3, 0, 0, 0));
+      mb.tube([{ x: tx, y: Hb, z: 0, r: 0.004 }, { x: tx - 0.06, y: Hb + 0.05, z: 0, r: 0.0015 }], 3, () => AT(0.8, 0.3, 0.8, 0.5, 0.3, 0, 0, 0));
+    },
+  });
+  // ---- the makers of the tracks: 0 a gummy squirrel (Psychropotes), its tall tail held up into the current; 1 Benthodytes,
+  // flat and broad, fringed; 2 Peniagone, small and see-through, a sail at its head ----
+  K.def('dp_maker', {
+    size: 'small', d0: 12, d1: 45, shadow: false, twoSided: true, sway: [0.012, 1.6, 0.4, 0.003], mat: [0.8, 0.12, 0, 0.6], glow: [0.5, 0.4, 0.3],
+    pal: [[[0.96, 0.78, 0.32], [1.0, 0.92, 0.62]], [[0.58, 0.22, 0.46], [0.86, 0.52, 0.72]], [[0.94, 0.58, 0.62], [1.0, 0.80, 0.82]], [[0.52, 0.12, 0.20], [0.82, 0.38, 0.42]]],
+    build(mb, rnd, lod, v) {
+      const sides = lod ? 6 : 12, segs = lod ? 5 : 12;
+      const L = [0.4, 0.3, 0.24][v], Wd = [0.065, 0.075, 0.05][v], Hh = [0.055, 0.022, 0.045][v];
+      // the body: a soft sausage, flat beneath; ring angle 0 faces up
+      const pts = []; for (let k = 0; k <= segs; k++) { const t = k / segs; pts.push({ x: (t - 0.5) * L, y: Hh * 0.46, z: 0, r: Wd * Math.pow(sin(PI * (0.06 + 0.88 * t)), 0.6) }); }
+      // an ellipse in section, its back domed (height Hh), its sole flat
+      mb.tube(pts, sides, (t) => AT(0.92, 0.25 * t, 0.85, 0.1, 0.8, 0.25, 0, 28), { rmod: (t, a) => { const c = cos(a), s = sin(a), e = c > 0 ? Hh / Wd : 0.46 * Hh / Wd; return 1 / sqrt((c * c) / (e * e) + s * s); }, capTip: true });
+      if (v === 0) {
+        // the tail: a broad paddle rising off the back
+        const P = []; for (let k = 0; k <= 6; k++) { const q = k / 6; P.push({ x: -L * 0.4 - 0.07 * q * q, y: Hh * 0.9 + q * 0.32, z: 0 }); }
+        mb.ribbon(P, P.map(() => [0, 0, 1]), (q) => 0.04 * Math.pow(sin(PI * (0.15 + 0.8 * q)), 0.7) + 0.006, (q) => AT(0.95, 0.5 + 0.5 * q, 0.9, 0.4 + 0.6 * q, 0.85, 0.4, 0, 28));
+      } else if (v === 2) {
+        // the sail: a broad see-through flap raised at the head
+        const P = []; for (let k = 0; k <= 5; k++) { const q = k / 5; P.push({ x: L * 0.34 + 0.03 * q, y: Hh * 0.9 + q * 0.11, z: 0 }); }
+        mb.ribbon(P, P.map(() => [0, 0, 1]), (q) => 0.045 * Math.pow(sin(PI * (0.2 + 0.75 * q)), 0.6), (q) => AT(0.95, 0.6 + 0.4 * q, 0.9, 0.5 * q, 0.85, 0.5, 0, 28));
+      }
+      // tube feet round the sole, papillae along the back
+      if (!lod) for (let i = 0; i < 18; i++) {
+        const t = (i % 9 + 0.5) / 9, s = i < 9 ? 1 : -1, x = (t - 0.5) * L * 0.9, w = Wd * Math.pow(sin(PI * (0.06 + 0.88 * t)), 0.6) * 0.95;
+        K.spike(mb, [x, Hh * 0.3, s * w], [0, -0.2, s], Wd * (v === 1 ? 0.5 : 0.3), 0.004, AT(0.95, 0.7, 0.9, 0.2, 0.8, 0.3, 0, 28));
+      }
+    },
+  });
+
+  // ======================================================================================================
+  // BASALT PILLARS
+  // ======================================================================================================
+  // ---- a drum of a basalt column: a hexagonal prism (circumradius 1, 1.5 tall along +y), its faces a little uneven, its
+  // edges bevelled where it meets the next drum, so the joints show as grooves. Stacked, no caps are seen. 0 whole;
+  // 1 one corner broken away; 2 the column's broken top: a jagged rim and a ledge of rock round the silted top (the place's
+  // hidden core, where things grow, fills the middle) ----
+  K.def('dp_column', {
+    size: 'big', d0: 30, d1: 110, shadow: false, noThin: true, sway: [0, 1, 0, 0], mat: [0.05, 0, 0, 0.3],
+    pal: [[[0.20, 0.19, 0.185], [0.56, 0.54, 0.50]], [[0.18, 0.18, 0.185], [0.52, 0.51, 0.48]], [[0.22, 0.21, 0.20], [0.58, 0.55, 0.50]], [[0.19, 0.185, 0.18], [0.54, 0.52, 0.49]]],
+    build(mb, rnd, lod, v) {
+      const H = 1.5, ch = 0.07, k = rnd() * 9, brk = floor(rnd() * 6), jag = [rnd() * 9, rnd() * 9];
+      for (let f = 0; f < 6; f++) {
+        const a0 = f * PI / 3, a1 = a0 + PI / 3, nx = cos(a0 + PI / 6), nz = sin(a0 + PI / 6);
+        WK.sheet(mb, lod ? 2 : 6, lod ? 3 : 8, (u, w) => {
+          let x = cos(a0) + (cos(a1) - cos(a0)) * u, z = sin(a0) + (sin(a1) - sin(a0)) * u;
+          const top = v === 2 ? H + 0.14 * abs(sin(u * 5 + f * 2.3 + jag[0])) + 0.08 * sin(u * 13 + jag[1]) : H - ch;
+          const y = (v === 2 ? ch : ch) + (top - ch) * w;
+          // a slight bulge across the face and fine rills down it
+          let b = 0.035 * sin(PI * u) * sin(PI * min(1, w * 1.1)) + 0.01 * sin(u * 23 + f * 3 + k) * (lod ? 0 : 1);
+          // 1: a corner broken away, a scoop out of the edge
+          if (v === 1 && (f === brk || f === (brk + 1) % 6)) { const e = f === brk ? u : 1 - u, q = sm(0.55, 1, e) * sm(0.35, 0.8, w); b -= 0.22 * q; }
+          x += nx * b; z += nz * b;
+          return [x, y, z];
+        }, (x, y, z, nx2, ny2) => AT(0.88 + 0.12 * sin(x * 7 + z * 5 + k), 0.12 * max(0, ny2), 0.75, 0, 0, 0, 0, 0), { flip: true });
+        // the bevels where it meets the drums above and below
+        for (const [y0, y1, r0, r1] of v === 2 ? [[0, ch, 1 - ch, 1]] : [[0, ch, 1 - ch, 1], [H - ch, H, 1, 1 - ch]]) {
+          WK.sheet(mb, lod ? 2 : 4, 1, (u, w) => { const a = a0 + (a1 - a0) * u, cr = 1 / cos(a - a0 - PI / 6) * cos(PI / 6), r = (r0 + (r1 - r0) * w) * cr; return [cos(a) * r, y0 + (y1 - y0) * w, sin(a) * r]; },
+            () => AT(0.7, 0.2, 0.55, 0, 0, 0, 0, 0), { flip: true });
+        }
+      }
+      if (v === 2) {
+        // a ledge of rock round the top, inside the rim, its surface silted
+        for (let f = 0; f < 6; f++) {
+          const a0 = f * PI / 3, a1 = a0 + PI / 3;
+          WK.sheet(mb, lod ? 2 : 4, 1, (u, w) => { const a = a0 + (a1 - a0) * u, cr = 1 / cos(a - a0 - PI / 6) * cos(PI / 6), r = (0.8 + 0.2 * w) * cr; return [cos(a) * r, H + 0.01, sin(a) * r]; },
+            () => AT(0.9, 0.85, 0.8, 0, 0, 0, 0, 0));
+        }
+      }
+    },
+  });
+  // ---- Relicanthus: a giant anemone of hard ground, pale pink, its long tentacles arching out a metre over the rock ----
+  K.def('dp_relicanthus', {
+    size: 'medium', d0: 14, d1: 60, shadow: false, sway: [0.07, 1.4, 0.35, 0.006], mat: [0.65, 0.08, 0, 0.55], glow: [0.9, 0.6, 0.7],
+    pal: [[[0.96, 0.72, 0.76], [1.0, 0.90, 0.92]], [[0.98, 0.80, 0.70], [1.0, 0.94, 0.88]], [[0.95, 0.90, 0.88], [1.0, 0.98, 0.96]], [[0.90, 0.56, 0.64], [0.98, 0.82, 0.86]]],
+    build(mb, rnd, lod) {
+      const R0 = rr(rnd, 0.1, 0.14), H0 = rr(rnd, 0.1, 0.16), sides = lod ? 8 : 16;
+      mb.lathe([[R0 * 1.3, -0.03], [R0 * 1.05, H0 * 0.3], [R0 * 0.95, H0 * 0.8], [R0 * 1.15, H0]], sides, (t) => AT(0.9, 0.2 + 0.3 * t, 0.7 + 0.3 * t, 0, 0.5, 0, 0, 0));
+      mb.lathe([[R0 * 1.15, H0], [R0 * 0.6, H0 + 0.01], [0.001, H0 - 0.01]], sides, () => AT(0.8, 0.6, 0.6, 0, 0.5, 0, 0, 0));
+      const n = lod ? 22 : 64, segs = lod ? 3 : 6;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * TAU + rnd() * 0.1, L = rr(rnd, 0.55, 1.05), ring = i % 2 ? 0.92 : 0.7;
+        let x = cos(a) * R0 * ring, y = H0, z = sin(a) * R0 * ring, el = rr(rnd, 0.9, 1.3);
+        const pts = [];
+        for (let k = 0; k <= segs; k++) {
+          pts.push({ x, y, z, r: 0.0075 * (1 - 0.7 * k / segs) });
+          el -= rr(rnd, 0.3, 0.42) * 6 / segs; const st = L / segs;
+          x += cos(a) * cos(el) * st; y += sin(el) * st; z += sin(a) * cos(el) * st;
+        }
+        mb.tube(pts, 3, (t) => AT(0.95, 0.3 + 0.7 * t, 0.75 + 0.25 * t, 0.15 + 0.85 * t, 0.65, 0.3 * t, t, 36), { capTip: true });
+      }
+    },
+  });
+  // ---- brisingid sea stars: a small disc on a high point, ten to fourteen long arms raised into the current, each
+  // fringed with fine spines that catch what drifts by ----
+  K.def('dp_brisingid', {
+    size: 'small', d0: 12, d1: 46, shadow: false, twoSided: true, alpha: true, sway: [0.03, 1.5, 0.5, 0.006], mat: [0.4, 0, 0, 0.45],
+    pal: [[[0.96, 0.36, 0.18], [1.0, 0.62, 0.40]], [[0.98, 0.52, 0.30], [1.0, 0.76, 0.56]], [[0.88, 0.22, 0.24], [0.98, 0.52, 0.48]], [[0.98, 0.62, 0.58], [1.0, 0.84, 0.80]]],
+    build(mb, rnd, lod, v) {
+      const n = [12, 9, 14][v], Rd = 0.024, segs = lod ? 3 : 7;
+      mb.blob(0, 0.02, 0, Rd, Rd * 0.45, Rd, lod ? 0 : 1, (x, y, z) => 1 + 0.15 * sin(x * 30 + z * 20), () => AT(0.9, 0.2, 0.8, 0, 0.3, 0, 0, 2));
+      for (let i = 0; i < n; i++) {
+        const a = i / n * TAU + rnd() * 0.15, L = rr(rnd, 0.24, 0.36), P = [];
+        let x = cos(a) * Rd * 0.8, y = 0.025, z = sin(a) * Rd * 0.8, el = rr(rnd, 1.05, 1.3);
+        for (let k = 0; k <= segs; k++) {
+          P.push([x, y, z]);
+          el -= rr(rnd, 0.06, 0.14) * 7 / segs; const st = L / segs;
+          x += cos(a) * cos(el) * st; y += sin(el) * st; z += sin(a) * cos(el) * st;
+        }
+        mb.tube(P.map((p, k) => P3(p, 0.0045 * (1 - 0.65 * k / segs))), 3, (t) => AT(0.95, 0.3 * t, 0.8 + 0.2 * t, 0.2 + 0.8 * t, 0.4, 0, 0, 0));
+        if (!lod) fringe(mb, P.slice(2), (u) => 0.012 * (1 - 0.5 * u), 40, (u) => AT(0.95, 0.5 + 0.5 * u, 0.85, 0.4 + 0.6 * u, 0.5, 0, 0, 0), 0.5, [cos(a), 0.3, sin(a)]);
+      }
+    },
+  });
+
+  // ======================================================================================================
+  // THE SEA-LILY MEADOW
+  // ======================================================================================================
+  // ---- the stalked sea lily (64-species-deep.js), turned so its crown leans along +x: planted with `fan`, downstream ----
+  {
+    const lily = Flora.defs.sealily;
+    Flora.def('dp_lily', Object.assign({}, lily, {
+      build(mb, rnd, lod, v) { const t = new MB(); lily.build(t, rnd, lod, v); WK.put(mb, t, WK.RY(PI / 2), [0, 0, 0]); },
+    }));
+  }
+  // ---- Bathycrinus: a crinoid on a stalk as long as an arm and thin as a straw, its small crown of ten feathery arms
+  // bent downstream into a cup ----
+  K.def('dp_bathycrinus', {
+    size: 'medium', d0: 14, d1: 55, shadow: false, twoSided: true, alpha: true, sway: [0.05, 1.7, 0.35, 0.006], mat: [0.45, 0, 0, 0.45],
+    pal: [[[0.92, 0.88, 0.80], [1.0, 0.97, 0.92]], [[0.94, 0.80, 0.70], [1.0, 0.92, 0.84]], [[0.90, 0.86, 0.86], [0.98, 0.96, 0.98]], [[0.86, 0.70, 0.56], [0.96, 0.86, 0.74]]],
+    build(mb, rnd, lod) {
+      const H = rr(rnd, 0.6, 1.0), bow = rr(rnd, 0.06, 0.14), segs = lod ? 4 : 12;
+      const C = (u) => [bow * u * u, u * H - 0.02, 0.015 * sin(u * 4)];
+      const pts = []; for (let k = 0; k <= segs; k++) pts.push(P3(C(k / segs), 0.0036 * (1 - 0.3 * k / segs)));
+      mb.tube(pts, 3, (t) => AT(0.9, 0.3 + 0.5 * t, 0.8, 0.5 * t, 0.3, 0, 1 / 255, 25));
+      mb.blob(0, 0.005, 0, 0.012, 0.006, 0.012, 0, null, () => AT(0.7, 0.2, 0.6, 0, 0.2, 0, 0, 0));
+      const top = C(1);
+      mb.blob(top[0], top[1] + 0.006, top[2], 0.008, 0.01, 0.008, lod ? 0 : 1, null, () => AT(0.9, 0.5, 0.8, 0.5, 0.3, 0, 0, 0));
+      const na = lod ? 5 : 10, as = lod ? 2 : 5;
+      for (let j = 0; j < na; j++) {
+        const az = j / na * TAU + rnd() * 0.2, L = rr(rnd, 0.07, 0.11), P = [];
+        let x = top[0], y = top[1] + 0.01, z = top[2], el = rr(rnd, 1.0, 1.25);
+        for (let k = 0; k <= as; k++) { P.push([x, y, z]); el -= 0.5; const st = L / as; x += cos(az) * cos(el) * st + 0.45 * st; y += sin(el) * st; z += sin(az) * cos(el) * st; }
+        fringe(mb, P, (u) => 0.008 * (1 - 0.5 * u), 40, (u) => AT(0.95, 0.4 + 0.6 * u, 0.8 + 0.2 * u, 0.4 + 0.6 * u, 0.5, 0, 0, 0), 0.6, [0, 1, 0]);
+      }
+    },
+  });
+
+  // ======================================================================================================
+  // THE GIANT SIPHONOPHORE (Apolemia): one colony some sixty metres long, coiled in a flat spiral a metre and a half
+  // over the mud, its tentacles let down all round to fish. Built in three pieces by sector so each piece is compact;
+  // a piece is centred on its own middle (APO, the same numbers as in 16-places-deep.js)
+  // ======================================================================================================
+  const APO = [[1.62, 3.24], [-4.01, 0.31], [1.94, -2.92]];
+  const SPIRAL = (() => {
+    const turns = 2.6, tmax = turns * TAU, r0 = 1.1, r1 = 6.4, pts = [];
+    const R = (t) => r0 + (r1 - r0) * Math.pow(t / tmax, 0.9), Y = (t) => 1.35 + 0.18 * sin(t * 0.9) + 0.3 * (1 - t / tmax);
+    // samples every 7 cm along the colony, from its tail (inside) to its swimming bells (outside)
+    let t = 0;
+    while (t < tmax) { const r = R(t); pts.push([cos(t) * r, Y(t), sin(t) * r, t]); t += 0.07 / r; }
+    return { pts, tmax };
+  })();
+  K.def('dp_apolemia', {
+    size: 'big', d0: 30, d1: 110, shadow: false, noThin: true, sway: [0.03, 1.5, 0.3, 0.004], mat: [0.65, 1.7, 0, 0.6], glow: [0.38, 0.78, 1.0],
+    pal: P4([0.98, 0.70, 0.56], [1.0, 0.95, 0.90]),
+    build(mb, rnd, lod, v) {
+      const sec = (q) => floor((((q[3] % TAU) + TAU) % TAU) / TAU * 3) % 3, cx = APO[v][0], cz = APO[v][1];
+      const S = SPIRAL.pts, n = S.length, step = lod ? 2 : 1;
+      // runs of the stem inside this sector (each run includes the sample beyond its end, so the pieces meet)
+      let run = [];
+      const flush = () => { if (run.length > 1) mb.tube(run, lod ? 3 : 4, () => AT(0.95, 0.4, 0.9, 0.3, 0.6, 0.35, 0, 0)); run = []; };
+      for (let i = 0; i < n; i += step) {
+        const q = S[i], inS = sec(q) === v;
+        if (inS || (run.length && sec(q) !== v)) run.push({ x: q[0] - cx, y: q[1], z: q[2] - cz, r: 0.011 });
+        if (!inS) flush();
+      }
+      flush();
+      for (let i = 0; i < n; i++) {
+        const q = S[i]; if (sec(q) !== v) continue;
+        const x = q[0] - cx, y = q[1], z = q[2] - cz, out = K.nrm([q[0], 0, q[2]]), t = q[3] / SPIRAL.tmax;
+        // the cormidia: little glowing bracts and bells close along the stem
+        if (i % (lod ? 2 : 1) === 0) K.octa(mb, [x + out[0] * 0.012, y + 0.01, z + out[2] * 0.012], 0.024, 0.02, 0.024, [0.95, 0.8, 1, 0.4], [0.6, 1, 0, 0], null);
+        // here and there one lets down a tentacle toward the mud, out and down, some longer, drifting with the current
+        const tr = rnd(), tl = rnd(), tc = rnd(), td = rnd();
+        if (tr < (lod ? 0.1 : 0.26)) {
+          const L = 0.35 + 1.0 * tl * tl, segs = lod ? 2 : 5, P = [], side = K.nrm([-out[2], 0, out[0]]), sw = (td - 0.5) * 0.5;
+          let px = x, py = y, pz = z, el = -0.25 - 0.3 * tc;
+          for (let k = 0; k <= segs; k++) { P.push(P3([px, py, pz], 0.0032 * (1 - 0.6 * k / segs))); el -= (0.2 + 0.25 * tc) * 4 / segs; const st = L / segs; px += (out[0] * cos(el) + side[0] * sw) * st; py += sin(el) * st; pz += (out[2] * cos(el) + side[2] * sw) * st; }
+          mb.tube(P, 3, (tt) => AT(0.95, 1, 1, 0.4 + 0.6 * tt, 0.6, 0.25 + 0.5 * tt, 0, 0));
+        }
+        // the swimming bells at the colony's head, the outer end of the spiral
+        if (t > 0.985 && i % 3 === 0) {
+          const T = K.nrm([S[min(n - 1, i + 1)][0] - q[0], 0, S[min(n - 1, i + 1)][2] - q[2]]);
+          for (const s of [-1, 1]) { const bx = x + out[0] * 0.05 * s, bz = z + out[2] * 0.05 * s; const b = new MB(); b.lathe([[0.001, 0], [0.04, 0.012], [0.05, 0.05], [0.035, 0.075], [0.001, 0.08]], lod ? 6 : 10, (tt) => AT(0.95, 1, 1, 0.2, 0.85, 0.5, 0, 28)); K.put(mb, b, K.frame(T, s), [bx, y, bz], 1); }
+        }
+      }
+    },
+  });
+
+  // ======================================================================================================
+  // THE WALL GARDENS
+  // ======================================================================================================
+  // ---- gold corals: 0, 1 a fan of fine golden branches in one plane (Kulamanamana), polyps along them; 2 a spiral coral
+  // (Iridogorgia): one stem climbing in a corkscrew, its branchlets all held out from the spiral ----
+  K.def('dp_goldcoral', {
+    size: 'big', d0: 22, d1: 95, sway: [0.012, 2, 0.3, 0.002], mat: [0.3, 0, 0, 0.55],
+    pal: [[[0.92, 0.70, 0.22], [1.0, 0.88, 0.52]], [[0.86, 0.58, 0.20], [0.98, 0.80, 0.44]], [[0.96, 0.82, 0.42], [1.0, 0.94, 0.70]], [[0.78, 0.50, 0.24], [0.94, 0.74, 0.46]]],
+    build(mb, rnd, lod, v) {
+      const sides = lod ? 3 : 5;
+      if (v < 2) {
+        // branches fork in the colony's plane (x, y), a little out of it
+        const depth = lod ? 3 : 5;
+        const grow = (p, d, r, len, gen) => {
+          const segs = lod ? 1 : 2, pts = [P3(p, r)];
+          let q = p, dd = d;
+          for (let k = 1; k <= segs; k++) { dd = K.nrm([dd[0] + (rnd() - 0.5) * 0.3, dd[1] + 0.05, (rnd() - 0.5) * 0.08]); q = K.add3(q, dd, len / segs); pts.push(P3(q, r * (1 - 0.25 * k / segs))); }
+          mb.tube(pts, sides, (t) => AT(0.92, 0.3 + 0.15 * gen, 0.6 + 0.08 * gen, (gen + t) / (depth + 1), 0.3, 0, 0, 2));
+          if (gen >= depth) return;
+          const n = gen < 2 ? 2 : 2 + (rnd() < 0.3 ? 1 : 0);
+          for (let i = 0; i < n; i++) {
+            const th = (i - (n - 1) / 2) * rr(rnd, 0.55, 0.85) * (v ? 1.2 : 1), c = cos(th), s = sin(th);
+            grow(q, K.nrm([dd[0] * c - dd[1] * s, dd[0] * s + dd[1] * c + 0.1, dd[2]]), r * 0.72, len * rr(rnd, 0.72, 0.88), gen + 1);
+          }
+        };
+        grow([0, -0.04, 0], [rr(rnd, -0.1, 0.1), 1, 0], 0.03, rr(rnd, 0.3, 0.42) * (v ? 0.85 : 1), 0);
+      } else {
+        const H = rr(rnd, 1.1, 1.6), R0 = rr(rnd, 0.09, 0.13), turns = rr(rnd, 3.5, 4.5), segs = lod ? 24 : 90, P = [];
+        for (let k = 0; k <= segs; k++) { const t = k / segs, a = t * turns * TAU; P.push([cos(a) * R0 * sm(0, 0.12, t), t * H - 0.03, sin(a) * R0 * sm(0, 0.12, t)]); }
+        mb.tube(P.map((p, k) => P3(p, 0.007 * (1 - 0.5 * k / segs))), sides, (t) => AT(0.95, 0.4 + 0.6 * t, 0.85, 0.6 * t, 0.3, 0, 0, 0));
+        // the branchlets: a comb along the outside of the spiral, held out level
+        for (let k = 6; k <= segs; k += lod ? 3 : 1) {
+          const t = k / segs, a = t * turns * TAU, o = [P[k][0], P[k][1], P[k][2]], out = [cos(a), 0.15, sin(a)], L = rr(rnd, 0.12, 0.2) * (0.6 + 0.4 * sm(0.1, 0.4, t));
+          mb.tube([P3(o, 0.0028), P3(K.add3(o, K.nrm(out), L), 0.0012)], 3, () => AT(1, 0.7 + 0.3 * t, 0.9, 0.5 + 0.5 * t, 0.4, 0, 0, 0));
+        }
+      }
+    },
+  });
+  // ---- glass sponges hanging from the roof of an overhang (grown along the normal, so planted on a ceiling they hang):
+  // lattice tubes of different lengths, flaring at their ends like chandeliers ----
+  K.def('dp_hangsponge', {
+    size: 'medium', d0: 16, d1: 70, twoSided: true, alpha: true, shadow: false, sway: [0.006, 1.6, 0.3, 0], mat: [0.5, 0.45, 0, 0.45], glow: [0.4, 0.66, 1.0],
+    pal: [[[0.88, 0.88, 0.84], [0.98, 0.98, 0.95]], [[0.90, 0.86, 0.90], [0.98, 0.96, 1.0]], [[0.92, 0.88, 0.76], [0.99, 0.96, 0.88]], [[0.86, 0.90, 0.92], [0.96, 0.99, 1.0]]],
+    build(mb, rnd, lod) {
+      const n = 3 + floor(rnd() * 3);
+      for (let i = 0; i < n; i++) {
+        const a = i / n * TAU + rnd() * 0.6, d = i ? rr(rnd, 0.06, 0.16) : 0, H = rr(rnd, 0.3, 0.85), r = rr(rnd, 0.035, 0.06), lean = rr(rnd, -0.15, 0.15);
+        const rings = lod ? 3 : 8, pts = [];
+        for (let k = 0; k <= rings; k++) { const u = k / rings; pts.push({ x: cos(a) * (d + lean * u * H), y: u * H - 0.03, z: sin(a) * (d + lean * u * H), r: r * (0.7 + 0.3 * u + 0.9 * Math.pow(u, 6)) }); }
+        mb.tube(pts, lod ? 8 : 16, (t) => AT(0.95, 0.35 + 0.65 * t, 0.7 + 0.3 * t, 0.3 * t, 0.6, 0.1 + 0.3 * t, Math.round(H / 0.02) / 255, 23));
+      }
+    },
+  });
+
+  // ======================================================================================================
+  // THE MUD VOLCANO
+  // ======================================================================================================
+  // ---- the crater's mud: a heavy grey surface, a 6 m tile, swelling here and there where gas is about to break through ----
+  K.def('dp_mudpool', {
+    size: 'big', d0: 30, d1: 100, shadow: false, sway: [0, 1, 0, 0], mat: [0, 0.05, 0, 1.1], glow: [0.3, 0.3, 0.3],
+    pal: P4([0.34, 0.33, 0.31], [0.50, 0.49, 0.46]),
+    build(mb, rnd, lod, v) {
+      const n = lod ? 4 : 18, dome = [[rr(rnd, -1.5, 1.5), rr(rnd, -1.5, 1.5), rr(rnd, 0.5, 0.9)], [rr(rnd, -1.8, 1.8), rr(rnd, -1.8, 1.8), rr(rnd, 0.3, 0.6)]];
+      mb.grid(n, n, (u, w) => {
+        const x = (u - 0.5) * 6.02, z = (w - 0.5) * 6.02, edge = sm(0, 0.12, min(u, w, 1 - u, 1 - w));
+        let h = 0, a = 0; for (const q of dome) { const e = Math.exp(-((x - q[0]) ** 2 + (z - q[1]) ** 2) / (q[2] * q[2])); h += 0.14 * e; a = max(a, e); }
+        return { p: [x, h * edge, z], n: [0, 1, 0], c: [0.9, a * 0.8, 1, 0], e: [0, 0.2 * a, 0, 0] };
+      });
+    },
+  });
+  // ---- gas hydrate: lumps of methane ice, white, some stained orange with oil, ice worms living in burrows in it ----
+  K.def('dp_hydrate', {
+    size: 'medium', d0: 14, d1: 60, shadow: false, sway: [0, 1, 0, 0], mat: [0.55, 0.1, 0, 0.8], glow: [0.6, 0.65, 0.7],
+    pal: [[[0.93, 0.92, 0.88], [0.88, 0.52, 0.20]], [[0.95, 0.94, 0.90], [0.80, 0.44, 0.18]], [[0.90, 0.90, 0.86], [0.92, 0.62, 0.30]], [[0.94, 0.93, 0.90], [0.72, 0.38, 0.16]]],
+    build(mb, rnd, lod) {
+      const n = 3 + floor(rnd() * 3), k = rnd() * 9;
+      for (let i = 0; i < n; i++) {
+        const a = rnd() * TAU, d = i ? rr(rnd, 0.1, 0.3) : 0, R = rr(rnd, 0.1, 0.2) * (i ? 1 : 1.4);
+        mb.blob(cos(a) * d, R * 0.45, sin(a) * d, R, R * 0.75, R, lod ? 1 : 2, (x, y, z) => 1 + 0.18 * sin(x * 9 + k) * sin(z * 8 - k) + 0.1 * sin(y * 13 + x * 5),
+          (q, P) => AT(0.95, max(0, sin(P[0] * 11 + k) * sin(P[2] * 9 + k * 2)) * 0.9 * (q[1] < 0.3 ? 1 : 0.4), 0.7 + 0.3 * max(0, q[1]), 0, 0.5, 0.15, 0, 2));
+      }
+      // the ice worms, pink, half out of their burrows
+      if (!lod) for (let i = 0; i < 14; i++) { const a = rnd() * TAU, d = rnd() * 0.25, y = rr(rnd, 0.05, 0.2); K.spike(mb, [cos(a) * d, y, sin(a) * d], [cos(a), 0.6, sin(a)], rr(rnd, 0.02, 0.035), 0.004, AT(0.95, 0, 0.9, 0.3, 0.5, 0, 0, 0)); }
+    },
+  });
+
+  // ======================================================================================================
+  // THE OCTOPUS GARDEN
+  // ======================================================================================================
+  // an octopus: a mantle (Mr, its axis tilted by `tilt` from up, its middle at height my), a head under it with two eyes,
+  // and eight arms along the paths arm(i) gives; on the arms' inner faces their white suckers (accent), in a row of dots.
+  // Kept to a few hundred triangles: a garden holds hundreds of them.
+  function octopus(mb, rnd, lod, o) {
+    const Mr = o.Mr, skin = (t) => AT(0.9, 0.06 * t, 0.7 + 0.3 * t, 0.15 + 0.6 * t, 0.45, 0.04, 0, 2);
+    const t = new MB();
+    t.blob(0, 0, 0, Mr, Mr * 1.2, Mr * 0.92, lod ? 0 : 1, (x, y) => 1 + 0.07 * sin(y * 6) - 0.1 * max(0, -y), () => skin(0));
+    K.put(mb, t, K.frame(o.axis), [o.mx, o.my, o.mz || 0], 1);
+    const hy = o.hy;
+    if (!lod) for (const s of [-1, 1]) K.octa(mb, [o.ex, hy + Mr * 0.25, s * Mr * 0.62], Mr * 0.2, Mr * 0.2, Mr * 0.2, [0.25, 0.1, 0.5, 0], [0.2, 0, 0, 0], null);
+    const segs = lod ? 3 : 5;
+    for (let i = 0; i < 8; i++) {
+      const P = o.arm(i), n = P.length - 1;
+      mb.tube(P.map((p, k) => P3(p, Mr * 0.24 * (1 - 0.8 * k / n) + 0.003)), lod ? 3 : 5, (t2) => skin(0.3 + 0.7 * t2), { capTip: true });
+      // the suckers: on the face of the arm toward the curl
+      if (!lod && o.suckers) for (let k = 1; k < n; k++) {
+        const a = P[k - 1], b = P[k], c = P[k + 1], cur = K.nrm([a[0] + c[0] - 2 * b[0], a[1] + c[1] - 2 * b[1], a[2] + c[2] - 2 * b[2]]), rr0 = Mr * 0.24 * (1 - 0.8 * k / n);
+        K.octa(mb, K.add3(b, cur, rr0 * 0.9), rr0 * 0.55, rr0 * 0.55, rr0 * 0.55, [1, 1, 0.95, 0.5], [0.5, 0.1, 0, 0], null);
+      }
+    }
+    if (o.eggs) for (let i = 0; i < (lod ? 0 : 12); i++) {
+      const a = rnd() * TAU, d = Math.sqrt(rnd()) * o.eggs[2];
+      K.octa(mb, [o.eggs[0] + cos(a) * d, o.eggs[1] + rr(rnd, -0.015, 0.015), sin(a) * d], 0.009, 0.014, 0.009, [1, 1, 0.9, 0], [0.6, 0.15, 0, 0], null);
+    }
+  }
+  // ---- Muusoctopus, brooding: 0 turned over on the rock, mantle down, its arms curled up and back like petals to show their
+  // white suckers; 1 hunched over its eggs, arms spread down over the rock like a skirt, tips curled; 2 tucked in a crack,
+  // only its mantle and the curls of a few arms showing ----
+  K.def('dp_octopus', {
+    size: 'small', d0: 10, d1: 50, shadow: false, sway: [0.004, 1.5, 0.4, 0.002], mat: [0.45, 0.08, 0, 0.5], glow: [0.6, 0.5, 0.7],
+    pal: [[[0.70, 0.56, 0.68], [0.98, 0.95, 0.92]], [[0.64, 0.52, 0.66], [0.96, 0.94, 0.92]], [[0.76, 0.62, 0.70], [1.0, 0.97, 0.94]], [[0.60, 0.48, 0.60], [0.95, 0.93, 0.90]]],
+    build(mb, rnd, lod, v) {
+      const Mr = rr(rnd, 0.07, 0.085), ph = rnd() * TAU, segs = lod ? 3 : 6;
+      if (v === 0) {
+        // turned over on the rock: the arms raised round it like the petals of a tulip, curling in at their tips
+        const arm = (i) => { const a = i / 8 * TAU + ph, P = [], L = rr(rnd, 0.1, 0.13); let r = Mr * 0.75, y = Mr * 0.9, el = 1.35; for (let k = 0; k <= segs; k++) { P.push([cos(a) * r, y, sin(a) * r]); el += 1.5 / segs; r += cos(el) * L / segs * 0.8; y += sin(el) * L / segs; } return P; };
+        octopus(mb, rnd, lod, { Mr, axis: [0.25, -1, 0.1], mx: 0.03, my: Mr * 0.75, hy: Mr * 1.0, ex: -Mr * 0.4, arm, suckers: true, eggs: [0, Mr * 1.4, Mr * 0.45] });
+      } else if (v === 1) {
+        // hunched over the clutch, the arms tucked down round it like a skirt, tips rolled under
+        const arm = (i) => { const a = i / 8 * TAU + ph, P = [], L = rr(rnd, 0.075, 0.1); for (let k = 0; k <= segs; k++) { const t = k / segs, curl = sm(0.55, 1, t), r = Mr * 0.7 + L * (sin(t * 1.9) - 0.6 * curl), y = max(0.012, Mr * 1.0 - t * Mr * 1.1) + 0.04 * curl; P.push([cos(a + 0.5 * curl) * r, y, sin(a + 0.5 * curl) * r]); } return P; };
+        octopus(mb, rnd, lod, { Mr, axis: [-0.5, 1, 0.1], mx: -0.02, my: Mr * 1.9, hy: Mr * 1.0, ex: Mr * 0.45, arm, suckers: true, eggs: [0.02, 0.025, Mr * 0.8] });
+      } else {
+        const arm = (i) => { const a = i / 8 * TAU + ph, P = []; for (let k = 0; k <= segs; k++) { const t = k / segs, r = Mr * 0.55 + sin(t * 2.8) * 0.07, y = Mr * 0.5 - t * 0.04 + sin(t * 3.4) * 0.03; P.push([cos(a + t * 0.9) * r, y, sin(a + t * 0.9) * r]); } return P; };
+        octopus(mb, rnd, lod, { Mr, axis: [-0.2, 1, 0], mx: 0, my: Mr * 1.0, hy: Mr * 0.5, ex: Mr * 0.5, arm, suckers: true, eggs: null });
+      }
+    },
+  });
+  // ---- the ghost octopus (Casper): small, pale, see-through, sitting up on its splayed arms on the mud, big dark eyes ----
+  K.def('dp_casper', {
+    size: 'small', d0: 12, d1: 45, shadow: false, sway: [0.006, 1.5, 0.4, 0.004], mat: [0.8, 0.25, 0, 0.7], glow: [0.7, 0.75, 0.8],
+    pal: P4([0.95, 0.94, 0.92], [1.0, 1.0, 1.0]),
+    build(mb, rnd, lod) {
+      const Mr = 0.045, ph = rnd() * TAU, segs = lod ? 3 : 6;
+      const arm = (i) => { const a = i / 8 * TAU + ph, P = []; for (let k = 0; k <= segs; k++) { const t = k / segs, r = Mr * 0.4 + t * 0.09; P.push([cos(a) * r, max(0.006, 0.07 - t * 0.08), sin(a) * r]); } return P; };
+      octopus(mb, rnd, lod, { Mr, axis: [0.05, 1, 0], mx: 0, my: 0.12, hy: 0.075, ex: Mr * 0.5, arm, suckers: false, eggs: null });
+      // its skin is see-through: give the vertices of the body the jelly kind
+      for (let k = 0; k < mb.count; k++) if (mb.e[k * 4 + 3] === 2) { mb.e[k * 4 + 3] = 28; mb.e[k * 4] = 0.8; }
+    },
+  });
+
+  // ======================================================================================================
+  // THE LAVA FLOW
+  // ======================================================================================================
+  // ---- a fresh pillow: a rind of black glass, split where it swelled, the lava glowing in the cracks. The cracks wander over
+  // the surface as thin glowing ribbons, with a faint heat in the glass beside them. 0 a pillow already dark, a crack or two
+  // still red; 1 a long lobe glowing in rings and along its back where it grew; 2 one breaking open, a bud of new lava
+  // swelling out of the split ----
+  K.def('dp_lavalobe', {
+    size: 'medium', d0: 18, d1: 80, shadow: false, noThin: true, sway: [0, 1, 0, 0], mat: [0.1, 3.2, 0, 0.7], glow: [1.0, 0.36, 0.07],
+    pal: [[[0.10, 0.10, 0.11], [1.0, 0.56, 0.18]], [[0.12, 0.11, 0.11], [1.0, 0.48, 0.12]], [[0.09, 0.09, 0.10], [1.0, 0.62, 0.22]], [[0.11, 0.10, 0.10], [0.98, 0.44, 0.10]]],
+    build(mb, rnd, lod, v) {
+      const ax = [0.55, 0.95, 0.55][v], ay = [0.4, 0.36, 0.44][v], az = [0.48, 0.42, 0.5][v], k = rnd() * 9, cy = ay * 0.68;
+      const lump = (x, y, z) => 1 + 0.12 * sin(x * 3.1 + k) * sin(z * 2.7 - k) + 0.08 * sin(y * 4.3 + x * 2 + k) + 0.04 * sin(x * 9 + z * 7 - k) - 0.15 * max(0, -y);
+      const S = (V) => { const q = lump(V[0], V[1], V[2]); return [V[0] * ax * q, V[1] * ay * q + cy, V[2] * az * q]; };
+      const Nm = (V) => K.nrm([V[0] / ax, V[1] / ay, V[2] / az]);
+      // the cracks, as paths of directions on the unit sphere
+      const cracks = [];
+      const walk = (V, T, steps, st, wid, gl) => {
+        const P = [];
+        for (let i = 0; i <= steps; i++) {
+          P.push(V);
+          const side = K.nrm(K.cross(V, T)), w = (rnd() - 0.5) * 0.9;
+          T = K.nrm([T[0] + side[0] * w, T[1] + side[1] * w, T[2] + side[2] * w]);
+          V = K.nrm([V[0] + T[0] * st, V[1] + T[1] * st, V[2] + T[2] * st]);
+          const d = V[0] * T[0] + V[1] * T[1] + V[2] * T[2]; T = K.nrm([T[0] - V[0] * d, T[1] - V[1] * d, T[2] - V[2] * d]);
+        }
+        cracks.push({ P, wid, gl });
+      };
+      const dir = (a, e) => [cos(a) * cos(e), sin(e), sin(a) * cos(e)];
+      if (v === 0) {
+        for (let i = 0; i < 2; i++) { const a = rnd() * TAU; walk(dir(a, rr(rnd, 0.1, 0.6)), dir(a + PI / 2, 0), lod ? 5 : 14, 0.09, 0.014, 0.45); }
+      } else if (v === 1) {
+        // rings round it where it grew in pulses, and a crack along its back
+        for (let r = 0; r < 4; r++) { const x = -0.6 + r * 0.4 + rr(rnd, -0.06, 0.06); walk(K.nrm([x, 0.75, 0.2]), [0, -0.2, 1], lod ? 6 : 18, 0.13, 0.024, 1); }
+        walk(K.nrm([-0.9, 0.5, 0]), [1, 0.1, 0], lod ? 6 : 18, 0.11, 0.03, 1);
+      } else {
+        for (let i = 0; i < 3; i++) { const a = rnd() * TAU; walk(dir(a, 1.2), dir(a, -0.3), lod ? 4 : 10, 0.1, 0.03 - 0.006 * i, 1); }
+        for (let i = 0; i < 2; i++) { const a = rnd() * TAU; walk(dir(a, 0.3), dir(a + PI / 2, 0), lod ? 4 : 10, 0.1, 0.015, 0.8); }
+      }
+      // the body: black glass, a little heat in it beside the cracks
+      const near = (Pp) => { let m = 9; for (const c of cracks) for (const V of c.P) { const q = S(V), d = hypot(q[0] - Pp[0], q[1] - Pp[1], q[2] - Pp[2]) / (c.gl > 0.5 ? 1 : 1.6); if (d < m) m = d; } return m; };
+      const hot = v === 0 ? 0 : 0.07;
+      mb.blob(0, cy, 0, ax, ay, az, lod ? 1 : v === 0 ? 2 : 3, lump, (V, Pp) => { const h = 1 - sm(0.01, 0.07, near(Pp)); return AT(0.85 + 0.15 * h, 0.4 * h * (hot > 0 ? 1 : 0), 0.8, 0, 0.1, hot * h, 0, 2); });
+      // the cracks themselves: glowing ribbons lying just proud of the glass, tapering at their ends
+      for (const c of cracks) {
+        const n = c.P.length - 1, pts = [], sv = [];
+        for (let i = 0; i <= n; i++) {
+          const V = c.P[i], q = S(V), N = Nm(V), T = i < n ? c.P[i + 1].map((x, j) => x - V[j]) : V.map((x, j) => x - c.P[i - 1][j]);
+          pts.push({ x: q[0] + N[0] * 0.006, y: q[1] + N[1] * 0.006, z: q[2] + N[2] * 0.006 }); sv.push(K.nrm(K.cross(T, N)));   // so the ribbon faces out
+        }
+        mb.ribbon(pts, sv, (t) => c.wid * Math.pow(sin(PI * (0.04 + 0.92 * t)), 0.6), (t) => AT(1, 1, 1, 0, 0.3, c.gl * (0.75 + 0.25 * sin(t * 9 + k)), 0, 0));
+      }
+      // 2: the new bud of lava swelling out of its split
+      if (v === 2) mb.blob(0, cy + ay * 0.9, 0, ax * 0.34, ay * 0.3, az * 0.34, lod ? 1 : 2, (x, y, z) => 1 + 0.1 * sin(x * 14 + k), () => AT(1, 1, 1, 0, 0.2, 0.9, 0, 0));
+    },
+  });
+  // ---- the glow far down in the fissure: a strip of molten lava, 2.2 m along +x, brightest along its middle ----
+  K.def('dp_lavaglow', {
+    size: 'big', d0: 30, d1: 100, shadow: false, noThin: true, sway: [0, 1, 0, 0], mat: [0, 3.2, 0, 0.2], glow: [1.0, 0.34, 0.06],
+    pal: P4([0.6, 0.2, 0.05], [1.0, 0.55, 0.18]),
+    build(mb, rnd, lod) {
+      const k = rnd() * 9, nu = lod ? 3 : 10, nw = lod ? 2 : 4;
+      mb.grid(nu, nw, (u, w) => {
+        const x = (u - 0.5) * 2.25, z = (w - 0.5) * 1.4, mid = 1 - abs(w - 0.5) * 2;
+        return { p: [x, 0.12 * sin(x * 3 + k) * mid + 0.08 * mid, z], n: [0, 1, 0], c: [1, mid, 1, 0], e: [0, 0.35 + 0.65 * mid, 0, 0] };
+      });
+    },
+  });
+
+  // ======================================================================================================
+  // THE WRECK
+  // ======================================================================================================
+  // her shape (the same numbers as in 16-places-deep.js): half-beam at X along the hull from the break and height y over the
+  // keel (the stem rakes forward), and the height of her deck, its sheer rising to the bow
+  const hullB = (X, y) => { const Xe = X - 0.26 * (y - 6); return Xe < 22 ? 6.5 : 6.5 * Math.pow(max(0, 1 - Math.pow((Xe - 22) / 18.5, 1.7)), 0.75); };
+  const hullD = (X) => 13 + 2.4 * sm(22, 41, X);
+  // steel a century down: black under rust, blotched, and streaked down from every opening
+  const rustA = (x, y, z, k) => max(0, min(1, 0.3 + 0.25 * sin(x * 1.3 + k) * sin(z * 1.7 + y * 0.5 - k) + 0.2 * sin(y * 3.1 + x * 0.6 + k) + 0.25 * max(0, sin(x * 5.3 + 2 * sin(y * 0.7 + k)))));
+  const steel = (x, y, z, k, ao) => AT(0.85 + 0.15 * sin(x * 2.1 + y * 1.3 + k), rustA(x, y, z, k), ao, 0, 0, 0, 0, 0);
+  // a porthole on a surface: a dark glass disc in a raised rim, facing along n
+  const PH = (() => { const m = new MB(); m.lathe([[0.17, 0.0], [0.24, 0.02], [0.23, 0.06], [0.16, 0.05]], 8, () => AT(0.7, 0.9, 0.7, 0, 0, 0, 0, 0)); m.lathe([[0.16, 0.035], [0.001, 0.04]], 8, () => AT(0.06, 0, 0.3, 0, 0, 0, 0, 0)); return m; })();
+  // rusticles under an edge: a few hanging icicles of rust
+  const drips = (mb, rnd, at, n, L) => { for (let i = 0; i < n; i++) K.spike(mb, [at[0] + rr(rnd, -0.3, 0.3), at[1], at[2] + rr(rnd, -0.08, 0.08)], [rr(rnd, -0.1, 0.1), -1, rr(rnd, -0.1, 0.1)], L * rr(rnd, 0.3, 1), 0.035, AT(0.8, 1, 0.7, 0.1, 0.2, 0, 0, 22), AT(0.9, 1, 0.8, 0.3, 0.2, 0, 0, 22)); };
+  // ---- the bow section, in three pieces along +x (each from its own start): 0 the fore part, forecastle and stem, anchors in
+  // their hawses; 1 the middle, hatches and a ventilator, the foremast fallen across her; 2 the break, plating torn, two decks
+  // open to the water. Keel at y 0; she stands buried six metres in the mud, so her bottom is never built ----
+  K.def('dp_hull', {
+    size: 'big', d0: 40, d1: 120, shadow: false, noThin: true, twoSided: true, sway: [0, 1, 0, 0], mat: [0.05, 0, 0, 0.25],
+    pal: P4([0.19, 0.145, 0.12], [0.56, 0.31, 0.15]),
+    build(mb, rnd, lod, v) {
+      const X0 = [26, 12, 0][v], L = [17.6, 14, 12][v], k = 3.1 + v * 1.7, nu = lod ? 8 : 28, y0 = 3;
+      // where the plating ends at the break: ragged
+      const end = (q) => (v === 2 ? 0.4 + 1.8 * abs(sin(q * 5.3 + 1.2)) + 0.7 * abs(sin(q * 13.1)) : 0);
+      const Xa = (u, q) => X0 + end(q) + (L - end(q)) * u;
+      // her sides, and the edges of her plating's strakes standing out along them
+      for (const s of [-1, 1]) WK.sheet(mb, nu, lod ? 4 : 10, (u, w) => { const X = Xa(u, w + s), y = y0 + (hullD(X) - y0) * w; return [X - X0, y, s * hullB(X, y)]; }, (x, y, z) => steel(x + X0, y, z, k, 0.8), { flip: s < 0 });
+      if (!lod) for (const s of [-1, 1]) for (let y = 4.4; y < 14; y += 1.8) {
+        const pts = []; for (let i = 0; i <= nu; i++) { const X = Xa(i / nu, y * 0.3 + s), b = hullB(X, y); if (b < 0.3 || y > hullD(X) - 0.2) { if (pts.length > 1) mb.tube(pts.splice(0), 3, () => steel(X, y, s, k, 0.7)); pts.length = 0; continue; } pts.push({ x: X - X0, y, z: s * (b + 0.015), r: 0.035 }); }
+        if (pts.length > 1) mb.tube(pts, 3, () => steel(0, y, s, k, 0.7));
+      }
+      // the bulwark above the deck and the rail on it
+      for (const s of [-1, 1]) {
+        WK.sheet(mb, nu, 1, (u, w) => { const X = Xa(u, 2 + s), D = hullD(X); return [X - X0, D + 1.1 * w, s * hullB(X, D) * 0.995]; }, (x, y, z) => steel(x + X0, y, z, k, 0.85), { flip: s < 0 });
+        const pts = []; for (let i = 0; i <= nu; i++) { const X = Xa(i / nu, 2 + s), D = hullD(X); pts.push({ x: X - X0, y: D + 1.12, z: s * hullB(X, D), r: 0.05 }); }
+        mb.tube(pts, lod ? 3 : 5, () => steel(0, 0, s, k, 0.9));
+      }
+      // the deck, a little cambered
+      WK.sheet(mb, nu, lod ? 3 : 8, (u, w) => { const X = Xa(u, w * 3), D = hullD(X), b = hullB(X, D) * 0.995, z = (w * 2 - 1) * b; return [X - X0, D + 0.12 * (1 - (z / 6.5) ** 2), z]; }, (x, y, z) => AT(0.75, rustA(x + X0, y, z, k + 1) * 0.8, 0.75, 0, 0, 0, 0, 0));
+      // her portholes, two rows down each side, and the rust bleeding down from them
+      if (!lod || v !== 2) for (const s of [-1, 1]) for (const dy of [2.1, 4.3]) for (let X = X0 + (v === 2 ? 3.2 : 0.9); X < X0 + L - 0.5; X += lod ? 3.4 : 1.7) {
+        const D = hullD(X), y = D - dy, b = hullB(X, y); if (b < 2.2) continue;
+        const db = (hullB(X + 0.1, y) - hullB(X - 0.1, y)) / 0.2, n = K.nrm([-db * 1, 0, s]);
+        K.put(mb, PH, K.frame(n), [X - X0 + n[0] * 0.01, y, s * b + n[2] * 0.01], 1);
+        if (!lod && rnd() < 0.4) drips(mb, rnd, [X - X0, y - 0.25, s * (b + 0.06)], 2, 0.4);
+      }
+      // rusticles under the rail
+      if (!lod) for (const s of [-1, 1]) for (let X = X0 + 0.5; X < X0 + L; X += 0.7 + rnd() * 1.5) { const D = hullD(X); drips(mb, rnd, [X - X0, D + 1.05, s * (hullB(X, D) + 0.06)], 1 + floor(rnd() * 3), 0.8); }
+      if (v === 0) {
+        // the forecastle: windlass drums, bollards, the chain to the hawses; anchors stowed in them
+        for (const s of [-1, 1]) {
+          const drum = new MB(); drum.lathe([[0.45, 0], [0.5, 0.1], [0.5, 0.9], [0.45, 1.0]], lod ? 6 : 12, () => steel(0, 0, s, k, 0.7)); K.put(mb, drum, K.frame([0, 0, 1]), [36.5 - X0, hullD(36.5) + 0.55, s * 0.6 - 0.5], 1);
+          for (const bx of [30, 33]) for (const o of [0, 0.7]) WK.rod(mb, [bx + o - X0, hullD(bx), s * 5.4], [bx + o - X0, hullD(bx) + 0.7, s * 5.4], 0.22, 0.22, lod ? 5 : 8, steel(bx, 0, s, k, 0.8), true);
+          const hx = 38.2, hy = hullD(hx) - 1.4, hb = hullB(hx, hy);
+          // the anchor hanging from the hawse: its shank down the side, its flukes across at the bottom
+          const zc = s * (hullB(hx - 0.6, hy - 1.5) + 0.14);
+          WK.box(mb, hx - X0 - 0.75, hy - 2.4, zc - 0.13, hx - X0 - 0.45, hy - 0.1, zc + 0.13, () => steel(hx, hy, s, k, 0.7));
+          WK.box(mb, hx - X0 - 1.5, hy - 2.9, zc - 0.16, hx - X0 + 0.3, hy - 2.3, zc + 0.16, () => steel(hx, hy - 2, s, k, 0.7));
+          K.put(mb, PH, K.frame([0.6, 0, s]), [hx - X0, hy, s * hb], 2.2);
+          WK.rod(mb, [36.5 - X0, hullD(36.5) + 0.4, s * 1.2], [hx - X0 - 0.5, hullD(hx) + 0.05, s * (hb - 0.4)], 0.09, 0.09, lod ? 3 : 5, steel(36, 0, s, k, 0.6), false);
+          if (!lod) drips(mb, rnd, [hx - X0, hy - 0.2, s * (hb + 0.1)], 4, 1.2);
+        }
+        // the foremast's stump
+        WK.rod(mb, [30.5 - X0, hullD(30.5), 0], [30.5 - X0, hullD(30.5) + 2.2, 0], 0.32, 0.28, lod ? 6 : 10, steel(30, 0, 0, k, 0.8), true);
+      } else if (v === 1) {
+        // two hatch coamings, their covers gone, dark below; a ventilator cowl; the foremast fallen across her and over the side
+        for (const hx of [2.5, 8.5]) {
+          const D = hullD(X0 + hx);
+          WK.box(mb, hx - 2.2, D, -2.6, hx + 2.2, D + 0.7, -2.35, () => steel(hx, D, -2, k, 0.8)); WK.box(mb, hx - 2.2, D, 2.35, hx + 2.2, D + 0.7, 2.6, () => steel(hx, D, 2, k, 0.8));
+          WK.box(mb, hx - 2.2, D, -2.6, hx - 1.95, D + 0.7, 2.6, () => steel(hx, D, 0, k, 0.8)); WK.box(mb, hx + 1.95, D, -2.6, hx + 2.2, D + 0.7, 2.6, () => steel(hx, D, 0, k, 0.8));
+          WK.box(mb, hx - 1.95, D + 0.15, -2.35, hx + 1.95, D + 0.2, 2.35, () => AT(0.05, 0, 0.2, 0, 0, 0, 0, 0));
+        }
+        { const D = hullD(X0 + 5.6), P = [{ x: 5.6, y: D, z: 3.6, r: 0.32 }, { x: 5.6, y: D + 1.6, z: 3.6, r: 0.3 }, { x: 5.8, y: D + 2.2, z: 3.3, r: 0.32 }, { x: 6.2, y: D + 2.3, z: 2.9, r: 0.42 }];
+          mb.tube(P, lod ? 6 : 10, () => steel(5, D, 3, k, 0.7)); const cw = new MB(); cw.lathe([[0.42, 0], [0.58, 0.25], [0.6, 0.32]], lod ? 6 : 10, () => steel(6, D, 3, k, 0.6)); K.put(mb, cw, K.frame([0.6, 0.1, -0.7]), [6.2, D + 2.3, 2.9], 1); }
+        mb.tube([{ x: 13.2, y: hullD(X0 + 13) + 0.3, z: 0.4, r: 0.3 }, { x: 6.8, y: hullD(X0 + 7) + 0.25, z: -3.8, r: 0.27 }, { x: 1.4, y: hullD(X0 + 1.4) - 0.8, z: -8.6, r: 0.24 }], lod ? 6 : 10, () => steel(7, 13, -3, k, 0.75), { capTip: true });
+        if (!lod) drips(mb, rnd, [3.4, hullD(X0 + 3.4) - 0.1, -6.75], 5, 1.0);
+      } else {
+        // the break: two decks inside, ending ragged, running back to a bulkhead, dark, a door in it open on blackness;
+        // the beams bent down; plates peeled out from her sides
+        for (const dy of [3.2, 6.4]) WK.sheet(mb, lod ? 3 : 8, lod ? 2 : 5, (u, w) => { const X = end(w * 4 + dy) * 0.6 + 0.3 + 6.6 * u, z = (w * 2 - 1) * 6.2; return [X, hullD(X) - dy - 0.25 * sm(0.4, 0, u) * (1 + sin(w * 9)), z]; }, () => AT(0.55, 0.6, 0.6, 0, 0, 0, 0, 0));
+        WK.sheet(mb, lod ? 3 : 8, lod ? 3 : 8, (u, w) => [6.9, y0 + (hullD(6.9) - y0) * w, (u * 2 - 1) * 6.45], (x, y, z) => AT(0.45, rustA(x, y, z, k) * 0.7, 0.5, 0, 0, 0, 0, 0));
+        WK.box(mb, 6.82, hullD(6.9) - 6.2, -0.6, 6.86, hullD(6.9) - 3.6, 0.6, () => AT(0.03, 0, 0.2, 0, 0, 0, 0, 0));
+        for (let i = 0; i < (lod ? 2 : 5); i++) { const z = rr(rnd, -5.5, 5.5), y = hullD(2) - rr(rnd, 0.3, 6.6); mb.tube([{ x: 2.5, y, z, r: 0.12 }, { x: 0.8, y: y - 0.3, z: z + 0.2, r: 0.11 }, { x: 0.1, y: y - 1.4, z: z + 0.3, r: 0.1 }], 4, () => steel(1, y, z, k, 0.6)); }
+        for (const s of [-1, 1]) for (let i = 0; i < 2; i++) {
+          const y = rr(rnd, 5, 11), ang = rr(rnd, 0.5, 1.1);
+          WK.sheet(mb, 3, 2, (u, w) => { const X = 0.8 + end(y) * 0.3 - u * 1.6 * cos(ang), out = u * 1.6 * sin(ang); return [X, y + (w - 0.5) * 2.2 - u * u * 0.6, s * (6.5 + out)]; }, (x, yy, z) => steel(x, yy, z, k, 0.7));
+        }
+        if (!lod) for (let i = 0; i < 26; i++) { const z = rr(rnd, -6.2, 6.2), y = rnd() < 0.5 ? hullD(1) : hullD(1) - (rnd() < 0.5 ? 3.2 : 6.4); drips(mb, rnd, [end(z) + 0.4, y - 0.1, z], 2, 1.3); }
+      }
+    },
+  });
+  // ---- the stern section, lying apart, turned round and crushed, +x toward her stern: 0 the counter, its rudder and the blades
+  // of her propeller half in the mud; 1 a crushed part, decks fallen in, plating splayed; 2 a heap of torn plating and beams ----
+  K.def('dp_stern', {
+    size: 'big', d0: 40, d1: 120, shadow: false, noThin: true, twoSided: true, sway: [0, 1, 0, 0], mat: [0.05, 0, 0, 0.25],
+    pal: P4([0.19, 0.145, 0.12], [0.56, 0.31, 0.15]),
+    build(mb, rnd, lod, v) {
+      const k = 7.7 + v, nu = lod ? 6 : 20, y0 = 2.5;
+      if (v < 2) {
+        const L = 12, B = (X) => (v === 0 ? 6.2 * Math.sqrt(max(0.02, 1 - (max(0, X - 3) / 9.4) ** 2)) : 6.2 + 1.6 * sm(0, 12, 12 - X) * 0.0), D = (X) => (v === 0 ? 8.5 + 0.8 * sin(X * 0.5) : 7.6 + 1.4 * sin(X * 0.9 + 1));
+        const bulge = (X, y, s) => (v === 1 ? 1.4 * sm(0.4, 1, (y - y0) / 6) * (0.6 + 0.4 * sin(X * 0.7 + s)) : 0.35 * sin(X * 1.1 + y * 0.6 + s));
+        for (const s of [-1, 1]) WK.sheet(mb, nu, lod ? 3 : 8, (u, w) => { const X = L * u, y = y0 + (D(X) - y0) * w; return [X, y, s * (B(X) + bulge(X, y, s))]; }, (x, y, z) => steel(x, y, z, k, 0.8), { flip: s < 0 });
+        // the deck fallen in
+        WK.sheet(mb, nu, lod ? 3 : 6, (u, w) => { const X = L * u, z = (w * 2 - 1) * (B(X) + bulge(X, D(X), w * 2 - 1)); return [X, D(X) - (v === 1 ? 2.2 : 0.9) * (1 - (z / 6.5) ** 2) + 0.3 * sin(X * 1.7 + w * 5), z]; }, (x, y, z) => steel(x, y, z, k + 1, 0.7));
+        if (v === 0) {
+          // the rudder, and the propeller: three broad blades round a hub, the lowest in the mud
+          WK.box(mb, 12.2, 1.2, -0.25, 14.4, 7.5, 0.25, () => steel(13, 4, 0, k, 0.7), lod ? 1 : 3);
+          const hub = new MB(); hub.lathe([[0.6, 0], [0.65, 0.6], [0.4, 1.1], [0.001, 1.25]], lod ? 6 : 12, () => steel(12, 3, 0, k, 0.7)); K.put(mb, hub, K.frame([1, 0, 0]), [11.4, 3.6, 0], 1);
+          for (let b = 0; b < 3; b++) {
+            const a0 = b * TAU / 3 + 0.4;
+            WK.sheet(mb, lod ? 2 : 5, lod ? 2 : 4, (u, w) => { const r = 0.6 + 2.6 * u, a = a0 + (w - 0.5) * (0.9 - 0.4 * u) + 0.3 * u, tw = (w - 0.5) * 0.5; return [12 + tw, 3.6 + sin(a) * r, cos(a) * r]; }, (x, y, z) => steel(x, y, z, k + 2, 0.75));
+          }
+          if (!lod) for (let i = 0; i < 14; i++) drips(mb, rnd, [rr(rnd, 1, 11), D(6) + 0.2, rnd() < 0.5 ? -6.3 : 6.3], 2, 1);
+        } else if (!lod) for (let i = 0; i < 18; i++) drips(mb, rnd, [rr(rnd, 0.5, 11.5), rr(rnd, 5, 8), (rnd() < 0.5 ? -1 : 1) * rr(rnd, 6.5, 7.6)], 2, 1.1);
+      } else {
+        // a heap of plating and beams fallen out where she tore
+        for (let i = 0; i < (lod ? 5 : 11); i++) {
+          const cx = rr(rnd, -3, 3), cz = rr(rnd, -3, 3), a = rnd() * TAU, ca = cos(a), sa = sin(a), W2 = rr(rnd, 1, 2.6), H2 = rr(rnd, 0.8, 2), bend = rr(rnd, -0.6, 0.6), tilt = rr(rnd, 0.2, 1.2);
+          WK.sheet(mb, 3, 2, (u, w) => { const s2 = (u - 0.5) * 2 * W2, h = w * H2; return [cx + ca * s2 - sa * (h * cos(tilt) + bend * (u - 0.5) ** 2 * 4), h * sin(tilt) + 0.2, cz + sa * s2 + ca * (h * cos(tilt))]; }, (x, y, z) => steel(x, y, z, k, 0.7));
+        }
+        for (let i = 0; i < (lod ? 2 : 5); i++) { const a = rnd() * TAU, L2 = rr(rnd, 3, 6), x0 = rr(rnd, -2, 2), z0 = rr(rnd, -2, 2); WK.rod(mb, [x0, 0.2, z0], [x0 + cos(a) * L2, rr(rnd, 0.3, 2.5), z0 + sin(a) * L2], 0.14, 0.14, 4, steel(x0, 1, z0, k, 0.7), true); }
+      }
+    },
+  });
+  // ---- what fell out of her: 0 a boiler on its side, its furnace mouths; 1 a deck bench, iron ends, a slat or two of its
+  // wood left; 2 a tangle of bent plates and girders ----
+  K.def('dp_debris', {
+    size: 'big', d0: 25, d1: 100, shadow: false, noThin: true, twoSided: true, sway: [0, 1, 0, 0], mat: [0.05, 0, 0, 0.25],
+    pal: [[[0.20, 0.15, 0.12], [0.56, 0.31, 0.15]], [[0.18, 0.14, 0.12], [0.52, 0.30, 0.15]], [[0.22, 0.16, 0.12], [0.60, 0.36, 0.17]], [[0.20, 0.16, 0.13], [0.54, 0.34, 0.20]]],
+    build(mb, rnd, lod, v) {
+      const k = rnd() * 9;
+      if (v === 0) {
+        const bo = new MB(); bo.lathe([[0.001, 0], [2.3, 0.05], [2.4, 0.3], [2.4, 3.4], [2.3, 3.7], [0.001, 3.75]], lod ? 10 : 22, (t) => steel(t * 3, 0, 0, k, 0.75));
+        K.put(mb, bo, K.frame([1, 0, 0]), [-1.9, 2.4, 0], 1);
+        for (const [y, z] of [[2.9, -1.1], [2.9, 1.1], [1.3, 0]]) K.put(mb, PH, K.frame([1, 0, 0]), [1.86, y, z], 2.6);
+        if (!lod) for (let i = 0; i < 12; i++) drips(mb, rnd, [rr(rnd, -1.6, 1.6), 4.7, rr(rnd, -1.5, 1.5)], 1, 0.6);
+      } else if (v === 1) {
+        for (const x of [-0.85, 0.85]) {
+          const P = [{ x, y: 0, z: -0.25, r: 0.03 }, { x, y: 0.4, z: -0.2, r: 0.03 }, { x, y: 0.45, z: 0.15, r: 0.03 }, { x, y: 0.85, z: 0.3, r: 0.03 }, { x, y: 0.95, z: 0.2, r: 0.03 }];
+          mb.tube(P, 4, () => steel(x, 0.4, 0, k, 0.7)); mb.tube([{ x, y: 0, z: 0.25, r: 0.03 }, { x, y: 0.42, z: 0.1, r: 0.03 }], 4, () => steel(x, 0.2, 0, k, 0.7));
+        }
+        for (const [z, y, ok] of [[-0.15, 0.44, 1], [0.0, 0.45, 0], [0.12, 0.46, 1], [0.28, 0.78, 1]]) if (ok) WK.box(mb, -0.95, y, z - 0.05, 0.95, y + 0.03, z + 0.05, () => AT(0.35, 0.2, 0.7, 0, 0, 0, 0, 0));
+      } else {
+        for (let i = 0; i < 4; i++) {
+          const a = rnd() * TAU, ca = cos(a), sa = sin(a), W2 = rr(rnd, 0.8, 1.6), H2 = rr(rnd, 0.6, 1.4), bend = rr(rnd, -0.5, 0.5), tilt = rr(rnd, 0.1, 1.0);
+          WK.sheet(mb, 3, 2, (u, w) => { const s2 = (u - 0.5) * 2 * W2, h = w * H2; return [ca * s2 - sa * (h * cos(tilt) + bend * (u - 0.5) ** 2 * 4), h * sin(tilt) + 0.1, sa * s2 + ca * h * cos(tilt)]; }, (x, y, z) => steel(x, y, z, k, 0.7));
+        }
+        for (let i = 0; i < 2; i++) { const a = rnd() * TAU, L2 = rr(rnd, 2, 4); WK.box(mb, -L2 / 2, 0.05, -0.12, L2 / 2, 0.35, 0.12, () => steel(i, 0, 0, k, 0.7)); void a; }
+      }
+    },
+  });
+  // ---- the small things in the trail: 0 a pair of boots, side by side; 1 a porthole fallen out of her side; 2 a stack of plates ----
+  K.def('dp_bits', {
+    size: 'small', d0: 10, d1: 40, shadow: false, sway: [0, 1, 0, 0], mat: [0.05, 0, 0, 0.3],
+    pal: [[[0.20, 0.15, 0.12], [0.78, 0.74, 0.66]], [[0.18, 0.14, 0.11], [0.82, 0.78, 0.70]], [[0.22, 0.16, 0.12], [0.62, 0.48, 0.28]], [[0.17, 0.13, 0.11], [0.86, 0.84, 0.80]]],
+    build(mb, rnd, lod, v) {
+      if (v === 0) {
+        for (const s of [-1, 1]) {
+          const x0 = s * 0.07, a = s * 0.12;
+          mb.tube([{ x: x0, y: 0.04, z: -0.1, r: 0.045 }, { x: x0 + sin(a) * 0.1, y: 0.035, z: 0.05, r: 0.04 }, { x: x0 + sin(a) * 0.16, y: 0.03, z: 0.14, r: 0.03 }], lod ? 4 : 7, () => AT(0.9, 0, 0.75, 0, 0, 0, 0, 0), { capTip: true });
+          WK.rod(mb, [x0, 0.02, -0.1], [x0 + 0.005, 0.2, -0.12], 0.045, 0.04, lod ? 4 : 7, AT(0.85, 0, 0.7, 0, 0, 0, 0, 0), true);
+        }
+      } else if (v === 1) K.put(mb, PH, K.frame([0.1, 1, 0]), [0, 0.01, 0], 1.3);
+      else for (let i = 0; i < 6; i++) { const t = new MB(); t.lathe([[0.001, 0], [0.09, 0.004], [0.13, 0.02], [0.135, 0.026]], lod ? 8 : 16, () => AT(0.95, 1, 0.85, 0, 0, 0, 0, 0)); K.put(mb, t, K.frame([0.05 * i, 1, 0]), [0.01 * i, i * 0.022, 0], 1); }
+    },
+  });
+  // ---- rusticles: a bunch of the iron-eating bacteria's icicles hanging from an edge (built hanging down -y... emitted with
+  // up [0,-1,0] the mesh's +y points down, so here they grow along +y), porous and orange ----
+  K.def('dp_rusticle', {
+    size: 'small', d0: 12, d1: 50, shadow: false, sway: [0.004, 1.4, 0.4, 0.002], mat: [0.2, 0, 0, 0.35],
+    pal: [[[0.52, 0.26, 0.12], [0.86, 0.50, 0.24]], [[0.46, 0.22, 0.10], [0.80, 0.42, 0.18]], [[0.58, 0.32, 0.16], [0.90, 0.58, 0.30]], [[0.42, 0.20, 0.10], [0.74, 0.38, 0.18]]],
+    build(mb, rnd, lod) {
+      const n = lod ? 3 : 4 + floor(rnd() * 4);
+      for (let i = 0; i < n; i++) {
+        const x = rr(rnd, -0.25, 0.25), z = rr(rnd, -0.06, 0.06), L = rr(rnd, 0.25, 0.8), r = rr(rnd, 0.03, 0.07), segs = lod ? 2 : 5, pts = [];
+        for (let j = 0; j <= segs; j++) { const t = j / segs; pts.push({ x: x + 0.04 * sin(t * 5 + i), y: t * L, z: z + 0.03 * sin(t * 4 - i), r: r * (1 - 0.85 * t) * (1 + 0.25 * sin(t * 11 + i)) + 0.004 }); }
+        mb.tube(pts, lod ? 4 : 6, (t) => AT(0.9, 0.3 + 0.7 * t, 0.8, 0.2 * t, 0.2, 0, 0, 22), { capTip: true });
+      }
+    },
+  });
+
+  // ======================================================================================================
+  // THE TRENCHES
+  // ======================================================================================================
+  // ---- Elpidia: hadal sea cucumbers a few centimetres long, pink and see-through, a few lying together on the silt ----
+  K.def('dp_elpidia', {
+    size: 'small', d0: 10, d1: 36, shadow: false, sway: [0.006, 1.5, 0.5, 0.003], mat: [0.85, 0.3, 0, 0.7], glow: [0.7, 0.5, 0.6],
+    pal: [[[0.94, 0.62, 0.66], [1.0, 0.86, 0.86]], [[0.88, 0.56, 0.70], [0.98, 0.82, 0.90]], [[0.96, 0.74, 0.70], [1.0, 0.90, 0.86]], [[0.86, 0.48, 0.58], [0.98, 0.76, 0.80]]],
+    build(mb, rnd, lod) {
+      const n = lod ? 3 : 3 + floor(rnd() * 4);
+      for (let i = 0; i < n; i++) {
+        const a = rnd() * TAU, d = i ? rr(rnd, 0.08, 0.22) : 0, h = rnd() * TAU, L = rr(rnd, 0.05, 0.08), cx = cos(a) * d, cz = sin(a) * d, ch = cos(h), sh = sin(h);
+        const pts = []; for (let k = 0; k <= (lod ? 3 : 7); k++) { const t = k / (lod ? 3 : 7), s = (t - 0.5) * L; pts.push({ x: cx + ch * s, y: L * 0.2, z: cz + sh * s, r: L * 0.28 * Math.pow(sin(PI * (0.08 + 0.84 * t)), 0.6) }); }
+        mb.tube(pts, lod ? 5 : 8, () => AT(0.95, 0.3, 0.9, 0.1, 0.85, 0.3, 0, 28), { rmod: (t, an) => 1 - 0.3 * max(0, -cos(an)), capTip: true });
+        if (!lod) for (let j = 0; j < 4; j++) { const s = (j / 3 - 0.5) * L * 0.6; K.spike(mb, [cx + ch * s, L * 0.36, cz + sh * s], [-sh * 0.3, 1, ch * 0.3], L * 0.35, 0.003, AT(0.95, 0.8, 0.9, 0.5, 0.85, 0.4, 0, 28)); }
+      }
+    },
+  });
+  // ---- a dead fish on a ledge: 0 swarming with amphipods; 1 picked clean to its bones; 2 the amphipods heaped where it was ----
+  K.def('dp_carcass', {
+    size: 'small', d0: 12, d1: 45, shadow: false, sway: [0.004, 1, 0.9, 0.004], mat: [0.4, 0.05, 0, 0.4],
+    pal: P4([0.46, 0.42, 0.40], [0.96, 0.86, 0.80]),
+    build(mb, rnd, lod, v) {
+      const L = 0.5;
+      if (v === 0) {
+        const pts = []; for (let k = 0; k <= (lod ? 4 : 10); k++) { const t = k / (lod ? 4 : 10); pts.push({ x: (t - 0.6) * L, y: 0.03, z: 0, r: 0.045 * Math.pow(sin(PI * (0.05 + 0.85 * t)), 0.7) + 0.004 }); }
+        mb.tube(pts, lod ? 5 : 9, () => AT(0.85, 0, 0.7, 0, 0.2, 0, 0, 0), { rmod: (t, a) => 1 - 0.45 * abs(cos(a)), capTip: true });
+      }
+      if (v === 1) {
+        mb.tube([{ x: -0.3, y: 0.012, z: 0, r: 0.008 }, { x: 0.2, y: 0.012, z: 0, r: 0.01 }], 4, () => AT(0.95, 1, 0.9, 0, 0.3, 0, 0, 0));
+        for (let i = 0; i < (lod ? 6 : 16); i++) { const x = -0.25 + i * 0.028; for (const s of [-1, 1]) mb.tube([{ x, y: 0.014, z: 0, r: 0.002 }, { x: x - 0.02, y: 0.016, z: s * 0.05, r: 0.0015 }], 3, () => AT(0.95, 1, 0.9, 0, 0.3, 0, 0, 0)); }
+        mb.blob(0.25, 0.03, 0, 0.05, 0.03, 0.035, 0, null, () => AT(0.95, 1, 0.8, 0, 0.3, 0, 0, 0));
+      }
+      // the amphipods: pale little crescents crowded on it and round it
+      const n = lod ? 40 : (v === 1 ? 60 : 260);
+      for (let i = 0; i < n; i++) {
+        const a = rnd() * TAU, d = Math.sqrt(rnd()) * (v === 2 ? 0.2 : 0.3), x = cos(a) * d * (v === 2 ? 1 : 1.3) - 0.05, z = sin(a) * d * 0.6;
+        const y = (v === 0 ? 0.05 * max(0, 1 - (z / 0.05) ** 2) * (abs(x) < 0.3 ? 1 : 0) : 0) + rr(rnd, 0.005, v === 2 ? 0.07 : 0.03) + (rnd() < 0.08 ? rr(rnd, 0.05, 0.25) : 0);
+        K.octa(mb, [x, y, z], 0.007, 0.004, 0.0035, [0.95, 1, 0.9, 1], [0.6, 0, 0, 0], K.frame([rnd() - 0.5, 0.3, rnd() - 0.5]));
+      }
+    },
+  });
+  // ---- the lander: 0 its frame on four feet, yellow floats on top, glass spheres in hard hats, a camera and a lamp looking
+  // down at the bait; 1 the bait cage, a fish inside it and amphipods all over it; 2 its anchor weight and a coil of line ----
+  K.def('dp_lander', {
+    size: 'big', d0: 25, d1: 100, shadow: false, noThin: true, sway: [0.002, 1, 0.8, 0.003], mat: [0.1, 4.0, 0, 0.3], glow: [0.75, 0.88, 1.0],
+    pal: P4([0.30, 0.31, 0.32], [0.68, 0.34, 0.10]),
+    build(mb, rnd, lod, v) {
+      const metal = AT(0.9, 0, 0.85, 0, 0, 0, 0, 0), foam = AT(0.9, 1, 0.85, 0, 0.1, 0, 0, 0), dark = AT(0.2, 0, 0.5, 0, 0, 0, 0, 0), sides = lod ? 4 : 8;
+      const rod = (a, b, r) => WK.rod(mb, a, b, r, r, sides, metal, false);
+      if (v === 0) {
+        const H = 2.0, S = 0.8;
+        for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { rod([sx * S, 0, sz * S], [sx * S * 0.85, H, sz * S * 0.85], 0.03); WK.box(mb, sx * S - 0.16, -0.05, sz * S - 0.16, sx * S + 0.16, 0.07, sz * S + 0.16, () => dark); }
+        for (const y of [0.4, H]) { const s = y > 1 ? S * 0.85 : S; rod([-s, y, -s], [s, y, -s], 0.025); rod([s, y, -s], [s, y, s], 0.025); rod([s, y, s], [-s, y, s], 0.025); rod([-s, y, s], [-s, y, -s], 0.025); }
+        rod([-S * 0.92, 1.2, -S * 0.92], [S * 0.92, 1.2, -S * 0.92], 0.02); rod([-S * 0.92, 1.2, -S * 0.92], [-S * 0.92, 1.2, S * 0.92], 0.02);
+        // one long float block across the top, scuffed; under it a glass sphere in its hard hat and a pressure case
+        WK.box(mb, -0.7, H, -0.45, 0.7, H + 0.36, 0.45, () => foam, lod ? 1 : 2);
+        mb.blob(-0.3, 1.05, 0.25, 0.21, 0.21, 0.21, lod ? 1 : 2, null, () => AT(0.6, 0, 0.8, 0, 0.6, 0.04, 0, 28)); mb.blob(-0.3, 1.14, 0.25, 0.23, 0.13, 0.23, lod ? 1 : 2, (xx, yy) => (yy < -0.2 ? 0.5 : 1), () => foam);
+        const cas = new MB(); cas.lathe([[0.09, 0], [0.09, 0.7], [0.06, 0.74], [0.001, 0.74]], sides, () => AT(0.55, 0, 0.7, 0, 0, 0, 0, 0)); K.put(mb, cas, K.frame([1, 0.05, 0.1]), [-0.45, 0.62, -0.35], 1);
+        // the camera and its lamp on an arm, looking down and out over the bait (+x); the lamp is what you see from afar
+        rod([0.68, 1.7, 0], [1.05, 1.62, 0], 0.02);
+        const cam = new MB(); cam.lathe([[0.065, 0], [0.065, 0.3], [0.045, 0.33], [0.001, 0.33]], sides, () => dark);
+        K.put(mb, cam, K.frame([0.55, -0.83, 0]), [1.05, 1.62, -0.14], 1);
+        const lamp = new MB(); lamp.lathe([[0.1, 0], [0.1, 0.12], [0.085, 0.13]], sides, () => dark); lamp.lathe([[0.085, 0.13], [0.05, 0.136], [0.001, 0.138]], sides, () => AT(1, 0, 1, 0, 0, 1, 0, 0));
+        K.put(mb, lamp, K.frame([0.55, -0.83, 0]), [1.05, 1.62, 0.16], 1.25);
+        // a second small light on the float, for whoever was to come back for it
+        K.octa(mb, [0.55, H + 0.44, -0.3], 0.045, 0.055, 0.045, [1, 1, 1, 0], [0, 1, 0, 0], null);
+        // silt on everything that faces up
+        for (let k = 0; k < mb.count; k++) if (mb.n[k * 3 + 1] > 0.6 && mb.e[k * 4 + 1] < 0.5) mb.c[k * 4] *= 0.72;
+      } else if (v === 1) {
+        // the cage: hoops and bars of wire round a dead fish
+        for (const y of [0.02, 0.25, 0.5]) { const pts = []; for (let k = 0; k <= 16; k++) { const a = k / 16 * TAU; pts.push({ x: cos(a) * 0.22, y, z: sin(a) * 0.22, r: 0.006 }); } mb.tube(pts, 3, () => metal); }
+        for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; rod([cos(a) * 0.22, 0.02, sin(a) * 0.22], [cos(a) * 0.22, 0.5, sin(a) * 0.22], 0.005); }
+        const pts = []; for (let k = 0; k <= 6; k++) { const t = k / 6; pts.push({ x: (t - 0.5) * 0.36, y: 0.1, z: 0, r: 0.04 * sin(PI * (0.1 + 0.8 * t)) + 0.005 }); }
+        mb.tube(pts, sides, () => AT(0.6, 0, 0.6, 0, 0.2, 0, 0, 0), { rmod: (t, a) => 1 - 0.4 * abs(cos(a)) });
+        for (let i = 0; i < (lod ? 40 : 220); i++) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * 0.3, y = rr(rnd, 0.02, 0.55); K.octa(mb, [cos(a) * d, y, sin(a) * d], 0.007, 0.004, 0.0035, [0.95, 1, 0.9, 1], [0.6, 0, 0, 0], K.frame([rnd() - 0.5, 0.3, rnd() - 0.5])); }
+      } else {
+        WK.box(mb, -0.25, 0, -0.18, 0.25, 0.22, 0.18, () => dark, 1);
+        const pts = []; for (let k = 0; k <= (lod ? 24 : 80); k++) { const t = k / (lod ? 24 : 80), a = t * 5 * TAU, r = 0.35 + 0.05 * sin(t * 30); pts.push({ x: 0.7 + cos(a) * r, y: 0.015 + 0.012 * floor(t * 5), z: sin(a) * r, r: 0.012 }); }
+        mb.tube(pts, 3, () => foam);
+        rod([0.25, 0.15, 0], [0.4, 0.03, 0], 0.012);
+      }
+    },
+  });
+})();
+
 // ---- 69-stubs.js ----
 // placeholders until the animals, sound and journal arrive
 
@@ -9967,11 +11834,12 @@ const Fauna = {
           const n = k === 'rockfish' ? 4 : 1;
           for (let i = 0; i < n; i++) { const c = at(p.r * 0.6, k === 'napoleon' ? 3 : 1.2); const g = this.spawnGroup({ kind: FISH[sp].beh, sp, x: c[0], y: c[1], z: c[2], n: 1, r: k === 'napoleon' ? 10 : 4 }, 'pf' + p.id + k + i); if (g) made.push(g); }
         }
-        else if (k === 'sheephead' || k === 'wolfEel' || k === 'ratfish' || k === 'grenadier' || k === 'hagfish' || k === 'eelpouts') {
-          const sp = { sheephead: 'sheephead', wolfEel: 'wolfeel', ratfish: 'ratfish', grenadier: 'grenadier', hagfish: 'hagfish', eelpouts: 'eelpout' }[k];
-          const n = { sheephead: 3, wolfEel: 1, ratfish: 2, grenadier: 4, hagfish: 6, eelpouts: 5 }[k];
+        else if (k === 'sheephead' || k === 'wolfEel' || k === 'ratfish' || k === 'grenadier' || k === 'hagfish' || k === 'eelpouts' || k === 'snailfish') {
+          const sp = { sheephead: 'sheephead', wolfEel: 'wolfeel', ratfish: 'ratfish', grenadier: 'grenadier', hagfish: 'hagfish', eelpouts: 'eelpout', snailfish: 'snailfish' }[k];
+          const n = { sheephead: 3, wolfEel: 1, ratfish: 2, grenadier: 4, hagfish: 6, eelpouts: 5, snailfish: 7 }[k];
           for (let i = 0; i < n; i++) { const c = at(p.r * 0.6, k === 'sheephead' || k === 'ratfish' ? 1.6 : 0.5); const g = this.spawnGroup({ kind: FISH[sp].beh, sp, x: c[0], y: c[1], z: c[2], n: 1, r: k === 'wolfEel' ? 1.5 : 6 }, 'pk' + p.id + k + i); if (g) made.push(g); }
         }
+        else if (k === 'amphipods') { const c = at(p.r * 0.25, 0.8); const g = this.spawnGroup({ kind: 'school', sp: 'amphipod', x: c[0], y: c[1], z: c[2], n: 500, r: 1.6, spread: 1.4, mill: 1 }, 'pam' + p.id); if (g) { g.home = [c[0], c[1], c[2]]; g.speed = 0.25; made.push(g); } }
         else if (k === 'krill') { const c = at(p.r * 0.4, 8); const g = this.spawnGroup({ kind: 'school', sp: 'krill', x: c[0], y: c[1], z: c[2], n: 900, r: 4, spread: 4, mill: 1 }, 'pkr' + p.id); if (g) { g.home = [c[0], c[1], c[2]]; g.speed = 0.3; made.push(g); } }
         else if (k === 'penguins') { const g = this.spawnPass('penguin', 6 + Math.floor(rnd() * 8), Player.pos); if (g) made.push(g); }
         else if (k === 'jellies' && arg === 'lionsmane') for (let i = 0; i < 3; i++) { const c = at(p.r * 0.6, 5 + rnd() * 6); made.push(Beasts.spawn('lionsmane', c[0], c[1], c[2], { range: p.r })); }
@@ -10069,9 +11937,12 @@ const Fauna = {
     if (schools.length >= want || Math.random() > 0.35) return;
     let sp;
     const r = Math.random();
-    if (deep > 0.5) sp = r < 0.6 ? 'lantern' : 'hatchet';
+    // over the deep it is the swimmer's own depth that decides: the lanternfish and hatchetfish below the light, the
+    // open ocean's own near the surface (cold or warm by the compass)
+    if (deep > 0.5 && -cam[1] > 150) sp = r < 0.6 ? 'lantern' : 'hatchet';
     else if (polar > 0.5) sp = 'icefish';
     else if (cold > 0.4) sp = r < 0.7 ? 'sardine' : 'jack';
+    else if (deep > 0.5) sp = World.compass(cam[0], cam[2])[0] > 1.2 ? (r < 0.7 ? 'sardine' : 'jack') : r < 0.45 ? 'jack' : r < 0.7 ? 'sardine' : r < 0.88 ? 'barracuda' : 'fusilier';
     else sp = r < 0.35 ? 'fusilier' : r < 0.6 ? 'snapper' : r < 0.82 ? 'jack' : r < 0.93 ? 'barracuda' : 'sardine';
     const d = FISH[sp];
     const a = Player.yaw + Math.PI + (Math.random() - 0.5) * 2.6 + (Math.random() < 0.5 ? Math.PI : 0);
@@ -10448,6 +12319,12 @@ const FISH = {
     len: [0.4, 0.6], beh: 'cruise', col: { top: [0.62, 0.48, 0.48], bot: [0.75, 0.62, 0.6], fin: [0.6, 0.46, 0.46], tail: [0.6, 0.46, 0.46] }, cs: 0.7 },
   eelpout: { P: { h: 0.1, w: 0.09, tm: 0.18, nose: 0.3, ped: 0.4, tail: 'round', tailL: 0.06, tailH: 0.7, dorsal: [0.2, 0.98, 0.2], anal: [0.45, 0.98, 0.15], pect: 0.08 },
     len: [0.25, 0.4], beh: 'hover', col: { top: [0.85, 0.8, 0.75], bot: [0.9, 0.86, 0.82], fin: [0.8, 0.75, 0.7], tail: [0.8, 0.75, 0.7] }, trans: 0.3 },
+  // the hadal snailfish: a soft pale tadpole with wide pectoral fins, see-through enough to show its liver, hanging over the trench floor
+  snailfish: { P: { h: 0.2, w: 0.16, tm: 0.12, nose: 0.22, ped: 0.55, tail: 'round', tailL: 0.05, tailH: 0.45, dorsal: [0.22, 0.98, 0.14], anal: [0.32, 0.98, 0.12], pect: 0.16 },
+    len: [0.18, 0.3], beh: 'hover', col: { top: [0.93, 0.78, 0.8], bot: [0.97, 0.87, 0.87], fin: [0.92, 0.8, 0.82], tail: [0.92, 0.8, 0.82] }, trans: 0.55 },
+  // amphipods: pale scavenging crustaceans that find bait within minutes and swarm it
+  amphipod: { P: { h: 0.26, w: 0.14, tm: 0.35, nose: 0.35, ped: 0.2, tail: 'fork', tailL: 0.15, tailH: 0.7 },
+    len: [0.02, 0.045], beh: 'school', col: { top: [0.93, 0.9, 0.8], bot: [0.97, 0.95, 0.88], fin: [0.9, 0.86, 0.76], tail: [0.9, 0.86, 0.76] }, trans: 0.35 },
   krill: { P: { h: 0.22, w: 0.18, tm: 0.3, nose: 0.4, ped: 0.15, tail: 'fork', tailL: 0.2, tailH: 0.9 },
     len: [0.03, 0.05], beh: 'school', col: { top: [0.95, 0.45, 0.4], bot: [0.98, 0.7, 0.6], fin: [0.9, 0.5, 0.45], tail: [0.9, 0.5, 0.45] }, trans: 0.5 },
   penguin: { P: { h: 0.3, w: 0.28, tm: 0.4, nose: 0.65, ped: 0.15, tail: 'round', tailL: 0.1, tailH: 0.5, pect: 0.32 },
@@ -11732,7 +13609,8 @@ const Audio2 = (() => {
     const enc = S.enc, lid = 1 - 0.6 * enc;   // rock overhead muffles the surface
     const lv = S.lv, set = (name, node, v, tc) => { if (S.solo && !S.solo.has(name)) v = 0; ease(node.gain, v, tc); lv[name] = v > 1e-6 ? +(20 * Math.log10(v)).toFixed(1) : -120; S.byName[name] = node; };
     // the bed
-    set('bedLo', L.bedLo, db(LV.bedLo + S.wk[0] * 2) * (0.75 + 0.25 * sun), 1.2);
+    const abyssal = smooth(800, 4500, depth);   // kilometres down the sea itself goes quieter and lower
+    set('bedLo', L.bedLo, db(LV.bedLo + S.wk[0] * 2) * (0.75 + 0.25 * sun) * (1 - 0.4 * abyssal), 1.2);
     ease(L.bedLoF.frequency, 110 + 150 * sun + 50 * (w.kelp + w.tempsand), 1.5);
     set('bedHi', L.bedHi, db(LV.bedHi + S.wk[1] * 2.5) * (0.3 + 0.7 * sun) * (1 + 0.35 * (w.lagoon + w.tempsand) + 0.15 * w.reef) * lid, 1.5);
     ease(L.bedHiF.frequency, 220 + 150 * sun, 1.5);
@@ -11752,7 +13630,7 @@ const Audio2 = (() => {
     ease(L.shrimpF.frequency, bright, 1.5); ease(L.snapF.frequency, bright * 1.1, 1.5);
     S.snapRate = 9 * shrimp * nearF; lv.snapRate = +S.snapRate.toFixed(1);
     // speed
-    const s = clamp(Player.speed / 7.4, 0, 1.2);
+    const s = clamp(Player.speed / 7.4, 0, 1.15);   // a plunge is no louder than a sprint, only longer
     set('rush', L.rush, db(LV.rush) * Math.pow(s, 2.2), 0.12);
     ease(L.rushF.frequency, 200 + 480 * s, 0.2);
     ease(L.rushT.gain, s > 0.25 ? rnd(0.75, 1.15) : 1, 0.06);
@@ -11767,7 +13645,7 @@ const Audio2 = (() => {
     // the deep hum
     const deep = (w.twilight + w.abyss + 0.8 * w.coldreef + 0.6 * w.vents + 0.35 * w.sponge + 0.3 * w.meso + 0.2 * w.polar) * Math.pow(smooth(30, 200, depth), 0.7);
     set('hum', L.hum, db(LV.hum + S.wk[4] * 2) * deep, 2);
-    ease(L.humF.frequency, 58 + 12 * (1 - smooth(100, 400, depth)), 3);
+    ease(L.humF.frequency, 58 + 12 * (1 - smooth(100, 400, depth)) - 7 * abyssal, 3);
     set('humTone', L.humT, db(LV.humTone) * deep * smooth(110, 330, depth), 3);
     // space: more reverb over open water and inside rock, darker with depth
     ease(N.revOut.gain, 0.8 + 0.5 * open + 0.5 * enc, 1.5);
@@ -11789,7 +13667,7 @@ const Audio2 = (() => {
     if (hz('crack', dtc, w.polar / 9, 2)) crack(t0);
     if (hz('seal', dtc, w.polar / 75, 25)) seal(t0);
     if (hz('seep', dtc, (w.vents + 0.45 * w.volcanic) / 6, 1.5)) seep(t0, w.vents + 0.45 * w.volcanic);
-    if (hz('tok', dtc, (w.abyss + w.twilight + 0.7 * w.coldreef + 0.3 * w.vents) * smooth(60, 160, depth) / 32, 12)) farClicks(t0);
+    if (hz('tok', dtc, (w.abyss + w.twilight + 0.7 * w.coldreef + 0.3 * w.vents) * smooth(60, 160, depth) * (1 - 0.75 * smooth(1500, 3500, depth)) / 32, 12)) farClicks(t0);
     if (hz('dgroan', dtc, (w.abyss + 0.5 * w.twilight) * smooth(150, 300, depth) / 110, 50)) groan(t0, 0);
     if (hz('crunch', dtc, (w.reef + 0.6 * w.karst + 0.4 * w.volcanic + 0.3 * w.meso + 0.3 * w.lagoon) * nearF / 14, 4)) crunch(t0, nearF);
     if (hz('grunt', dtc, (0.7 * w.reef + 0.4 * w.lagoon + 0.5 * w.kelp + 0.6 * w.meso + 0.6 * w.sponge + 0.5 * w.tempsand + 0.5 * w.karst + 0.3 * w.coldreef) * (0.4 + 0.6 * nearF) * (1 + 0.8 * night) / 11, 3)) grunt(t0);
@@ -11851,6 +13729,12 @@ const Audio2 = (() => {
     blackslope: { n: [40, 47, 52, 55, 62], c: 'rumble' }, basalt: { n: [38, 45, 52, 57, 59], c: 'rumble' }, pillows: { n: [38, 45, 50, 55, 62], c: 'rumble' },
     woodwreck: { n: [42, 49, 54, 57, 61], c: 'dark' }, freighter: { n: [35, 42, 54, 57, 61], c: 'dark' }, warplane: { n: [40, 47, 55, 59, 62], c: 'dark' },
     anchor: { n: [43, 50, 55, 59, 62], c: 'dark' }, cannons: { n: [38, 45, 50, 57, 59], c: 'dark' }, ghostnet: { n: [47, 54, 57, 62, 64], c: 'dark' },
+    // the deep places (16-places-deep.js)
+    tracks: { n: [36, 43, 50, 55, 57], c: 'open' }, pillars: { n: [38, 45, 52, 57, 62], c: 'rise' }, sealilies: { n: [45, 52, 57, 59, 64], c: 'air' },
+    apolemia: { n: [50, 57, 62, 64, 69], c: 'glass' }, lanternhall: { n: [40, 47, 54, 59, 64, 66], c: 'glass' }, wallgarden: { n: [43, 50, 55, 62, 64], c: 'rise' },
+    seepwall: { n: [40, 47, 52, 55, 59], c: 'dark' }, mudvolcano: { n: [36, 43, 48, 55, 58], c: 'rumble' }, octopusgarden: { n: [45, 52, 55, 57, 62], c: 'warm' },
+    lavaflow: { n: [33, 40, 47, 52, 54], c: 'rumble' }, deepwreck: { n: [35, 42, 49, 54, 57], c: 'dark' }, trenchledges: { n: [31, 38, 45, 50, 52], c: 'vast' },
+    lander: { n: [36, 43, 50, 53, 57], c: 'dark' },
   };
   function voicing(type) {
     if (PLACE[type]) return PLACE[type];
