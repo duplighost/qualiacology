@@ -268,6 +268,9 @@ export function pegboard(R) {
     },
     black(k) { mat.color.setRGB(1 - 0.97 * k, 1 - 0.97 * k, 1 - 0.97 * k); },
   };
+  // on the wall from the start: the renderer sizes an instanced mesh's bounds once, at its first draw (the load's
+  // warm-up), and with every mask still at the room's centre then, it hid them whenever the centre was off screen
+  api.face(0);
   return api;
 }
 

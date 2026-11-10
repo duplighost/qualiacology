@@ -1,7 +1,7 @@
 // THE CLERK: the display mannequin from the front window, now working the back room. A glazed porcelain figurine
 // (src/game/figurine.js) in a black catsuit and an orange store vest, cat ears on buns, a name tag, a measuring tape,
 // gold shears or an orange price gun in her right hand. Five painted plates (SERVICE SALE NO CRACK HELL), a hinged
-// jaw (the lip-sync), and her signature: she only moves on the band's hits, and freezes in every silence.
+// jaw (the lip-sync), and her signature: she freezes in every silence.
 import * as THREE from 'three';
 import { EXPRESSIONS } from '../../game/figurine.js';
 import { paintFace } from '../../game/figurine/face.js';
@@ -124,8 +124,7 @@ export class Clerk {
     this.freezes = [];            // [t0, t1) song times she stands frozen in (the stops)
     this.holds = [];              // the same, scheduled by the script
     this.hug = 0; this.scratchCool = 0;
-    this.snaps = [];              // song times of the band's stabs she snaps to (the intro)
-    this.snapUntil = -1;          // before this, she only moves on snaps
+    this.backUntil = -1;          // before this she has her back to the room (only the script turns her)
     this.y = 0; this.yT = 0;
     this.props = buildProps(fig);
     this.hand = 'shears';
@@ -431,18 +430,12 @@ export class Clerk {
     if (this.plateUntil && t >= this.plateUntil) { this.plateUntil = 0; this._show(this.basePlate); }
     // her death scene moves her (death.js)
     if (b.scene) { rig.timeScale = 1; b.lockFacing = false; this.frozen = false; return; }
-    // frozen in a silence; in the intro, still between the stabs
+    // frozen in a silence
     let frozen = false;
     for (const [a, z] of this.freezes) if (t >= a && t < z) { frozen = true; break; }
     if (!frozen) for (const [a, z] of this.holds) if (t >= a && t < z) { frozen = true; break; }
-    let snap = 1;
-    if (t < this.snapUntil) {
-      let last = -9; for (const s of this.snaps) if (s <= t) last = s; else break;
-      const since = t - last;
-      snap = since < 0.12 ? 5 : 0;         // a jerk to the next pose, then still
-    }
-    rig.timeScale = frozen ? 0 : snap;
-    b.lockFacing = frozen || (t < this.snapUntil && snap === 0) || this.slowTurn;
+    rig.timeScale = frozen ? 0 : 1;
+    b.lockFacing = frozen || t < this.backUntil || this.slowTurn;
     // the bridge: she turns to face YOU at 90 degrees a beat, slowly, so YOU can circle her
     if (this.slowTurn && !frozen && !b.move) { const want = Math.atan2(f.player.x - b.x, f.player.z - b.z); const d = Math.atan2(Math.sin(want - b.facing), Math.cos(want - b.facing)); const m = (Math.PI / 2) / f.beat * dt; b.facing += Math.abs(d) <= m ? d : Math.sign(d) * m; }
     this.frozen = frozen;

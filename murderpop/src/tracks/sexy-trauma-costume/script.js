@@ -47,19 +47,28 @@ export function script(T, f) {
 
   // her stops: nothing of hers lands in a silence, and she stands frozen in it
   C.freezes = [[B(41, 3), B(42, 1)], [139.70, 139.82], [141.15, 141.64], [204.66, 204.82], [206.32, 206.47], [207.33, 207.48], [208.99, 209.15], [209.99, 210.32]];
-  // the intro: two stabs and a gap per bar; between stabs she is a window dummy
-  C.snaps = []; for (let bar = 0; bar < 8; bar++) C.snaps.push(B(bar, 1), B(bar, 2));
-  C.snapUntil = 5.5;
-
   // =================================================================== S0 THE BACK ROOM · 0.00–22.66
-  // the welcome: she has her back to the room, stocking the counter; she moves only on the stabs
-  at(B(0, 1), () => { b.facing += 0.35; });
-  at(B(0, 2), () => { b.facing += 0.6; });
-  at(B(1, 2), () => { b.faceNow(f.player.x, f.player.z); C.say('sale', 1); C.play('Yes', f.t, 0.7); });       // "honey"
-  // four steps round the counter's left end, one per stab, to (-2.4, -4.6); the shears come out on the last
-  const steps = [[-1.9, -6.85], [-3.85, -6.55], [-3.85, -5.1], [-2.4, -4.6]];
-  [B(2, 1), B(2, 2), B(3, 1), B(3, 2)].forEach((t, i) => go(t, steps[i][0], steps[i][1], 0.14));
-  at(B(3, 2), () => { C.draw('shears'); b.idle = 'Idle_Talking_Loop'; });
+  // the welcome: she has her back to the room, stocking the counter, and glances round on the first two stabs; on
+  // "honey" she turns to YOU and nods, then hurries out round the counter's left end to (-2.4, -4.6), there on the
+  // stab the shears come out on: one unbroken jog, every leg at the same speed, no stop at a corner. The legs are laid
+  // clear of the counter, so the walk takes them as they are (the aisle behind it is narrower than her round body
+  // for the shared routing, which jumped her out of it)
+  C.backUntil = B(1, 2);
+  const glance = (t0, by, dur) => at(t0, () => {
+    const a0 = b.facing;
+    R.keep(null, t0 + dur, { tick: (t) => { const k = Math.min(1, Math.max(0, (t - t0) / dur)); b.facing = a0 + by * k * k * (3 - 2 * k); } });
+  });
+  glance(B(0, 1), 0.35, 0.25);
+  glance(B(0, 2), 0.6, 0.3);
+  at(B(1, 2), () => { b.idle = 'Idle_Talking_Loop'; C.say('sale', 1); C.play('Yes', f.t, 0.7); });       // "honey"
+  at(B(1, 2) + 0.7, () => {
+    b.behave = 'hold';
+    const legs = [[-1.9, -6.85], [-3.85, -6.55], [-3.85, -5.1], [-2.4, -4.6]];
+    let px = b.x, pz = b.z, len = 0; const seg = legs.map(([x, z]) => { const d = Math.hypot(x - px, z - pz); px = x; pz = z; len += d; return d; });
+    const dur = Math.max(0.5, B(3, 2) - f.t); let tt = f.t;
+    legs.forEach(([x, z], i) => { const d = dur * seg[i] / Math.max(1e-3, len); f.at(tt, () => b.moveTo(x, z, Math.max(0.05, d), { easing: 'linear', through: true })); tt += d; });
+  });
+  at(B(3, 2), () => { C.draw('shears'); });
 
   // SEXY DIVORCE: two cuts down the floor toward YOU ("di-VORCE", "three-PIECE")
   const divorce = (t0, t1) => at(t0, () => {

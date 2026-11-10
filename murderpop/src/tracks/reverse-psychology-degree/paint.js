@@ -1,5 +1,6 @@
 // Paintings for the sets, drawn on canvases: the lecture screen's slides (and the inkblot), the chalkboards, the
-// banner's crest, the dissertations' spines, the clock face, windows, hedges, grass. Mirror-written where she wrote it.
+// banner's crest, the dissertations' spines, the clock face, windows, hedges, grass. Her diagrams on the screen are
+// drawn mirror-wise; every word on the screen and the chalkboards reads the right way round.
 import * as THREE from 'three';
 
 export function tex(c, { srgb = true, repeat = null, aniso = 8 } = {}) {
@@ -43,8 +44,10 @@ export class Screen {
     } else if (slide === 'ink') {
       this._ink(g, W, H, k);
     } else {
-      // her mirror-written diagrams: a brain, arrows, a target round a stick figure
+      // her diagrams, drawn mirror-wise: a brain, arrows, a target round a stick figure (the words in them are flipped
+      // back where they're written, so they read, and sit where they always did)
       g.translate(W, 0); g.scale(-1, 1);
+      const write = (s, x, y) => { g.save(); g.translate(x, y); g.scale(-1, 1); g.textAlign = 'right'; g.fillText(s, 0, 0); g.restore(); };
       g.strokeStyle = '#3a1a1a'; g.fillStyle = '#3a1a1a'; g.lineWidth = 5; g.lineCap = 'round';
       const v = slide % 4;
       if (v === 1 || v === 3) { // the brain in profile, gyri scribbled
@@ -59,7 +62,7 @@ export class Screen {
       }
       if (v === 0 || v === 2) { // arrows and her scrawl
         seed = 31 + v; g.font = 'italic 700 34px Fraunces, Georgia, serif';
-        for (let i = 0; i < 5; i++) { const y = 70 + i * 52; g.fillText(['ego ⇄ id', 'yes = no', 'Δ doubt ∝ t', 'you → me', 'Q.E.D.'][i], 600 + rnd() * 120, y); }
+        for (let i = 0; i < 5; i++) { const y = 70 + i * 52; write(['ego ⇄ id', 'yes = no', 'Δ doubt ∝ t', 'you → me', 'Q.E.D.'][i], 600 + rnd() * 120, y); }
         g.beginPath(); g.moveTo(560, 300); g.bezierCurveTo(470, 330, 420, 240, 470, 200); g.stroke();
       }
     }
@@ -99,7 +102,6 @@ export function chalkboard() {
   g.fillStyle = '#1d2420'; g.fillRect(0, 0, 512, 280);
   seed = 3;
   for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(230,230,220,${rnd() * 0.05})`; g.fillRect(rnd() * 512, rnd() * 280, 2 + rnd() * 6, 1 + rnd() * 3); }
-  g.translate(512, 0); g.scale(-1, 1);
   g.strokeStyle = 'rgba(240,238,228,0.75)'; g.fillStyle = 'rgba(240,238,228,0.8)'; g.lineWidth = 2.5; g.lineCap = 'round';
   g.font = 'italic 26px Fraunces, Georgia, serif';
   for (let i = 0; i < 6; i++) g.fillText(['∂(you)/∂t < 0', 'denial ≡ assent', 'p(leave) → 0', 'shame × love = ?', 'reverse(x) = x', 'I ⊃ you'][i], 24 + (i % 2) * 230, 46 + Math.floor(i / 2) * 70);
