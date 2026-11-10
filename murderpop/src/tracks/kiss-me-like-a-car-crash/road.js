@@ -4,7 +4,7 @@
 // Almost everything here is a function of song time (update(t) puts it where it is at t), so a rewind to any section
 // is exact; what play decides (what broke, where her car ended up) is snapshotted at each section and restored.
 import * as THREE from 'three';
-import { makeCar, mats, lacquer, MAT, Glows, flare, flareRegistry, flushFlares, Billboards, glowTexture, skyDome, decal, decalTex, Fires, clamp01, smooth, lerp, hash } from './kit.js';
+import { makeCar, mats, lacquer, MAT, Glows, flare, flareRegistry, flushFlares, Billboards, glowTexture, skyDome, beyond, decal, decalTex, Fires, clamp01, smooth, lerp, hash } from './kit.js';
 
 export const FLOOR = { minX: -10.5, maxX: 10.9, minZ: -3.3, maxZ: 6.6 };
 // the message board's dot font: 5 x 7, rows as 5-bit numbers
@@ -13,6 +13,7 @@ export const LANE_Z = -5.45, KRAIL_Z = -3.6, GUARD_Z = 6.8;
 export const BOULDERS = [[-5.0, -1.4, 0.9], [2.4, -2.0, 0.8], [-4.6, 5.0, 0.8], [2.9, 5.2, 0.7]];
 export const SLOTS = [[-2.6, -3.3, 1.5], [1.4, 1.6, 6.6], [-6.0, 1.6, 6.6], [4.4, -3.3, 0.3]];   // W1..W4: x, z0, z1
 export const STOPPED_X = [-9.2, -4.6, 0.0, 4.6, 9.2];
+export const YOU_CAR = { x: 7.4, z: 1.4, yaw: Math.PI, crumple: 0 };
 const yawFor = (fx, fz) => Math.atan2(-fz, fx);          // a car's yaw so its nose (+x) points along (fx, fz)
 const C = (hex, k = 1) => new THREE.Color(hex).multiplyScalar(k);
 const WHITE = C('#eaf2ff'), PINKW = C('#ffe2ec'), RED = C('#ff2a3a'), BLUE = C('#2f55ff'), FLAME = C('#ffb35a'), FIRE = C('#ff7a2a'), AMBER = C('#ffb000'), SEARCH = C('#f4f8ff');
@@ -27,6 +28,7 @@ export class Road {
     this.glows = new Glows(sc, 160);
     this.fires = new Fires(sc, 72);
     this.sky = skyDome(sc);
+    this.far = beyond(sc, this.sky);
     this.t = 0;
     this.surfaces = [];          // crash surfaces and colliders: {type, shape:'box'|'circle', x, z, hx, hz, rot, r, on() }
     this._times();
@@ -69,10 +71,17 @@ export class Road {
     you.flareL = flare(WHITE.clone().multiplyScalar(0.8), 0.6); you.flareR = flare(WHITE.clone().multiplyScalar(0.8), 0.6);
     you.parts.lensL.add(you.flareL); you.parts.lensR.add(you.flareR);
     her.flareL = flare(PINKW.clone().multiplyScalar(0.9), 0.65); her.parts.lensL.add(her.flareL);
-    // her car's eventual wreck pose (where it stopped), crumple
+    // her car's eventual wreck pose (where it stopped), crumple. (lit: the wreck's one light is back on; blaze: how
+    // bright; y, pitch, roll: its body rocking on its springs. Her last bars use these: death.js.)
     this.herCar = { mode: 'parked', x: -7.6, z: 1.4, yaw: 0, crumple: 0 };
+    // YOU's car sits where YOU left it all song; her last bars shunt it (death.js)
+    this.youCar = { ...YOU_CAR };
+    you.root.rotation.order = 'YZX'; her.root.rotation.order = 'YZX';
     this.surfaces.push(this.youSurf = { type: 'car', name: 'you', shape: 'box', x: 7.4, z: 1.4, hx: 2.35, hz: 0.95, rot: 0, on: () => true, hits: 0 });
     this.surfaces.push(this.herSurf = { type: 'car', name: 'her', shape: 'box', x: -7.6, z: 1.4, hx: 2.3, hz: 0.95, rot: 0, on: () => this.herCar.mode !== 'driving', hits: 0 });
+    // the message board's trailer (baked into the set; YOU's floor test already has it): she can't walk through it
+    // either, and a charge that ends in it is a crash like any other
+    this.surfaces.push({ type: 'board', name: 'board', shape: 'box', x: 9.4, z: 5.6, hx: 0.75, hz: 1.25, rot: 0, on: () => true, hits: 0 });
     // breakables on YOU's car, in the order she takes them (pre 1)
     this.youBreak = [
       { name: 'headL', obj: you.parts.lensL, at: [5.08, 0.95] }, { name: 'headR', obj: you.parts.lensR, at: [5.08, 1.85] },
@@ -426,6 +435,7 @@ export class Road {
   restore(s) {
     this.state = { youBroken: [...s.youBroken], carve: s.carve };
     this.herCar = { ...s.herCar };
+    this.youCar = { ...YOU_CAR };
     this.cones.forEach((c, i) => { c.st = s.cones[i] === 'up' ? 'up' : 'gone'; c.obj.position.set(c.home[0], 0, c.home[1]); c.obj.rotation.set(0, 0, 0); c.obj.visible = c.st === 'up'; });
     this.horses.forEach((c, i) => { c.st = s.horses[i] === 'up' ? 'up' : 'gone'; c.obj.position.set(c.home[0], 0, c.home[1]); c.obj.rotation.set(0, 0, 0); c.obj.visible = c.st === 'up'; });
     this.rocks.forEach((r, i) => { r.s.hits = s.rocks[i]; r.obj.scale.setScalar(s.rocks[i] ? 0.9 : 1); });
@@ -449,6 +459,18 @@ export class Road {
   }
   youBroken(name) { return this.state.youBroken.includes(name); }
 
+  // the two cars where their state has them, and their colliders with them (a collider turns with the body: resolve
+  // and ray take local x along the nose, (cos yaw, -sin yaw); and it crumples with it)
+  placeCars() {
+    const hc = this.herCar, her = this.her, yc = this.youCar, you = this.you;
+    her.root.position.set(hc.x, hc.y || 0, hc.z); her.root.rotation.set(hc.roll || 0, hc.yaw, hc.pitch || 0);
+    her.root.scale.set(1 - 0.18 * hc.crumple, 1 - 0.12 * hc.crumple, 1);
+    this.herSurf.x = hc.x; this.herSurf.z = hc.z; this.herSurf.rot = hc.yaw; this.herSurf.hx = 2.3 * (1 - 0.18 * hc.crumple);
+    you.root.position.set(yc.x, yc.y || 0, yc.z); you.root.rotation.set(yc.roll || 0, yc.yaw, yc.pitch || 0);
+    you.root.scale.set(1 - 0.18 * yc.crumple, 1 - 0.12 * yc.crumple, 1);
+    this.youSurf.x = yc.x; this.youSurf.z = yc.z; this.youSurf.rot = yc.yaw - Math.PI; this.youSurf.hx = 2.35 * (1 - 0.18 * yc.crumple);
+  }
+
   // ------------------------------------------------------------------ per frame: everything where it is at song time t
   update(dt, t, f) {
     this.t = t;
@@ -468,22 +490,20 @@ export class Road {
     }
     you.parts.glass[0].material = !this.youBroken('windscreen') && !this.windowsOut ? MAT.glass : MAT.glassOut;
     you.doorGlass.visible = !this.youBroken('doorGlass') && !this.windowsOut;
-    // ---- her car: parked (its one headlight), driving (moves.js drives it), or a wreck
+    // ---- her car: parked (its one headlight), driving (moves.js drives it), or a wreck (whose light comes back on
+    // for her last bars)
     const hc = this.herCar, her = this.her;
-    her.root.position.set(hc.x, 0, hc.z); her.root.rotation.y = hc.yaw;
-    her.root.scale.set(1 - 0.18 * hc.crumple, 1 - 0.12 * hc.crumple, 1);
+    this.placeCars();
     her.parts.glass[0].material = this.windowsOut && hc.mode === 'wreck' ? MAT.glassOut : MAT.glass;
-    const herOn = hc.mode !== 'wreck' && ((t >= T.herLight && t < T.headsOff) || t >= T.headsOn);
+    const herOn = (hc.mode !== 'wreck' || hc.lit) && ((t >= T.herLight && t < T.headsOff) || t >= T.headsOn);
     her.flareL.visible = herOn; her.parts.lensL.material = herOn ? MAT.lens : MAT.lensOff;
     if (herOn) {
-      const blaze = t >= T.engine ? 1.8 : 1;
-      const fx = Math.cos(hc.yaw), fz = -Math.sin(hc.yaw);
-      const lx = hc.x + fx * 2.3 - fz * 0.6, lz = hc.z + fz * 2.3 + fx * 0.6;
+      const blaze = (t >= T.engine ? 1.8 : 1) * (hc.blaze ?? 1);
+      const fx = Math.cos(hc.yaw), fz = -Math.sin(hc.yaw), nose = 2.3 * (1 - 0.18 * hc.crumple);
+      const lx = hc.x + fx * nose - fz * 0.6, lz = hc.z + fz * nose + fx * 0.6;
       g.beam(lx, lz, Math.atan2(fx, fz), 14, 4.0, PINKW, 0.085 * blaze * (t < T.herLight + 0.1 ? (t - T.herLight) / 0.1 : 1));
       her.flareL.scale.setScalar(0.65 * blaze);
     }
-    // its collider turns with the body (resolve/ray take local x along the nose: (cos yaw, -sin yaw)) and crumples with it
-    this.herSurf.x = hc.x; this.herSurf.z = hc.z; this.herSurf.rot = hc.yaw; this.herSurf.hx = 2.3 * (1 - 0.18 * hc.crumple);
     // ---- strobes at the roadblock: red on beats 1 and 3, blue on 2 and 4
     const strobeK = this._strobeK(t);
     if (strobeK > 0) {
@@ -606,6 +626,8 @@ export class Road {
     const s = this.skyAt(t);
     this.sky.material.uniforms.uTop.value.copy(s.top); this.sky.material.uniforms.uHor.value.copy(s.hor);
     if (t >= this.T.blast && t < this.T.blast + 0.3) { const fl = 1 - (t - this.T.blast) / 0.3; this.sky.material.uniforms.uHor.value.lerp(new THREE.Color(1.7, 1.65, 1.6), fl * fl); }
+    // the sky the camera sees over the ridge: night's is dim, first light's is the brightest thing in the picture
+    this.far.dome.material.uniforms.uGain.value = lerp(0.5, 0.82, t >= this.T.dawn ? smooth(this.T.dawn, this.T.dawn + 9, t) : 0);
   }
 
   _boardAt(t, f, barBeat, inBeat) {
@@ -765,6 +787,6 @@ export class Road {
   }
   setPuddles(list) { this.puddles = list; }
   dispose() {
-    this.f.scene.remove(this.group); this.glows.dispose(this.f.scene); this.fires.dispose(this.f.scene); this.f.scene.remove(this.sky); this.flareBB.dispose(this.f.scene); this.flareList.length = 0;
+    this.f.scene.remove(this.group); this.glows.dispose(this.f.scene); this.fires.dispose(this.f.scene); this.f.scene.remove(this.sky); this.far.dispose(); this.flareBB.dispose(this.f.scene); this.flareList.length = 0;
   }
 }

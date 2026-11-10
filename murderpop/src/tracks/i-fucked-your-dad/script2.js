@@ -79,7 +79,8 @@ export function script2(T, f, tr, H) {
   // KISSED ME SLOW: the only homing shot in the fight
   at(108.46, (ff) => { if (ff.suppress) return; ff.pat.fan(ff, { n: 1, speed: 3.5, shape: 'kiss', size: 0.8, kind: 'pink', homing: 1.2, life: 3.0 }); });
   // THE APPLE DIDN'T FALL FAR: she walks to the apple tree, slaps its trunk, bites; ripe apples, a rotten one
-  at(109.53, (ff) => { D._seated = false; boss().idle = 'Idle_Talking_Loop'; D.lock(115.0); D.strut(8.4, -4.4, Math.hypot(8.4 - boss().x, -4.4 - boss().z) / Math.max(0.6, S(111.2) - ff.t)); });
+  // (round the foot of the bed she was on, and the end of the poster flat)
+  at(109.53, (ff) => { D._seated = false; boss().idle = 'Idle_Talking_Loop'; D.lock(115.0); D.walk([[3.95, -0.75], [5.55, -0.75], [8.35, -4.6]], Math.max(ff.t + 0.6, S(111.2))); });
   at(111.31, (ff) => { boss().faceNow(9.6, -5.6); boss().perform('Interact', { duration: 0.32 }); snd('thump', { x: 9.6, gain: 0.4, rate: 1.6 }); });
   at(111.67, (ff) => { boss().perform('Consume', { duration: 0.6 }); snd('strike', { x: 8.6, rate: 0.5, gain: 0.8 }); });
   for (const s of [112.38, 113.09, 113.80]) at(s, (ff) => { if (!ff.suppress) shotAt(ff, { from: { x: 8.6, z: -4.6 }, tArrive: ff.t + 2 * B(ff.t), shape: 'orb', size: 0.45 }); boss().perform('OverhandThrow', { duration: 0.32, from: 0.3, to: 0.8 }); });

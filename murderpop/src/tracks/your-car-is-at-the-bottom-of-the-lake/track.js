@@ -14,6 +14,7 @@ import { buildSolver, makeBoss, Solver, BEAT, bindSound } from './boss.js';
 import { LakeSound } from './sound.js';
 import { area, show, keyRing, keyLoop, block, kissRing, Beams, pour, coverShots } from './moves.js';
 import { teachBot } from './bot.js';
+import { death, killFrame } from './death.js';
 
 const ID = 'your-car-is-at-the-bottom-of-the-lake';
 const HP = 1650;   // no bullet sponge: the test bot (twice a person's damage) empties her at the first stop, about 42 s
@@ -40,7 +41,9 @@ export default {
   id: ID,
   beats: ID,
   par: 50000,
-  lastHit: S.thump,           // the fight's own end: the soft thump in her doorway (the main finish lands at 100.611, below)
+  // the song's last big hit ("You're mine forever now", 100.611): her death scene's last press lands on it, or the
+  // ENCORE is called on it. The outro after it (the lake lets go, dawn, "I kept the spare key") plays over what's left.
+  lastHit: S.finish,
   spawn: { player: [pierPoint(3.4, 0.1).x, pierPoint(3.4, 0.1).z, PIER_ANGLE + Math.PI], boss: [SPOTS.porch.x, SPOTS.porch.z, 0] },
 
   async buildArena(f) {
@@ -48,6 +51,7 @@ export default {
     f.lakeHz = [];
     const world = new World(f);
     L = { f, world, live: new Set(), ticks: [], songT: 0 };
+    f.lake = L;      // (her death scene, and tools that look at the set, reach it through the fight)
     await world.build();
     const snd = new LakeSound(f); await snd.load(); L.snd = snd; world.snd = (n, x, o) => snd.play(n, x, o);
     bindSound((n, x, o) => snd.play(n, x, o));
@@ -90,8 +94,8 @@ export default {
     T.section('verse 2, the police', { s: B(17) }, { s: B(21) });
     T.section('verse 2b and the second stop', { s: B(21) }, { s: B(26, 2) }, { close: true });
     T.section('chorus 2, at the bottom of the lake', { s: B(26, 2) }, { s: B(30) }, { final: true });
+    // (the fight ends on the final's last hit, B(32, 4): the outro is what's left of the song after it, and no section)
     T.section('the final', { s: B(30) }, { s: B(33) });
-    T.section('the outro', { s: B(33) }, { s: S.end }, { close: true });
 
     // ================================================================ S1 · INTRO: she's on her porch with her coffee
     at(0.02, () => { b().perform('Consume', { duration: 1.4, from: 0.1, to: 0.9 }); sv().setFace('SWEET'); });
@@ -411,25 +415,18 @@ export default {
     // NOW: the lid presses down
     at(B(32, 1), () => { const bb = b(); bb.perform('Spell_Simple_Enter', { duration: 0.7 }); area(f, { shape: 'ring', x: bb.x, z: bb.z, w: 7, param: 4.5 }, { end: B(32, 2), kind: 'white', onImpact: () => { snd().play('whum', bb.x); } }); });
     at(B(32, 2.5), () => { b().open(0.9); });
-    // the pickup and THE FINISH on the last hit; or, with health left, MAKE NO MISTAKE
+    // MAKE NO MISTAKE: with health left she comes down on YOU, a breath before the last hit (on it the fight calls
+    // the ENCORE: what's still filling then never lands). Her bar empty, the last bars are her death scene (death.js),
+    // and the fight ends her on the last hit itself.
     at(B(32, 3), () => {
       const bb = b();
       if (bb.state === 'desperate') return;
-      const lock = { x: pl().x, z: pl().z };
-      area(f, { shape: 'circle', x: lock.x, z: lock.z, w: 2.4 }, { end: B(32, 4), kind: 'white', onImpact: () => { snd().play('plateHeavy', lock.x); f.cam.shake(0.5, 0.15); } });
-      f.at(B(32, 4) - 0.32, () => { if (bb.state === 'desperate') return; sv().flash('REAL', 0.45); bb.moveTo(lock.x, lock.z - 0.3, 0.3, { easing: 'in' }); bb.perform('Sword_Heavy_Combo', { from: 0.72, to: 0.95, duration: 0.45 }); });
+      const lock = { x: pl().x, z: pl().z }, land = S.finish - 0.04;
+      area(f, { shape: 'circle', x: lock.x, z: lock.z, w: 2.4 }, { end: land, kind: 'white', onImpact: () => { snd().play('plateHeavy', lock.x); f.cam.shake(0.5, 0.15); } });
+      f.at(land - 0.32, () => { if (bb.state === 'desperate') return; sv().flash('REAL', 0.45); bb.moveTo(lock.x, lock.z - 0.3, 0.3, { easing: 'in', arc: 0.9 }); bb.perform('Sword_Heavy_Combo', { from: 0.72, to: 0.95, duration: 0.45 }); });
     });
-    at(S.finish, () => { if (b().state === 'desperate' && f.state === 'play') { L.won = true; L.world.won = true; f._finish(); } });
-
-    // ================================================================ S9 · THE OUTRO: the lake lets go (the walk home, if she's still standing)
-    at(S.drain, () => { snd().under = false; snd().play('drain', 3); });
-    at(S.drain + 0.3, () => { if (L.won) return; const bb = b(); bb.behave = 'hold'; bb.walkClip = bb.broken >= 3 ? 'Zombie_Walk_Fwd_Loop' : 'Walk_Formal_Loop'; bb.runClip = bb.walkClip; bb.moveTo(SPOTS.steps.x, SPOTS.steps.z + 0.3, 104.4 - f.t); });
-    at(104.6, () => { if (L.won) return; const bb = b(); bb.faceNow(pl().x, pl().z); bb.rig.upperOnce('Yes', { duration: 0.6 }); const a = toward(bb, pl()), d = Math.hypot(pl().x - bb.x, pl().z - bb.z); f.proj.spawn({ x: bb.x + Math.sin(a) * 0.6, z: bb.z + Math.cos(a) * 0.6, angle: a, speed: Math.max(3, (d - 0.6) / (B(34, 3) - f.t)), kind: 'pink', shape: 'kiss', size: 0.42, life: 4 }); snd().play('kiss', bb.x); });
-    at(106.0, () => { if (L.won) return; b().moveTo(SPOTS.door.x + 0.3, -6.35, 1.6); });
-    at(B(35, 2), () => { if (L.won) return; const bb = b(); bb.faceNow(SPOTS.plaque.x, -7.5); bb.perform('Interact', { duration: 1.4 }); bb.open(1.5); snd().play('coins', bb.x, { gain: 0.5 }); });
-    at(B(36, 1.5), () => { if (L.won) return; const bb = b(); bb.faceNow(pl().x, pl().z); area(f, { shape: 'ring', x: bb.x, z: bb.z, w: 6, param: 3.5 }, { end: B(36, 2), kind: 'white', onImpact: () => snd().play('whum', bb.x) }); });
-    at(113.0, () => { if (L.won) return; snd().play('doorOpen', SPOTS.door.x); L.world.doorOpen = (t) => (t - 113.0) / 0.8; });
-    at(S.home, () => { if (L.won) return; b().moveTo(SPOTS.door.x + 0.1, -6.75, 0.4); });
+    // (the outro, 101.4 to the end, has no events of hers: the fight is over on the last hit. The lake letting go, the
+    // dawn, the key on its hook and the porch light are the set's own, on the song's clock: world.js, and update below.)
   },
 
   // ---------------------------------------------------------------------------------------------- the fight's hooks
@@ -437,7 +434,9 @@ export default {
     const pl = f.player;
     // YOU bails out of YOUR car as it rolls down her pier: mid-roll, on the deck, heading down the ramp
     const st = pierPoint(3.4, 0.1); pl.place(st.x, st.z, PIER_ANGLE + Math.PI);
-    pl.state = 'dash'; pl.st = 0.02; pl._dashAng = PIER_ANGLE + Math.PI; pl.rig.once('Roll', { from: 0.33, to: 0.95, duration: 0.3, then: null });
+    // (a dash's own fields, all of them: without the way she faces through it her facing went NaN for the roll, and a
+    // ring thrown in that tenth of a second flew off to nowhere)
+    pl.state = 'dash'; pl.st = 0.02; pl._dashAng = pl._dashFace = PIER_ANGLE + Math.PI; pl.rig.once('Roll', { from: 0.33, to: 0.95, duration: 0.3, then: null });
     resync(f, 0, true); L.fromTop = true;
   },
   onSection(f, sec) { L.world.snapshot(sec.t0); },
@@ -455,8 +454,10 @@ export default {
   },
   onEmpty(f) { const b = f.boss; b.walkClip = 'Zombie_Walk_Fwd_Loop'; b.runClip = 'Zombie_Walk_Fwd_Loop'; L.solver.setFace('WRECKED'); },
   onFinish(f) {
-    L.won = true; L.world.won = true; L.snd.play('glassHeavy', f.boss.x, { dry: true });
-    // the song plays on for eighteen seconds after she shatters, and no spotlight can start then: keep the meter from
+    L.won = true; L.world.won = true;
+    // (her death scene has its own sound for the last hit: the lid coming down on her. Shattered where she stood, glass)
+    if (!L.world.kill) L.snd.play('glassHeavy', f.boss.x, { dry: true });
+    // the song plays on for eighteen seconds after she's gone, and no spotlight can start then: keep the meter from
     // showing one ready
     f.player.meter = Math.min(f.player.meter, 0.99);
   },
@@ -468,11 +469,15 @@ export default {
     // practice from a section (?at=): the set, her and YOU as they'd be there, her health as a good player leaves it
     if (!L.botTaught && f.input && f.input.think) { L.botTaught = true; teachBot(f, L); }
     if (!L.started) { L.started = true; if (t > 0.5) { practiceHp(f, t); resync(f, t, false); const fig = f.boss.fig; for (let k = 0; k < Math.min(3, f.boss.broken); k++) { const n = fig.spec.breaks[k], a = fig.acc.find((x) => x.name === n); if (a) { a.broken = true; a.def.broken = true; for (const o of a.objects) o.visible = false; } else fig.breakPiece(n); } } }
-    // the set's clock: the song's, and after the finish it plays on (the outro, dawn, the porch light on "home")
+    // the set's clock: the song's, and after the finish it plays on (the outro, dawn, the porch light on "home").
+    // An ENCORE is called on the last hit, a beat before the lake lets go: the set holds there until the record winds back.
     if (f.state === 'play' || f.state === 'dying' || f.state === 'rewinding') L.songT = t;
-    else if (f.state === 'finishing' || f.state === 'encore') L.songT = f.manual ? L.songT + dt : Math.max(L.songT, f.audio.time(performance.now()));
+    else if (f.state === 'finishing') L.songT = f.manual ? L.songT + dt : Math.max(L.songT, f.audio.time(performance.now()));
     if (!L.solver) return;
-    const b = f.boss, sv = L.solver;
+    const b = f.boss, sv = L.solver, scene = !!b.scene;
+    // the lake lets go (the song's own fall, after the fight's last hit): its sound, and the sounds are in the air again
+    if (L.songT >= S.drain && !L.drained) { L.drained = true; if (L.songT < S.drain + 0.5) L.snd.play('drain', 3, { dry: true }); }
+    L.snd.under = L.songT >= S.under && L.songT < S.drain;
     // the first second and a half: the camera leans out over her yard so YOUR car is in the picture, rolling down her pier
     if (L.fromTop && f.state === 'play' && L.songT < 1.9) { const k = 1 - ramp(L.songT, 1.0, 1.9); f.cam.override = L.introCam || (L.introCam = { pos: new THREE.Vector3(3.2, 17.0, 15.2), look: new THREE.Vector3(3.2, 0.5, 2.4), k: 1 }); L.introCam.k = k * k * (3 - 2 * k); }
     else if (L.introCam && f.cam.override === L.introCam) { f.cam.override = null; L.introCam = null; }
@@ -487,10 +492,14 @@ export default {
     sv.update(dt);
     // the police light: when a beam is on her she bursts into tears
     if (L.world.beamOn(b.x, b.z, t) && b.state !== 'desperate') sv.flash('CUE', 0.14);
-    // her spins (the donut, the offering) and the halo
-    if (L.spin && t >= L.spin.t0 && t <= L.spin.t1) { b.lockFacing = true; b.facing = L.spin.y0 + (t - L.spin.t0) / (L.spin.t1 - L.spin.t0) * Math.PI * 2; } else if (L.spin && t > L.spin.t1) { b.lockFacing = false; L.spin = null; }
-    // ground rings under the fighters sit on the porch / pier / water
-    if (f.marks) { f.marks.you.position.y = Math.max(floorAt(f.player.x, f.player.z), L.world.surf) + 0.03; f.marks.her.position.y = Math.max(floorAt(b.x, b.z), L.world.surf) + 0.03; }
+    // her spins (the donut, the offering) and the halo (not in her death scene: the scene turns her)
+    if (scene) { L.spin = null; b.lockFacing = false; }
+    else if (L.spin && t >= L.spin.t0 && t <= L.spin.t1) { b.lockFacing = true; b.facing = L.spin.y0 + (t - L.spin.t0) / (L.spin.t1 - L.spin.t0) * Math.PI * 2; } else if (L.spin && t > L.spin.t1) { b.lockFacing = false; L.spin = null; }
+    // ground rings under the fighters sit on the porch / pier / water (in her death scene YOU's is only there while
+    // she's on the floor: up on the car, in the air, it would lie on the lakebed under nobody)
+    if (f.marks) { f.marks.you.position.y = Math.max(floorAt(f.player.x, f.player.z), L.world.surf) + 0.03; f.marks.her.position.y = Math.max(floorAt(b.x, b.z), L.world.surf) + 0.03; if (f.player.state === 'scene') f.marks.you.visible = f.player.y < 0.06; }
+    // her death scene's own moving parts (YOUR car, its lid, the key ring), and what's left in the lake after it
+    killFrame(f, L, dt);
     // falling blocks, the pour, the third case
     for (const blk of L.live) blk.fall && blk.fall();
     L.ticks = L.ticks.filter((fn) => fn(dt, t));
@@ -515,10 +524,12 @@ export default {
     // the spare key is hers if she walks up onto the porch for it
     if (L.won && !L.world.keyTaken && L.songT > S.drained) { const p = f.player; if (Math.hypot(p.x - SPOTS.plaque.x, p.z - (SPOTS.plaque.z + 0.6)) < 1.3) { L.world.keyTaken = true; L.snd.play('coins', p.x); L.snd.play('click', p.x, { at: 0.25 }); } }
     if (L.won && L.songT >= S.home && !L.lightOff) { L.lightOff = true; L.snd.play('click', SPOTS.door.x); }
-    if (!L.won && L.songT >= S.home + 0.05 && !L.inside) { L.inside = true; }
     // YOUR rings trim the topiary hearts: three hits and it's a stump
     trimFrame(f);
   },
+
+  // her last bars, her bar empty: PUT AWAY (death.js)
+  death,
 };
 
 // ---------------------------------------------------------------------------------------------- helpers
@@ -593,7 +604,7 @@ function fizzle(f) {
 // put everything back as it is at song time t (rewinds, encores, practice from a section)
 function resync(f, t, first) {
   const w = L.world, sv = L.solver, b = f.boss;
-  L.songT = t; L.honkT = 0; L.spin = null; L.combo = null; L.unstoppable = false; L.offering = null; L.noFlick = false; L.atStick = false;
+  L.songT = t; L.honkT = 0; L.spin = null; L.combo = null; L.unstoppable = false; L.offering = null; L.noFlick = false; L.atStick = false; L.drained = t >= S.drain;
   L.ticks.length = 0; for (const blk of L.live) { blk.o.visible = false; blk.busy = false; } L.live.clear(); w.freeBlocks();
   L.beams.clear(); f.lakeHz.length = 0; L.bubbles = [];
   if (!first && !w.restore(SPAWN[sectionIndex(t)].t)) w.stateAt(t, true); else w.stateAt(t, first);
@@ -620,8 +631,10 @@ function resync(f, t, first) {
 // practice from a section: her health as a good player leaves it there
 export function practiceHp(f, t) {
   const b = f.boss, i = sectionIndex(t);
-  b.hp = b.maxHp * ARC[i]; b.damageK = 1 - ARC[i];
-  b.broken = b.notches.filter((n) => ARC[i] <= n).length;
+  // (her bar already emptied before the first frame, by ?kill: it stays empty, and she's as broken as that)
+  const k = b.hp <= 0 ? 0 : ARC[i];
+  b.hp = b.maxHp * k; b.damageK = 1 - k;
+  b.broken = b.notches.filter((n) => k <= n).length;
   if (b.hp <= 0) { b.hp = 0; b.state = 'desperate'; }
   f.hud.restoreNotches && f.hud.restoreNotches(b.broken);
   f.checkpoint = { t: SPAWN[i].t, boss: b.snapshot(), score: f.score };

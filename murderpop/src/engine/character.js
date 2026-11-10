@@ -85,6 +85,11 @@ export class Rig {
     this.flinchDir = new THREE.Vector3();
     this.lookTarget = null;            // world position the head turns towards
     this.frozen = 0;                   // hit-stop seconds left (local: only this rig)
+    // the whole body, on top of the clip: lifted (a jump), spun about its own axis (a pirouette), tipped about the
+    // hips (a flip, a dive), and squashed for a frame on a landing. The game sets these; they ease nowhere by themselves.
+    this.body = { y: 0, spin: 0, pitch: 0, roll: 0, squash: 0, hip: 1.0 };
+    this._m0 = null;                   // the model's own transform, taken as these come on (and put back as they go)
+    this.flinchGain = 1;               // how far a blow folds her (her: more than YOU)
     this.meshes = [];
     model.traverse((o) => { if (o.isMesh) this.meshes.push(o); });
     this.mixer.addEventListener('finished', (e) => this._finished(e));
@@ -151,6 +156,31 @@ export class Rig {
   }
   upperStop(fade = 0.12) { this._upperHold = false; if (this.upperAct) { this.upperAct.fadeOut(fade); this.upperAct = null; } }
 
+  // a clip driven by hand: the caller sets where in [from, to] the pose is, every frame (a strike that has to land
+  // on a beat keeps its own clock). scrubTo(k): k 0..1 of the window. It holds its last pose until something else plays.
+  scrub(name, { from = 0, to = 1, fade = 0.05 } = {}) {
+    const clip = this.kit.clips[name];
+    if (!clip) { console.warn('no clip', name); return null; }
+    const a = this.play(name, { fade, speed: 0, loop: false, offset: from, force: true });
+    this._onceEnd = 0; this._then = null;
+    this._scrub = { a, from, to, dur: clip.duration };
+    return a;
+  }
+  scrubTo(k) { const s = this._scrub; if (!s || s.a !== this.base) return; s.a.time = s.dur * (s.from + (s.to - s.from) * Math.max(0, Math.min(1, k))); }
+  // the same for the upper body alone (the legs keep running, or stay tucked in the air)
+  upperScrub(name, { from = 0, to = 1, fade = 0.05 } = {}) {
+    const clip = this.kit.upper(name);
+    if (!clip) return null;
+    if (this.upperAct) this.upperAct.fadeOut(fade);
+    const a = this.mixer.clipAction(clip);
+    a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.timeScale = 0; a.time = clip.duration * from; a.enabled = true;
+    a.setEffectiveWeight(1); a.fadeIn(fade); a.play();
+    this.upperAct = a; this._upperHold = true; this._upperEnd = clip.duration; this.upperEvents = null;
+    this._uscrub = { a, from, to, dur: clip.duration };
+    return a;
+  }
+  upperScrubTo(k) { const s = this._uscrub; if (!s || s.a !== this.upperAct) return; s.a.time = s.dur * (s.from + (s.to - s.from) * Math.max(0, Math.min(1, k))); }
+
   _finished(e) {
     if (e.action === this.base && this._then) { const t = this._then; this._then = null; this.play(t, { fade: this._thenFade }); }
     if (e.action === this.upperAct && !this._upperHold) { this.upperAct.fadeOut(0.15); this.upperAct = null; }
@@ -161,6 +191,9 @@ export class Rig {
   update(dt) {
     if (this.frozen > 0) { this.frozen -= dt; dt *= 0.04; }
     const step = dt * this.timeScale;
+    // (the mixer only writes a bone whose clip value changed: a bone a clip holds still would keep last frame's nudge
+    // and take another, every frame, until she'd folded in half. So the clip's own pose goes back first.)
+    if (this._clean) for (const c of this._clean) c.bone.quaternion.copy(c.q);
     this.mixer.update(step);
     // timed events of the one-shot, and an early end
     if (this.base && this.events.length) {
@@ -174,7 +207,7 @@ export class Rig {
     if (this.upperAct && this.upperEvents) {
       for (const e of this.upperEvents) if (!e.done && this.upperAct.time >= e.t) { e.done = true; e.fn(); }
       if (this.upperAct.time >= this._upperEnd - 1e-3) {
-        if (this._upperHold) { this.upperAct.time = this._upperEnd - 1e-3; this.upperAct.timeScale = 0; }   // held in the pose
+        if (this._upperHold) { if (!(this._uscrub && this._uscrub.a === this.upperAct)) { this.upperAct.time = this._upperEnd - 1e-3; this.upperAct.timeScale = 0; } }   // held in the pose
         else { this.upperAct.fadeOut(0.12); this.upperAct = null; }
       }
     }
@@ -183,6 +216,23 @@ export class Rig {
 
   // procedural touches applied after the mixer
   _post(dt) {
+    // the body's own lift, spin and tip (about the hips), over whatever the model's rest transform is
+    const B = this.body, m = this.model;
+    const bodyOn = !!(B.y || B.spin || B.pitch || B.roll || B.squash);
+    if (bodyOn && !this._bodyOn) this._m0 = { p: m.position.clone(), q: m.quaternion.clone(), s: m.scale.clone() };
+    const m0 = this._m0;
+    if ((bodyOn || this._bodyOn) && m0) {
+      _e1.set(B.pitch, B.spin, B.roll, 'YXZ'); _q2b.setFromEuler(_e1);
+      m.quaternion.copy(m0.q).multiply(_q2b);
+      const h = B.hip * m0.s.y;
+      _v3.set(0, h, 0).applyQuaternion(_q2b);
+      m.position.set(m0.p.x - _v3.x, m0.p.y + B.y + h - _v3.y, m0.p.z - _v3.z);
+      const sq = B.squash; m.scale.set(m0.s.x * (1 + sq * 0.5), m0.s.y * (1 - sq), m0.s.z * (1 + sq * 0.5));
+      this._bodyOn = bodyOn;
+    }
+    const clean = this._clean || (this._clean = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head', 'head', 'upperarm_l', 'upperarm_r']
+      .map((n) => this.bones[n]).filter(Boolean).map((bone) => ({ bone, q: new THREE.Quaternion() })));
+    for (const c of clean) c.q.copy(c.bone.quaternion);
     const k = 1 - Math.exp(-dt * 10);
     this._leanS.x += (this.lean.x - this._leanS.x) * k;
     this._leanS.y += (this.lean.y - this._leanS.y) * k;
@@ -191,11 +241,15 @@ export class Rig {
     const pel = this.bones.pelvis;
     if (pel) { pel.rotation.z += this._leanS.x * 0.4; }
     if (this.flinch > 0.001) {
-      const f = this.flinch;
-      const s2 = this.bones.spine_02;
-      if (s2) { s2.rotation.x -= f * 0.35 * this.flinchDir.z; s2.rotation.z += f * 0.35 * this.flinchDir.x; }
-      const hd = this.bones.Head || this.bones.head; if (hd) hd.rotation.x -= f * 0.3;
-      this.flinch *= Math.exp(-dt * 9);
+      // a blow folds her round it: the spine away from it, the head whipping after, the arms thrown out
+      const f = this.flinch * this.flinchGain, dz = this.flinchDir.z, dx = this.flinchDir.x, g = this.flinchGain > 1 ? 1 : 0;
+      const s1 = this.bones.spine_01, s2 = this.bones.spine_02, s3 = this.bones.spine_03;
+      if (s2) { s2.rotation.x -= f * 0.35 * dz; s2.rotation.z += f * 0.35 * dx; }
+      if (g && s1) { s1.rotation.x -= f * 0.16 * dz; s1.rotation.z += f * 0.16 * dx; }
+      if (g && s3) { s3.rotation.x -= f * 0.14 * dz; s3.rotation.z += f * 0.14 * dx; }
+      const hd = this.bones.Head || this.bones.head; if (hd) { hd.rotation.x -= f * 0.3 * (g ? Math.abs(dz) + 0.3 : 1); if (g) hd.rotation.z += f * 0.22 * dx; }
+      if (g) { const ul = this.bones.upperarm_l, ur = this.bones.upperarm_r; if (ul) ul.rotation.z += f * 0.2; if (ur) ur.rotation.z -= f * 0.2; }
+      this.flinch *= Math.exp(-dt * (g ? 7 : 9));
     }
     if (this.lookTarget && (this.bones.Head || this.bones.head)) {
       const head = this.bones.Head || this.bones.head;
@@ -223,4 +277,4 @@ export class Rig {
   }
 }
 
-const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q1 = new THREE.Quaternion();
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _q1 = new THREE.Quaternion(), _q2b = new THREE.Quaternion(), _e1 = new THREE.Euler();

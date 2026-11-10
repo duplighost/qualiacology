@@ -8,9 +8,10 @@ import { Retargeter } from '../engine/retarget.js';
 import { Rig, isUpper } from '../engine/character.js';
 import { Springs } from '../engine/springs.js';
 import { FXK } from '../engine/post.js';
+import { HERO, heroChunk, HERO_PARS } from '../engine/herolight.js';
 
 // a warm rim on YOU's silhouette (copper, like her rings): she reads on any floor, dark rooms most of all
-const RIM = { value: new THREE.Color(0, 0, 0) };
+const RIM = { value: new THREE.Color(0, 0, 0) }, KEY = { value: new THREE.Color(0, 0, 0) };
 function addRim(model) {
   model.traverse((m) => {
     if (!m.isMesh || /iris|teeth|tongue|lash|eyeliner|eyebrow/i.test(m.name)) return;
@@ -20,12 +21,13 @@ function addRim(model) {
       const prev = mat.onBeforeCompile;
       mat.onBeforeCompile = (sh, r) => {
         if (prev) prev(sh, r);
-        sh.uniforms.uYouRim = RIM;
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uYouRim;')
+        sh.uniforms.uYouRim = RIM; sh.uniforms.uYouKey = KEY; sh.uniforms.uHeroDir = HERO.dir; sh.uniforms.uHeroSpec = HERO.spec;
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uYouRim; uniform vec3 uYouKey; ' + HERO_PARS)
+          .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + heroChunk('uYouKey'))
           .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n { float yr = 1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0); totalEmissiveRadiance += uYouRim * yr * yr * yr; }');
       };
       const key = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : () => '';
-      mat.customProgramCacheKey = () => key() + '|you-rim';
+      mat.customProgramCacheKey = () => key() + '|you-rim-key';
       mat.needsUpdate = true;
     }
   });
@@ -37,6 +39,7 @@ export const HEROINE_CLIPS = [
   'Melee_Hook', 'OverhandThrow', 'Roll', 'Slide_Start', 'Slide_Loop', 'Hit_Chest', 'Hit_Head', 'Hit_Knockback', 'Death01', 'LayToIdle',
   'Dance_Loop', 'Yes', 'Idle_FoldArms_Loop', 'Spell_Simple_Shoot', 'NinjaJump_Start', 'NinjaJump_Land', 'Sitting_Idle_Loop', 'Sitting_Exit',
   'Swim_Idle_Loop', 'Swim_Fwd_Loop', 'Crouch_Idle_Loop', 'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Interact', 'PickUp_Table', 'Idle_Talking_Loop',
+  'NinjaJump_Idle_Loop', 'Slide_Exit', 'Sword_Regular_A_Rec', 'Sword_Regular_B_Rec', 'Melee_Hook_Rec', 'Shield_OneShot', 'Idle_Shield_Break', 'Idle_No_Loop', 'Consume',
 ];
 
 // a kit-like object for Rig: retargeted clips + upper-body versions
@@ -133,7 +136,8 @@ export class Heroine {
   }
 
   update(dt) {
-    RIM.value.setRGB(0.95, 0.56, 0.28).multiplyScalar(0.3 * Math.min(1.25, FXK.value));
+    RIM.value.setRGB(0.95, 0.56, 0.28).multiplyScalar(0.42 * Math.min(1.25, FXK.value));
+    KEY.value.setRGB(1.0, 0.93, 0.84).multiplyScalar(HERO.k * 1.05 * Math.min(1.25, FXK.value));
     this.rig.update(dt);
     this.springs.update(dt);
     // expressions ease

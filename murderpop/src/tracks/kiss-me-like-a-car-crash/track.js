@@ -14,6 +14,7 @@ import { Road, FLOOR, BOULDERS, SLOTS, STOPPED_X, LANE_Z } from './road.js';
 import { Her, U, UC, arc, area, lob } from './moves.js';
 import { Sounds } from './sounds.js';
 import { flare } from './kit.js';
+import { death } from './death.js';
 
 const ID = 'kiss-me-like-a-car-crash';
 let kit = null;
@@ -57,6 +58,7 @@ export default {
     const road = new Road(f, arena, B);
     const snd = new Sounds(f);
     W = { f, arena, road, snd, B, stuck: [], puddles: [], giftBox, lastT: -1, init: false, ep: 0, cues: [] };
+    f.kml = W;               // (her death scene, death.js, works the cars and the road through this)
     // YOU's spotlight sweeps her shapes off the road (fight.js clears every telegraph) and they must never land after
     // it (moves.js: W.ep). The road's own shapes (the barriers, the cars coming in, the grenade, a package already in
     // the air, the fires) stay drawn through it and land as drawn: they're added past the spotlight's filter and kept
@@ -283,13 +285,17 @@ export default {
     at(97, 3, () => { if (!empty()) H().kiss({ impact: B(98, 1) }); });
     at(97, 4, () => { if (empty()) { H().expr('wreck_plea'); f.boss.facing = Math.atan2(f.player.x - f.boss.x, f.player.z - f.boss.z) * 0.5 + f.boss.facing * 0.5; } });
     at(98, 2, () => { if (!empty()) H().headOn({ lock: B(98, 4), impact: B(99, 1) }); });
-    at(100, 3, () => { if (empty()) { H().setMode('stand'); f.boss.faceTarget = f.player; } });
+    // (once her death scene has her, death.js, these last bars are its own: her bar is empty and the scene is on from
+    // bar 99. They still run when the scene can't: a late empty bar, YOU's spotlight over its start.)
+    const scene = () => f.boss.scene;
+    at(100, 3, () => { if (empty() && !scene()) { H().setMode('stand'); f.boss.faceTarget = f.player; } });
     at(101, 1, () => { if (!empty()) H().grab({ impact: B(101, 3) }); });
-    at(102, 1, () => { if (empty()) { H().setMode('stand'); if (f.boss.rig) f.boss.rig.play('Crouch_Idle_Loop', { fade: 0.3 }); f.boss.busyUntil = B(104, 1); W.beam = true; } });
+    at(102, 1, () => { if (empty() && !scene()) { H().setMode('stand'); if (f.boss.rig) f.boss.rig.play('Crouch_Idle_Loop', { fade: 0.3 }); f.boss.busyUntil = B(104, 1); W.beam = true; } });
     at(102, 2, () => { if (!empty()) H().headOn({ lock: B(102, 4), impact: B(103, 1) }); });
-    at(103, 1, () => { if (empty()) lastRun(f, B, 'pink'); });
-    at(104, 1, () => { if (!W.lastRun) lastRun(f, B, empty() ? 'pink' : 'white'); });
+    at(103, 1, () => { if (empty() && !scene()) lastRun(f, B, 'pink'); });
+    at(104, 1, () => { if (!W.lastRun && !scene()) lastRun(f, B, empty() ? 'pink' : 'white'); });
   },
+  death,
 
   // ------------------------------------------------------------------ hooks
   // (both put the set where it is at t; update's own catch for a jump back is for a start part-way in)
@@ -305,6 +311,14 @@ export default {
     W.her.expr('wreck_grin');
   },
   onEmpty(f) { W.her.expr('wreck_wrecked'); W.her.mode = W.her.mode === 'stand' ? 'stand' : 'approach'; f.boss.walkClip = 'Zombie_Walk_Fwd_Loop'; f.boss.runClip = 'Zombie_Walk_Fwd_Loop'; },
+  // her death scene takes her (death.js): whatever she was in the middle of stops, and nothing of the road's is left
+  // pointing at YOU
+  onDeathScene(f) {
+    const her = W.her, b = f.boss;
+    her.endAct(); her.held = null; her.headTurnT = 0; her.headTurn = 0; her.alight = false; her.setMode('stand');
+    W.beam = false; W.shatterHow = null; W.lastRun = null; W.burnLane = null; W.rollers = null;
+    b.root.visible = true; b.root.position.y = 0; b.faceTarget = null;
+  },
   onFinish(f) {
     W.snd.play('ping', { x: f.boss.x, at: 1.05, gain: 0.9 });
     W.her.endAct(); W.finished = true;
@@ -314,7 +328,8 @@ export default {
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.014, 8, 28), new THREE.MeshStandardMaterial({ color: 0xffc35a, metalness: 1, roughness: 0.25 })); rim.rotation.y = Math.PI / 2; g.add(rim);
     g.add(flare(new THREE.Color(1.6, 1.25, 1.3), 0.5));
     g.position.copy(from); f.scene.add(g);
-    const p = f.player, to = new THREE.Vector3(p.x + 0.9, 0.11, p.z + 0.6);
+    // (after her death scene YOU comes down off her car at death.js's `down` mark: it rolls to there)
+    const p = f.player, to = f.exec && f.exec.on ? new THREE.Vector3(6.15 - 0.75, 0.11, 3.55 + 0.35) : new THREE.Vector3(p.x + 0.9, 0.11, p.z + 0.6);
     W.keepsake = { g, from: from.clone(), to, age: -0.35, dur: 1.6 };   // (the song clock stops at the finish: it runs on its own time)
     if (hc.mode === 'parked') { /* (never: the car is a wreck by the end) */ }
     if (W.engine) { W.engine.stop(0.2); W.engine = null; }
@@ -329,6 +344,8 @@ export default {
     W.her.update(dt, t);
     if (W.carRun) W.carRun(dt, t);
     tick(f, dt, t);
+    // her death scene's own frame (the cars, her head, its camera), after the two of them have been posed
+    if (W.sceneLate) W.sceneLate(dt);
   },
 };
 
@@ -344,6 +361,8 @@ function setStateAt(f, t, place) {
   W.puddles = []; road.setPuddles([]);
   if (W.keepsake) { f.scene.remove(W.keepsake.g); W.keepsake = null; }
   W.lastRun = null; W.carRun = null; W.burnLane = null; W.rollers = null; W.beam = false; W.goodbye = false; W.finished = false; W.closed = false; W.shatterHow = null; W.kiss = false;
+  // (her death scene's doings: its frame hook, her car's light she lost, YOU's car door)
+  W.sceneLate = null; road.her.parts.lensL.visible = true; if (t >= 5) road.you.door.rotation.y = 0.81;
   if (W.engine) { W.engine.stop(0.1); W.engine = null; }
   if (W.rotor) { W.rotor.stop(0.1); W.rotor = null; }
   // what play decided: the snapshot taken when this section began, or the canonical set for t
@@ -580,7 +599,9 @@ function carve(f, B) {
   const wall = pl.z < 1.65 ? 'krail' : 'guardrail';
   const z = wall === 'krail' ? FLOOR.minZ + 0.9 : FLOOR.maxZ - 0.9;
   const fromLeft = b.x < 0;
-  const x0 = fromLeft ? FLOOR.minX + 0.6 : FLOOR.maxX - 0.6, x1 = fromLeft ? FLOOR.maxX - 0.6 : FLOOR.minX + 0.6;
+  // (along the guardrail the run stops short of the message board's trailer, x 8.65 on: she ran through it)
+  const xe = wall === 'guardrail' ? 7.9 : FLOOR.maxX - 0.6;
+  const x0 = fromLeft ? FLOOR.minX + 0.6 : xe, x1 = fromLeft ? xe : FLOOR.minX + 0.6;
   const t3 = B(54, 3), t4 = B(54, 4);
   area(f, { shape: 'rect', x: x0, z, angle: fromLeft ? Math.PI / 2 : -Math.PI / 2, w: 0.9, h: Math.abs(x1 - x0), kind: 'white', start: f.t, end: t4, damage: 1, melee: true });
   her.endAct(); her.claim(t4 + 0.2);

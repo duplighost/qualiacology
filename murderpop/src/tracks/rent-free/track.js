@@ -12,6 +12,7 @@ import { buildTenant, Tenant, clampX, clampZ } from './tenant.js';
 import * as P from './props.js';
 import { installSounds } from './sound.js';
 import { House, SOCK, roomAt } from './house.js';
+import { death, sceneBind, sceneBegin, sceneUpdate, sceneReset, sceneFinish } from './death.js';
 
 // the design's bars are bars.py bars (from 0); beats.js counts from 1
 const D = (s) => { const [b, bb] = String(s).split('.'); return `${+b + 1}:${bb || 1}`; };
@@ -30,7 +31,7 @@ const SECTIONS = [
   { name: 'chorus2', t0: 130.06, t1: 168.52, boss: [9.75, -4.5, -Math.PI / 2] },
   { name: 'party', t0: 168.52, t1: 176.48, boss: [0, -6.2, 0] },
   { name: 'bridgeA', t0: 176.48, t1: 196.36, boss: [0, -2.6, 0] },
-  { name: 'bridgeB', t0: 196.36, t1: 217.58, boss: [-9.4, -5.6, 0.6] },
+  { name: 'bridgeB', t0: 196.36, t1: 217.58, boss: [-9.4, -3.7, 0.6] },
   { name: 'final', t0: 217.58, t1: 249.41, boss: [0, -1.5, 0], final: true },
   { name: 'sickest', t0: 249.41, t1: 264.01, boss: [0, -1.5, 0] },
   { name: 'coda', t0: 264.01, t1: 291.87, boss: [7.35, -4.15, Math.PI / 2 - 0.5] },
@@ -135,7 +136,7 @@ const STANDING = {
   verse2: (f) => { portraitClaim(f, 'L1'); portraitClaim(f, 'R1'); furnitureClaim(f, 'F:vanity', 'vanityTable', -8.6, -2.4, Math.PI / 2); },
   taunt: (f) => { for (const s of ['W1', 'W2', 'W3']) portraitClaim(f, s); },
   chorus2: (f) => ballroomSet(f, true, 'c2'),
-  party: (f) => { for (const [id, x, z] of [['BQ:1', -6.5, -3.0], ['BQ:2', 6.5, -3.0], ['BQ:3', 0, -5.2]]) bouquetClaim(f, id, x, z, false); },
+  party: (f) => { for (const [id, x, z] of [['BQ:1', -6.5, -3.0], ['BQ:2', 6.5, -3.0], ['BQ:3', 2.4, -5.2]]) bouquetClaim(f, id, x, z, false); },
   bridgeB: (f) => LUG.forEach(([, x, z, kind], i) => luggageClaim(f, 'LG:' + (i + 1), kind, x, z, { rot: (x * 7 + z * 3) % 1 })),
   sickest: (f) => { grandSet(f, true); for (const [id, x, z] of [['N1', 9.0, 3.5], ['N2', -8.0, 5.0]]) S.claims.add({ id, kind: 'nib', obj: P.nib(), x, z, y: 0.5, r: 0.35, hits: 4, value: 6, solid: true, data: {} }); },
   dreams: (f) => { portraitClaim(f, 'L1'); portraitClaim(f, 'R1'); furnitureClaim(f, 'F:vanity', 'vanityTable', -8.6, -2.4, Math.PI / 2); },
@@ -155,6 +156,7 @@ function setStateAt(f, t) {
   S.ribbon = null; S.yank = null; S.glide = null; S.chase = null; S.drawn = null; S.house.extraCols = [];
   S.pearls.clear();
   S.claims.clear(); S.claims.clearFx();
+  sceneReset(f); S.house.sceneClear();
   S.house.lampOut = false;
   S.house.goTo(roomAt(t), { instant: true, t });
   wreck(f, f.boss.hp <= 0);
@@ -209,6 +211,7 @@ export default {
     S.pearls = new PearlPool(f.scene);
     S.snd = installSounds(f);
     house.setSnd((n, o) => snd(n, o));
+    sceneBind(S, { snd, spareKey, faceShard });
     // the three stitched samplers (the song's best lines, dropped in on a wire as they're sung)
     const bt = (s2) => f.bm.t(D(s2));
     // (hung low on the back wall: the high camera sees only its lowest two metres)
@@ -311,7 +314,8 @@ export default {
 
   script(T, f) {
     for (const s of SECTIONS) T.section(s.name, { s: s.t0 }, { s: s.t1 }, { final: !!s.final });
-    const at = (pos, fn) => T.at(typeof pos === 'number' || (pos && typeof pos === 'object') ? (typeof pos === 'number' ? { s: pos } : pos) : D(pos), fn);
+    // (once her death scene has her, what the song had her do next doesn't happen: the scene is her last bars)
+    const at = (pos, fn) => T.at(typeof pos === 'number' || (pos && typeof pos === 'object') ? (typeof pos === 'number' ? { s: pos } : pos) : D(pos), (ff) => { if (ff.boss && ff.boss.scene) return; fn(ff); });
     const t = (s) => tb(f, s);
     const spawn = (time, fn) => { SPAWNS.push({ t: time, fn }); T.at({ s: time }, (ff) => fn(ff, false), 'set'); };
     SPAWNS.length = 0;
@@ -636,7 +640,7 @@ export default {
     at('124.2', (ff) => { snd('rf-pencil', { x: 0, gain: 0.8, rate: 0.7 }); ten().face('tenantMine', 4); ten().upper('Spell_Simple_Shoot', { duration: 0.5 }); });
 
     // ============================================================ §9 WELCOME HOME, THE PARTY (168.52 - 176.48) the foyer, dressed for a party
-    spawn(168.52, (ff, instant) => { for (const [id, x, z] of [['BQ:1', -6.5, -3.0], ['BQ:2', 6.5, -3.0], ['BQ:3', 0, -5.2]]) if (!S.claims.get(id)) bouquetClaim(ff, id, x, z, !instant); });
+    spawn(168.52, (ff, instant) => { for (const [id, x, z] of [['BQ:1', -6.5, -3.0], ['BQ:2', 6.5, -3.0], ['BQ:3', 2.4, -5.2]]) if (!S.claims.get(id)) bouquetClaim(ff, id, x, z, !instant); });
     at(168.52, (ff) => { ten().reset(0, -6.2, 0); ten().own(t('128.4')); ff.boss.perform('Spell_Simple_Enter', { duration: 0.7 }); ten().face('tenantMine', 4); ff.at(ff.t + 0.8, () => ten().stroll(0, -3.0, t('128.4'))); });
     for (const [pt, sw, pop, id] of [['129.2', '129.3', '130.1', 'BQ:1'], ['130.2', '130.3', '131.2', 'BQ:2'], ['131.3', '131.4', '132.3', 'BQ:3']]) at(pt, (ff) => balloons(ff, id, t(sw), t(pop)));
 
@@ -661,7 +665,7 @@ export default {
     // ============================================================ §11 BRIDGE B, THE DARK (196.36 - 217.58) closest; she strikes only in the pauses
     const PAUSES = [['148.1', '148.3'], ['149.2', '149.4'], ['151.1', '151.3'], ['152.1', '152.3'], ['153.2', '153.4'], ['154.4', '155.3', true], ['157.1', '157.3']];
     for (const [a, b2, hes] of PAUSES) at(a, (ff) => pauseStrike(ff, t(b2), hes ? { hold: [t('155.2'), t('155.3')] } : {}));
-    at('148.1', (ff) => { ten().reset(-9.4, -5.6, 0.6); ff.boss.root.visible = true; ff.boss.intangible = false; ten().mode = 'script'; ten().until = t('158.1'); });
+    at('148.1', (ff) => { ten().reset(-9.4, -3.7, 0.6); ff.boss.root.visible = true; ff.boss.intangible = false; ten().mode = 'script'; ten().until = t('158.1'); });
     // THE RIBBON: "I'm the reason you can't quite let go"
     at('158.1', (ff) => ribbonFlick(ff, t('158.3')));
     for (const [tug, slap] of [['159.2', '159.3'], ['160.2', '160.3'], ['161.2', '161.3']]) at(tug, (ff) => ribbonTug(ff, t(slap)));
@@ -762,8 +766,14 @@ export default {
     if (i === 2) { fig.breakPiece('coupe'); const p = fig.bones.hand_r ? fig.bones.hand_r.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(b.x, 1.2, b.z); f.fx.emit(26, { x: p.x, y: p.y, z: p.z, color: new THREE.Color(3.2, 0.7, 1.8), shape: 0, speed: 2.5, life: 0.7, size: 0.12, gravity: 9, up: 0.4 }); snd('rf-tink', { x: b.x, rate: 1.8, gain: 1.2 }); f.at(f.t + 0.5, () => snd('rf-burst', { x: b.x, rate: 1.3, gain: 0.7 })); }
   },
   onEmpty(f) { wreck(f, true); S.ten.face('tenantEvicted'); },
+  // her end: THE EVICTION (death.js). It begins: whatever she was in the middle of stops here
+  death,
+  onDeathScene(f, X) { sceneBegin(f, X); },
   onFinish(f) {
-    S.finishT = 0; S.keyDropped = false; S.bulbPopped = false; S.faceFly = null; S.ten.paintAnim = null; S.ten.painted.visible = false;
+    S.ten.paintAnim = null; S.ten.painted.visible = false;
+    // (her death scene ends her its own way: the front door, her face on the mat)
+    if (f.exec && f.exec.on) { sceneFinish(f); return; }
+    S.finishT = 0; S.keyDropped = false; S.bulbPopped = false; S.faceFly = null;
     S.finishAt = { x: f.boss.x, z: f.boss.z };
   },
 
@@ -795,6 +805,10 @@ export default {
     S.claims.update(dt);
     S.ten.update(dt);
     S.pearls.update(dt);
+    sceneUpdate(f, dt);
+    // off your bed (a blow knocked her from it): her feet are on the floor, not 0.62 m over it
+    if (S.ten.mode === 'lounge' && S.ten.seat && S.ten.seat.id === 'BED' && !b.scene && Math.hypot(b.x - 0.2, b.z + 5.4) > 0.45) { S.ten.gen++; S.ten.mode = 'script'; S.ten.until = t + f.beat; S.ten.seat.occupant = null; S.ten.seat = null; b.root.position.y = 0; b.lockFacing = false; b.busyUntil = 0; }
+    else if (S.ten.mode !== 'lounge' && !b.scene && t >= 299.4 && b.root.position.y > 0.01 && !(b.move && b.move.arc)) b.root.position.y = 0;
     // the taunt: she walks after you, laughing
     if (S.chase && t < S.chase.until && b.root.visible && S.ten.mode === 'script') {
       const dx = pl.x - b.x, dz = pl.z - b.z, d = Math.hypot(dx, dz);
@@ -816,7 +830,7 @@ export default {
     // confetti in the grand ballroom
     if (t >= 217.9 && t < 250.7 && f.state === 'play') { const cols = [new THREE.Color(2.4, 1.0, 3.0), new THREE.Color(3.0, 2.0, 0.6), new THREE.Color(3.0, 1.2, 2.0)]; f.fx.emit(2, { x: (Math.random() - 0.5) * 20, y: 6.5, z: (Math.random() - 0.5) * 12, color: cols[(Math.random() * 3) | 0], shape: 4, speed: 0.4, life: 3.2, size: 0.08, gravity: 1.6, up: 0, jitter: 0.5, drag: 0.6 }); }
     // petals through the moonbeam at the end
-    if (t >= 292.5 && f.state === 'play' && Math.random() < 0.4) f.fx.emit(1, { x: 4 + Math.random() * 4, y: 5.5, z: -6 + Math.random() * 5, color: new THREE.Color(1.6, 1.1, 1.7), shape: 4, speed: 0.3, life: 4, size: 0.07, gravity: 1.0, up: 0, jitter: 0.6, drag: 0.4 });
+    if (t >= 292.5 && f.state === 'play' && S.house.current && S.house.current.name === 'bedroom' && Math.random() < 0.4) f.fx.emit(1, { x: 4 + Math.random() * 4, y: 5.5, z: -6 + Math.random() * 5, color: new THREE.Color(1.6, 1.1, 1.7), shape: 4, speed: 0.3, life: 4, size: 0.07, gravity: 1.0, up: 0, jitter: 0.6, drag: 0.4 });
     if (S.hollow) S.hollow.visible = b.broken >= 2 && b.root.visible;
     // she downs the cocktail and throws the glass; a fresh one appears in her hand at the next section line
     { const cp = S.ten.fig.acc.find((a) => a.name === 'coupe'); if (cp && !cp.broken) { const v = !(t >= 60.1 && t < 61.13); for (const o of cp.objects) if (o.visible !== v) { o.visible = v; if (v && t > 61) snd('rf-tink', { x: b.x, gain: 0.5, rate: 1.4 }); } } }
@@ -841,6 +855,8 @@ export default {
         F.m.rotation.set((1 - k) * 7.5, (1 - k) * 2.0, (1 - k) * 3.0);
         if (k >= 1) { F.landed = true; F.m.rotation.set(0, 0.35, 0); snd('rf-tink', { x: F.x1, rate: 1.25, gain: 0.45 }); f.fx.glitter(F.x1, 0.9, F.z1, new THREE.Color(3.0, 2.2, 0.8), 6, 0.2); }
       }
+      // (her copy of the key: the fight's own keepsake now, dropped as her bar empties; this one only if that didn't)
+      if (S.finishT > 0.8 && !S.keyDropped && (f.ks || f.kept)) S.keyDropped = true;
       if (S.finishT > 0.8 && !S.keyDropped) {
         S.keyDropped = true;
         const k = spareKey(); k.position.set(pl.x + 0.6, 1.4, pl.z + 0.3); f.scene.add(k); addLoose(k);

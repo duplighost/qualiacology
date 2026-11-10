@@ -100,7 +100,8 @@ export class Her {
   // ------------------------------------------------------------------ per frame
   update(dt, t) {
     const f = this.f, b = this.b, pl = this.pl;
-    if (b.state === 'finished') return;
+    // (finished, or her death scene has her: death.js moves her, nothing here does)
+    if (b.state === 'finished' || b.scene) return;
     if (this.act) {
       if (t >= this.act.until) this.endAct();
       else if (this.act.update) this.act.update(dt, t);

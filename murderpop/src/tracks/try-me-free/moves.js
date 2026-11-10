@@ -221,7 +221,8 @@ export function script(T, f, track) {
   // FREE SAMPLES: 2 then 3 cards, arriving on 11.42 and 11.77
   at(10.72, (ff) => { swingAt(ff, 'OverhandThrow', 10.95, 0.5, 0.2, 0.8); fanAt(ff, { n: 2, arc: 30, arrive: 11.42, shape: 'card', kind: 'pink' }); });
   at(11.07, (ff) => { swingAt(ff, 'OverhandThrow', 11.3, 0.5, 0.2, 0.8); fanAt(ff, { n: 3, arc: 40, arrive: 11.77, shape: 'card', kind: 'pink' }); });
-  at(11.77, (ff) => { const b = boss(ff); b.moveTo(0, -4.4, 0.6, { easing: 'inOut' }); });
+  // (to behind where her bench comes up at 12.46, where the cut at 13.48 stands her: at -4.4 it rose round her)
+  at(11.77, (ff) => { const b = boss(ff); b.moveTo(0, -5.3, 0.6, { easing: 'inOut' }); });
   // ORDER IN THE COURT: she lifts the gavel in the stop; the gavel on 14.14, a ring of cereal rolling out
   at(13.82, (ff) => gavel(ff, 14.14));
   at(14.14, (ff) => { expr('ow'); setTimeout(() => {}, 0); });
@@ -381,7 +382,8 @@ function scriptRest(T, f, { at, hit, bt }) {
 
   // ================= S9 · COURTHOUSE (175.24 -> 188.48, then DARK D)
   hit(176.63, 2, (ff, t1) => gavel(ff, t1));
-  at(176.63, (ff) => { boss(ff).moveTo(0, -2.8, 0.45, { easing: 'out' }); expr('ow'); ff.after(0.2, () => expr('smug')); });
+  // (over her bench, 1.42 m tall, with a real jump: she went straight through it)
+  at(176.63, (ff) => { boss(ff).moveTo(0, -2.8, 0.45, { easing: 'out', arc: 1.75 }); expr('ow'); ff.after(0.2, () => expr('smug')); });
   // SKIRT TOO SHORT FOR THE COURTHOUSE: the pews slide in from x +-7 to +-3.5
   at(bt(179.06, 4), (ff) => { for (const s of [-1, 1]) area(ff, { shape: 'rect', x: s * 5.25, z: -4.0, angle: 0, w: 2.25, h: 6.0, kind: 'white', start: ff.t, end: 179.06, onImpact: () => { S().sound.play('cardboard', s * 5, { rate: 0.5, gain: 1.2 }); ff.cam.shake(0.3, 0.12); } }); });
   at(179.06, (ff) => { const b = boss(ff); b.idle = 'Walk_Formal_Loop'; b.moveTo(0, clampZ(Math.min(ff.player.z - 2, 3)), 1.6, { easing: 'linear' }); b.loop('Walk_Formal_Loop'); });

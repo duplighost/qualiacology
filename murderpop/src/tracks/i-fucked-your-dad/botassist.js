@@ -15,7 +15,7 @@ export function assistBot(f, set, sloppy = false) {
   auto.think = () => {
     think();
     const pl = f.player, t = f.t;
-    if (!pl || f.state !== 'play') return;
+    if (!pl || f.state !== 'play' || (f.exec && f.exec.on)) return;       // (her death scene: the presses are the bot's own)
     const inBlock = (x, z, m = 0) => x > BLOCK.x0 - m && x < BLOCK.x1 + m && z > BLOCK.z0 - m && z < BLOCK.z1 + m;
     const blockLive = t > TIME.strike + (sloppy ? 4.0 : 0.4) && t < TIME.embers;
     const bad = (x, z) => !!set.hazardAt(x, z, 0.45) || (blockLive && inBlock(x, z, 0.35)) || x < f.bounds.minX + 0.3 || x > f.bounds.maxX - 0.3 || z < f.bounds.minZ + 0.3 || z > f.bounds.maxZ - 0.3;

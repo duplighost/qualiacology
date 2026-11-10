@@ -3,7 +3,7 @@
 // through it) and it arcs in gold onto the GUILTY pan, landing on the next downbeat at least 0.6 s away, and the
 // gavel falls with it: GUILTY for two bars (stagger, open, lipstick), then the gloss sweeps back.
 import * as THREE from 'three';
-import { FEEL } from '../../game/player.js';
+import { FEEL, MOVES } from '../../game/player.js';
 
 const TAU = Math.PI * 2;
 const GOLD = new THREE.Color(3.2, 2.0, 0.55), PINKG = new THREE.Color(3.0, 1.2, 1.9);
@@ -111,13 +111,15 @@ export class Court {
   nextDownbeat(t) { const bm = this.f.bm; const B = bm.beatAt(t) - bm.downbeat; return bm.timeOf(bm.downbeat + Math.ceil(B / 4 - 1e-6) * 4); }
 
   // ---------------------------------------------------------------- hits on her
-  // a counter: the strike just spent the near miss's counter (and its damage is a counter's)
+  // a counter: the strike that spent the near miss's counter. YOU's strike takes it as it lands (player.js _strikeHit:
+  // counterT goes to exactly 0, and the hit comes in heavy whatever the move was).
   isCounter(info) {
-    const pl = this.f.player;
-    if (!(this._counterArmed && pl.counterT <= 0)) return false;
-    const d = info.dmg;
-    for (const s of [...FEEL.strikes, ...FEEL.punches]) for (const k of [1.5, 1.875]) if (Math.abs(d - s.dmg * k) < 1e-3) return true;
-    return false;
+    const pl = this.f.player, def = MOVES[info.move];
+    // a move that isn't heavy by itself came in heavy: only a counter does that
+    if (info.heavy && def && !def.heavy && !def.finisher && !def.riposte) return true;
+    // a heavy move (the lunge out of a dash, the slam): the counter was armed when I last looked, with more than this
+    // frame left on it, and now it's spent
+    return pl.counterT === 0 && (this._counterLeft || 0) - (this.f.dt || 0) > 1e-4;
   }
   deflect(info) {
     const f = this.f, b = this.boss, pl = f.player, t = f.t;
@@ -230,6 +232,14 @@ export class Court {
     this.glass(true);
     this.onPretty && this.onPretty(f.t);
   }
+  // her death scene: nothing more is scheduled (death.js has the gavel), and the scales wait for the last word
+  adjourn() {
+    for (const p of this.pending) p.canceled = true;
+    this.pending = []; this.noLip = true; this.lipOn = false;
+    if (this.state === 'guilty') { this.state = 'pretty'; this.until = -99; }
+  }
+  // the last hit: GUILTY, for good
+  close() { this.state = 'guilty'; this.until = Infinity; this.noLip = true; this.lipOn = false; this.glass(false); }
   // her telegraphs on the floor fizzle out (a verdict pauses her, not the court)
   fizzle() {
     for (const z of this.zones) { if (z.owner === 'court' || z.dead) continue; z.dead = true; if (z.g) z.g.dead = true; this.f.fx.sparks(z.sh.x, 0.1, z.sh.z, new THREE.Color(1.2, 1.2, 1.4), 4); }
@@ -341,8 +351,8 @@ export class Court {
       if (!this.noLip && !this.lipOn && t >= this.lipFrom && t < this.until) this._lipstick();
       if (t >= this.until) this._pretty();
     }
-    // counter bookkeeping (for isCounter)
-    this._counterArmed = f.player.counterT > 0;
+    // counter bookkeeping (for isCounter): how long YOU's counter has left, as of the end of this frame
+    this._counterLeft = f.player.counterT;
     this.mirrorFlash = Math.max(0, (this.mirrorFlash || 0) - dt * 7);
     this.glint.visible = this.mirrorFlash > 0.01 && !!this.mirrorAt;
     if (this.glint.visible) { const k = this.mirrorFlash; this.glint.position.copy(this.mirrorAt); this.glint.scale.setScalar(0.5 + 0.7 * Math.sqrt(1 - k) * k + 0.35 * k); this.glint.material.opacity = k; this.glint.material.rotation = (1 - k) * 0.5; }

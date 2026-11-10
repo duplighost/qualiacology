@@ -33,6 +33,35 @@ const BOUNDS = { minX: -11.4, maxX: 11.0, minZ: -6.7, maxZ: 7.0 };
 const BOWL = { x: -25.5, z: 0, r: 15.5 };
 export const BOX = { x: 0, z: -8.8, w: 7, h: 12, d: 3, base: 1.2, win: { w: 2.6, h: 3.0, wy: 0.3 } };   // her box
 export const INBOX = { x: 0, y: BOX.base + BOX.win.wy, z: -8.15 };   // where she stands in her packaging
+// in the darks she's mint in her box and the box is what YOU beats on: this is where a strike finds it (the foot of
+// its front, under her window), so strikes carry YOU to it and land there like any strike
+export const BOXHIT = { x: 0, z: BOX.z + BOX.d / 2 + 0.12 };
+const BOXPOSE = { clip: 'Spell_Simple_Idle_Loop', at: 0.3 };      // the product hold, held still: the pose on the box
+// the window's glazing: a sheet of cellophane over the die-cut arch. Two fixed streaks of light and one that crosses it,
+// the creases a blow leaves in it, and the white flash and ring of the blow itself
+const PANE_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+const PANE_FS = /* glsl */`
+uniform float uSweep, uFlash, uCrinkle, uGain, uBeat; uniform vec3 uHit; uniform vec2 uSize; varying vec2 vUv;
+vec2 h2(vec2 p){ return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453); }
+float crease(vec2 p){ vec2 i = floor(p), f = fract(p); float d1 = 9.0, d2 = 9.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 g = vec2(float(x), float(y)); float d = length(g + h2(i + g) - f); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
+  return 1.0 - smoothstep(0.0, 0.05, d2 - d1); }
+float band(float d, float at, float w){ return 1.0 - smoothstep(0.0, w, abs(d - at)); }
+void main(){
+  vec2 p = vec2((vUv.x - 0.5) * uSize.x, vUv.y * uSize.y);
+  float r = uSize.x * 0.5, top = uSize.y - r;
+  float e = p.y < top ? r - abs(p.x) : r - length(vec2(p.x, p.y - top));
+  if (e < 0.0 || p.y < 0.0) discard;
+  float d = p.x * 0.8 + p.y * 0.6;
+  float a = 0.03 + band(d, 0.55, 0.24) * 0.15 + band(d, 0.98, 0.05) * 0.24 + band(d, -0.75, 0.42) * 0.06;
+  a += band(d, mix(-1.5, 3.3, uSweep), 0.2) * 0.5 * step(0.0, uSweep);
+  a += (1.0 - smoothstep(0.0, 0.07, e)) * (0.16 + 0.16 * uBeat);          // the film's edge, stretched over the die-cut
+  float cr = crease(p * 2.4 + 3.1), cr2 = crease(p * 5.1 + 9.7);
+  a += cr * (0.13 * uCrinkle + 0.55 * uFlash) + cr2 * 0.07 * uCrinkle;
+  float ring = band(length(p - uHit.xy), uHit.z * 5.5, 0.16) * exp(-uHit.z * 7.0);
+  a += uFlash * 0.2 + ring * 0.8;
+  gl_FragColor = vec4(vec3(0.84, 0.92, 1.0) * uGain * (1.0 + uFlash * 0.8 + ring), clamp(a, 0.0, 0.92));
+}`;
 export const P1 = { x: -6.5, z: 2.5 }, P2 = { x: 6.5, z: 2.5 };
 
 // exposure per baked state (the open set takes the full sun: exposure x mean light ~ 0.3-0.45, like the kit's sample)
@@ -250,9 +279,17 @@ export class CerealSet {
     this.tube = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, ww - 0.2, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 5.6, 6.4) }));
     this.tube.rotation.z = Math.PI / 2; this.tube.position.set(0, wh + 0.05, -0.3); inner.add(this.tube);
     this.tubeLight = { intensity: 0 };   // the bake's off-air key is this tube: it lights her in real time
-    // cellophane over the window: a faint iridescent sheet
+    // cellophane over the window: a faint iridescent sheet, and the light it catches (so it reads as shut: Alex, 9 Nov,
+    // couldn't tell whether she could be hit in there)
     const cel = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0, iridescence: 1, iridescenceIOR: 1.6, clearcoat: 1, depthWrite: false }));
-    cel.position.set(0, wy + wh / 2, 0.02); g.add(cel); this.cello = cel;
+    cel.position.set(0, wy + wh / 2, 0.02);
+    this.paneU = { uSweep: { value: -1 }, uFlash: { value: 0 }, uCrinkle: { value: 0 }, uGain: { value: 1 }, uBeat: { value: 0 }, uHit: { value: new THREE.Vector3(0, 1.4, 9) }, uSize: { value: new THREE.Vector2(ww, wh) } };
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh), new THREE.ShaderMaterial({ uniforms: this.paneU, vertexShader: PANE_VS, fragmentShader: PANE_FS, transparent: true, depthWrite: false }));
+    pane.position.set(0, wy + wh / 2, 0.04); pane.renderOrder = 2;
+    this.cello = new THREE.Group(); this.cello.add(cel, pane); g.add(this.cello);
+    // the box rocks under what lands on it (degrees: a tip, forward +; r roll), and she's thrown about on her peg inside
+    // (x, y metres in the window, r her roll): two springs
+    this.rock = { a: 0, va: 0, r: 0, vr: 0 }; this.rat = { x: 0, vx: 0, y: 0, vy: 0, r: 0, vr: 0 };
     // marquee bulbs round its edge, chasing
     const n = 64, bulbs = this.bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.09, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }), n);
     const per = 2 * (BOX.w + BOX.h); const m4 = new THREE.Matrix4();
@@ -318,6 +355,7 @@ export class CerealSet {
   }
   pieceUp(name, t) {
     // 0 (down) .. 1 (up): rises 0.8 s from its time, sinks 0.6 s at its end; gone at once in a dark
+    if (name === 'bowl') return this.dth ? this.dth.bowlK : 0;      // (her death scene's: death.js)
     const key = name.startsWith('pew') ? 'pews' : name;
     let k = 0;
     for (const [a, b] of PIECES[key] || []) {
@@ -451,6 +489,7 @@ export class CerealSet {
     prize.boss.onGuilty = () => { this.guiltyUntil = Math.max(this.guiltyUntil || -9, this.f.t + this.f.beat * 4); this.sound.play('guilty', prize.boss.x); };
     prize.boss.on('deflect', (h) => this._deflected(h));
     prize.boss.on('hit', (h) => this._hit(h));
+    this._deathProps && this._deathProps();
   }
 
   // ---------------------------------------------------------------- collisions and strikes
@@ -504,16 +543,92 @@ export class CerealSet {
   }
   _hit(h) {
     const pr = this.prize, f = this.f; if (!pr) return;
+    if (pr.boss.boxed) { this._boxHit(h); return; }
     const heavy = h.heavy || h.kind === 'return';
     if (h.kind === 'return') { pr.fig.hitAt(new THREE.Vector3(pr.boss.x, 1.5, pr.boss.z), new THREE.Vector3(0, 0, -1), { power: 1.7 }); f.fx.glitter(pr.boss.x, 1.6, pr.boss.z, new THREE.Color(3.6, 2.2, 0.55), 18, 0.8); }
     if (!pr.boss.busy) pr.fig.rig.upperOnce(heavy ? 'Hit_Knockback' : (Math.random() < 0.5 ? 'Hit_Chest' : 'Hit_Head'), { duration: heavy ? 0.45 : 0.28, weight: heavy ? 0.85 : 0.6 });
     if (heavy) { const keep = pr.fig.exprName; setExpr(pr.fig, 'ow', 0.02); this._owUntil = f.t + 0.07; this._owBack = keep === 'ow' ? 'grin' : keep; }
   }
 
+  // ---------------------------------------------------------------- mint in box (the darks)
+  // The commercial cuts out and she's back in her packaging: in her window, behind the cellophane, facing the room,
+  // posed like the product, lit by the cold tube. She makes no attack and no show, and the BOX is what YOU beats on
+  // (Alex, 9 Nov: "she's just doing an odd animation and I don't know if you can hit her": she had her back to the
+  // room, couldn't be touched, and nothing said so). Strikes find the foot of its front like any strike, on the tick;
+  // every one rocks the box, creases the cellophane and throws her about on her peg, and counts for less (prize.js
+  // BOXED). No juggle, no knockback, no answer from her in there (track.js: juggle, counters).
+  _box(f, on, t) {
+    const pr = this.prize, b = pr.boss, rig = pr.fig.rig;
+    if (on) {
+      // (she may be up in the air from a juggle, or down on her knees for the finale's last bars: a pinned boss takes
+      // no place and no clip, and was drawn cartwheeling in the dark. Down she comes, and up she gets)
+      if (f.air && f.air.up) { const A = f.air; A.up = false; A.y = 0; A.vy = A.vx = A.vz = 0; A.spin = A.spinV = 0; f.cam.bossAirY = 0; }
+      b.pinned = false; b.dazeUntil = 0; b.stop();
+      if (b.state === 'open' || b.state === 'stagger') { b.state = b.hp <= 0 ? 'desperate' : 'perform'; b.st = 0; }
+      b.boxed = true; b.intangible = false; b.root.visible = true; b.lockFacing = true; b.lockPos = true;
+      b.place(BOXHIT.x, BOXHIT.z, 0);
+      pr.dress('self'); pr.show('spoon', false); pr.show('mini', true);
+      b.idle = BOXPOSE.clip; rig.timeScale = 1; rig.lean.set(0, 0); rig.upperStop(0.02);
+      rig.scrub(BOXPOSE.clip, { from: 0, to: 1, fade: 0.02 }); rig.scrubTo(BOXPOSE.at);
+      setExpr(pr.fig, 'grin', 0.01);
+      const R = this.rock, T = this.rat; R.a = R.r = R.vr = T.x = T.y = T.r = T.vx = T.vr = 0;
+      R.va = -34; T.vy = 1.8;                        // she lands in it and the box rocks once: it's a thing that moves
+      this.paneU.uCrinkle.value = 0; this.paneU.uFlash.value = 0.3; this._flick = 0.6;
+      if (t > 1) this.sound.play('cardboard', BOX.x, { rate: 0.8, gain: 0.6 });
+    } else {
+      b.boxed = false; b.lockPos = false; b.lockFacing = false; b.busyUntil = 0;
+      b.root.position.y = 0; b.root.rotation.x = b.root.rotation.z = 0;
+      rig.timeScale = 1; pr.show('mini', false);
+      this.paneU.uCrinkle.value = 0;
+    }
+  }
+  // something of YOU's landed on the box: it rocks back from the blow and twists, the cellophane creases, the cereal in
+  // it rattles, the marquee jumps, and she's knocked askew on her peg (harder for the heavy ones)
+  _boxHit(h) {
+    const f = this.f, pr = this.prize, R = this.rock, T = this.rat, U = this.paneU;
+    const k = h.kind === 'ring' ? 0.5 : h.kind === 'prop' ? 1.25 : h.finisher || h.riposte ? 1.7 : h.heavy ? 1.3 : h.onBeat ? 1.0 : 0.8;
+    const s = this._boxSide = -(this._boxSide || 1);
+    R.va -= 78 * k; R.vr += s * 34 * k;
+    T.vx += s * 3.8 * k; T.vr -= s * 6.5 * k; T.vy += 2.5 * k;
+    U.uFlash.value = Math.min(1.3, 0.5 + 0.45 * k); U.uCrinkle.value = Math.min(1, U.uCrinkle.value + 0.06 * k);
+    U.uHit.value.set(h.x !== undefined ? Math.max(-1, Math.min(1, (h.x - BOX.x) * 0.5)) : 0, 0.5 + Math.random() * 0.9, 0);
+    this._flick = Math.min(1, 0.5 + 0.4 * k);
+    this.sound.play('cello', BOX.x, { rate: 0.85 + Math.random() * 0.4, gain: 0.55 + 0.25 * k });
+    this.sound.play('rattle', BOX.x, { rate: 0.9 + Math.random() * 0.3, gain: 0.35 + 0.3 * k });
+    if (k > 1.1) {
+      this.sound.play('cardboard', BOX.x, { rate: 0.65, gain: 0.5 * k }); f.cam.shake(0.22 * k, 0.12);
+      for (let i = 0; i < 5; i++) this._drop(BOX.x + (Math.random() - 0.5) * 4.5, 9 + Math.random() * 3, -6.7 + Math.random() * 0.5, this.t + 0.5 + Math.random() * 0.3);
+    }
+    pr.fig.rig.upperOnce(k > 1.1 ? 'Hit_Chest' : 'Hit_Head', { duration: 0.32, weight: 0.75 });
+    if (k > 1.1) { setExpr(pr.fig, 'ow', 0.02); this._owUntil = f.t + 0.14; this._owBack = 'grin'; }
+  }
+  // every frame she's in it: nothing of the shared fight's makes her act in there (no stride, no flinch clip, no kick,
+  // no answer), and no spotlight in the dark (its meter waits just short of full)
+  _boxUpdate(f, dt, t) {
+    const b = this.prize.boss;
+    b.busyUntil = Math.max(b.busyUntil || 0, t + 0.3);
+    if (f.player.meter >= 1) f.player.meter = 0.999;
+    this._ride(dt);
+  }
+  // her peg's spring, and her body riding the box as it rocks
+  _ride(dt) {
+    const pr = this.prize, b = pr.boss, T = this.rat, R = this.rock;
+    for (let n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n, i = 0; i < n; i++) {
+      T.vx += (-560 * T.x - 13 * T.vx) * h; T.x += T.vx * h;
+      T.vr += (-520 * T.r - 11 * T.vr) * h; T.r += T.vr * h;
+      T.vy -= 30 * h; T.y += T.vy * h; if (T.y < 0) { T.y = 0; T.vy = T.vy < -1.5 ? -T.vy * 0.3 : 0; }
+    }
+    T.x = Math.max(-0.45, Math.min(0.45, T.x)); T.r = Math.max(-0.6, Math.min(0.6, T.r)); T.y = Math.min(T.y, 0.5);
+    _v.set(T.x, BOX.win.wy + T.y, INBOX.z - (BOX.z + BOX.d / 2)); this.boxG.updateWorldMatrix(true, false); this.boxG.localToWorld(_v);
+    b.root.position.copy(_v);
+    b.root.rotation.x = (this._tip || 0) * Math.PI / 180; b.root.rotation.z = R.r * Math.PI / 180 + T.r;
+  }
+
   // ---------------------------------------------------------------- the commercial at song time t
   setStateAt(f, t, hard = false) {
     const pr = this.prize, b = pr && pr.boss;
     this.lastT = t;
+    this.deathReset && this.deathReset();
     // pieces: up or down
     for (const [name, p] of Object.entries(this.pieces)) { p.up = this.pieceUp(name, t); }
     // cover re-forms in the darks and on rewinds
@@ -532,6 +647,7 @@ export class CerealSet {
     // her: costume, place, face
     if (b) {
       const c = cutAt(t);
+      if (b.boxed) this._box(f, false, t);
       b.stop(); b.lockFacing = false; b.intangible = false; b.frozen = false; b.lookAt = null;
       b.walkClip = b.runClip = t >= 211.9 ? 'Slide_Loop' : 'Walk_Formal_Loop'; if (t < 211.9) b.runClip = 'Jog_Fwd_Loop';
       f.app.post.fx.vhs = 0;
@@ -573,12 +689,13 @@ export class CerealSet {
     const dark = inDark(t);
     // ---- the dark: in one frame
     if (dark !== this.dark) this._setDark(f, dark, t);
-    if (dark && b && t < 289.5) { if (t > 289.1 && b.z !== INBOX.z) b.place(INBOX.x, INBOX.z, Math.PI); b.root.position.set(INBOX.x, INBOX.y, INBOX.z); }
-    // ---- in the dark, standing still for two beats, YOU lowers her rings: nothing to fight
-    { const pl = f.player, still = Math.hypot(pl.vx || 0, pl.vz || 0) < 0.3 && pl.state === 'free';
-      this._still = dark && still ? (this._still || 0) + dt : 0;
-      const lower = this._still > 2 * (f.beat || 0.35);
-      if (lower !== !!pl.walk) pl.walk = lower; }
+    // (her death scene has her: the set stands down)
+    const scene = !!(b && b.scene);
+    if (scene && b.boxed) this._box(f, false, t);
+    // ---- the picture looks up at her window while she's in it (the camera's own look height otherwise)
+    { const cam = f.cam; if (this._lookY0 === undefined) this._lookY0 = cam.lookY;
+      const want = b && b.boxed ? 2.0 : this._lookY0;
+      if (Math.abs(cam.lookY - want) > 1e-3) cam.lookY += (want - cam.lookY) * Math.min(1, dt * 4); }
     // ---- lighting
     const L = lightAt(t);
     this._light(f, L[1], t - L[0], t, dark);
@@ -609,11 +726,14 @@ export class CerealSet {
     const chase = !dark && t > 2.07 && !(t >= FREEZE[0] && t < FREEZE[1]);
     const C = _C, nb = this.bulbs.count, full = t >= 126.03 && t < 138.49 || t >= 271.9;
     const beatPh = f.bm ? f.bm.beatAt(t) : t * 2.9;
+    // (in the dark the marquee is all but out: it ticks with the pulse YOU fights on, and jumps when the box is struck)
+    this._flick = Math.max(0, (this._flick || 0) - dt * 5);
+    const tp = dark && f.bm && f.bm.tickPulse ? f.bm.tickPulse(t, 7) : 0, darkK = 0.07 + 0.13 * tp * tp + 0.7 * this._flick;
     for (let i = 0; i < nb; i++) {
       let k = 0;
       if (chase) k = full ? 0.6 + 0.4 * (((i + Math.floor(beatPh * 2)) % 3) === 0 ? 1 : 0) : (((i + Math.floor(beatPh)) % 4) === 0 ? 1 : 0.25);
       else if (t >= 289.54 && t < 292.39) k = i / nb > (t - 291.34) / 1.05 ? 1 : 0;
-      else k = 0.07;
+      else k = dark ? darkK : 0.07;
       C.setRGB(4.2 * k, 3.4 * k, 1.8 * k); this.bulbs.setColorAt(i, C);
     }
     this.bulbs.instanceColor.needsUpdate = true;
@@ -656,8 +776,9 @@ export class CerealSet {
       pr.sheen(!(pr.costume === 'defendant' && guilty));
       if (pretty && f.bm) { const bi = Math.floor(f.bm.beatAt(t)); if (bi !== this._sheenBeat) { this._sheenBeat = bi; pr.ripple(0xff3a5a, 0.3); } }
       if (this._owUntil && t > this._owUntil) { setExpr(pr.fig, this._owBack || 'grin', 0.05); this._owUntil = 0; }
-      // the bar empty: she plays on like a chewed tape
-      if (b.state === 'desperate' && !b.frozen && f.state === 'play') { const step = 1 / 12, before = this._tape || 0; this._tape = before + dt; pr.fig.rig.timeScale = Math.floor(this._tape / step) > Math.floor(before / step) ? step / Math.max(dt, 1e-3) : 0; }
+      // the bar empty: she plays on like a chewed tape (not in her box, where she holds still, nor in her death scene)
+      if (scene || b.boxed) { if (this._taped) { this._taped = false; pr.fig.rig.timeScale = 1; } }
+      else if (b.state === 'desperate' && !b.frozen && f.state === 'play') { const step = 1 / 12, before = this._tape || 0; this._tape = before + dt; pr.fig.rig.timeScale = Math.floor(this._tape / step) > Math.floor(before / step) ? step / Math.max(dt, 1e-3) : 0; this._taped = true; }
       pr.haloLight.intensity = !pr.props.halo.userData.broken && pr.costume === 'self' && !dark ? (t >= 37.38 && t < 53.64 ? 1.6 : 0.45) : 0;
       pr.update(dt);
     }
@@ -703,6 +824,14 @@ export class CerealSet {
       }
     }
     this._dressUpdate(f, dt, t, dark);
+    // ---- her window: the light on the cellophane, and her in it, riding the box
+    { const U = this.paneU, bar = f.bm ? (((f.bm.beatAt(t) - (f.bm.downbeat || 0)) % 8) + 8) % 8 * (f.beat || 0.35) : 9;
+      U.uGain.value = 0.6 / Math.max(0.2, f.app.post.fx.exposure);
+      U.uFlash.value = Math.max(0, U.uFlash.value - dt * 4.5); U.uHit.value.z += dt;
+      U.uSweep.value = bar < 0.55 && t > 2.07 ? bar / 0.55 : -1;
+      U.uBeat.value = b && b.boxed && f.bm && f.bm.tickPulse ? f.bm.tickPulse(t, 7) : 0; }
+    if (b && b.boxed) this._boxUpdate(f, dt, t);
+    this._deathUpdate && this._deathUpdate(f, dt);
     // ---- the bridge: the camera eases closer (the fight follows its section's close flag)
     if (f.lastSection) f.lastSection.close = t >= BRIDGE[0] && t < BRIDGE[1];
     // ---- sugar confetti drifting at full chorus
@@ -719,7 +848,6 @@ export class CerealSet {
   _setDark(f, on, t) {
     this.dark = on;
     const pr = this.prize, b = pr && pr.boss, pl = f.player;
-    const hud = f.hud && f.hud.el && f.hud.el.boss; if (hud) { hud.style.transition = 'opacity 0.05s'; hud.style.opacity = on ? '0.25' : '1'; }
     if (on) {
       this._darkT0 = t; this._clearPolaroids();
       // nothing starts and nothing lands: anything in flight vanishes with the cut
@@ -728,13 +856,8 @@ export class CerealSet {
       this.rings.length = 0;
       // the mail-in parcels go with the lights
       for (const p of this.parcels) { p.alive = false; p.falling = false; p.g.visible = false; }
-      if (b) {
-        b.stop(); b.intangible = true; b.root.visible = true; b.lockFacing = true;
-        // she stands in her window; the camera frames her a little behind it so the whole lit window stays in the
-        // picture wherever YOU is (her body is put back in the window every frame, see update)
-        b.place(INBOX.x, INBOX.z - 1.7, Math.PI); b.root.position.set(INBOX.x, INBOX.y, INBOX.z);
-        b.idle = 'Idle_Loop'; b.loop('Idle_Loop'); setExpr(pr.fig, 'grin', 0.01);
-      }
+      // she's back in her box, facing the room (her death scene, if it has her, puts her there itself)
+      if (b && !b.scene) this._box(f, true, t);
       // the stage lights can't swing onto YOU in the dark: a spotlight that was on ends, and its meter comes back after
       const spot = f.spotUntil > 0;
       if (spot && f._endSpotlight) f._endSpotlight();
@@ -743,13 +866,14 @@ export class CerealSet {
       if (pl.meter >= 1) pl.meter = 0.999;
       if (this._creakT !== t) { this._creakT = t; this.sound.dark(true, t); }
     } else {
-      if (b && t < 289.5) { b.root.position.y = 0; b.lockFacing = false; b.intangible = t < 6.57; }
+      // (at the song's last hit she stays where she is: she shatters in her window, or the encore takes her out of it)
+      if (b && t < 289.5 && !b.scene) { if (b.boxed) this._box(f, false, t); b.root.position.y = 0; b.lockFacing = false; b.intangible = t < 6.57; }
       if (this._meter !== undefined) { pl.meter = Math.max(pl.meter, this._meter); this._meter = undefined; }
       for (const h of this.breakables) if (h.kind === 'heap') { h.alive = true; h.hp = h.max; h.g.visible = true; }
       for (const p of this.parcels) { p.alive = false; p.g.visible = false; }
       if (t > 1) this.sound.dark(false, t);
       // back on in one frame, mid-pose, as if nothing happened
-      if (b && t > 6.57 && t < 289.5) { const c = cutAt(t); if (c) { pr.dress(c[1]); const pos = this.restPos(t, c); b.place(pos.x, pos.z); setExpr(pr.fig, c[4]?.face || 'grin', 0.01); } }
+      if (b && t > 6.57 && t < 289.5 && !b.scene) { const c = cutAt(t); if (c) { pr.dress(c[1]); const pos = this.restPos(t, c); b.place(pos.x, pos.z); setExpr(pr.fig, c[4]?.face || 'grin', 0.01); } }
     }
   }
 
@@ -761,7 +885,9 @@ export class CerealSet {
     if (name === 'finale') { const off = clamp01(Math.floor(Math.max(0, t - 290.27) / 0.36 + 1) / 4); a = 'commercial'; bb = 'offair'; k = t < 290.27 ? 0 : off; }
     if (this.arena) {
       if (key !== this.stateName) { this.stateName = key; this.arena.setState(a, bb, k); }
-      this.arena.update(f.dt || 0, f.cam.cam, f.player.root.position);
+      // off air the key is the cold tube in her box: it's on her window (aimed at YOU it left her black unless YOU stood
+      // under it), or on whatever her death scene points it at
+      this.arena.update(f.dt || 0, f.cam.cam, dark && t < 289.5 ? (this.lightAim || (this._boxAim ||= new THREE.Vector3(INBOX.x, INBOX.y + 0.4, INBOX.z + 0.5))) : f.player.root.position);
       const fx = f.app.post.fx;
       fx.exposure = (EXPO[a] ?? 1) * (1 - k) + (EXPO[bb] ?? 1) * k;
       // a blend with the dark is the lit state dimmed (the banks coming on one by one, the livestream's set at 40%,
@@ -946,7 +1072,7 @@ export class CerealSet {
   // ---------------------------------------------------------------- hooks
   onBreak(f, i) {
     const pr = this.prize, b = pr.boss;
-    b.perform('Idle_Shield_Break', { duration: f.beat * 2 });
+    if (!b.boxed) b.perform('Idle_Shield_Break', { duration: f.beat * 2 });
     if (i === 0) pr.breakProp('pigtail');
     if (i === 1) pr.breakProp('halo');
   }

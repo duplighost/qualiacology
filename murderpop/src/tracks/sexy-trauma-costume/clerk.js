@@ -102,9 +102,9 @@ export function routeRoundCounter(x0, z0, x1, z1) {
   if (inCounter(x1, z1)) {
     // the side she's coming from (in front, behind, or the end she's beside); from inside, the nearest side
     const mid = (COUNTER.z0 + COUNTER.z1) / 2;
-    if (x0 <= COUNTER.x0 || x0 >= COUNTER.x1) x1 = x0 <= COUNTER.x0 ? COUNTER.x0 - 0.04 : COUNTER.x1 + 0.04;
-    else if (!inCounter(x0, z0)) z1 = z0 >= mid ? COUNTER.z1 + 0.04 : COUNTER.z0 - 0.04;
-    else z1 = z1 >= mid ? COUNTER.z1 + 0.04 : COUNTER.z0 - 0.04;
+    if (x0 <= COUNTER.x0 || x0 >= COUNTER.x1) x1 = x0 <= COUNTER.x0 ? COUNTER.x0 - 0.35 : COUNTER.x1 + 0.35;
+    else if (!inCounter(x0, z0)) z1 = z0 >= mid ? COUNTER.z1 + 0.35 : COUNTER.z0 - 0.04;
+    else z1 = z1 >= mid ? COUNTER.z1 + 0.35 : COUNTER.z0 - 0.04;
   }
   if (inCounter(x0, z0) || clearOfCounter(x0, z0, x1, z1)) return [[x1, z1]];
   const len = (pts) => { let px = x0, pz = z0, L = 0; for (const [x, z] of pts) { L += Math.hypot(x - px, z - pz); px = x; pz = z; } return L; };
@@ -146,12 +146,21 @@ export class Clerk {
     let seq = 0;
     b.moveTo = (x, z, dur, o = {}) => {
       const my = ++seq;
-      if (o.through || this.y > 0.3 || this.yT > 0.3 || this.inBooth) return move(x, z, dur, o);
+      // (stunned or in the air: the boss keeps the move as asked, and it comes back through here when she's free)
+      if (b.pinned || b.dazed) return move(x, z, dur, o);
+      if (o.through || this.y > 0.3 || this.yT > 0.3 || this.inBooth) {
+        // (asked for in the middle of going over the counter: she stays up for as long as she's still over it)
+        if (!o.through && !this.up && !this.inBooth) this.vaultUntil = Math.max(this.vaultUntil || 0, (o.now ?? b._now ?? f.t) + dur);
+        return move(x, z, dur, o);
+      }
+      // a spot on the open floor that's inside a rack, a dress form or the room's edge is the floor beside it (round
+      // the counter she goes where she's told: that's hers)
+      if (z > COUNTER.z1 + 0.1 && f.arena && f.arena.resolve) { const q = f.arena.resolve(x, z, 0.45); x = q.x; z = Math.max(COUNTER.z1 + 0.12, q.z); }
       const legs = routeRoundCounter(b.x, b.z, x, z);
       if (legs.length === 1) return move(legs[0][0], legs[0][1], dur, o);
       let px = b.x, pz = b.z, L = 0; const seg = legs.map(([lx, lz]) => { const d = Math.hypot(lx - px, lz - pz); px = lx; pz = lz; L += d; return d; });
       // no time to go round: she goes over it, a hop up and down the other side
-      if (L / Math.max(0.01, dur) > 7.5 && !clearOfCounter(b.x, b.z, x, z) && !inCounter(x, z)) {
+      if (L / Math.max(0.01, dur) > 7.5 && !o.noVault && !clearOfCounter(b.x, b.z, x, z) && !inCounter(x, z)) {
         this.vaultUntil = (o.now ?? b._now ?? f.t) + dur;
         if (!b.busy) b.perform('NinjaJump_Start', { duration: Math.max(0.2, Math.min(dur, 0.6)), from: 0.1, to: 0.85, then: 'idle' });
         return move(x, z, dur, { ...o, through: true });
@@ -215,7 +224,7 @@ export class Clerk {
   loop(clip, at, speed = 1) { const f = this.f; const go = () => { this.b.idle = clip; this.b.loop(clip, { speed }); }; if (at <= f.t + 0.01) go(); else f.at(at, go); }
 
   // up onto the counter / down
-  onCounter(on) { this.yT = on ? 1.05 : 0; }
+  onCounter(on) { this.up = on; this.yT = on ? 1.05 : 0; }
 
   // a return of hers hit her: the NO plate for two beats
   returned() {}
@@ -244,7 +253,23 @@ export class Clerk {
   // a hop up onto the counter (or down): NinjaJump on t0, landing on t1
   hop(x, z, t0, t1, up = true) {
     const f = this.f, b = this.b;
-    const go = () => { b.behave = 'hold'; b.moveTo(x, z, Math.max(0.15, t1 - f.t), { easing: 'inOut', through: true }); b.perform('NinjaJump_Start', { duration: Math.max(0.15, t1 - f.t), from: 0.1, to: 0.85, then: 'idle' }); this.onCounter(up); };
+    const jump = () => {
+      const dur = Math.max(0.15, t1 - f.t);
+      b.moveTo(x, z, dur, { easing: 'inOut', through: true });
+      // (stunned as the song asked for it: she makes the hop when she's back, and goes up then, not where she stands)
+      if (b.moveHeld) { b._wait = null; this._hopWant = { up, x, z }; return; }
+      b.perform('NinjaJump_Start', { duration: dur, from: 0.1, to: 0.85, then: 'idle' }); this.onCounter(up);
+    };
+    const go = () => {
+      b.behave = 'hold';
+      // from across the room she comes to the counter's front on her feet first, and rises over the last of it
+      const fx = Math.max(COUNTER.x0 + 0.5, Math.min(COUNTER.x1 - 0.5, x)), fz = COUNTER.z1 + 0.9, d1 = Math.hypot(fx - b.x, fz - b.z);
+      if (up && this.y < 0.3 && d1 > 2.2 && !inCounter(b.x, b.z)) {
+        const d2 = Math.hypot(x - fx, z - fz), T = Math.max(0.3, t1 - f.t), T1 = T * d1 / (d1 + d2 + 0.8);
+        b.moveTo(fx, fz, T1, { easing: 'in' });
+        f.at(f.t + T1, jump);
+      } else jump();
+    };
     if (t0 <= f.t + 0.01) go(); else f.at(t0, go);
   }
   // the huge grinning smiley mask of the charge: a printed grin over her face (placed in bind space, like her accessories)
@@ -303,7 +328,7 @@ export class Clerk {
     let hand = null; for (const [tt, h] of HAND) if (t >= tt - 0.01) hand = h;
     this.hand = '?'; this.draw(hand);
     this.inBooth = t >= B_IN && t < 22.28;
-    this.yT = this.y = 0; this.b.root.position.y = 0; this.vaultUntil = 0;
+    this.yT = this.y = 0; this.up = false; this._hopWant = null; this._booth = null; this.b.root.position.y = 0; this.vaultUntil = 0;
     this.b.lockFacing = false;
     this.slowTurn = t >= 129.33 && t < 141.99; this.tied = false; this.limp = t >= 137.32;
     this.fig.U.fKintsugi.value = t >= 64.83 ? 6 : 1;
@@ -335,11 +360,12 @@ export class Clerk {
     if (this.tag) this.tag.visible = false;
     const k = this._tagMesh(1.9);
     const from = this.fig.bones.neck_01 ? this.fig.bones.neck_01.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(this.b.x, 2, this.b.z);
-    const to = new THREE.Vector3(pl.x + Math.sin(pl.facing) * 0.7, 0.012, pl.z + Math.cos(pl.facing) * 0.7);
+    const fy = (pl.y || 0) + 0.012;      // (YOU may be up on the counter: death.js)
+    const to = new THREE.Vector3(pl.x + Math.sin(pl.facing) * 0.7, fy, pl.z + Math.cos(pl.facing) * 0.7);
     let a = 0;
     R.keep(k, 1e9, { tick: (t, dt) => {
       a += dt || 1 / 60; const u = Math.min(1, a / 0.9);
-      k.position.lerpVectors(from, to, u); k.position.y = from.y * (1 - u) + 0.012 + 1.6 * u * (1 - u) * 2;
+      k.position.lerpVectors(from, to, u); k.position.y = from.y * (1 - u) + fy * u + 1.6 * u * (1 - u) * 2;
       k.rotation.set(-Math.PI / 2 + (1 - u) * 6, 0, (1 - u) * 9 + 0.3);
       if (u >= 1 && !k.userData.landed) { k.userData.landed = true; f.fx.glitter(to.x, 0.2, to.z, new THREE.Color(3, 2.2, 0.8), 18, 0.4); R.snd.porcelain(to.x); }
     } });
@@ -403,6 +429,8 @@ export class Clerk {
     if (f.state === 'play') this._scratch(dt);
     // plates time out back to the base
     if (this.plateUntil && t >= this.plateUntil) { this.plateUntil = 0; this._show(this.basePlate); }
+    // her death scene moves her (death.js)
+    if (b.scene) { rig.timeScale = 1; b.lockFacing = false; this.frozen = false; return; }
     // frozen in a silence; in the intro, still between the stabs
     let frozen = false;
     for (const [a, z] of this.freezes) if (t >= a && t < z) { frozen = true; break; }
@@ -418,19 +446,32 @@ export class Clerk {
     // the bridge: she turns to face YOU at 90 degrees a beat, slowly, so YOU can circle her
     if (this.slowTurn && !frozen && !b.move) { const want = Math.atan2(f.player.x - b.x, f.player.z - b.z); const d = Math.atan2(Math.sin(want - b.facing), Math.cos(want - b.facing)); const m = (Math.PI / 2) / f.beat * dt; b.facing += Math.abs(d) <= m ? d : Math.sign(d) * m; }
     this.frozen = frozen;
-    // she walks round the racks and dress forms, never through them
-    if (f.room && this.y < 0.3 && !this.inBooth && b.state !== 'finished') { const r = f.room.stage.resolve(b.x, b.z, 0.42); if (Math.abs(r.x - b.x) + Math.abs(r.z - b.z) > 1e-4) { b.x = r.x; b.z = r.z; b._sync(); } }
+    // a hop the song asked for while she was stunned: made when she's back (to the counter's front on her feet first)
+    if (this._hopWant && !b.dazed && !b.pinned && !b.move && b.state !== 'stagger') { const w = this._hopWant; this._hopWant = null; this.hop(w.x, w.z, t, t + 0.6, w.up); }
+    // the fitting room: to its front on her feet, in through the open curtain, and she's in it once she's there (on
+    // the song's word, or late if a stun kept her)
+    if (this._booth && t < 22.0) {
+      if (this._booth === 'walk' && b.near(-8.3, 0.0, 0.9)) { this._booth = 'in'; b.moveTo(-10.0, 0.0, Math.max(0.25, this.boothAt - t), { through: true, easing: 'out' }); }
+      else if (this._booth === 'in' && t >= this.boothAt && b.near(-10.0, 0.0, 0.9)) { this._booth = null; this.boothEnter && this.boothEnter(); }
+    }
+    // standing in a rack or a dress form (pushed there, put there): the open floor beside it. Her walks go round
+    // them on their own (Boss.moveTo), so this never fights a walk
+    if (f.room && this.y < 0.3 && !this.inBooth && !b.move && b.state !== 'finished') { const r = f.room.stage.resolve(b.x, b.z, 0.42); if (Math.abs(r.x - b.x) + Math.abs(r.z - b.z) > 1e-4) { b.x = r.x; b.z = r.z; b._sync(); } }
     // going over it: up while she's over the counter, down the other side
     const vaulting = this.vaultUntil && t < this.vaultUntil + 0.05;
     if (vaulting) this.yT = inCounter(b.x, b.z) || Math.abs(b.z + 5.97) < 1.0 && Math.abs(b.x) < 3.6 ? 1.05 : 0;
-    else if (this.vaultUntil) { this.vaultUntil = 0; if (this.yT > 0.3 && !inCounter(b.x, b.z)) this.yT = 0; }
+    else if (this.vaultUntil) { this.vaultUntil = 0; this.yT = this.up ? 1.05 : 0; }      // (down, wherever the vault left her: she's only up there when the song hops her up)
     // and never stands inside the counter on the floor (anything that put her there, a push, a place): out the nearer side
     if (!vaulting && this.y < 0.3 && this.yT < 0.3 && !this.inBooth && !b.move && b.state !== 'finished' && inCounter(b.x, b.z)) {
       const [[x, z]] = routeRoundCounter(b.x, b.z, b.x, b.z); b.x = x; b.z = z; b._sync();
     }
     // height: up on the counter, down on the floor (a hop is quick; a vault quicker)
-    this.y += (this.yT - this.y) * Math.min(1, dt * (vaulting ? 26 : 14));
-    b.root.position.y = this.y;
+    // (hopping down, she stays up until she's clear of it)
+    const yWant = this.yT < 0.3 && b.move && inCounter(b.x, b.z) ? 1.05 : this.yT;
+    this.y += (yWant - this.y) * Math.min(1, dt * (vaulting ? 26 : 14));
+    // (a jump the shared code gave her, out from between things: on top of that)
+    const mv = b.move, kk = mv && mv.arc ? Math.min(1, Math.max(0, (t - mv.t0) / mv.dur)) : 0;
+    b.root.position.y = this.y + (mv && mv.arc ? 4 * mv.arc * kk * (1 - kk) : 0);
     // behind the counter her ring would show on the floor in front of it (Alex, 7 Nov: she looked to be inside "the
     // stage"): it fades while she's back there, and comes back as she comes out
     const behind = this.y < 0.3 && b.z < COUNTER.z1 - 0.05 && Math.abs(b.x) < COUNTER.x1 + 0.6;

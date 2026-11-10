@@ -89,7 +89,7 @@ export class Director {
 
   // ---------- faces ----------
   face(name, hold = 0, fade = 0.12) {
-    if (!this.fig) return;
+    if (!this.fig || this.b.scene) return;         // (in her death scene her face is the scene's)
     this.fig.setExpression(this._mapFace(name), { fade });
     this.exprUntil = hold > 0 ? this.t + hold : -1;
     if (hold <= 0) this.exprBase = name;
@@ -100,14 +100,32 @@ export class Director {
   // ---------- moves ----------
   // walk (her strut) to x, z at a speed; returns the arrival time
   strut(x, z, speed = 2.4) {
-    const b = this.b, d = Math.hypot(x - b.x, z - b.z);
+    const b = this.b, f = this.f;
+    // (to open floor: a spot inside something, the fallen teddy, the car, is moved to its edge, as a skid's is)
+    const r = f.arena && f.arena.resolve ? f.arena.resolve(x, z, b.radius * 0.8) : { x, z };
+    const d = Math.hypot(r.x - b.x, r.z - b.z);
     const dur = Math.max(0.15, d / speed);
-    b.moveTo(x, z, dur, { easing: 'inOut' });
+    b.moveTo(r.x, r.z, dur, { easing: 'inOut' });
     return this.t + dur;
+  }
+  // a walk through points (round something), at one pace, there by tEnd
+  walk(pts, tEnd) {
+    const b = this.b, f = this.f;
+    let x = b.x, z = b.z, L = 0;
+    for (const p of pts) { L += Math.hypot(p[0] - x, p[1] - z); x = p[0]; z = p[1]; }
+    const speed = L / Math.max(0.4, tEnd - this.t);
+    let t = this.t; x = b.x; z = b.z;
+    pts.forEach((p, i) => {
+      const d = Math.hypot(p[0] - x, p[1] - z), t0 = t, go = () => b.moveTo(p[0], p[1], Math.max(0.1, d / speed), { easing: 'linear' });
+      x = p[0]; z = p[1]; t += d / speed;
+      if (i === 0) go(); else f.at(t0, go);
+    });
+    return t;
   }
   // the signature reposition: a figurine pushed across a glazed shelf, fast, a crisp stop, still facing you
   skid(x, z, dur = 0.5, { face = false } = {}) {
     const b = this.b, f = this.f;
+    if (b.scene) return this.t + dur;
     const r = f.arena.resolve ? f.arena.resolve(x, z, b.radius * 0.8) : { x, z };
     b.perform('Slide_Loop', { duration: dur, from: 0.0, to: 1.0, fade: 0.06 });
     b.moveTo(r.x, r.z, dur, { easing: 'out', face });
@@ -121,6 +139,7 @@ export class Director {
   // follows YOU until it locks; she homes on it in the air and lands on the locked spot)
   leap(target, tLand, { h = 3.2, crouch = 0.1 } = {}) {
     const b = this.b, t0 = this.t;
+    if (b.scene) return;
     b.move = null;
     this.jump = { t0: t0 + crouch, t1: tLand, h, x0: b.x, z0: b.z, target, rot: this.wrecked ? Math.PI * 2 : 0 };
     b.perform('NinjaJump_Start', { duration: Math.min(0.3, Math.max(0.12, (tLand - t0) * 0.3)), then: 'NinjaJump_Idle_Loop', fade: 0.05 });
@@ -134,6 +153,8 @@ export class Director {
   // ---------- per frame ----------
   update(dt) {
     const f = this.f, b = this.b, t = this.t, pl = f.player;
+    // her death scene moves her (death.js): where she stands, her height, her face are all its own
+    if (b.scene) { this.jump = null; this._seated = false; this.exprUntil = -1; return; }
     // the jump arc (the boss tween moves x, z; we lift her)
     if (this.jump) {
       const J = this.jump, k = THREE.MathUtils.clamp((t - J.t0) / Math.max(0.01, J.t1 - J.t0), 0, 1), e = ease.inOut(k);
@@ -200,7 +221,7 @@ export class Director {
   // the cornered shove: a one-beat wind-up from the beat it's cued on, landing exactly on the next (t1)
   _shove(t1) {
     const f = this.f, b = this.b;
-    if (f.suppress) return;
+    if (f.suppress || b.scene) return;
     b.faceNow(f.player.x, f.player.z);
     const beats = Math.max(0.5, ((t1 ?? f.t + f.beat) - f.t) / f.beat);
     b.perform('Punch_Cross', { duration: this.beat * 1.15, from: 0.0, to: 0.7 });

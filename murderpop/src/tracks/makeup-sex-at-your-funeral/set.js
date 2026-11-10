@@ -18,6 +18,8 @@ export const TL = {
   chapel: 147.192, dark: 148.172, burst: 158.601, ring: 158.926, sunrise: 166.449, sunHigh: 190.320, wedding: 199.469, negative: 200.791,
 };
 const BEAT = 0.326;
+// the wedding's casket on the altar (the chapel's bier is 0.72 high); a little bigger than life: she is a tall figurine
+export const CASKET = { x: 0, z: -4.0, y: 0.75, scale: 1 };
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const smooth = (a, b, t) => { const k = clamp01((t - a) / (b - a)); return k * k * (3 - 2 * k); };
 const backOut = (k) => { k = clamp01(k); const c = 1.7; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
@@ -290,6 +292,8 @@ export class FuneralSet {
     else if (t < TL.road) casket = { visible: false };
     else if (t < TL.chapel) casket = { visible: false };
     else if (t < TL.burst) casket = { x: 0, z: -4.0, y: 0.75 * smooth(TL.chapel, TL.chapel + 0.65, t), rotY: 0, visible: true };
+    // the wedding: your casket, open, on the altar under the rose arch (it's the groom; her death scene shuts her in it)
+    else if (t >= TL.wedding) casket = { x: CASKET.x, z: CASKET.z, y: CASKET.y, rotY: 0, scale: CASKET.scale, visible: true };
     else casket = { visible: false };
     set('casket', casket);
     const ck = props.casket.obj.userData;
@@ -359,7 +363,8 @@ export class FuneralSet {
     const small = (t >= TL.chapel && t < TL.burst) || t >= TL.wedding;
     const k = small ? smooth(t >= TL.wedding ? TL.wedding : TL.chapel, (t >= TL.wedding ? TL.wedding : TL.chapel) + 2 * BEAT, t) : (t >= TL.burst && t < TL.burst + 2 * BEAT ? 1 - smooth(TL.burst, TL.burst + 2 * BEAT, t) : 0);
     const b = this.bounds;
-    b.minX = -11 + 3 * k; b.maxX = 11 - 3 * k; b.minZ = -7 + 1.5 * k; b.maxZ = 7 - 2.5 * k;
+    // (at the wedding the floor stops in front of the altar: nobody gets behind the casket and the groomsmen)
+    b.minX = -11 + 3 * k; b.maxX = 11 - 3 * k; b.minZ = -7 + (t >= TL.wedding ? 2.75 : 1.5) * k; b.maxZ = 7 - 2.5 * k;
     // the bar counter is the left bound in the viewing room
     this.wall = t < TL.walls ? { minX: -10.4, z0: -5, z1: 3 } : null;
     this._sets(t);

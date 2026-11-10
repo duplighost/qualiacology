@@ -86,7 +86,11 @@ export function makeCar() {
   gg.translate(0, 0, -0.65); gg.rotateY(-Math.PI / 2); gg.computeVertexNormals();
   car.add(mesh(gg, M.glass));
   const roof = mesh(new THREE.BoxGeometry(1.36, 0.05, 0.95), M.ivory); roof.position.set(0, 1.33, 0.12); roof.rotation.x = 0.04; car.add(roof);
-  const roofBack = mesh(new THREE.BoxGeometry(1.3, 0.05, 1.2), M.ivory); roofBack.position.set(0, 1.12, -1.05); roofBack.rotation.x = -0.33; car.add(roofBack);
+  // the fastback's lid, on its hinge at the roof (it stays shut all song; it opens in her death scene: death.js)
+  const hatch = new THREE.Group(); hatch.name = 'hatch'; hatch.position.set(0, 1.314, -0.482);
+  const roofBack = mesh(new THREE.BoxGeometry(1.3, 0.05, 1.2), M.ivory); roofBack.position.set(0, -0.194, -0.568); roofBack.rotation.x = -0.33; hatch.add(roofBack);
+  const liner = mesh(new THREE.BoxGeometry(1.2, 0.02, 1.1), M.black); liner.position.set(0, -0.03, 0); roofBack.add(liner);
+  car.add(hatch);
   for (const z of [-2.32, 2.32]) { const b = mesh(new THREE.CapsuleGeometry(0.06, 1.55, 4, 10), M.chrome); b.rotation.z = Math.PI / 2; b.position.set(0, 0.44, z); car.add(b); }
   const lights = new THREE.Group(); lights.name = 'lights';
   for (const x of [-0.6, 0.6]) {
@@ -116,9 +120,33 @@ export function makeCar() {
   const beams = new THREE.Group();
   for (const x of [-0.6, 0.6]) { const b = new THREE.Mesh(cone, beamM); b.position.set(x, 0.64, 2.3); b.rotation.x = 0.12; b.renderOrder = 9; beams.add(b); }
   car.add(beams);
-  car.userData = { lights, wheels, beams, beamM, roofCase };
-  mergeByMaterial(car, new Set([lights, beams]));
+  car.userData = { lights, wheels, beams, beamM, roofCase, hatch };
+  mergeByMaterial(car, new Set([lights, beams, hatch]));
   return car;
+}
+
+// her key ring (YOUR car key on it, with its umber fob and copper badge), big enough to read in the air: it flies in
+// her death scene (death.js), and YOU ends up with it
+export function makeKeyRing() {
+  const M = mats();
+  const g = new THREE.Group(); g.name = 'key ring';
+  const gold = new THREE.MeshStandardMaterial({ color: 0xf2c14e, metalness: 1, roughness: 0.22, emissive: new THREE.Color(0.6, 0.4, 0.1), emissiveIntensity: 0.9 });
+  const nickel = new THREE.MeshStandardMaterial({ color: 0xd6d8de, metalness: 1, roughness: 0.25, emissive: new THREE.Color(0.22, 0.24, 0.28), emissiveIntensity: 0.7 });
+  const spin = new THREE.Group(); g.add(spin);
+  spin.add(mesh(new THREE.TorusGeometry(0.13, 0.014, 8, 32), gold, false));
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * Math.PI * 2, k = new THREE.Group(), m = i % 2 ? nickel : gold;
+    k.add(mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.012, 14).rotateX(Math.PI / 2), m, false));
+    const blade = mesh(new THREE.BoxGeometry(0.13, 0.026, 0.008), m, false); blade.position.x = 0.095; k.add(blade);
+    if (i === 0) {
+      const fob = mesh(new THREE.BoxGeometry(0.1, 0.066, 0.02), M.umber, false); fob.position.x = -0.03; k.add(fob);
+      const badge = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.008, 12).rotateX(Math.PI / 2), M.copper, false); badge.position.set(-0.03, 0, 0.014); k.add(badge);
+    }
+    k.position.set(Math.cos(a) * 0.165, Math.sin(a) * 0.165, 0); k.rotation.z = a;
+    spin.add(k);
+  }
+  g.userData.spin = spin;
+  return g;
 }
 
 // ---------------------------------------------------------------------------------------------- YOUR cases

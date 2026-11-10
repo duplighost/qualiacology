@@ -191,6 +191,8 @@ function hang(fig, bone, obj, pos, yAxis, zHint, worldScale = true) {
 }
 
 // ---------------------------------------------------------------- the boss
+// in the darks she's mint in her box, and the box is what YOU beats on: what lands on it counts for this much
+export const BOXED = { dmg: 0.4, air: 1.5 };
 export class PrizeBoss extends Boss {
   constructor(body, opts) {
     super(body, opts);
@@ -198,10 +200,16 @@ export class PrizeBoss extends Boss {
     this.frozen = false;          // the freeze-frame (164.81): the commercial pauses
     this.returnMult = 2.1;        // her generosity is her weakness: a gold return is worth about three strikes
     this.onGuilty = null;
+    this.boxed = false;           // in her window, behind the cellophane (set.js _box)
   }
+  // how high she is, as YOU's strikes and rings read it: in her box she's up in its window, so a ring thrown from
+  // across the table flies to the pane, and a cut made in the air goes up to it (the fight's own juggle height otherwise)
+  get airY() { return this.boxed ? BOXED.air : this._airY || 0; }
+  set airY(v) { this._airY = v || 0; }
   takeHit(info) {
     if (!this.targetable) return { landed: false };
-    if (info.kind === 'return') info = { ...info, dmg: info.dmg * this.returnMult, heavy: true };
+    if (this.boxed) info = { ...info, dmg: info.dmg * BOXED.dmg, boxed: true };
+    else if (info.kind === 'return') info = { ...info, dmg: info.dmg * this.returnMult, heavy: true };
     // between her openings the glaze is hard: strikes and rings land for less; open, staggered or blinded, full
     else if (this.state === 'perform' && !this.blinded) info = { ...info, dmg: info.dmg * 0.6 };
     if (this.guard === 'pretty' && (info.kind === 'return' || this.blinded)) {

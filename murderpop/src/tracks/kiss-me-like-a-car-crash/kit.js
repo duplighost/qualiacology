@@ -210,6 +210,55 @@ export function skyDome(scene) {
   return d;
 }
 
+// ------------------------------------------------------------------------------------------ beyond the road
+// What the stage camera sees past the far median and off both ends of the slab: the hill the freeway is cut into
+// (the one that comes down on "bury"), the road going on, and the sky over the ridge. (Until 10 Nov the camera was
+// high and never looked past the K-rail, so there was nothing there: with the low camera, a black void over a wet
+// road full of dawn.) Drawn by the game camera only: the wet road goes on reflecting the sky dome above, as it was lit
+// to. `sky`: the dome above's own colours (the same Color objects), dimmer and with the horizon's band drawn tight.
+export function beyond(scene, sky) {
+  const g = new THREE.Group(); g.name = 'beyond';
+  const put = (m) => { m.layers.set(LAYER.NO_REFLECT); m.frustumCulled = false; m.castShadow = false; m.receiveShadow = false; g.add(m); return m; };
+  const su = sky.material.uniforms;
+  const dome = put(new THREE.Mesh(new THREE.SphereGeometry(140, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false,
+    uniforms: { uTop: su.uTop, uHor: su.uHor, uGain: { value: 0.6 } },
+    vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 uTop, uHor; uniform float uGain; varying vec3 vD; void main(){ float k = smoothstep(0.0, 0.36, vD.y); gl_FragColor = vec4(mix(uHor, uTop, k) * uGain, 1.0); }' })));
+  dome.renderOrder = -9;
+  // the hill: a faceted rise from the far shoulder (z -13) to a ridge 60 m back, dark scrub and rock
+  const NX = 96, NZ = 15, X0 = -150, X1 = 150, pos = [], col = [];
+  const dAt = (j) => 78 * Math.pow(j / NZ, 1.7);                      // rows crowd toward the road
+  const hAt = (x, d, i, j) => {
+    const big = 0.75 + 0.5 * (0.5 + 0.5 * Math.sin(x * 0.037 + 1.3)) * (0.6 + 0.4 * Math.sin(x * 0.011 + 4.0));
+    return 2.4 * smooth(0, 5, d) + 8.6 * smooth(4, 62, d) * big + (j > 0 ? (hash(i * 7.3 + j * 19.1) - 0.5) * (0.35 + d * 0.022) : 0);
+  };
+  const P = (i, j) => { const x = lerp(X0, X1, i / NX) + (j > 0 ? (hash(i * 3.1 + j * 5.7) - 0.5) * 1.6 : 0), d = dAt(j); return [x, j === 0 ? -0.02 : hAt(x, d, i, j), -13.0 - d]; };
+  for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) {
+    const a = P(i, j), b = P(i + 1, j), c = P(i, j + 1), e = P(i + 1, j + 1);
+    for (const [tri, seed] of [[[a, b, c], i * 2.3 + j * 11.7], [[b, e, c], i * 5.1 + j * 3.9 + 0.5]]) {
+      // (dark, and nearly one tone: it's behind the two of you, not a picture of its own)
+      const k = hash(seed), rock = k > 0.9;
+      const c0 = rock ? [0.036 + 0.008 * hash(seed + 2), 0.034, 0.032] : [0.017 + 0.007 * k, 0.021 + 0.008 * k, 0.016 + 0.005 * k];
+      for (const v of tri) { pos.push(v[0], v[1], v[2]); col.push(c0[0], c0[1], c0[2]); }
+    }
+  }
+  const hg = new THREE.BufferGeometry();
+  hg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); hg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); hg.computeVertexNormals();
+  const ground = new THREE.MeshLambertMaterial({ vertexColors: true });
+  put(new THREE.Mesh(hg, ground));
+  // the road, the verge and the bank going on past both ends of the set (x beyond 17)
+  const flat = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.02, 0.02, 0.024) }), bank = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.03, 0.036, 0.028) });
+  for (const s of [-1, 1]) {
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(133, 20.2), flat); road.rotation.x = -Math.PI / 2; road.position.set(s * (17 + 66.5), -0.012, -2.9); put(road);
+    const slope = new THREE.BufferGeometry(); const xa = s * 17, xb = s * 150;
+    slope.setAttribute('position', new THREE.Float32BufferAttribute([xa, -0.012, 7.2, xb, -0.012, 7.2, xa, -7, 14, xb, -0.012, 7.2, xb, -7, 14, xa, -7, 14], 3));
+    if (s > 0) slope.setIndex([0, 2, 1, 3, 5, 4]);
+    slope.computeVertexNormals(); put(new THREE.Mesh(slope, bank));
+  }
+  scene.add(g);
+  return { group: g, dome, dispose() { scene.remove(g); g.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); } };
+}
+
 // ------------------------------------------------------------------------------------------ floor decals (painted textures, not mirrored)
 export function decalTex(draw, size = 128) {
   const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d');

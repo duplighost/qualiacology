@@ -3,11 +3,13 @@
 // pictures (the cut's arc, the star where it lands, floor rings, the guard, the solo's pips) are in strikes.js.
 import * as THREE from 'three';
 import { FXK } from '../engine/post.js';
-import { StrikeFX, SX_GOLD, SX_IVORY, SX_PINK, SX_WHITE } from './strikes.js';
+import { StrikeFX, SX_GOLD, SX_COPPER, SX_IVORY, SX_PINK, SX_WHITE } from './strikes.js';
 
-const TRAIL_VS = 'attribute float alpha; varying float vA; void main(){ vA = alpha; gl_Position = projectionMatrix * (viewMatrix * vec4(position,1.0)); }';
-const TRAIL_FS = 'uniform vec3 uC; uniform float uFxK; varying float vA; void main(){ gl_FragColor = vec4(uC * vA * uFxK, vA); }';
+// a ribbon: bright down its middle, soft at its edges (side runs 0..1 across it)
+const TRAIL_VS = 'attribute float alpha; attribute float side; varying float vA; varying float vS; void main(){ vA = alpha; vS = side; gl_Position = projectionMatrix * (viewMatrix * vec4(position,1.0)); }';
+const TRAIL_FS = 'uniform vec3 uC; uniform float uFxK; varying float vA; varying float vS; void main(){ float e = sin(vS * 3.14159); float a = vA * e * e; gl_FragColor = vec4(uC * a * uFxK, a * 0.6); }';
 
+const T_GOLD = new THREE.Color(2.6, 1.6, 0.42), T_COPPER = new THREE.Color(1.5, 0.72, 0.3);
 const MAXP = 2400;
 const PVS = /* glsl */`
 attribute vec4 aP;   // x y z size
@@ -86,8 +88,8 @@ export class FX {
     this.sx = new StrikeFX(scene);
     // trail materials are shared by colour, so a new trail never waits for a shader; each is drawn once at load
     this._trailMats = new Map();
-    for (const c of [new THREE.Color(3.2, 1.9, 0.5), new THREE.Color(0.95, 0.66, 0.36), new THREE.Color(3.2, 1.95, 0.5), new THREE.Color(1.9, 1.65, 1.35)]) {
-      const warm = new THREE.Mesh(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, -9, 0, 0.01, -9, 0, 0, -9, 0.01], 3)).setAttribute('alpha', new THREE.Float32BufferAttribute([0, 0, 0], 1)), this._trailMat(c));
+    for (const c of [new THREE.Color(3.2, 1.9, 0.5), new THREE.Color(0.95, 0.66, 0.36), T_GOLD, T_COPPER]) {
+      const warm = new THREE.Mesh(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, -9, 0, 0.01, -9, 0, 0, -9, 0.01], 3)).setAttribute('alpha', new THREE.Float32BufferAttribute([0, 0, 0], 1)).setAttribute('side', new THREE.Float32BufferAttribute([0, 1, 0], 1)), this._trailMat(c));
       warm.frustumCulled = false; warm.visible = false; scene.add(warm);
     }
   }
@@ -145,10 +147,12 @@ export class FX {
   // a ribbon following get() (a Vector3), width w, colour c; flat=true lies on the floor
   trail(get, { w = 0.22, color = new THREE.Color(3, 1.9, 0.5), len = 18, flat = false, life = 0.25 } = {}) {
     const n = len;
-    const pos = new Float32Array(n * 2 * 3), al = new Float32Array(n * 2);
+    const pos = new Float32Array(n * 2 * 3), al = new Float32Array(n * 2), sd = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) { sd[i * 2] = 0; sd[i * 2 + 1] = 1; }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('alpha', new THREE.BufferAttribute(al, 1).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('side', new THREE.BufferAttribute(sd, 1));
     const idx = []; for (let i = 0; i < n - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } g.setIndex(idx);
     const mesh = new THREE.Mesh(g, this._trailMat(color)); mesh.frustumCulled = false; mesh.renderOrder = 5; this.scene.add(mesh);
     const tr = { get, w, flat, pts: [], mesh, g, pos, al, n, live: true, fade: 1, life };
@@ -205,24 +209,28 @@ export class FX {
     if (on) r.trail = this.trail(() => r.pos, { w: 0.2, color: new THREE.Color(3.2, 1.9, 0.5), len: 16, life: 0.2 });
     else if (r.trail) { r.trail.live = false; r.trail = null; }
   }
-  // a strike: ribbons off both rings (or her fists) for as long as it lasts, gold when it's on the beat
+  // a strike: ribbons off both rings for as long as it lasts: copper, gold when it was pressed on the tick
   swing(pl, s) {
     this._endSwing();
-    const big = !!(s.finisher || s.riposte);
-    const col = s.on || s.riposte ? new THREE.Color(3.2, 1.95, 0.5) : new THREE.Color(1.9, 1.65, 1.35);
+    const big = !!(s.finisher || s.riposte || s.heavy);
+    const col = s.on || s.riposte ? T_GOLD : T_COPPER;
     const srcs = [];
-    if (s.armed !== false && pl.rings) for (const r of pl.rings) if (r.state === 'hand' && r.holder) srcs.push(() => r.holder.getWorldPosition(this._sv));
+    if (pl.rings) for (const r of pl.rings) if (r.state === 'hand' && r.holder) srcs.push(() => r.holder.getWorldPosition(this._sv));
     if (!srcs.length) for (const b of [pl.rig.bones.hand_l, pl.rig.bones.hand_r]) if (b) srcs.push(() => b.getWorldPosition(this._sv));
-    this._swing = { s, trails: srcs.map((get) => this.trail(get, { w: big ? 0.24 : s.on ? 0.17 : 0.12, color: col, len: big ? 18 : 12, life: big ? 0.22 : 0.13 })) };
+    this._swing = { s, trails: srcs.map((get) => this.trail(get, { w: big ? 0.3 : 0.22, color: col, len: big ? 16 : 11, life: big ? 0.2 : 0.12 })) };
   }
   _endSwing() { if (this._swing) { for (const t of this._swing.trails) t.live = false; this._swing = null; } }
-  // the cut's arc in the air, at the moment it lands
+  // the cut's arc in the air, at the moment it lands: in the move's own plane, at the height she is
   slash(pl, s, ang) {
-    const big = !!(s.finisher || s.riposte);
-    // off the beat the cut is a thin grey ghost of itself
-    this.sx.slash(pl.x, pl.z, ang, { sweep: big ? 1 : s.sweep, gold: s.on || s.riposte, big, color: s.on || s.riposte ? undefined : new THREE.Color(0.9, 0.85, 0.8), r: s.on || big ? undefined : 1.45 });
-    if (big) this.sx.slash(pl.x, pl.z, ang + 0.35, { sweep: -1, gold: true, big: true, r: 1.7 });
+    const d = s.def || {}, big = !!(s.finisher || s.riposte), gold = !!(s.on || s.riposte);
+    const y = (pl.y || 0) + (d.dive ? 0.9 : 1.2), x = pl.x + Math.sin(ang) * 0.25, z = pl.z + Math.cos(ang) * 0.25;
+    const half = Math.min(3.0, (d.arc ?? 1.5) * 0.62 + 0.35);
+    this.sx.slash(x, y, z, ang, { sweep: s.sweep === 0 ? 1 : s.sweep, tilt: d.tilt ?? 0.3, gold, big: big || !!s.heavy, half, r: big ? 1.95 : s.heavy ? 1.7 : 1.4 });
+    // the big ones leave a second, wider one a moment behind
+    if (big) this.sx.slash(x, y, z, ang, { sweep: s.sweep === 0 ? -1 : -s.sweep, tilt: (d.tilt ?? 0.3) + 0.35, gold: true, big: true, half: half * 0.8, r: 2.5, life: 0.28 });
   }
+  // wound up for the heavy: the rings burn, and a ring on the floor closes with each tick held
+  charge(pl, on) { this._charge = on ? { pl, t: 0 } : null; }
   impact(x, y, z, dir, o = {}) { this.sx.impact(x, y, z, o); }
   ring(x, z, color, r = 2) { this.sx.ring(x, z, color, r); }
   // a pink hit on the guard: sparks where it met the shield, the shield flares (pl.blockK)
@@ -261,6 +269,7 @@ export class FX {
     }
   }
   drawTargets(list, pulse) { this.sx.drawTargets(list, pulse); }
+  drawNotes(list, pl, tick) { this.sx.drawNotes(list, pl, tick, this._time || 0); }
   dazeStars(b, n, dur) { this.sx.dazeStars(b, n, dur); }
 
   // ---------- screen ----------
@@ -277,6 +286,7 @@ export class FX {
     if (this._swing && (!player || player.state !== 'strike' || player.strike !== this._swing.s)) this._endSwing();
     this.sx.update(dt);
     this.sx.updateGuard(dt, player, this._time);
+    if (this._charge && player) { const c = this._charge; c.t += dt; if (((c.n = (c.n || 0) + dt) > 0.05)) { c.n = 0; for (const r of player.rings || []) if (r.state === 'hand' && r.holder) { r.holder.getWorldPosition(this._sv); this.emit(2, { x: this._sv.x, y: this._sv.y, z: this._sv.z, color: T_GOLD, shape: 3, speed: 1.2, life: 0.3, size: 0.07, gravity: -2, jitter: 0.25, up: 0.5 }); } } if (player.state !== 'strike' || !player.strike || !player.strike.charging) this._charge = null; }
     this._updateMotes(dt);
     // catch ring
     if (player) {

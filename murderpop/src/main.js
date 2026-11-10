@@ -18,6 +18,7 @@ import { Autopilot } from './game/autopilot.js';
 import { RecordMenu } from './ui/record.js';
 import { Screens } from './ui/screens.js';
 import { MenuDOM, loadProgress, saveProgress, better } from './ui/menu.js';
+import { Trophies } from './game/trophies.js';
 
 const Q = new URLSearchParams(location.search);
 
@@ -58,10 +59,12 @@ class App {
     this.menuDom.onPick = (i) => this.menuPick(i);
     this.menuDom.onSide = (s) => this.setSide(s);
     this.menuDom.onEncore = () => { this.settings.encore = !this.settings.encore; try { localStorage.setItem('mp-settings', JSON.stringify(this.settings)); } catch (e) { /* fine */ } this.sfx.ui && this.sfx.ui('select'); this.record.encore = this.settings.encore; this.setSide(this.side || 'A'); };
-    this.screens.veil(true, 'MURDERPOP', 0.1);
+    const boot = { img: 'assets/loading/title.webp' };
+    this.screens.veil(true, 'MURDERPOP', 0.1, boot);
     // YOU, loaded once
-    this.heroine = await loadHeroine('assets/characters/heroine.glb', 'assets/characters/anims.glb', (k) => this.screens.veil(true, 'MURDERPOP', 0.1 + k * 0.8));
+    this.heroine = await loadHeroine('assets/characters/heroine.glb', 'assets/characters/anims.glb', (k) => this.screens.veil(true, 'MURDERPOP', 0.1 + k * 0.8, boot));
     this.player = new Player(this.heroine, this.scene);
+    this.trophies = new Trophies(this.heroine);
     this.record.setHeroine(this.heroine);
     this.last = performance.now();
     window.__MP = this;
@@ -202,13 +205,17 @@ class App {
     const meta = trackById(id);
     this.lastTrack = meta.id;
     this.screen = 'loading'; this.menuDom.mode('hidden');
-    this.screens.veil(true, meta.title, 0);
+    const art = meta.art ? { img: meta.art, boss: meta.boss, line: meta.line } : null;
+    this.screens.veil(true, meta.title, 0, art);
+    const shown = performance.now();
     let fight;
     try {
       const mod = await meta.load();
       fight = mod.default.kind === 'walk' ? new Walk(this, mod.default) : new Fight(this, mod.default);
       fight.manual = this.capture;
-      await fight.load((k) => this.screens.veil(true, meta.title, k));
+      // (the song's download and the build report to the same bar, in any order: it never goes back)
+      let shown = 0;
+      await fight.load((k) => { shown = Math.max(shown, k); this.screens.veil(true, meta.title, shown, art); });
     } catch (e) {
       // a song that can't load never leaves you on the loading bar: say so, then back to the record
       console.error('could not load', meta.id, e);
@@ -227,9 +234,20 @@ class App {
     fight.resultCb = (r) => this.results(r, meta);
     await this._warm();
     await this.audio.resume();
+    // the picture gets its moment (a song that was already loaded would flash by)
+    if (art && !this.capture && !Q.has('auto')) { const left = 2400 - (performance.now() - shown); if (left > 0) await new Promise((r) => setTimeout(r, left)); }
     this.screens.veil(false);
     this.screen = 'fight';
+    // on her belt: what she's kept from every fight she's won (not this one's: that's still to take)
+    try {
+      this.heroine.rig.play(fight.kind === 'walk' ? 'Idle_Loop' : 'Sword_Idle', { fade: 0, force: true }); this.heroine.rig.mixer.update(0); this.heroine.root.rotation.y = 0; this.heroine.root.updateMatrixWorld(true);
+      const have = TRACKS.filter((t) => t.prize && t.side !== 'dev' && t.side !== 'Credits' && (this.progress.won[t.id] || Q.has('trophies')) && (t.id !== meta.id || fight.kind === 'walk')).map((t) => t.prize);
+      this.trophies.set(have);
+    } catch (e) { console.warn('trophies', e.message); }
+    // ?kill: straight to her death scene (her bar empty, a few seconds before her last bars)
+    if (Q.has('kill') && fight.exec) at = Math.max(0, fight.exec.t0 - 3);
     fight.start(at);
+    if (Q.has('kill') && fight.exec) fight.boss.takeHit({ dmg: 9e9, kind: 'slam', x: fight.boss.x, z: fight.boss.z });
   }
   // warm every shader before the first frame of play: compiled for what the game really draws into (the linear
   // HDR buffer, not the screen, so nothing compiles again on the first frame), and every texture uploaded,
@@ -314,9 +332,12 @@ class App {
       if (this.capture) this.fight.stepManual(dt);
       if (this.auto) this.auto.think();
       this.fight.update(now, dt);
+      this.trophies && this.trophies.update(dt);
       if (this.settings.calm) { this.post.fx.flash.multiplyScalar(0.3); this.cam.shakeA *= 0.3; }
     }
-    if (!quiet && !(this.fight && this.fight.skipRender)) this.post.render(this.scene, this.cam.cam, now / 1000);
+    // (not while a song is loading: the veil is over the picture, and drawing the half-built set compiled its shaders
+    // one at a time on this thread, the whole page frozen, and again for every light and reflection added after)
+    if (!quiet && this.screen !== 'loading' && !(this.fight && this.fight.skipRender)) this.post.render(this.scene, this.cam.cam, now / 1000);
   }
 }
 

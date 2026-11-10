@@ -250,7 +250,7 @@ export class Campus {
     this.chairs.forEach((c, i) => { c.alive = snap ? snap.chairs[i] : true; c.brokeT = c.alive ? -1 : -100; if (c.alive) c.dir = 0; });
     this.slabs.forEach((s, i) => { s.alive = snap ? snap.slabs[i].alive : true; s.hp = snap ? snap.slabs[i].hp : 3; s.topple = null; });
     this.ringing.clear(); this.burnt = -1; this.burnT = -9;
-    for (const o of [...this.stamps, ...this.seals, ...this.blades, ...this.tears]) { o.mesh.visible = false; o.on = false; }
+    for (const o of [...this.stamps, ...this.seals, ...this.blades, ...this.tears]) { o.mesh.visible = false; o.on = false; o.taken = false; }
     this.letgo = null; if (this.scroll) this.scroll.visible = false;
     this.starFall = null; this.finAge = undefined; if (this.fallStar) this.fallStar.visible = false;
     this.update(0, t, this.f);
@@ -588,8 +588,8 @@ export class Campus {
       else { m.position.set(b.x, 0.12, b.z); m.rotation.set(0.35, b.e * 22, 0.9); if (!b.shat && t > b.e + 1.06) { b.shat = true; f.fx.chips(b.x, 0.2, b.z, new THREE.Color(2, 2, 2.1), 12); } }
     }
     for (const r of this.tears) { const m = r.mesh; if (!m.visible) continue; if (t > r.e || t < r.s) { m.visible = false; continue; } const k = (t - r.s) / (r.e - r.s); m.position.set(r.x, 6.5 - 6.4 * k * k, r.z); m.rotation.y = t * 3; }
-    // the diploma she lets go: it floats to YOU, glowing pink, and does nothing either way
-    if (this.letgo) this._letgo(t, f, dt);
+    // the diploma she lets go: it floats to YOU, glowing pink, and does nothing either way (her death scene has its own)
+    if (this.letgo && !f.boss.scene) this._letgo(t, f, dt);
     if (this.starFall) this._starFall(t, f, dt);
   }
 
@@ -608,8 +608,8 @@ export class Campus {
     }
     f.cam.shake(0.9, 0.25);
   }
-  stamp(f, p, s, e) {
-    let st = this.stamps.find((q) => !q.on);
+  _freeStamp() {
+    let st = this.stamps.find((q) => !q.on && !q.taken);
     if (!st) {
       const g = new THREE.Group();
       const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.16, 40), this.K.brass); disc.position.y = 0.08; g.add(disc);
@@ -619,13 +619,21 @@ export class Campus {
       g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       this.group.add(g); st = { mesh: g }; this.stamps.push(st);
     }
+    return st;
+  }
+  stamp(f, p, s, e) {
+    const st = this._freeStamp();
     Object.assign(st, { x: p.x, z: p.z, s, e, on: true }); st.mesh.visible = false;
   }
-  waxSeal(f, p) {
+  // her stamp, for her death scene to bring down itself (death.js moves it: nothing here does while it's taken)
+  takeStamp() { const st = this._freeStamp(); st.taken = true; st.on = false; st.mesh.visible = false; st.mesh.rotation.set(0, 0, 0); return st; }
+  // k: how big (1: the seal her stamps leave under YOU; her own, at the end, is the whole face of the stamp)
+  waxSeal(f, p, k = 1) {
     let s = this.seals.find((q) => !q.mesh.visible);
     // dark crimson wax under the set's light (the dimmer, the negative): never a pink circle, which would mean "catch"
     if (!s) { const m = PC.decal(1.4, 1.4, new THREE.MeshBasicMaterial({ map: this.sealTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), { y: 0.014, order: 1 }); negifyTree(m, { holes: false, dim: true }); this.group.add(m); s = { mesh: m }; this.seals.push(s); }
-    s.mesh.position.set(p.x, 0.014, p.z); s.mesh.rotation.z = Math.random() * 6; s.t = f.t; s.mesh.visible = true;
+    s.mesh.position.set(p.x, 0.014, p.z); s.mesh.rotation.z = Math.random() * 6; s.mesh.scale.setScalar(k); s.t = f.t; s.mesh.visible = true;
+    return s;
   }
   dust(f, p) { f.fx.dust(p.x, p.z, 14, new THREE.Color(0.55, 0.5, 0.46)); f.fx.chips(p.x, 0.1, p.z, new THREE.Color(0.5, 0.42, 0.36), 8); }
   tear(f, p, s, e) {
@@ -798,6 +806,7 @@ export class Campus {
 
   dispose() {
     const f = this.f;
+    this.R.death && this.R.death.dispose();          // (what her death scene put in YOUR hands comes out of them)
     if (this._trill) this._trill.stop(0.05);
     this.R.snd && this.R.snd.stopAll();
     NEG.uRpdNeg.value = 0; NEG.uRpdDim.value = 1; NEG.uRpdFlash.value = 0;

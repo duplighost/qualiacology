@@ -289,7 +289,7 @@ export class Tenant {
     this.painted.visible = false;
     this.mode = 'evicted'; this.seat = null; this.frame = null;
     b.intangible = false; b.root.visible = true; b.root.scale.setScalar(1);
-    b.move = null;
+    b.move = null; b.root.position.y = 0;      // (thrown off a seat or your bed: onto the floor)
     if (wasFrame) { const p = this.hooks.floorBelow ? this.hooks.floorBelow(c) : { x: c.x, z: c.z + 1.2 }; b.place(p.x, p.z, Math.atan2(f.player.x - p.x, f.player.z - p.z)); }
     else { const a = Math.atan2(b.x - c.x, b.z - c.z) || 0; b.place(c.x + Math.sin(a) * 1.1, c.z + Math.cos(a) * 1.1); }
     const t0 = this.t, bt = this.beat;
@@ -475,6 +475,8 @@ export class Tenant {
   // ---------- every frame
   update(dt) {
     const f = this.f, b = this.b, fig = this.fig, t = this.t, pl = f.player;
+    // her death scene has her (death.js): her habits, her faces and her reflexes stand down; her keys still hang true
+    if (b.scene) { this._hang(t, 0); this.near = 0; return; }
     if (this.exprUntil && t >= this.exprUntil) { this.exprUntil = 0; fig.setExpression(this.wrecked ? 'tenantEvicted' : 'tenantHome', { fade: 0.25 }); }
     // the painted self walking through her canvases
     if (this.paintAnim) {
@@ -486,15 +488,7 @@ export class Tenant {
       if (!A.c.alive) { this.painted.visible = false; }
     }
     // the keys swing as she moves; a jingle on her steps (how you know where she is in the dark)
-    { const sp = Math.min(1, (b._speed || 0) / 1.7);
-      for (const u of this.upright) {
-        if (u.acc && u.acc.broken) continue;
-        const par = u.obj.parent; if (!par) continue;
-        par.getWorldQuaternion(this._q);
-        this._e.set(u.swing ? Math.sin(t * 9) * 0.35 * sp + Math.sin(t * 2.3) * 0.06 : 0, b.facing, u.swing ? Math.sin(t * 7.1) * 0.12 * sp : 0, 'YXZ');
-        this._q2.setFromEuler(this._e);
-        u.obj.quaternion.copy(this._q.invert().multiply(this._q2));
-      } }
+    this._hang(t, Math.min(1, (b._speed || 0) / 1.7));
     if (b.root.visible && (b._speed || 0) > 0.4) { this._walked = (this._walked || 0) + (b._speed || 0) * dt; if (this._walked > 0.85) { this._walked = 0; this.hooks.step && this.hooks.step(b.x); } }
     // a reflex slap still filling yields to any scripted attack that puts its shape down meanwhile
     // (or when a scripted move takes her over, or she's due to rest)
@@ -530,6 +524,18 @@ export class Tenant {
         this.hits.length = 0; this.reflexLock = F + this.beat * 12;
         if (near !== dst || ps.length === 1) this.frameWalk(F, near, ps.length === 1 ? near : dst);
       }
+    }
+  }
+  // her coupe stays upright in her hand and your keys hang from her wrist, swinging with her stride (sp 0..1)
+  _hang(t, sp) {
+    const b = this.b;
+    for (const u of this.upright) {
+      if (u.acc && u.acc.broken) continue;
+      const par = u.obj.parent; if (!par) continue;
+      par.getWorldQuaternion(this._q);
+      this._e.set(u.swing ? Math.sin(t * 9) * 0.35 * sp + Math.sin(t * 2.3) * 0.06 : 0, b.facing, u.swing ? Math.sin(t * 7.1) * 0.12 * sp : 0, 'YXZ');
+      this._q2.setFromEuler(this._e);
+      u.obj.quaternion.copy(this._q.invert().multiply(this._q2));
     }
   }
   // put her back as she is at a section line

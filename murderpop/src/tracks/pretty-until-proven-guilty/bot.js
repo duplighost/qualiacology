@@ -46,12 +46,12 @@ export function teachBot(f) {
   bot.think = () => {
     base();
     const pl = f.player, b = f.boss, C = f.court;
-    if (!pl || !b || !C || f.state !== 'play') return;
+    if (!pl || !b || !C || f.state !== 'play' || (f.exec && f.exec.on)) return;
     const t = f.t;
     if (t - mindT > 1.5) { mindT = t; mind = bot.rand(); }
     const canHit = !C.pretty || pl.counterT > 0 || b.state === 'open' || b.state === 'stagger' || b.blinded || b.state === 'desperate';
     const si = bot.pressed.indexOf('strike');
-    if (si >= 0 && !canHit && (!sloppy || mind < 0.65)) bot.pressed.splice(si, 1);
+    if (si >= 0 && !canHit && (!sloppy || mind < 0.65)) { bot.pressed.splice(si, 1); bot.pressedAt && bot.pressedAt.splice(si, 1); }
     // never into the fire: out of it by the shortest way, or hold still at its edge
     if (burning(pl.x + bot.mv.x * 0.7, pl.z + bot.mv.y * 0.7)) {
       let best = null;

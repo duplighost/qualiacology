@@ -259,10 +259,33 @@ class World {
     this.board = { slots: [[], []], want: null, light: 1, dirty: true };
     for (let r = 0; r < 2; r++) for (let i = 0; i < 18; i++) this.board.slots[r][i] = { ch: ' ', want: ' ', k: 1, tilt: 0.6, glow: 0 };
     this.door = { k: 0, want: false, was: false };
+    await this._precompile(onProgress);
     this._probe();
     this._dim = 1;
     this.facadeK = 1; this.liftK = 0; this.entered = false;
     onProgress(1);
+  }
+
+  // Every shader the store needs, compiled once and together (the driver does them side by side, and this
+  // thread stays free), before anything of the store is drawn. The lights are all in the scene by now, and a black
+  // environment the size of the real one is set, so the probe and the game itself draw with these same programs.
+  // (With 22 lights a program takes about a second to compile on its own; each used to be compiled three times, one
+  // at a time, in frames drawn under the loading veil: a minute or more of frozen page on a first load.)
+  async _precompile(onProgress = () => {}) {
+    const r = this.app.renderer, pm = new THREE.PMREMGenerator(r);
+    this._env0 = { env: this.scene.environment, k: this.scene.environmentIntensity };
+    this._envBlack = pm.fromScene(new THREE.Scene(), 0, 0.1, 60); pm.dispose();
+    this.scene.environment = this._envBlack.texture; this.scene.environmentIntensity = 0.55;
+    const made = r.info.programs ? r.info.programs.length : 0;
+    const prev = r.getRenderTarget(); r.setRenderTarget(this.app.post.target);
+    let job = null; try { job = r.compileAsync(this.scene, this.f.cam.cam); } catch (e) { console.warn('store shaders', e.message); }
+    r.setRenderTarget(prev);
+    // the bar keeps moving while they compile: the share of the new programs that are ready
+    const iv = setInterval(() => {
+      const ps = (r.info.programs || []).slice(made); let n = 0; for (const p of ps) if (!p.isReady || p.isReady()) n++;
+      onProgress(0.6 + 0.38 * (ps.length ? n / ps.length : 1));
+    }, 100);
+    try { if (job) await job; } finally { clearInterval(iv); }
   }
 
   // the store, captured once with its lights on, as what its glossy things reflect
@@ -279,8 +302,9 @@ class World {
     pm.dispose();
     s.pmesh.layers.set(1);
     hide.forEach((o) => { o.visible = o.userData.v; });
-    this._env0 = { env: this.scene.environment, k: this.scene.environmentIntensity };
+    if (!this._env0) this._env0 = { env: this.scene.environment, k: this.scene.environmentIntensity };
     this.scene.environment = this.env.texture; this.scene.environmentIntensity = 0.55;
+    if (this._envBlack) { this._envBlack.dispose(); this._envBlack = null; }
   }
 
   // ---------- pieces ----------

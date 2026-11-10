@@ -9,9 +9,11 @@ import { script2 } from './script2.js';
 export function script(T, f, tr) {
   const bm = f.bm, D = tr.dir, set = tr.set;
   const S = (s) => { const n = bm.nearest(s, 2); return Math.abs(n.offset) < 0.085 ? n.time : s; };
-  const at = (s, fn) => T.at({ s: S(s) }, fn);
+  // (once her death scene has her, the song's last bars are the scene's: nothing scripted fires, or sounds, under it)
+  const inScene = () => !!(f.boss && f.boss.scene);
+  const at = (s, fn) => T.at({ s: S(s) }, (ff) => { if (!inScene()) fn(ff); });
   const B = (s) => bm.periodAt(s);                 // the beat's length there
-  const snd = (name, o) => tr._snd && tr._snd.play(name, o);
+  const snd = (name, o) => tr._snd && !inScene() && tr._snd.play(name, o);
   const boss = () => f.boss;
   tr._long = [];
   // fn returns its shape (with .tele): the copy that's up is remembered, so a re-add takes it down first
@@ -99,7 +101,8 @@ export function script(T, f, tr) {
   at(5.11, (ff) => { boss().perform('OverhandThrow', { duration: 0.42, from: 0.2, to: 0.85, fade: 0.04 }); snd('flick', { x: boss().x }); set.flyMatch(boss(), { x: 5, z: -0.6 }, S(5.466)); });
   at(5.466, (ff) => { snd('whump', { x: 5 }); ff.fx.sparks(5, 0.8, -0.6, new THREE.Color(3.2, 1.0, 0.3), 26); ff.cam.shake(0.3, 0.12); });
   // free beats: she walks to the walk, hit her as much as you like
-  at(5.9, () => { D.strut(0.5, -1.0, 2.1); D.lock(7.9); });
+  // (round the bed's corner and the box beside it, not through them)
+  at(5.9, (ff) => { D.lock(7.9); const e = D.strut(3.4, 2.0, 2.6); ff.at(e, () => D.strut(0.5, -1.0, 2.6)); });
   // GLORY: a kiss blown on 5:2, arriving on 5:4
   at(8.32, (ff) => { boss().perform('Consume', { duration: 0.34, from: 0.3, to: 0.7 }); const h = boss().fig.bones.Head; if (h) { const p = h.getWorldPosition(new THREE.Vector3()); ff.fx.glitter(p.x, p.y, p.z, new THREE.Color(4, 0.6, 1.7), 10, 0.25); } });
   at(8.68, (ff) => { if (ff.suppress) return; shotAt(ff, { tArrive: S(9.396), shape: 'kiss', size: 0.5 }); boss().perform('Spell_Simple_Shoot', { duration: 0.3, from: 0.15, to: 0.8 }); });

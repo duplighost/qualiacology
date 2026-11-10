@@ -259,7 +259,9 @@ export class World {
     // surface is fifty feet up, and what's drawn on the floor sits on the lakebed)
     this.level = 0; this.surf = 0; this.ripples = []; this.ripT = 0; this.snap = new Map(); this.events = {};
     this.postsAt = null;  // where the depth posts rose (set by the choreography)
+    this.kill = null;     // her death scene's hold on YOUR car, its lid and lamps, the key ring (death.js)
   }
+  get killOn() { return !!(this.kill && this.kill.on); }
 
   async build() {
     const f = this.f;
@@ -452,6 +454,8 @@ export class World {
     // YOUR car, on a pivot at the pier's end so it can teeter and tip
     this.car = P.makeCar(); this.carPivot = new THREE.Group(); this.carPivot.add(this.car); g.add(this.carPivot);
     const end = pierPoint(PIER.len); this.carEnd = end;
+    // her key ring as it flies in her death scene (death.js moves it)
+    this.keyRing = P.makeKeyRing(); this.keyRing.visible = false; g.add(this.keyRing);
     // YOUR cases
     this.cases = SPOTS.cases.map((p, i) => { const o = P.makeCase(); g.add(o); return { o, home: { ...p }, x: p.x, z: p.z, vx: 0, vz: 0, state: 'lawn', id: i, spin: 0, ry: i ? 0.6 : -0.4 }; });
     this.case3 = P.makeCase(); this.case3.visible = false; g.add(this.case3);
@@ -521,10 +525,16 @@ export class World {
   // ---------------------------------------------------------------- the fight's hooks: walls, heights, telegraphs over the water
   hooks() {
     const f = this.f, pl = f.player, self = this;
-    // YOU stands on the porch and the pier: lift her feet to the floor under her (smoothed, like a step)
+    // YOU stands on the porch and the pier: lift her feet to the floor under her (smoothed, like a step), and her
+    // jump is on top of that (this.y: without it she never left the floor in this yard). In her death scene the
+    // scene sets YOU's height itself, from the lawn's level (death.js)
     this._plSync = pl._sync;
     let y = 0;
-    pl._sync = function () { this.root.position.set(this.x, 0, this.z); this.root.rotation.y = this.facing; const want = floorAt(this.x, this.z); y += (want - y) * Math.min(1, (f.dt || 0.016) * 16); this.root.position.y = y; };
+    pl._sync = function () {
+      this.root.position.set(this.x, 0, this.z); this.root.rotation.y = this.facing;
+      if (this.state === 'scene') { y = 0; this.root.position.y = this.y; return; }
+      const want = floorAt(this.x, this.z); y += (want - y) * Math.min(1, (f.dt || 0.016) * 16); this.root.position.y = y + this.y;
+    };
     // telegraphs sit on the floor under them, above the water
     const add = f.tele.add.bind(f.tele);
     f.tele.add = (o) => add({ ...o, y: o.y ?? Math.max(floorAt(o.x, o.z), self.surf) + 0.025 });
@@ -572,6 +582,10 @@ export class World {
   // everything derived from the song's time; `hard`: also put back what YOU changed to how it was at t (no history)
   stateAt(t, hard = false) {
     this.t = t;
+    // (the car went in at the first stop: a start after it doesn't throw its fountain up again)
+    this.events.splash = t >= S.splash;
+    // her death scene's hold on the car and the lights is over (a rewind, a start anywhere)
+    this.kill = null; if (this.keyRing) this.keyRing.visible = false;
     if (hard) {
       this.cases.forEach((c) => { Object.assign(c, c.home, { vx: 0, vz: 0, state: t < S.band ? 'tumble' : 'lawn' }); if (t > 16.710) c.state = 'burst'; else if (t > 15.951 && c.id === 0) c.state = 'burst'; });
       this.flamingos.forEach((x) => { x.broken = false; }); this.mailbox.broken = false; this.trimmed = [false, false]; this.topHits = [0, 0];
@@ -617,7 +631,7 @@ export class World {
       else if (t < S.dark) { a.setState('night'); expo = 0.8; }
       else if (t < S.rise) a.setState('night', 'dark', ramp(t, S.dark, S.dark + 0.7));
       else if (t < S.under) a.setState('dark', 'under', ramp(t, S.rise, S.under) * 0.7);
-      else if (t < S.drain) { a.setState('under'); expo = 0.62 * (t >= S.lid ? lerp(1, 0.8, ramp(t, S.lid, S.lid + 1.2)) : 1); if (t >= S.black && t < S.lightsBack) expo *= 0.55; }
+      else if (t < S.drain) { a.setState('under'); expo = 0.62 * (t >= S.lid && !this.killOn ? lerp(1, 0.8, ramp(t, S.lid, S.lid + 1.2)) : 1); if (t >= S.black && t < S.lightsBack) expo *= 0.55; }
       else a.setState('under', 'dawn', ramp(t, S.drain + 0.5, S.drained));
       // the porch light: the last thing to go off, on "home"
       if (this.porchLamp && t >= S.home && this.won) this.porchLamp.mat.emissive.setRGB(0, 0, 0);
@@ -641,7 +655,7 @@ export class World {
     fx.lift.setRGB(0, lerp(0, 0.006, uk), lerp(0, 0.008, uk));
     const dawn = ramp(t, S.drain + 0.5, S.drained);
     fx.highTint.setRGB(lerp(1, 1.05, dawn), lerp(1, 0.98, dawn), lerp(1, 0.95, dawn));
-    fx.vignette = 0.55 + (t >= S.lid && t < S.drain ? 0.25 : 0) + (t >= S.dark && t < S.rise ? 0.12 : 0);
+    fx.vignette = 0.55 + (t >= S.lid && t < S.drain && !this.killOn ? 0.25 : 0) + (t >= S.dark && t < S.rise ? 0.12 : 0);
     // the sky in the reflections: night, the moon behind cloud in the dark, lavender and peach at dawn
     const su = this.su;
     const cloud = t >= S.dark && t < S.rise ? ramp(t, S.dark, S.dark + 1) : 0;
@@ -705,6 +719,16 @@ export class World {
   // YOUR car: rolls to the end of her pier, teeters, flares, tips, plunges; later sits on the lakebed, beams up the slope
   _carFrame(dt, t, under) {
     const c = this.car, pv = this.carPivot, ud = c.userData, end = this.carEnd;
+    // her death scene has the car (death.js): where it stands on the lakebed, its lid, its lamps, and how it goes
+    const K = this.kill;
+    if (K && K.on) {
+      pv.visible = K.vis !== false;
+      pv.position.set(K.x, K.y + K.dip, K.z); pv.rotation.set(0, Math.PI, 0); pv.updateMatrixWorld();
+      c.position.set(0, 0, 0); c.rotation.set(K.pitch, 0, 0);
+      ud.hatch.rotation.x = K.hatch; ud.beamM.uniforms.uK.value = K.beam; MATS_HEAD(K.head); P.MAT.tail.emissiveIntensity = K.tail;
+      return;
+    }
+    ud.hatch.rotation.x = 0; P.MAT.tail.emissiveIntensity = 1.2;
     let vis = true, theta = 0, slide = 0, drop = 0, lights = 1, beamK = 0;
     if (t < S.clunk) { slide = -3.5 * (S.clunk - t); }
     else if (t < S.tick) { const u = t - S.clunk; theta = 0.07 + 0.11 * Math.exp(-u * 2.2) * Math.sin(u * 8.5); }
@@ -908,10 +932,14 @@ export class World {
     let hk = flooded ? (t < S.dark ? 0.55 : 0.8) : 0;
     if (t >= S.rise && t < S.under) { const k = ramp(t, S.rise, S.under); gu.uHead.value[0].set(lerp(10.4, -1.6, k), lerp(7.6, 8.2, k), 0.9, 0.6); gu.uHead.value[1].set(lerp(11.0, -0.4, k), lerp(7.0, 8.2, k), 0.9, 0.6); }
     else { gu.uHead.value[0].set(10.4, 7.6, 0.9, 0.6); gu.uHead.value[1].set(11.0, 7.0, 0.9, 0.6); }
+    // after her death scene: YOUR car's lamps, still on, down in the lake where it went (death.js fades them)
+    const K = this.kill;
+    if (K && K.glow > 0.002) { gu.uHead.value[0].set(K.gx - 0.6, K.gz, 0.8, 0.55); gu.uHead.value[1].set(K.gx + 0.6, K.gz, 0.8, 0.55); hk = K.glow; }
     gu.uHeadK.value = hk;
     this.glow.position.y = under ? 0.03 : Math.max(0.03, this.level + 0.02);
-    // god rays, caustics, silt; at the lid the rays converge on her moon shaft and the rest goes dark
-    const lid = t >= S.lid && t < S.drain ? ramp(t, S.lid, S.lid + 1.0) : 0;
+    // god rays, caustics, silt; at the lid the rays converge on her moon shaft and the rest goes dark (not in her
+    // death scene: it's out past the shore, and the whole lakebed is its stage)
+    const lid = t >= S.lid && t < S.drain && !this.killOn ? ramp(t, S.lid, S.lid + 1.0) : 0;
     this.shaftList.forEach((s, i) => this.shafts.set(s, under ? (i === 1 ? 0.55 + lid * 1.2 : 0.5 * (1 - lid)) : 0));
     this.shafts.update(dt);
     gu.uCaus.value = under ? 0.22 : 0; gu.uCausT.value += dt * (1 - lid * 0.92); gu.uLidK.value = lid;
@@ -964,6 +992,7 @@ export class World {
     const f = this.f, fx = f.app.post.fx;
     if (this._plSync) { delete f.player._sync; f.player.root.position.y = 0; }
     fx.gain.setRGB(1, 1, 1); fx.lift.setRGB(0, 0, 0); fx.highTint.setRGB(1, 1, 1); fx.vignette = 0.55;
+    if (P.MAT.tail) P.MAT.tail.emissiveIntensity = 1.2;
     if (this.arena) { this.arena.mirror = this.mirrorObj; this.arena.dispose(); }
     if (this.lite) this.lite.dispose();
     this.scene.remove(this.group, this.sky, this.particles.mesh);

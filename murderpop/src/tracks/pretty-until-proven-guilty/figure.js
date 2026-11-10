@@ -233,9 +233,11 @@ export class Defendant extends Boss {
   _lands(info) {
     const c = this.court;
     if (!c.pretty) return true;
-    if (info.kind === 'return' || this.blinded) return true;
-    if (this.state === 'open' || this.state === 'stagger' || this.state === 'desperate') return true;
-    if (info.kind === 'strike' && c.isCounter(info)) return true;
+    // what comes back at her lands, and so does what the room does to her (thrown into a wall, brought down out of the air)
+    if (info.kind === 'return' || info.kind === 'slam' || this.blinded) return true;
+    if (this.state === 'open' || this.state === 'stagger' || this.state === 'desperate' || this.hp <= 0) return true;
+    // the cut of a hit sent back, and a strike after a slip (a counter)
+    if (info.kind === 'strike' && (info.riposte || c.isCounter(info))) return true;
     return false;
   }
 }

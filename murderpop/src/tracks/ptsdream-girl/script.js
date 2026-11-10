@@ -180,8 +180,9 @@ export function choreography(T, f, tr) {
   A(B(62, 3), (ff) => { her().place(-6.0, 4.6); her().hide(false); ff.boss.behave = 'hold'; });
   kiss(62, 4, { n: 5, spread: 24 });
   A(B(63, 3), () => her().out(B(63, 3)));
+  // (beside the nightstand her phone is on, not in it)
   A(B(63, 4), () => set().tell('phone', B(63, 4), B(64, 1)));
-  A(B(64, 1), (ff) => { her().place(2.6, -4.6); her().hide(false); const b = ff.boss; b.idle = 'Idle_TalkingPhone_Loop'; b.loop('Idle_TalkingPhone_Loop'); tr.extra && tr.extra.show('phone', true); b.open(B(65, 2) - ff.t); });
+  A(B(64, 1), (ff) => { her().place(2.75, -4.45); her().hide(false); const b = ff.boss; b.idle = 'Idle_TalkingPhone_Loop'; b.loop('Idle_TalkingPhone_Loop'); tr.extra && tr.extra.show('phone', true); b.open(B(65, 2) - ff.t); });
   // HER PHONE DINGS AT DAWN: four notification ticks, the ding, the blinds snap open: stripes of dawn burn
   H(B(64, 1) - 0.02, () => set().dawnStripes(beats(64), B(65, 1), B(65, 2)));
   H(B(65, 2) - 0.25, (ff) => { her().act('OverhandThrow', B(65, 2), { contact: 0.55, dur: 0.5 }); ff.at(B(65, 2), () => { tr.extra && tr.extra.show('phone', false); phoneThrow(ff); }); });
@@ -197,11 +198,13 @@ export function choreography(T, f, tr) {
   A(B(69, 4), () => set().legalPad());
   for (const [bar, beat] of [[70, 2], [70, 4], [71, 2]]) H(B(bar, beat) - 0.3, (ff) => her().kissFan(B(bar, beat), { n: 3, spread: 18, speed: 10, from: { x: -5.0, z: -4.0 }, card: true }));
   A(B(71, 4), (ff) => { const b = ff.boss; b.idle = 'Idle_Talking_Loop'; b.perform('Sitting_Exit', { duration: 0.5, then: 'idle' }); her().out(B(71, 4) + 0.25); });
-  A(B(72, 1), () => her().reflection(10.4, -6.0, B(72, 1), B(72, 2)));
-  A(B(72, 2), (ff) => { her().place(10.4, -6.0); her().hide(false); const b = ff.boss; b.idle = 'Crouch_Idle_Loop'; b.loop('Crouch_Idle_Loop'); });
+  // (the margin she crouches in and streaks along runs behind everything in the office: the pad's easel stands at
+  // z -5.6, so her line is z -6.4, clear of it)
+  A(B(72, 1), () => her().reflection(10.4, -6.4, B(72, 1), B(72, 2)));
+  A(B(72, 2), (ff) => { her().place(10.4, -6.4); her().hide(false); const b = ff.boss; b.idle = 'Crouch_Idle_Loop'; b.loop('Crouch_Idle_Loop'); });
   grenade(72, 2.5, { land: B(72, 3) });
   H(B(73, 1) - 0.02, () => set().pageTurn(beats(73), B(74, 1)));
-  A(B(74, 1) + 0.05, (ff) => { const b = ff.boss; b.moveTo(-10.4, -6.0, ff.beat, { easing: 'inOut' }); });
+  A(B(74, 1) + 0.05, (ff) => { const b = ff.boss; b.moveTo(-10.4, -6.4, ff.beat, { easing: 'inOut', through: true }); });
   // I HAUNT THE MARGIN: she sprints the margins, laughing; ink marks where you stand, splatting a bar later
   A(B(75, 1), (ff) => { const b = ff.boss; b.idle = 'Idle_Talking_Loop'; b.loop(b.idleClip); sprint(ff); });
   for (let i = 0; i < 4; i++) H(B(75, 1 + i), (ff) => ink(ff, B(75, 1 + i), B(76, 1 + i)));
@@ -266,8 +269,17 @@ export function choreography(T, f, tr) {
   A(B(114, 3), (ff) => { her().place(7.2, -5.3); her().hide(false); ff.boss.behave = 'hold'; });
   grenade(114, 3.5, { land: B(114, 4), thing: 'candle' });
   H(B(115, 1) - 0.02, () => her().knives(beats(115), B(116, 1)));
-  // she vaults the island at you: close quarters
-  A(B(116, 2), (ff) => { const b = ff.boss, p = ff.player; const a = Math.atan2(p.x - b.x, p.z - b.z); const d = Math.max(0, Math.hypot(p.x - b.x, p.z - b.z) - 1.6); b.moveTo(b.x + Math.sin(a) * d, b.z + Math.cos(a) * d, 0.3, { easing: 'out' }); her().act('Jump_Start', ff.t + 0.15, { contact: 0.5, dur: 0.3 }); });
+  // she vaults the island at you: close quarters. A real jump, over the counter and down on open floor this side of
+  // YOU (no floor to land on short of you: she stays behind it, and her slap comes from there)
+  A(B(116, 2), (ff) => {
+    const b = ff.boss, p = ff.player, m = b.radius * 0.8 + 0.04;
+    const a = Math.atan2(p.x - b.x, p.z - b.z), full = Math.hypot(p.x - b.x, p.z - b.z);
+    let d = -1;
+    for (let q = Math.max(0, full - 1.6); q <= full - 1.0; q += 0.15) if (set().free(b.x + Math.sin(a) * q, b.z + Math.cos(a) * q, m)) { d = q; break; }
+    if (d < 0.6 || b.intangible || !b.root.visible) return;
+    b.moveTo(b.x + Math.sin(a) * d, b.z + Math.cos(a) * d, 0.3, { easing: 'linear', arc: clamp(0.95 + d * 0.12, 1.1, 1.8) }); her().act('Jump_Start', ff.t + 0.15, { contact: 0.5, dur: 0.3 });
+    ff.at(ff.t + 0.3, () => { if (!ff.boss.scene) { tr.snd.play('heel', { x: ff.boss.x }); ff.fx.dust(ff.boss.x, ff.boss.z, 8); } });
+  });
   H(B(116, 2) + 0.31, () => her().slap(B(116, 2) + 0.31, B(116, 3)));
   H(B(116, 3) + 0.02, () => her().swipe(B(116, 3) + 0.02, B(116, 4)));
   grenade(116, 4.5, { land: B(117, 1), thing: 'mug' });
@@ -296,7 +308,8 @@ export function choreography(T, f, tr) {
   kiss(124, 3, { n: 5, spread: 24 });
   H(B(125, 1) - 0.02, () => set().showerCount(beats(125), B(126, 1), { apex: { x: -9.8, z: -4.4 }, island: true }));
   H(B(127, 1) - 0.02, () => her().mirrorRing(beats(127), B(128, 1)));
-  A(B(128, 2), (ff) => { her().flicker(B(128, 2), B(128, 3), 8.8, -3.9, { tell: 'knife' }); ff.at(B(128, 3), () => { ff.boss.behave = 'hold'; }); });
+  // (the island stands end-on here, from z -7 to -3.8: she comes in at its near end, not in it)
+  A(B(128, 2), (ff) => { her().flicker(B(128, 2), B(128, 3), 8.8, -3.2, { tell: 'knife' }); ff.at(B(128, 3), () => { ff.boss.behave = 'hold'; }); });
   H(B(129, 1) - 0.02, () => her().knives(beats(129), B(130, 1)));
   grenade(129, 4.5, { land: B(130, 1) });
   H(B(130, 1) - 0.02, () => set().barcode(B(130, 1), [B(131, 1), B(131, 2), B(131, 3), B(131, 4)], { x0: -10.5, x1: 10.5, z0: -5.1, z1: 5.1 }));
@@ -323,9 +336,8 @@ export function choreography(T, f, tr) {
     s1: [B(148, 3) + 0.05, B(148, 4), B(149, 1)], s2: null, laugh: B(149, 2), hearts: 6 });
   for (const bar of [151, 152, 153, 154]) { grenade(bar - 1, 4.5, { land: B(bar, 1) }); kiss(bar, 3, { n: 3 }); }
   A(B(150, 1), (ff) => { const b = ff.boss; if (!b.intangible && !tr.wrecked) { b.moveTo(0, -4.4, 0.8); b.idle = 'Dance_Loop'; } });
-  // THE PIN, and THE LAST COUNT (when her bar is empty): she pulls the pin of the bottle at her heart
-  A(B(150, 2), (ff) => { if (tr.wrecked) lastPin(ff); });
-  for (const [i, bar] of [[0, 152], [1, 153], [2, 154], [3, 155]]) A(B(bar, 1), (ff) => { if (tr.wrecked) lastTick(ff, i); });
+  // THE PIN, and THE LAST COUNT (when her bar is empty): her death scene (death.js) plays the song's last bars from
+  // here: the pin of the bottle at her heart, the count of four on the 1 of bars 152 to 155, the sting on 156:1
 
   // ---------------------------------------------------------------- the pieces the timeline uses
   function slapOff() { her().slapOn = false; }
@@ -397,8 +409,6 @@ export function choreography(T, f, tr) {
     const glass = [['mirror', 0, -6.6], ['vanity', -6.4, -6.6], ['stall', -9.8, -4.8], ['window', 7.6, -6.6]];
     ticks.forEach((t, i) => f.at(t, () => { if (tr.wrecked) return; const [name, x, z] = glass[i]; set().faceIn(name, t); her().kissFan(t, { n: 1, speed: 11, from: { x, z } }); }));
   }
-  function lastPin(ff) { set().lastPin(ff.t); tr.snd.play('pin', { x: ff.boss.x }); }
-  function lastTick(ff, i) { set().lastTick(ff.t, i); tr.snd.play('deeptick', { x: ff.boss.x, rate: 1 - i * 0.08 }); }
 }
 // a shared bag for things the timeline sets up
 export const W = {};

@@ -16,6 +16,8 @@ export function teachBot(f, L) {
     base();
     const t = f.t, pl = f.player, b = f.boss;
     if (!pl || !b || f.state !== 'play') return;
+    // her death scene: the shared bot presses what it asks for; nothing of the yard's to steer round
+    if (f.exec && f.exec.on) return;
     const panic = () => { bot.pressed = bot.pressed.filter((a) => a !== 'strike'); };
     if (sloppy && t >= S.still + 0.8 && t < S.surge + 0.05) { panic(); bot.mv = go(pl, pl.x * 0.6 - 1, -6.0); return; }
     if (sloppy && t >= S.white2 + 0.35 && t < S.under + 0.05) { panic(); const dx = pl.x - b.x, dz = pl.z - b.z, l = Math.hypot(dx, dz) || 1; bot.mv = { x: dx / l, y: dz / l }; return; }

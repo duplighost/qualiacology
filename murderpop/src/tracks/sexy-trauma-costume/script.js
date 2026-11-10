@@ -97,7 +97,11 @@ export function script(T, f) {
     const c = you();
     b.behave = 'hold';
     const a0 = toward(c, b), n = 6;
-    for (let i = 1; i <= n; i++) { const a = a0 + i / n * TAU * 0.85; const tt = f.t + (B(11, 3) - f.t) * (i - 1) / n; f.at(tt, () => b.moveTo(c.x + Math.sin(a) * 2.4, c.z + Math.cos(a) * 2.4, (B(11, 3) - B(10, 1)) / n, { easing: 'linear' })); }
+    // (each point of her circle is brought onto open floor: by a wall or the counter the circle bends, and she never
+    // goes over the counter or out of the room for it)
+    const pts = [];
+    for (let i = 1; i <= n; i++) { const a = a0 + i / n * TAU * 0.85, q = f.arena.resolve(c.x + Math.sin(a) * 2.4, c.z + Math.cos(a) * 2.4, 0.5); pts.push([q.x, Math.max(-4.9, q.z)]); }
+    pts.forEach(([px, pz], i) => { const tt = f.t + (B(11, 3) - f.t) * i / n; f.at(tt, () => b.moveTo(px, pz, (B(11, 3) - B(10, 1)) / n, { easing: 'linear', noVault: true })); });
     R.tapeLoop(c, B(10, 1), B(11, 3));
     M.circle(f, { at: c, start: f.t, end: B(11, 3), w: 1.6, kind: 'pink', melee: true,
       onImpact: (hit) => {
@@ -108,21 +112,23 @@ export function script(T, f) {
 
   // STEP INTO THE FITTING ROOM, FACE THE MIRROR: the curtains open on "IN-to", she goes in, it closes on "ROOM"
   at(B(12, 1) - 0.62, () => { b.behave = 'hold'; b.stop(); });
-  at(B(11, 4), () => { b.moveTo(-10.0, 0.0, Math.max(0.6, B(12, 3.5) - f.t), { easing: 'inOut' }); });
+  at(B(11, 4), () => {
+    C.boothAt = B(12, 3.5); C._booth = 'walk'; C.boothEnter = () => { R.curtains('in'); b.faceNow(0, 0); C.inBooth = true; };
+    b.moveTo(-8.3, 0.0, Math.max(0.5, (B(12, 3.5) - f.t) * 0.8), { easing: 'inOut' });
+  });
   at(17.42, () => R.curtains('open'));
-  at(B(12, 3.5), () => { R.curtains('in'); b.faceNow(0, 0); C.inBooth = true; });
   at(19.12, () => R.mirrorOn());
   // from the booth she lobs three over the rail; uncaught they're packing peanuts (practice)
   const booth = (t0, t1) => at(t0, () => {
     C.strike('OverhandThrow', t0 + 0.05, { from: 0.25, to: 0.7, hit: 0.3 });
-    M.lob(f, { start: t0, end: t1, r: 1.1, from: { x: -9.6, z: 0 }, fromY: 2.9, damage: 0, mesh: R.package('box'), shape: 'card', size: 0.42,
+    M.lob(f, { start: t0, end: t1, r: 1.1, from: C.inBooth ? { x: -9.6, z: 0 } : { x: b.x, z: b.z }, fromY: C.inBooth ? 2.9 : 1.7, damage: 0, mesh: R.package('box'), shape: 'card', size: 0.42,
       onCaught: () => {}, onLand: (sh) => R.peanuts(sh) });
   });
   booth(B(13, 3), B(14, 1));
   booth(B(14, 1), B(14, 3));
   booth(B(14, 4), B(15, 2.5));
   // "One": she pushes out through what's left of the curtain
-  at(22.28, () => { C.inBooth = false; R.curtains('out'); b.moveTo(-6.5, -0.5, B(16, 1) - f.t, { easing: 'out' }); });
+  at(22.28, () => { C.inBooth = false; C._booth = null; R.curtains('out'); b.moveTo(-6.5, -0.5, B(16, 1) - f.t, { easing: 'out' }); });
 
   // =================================================================== S1 ONE SIZE FITS ALL · 22.66–33.33
   at(B(16, 1), () => { b.place(-6.5, -0.5); b.behave = 'hold'; R.dress(true); C.loop('Idle_Talking_Loop', f.t); });
@@ -377,6 +383,8 @@ export function script(T, f) {
   // SEXY DADDY ISSUES, one more time, slower and alone; no tears
   at(B(104, 1), () => { C.say('crack'); C.strike('OverhandThrow', f.t + 0.05, { from: 0.25, to: 0.7, hit: 0.3, dur: 0.6 }); M.lob(f, { end: B(104, 3.5), r: 1.1, mesh: R.package('tie'), shape: 'card', size: 0.45, onLand: (sh) => R.landed(sh, B(106, 1), 'tie') }); });
   // I'LL TAKE IT IN BLACK: every light slams on and the room has gone black; she hops onto the counter for the downbeat
+  // (she starts for it half a bar early, on her feet, from wherever the bridge left her)
+  at(B(105, 1), () => { C.slowTurn = false; b.behave = 'hold'; b.moveTo(Math.max(-2.6, Math.min(2.6, b.x)), -4.3, Math.max(0.3, B(105, 3) - f.t), { easing: 'inOut' }); });
   at(B(105, 3), () => { C.slowTurn = false; C.say('service'); C.draw('shears'); C.hop(0, -6.05, B(105, 3), B(106, 1)); });
 
   // =================================================================== S9 NO REFUNDS · final chorus · 142.67–169.33
@@ -390,7 +398,7 @@ export function script(T, f) {
   // WE'RE ALL WALKING ADVERTISEMENTS FOR PAIN: four guests in sandwich boards walk the room
   at(B(107, 4), () => R.walkers(B(107, 4), B(108, 2)));
   // MAKING TRAUMA FASHION: the runway; she struts it as a blur
-  at(B(108, 4), () => { C.hop(0, -5.0, f.t, f.t + 0.35, false); });
+  at(B(108, 4), () => { C.hop(0, -4.2, f.t, f.t + 0.35, false); });
   at(B(109, 3), () => {
     M.area(f, { shape: 'rect', x: 0, z: -5.4, angle: 0, w: 1.0, h: 11, kind: 'white', start: f.t, end: B(110, 2.5), melee: true });
     R.runwayLights(B(109, 3), B(110, 2.5));
