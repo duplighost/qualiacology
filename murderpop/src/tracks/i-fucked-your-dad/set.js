@@ -157,8 +157,8 @@ export class YardSet {
     this.rungMesh.count = 0; this.rungMesh.frustumCulled = false; R.add(this.rungMesh);
     this.helices = [];
     this.hazards.push({ name: 'helix', active: (t) => this.helices.length > 0, test: (x, z, r, t) => this.helices.some((h) => { const hx = -10 + 10 * (t - h.t0); return t > h.t0 && Math.abs(x - hx) < 0.42 + r * 0.6 && Math.abs(z - h.gap) > 1.2 - r * 0.5; }), once: true });
-    // the brand: DAD, mirror-image, scorched into the lawn
-    const tex = canvasTex(512, 256, (c, w, h) => { c.clearRect(0, 0, w, h); c.translate(w, 0); c.scale(-1, 1); c.font = '900 200px "Archivo Black", Arial Black, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = '#ff6a2a'; c.shadowBlur = 24; c.fillStyle = '#1a0a06'; c.fillText('DAD', w / 2, h / 2 + 8); c.shadowBlur = 0; c.fillText('DAD', w / 2, h / 2 + 8); });
+    // the brand: DAD scorched into the lawn, reading the right way round from where YOU stands
+    const tex = canvasTex(512, 256, (c, w, h) => { c.clearRect(0, 0, w, h); c.font = '900 200px "Archivo Black", Arial Black, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = '#ff6a2a'; c.shadowBlur = 24; c.fillStyle = '#1a0a06'; c.fillText('DAD', w / 2, h / 2 + 8); c.shadowBlur = 0; c.fillText('DAD', w / 2, h / 2 + 8); });
     this.brand = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, color: new THREE.Color(1, 1, 1) }));
     this.brand.rotation.x = -Math.PI / 2; this.brand.position.y = 0.021; this.brand.renderOrder = 1; this.brand.visible = false; this.brand.layers.set(LAYER.NO_REFLECT); R.add(this.brand);
     this.brandT = -1;

@@ -124,9 +124,10 @@ export class Justice {
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); g.setIndex(I); g.computeVertexNormals();
       const drape = new THREE.Mesh(g, mat.clone()); drape.material.side = THREE.DoubleSide; drape.castShadow = true; this.group.add(drape);
     }
-    // the throne: a marble block with a gold band
+    // the throne: a marble block with a gold band just under the seat's edge (its top level with the seat, the two
+    // faces fought over every pixel and the seat flickered marble and gold)
     const throne = new THREE.Mesh(new THREE.BoxGeometry(3.6, this.seatTop, 2.0), mat); throne.position.set(this.base.x, this.seatTop / 2, this.base.z - 0.3); throne.castShadow = true; this.group.add(throne);
-    const tb = new THREE.Mesh(new THREE.BoxGeometry(3.64, 0.08, 2.04), gold); tb.position.set(this.base.x, this.seatTop - 0.04, this.base.z - 0.3); this.group.add(tb);
+    const tb = new THREE.Mesh(new THREE.BoxGeometry(3.64, 0.08, 2.04), gold); tb.position.set(this.base.x, this.seatTop - 0.07, this.base.z - 0.3); this.group.add(tb);
     // her own light: a white statue reads from the high camera
     const spot = this.spot = new THREE.SpotLight(0xfff2e4, 160, 30, 0.42, 0.6, 2.0); spot.position.set(0.5, 11, -1.5); spot.target.position.set(0, 4.2, -9.4);
     this.group.add(spot, spot.target);

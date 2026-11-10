@@ -16,7 +16,7 @@ import { death } from './death.js';
 const ID = 'i-fucked-your-dad';
 // the checkpoints: where YOU and she stand when a section starts again (design §5)
 export const CHECK = [
-  { t: 0.0, you: [3.6, -0.6, -Math.PI / 2], her: [6.4, -0.6, Math.PI / 2], mode: 'still' },
+  { t: 0.0, you: [3.6, -0.6, -Math.PI / 2], her: [6.15, -0.6, Math.PI / 2], mode: 'still' },     // (her seat on the bed's far edge)
   { t: 11.178, you: [0, 3.0, Math.PI], her: [0.5, -1.0, 0], mode: 'story' },
   { t: 22.587, you: [6, 3.5, Math.PI], her: [-5, -3.8, 0], mode: 'story' },
   { t: 33.988, you: [4, 2.5, Math.PI], her: [-6.5, 0.2, 0], mode: 'story' },
@@ -137,6 +137,8 @@ export default {
       if (f.app.auto) assistBot(f, this.set, new URLSearchParams(location.search).get('auto') === 'bad');
     }
     if (this._outro) { this._outro.t += dt; }
+    // YOU getting up off the bed (seatYou)
+    { const st = this._seat; if (st && st.rate) { st.k = Math.max(0, st.k - st.rate * dt); st.pose(); if (st.k === 0) st.rate = 0; } }
     // the VHS blink between the glitch lunges: on while it runs, off the frame after (a death's rewind owns vhs otherwise)
     if (f.state === 'play') {
       if (this._vhs > 0) { this._vhs -= dt; f.app.post.fx.vhs = 0.6; this._vhsOn = true; }
@@ -152,25 +154,29 @@ export default {
     else if (st > 52.52 && st < 60.4) f.cam.closeK = Math.max(0, f.cam.closeK - dt * 3);
   },
 
-  // YOU starts seated on the bed's edge: any input and she's up in the same frame; untouched, she stands on "story"
+  // YOU starts seated on the bed's edge: any input and she's up in the same frame; untouched, she stands on "story".
+  // The bed keeps her body out at x 3.6, and the sitting pose puts her hips a third of a metre behind her feet, which
+  // left her sitting on the air beside the duvet: while she sits, her body sits back onto the bed (and up), and it
+  // comes back over her feet as she gets up (over the stand, or in a moment if she's moving)
   seatYou(f) {
     const pl = f.player, rig = pl.rig, model = rig.model;
     if (this._unpatch) this._unpatch();
     const play = rig.play.bind(rig);
     let seated = true, standUntil = -1;
-    model.position.y = 0.17;
+    const seat = this._seat = { k: 1, rate: 0, pose() { const e = this.k * this.k * (3 - 2 * this.k); model.position.y = 0.17 * e; model.position.z = -0.48 * e; } };
+    seat.pose();
     rig.play('Sitting_Idle_Loop', { fade: 0, force: true });
     rig.play = (name, o = {}) => {
       const moving = pl.state !== 'free' || Math.hypot(pl.vx, pl.vz) > 0.25;
       if (seated && (moving || f.t > 2.12)) {
-        seated = false; model.position.y = 0;
+        seated = false; seat.rate = moving ? 1 / 0.12 : 1 / 0.62;
         if (!moving) { standUntil = f.t + 0.62; return rig.once('Sitting_Exit', { duration: 0.62, fade: 0.06, then: 'Sword_Idle' }); }
       }
       if (seated && name === 'Sword_Idle') return rig.base;
       if (!seated && f.t < standUntil && !moving && name === 'Sword_Idle') return rig.base;
       return play(name, o);
     };
-    this._unpatch = () => { rig.play = play; model.position.y = 0; this._unpatch = null; };
+    this._unpatch = () => { rig.play = play; model.position.y = 0; model.position.z = 0; this._seat = null; this._unpatch = null; };
   },
 
   // ---------------------------------------------------------------- rewinds
