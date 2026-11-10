@@ -59,6 +59,23 @@ void main() {
   gl_FragColor = vec4(uC * a * uFxK, a);
 }`;
 
+// a note: a ring on the floor closing on YOU as something of hers comes in. Pink: whole, soft (guard it). White: cut
+// into running dashes (you can't guard it: get out from under it, or jump). uK: 1 as it lands (it flares)
+const NOTE_FS = /* glsl */`
+uniform vec3 uC; uniform float uR, uW, uA, uDash, uTime, uK, uFxK;
+varying vec2 vP;
+void main() {
+  float d = length(vP);
+  float w = max(uW, fwidth(d) * 1.5);
+  float band = exp(-pow((d - uR) / w, 2.0));
+  float an = atan(vP.x, vP.y);
+  float dash = mix(1.0, step(0.42, fract(an * 2.2282 + uTime * 0.9)), uDash);       // 14 dashes round it
+  float inner = (1.0 - smoothstep(0.0, uR, d)) * 0.07 * (1.0 - uDash) * smoothstep(0.55, 1.0, uK);
+  float a = (band * dash * (0.75 + 0.6 * uK) + inner) * uA;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(mix(uC, vec3(3.0, 2.9, 2.8), uK * uK * 0.45) * a * uFxK, min(1.0, a));
+}`;
+
 // the guard: a curved band of light in front of her; x along the curve, y up it
 const SHIELD_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * (viewMatrix * (modelMatrix * vec4(position, 1.0))); }';
 const SHIELD_FS = /* glsl */`
@@ -102,6 +119,8 @@ const mat = (fs, uniforms, vs = VS, side = THREE.DoubleSide) => new THREE.Shader
   uniforms: { uFxK: FXK, ...uniforms },
 });
 
+const _X = new THREE.Vector3(), _Y = new THREE.Vector3(), _Z = new THREE.Vector3(), _M = new THREE.Matrix4();
+export const SX_COPPER = new THREE.Color(2.1, 1.05, 0.45);
 export const SX_GOLD = new THREE.Color(3.0, 1.85, 0.5), SX_IVORY = new THREE.Color(2.1, 1.85, 1.55), SX_PINK = new THREE.Color(3.4, 0.45, 1.5), SX_WHITE = new THREE.Color(2.4, 2.7, 3.1);
 
 export class StrikeFX {
@@ -124,6 +143,9 @@ export class StrikeFX {
     for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(QUAD, mat(RING_FS, { uC: { value: SX_GOLD.clone() }, uR: { value: 0.5 }, uW: { value: 0.05 }, uA: { value: 0 } })); m.rotation.x = -Math.PI / 2; m.renderOrder = 3; m.frustumCulled = false; m.visible = false; this.group.add(m); this.targets.push(m); }
     this.targetLine = new THREE.Mesh(QUAD, mat(RING_FS, { uC: { value: new THREE.Color(2.6, 2.4, 2.1) }, uR: { value: 0.8 }, uW: { value: 0.02 }, uA: { value: 0 } }));
     this.targetLine.rotation.x = -Math.PI / 2; this.targetLine.renderOrder = 3; this.targetLine.frustumCulled = false; this.targetLine.visible = false; this.group.add(this.targetLine);
+    // the notes round YOU
+    this.noteM = [];
+    for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(QUAD, mat(NOTE_FS, { uC: { value: SX_PINK.clone() }, uR: { value: 0.5 }, uW: { value: 0.03 }, uA: { value: 0 }, uDash: { value: 0 }, uTime: { value: 0 }, uK: { value: 0 } })); m.rotation.x = -Math.PI / 2; m.renderOrder = 3; m.frustumCulled = false; m.visible = false; this.group.add(m); this.noteM.push(m); }
     // stunned: gold stars round her head, one for each counter in a row
     this.dazeS = [];
     for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(QUAD, mat(STAR_FS, { uC: { value: SX_GOLD.clone() }, uA: { value: 0 }, uRot: { value: i } }, VS_BILL)); m.renderOrder = 9; m.frustumCulled = false; m.visible = false; this.group.add(m); this.dazeS.push(m); }
@@ -140,38 +162,35 @@ export class StrikeFX {
   _mkRing() { const s = new THREE.Mesh(QUAD, mat(RING_FS, { uC: { value: new THREE.Color() }, uR: { value: 0 }, uW: { value: 0.06 }, uA: { value: 0 } })); s.rotation.x = -Math.PI / 2; s.renderOrder = 3; s.frustumCulled = false; s.visible = false; this.group.add(s); this.rings.push(s); return s; }
 
   // ---------- the cut ----------
-  // x, z: YOU; ang: the cut's direction; o: { sweep: 1 | -1 | 0 (overhead), color, r, gold, big }
-  slash(x, z, ang, o = {}) {
+  // The arc a cut leaves in the air, in the cut's own plane. x, y, z: its centre (her chest); ang: the way the cut
+  // goes; o: { sweep: 1 | -1 (which way round it runs), tilt: the plane (0 flat, 1.57 upright: a rising cut or one
+  // straight down), half: half its angle, r, color, gold, big, life }
+  slash(x, y, z, ang, o = {}) {
     const m = this._take(this.slashes, () => this._mkSlash());
     const U = m.material.uniforms, big = !!o.big;
-    U.uC.value.copy(o.color || (o.gold ? SX_GOLD : SX_IVORY));
+    U.uC.value.copy(o.color || (o.gold ? SX_GOLD : SX_COPPER));
     U.uDir.value = o.sweep === -1 ? -1 : 1;
-    U.uHalf.value = big ? 1.65 : o.sweep === 0 ? 1.0 : 1.25;
-    U.uIn.value = big ? 0.25 : 0.42;
-    const r = o.r ?? (big ? 2.1 : o.sweep === 0 ? 1.5 : 1.65);
+    U.uHalf.value = Math.min(3.1, o.half ?? (big ? 1.65 : 1.25));
+    U.uIn.value = big ? 0.3 : 0.45;
+    const r = o.r ?? (big ? 2.2 : 1.75);
     m.scale.set(r, r, r);
-    if (o.sweep === 0 && !big) {
-      // overhead: the arc stands up in the cut's own plane, centred forward-and-up, from behind her head down in front
-      // (the quad's +x points along the cut, its +y tilted 0.6 rad from straight up toward the front)
-      m.position.set(x, 1.1, z);
-      m.rotation.set(0, ang - Math.PI / 2, -0.6, 'YXZ');
-    } else {
-      // flat, at the height of the blade: the quad's +y (the arc's middle) along the cut
-      m.position.set(x, big ? 1.0 : 1.15, z);
-      m.rotation.set(-Math.PI / 2, ang + Math.PI, 0, 'YXZ');
-    }
-    this.live.push({ m, kind: 'slash', t: 0, dur: big ? 0.2 : 0.14, U });
+    // the quad's +y runs along the cut, its +x across it, tipped up out of the floor's plane by the tilt
+    const t = o.tilt ?? 0.3, sa = Math.sin(ang), ca = Math.cos(ang), ct = Math.cos(t), st = Math.sin(t);
+    _X.set(ca * ct, st, -sa * ct); _Y.set(sa, 0, ca); _Z.crossVectors(_X, _Y);
+    m.quaternion.setFromRotationMatrix(_M.makeBasis(_X, _Y, _Z));
+    m.position.set(x, y, z);
+    this.live.push({ m, kind: 'slash', t: 0, dur: o.life ?? (big ? 0.22 : 0.15), U, a: o.alpha ?? (big ? 0.7 : 0.9) });
   }
 
   // ---------- the point of contact ----------
   impact(x, y, z, o = {}) {
     const p = o.power ?? 1;
     const m = this._take(this.stars, () => this._mkStar());
-    m.material.uniforms.uC.value.copy(o.color || (o.gold ? SX_GOLD : SX_IVORY));
+    m.material.uniforms.uC.value.copy(o.color || (o.gold ? SX_GOLD : SX_COPPER));
     m.material.uniforms.uRot.value = Math.random() * 3.14;
     m.position.set(x, y, z);
     this.live.push({ m, kind: 'star', t: 0, dur: 0.1 + 0.05 * p, size: 0.5 + 0.55 * p, U: m.material.uniforms });
-    if (p >= 1) this.ring(x, z, o.gold ? SX_GOLD : SX_IVORY, 0.9 + 0.8 * p, 0.22 + 0.06 * p);
+    if (p >= 1.5) this.ring(x, z, o.gold ? SX_GOLD : SX_COPPER, 0.9 + 0.8 * p, 0.22 + 0.06 * p, 0.035);
   }
 
   // ---------- a ring running out across the floor ----------
@@ -200,6 +219,26 @@ export class StrikeFX {
     const s = 1 + hit * 0.12; this.shield.scale.set(s, 1, s);
     const U = this.shield.material.uniforms;
     U.uA.value = this.guardK * (pl.catching ? 1.4 : 1); U.uHit.value = hit; U.uTime.value = t;
+  }
+
+  // ---------- the notes ----------
+  // list: threats() (soonest first); pl: YOU; tick: the tick's length in seconds. A ring is one tick of the song
+  // further out for every tick it has left, so a row of them reads like the bar it is.
+  drawNotes(list, pl, tick = 0.36, time = 0) {
+    const S = 4.2, r0 = 0.8, per = 0.62;
+    for (let i = 0; i < this.noteM.length; i++) {
+      const m = this.noteM[i], n = list[i];
+      if (!n || !pl || pl.state === 'dead') { m.visible = false; continue; }
+      const ticks = Math.max(0, n.tl) / Math.max(0.05, tick);
+      if (ticks > 4.2) { m.visible = false; continue; }
+      m.visible = true;
+      m.position.set(pl.x, 0.06, pl.z); m.scale.setScalar(S);
+      const U = m.material.uniforms, near = Math.max(0, 1 - ticks / 1.2);
+      U.uR.value = (r0 + per * ticks) / S; U.uW.value = (0.03 + 0.035 * near) / S;
+      U.uA.value = Math.min(1, (4.2 - ticks) / 0.8) * (0.55 + 0.45 * near);
+      U.uDash.value = n.kind === 'white' ? 1 : 0; U.uTime.value = time; U.uK.value = near;
+      U.uC.value.copy(n.kind === 'white' ? SX_WHITE : SX_PINK);
+    }
   }
 
   // ---------- the finale ----------
@@ -259,12 +298,12 @@ export class StrikeFX {
       const e = this.live[i];
       e.t += dt;
       const k = Math.min(1, e.t / e.dur);
-      if (e.kind === 'slash') { e.U.uProg.value = Math.min(1.08, k * 1.6); e.U.uA.value = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45; }
+      if (e.kind === 'slash') { e.U.uProg.value = Math.min(1.08, k * 1.6); e.U.uA.value = (k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45) * (e.a ?? 1); }
       else if (e.kind === 'star') { const s = e.size * (0.35 + 0.65 * Math.sqrt(k)); e.m.scale.setScalar(s); e.U.uA.value = (1 - k) * (1 - k); }
       else if (e.kind === 'ring') { e.U.uR.value = (0.15 + 0.85 * (1 - (1 - k) * (1 - k))) / 1.15; e.U.uW.value = e.w / (e.r * 1.15); e.U.uA.value = (1 - k) * 0.9; }
       if (k >= 1) { e.m.visible = false; e.m.userData.busy = false; this.live.splice(i, 1); }
     }
   }
 
-  clear() { this.daze = null; for (const m of this.dazeS) m.visible = false; for (const e of this.live) { e.m.visible = false; e.m.userData.busy = false; } this.live.length = 0; this.guardK = 0; this.shield.visible = false; this.pipsK = 0; this.pips.visible = false; for (const m of this.targets) m.visible = false; this.targetLine.visible = false; }
+  clear() { this.daze = null; for (const m of this.dazeS) m.visible = false; for (const e of this.live) { e.m.visible = false; e.m.userData.busy = false; } this.live.length = 0; this.guardK = 0; this.shield.visible = false; this.pipsK = 0; this.pips.visible = false; for (const m of this.targets) m.visible = false; for (const m of this.noteM) m.visible = false; this.targetLine.visible = false; }
 }

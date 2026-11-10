@@ -88,7 +88,8 @@ export class Director {
   leap(x, z, dur) {
     const b = this.boss;
     b.faceNow(x, z);
-    b.moveTo(x, z, dur, { easing: 'inOut', face: false });
+    // (a real jump: her feet leave the floor and she goes over what's between, the prep table for one)
+    b.moveTo(x, z, dur, { easing: 'inOut', face: false, arc: Math.min(1.5, 0.6 + dur * 1.8), land: 0 });
     b.setMark(x, z);
     this.act('NinjaJump_Start', dur * 0.3, { then: 'NinjaJump_Idle_Loop' });
     this.f.after(dur * 0.82, () => this.act('NinjaJump_Land', 0.3));
@@ -307,6 +308,8 @@ export class Director {
     // (the flash is local: at its peak a bloom about her height across, never a white ball over the whole figure;
     // in a dark, high-exposure room it comes down with the game's other glows, FXK)
     if (this.bloom) { fig.props.led.getWorldPosition(this.bloom.position); this.bloom.material.opacity = Math.min(0.9, led * 0.5) * Math.min(1, FXK.value); this.bloom.scale.setScalar(0.3 + led * 0.45); this.bloom.visible = led > 0.02 && fig.root.visible; }
+    // her death scene has her body (death.js): only the sceptre and its light stay hers
+    if (b.scene) { this.admire = 0; this.flip = 0; this.faceT = 0; this._hands(dt); return; }
     // the admiring hold: her head dips to the screen; procedural, on top of the frozen frame
     const bones = b.rig && b.rig.bones;
     if (bones && this.admire) { bones.Head && (bones.Head.rotation.x += 0.26); bones.lowerarm_l && (bones.lowerarm_l.rotation.z += 0.25); }

@@ -10,12 +10,16 @@ import { Her, clamp } from './her.js';
 import { Sounds } from './sounds.js';
 import { buildSet } from './set.js';
 import { choreography, SECTIONS, sectionPose } from './script.js';
+import { death, Kill } from './death.js';
 
 const HP = 3350;
 let kit = null;
 
 export default {
   id: 'ptsdream-girl', beats: 'ptsdream-girl', par: 120000, lastHit: 257.88,
+  // the song's bar line is three beats into the beat file. Said here, so the fight has it before it measures the
+  // song's drums against the grid (set later, in buildArena, the accents sat three beats early and on the off-beats)
+  downbeat: 3,
   spawn: { player: [-9.4, 3.2, Math.PI / 2], boss: [0, -7.7, 0] },
 
   async buildArena(f) {
@@ -23,14 +27,14 @@ export default {
     this.f = f;
     this.snd = new Sounds(f); this.snd.init();
     this.set = await buildSet(f, this);
-    this.wrecked = false; this.baseExpr = 'smug'; this._inited = false; this.log = [];
+    this.wrecked = false; this.baseExpr = 'smug'; this._inited = false; this.log = []; this.kill = null;
     const set = this.set;
     return {
       arena: set.arena, bounds: set.bounds, room: set.room,
       resolve: (x, z, r) => set.resolve(x, z, r),
       strikeArc: (x, z, ang, range, arc, s, ff) => set.strikeArc(x, z, ang, range, arc, s, ff),
       update: (dt, t, ff) => set.update(dt, t, ff),
-      dispose: () => set.dispose(),
+      dispose: () => { this.kill && this.kill.reset(); set.dispose(); },
     };
   },
 
@@ -47,6 +51,7 @@ export default {
     fig.setExpression('smug', { fade: 0.01 });
     try { await fig.prepare(f.app.renderer, f.cam.cam, f.scene); } catch (e) { console.warn('ptsd figurine prepare', e.message); }
     this.her = new Her(f, this);
+    this.kill = new Kill(f, this);       // her death scene's things (death.js)
     this.set.addCasters && this.set.addCasters(f.player.root, fig.root);
     try { this.set.warm([...this.her.warmObjects(), ...(extra && extra.warmObjects ? extra.warmObjects() : [])], fig); } catch (e) { console.warn('ptsd warm-up', e.message); }
     return b;
@@ -65,6 +70,7 @@ export default {
     this._inited = true;
     const b = f.boss;
     this.her.reset();
+    this.kill && this.kill.reset();
     this.snd.stopQueued();
     this.set.setStateAt(t);
     b.arena = f.arena;
@@ -106,8 +112,7 @@ export default {
     if (b.fig) b.fig.setExpression('smug', { fade: 0.4 });
     b.perform('Idle_Shield_Break', { duration: f.beat * 2, then: 'idle' });
     this.set.wrecked && this.set.wrecked(f.t);
-    // broken after 150:2: she pulls the pin now, and the lights for the bars already gone come on at once
-    const bm = f.bm; if (f.t > bm.timeOfBar(150, 2)) { this.set.lastPin(f.t); this.snd.play('pin', { x: b.x }); [152, 153, 154, 155].forEach((bar, i) => { if (f.t >= bm.timeOfBar(bar, 1)) this.set.lastTick(f.t, i); }); }
+    // (the pin and the last count are her death scene's: it takes them up wherever in the last bars her bar empties)
     this.log.push(['empty', +f.t.toFixed(2)]);
   },
   onFinish(f) { this.set.finish && this.set.finish(f.t); this.log.push(['finish', +f.t.toFixed(2)]); },
@@ -122,8 +127,9 @@ export default {
     // what hurt YOU (for the tests)
     const hz = f.player.hearts; if (this._hz !== undefined && hz < this._hz && f.state === 'play') this.log.push(['hurt', +f.t.toFixed(2), f.player.lastHitBy, hz]); this._hz = hz;
     this.her.update(dt);
-    // wrecked: the cracked bottle at her chest trails a thin pink mist
-    if (this.wrecked && f.boss.state !== 'finished' && (this._mist = (this._mist || 0) + dt) > 0.12) { this._mist = 0; const b = f.boss; f.fx.glitter(b.x + Math.sin(b.facing) * 0.25, 1.75, b.z + Math.cos(b.facing) * 0.25, new THREE.Color(2.6, 0.5, 1.2), 2, 0.25); }
+    this.kill && this.kill.update(dt);
+    // wrecked: the cracked bottle at her chest trails a thin pink mist (in her death scene the bottle's in her hand)
+    if (this.wrecked && !(this.kill && this.kill.on) && f.boss.state !== 'finished' && (this._mist = (this._mist || 0) + dt) > 0.12) { this._mist = 0; const b = f.boss; f.fx.glitter(b.x + Math.sin(b.facing) * 0.25, 1.75, b.z + Math.cos(b.facing) * 0.25, new THREE.Color(2.6, 0.5, 1.2), 2, 0.25); }
     this.extra && this.extra.update(dt);
     this.snd.update();
     // her things are solid: her shots stop at them (the island is cover, so is the bathroom door)
@@ -135,5 +141,6 @@ export default {
   // the boss bar fades in when her reflection first shows in the mirror
   hudBoss(on) { const el = this.f && this.f.hud && this.f.hud.el && this.f.hud.el.boss; if (el) { el.style.transition = 'opacity 1.2s'; el.style.opacity = on ? '' : '0'; } },
   // a grenade's landing spot: inside the stage, clear of solid props
+  death,
   safeSpot(x, z, m) { const p = this.set.clearOf(clamp(x, -10.2, 10.2), clamp(z, -6.2, 6.2), m); return p; },
 };

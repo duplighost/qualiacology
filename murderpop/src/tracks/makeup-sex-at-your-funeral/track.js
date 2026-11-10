@@ -8,7 +8,8 @@ import { buildMourner, Mourner, repaintFace, getKit, PEARL } from './mourner.js'
 import { Shots } from './shot.js';
 import { Director, Entrance } from './director.js';
 import { choreograph } from './script.js';
-import { Bearers, Ride, Hearses, Chapel, Decals } from './pieces.js';
+import { Bearers, Ride, Hearses, Chapel, Decals, GROOMSMEN } from './pieces.js';
+import { death } from './death.js';
 import { Sounds } from './sounds.js';
 import { Petals, RippleEdge } from './atmos.js';
 import { heart } from './mourner.js';
@@ -29,6 +30,8 @@ export default {
   par: 110000,
   lastHit: 212.625,
   spawn: { player: [0, -5.0, PI / 2], boss: [10.6, 0, -PI / 2] },
+  // her end: shut in your casket, at her own wedding (death.js)
+  death,
 
   async buildArena(f) {
     const S = this.S = { f, pins: [], walls: [], spans: [] };
@@ -180,14 +183,16 @@ export default {
     S.shots.update(dt);
     S.bearers.update(dt); S.ride.update(dt); S.hearses.update(dt); S.chapel.update(dt); S.decals.update(dt);
     this._pins(dt); this._walls(dt); this._projectiles(dt); this._table(dt);
-    // her height: on BELOVED, on the island, in the casket
+    // her height: on BELOVED, on the island, in the casket (a real jump of hers has her height itself, and so does
+    // her death scene)
     const t = f.t;
     let y = 0;
     if (S.ride.on) y = 0.92; else if ((S.ride.island || (t >= TL.island && t < 145.9)) && Math.abs(b.x) < 2.05 && Math.abs(b.z) < 0.6) y = 0.32;
     else if (t >= 150.7 && t < 156.9 && !S.chapel.inside && Math.hypot(b.x, b.z + 4) < 0.5) y = 0.95;
     b.onStone = (t >= 62.9 && t < 65.8) || (t >= 117.0 && t < 118.6);
     if (b.onStone && Math.hypot(b.x, b.z + 4.6) < 0.9) y = 1.05;
-    b.root.position.y += (y - b.root.position.y) * Math.min(1, dt * 14);
+    const jumping = b.move && b.move.arc;
+    if (!b.scene && !S.kill && !jumping) b.root.position.y += (y - b.root.position.y) * Math.min(1, dt * 14);
     b.keepFacing = S.ride.on || y === 0.95;
     if (S.glazeT > 0) { S.glazeT -= dt; if (S.glazeT <= 0) f.player.rig.flash(new THREE.Color(0, 0, 0), 0); }
     // the last flash turns the world white (a white fade, never a strobe): a soft bloom of white, up in 0.14 s, held a
@@ -211,14 +216,18 @@ export default {
     // Polaroids stay as set dressing until the next set change
     const fl = S.set.floorAt(t).cur[1]; if (S.floorWas && fl !== S.floorWas) S.shots.clearPolaroids(); S.floorWas = fl;
     // the outro, with the bar empty: she walks to the arch, poses weakly; her phone dies on the dropout
-    if (S.outro) this._outroUpdate(dt);
+    // (her death scene takes this over from where it starts: death.js)
+    if (S.outro && !b.scene && !S.kill && f.state === 'play') this._outroUpdate(dt);
     if (S.locketFly) this._locketUpdate(dt);
     this._air(dt);
+    // her death scene's own things: the casket's lids, what's in the air, the pin (from its start to the fight's end)
+    if (S.kill) S.kill.update(dt);
   },
 
   // ---------------------------------------------------------------- internals
   _resync(t) {
     const S = this.S, f = S.f, b = f.boss;
+    if (S.kill) { S.kill.dispose(); S.kill = null; }      // (her death scene's things: a rewind takes them back)
     S.shots.cancelAll(); S.D.clearHands(); S.hearses.clear(); S.decals.clear();
     for (const p of S.pins) { f.scene.remove(p.pin, p.tag); } S.pins.length = 0; S.walls.length = 0;
     S.tableRun = null; S.set.override.clear(); S.whiteT = 0; S.whiteMove = false; f.app.post.fx.fade = 0;
@@ -267,6 +276,8 @@ export default {
       for (const x of [-2, 2]) out.push({ type: 'circle', x, z: -4.4, r: 0.3 });
       for (const x of [-1.5, 1.5]) out.push({ type: 'circle', x, z: -4.6, r: 0.24 });
     }
+    // and her six groomsmen along the back wall, whatever the set is drawn with
+    if (f.t >= TL.wedding && S.bearers && S.bearers.men.length) for (const [x, z] of GROOMSMEN) out.push({ type: 'circle', x, z, r: 0.3, name: 'groomsman' });
     return out;
   },
   // her projectiles stop on cover; DISSOLVING pills split; a whole pill caught goes back double
@@ -359,7 +370,7 @@ export default {
     for (const a of fig.acc) for (const o of a.objects) o.traverse((m) => { if (!m.isMesh || !m.material || !m.material.color || m.material.userData.figMake?.opts?.goldTint) return; if (!m.material.userData.origColor) m.material.userData.origColor = m.material.color.clone(); if (white) m.material.color.copy(pearl).multiplyScalar(0.92); else m.material.color.copy(m.material.userData.origColor); });
   },
   // the outro with the bar empty: up the white runner to the arch, limping, the glowing locket to her lips
-  _outroWalk() { const S = this.S, b = S.f.boss; if (b.state !== 'desperate') return; S.outro = { t: 0 }; S.D.free(); b.moveTo(0, -2.4, 3.8, { easing: 'inOut' }); b.setMark(0, -2.4); },
+  _outroWalk() { const S = this.S, b = S.f.boss; if (b.state !== 'desperate' || b.scene || S.kill) return; S.outro = { t: 0 }; S.D.free(); b.moveTo(0, -2.4, 3.8, { easing: 'inOut' }); b.setMark(0, -2.4); },
   _outroUpdate(dt) {
     const S = this.S, f = S.f, b = f.boss, t = f.t, fig = b.fig;
     if (t >= 204.724 && !S.outro.posed) { S.outro.posed = true; S.D.act('Spell_Simple_Shoot', 0.3); S.sounds.play('pop', { x: b.x, gain: 0.25, rate: 0.5 }); S.shots.ledK = 0.2; }
@@ -404,6 +415,7 @@ export default {
   },
   _dispose() {
     const S = this.S; if (!S) return;
+    if (S.kill) { S.kill.dispose(); S.kill = null; }
     S.shots && S.shots.dispose(); S.D && S.D.dispose(); S.decals && S.decals.dispose(); S.set && S.set.dispose();
     S.petals && S.petals.dispose(S.f.scene); S.edge && S.edge.dispose(S.f.scene);
     for (const p of S.pins) S.f.scene.remove(p.pin, p.tag);

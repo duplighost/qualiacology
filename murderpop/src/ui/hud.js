@@ -7,6 +7,11 @@ const HEART_PATH = '<path d="M16 29 C6 21 1 15.5 1 9.5 C1 4.8 4.8 1 9.4 1 C12.3 
 // a heart is its empty shape with the pink on top: half a heart shows the pink on its left half
 const HEART = `<svg class="h-bg" viewBox="0 0 32 30">${HEART_PATH}</svg><svg class="h-fg" viewBox="0 0 32 30">${HEART_PATH}</svg>`;
 
+// the four presses, drawn: a mouse with the button lit, or a key
+const MOUSE = (side) => `<svg viewBox="0 0 64 88"><rect x="4" y="4" width="56" height="80" rx="28" fill="rgba(12,6,10,.82)" stroke="#f7efe4" stroke-width="3"/><path d="${side === 'L' ? 'M32 6 C17 6 6 17 6 32 V40 H32 Z' : 'M32 6 C47 6 58 17 58 32 V40 H32 Z'}" fill="#f2c25b"/><path d="M32 6 V40 M6 40 H58" stroke="#f7efe4" stroke-width="3" fill="none"/></svg>`;
+const CAP = (t) => `<span class="mp-cap">${t}</span>`;
+const KEY_ART = { mouse: { strike: MOUSE('L'), parry: MOUSE('R'), jump: CAP('SPACE'), dash: CAP('SHIFT') }, keys: { strike: CAP('J'), parry: CAP('K'), jump: CAP('I'), dash: CAP('L') } };
+
 export class HUD {
   constructor(root) {
     this.root = root;
@@ -24,6 +29,8 @@ export class HUD {
       <div class="mp-chain"><b class="mp-chain-n">0</b><i class="mp-chain-x">×1</i></div>
       <div class="mp-bonus"><b class="mp-bonus-n">0</b><i class="mp-bonus-x">×1</i><i class="mp-bonus-k">×2</i></div>
       <div class="mp-keycap">Q</div>
+      <div class="mp-hint"></div>
+      <div class="mp-qte"><div class="mp-qte-ring"></div><div class="mp-qte-key"></div><div class="mp-qte-dots"></div></div>
       <div class="mp-banner"></div>`;
     this.el = {
       boss: root.querySelector('.mp-boss'), name: root.querySelector('.mp-boss-name'), fill: root.querySelector('.mp-bar-fill'), ghost: root.querySelector('.mp-bar-ghost'),
@@ -31,6 +38,8 @@ export class HUD {
       score: root.querySelector('.mp-score-n'), combo: root.querySelector('.mp-combo'), comboN: root.querySelector('.mp-combo-n'), pops: root.querySelector('.mp-pops'), banner: root.querySelector('.mp-banner'),
       chain: root.querySelector('.mp-chain'), chainN: root.querySelector('.mp-chain-n'), chainX: root.querySelector('.mp-chain-x'),
       bonus: root.querySelector('.mp-bonus'), bonusN: root.querySelector('.mp-bonus-n'), bonusX: root.querySelector('.mp-bonus-x'), key: root.querySelector('.mp-keycap'),
+      hint: root.querySelector('.mp-hint'),
+      qte: root.querySelector('.mp-qte'), qteRing: root.querySelector('.mp-qte-ring'), qteKey: root.querySelector('.mp-qte-key'), qteDots: root.querySelector('.mp-qte-dots'),
     };
     this._chain = 0; this._mult = 1; this._bonus = 0;
     this.ghostK = 1; this.shownK = 1; this.ghostHold = 0; this.lastHearts = -1; this.shownScore = 0;
@@ -87,6 +96,29 @@ export class HUD {
     el.bonusN.textContent = Math.round(this._bonus).toLocaleString('en-US');
     el.bonusX.textContent = '\u00d7' + mult;
     el.bonus.classList.toggle('kept', kept > 1);
+  }
+  // her death scene's press: which of the four it is, big, with its ring closing on it (k: 1 far, 0 now)
+  // p: null | { key: 'strike' | 'parry' | 'jump' | 'dash', k, state: 'wait' | 'hit' | 'miss', n, of, dev: 'mouse' | 'keys', last }
+  qte(p) {
+    const el = this.el.qte; if (!el) return;
+    if (!p) { if (this._qteOn) { el.className = 'mp-qte'; this._qteOn = false; this._qteKey = ''; } return;  }
+    this._qteOn = true;
+    const id = p.key + p.dev;
+    if (id !== this._qteKey) { this._qteKey = id; this.el.qteKey.innerHTML = KEY_ART[p.dev === 'keys' ? 'keys' : 'mouse'][p.key] || ''; }
+    el.className = 'mp-qte on ' + p.state + (p.last ? ' last' : '') + ' k-' + p.key;
+    this.el.qteRing.style.transform = `translate(-50%, -50%) scale(${(1 + 1.9 * p.k).toFixed(3)})`;
+    this.el.qteRing.style.opacity = String(Math.min(1, 0.25 + (1 - p.k) * 1.1));
+    if (p.of && this._qteOf !== p.of + ':' + p.n) { this._qteOf = p.of + ':' + p.n; this.el.qteDots.innerHTML = Array.from({ length: p.of }, (_, i) => `<i class="${i < p.n ? 'done' : i === p.n ? 'now' : ''}"></i>`).join(''); }
+  }
+  // a button, small, over one of you: the one that answers what's happening (the first few times it happens)
+  // p: null | { key: 'strike' | 'parry' | 'jump' | 'dash', x, y, pulse, dev }
+  hint(p) {
+    const el = this.el.hint; if (!el) return;
+    if (!p) { if (this._hintOn) { el.classList.remove('on'); this._hintOn = false; } return; }
+    const id = p.key + (p.dev || 'mouse');
+    if (id !== this._hintKey) { this._hintKey = id; el.innerHTML = KEY_ART[p.dev === 'keys' ? 'keys' : 'mouse'][p.key] || ''; }
+    el.classList.add('on'); this._hintOn = true;
+    el.style.left = (p.x * 100) + '%'; el.style.top = (p.y * 100) + '%'; el.style.setProperty('--pulse', String(p.pulse || 0));
   }
   // the key, over YOU's head (x, y: 0..1 of the screen)
   keycap(on, x = 0.5, y = 0.5, pulse = 0) {

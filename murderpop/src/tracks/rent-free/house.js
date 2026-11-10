@@ -149,6 +149,8 @@ export class House {
     const R = (name, t0, beats = 4) => ({ name, t0, dur: beats * 0.3316 });
     // (to a null floor the old one rolls away from the back wall: the ink-in at 118.13 floods forward over two beats)
     const segs = [R(null, 0), R('parquet', 61.13), R('boards', 86.30, 2), R('bedboards', 95.58, 2), R('concrete', 104.87, 0.4), R('blueprint', 112.15, 6), R(null, 118.13, 2), R('parquet', 130.06), R('lease', 164.87, 2), R(null, 168.52, 2), R('parquet', 218.58, 2), R(null, 264.01, 3), R('bedboards', 291.87, 4)];
+    // (her death scene changes the room off the clock: its floor comes with it)
+    const OF = this.over && this.over.floor; if (OF) segs.push(R(OF.name, OF.t0, OF.beats));
     let cur = segs[0], prev = null;
     for (const s of segs) if (t >= s.t0 - 1e-3) { prev = cur; cur = s; }
     const k = cur.t0 <= (this._jumpT ?? -1) + 0.01 ? 1 : clamp01((t - cur.t0) / cur.dur);
@@ -542,6 +544,33 @@ export class House {
   }
   setSnd(fn) { this.snd = fn; }
 
+  // ---------------------------------------------------------------------------------------- her eviction (death.js)
+  // Her death scene takes the house off the song's clock: the room it wants (the foyer and its front door) flies in to
+  // land at `land`, whatever room the song is in; the scene works the front door (doorK: 0 shut .. 1 open), the light
+  // (over.light(t) -> { a, b, k, ex }) and the floor itself. sceneClear() gives the house back to the song.
+  sceneRoom(name, { t = this.t, land = t + 0.6, instant = false } = {}) {
+    const next = this.rooms[name]; if (!next) return;
+    const O = this.over || (this.over = {});
+    O.room = name;
+    if (this.current === next) return;
+    // the floor rolls back to the marble under the old room as it goes
+    O.floor = { name: next.floor, t0: instant ? t - 9 : t, beats: 1 };
+    if (instant || !this.current) { this.goTo(name, { t, instant: true }); return; }
+    const prev = this.current, d = Math.max(0.12, land - t);
+    this.flying = this.flying.filter((fl) => fl.room !== prev && fl.room !== next);
+    this.flying.push({ room: prev, t0: t, t1: t + Math.min(0.5, d * 0.9), from: prev.flatsG.position.y, to: 11, out: true, props: Math.min(0.28, d * 0.75) });
+    next.group.visible = true; this._rest(next, 0); next.flatsG.position.y = 11;
+    this.flying.push({ room: next, t0: t + d * 0.25, t1: land, from: 11, to: 0, out: false, props: 0.3, quiet: true });
+    this.snd && this.snd('rf-wires', { x: 0, gain: 0.5, rate: 2.4 });
+    this.current = next; this.colliders = next.cols;
+  }
+  sceneClear() {
+    this.over = null; this.doorK = null;
+    for (const s of this.signs || []) s.out = undefined;
+  }
+  // a sampler goes up into the flies with the room it hung in
+  signOut(text, t = this.t) { for (const s of this.signs) if (s.text === text && s.out === undefined) s.out = t; }
+
   // ---------------------------------------------------------------------------------------- the hall of doors
   doorPoint(id) { const d = this.rooms.hall.doorAt[id]; return { x: d[0], z: d[1], nx: d[2], nz: d[3] }; }
   // a knock: the knocker jumps, the latch rattles, the slit of light under the door flares
@@ -577,11 +606,11 @@ export class House {
   // ---------------------------------------------------------------------------------------- per frame
   update(dt, t, f) {
     this.t = t;
-    const A = this.arena;
-    const L0 = lightAt(t);
+    const A = this.arena, O = this.over;
+    const L0 = O && O.light ? O.light(t, lightAt(t)) : lightAt(t);
     A.setState(L0.a, L0.b, L0.k);
-    // the room that should be up (a jump in time puts it there at once)
-    const want = roomAt(t);
+    // the room that should be up (a jump in time puts it there at once); her death scene can ask for its own
+    const want = O && O.room ? O.room : roomAt(t);
     const jump = this._lastT === undefined || Math.abs(t - this._lastT) > 0.5;
     if (jump) this._jumpT = t;
     if (!this.current || this.current.name !== want) this.goTo(want, { t, instant: jump || !this.current });
@@ -608,8 +637,10 @@ export class House {
     const R = this.rooms;
     // the foyer: the door opens at 2.73; the doorway glows; her silhouette in the fanlight until then
     const fo = R.foyer.props;
-    const open = t >= 2.73 && t < 6.06 ? clamp01((t - 2.73) / 0.4) : t >= 6.06 && t < 10.7 ? 1 - clamp01((t - 6.06) / 0.25) : 0;
-    for (const lf of fo.door.userData.leaves) lf.hinge.rotation.y = lf.dir * -1.75 * ease(open);
+    // (her death scene works the door itself: doorK is how far open it stands, set every frame, no easing)
+    const scened = this.doorK !== null && this.doorK !== undefined;
+    const open = scened ? this.doorK : t >= 2.73 && t < 6.06 ? clamp01((t - 2.73) / 0.4) : t >= 6.06 && t < 10.7 ? 1 - clamp01((t - 6.06) / 0.25) : 0;
+    for (const lf of fo.door.userData.leaves) lf.hinge.rotation.y = lf.dir * -1.75 * (scened ? open : ease(open));
     fo.doorway.visible = open > 0.02;
     fo.sil.visible = t < 2.73;
     fo.party.visible = t >= 168.52 && t < 176.48;
@@ -664,6 +695,8 @@ export class House {
     // (the fireside's: up at the mantel, not a metre over the floor, where it burned a white hot spot beside the fire)
     if (t >= 249.41 && t < 255.71) this.warm.position.set(1.8, 1.6, -4.2); else if (t >= 264.01 && t < 291.87) this.warm.position.set(9.2, 2.2, -2.2); else if (t >= 86.3 && t < 95.58) this.warm.position.set(0, 4.5, 0); else this.warm.position.set(f.player.x, 2.4, f.player.z + 1.2);
     this.cool.intensity = (t >= 95.58 && t < 118.13) || t >= 291.87 ? 4 : 0;
+    // (out of the moonlit bedroom with her death scene: the moon's fill on the two of you goes with it)
+    if (this.over && this.over.room && this.over.room !== 'bedroom') this.cool.intensity = this.over.cool ?? 0;
     this.flatDim = t >= 249.41 && t < 255.71 ? 0.2 : 1;
   }
 
@@ -706,19 +739,21 @@ export class House {
     for (const [ww, hh, xx, yy] of [[w + 0.16, 0.08, 0, h / 2 + 0.04], [w + 0.16, 0.08, 0, -h / 2 - 0.04], [0.08, h, -w / 2 - 0.04, 0], [0.08, h, w / 2 + 0.04, 0]]) g.add(box(ww, hh, 0.06, fr, xx, yy, 0.02));
     for (const s of [-1, 1]) g.add(cyl(0.006, 0.006, 8, this.Y.brass, s * w * 0.35, h / 2 + 4, 0, 4));
     g.position.set(x, y + 8, z); this.group.add(g);
-    const s = { g, x, y, z, t0, t1, until };
+    const s = { g, x, y, z, t0, t1, until, text };
     this.signs.push(s);
     return s;
   }
   updateSigns(t) {
     for (const s of this.signs) {
-      const on = t >= s.t0 - 0.01 && t < s.until;
+      const on = t >= s.t0 - 0.01 && t < s.until && !(s.out !== undefined && t >= s.out + 0.4);
       s.g.visible = on;
       if (!on) continue;
       const k = clamp01((t - s.t0) / Math.max(0.05, s.t1 - s.t0));
       const e = 1 - Math.pow(1 - k, 3);
       s.g.position.y = s.y + 8 * (1 - e) + (k >= 1 ? Math.sin((t - s.t1) * 6) * 0.04 * Math.exp(-(t - s.t1) * 2) : 0);
       s.g.rotation.z = Math.sin(t * 1.3 + s.x) * 0.02 * (1 - e * 0.6);
+      // (flown out with its room: up its wires)
+      if (s.out !== undefined && t >= s.out) { const u = clamp01((t - s.out) / 0.4); s.g.position.y += 11 * u * u; }
     }
   }
   dispose() {

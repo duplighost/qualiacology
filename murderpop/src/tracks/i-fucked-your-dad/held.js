@@ -67,6 +67,10 @@ export class Held {
     for (const k of Object.keys(I)) I[k].h.visible = !fin && inW(W[k] || [], t);
     if (handless) { I.matchR.h.visible = !fin && inW(W.match, t); I.match.h.visible = false; I.fork.h.visible = false; if (I.phoneL.h.visible) { I.phoneL.h.visible = false; I.phone.h.visible = !fin && !I.staff.h.visible; } }
     else I.matchR.h.visible = false;
+    // her death scene: only the can, while she still has it (the match there is the scene's own: death.js)
+    const K = set.kill, live = !!(K && K.live);
+    if (live) { for (const k of Object.keys(I)) I[k].h.visible = false; I.can.h.visible = !fin && K.canInHand; }
+    I.can.h.scale.setScalar((live ? 1.35 : 1) / this.fig.scale);
     // the phone's screen brightens as she reads it up close; static white for the lies
     const scr = this.phone.userData.screen;
     const read = t > 19.37 && t < 20.8 ? 1 + Math.floor((t - 19.37) / 0.357) * 0.5 : 1;

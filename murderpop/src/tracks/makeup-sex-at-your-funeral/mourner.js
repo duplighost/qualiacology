@@ -222,6 +222,8 @@ export class Mourner extends Boss {
   snap(sec = 0.1) { this.snapUntil = (this._now ?? 0) + sec; }
   update(dt, now, beat, player) {
     this._now = now;
+    // her death scene moves her (death.js): no drift to her mark, no turning her back for a shot
+    if (this.scene) { this.vel.set(0, 0); this.pose = null; this.backTo = null; this.lockFacing = false; super.update(dt, now, beat, player); return; }
     if (this.posing) { this.flinchK = 0; if (this.rig) this.rig.flinch = Math.min(this.rig.flinch, 0.1); }
     if (this.mark && !this.move && (this.state === 'perform' || this.state === 'open' || this.state === 'desperate') && dt > 0) {
       const w = now < this.snapUntil ? 40 : (this.sober ? 9 : this.omega);

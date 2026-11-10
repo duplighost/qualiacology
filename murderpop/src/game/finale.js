@@ -12,7 +12,7 @@ export class Finale {
   reset() {
     this.on = false; this.down = false; this.downAt = Infinity;
     this.bank = 0; this.mult = 1; this.streak = 0; this.kept = 1; this.dropT = -9; this.upT = -9; this.offRun = 0;
-    this.rings = []; this.perfect = 0; this.total = 0; this.finalBlow = false; this.nextT1 = Infinity; this.lastT1 = 0;
+    this.rings = []; this.perfect = 0; this.total = 0; this.finalBlow = false; this.nextT1 = Infinity; this.lastT1 = 0; this.hold = false;
   }
   start() {
     const f = this.f, bm = f.bm;
@@ -36,7 +36,7 @@ export class Finale {
     return c >= last - 0.15 ? last : c;
   }
   update() {
-    if (!this.on) return;
+    if (!this.on || this.hold) return;
     const f = this.f, t = f.t, b = f.boss;
     if (!this.down && t >= this.downAt) { this.down = true; f._finaleDown && f._finaleDown(); }
     // each ring opens as the one before it closes (the first a beat or so after her bar empties)
@@ -70,6 +70,7 @@ export class Finale {
   // what's on the floor round her now: [{ x, z, r (metres), a (0..1), last, hit, rT }]
   drawList() {
     const f = this.f, t = f.t, b = f.boss, out = [];
+    if (this.hold) return out;
     const rT = (b.radius || 0.85) * 0.95, tick = f.bm.pulse(t, 7);
     for (const r of this.rings) {
       if (t < r.t0) continue;

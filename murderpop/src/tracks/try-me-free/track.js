@@ -4,8 +4,12 @@
 // words land in the dark.
 import * as THREE from 'three';
 import { Prize, setExpr } from './prize.js';
-import { buildSet } from './set.js';
+import { buildSet, CerealSet } from './set.js';
 import * as A from './moves.js';
+import { death, DEATHSET } from './death.js';
+
+// (her death scene's part of the set: the bowl, the spoon, the box coming over)
+Object.assign(CerealSet.prototype, DEATHSET);
 
 export const SECTIONS = [
   ['S1 commercial', 0.0], ['S2 funeral', 16.61], ['S3 livestream', 37.38], ['S4 coffee', 58.16], ['S5 alphabet', 80.32],
@@ -17,6 +21,10 @@ let prize = null;
 export default {
   id: 'try-me-free', beats: 'try-me-free', par: 50000, lastHit: 289.54,
   spawn: { player: [0, 4.2, Math.PI], boss: [0, -5.6, 0] },
+  death,
+  // in the darks she's in her box and the box is what YOU beats on: it rocks, she doesn't leave it and doesn't answer
+  get juggle() { return this.set && this.set.dark ? false : undefined; },
+  get counters() { return this.set && this.set.dark ? false : undefined; },
 
   async buildArena(f) { this.set = await buildSet(f); return this.set.world; },
   async buildBoss(f) {

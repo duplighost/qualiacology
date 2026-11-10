@@ -306,7 +306,11 @@ export function dress(set) {
     if (t > T2.cloche && t < T2.clocheLock && set.f.player) { s.x = set.f.player.x; s.z = set.f.player.z; }
     clo.position.set(s.x, y, s.z); clo.visible = y < 15.9;
     plate.position.set(s.x, 0, s.z); plate.visible = t > T2.clocheSlam && t < T2.finish + 0.4;
-    plf.set('m', plate.visible ? 1 : 0, 1); plf.update(dt, t);
+    // her death scene moves it out of the way, then brings it up bare for her head (death.js)
+    const kp = set.kill && set.kill.plate, stick = !kp || kp.lit;
+    if (kp) { plate.position.set(kp.x, kp.y, kp.z); plate.visible = kp.vis; }
+    for (const c of plate.children) if (c !== plf.mesh && c !== plate.children[0]) c.visible = stick;
+    plf.set('m', plate.visible && stick ? 1 : 0, 1); plf.update(dt, t);
     fr2.m.position.set(s.x, 0.016, s.z); fr2.set(t > T2.clocheSlam ? 1 - ramp(t, T2.clocheSlam + 3, T2.clocheSlam + 9) : 0); fr2.u.uTime.value = t;
   });
   set.clocheShadow = set.pool(0, 0, 2.5, 0x0a0812, 'dark');

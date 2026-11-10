@@ -23,5 +23,12 @@ export const TRACKS = [
 ];
 const PRIZE = { 'sexy-trauma-costume': 'tag', 'your-car-is-at-the-bottom-of-the-lake': 'key', 'pretty-until-proven-guilty': 'gavel', 'makeup-sex-at-your-funeral': 'locket',
   'kiss-me-like-a-car-crash': 'headlight', 'i-fucked-your-dad': 'teddy', 'rent-free': 'giltkey', 'reverse-psychology-degree': 'star', 'ptsdream-girl': 'pin', 'try-me-free': 'prize', 'grocery-store-at-2-am': 'bag' };
-for (const t of TRACKS) t.prize = PRIZE[t.id];
+// what she opens with (the song's own first words: the loading picture carries them)
+const LINE = { 'sexy-trauma-costume': "Welcome to Spirit Halloween's back room, honey", 'your-car-is-at-the-bottom-of-the-lake': "You should've let me drive",
+  'pretty-until-proven-guilty': 'Order in the court. Try not to cry.', 'makeup-sex-at-your-funeral': "Open casket, open bar, I'm overdressed",
+  'kiss-me-like-a-car-crash': 'Kiss me like a car crash, I wanna taste the wreck', 'i-fucked-your-dad': "Oh, you're gonna hate this story",
+  'rent-free': "Honey, I'm home. Did you miss me?", 'reverse-psychology-degree': 'Got my PhD in fucking with your head',
+  'ptsdream-girl': "Trigger warning, baby I'm your favorite emergency", 'try-me-free': 'Try me free, try me free',
+  'grocery-store-at-2-am': 'The ceiling hums its hollow hymns to no one in particular' };
+for (const t of TRACKS) { t.prize = PRIZE[t.id]; t.line = LINE[t.id] || ''; t.art = LINE[t.id] ? `assets/loading/${t.id}.webp` : ''; }
 export const trackById = (id) => TRACKS.find((t) => t.id === id) || TRACKS[TRACKS.length - 1];

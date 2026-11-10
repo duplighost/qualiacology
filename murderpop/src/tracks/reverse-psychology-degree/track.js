@@ -17,6 +17,7 @@ import { DOCTOR, Faces } from './doctor.js';
 import * as M from './moves.js';
 import { coachBot } from './coach.js';
 import { Campus } from './set.js';
+import { death, Death } from './death.js';
 
 const ID = 'reverse-psychology-degree';
 const D2R = Math.PI / 180;
@@ -67,6 +68,7 @@ export default {
     R.set = new Campus(f, R);
     const w = await R.set.load();
     R.flashes = new M.Flashes(f.scene);
+    Death.build(f, R);             // her death scene's own things, made now (hidden) so the warm-up compiles them
     return w;
   },
 
@@ -161,6 +163,8 @@ export default {
     T.seek = (to) => { seek(to); this._seeked(f, to); };
     for (const [name, a, b, o] of SECTIONS) T.section(name, { s: a }, { s: b }, o || {});
     const at = (t, fn) => T.at({ s: t }, fn);
+    // (the song's last section: what she does there is the scene's once her death scene has her)
+    const own = (fn) => (ff) => { if (!ff.boss.scene) fn(ff); };
     const L = R.lies;
     const flip = (t) => at(t - 0.25, () => R.snd.play('kachunk'));
     // the seven negatives (their envelopes are pure song time: rewinds and late starts get them right)
@@ -238,7 +242,8 @@ export default {
     at(65.0, (ff) => walk(ff, 0, -1.6, 0.85));
 
     // ============ §6 DON'T LEAVE MEANS GO (65.88 -> 79.16)
-    at(65.88, (ff) => { ff.boss.idle = 'Idle_FoldArms_Loop'; ff.boss.loop('Idle_FoldArms_Loop'); L.inverse({ holes: [{ x: ff.boss.x, z: ff.boss.z, r: 2.6 }], start: 65.88, end: 67.99 }); });
+    // (the circle is drawn where she stands: a walk still on its way, or held by a stun, ends here, so she stays in it)
+    at(65.88, (ff) => { ff.boss.stop(); ff.boss.idle = 'Idle_FoldArms_Loop'; ff.boss.loop('Idle_FoldArms_Loop'); L.inverse({ holes: [{ x: ff.boss.x, z: ff.boss.z, r: 2.6 }], start: 65.88, end: 67.99 }); });
     at(68.2, (ff) => { ff.boss.idle = 'Idle_Talking_Loop'; walk(ff, -2.4, -2.6, 0.9); });
     at(69.05, (ff) => { upper(ff, 'Spell_Simple_Enter', 0.6); M.circle(ff, R, { x: ff.player.x, z: ff.player.z, r: 2.2, start: 69.05, end: 70.15 }); });
     at(70.3, (ff) => walk(ff, 2.2, -2.8, 0.9));
@@ -271,7 +276,8 @@ export default {
     at(92.98, (ff) => walk(ff, -1.9, -0.5, 0.5));
 
     // ============ §8 DON'T BELIEVE ME (93.48 -> 100.39). Nothing before 99.86 can hurt: three lies, one truth.
-    at(93.48, (ff) => { ff.boss.place(-1.9, -0.5, toward({ x: -1.9, z: -0.5 }, { x: 0, z: 0.8 })); ff.boss.idle = 'Sitting_Idle_Loop'; ff.boss.perform('Sitting_Enter', { duration: 0.54, then: 'Sitting_Idle_Loop' }); ff.boss.lockFacing = true; });
+    // (she's put in the chair, so she sits in it: a stun she was reeling from doesn't leave her standing in the seat)
+    at(93.48, (ff) => { const b = ff.boss; b.place(-1.9, -0.5, toward({ x: -1.9, z: -0.5 }, { x: 0, z: 0.8 })); b.idle = 'Sitting_Idle_Loop'; b.perform('Sitting_Enter', { duration: 0.54, then: 'Sitting_Idle_Loop', force: !b.pinned && !b.scene }); b.lockFacing = true; });
     at(94.55, (ff) => L.bluff({ shape: 'circle', x: ff.player.x, z: ff.player.z, w: 2.2, start: 94.55, end: 96.16 }));
     at(95.62, (ff) => { const a = toward(ff.boss, ff.player); L.bluff({ shape: 'rect', x: ff.boss.x, z: ff.boss.z, angle: a, w: 0.8, h: 16, start: 95.62, end: 96.70 }); });
     at(96.16, (ff) => L.bluff({ shape: 'ring', x: ff.player.x, z: ff.player.z, w: 4.2, param: 2.0, start: 96.16, end: 97.23 }));
@@ -348,7 +354,7 @@ export default {
     at(140.23, (ff) => M.thrust(ff, R, { start: 140.23, end: 141.28, w: 3.6, deg: 22, bluff: true }));
     at(141.28, (ff) => R.set.releaseBalloons && R.set.releaseBalloons(ff));
     at(141.81, (ff) => { ff.boss.behave = 'hold'; const a = toward(ff.player, ff.boss); const p = { x: Math.max(-9.5, Math.min(9.5, ff.boss.x + Math.sin(a) * 2.4)), z: Math.max(-5.8, Math.min(5.8, ff.boss.z + Math.cos(a) * 2.4)) }; walk(ff, p.x, p.z, 0.53, { face: false }); upper(ff, 'Spell_Simple_Enter', 0.5); });
-    at(142.34, (ff) => { ff.boss.idle = 'Spell_Simple_Idle_Loop'; ff.boss.loop('Spell_Simple_Idle_Loop'); L.inverse({ holes: [{ x: ff.boss.x, z: ff.boss.z, r: 2.6 }], start: 142.34, end: 144.46 }); });
+    at(142.34, (ff) => { ff.boss.stop(); ff.boss.idle = 'Spell_Simple_Idle_Loop'; ff.boss.loop('Spell_Simple_Idle_Loop'); L.inverse({ holes: [{ x: ff.boss.x, z: ff.boss.z, r: 2.6 }], start: 142.34, end: 144.46 }); });
 
     // ============ §13 NOTHING MEANS WHAT I SAY (144.46 -> 161.46). The final chorus: everything.
     at(144.46, (ff) => { ff.boss.idle = 'Idle_Talking_Loop'; ff.boss.loop('Idle_Talking_Loop'); walk(ff, 0, -3.5, 1.0); });
@@ -399,16 +405,16 @@ export default {
     for (const t of [189.87, 190.13, 190.40, 190.66, 190.92]) at(t, (ff) => R.snd.play('tick', { x: 0, gain: 0.4 }));
 
     // ============ §16 COMPLETE (191.71 -> 206.44). The last flurry, then the walk to the finish.
-    at(191.71, (ff) => { ff.boss.idle = 'Idle_Talking_Loop'; ff.boss.loop('Idle_Talking_Loop'); M.send(ff, R, { start: 191.71, end: 192.79, n: 7, arc: 100 }); });
-    at(193.32, (ff) => {
+    at(191.71, own((ff) => { ff.boss.idle = 'Idle_Talking_Loop'; ff.boss.loop('Idle_Talking_Loop'); M.send(ff, R, { start: 191.71, end: 192.79, n: 7, arc: 100 }); }));
+    at(193.32, own((ff) => {
       if (near(ff, 4.5)) M.redPen(ff, R, { start: 193.32, end: 194.38 });
       else { const a = toward(ff.boss, ff.player); for (const d of [-14, 0, 14]) M.laser(ff, R, { start: 193.32, end: 194.38, angle: a + d * D2R }); }
-    });
+    }));
     at(194.58, (ff) => ff.sign('NOW THANK ME FOR YOUR DEFEAT', { style: 'gilt', x: 0, y: 0.03, z: 3.4, height: 0.9, lieFlat: true, at: { s: 194.58 }, until: { s: 197.96 } }));
-    at(194.91, (ff) => { upper(ff, 'Interact', 0.8, { from: 0.0, to: 0.4 }); M.slam(ff, R, { start: 194.91, end: 195.97, r: 3.0 }); });
-    at(196.50, (ff) => M.send(ff, R, { start: 196.50, end: 197.56, n: 5, arc: 60, shape: 'star', size: 0.42 }));
-    at(197.56, (ff) => { R.outro = true; diplomaState(197.6); ff.boss.idle = 'Idle_Loop'; ff.boss.loop('Idle_Loop'); upper(ff, 'Interact', 0.6, { from: 0.0, to: 0.3 }); R.snd.lib('k-page', { x: ff.boss.x, gain: 0.5 }); });
-    at(199.71, (ff) => R.set.letGo && R.set.letGo(ff));
+    at(194.91, own((ff) => { upper(ff, 'Interact', 0.8, { from: 0.0, to: 0.4 }); M.slam(ff, R, { start: 194.91, end: 195.97, r: 3.0 }); }));
+    at(196.50, own((ff) => M.send(ff, R, { start: 196.50, end: 197.56, n: 5, arc: 60, shape: 'star', size: 0.42 })));
+    at(197.56, own((ff) => { R.outro = true; diplomaState(197.6); ff.boss.idle = 'Idle_Loop'; ff.boss.loop('Idle_Loop'); upper(ff, 'Interact', 0.6, { from: 0.0, to: 0.3 }); R.snd.lib('k-page', { x: ff.boss.x, gain: 0.5 }); }));
+    at(199.71, own((ff) => R.set.letGo && R.set.letGo(ff)));
   },
 
   // ---------------------------------------------------------------- hooks
@@ -435,6 +441,7 @@ export default {
   },
   // everything that isn't the timeline: the set, her place and face, the negative
   _setAt(f, t, place, first = false) {
+    Death.reset();
     if (!first) { R.lies.reset(); R.flashes.clear(); }
     R.seeMeT = -9; R.crowd = 0;
     R.outro = t >= 197.56;
@@ -471,7 +478,8 @@ export default {
     const pt = R.fig.acc.find((a) => a.name === 'rpdPointer'); if (pt) for (const o of pt.objects) o.rotation.x += 0.18;
     f.boss.walkClip = f.boss.runClip = 'Zombie_Walk_Fwd_Loop';      // WRECKED: stiff, cracked, even on a long move
   },
-  onFinish(f) { R.set.finish && R.set.finish(f); },
+  // (her death scene leaves the gold star itself, in her wax; without it the star comes off her as she breaks)
+  onFinish(f) { if (!Death.did) R.set.finish && R.set.finish(f); },
   // her bow (the fight then seeks back to the final chorus and calls onRewind)
   onEncore(f) { f.boss.perform('PickUp_Table', { duration: 0.9 }); },
   // a rewind, or the ENCORE's seek back to the final chorus. Safe to run twice: it only puts things back.
@@ -485,10 +493,24 @@ export default {
     this._unstale(f);
   },
   onSpotlight(f, on) { R.set.spotlight && R.set.spotlight(f, on); },
+  death,
 
   update(f, dt) {
     if (!R.inited) this._init(f, f.t);
     const t = f.t, b = f.boss;
+    // her death scene (death.js) has the two of them: nothing here moves her, turns her, or paces her stride. What's
+    // left is what the scene itself leans on: her face, her eyes, the negative and her circle on the floor.
+    if (Death.on) { try { Death.tick(f, dt); } catch (e) { if (!R.deathErr) { R.deathErr = true; console.error('rpd death scene', e); } } }
+    if (b.scene) {
+      if (R.camO && f.cam.override === R.camO) f.cam.override = null;
+      R.faces.update(t);
+      R.fig.lookAt(new THREE.Vector3(f.player.x, 1.5 + f.player.y, f.player.z));
+      R.lies.update();
+      R.flashes.update(t);
+      NEG.uRpdExpo.value = f.app.post.fx.exposure;
+      R.crowd = 0; R.lastHearts = f.player.hearts; R.lx = b.x; R.lz = b.z; R.lastBeat = Math.floor(f.bm.beatAt(t));
+      return;
+    }
     // her turn at the start (two beats, while the laser dot slides down the wall)
     if (R.turn) { const k = THREE.MathUtils.clamp((t - R.turn.t0) / (R.turn.t1 - R.turn.t0), 0, 1); const want = toward(b, f.player); let d = want - R.turn.from; d = Math.atan2(Math.sin(d), Math.cos(d)); b.facing = R.turn.from + d * (k * k * (3 - 2 * k)); b.lockFacing = k < 1; if (k >= 1) { R.turn = null; b.lockFacing = false; b.faceTarget = f.player; } }
     else if (t >= 2.15 && !b.faceTarget && t < 93.48) b.faceTarget = f.player;
@@ -529,7 +551,7 @@ export default {
   // Paced as a walk, a long move is a brisk march; WRECKED, a stiffer 0.85. Called from her figurine's update (above).
   _stride(b) {
     const r = b.rig;
-    if (!r || !r.base || b.busy || b.state === 'finished' || r.baseName !== b.walkClip) return;
+    if (!r || !r.base || b.scene || b.busy || b.state === 'finished' || r.baseName !== b.walkClip) return;
     r.base.timeScale = THREE.MathUtils.clamp(b._speed / 1.3, 0.75, 2.2) * (b.state === 'desperate' ? 0.85 : 1);
   },
   _seeMe(f) {

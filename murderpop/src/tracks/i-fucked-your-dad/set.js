@@ -10,6 +10,7 @@ import * as P from './props.js';
 import { M, GLOW, canvasTex } from './mats.js';
 import { PLAN } from './yard-lite.js';
 import { LAYER } from '../../game/arena.js';
+import { Kill, MARK as KM } from './death.js';
 
 export const TIME = {
   bedFire: 5.466, lamps: 11.178, market: 22.587, scales: 42.54, bandCut: 46.457, matchbookUp: 46.82,
@@ -100,6 +101,9 @@ export class YardSet {
       const burn = ramp(t, TIME.erupt, TIME.erupt + 3.5);
       cov.emissiveIntensity = (0.25 * reveal + 1.4 * blaze) * (1 - burn) + 2.2 * Math.sin(Math.PI * Math.min(1, burn * 1.4)) * (1 - burn);
       cov.color.setScalar(1 - 0.85 * burn);
+      // her death scene brings it back up (death.js)
+      const kb = this.kill && this.kill.book;
+      if (kb) { mb.position.y = kb.y; mb.visible = kb.y > -2.95; cov.emissiveIntensity = kb.glow * (1 - kb.burn) + 2.2 * Math.sin(Math.PI * Math.min(1, kb.burn * 1.4)) * (1 - kb.burn); cov.color.setScalar(1 - 0.85 * kb.burn); }
     });
     this.colliders.push({ type: 'box', x: 0, z: -5.3, hx: 0.8, hz: 0.35, active: (t) => t > TIME.matchbookUp + 0.25 && t < TIME.bedroom });
     this.blockers.push({ x0: -0.8, z0: -5.5, x1: 0.8, z1: -5.1, active: (t) => t > TIME.matchbookUp + 0.25 && t < TIME.bedroom });
@@ -124,6 +128,8 @@ export class YardSet {
     // ---- things that fly from her hand (a match flicked onto the bed, the empty can tossed on the street)
     this.flyers = [];
     this._extras();
+    // ---- her death scene's props (the can, the match, her petrol, the fire): built now, hidden
+    if (boss && boss.fig) this.kill = new Kill(this, boss);
     this.update(0, f.t || 0);
   }
 
@@ -208,12 +214,14 @@ export class YardSet {
     if (!this._finished && this._lean && f.cam.override === this._lean) f.cam.override = null;
     if (!this._finished) { this.bear.visible = false; this.headMatch.visible = false; this.headFlame.set('m', 0, 1); this.youre.set('y', 0, 1); this.bearPool && this.bearPool.set(0); return; }
     const ot = this.outroT();
-    if (!this._head && fig) this._head = this._findFace(fig);
+    // after her death scene her head comes down on the gold plate, where the matchbook stood (served to your father)
+    const served = !!(this.kill && this.kill.live && this.kill.t.kill != null);
+    if (!this._head && fig) this._head = this._findFace(fig, served);
     const H = this._head, T0 = this._finishT;
     // her face is the one shard the shatter keeps whole; it's drawn a little larger than life (HS) so it reads
     // from the high camera as her head on the walk, not a scrap of glaze
     const HS = 2.4;
-    const target = new THREE.Vector3(0.12, 0.16, -5.72);
+    const target = served ? new THREE.Vector3(KM.serve[0], 0.3, KM.serve[1] + 0.1) : new THREE.Vector3(0.12, 0.16, -5.72);
     if (H && H.body) {
       const b = H.body;
       if (!H.from) { H.from = b.pos.clone(); H.q0 = b.q.clone(); b.asleep = true; b.vel.set(0, 0, 0); b.w.set(0, 0, 0); }
@@ -237,11 +245,11 @@ export class YardSet {
     if (ot >= T2.out && !this._pff) { this._pff = true; f.track._snd && f.track._snd.play('pff', { x: 0, always: true }); f.fx.dust(this.headMatch.position.x, this.headMatch.position.z, 4, new THREE.Color(0.6, 0.6, 0.65)); }
     // the bear: out of the hollow of her chest, it drops and sits up in the glitter where she stood
     const bk = Math.min(1, (ot - T0) / 0.55);
-    const bp = this._bearAt || (this._bearAt = { x: this.boss.x, z: this.boss.z });
+    const bp = this._bearAt || (this._bearAt = served ? { x: KM.bear[0], z: KM.bear[1] } : { x: this.boss.x, z: this.boss.z });
     this.bear.visible = true; this.bear.position.set(bp.x, 1.25 * (1 - bk * bk) + (bk >= 1 ? 0 : 0), bp.z); this.bear.rotation.set(bk < 1 ? (1 - bk) * 1.2 : 0, 0.4, 0);
     // a soft warm light on it as it sits up in the glitter (the bed fire's light, free since verse 1), and a pool
     const bl = Math.min(1, Math.max(0, (ot - T0 - 0.4) / 1.2));
-    L.bed.position.set(bp.x, 1.5, bp.z + 0.8); L.bed.intensity = 3.2 * bl;
+    if (!(this.kill && this.kill.fireK > 0.02)) { L.bed.position.set(bp.x, 1.5, bp.z + 0.8); L.bed.intensity = 3.2 * bl; }
     this.bearPool.mesh.position.set(bp.x, 0.019, bp.z); this.bearPool.set(0.22 * bl);
     this.youre.set('y', ot > T2.youre && ot < T2.youre + 1.6 ? 1 - Math.max(0, ot - T2.youre - 0.9) / 0.7 : 0, 1); this.youre.update(dt, ot);
     // YOU'RE WELCOME: for the last bars the picture leans in on the mat, her head and the bear together, the way the
@@ -261,7 +269,7 @@ export class YardSet {
     if (this._tonk && ot > this._tonk) this._tonk = 0;
   }
   // her face, the one shard the shatter keeps whole: turned up toward the camera
-  _findFace(fig) {
+  _findFace(fig, served = false) {
     try {
       const plans = fig.prepareShatter(); const p = plans.find((q) => q.name === 'body'); if (!p || !p.plan.bodies) return null;
       const A = p.plan.attrs.aBind ? p.plan.attrs.aBind.array : null; if (!A) return null;
@@ -269,13 +277,14 @@ export class YardSet {
       for (const b of p.plan.bodies) { const fv = p.plan.shardFront[b.local]; if (!fv || fv.length < 20) continue; let y = 0, z = 0; for (const i of fv) { y += A[i * 4 + 1]; z += A[i * 4 + 2]; } y /= fv.length; z /= fv.length; if (y > fig.I.Y.neck && z > fig.I.headC.z && fv.length > bn) { bn = fv.length; best = b; } }
       if (!best) return null;
       const fwd = new THREE.Vector3(Math.sin(this.boss.facing), 0, Math.cos(this.boss.facing));
-      const qFace = new THREE.Quaternion().setFromUnitVectors(fwd, new THREE.Vector3(0, 0.82, 0.57).normalize());
+      const qFace = new THREE.Quaternion().setFromUnitVectors(fwd, (served ? new THREE.Vector3(0, 0.5, 0.87) : new THREE.Vector3(0, 0.82, 0.57)).normalize());
       return { body: best, qFace };
     } catch (e) { console.warn('ex: face', e.message); return null; }
   }
 
   // a burst of fire at (x, z): k scales it (a DAD landing 1.3, a spark 0.5)
   burst(x, z, k = 1) {
+    if (this.boss && this.boss.scene) return;
     const b = this.bursts.reduce((m, q) => (q.t0 < m.t0 ? q : m), this.bursts[0]);
     b.t0 = this.t; b.k = k; b.g.position.set(x, 0, z); b.g.scale.set(k, k, k);
     this.f.fx.sparks(x, 0.6, z, new THREE.Color(3.2, 0.9, 0.25), Math.round(14 * k));
@@ -422,7 +431,7 @@ export class YardSet {
     return { x: best[0], z: best[1] };
   }
   _hazards(f) {
-    const pl = f.player; if (!pl || pl.state === 'dead' || f.state !== 'play') return;
+    const pl = f.player; if (!pl || pl.state === 'dead' || f.state !== 'play' || (f.boss && f.boss.scene)) return;
     const h = this.hazardAt(pl.x, pl.z, 0.42 * 0.7);
     if (!h) return;
     if (h.once) { const hx = this.helices.find((q) => !q.hit && Math.abs(pl.x - (-10 + 10 * (f.t - q.t0))) < 1.2); if (!hx) return; if (pl.invulnerable) { if (pl.state === 'dash' && !hx.nm) { hx.nm = true; pl.nearMiss(f._ctx(0)); } return; } hx.hit = true; if (pl.hurt(f._ctx(0), 1, pl.x - 1, pl.z, 'helix')) f._hurt(pl.x, pl.z); return; }
@@ -450,6 +459,7 @@ export class YardSet {
   update(dt, t) {
     this.t = t;
     const f = this.f, F = this.fire, L = this.lights;
+    if (this.kill) this.kill.update(dt, t);
     for (const fn of this.pieces) fn(t, dt);
     // fire levels
     const bedLvl = ramp(t, TIME.bedFire, TIME.bedFire + 0.3) * (1 - ramp(t, TIME.market, TIME.market + 0.35));
@@ -467,7 +477,7 @@ export class YardSet {
     const H = this.heldProps ? this.heldProps.update(dt, t, this) : null;
     // her cracks glow from inside like a kiln from "I'm the fucking fire" to the end of the chorus
     const fig = this.boss && this.boss.fig;
-    if (fig) { const kiln = t > 55.37 && t < TIME.embers ? 1 : 0, wreck = this.boss.state === 'desperate' ? 1 : 0; fig.U.fKintsugi.value = 1 + 4.5 * Math.max(kiln, wreck * 0.8); fig.U.fGold.value.setRGB(1.0, 0.74 - 0.3 * Math.max(kiln, wreck), 0.33 - 0.2 * Math.max(kiln, wreck)); }
+    if (fig) { const kiln = (t > 55.37 && t < TIME.embers) || (this.kill && this.kill.burnK) ? 1 : 0, wreck = this.boss.state === 'desperate' ? 1 : 0; fig.U.fKintsugi.value = 1 + 4.5 * Math.max(kiln, wreck * 0.8); fig.U.fGold.value.setRGB(1.0, 0.74 - 0.3 * Math.max(kiln, wreck), 0.33 - 0.2 * Math.max(kiln, wreck)); }
     F.update(dt, t);
     // soaks and their dashed outlines; the char after the fire
     this.soaks.forEach((s, i) => { const k = ramp(t, s.t, s.t + 0.45) * (1 - ramp(t, TIME.erupt, TIME.erupt + 0.3)); s.o.set(k, t < TIME.soak[4] + 0.3 ? k : 0); s.o.u.uTime.value = t; s.o.u.uFill.value = ramp(t, TIME.strike, TIME.erupt); });
@@ -486,6 +496,7 @@ export class YardSet {
     const spotK = ramp(t, TIME.bandCut, TIME.bandCut + 0.5) * (1 - ramp(t, TIME.erupt, TIME.erupt + 0.2));
     if (boss) { L.spot.target.position.set(boss.x, 1.0, boss.z); L.spot.intensity = 80 * spotK; this.spotPool.mesh.position.set(boss.x, 0.018, boss.z); this.spotPool.set(0.32 * spotK); }
     this.bookPool.set(0.28 * ramp(t, TIME.drawMatch, TIME.drawMatch + 0.3) * (1 - ramp(t, TIME.erupt, TIME.erupt + 0.3)));
+    if (this.kill) this.kill.light(L, flick);
     // a seek (a rewind, a start anywhere): what hadn't happened yet goes away
     if (dt === 0) { this.helices = this.helices.filter((h) => h.t0 <= t); for (const b of this.bursts) if (b.t0 > t) b.t0 = -99; for (const q of this.flyers) q.t1 = -1; if (this.brandT > t) this.brandT = -1; if (t < 131.2) { this.hangSpots.length = 0; this.knocked.length = 0; } }
     this._helices(t);

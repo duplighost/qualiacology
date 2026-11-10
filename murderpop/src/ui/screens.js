@@ -5,16 +5,17 @@ export class Screens {
   constructor(root, app) {
     this.root = root; this.app = app;
     root.innerHTML = `
-      <div class="mp-veil"><div class="mp-veil-in"><div class="mp-veil-title"></div><div class="mp-veil-bar"><i></i></div></div></div>
+      <div class="mp-veil"><div class="mp-veil-art"></div><div class="mp-veil-in"><div class="mp-veil-boss"></div><div class="mp-veil-title"></div><div class="mp-veil-line"></div><div class="mp-veil-bar"><i></i></div></div></div>
       <div class="mp-pause">
         <div class="mp-card">
           <div class="mp-card-h">PAUSED</div>
           <div class="mp-card-song"></div>
           <div class="mp-keys">
-            <div><b>WASD</b><span>move</span></div><div><b>Mouse</b><span>aim</span></div>
-            <div><b>Left click</b><span>strike</span></div><div><b>Hold right click</b><span>block</span></div>
+            <div><b>WASD</b><span>move</span></div><div><b>Left click</b><span>strike</span></div>
+            <div><b>Hold left click</b><span>the heavy</span></div><div><b>Space</b><span>jump</span></div>
+            <div class="wide"><b>Space in a combo</b><span>lift her</span></div>
             <div class="wide"><b>Right click as it lands</b><span>send it back</span></div>
-            <div><b>E</b><span>throw a ring</span></div><div><b>Space</b><span>dash</span></div>
+            <div><b>Hold right click</b><span>block</span></div><div><b>Shift</b><span>dash</span></div>
             <div class="wide"><b>Q</b><span>take the spotlight</span></div>
             <div><b>F</b><span>full screen</span></div><div><b>M</b><span>mute</span></div>
           </div>
@@ -54,10 +55,21 @@ export class Screens {
     root.querySelectorAll('input[type=range]').forEach((r) => r.addEventListener('input', () => this.onSetting && this.onSetting(r.dataset.k, r.value / 100)));
     root.querySelectorAll('input[type=checkbox]').forEach((r) => r.addEventListener('change', () => this.onSetting && this.onSetting(r.dataset.k, r.checked)));
   }
-  veil(on, title = '', k = 0) {
+  // art: { img, boss, line }: a song's loading picture (the song's name over it, who's singing, her first words)
+  veil(on, title = '', k = 0, art = null) {
     const v = this.el('.mp-veil'); v.classList.toggle('on', on);
     if (title) this.el('.mp-veil-title').textContent = title;
     this.el('.mp-veil-bar i').style.transform = `scaleX(${k})`;
+    if (!on) return;
+    const key = art && art.img ? art.img : '';
+    if (key === this._veilArt) return;
+    this._veilArt = key;
+    const a = this.el('.mp-veil-art');
+    v.classList.toggle('art', !!key); a.classList.remove('in');
+    this.el('.mp-veil-boss').textContent = art && art.boss ? art.boss : '';
+    this.el('.mp-veil-line').textContent = art && art.line ? `\u201c${art.line}\u201d` : '';
+    if (key) { const im = new Image(); im.onload = () => { if (this._veilArt === key) { a.style.backgroundImage = `url("${key}")`; a.classList.add('in'); } }; im.src = key; }
+    else a.style.backgroundImage = '';
   }
   // sections: on a track you've won, start again from any of its sections (practice)
   pause(on, song = '', sections = null) {
@@ -75,12 +87,14 @@ export class Screens {
     const s = r.stats;
     const rows = [
       ['On the beat', s.hits ? `${Math.round((s.onBeat / s.hits) * 100)}%` : '—'],
-      ['Caught', `${s.catches}`], ['Perfect', `${s.perfect}`], ['Close calls', `${s.nearMiss}`],
-      ['Ring hits', `${s.ringHits}`], ['Hits you took', `${s.hurt}`],
+      ['Sent back', `${s.catches}`], ['Perfect', `${s.perfect}`], ['Close calls', `${s.nearMiss}`],
+      ['In the air', `${s.air || 0}`], ['Hits you took', `${s.hurt}`],
       ['Rewinds', `${r.rewinds}`], ['Encores', `${r.encores}`],
     ];
     // the finale: its points (doubled if YOU took her keepsake back), and the rings landed as they closed
-    if (r.finale) rows.push(['Finale' + (r.finale.kept ? ' \u00d72' : ''), r.finale.bonus.toLocaleString('en-US')], ['Rings', `${r.finale.rings} / ${r.finale.of}${r.finale.finalBlow ? ' + the last' : ''}`]);
+    if (r.finale) rows.push(['Finale' + (r.finale.kept ? ' \u00d72' : ''), r.finale.bonus.toLocaleString('en-US')], ['Rings', `${r.finale.rings} / ${r.finale.of}`]);
+    // her end: the presses landed
+    if (r.kill && r.kill.of) rows.push(['Her end', `${r.kill.hits} / ${r.kill.of}`]);
     this.el('.mp-res-stats').innerHTML = rows.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('');
     this.el('.mp-res-keep').textContent = meta.keepsake ? `Kept: ${meta.keepsake}` : '';
   }

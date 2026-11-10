@@ -15,6 +15,7 @@ import { Sounds } from './sounds.js';
 import { zone, send, shot, hazard, updateHazards, goldMark, updateMarks, clearMarks, toward, you, clampTo, handOf } from './moves.js';
 import { teachBot } from './bot.js';
 import { liteCourt } from './lite.js';
+import { death, buildEnd, endScene, endUpdate, disposeEnd } from './death.js';
 import { Arena } from '../../game/arena.js';
 
 const ID = 'pretty-until-proven-guilty';
@@ -33,7 +34,7 @@ const ease = (k) => { k = Math.max(0, Math.min(1, k)); return k * k * (3 - 2 * k
 function H(f) { return f.boss; }
 // play a clip so it runs from now until song time t1
 function act(f, clip, t1, o = {}) { const b = f.boss; b.perform(clip, { duration: Math.max(0.12, t1 - f.t), from: o.from ?? 0, to: o.to ?? 1, fade: o.fade ?? 0.1, then: o.then }); }
-function upper(f, clip, dur, o = {}) { const b = f.boss; b.rig && b.rig.upperOnce(clip, { duration: dur, from: o.from ?? 0, to: o.to ?? 1, fade: o.fade ?? 0.08 }); }
+function upper(f, clip, dur, o = {}) { const b = f.boss; if (b.scene) return; b.rig && b.rig.upperOnce(clip, { duration: dur, from: o.from ?? 0, to: o.to ?? 1, fade: o.fade ?? 0.08 }); }
 function goTo(f, x, z, dur, easing = 'inOut') { const p = clampTo(f, { x, z }, 0.9); f.boss.moveTo(p.x, p.z, dur, { easing }); }
 function hold(f, until) { f.ppg.holdUntil = Math.max(f.ppg.holdUntil || 0, until); }
 function grin(f, sec = 1.2) { face(f.boss.fig, 'grin'); f.ppg.faceUntil = f.t + sec; }
@@ -80,7 +81,7 @@ function kissAt(T, fire, arrive, o = {}) {
 }
 function kissNow(f, arrive, o) {
   {
-    if (f.court.stagger) return;
+    if (f.court.stagger || f.boss.scene) return;
     upper(f, 'Spell_Simple_Shoot', 0.45, { from: 0.2, to: 0.8 });
     face(f.boss.fig, 'pout'); f.ppg.faceUntil = f.t + 0.5;
     send(f, { arrive, r: o.r ?? 0.9, size: o.size ?? 0.42, shape: o.shape || 'kiss', vmin: o.vmin ?? 4, vmax: o.vmax ?? 9, homing: o.homing, life: o.life });
@@ -184,7 +185,7 @@ function lightAt(t) {
 // ------------------------------------------------------------------------------------------ the set at time t (rewinds, ?at=)
 function setStateAt(f, t) {
   const S = f.ppg;
-  clearMarks(f);
+  clearMarks(f); endScene(f);
   S.holdUntil = 0; S.hop = null; S.faceUntil = 0; S.key = null; S.streak = null; S.pour = null; S.burn = null; S.bubble = null;
   S.knives.clear(); S.keyMesh.visible = false;
   S.drop = null; S.fling = null; S.chain = null; S.bound = false; S.ripPending = 0; S.selfLove = null; S.swallowed = false; S.cuffAt = null; S.kissTag = null; S.phoneZones = [];
@@ -481,8 +482,9 @@ function script(T, F) {
   for (const e of [66.234, 67.018, 67.779]) at(e - 0.774, (f) => slap(f, { end: e, clip: e === 67.018 ? 'Punch_Cross' : 'Melee_Hook' }));
   at(67.95, (f) => { H(f).behave = 'hold'; });
   // LIVE-STREAMING MELTDOWNS FROM THE WITNESS FLOOR: up onto the stand; the four phones flash on the beat
-  at(68.2, (f) => { const b = H(f); b.behave = 'hold'; hold(f, 72.6); act(f, 'NinjaJump_Start', 68.5); f.ppg.hop = { t0: 68.2, t1: 68.954, y0: b.root.position.y, y1: 1.1, peak: 1.1 }; b.moveTo(9.8, -4.5, 0.754, { easing: 'inOut' }); });
-  at(68.96, (f) => { const b = H(f); b.root.position.y = 1.1; act(f, 'Idle_TalkingPhone_Loop', 72.3); b.faceTarget = null; b.faceNow(9.8, 3); f.ppg.snd.play('hum', { pan: 0.6, gain: 0.5 }); });
+  at(68.2, (f) => { const b = H(f); b.behave = 'hold'; hold(f, 72.6); act(f, 'NinjaJump_Start', 68.5); b.moveTo(9.8, -4.5, 0.754, { easing: 'inOut', arc: 1.1, land: 1.1 }); });
+  at(68.96, (f) => { const b = H(f); if (!b.near(9.8, -4.5)) return;   // (stunned as she went: she isn't up there)
+    act(f, 'Idle_TalkingPhone_Loop', 72.3); b.faceTarget = null; b.faceNow(9.8, 3); f.ppg.snd.play('hum', { pan: 0.6, gain: 0.5 }); });
   for (const [tt, name] of [[69.727, 'NW'], [70.114, 'NE'], [70.501, 'SW'], [70.886, 'SE'], [71.275, 'NW'], [71.664, 'NE']]) at(tt - 0.774, (f) => {
     const ph = f.ppg.props.phones.find((q) => q.name === name); if (!ph || !ph.alive) return;
     const o = ph.obj.position, a = ang(o, you(f));
@@ -492,7 +494,7 @@ function script(T, F) {
   });
   // YOU SAY I BROKE YOUR HEART: she mimes it on the stand, hops down
   at(72.0, (f) => { if (f.court.pretty) upper(f, 'Hit_Chest', 0.4); });
-  at(72.426, (f) => { const b = H(f); b.faceTarget = f.player; f.ppg.hop = { t0: 72.426, t1: 72.95, y0: 1.1, y1: 0, peak: 0.6 }; b.moveTo(7.6, -2.6, 0.52); act(f, 'NinjaJump_Land', 73.1); });
+  at(72.426, (f) => { const b = H(f); b.faceTarget = f.player; b.moveTo(7.6, -2.6, 0.52, { arc: 0.6, land: 0 }); act(f, 'NinjaJump_Land', 73.1); });
   // WHERE'S THE CORPUS DELICTI? a glass case with a broken red glass heart lowers over YOU
   at(73.197, (f) => {
     const p = clampTo(f, you(f), 1.0);
@@ -574,11 +576,11 @@ function script(T, F) {
   for (const [k, e] of [[0, 92.96], [1, 93.343], [2, 93.729], [3, 94.115]]) at(e - 0.774, (f) => {
     const b = H(f);
     slash(f, { r: 2.8, half: 60, end: e, clip: k % 2 ? 'Sword_Regular_B' : 'Sword_Regular_A', lead: 0.3 });
-    f.at(e - 0.2, () => { if (f.court.stagger) return; const a = ang(b, you(f)); const p = clampTo(f, { x: b.x + Math.sin(a) * 1.2, z: b.z + Math.cos(a) * 1.2 }, 0.9); b.moveTo(p.x, p.z, 0.2, { easing: 'out' }); });
+    f.at(e - 0.2, () => { if (f.court.stagger) return; const a = ang(b, you(f)); const c = clampTo(f, { x: b.x + Math.sin(a) * 1.2, z: b.z + Math.cos(a) * 1.2 }, 0.9), p = f.arena.resolve(c.x, c.z, b.radius); b.moveTo(p.x, p.z, 0.2, { easing: 'out', straight: true }); });
   });
   at(92.2, (f) => { const b = H(f); b.show('knife', true); });
   // LOCK ME UP: she slides into the centre lane; the cell walls slam on the song's double knock
-  at(94.2, (f) => { const b = H(f); b.show('knife', false); const tz = THREE.MathUtils.clamp(b.z, -5, 3); act(f, 'Slide_Loop', 94.5); b.moveTo(0, tz, 0.3, { easing: 'out' }); hold(f, 95.0); });
+  at(94.2, (f) => { const b = H(f); b.show('knife', false); const tz = f.arena.resolve(0, THREE.MathUtils.clamp(b.z, -5, 3), b.radius).z; act(f, 'Slide_Loop', 94.5); b.moveTo(0, tz, 0.3, { easing: 'out' }); hold(f, 95.0); });
   for (const wx of CELLS.xs) at(Math.abs(wx) > 4 ? 94.502 : 94.89, (f) => {
     const slamT = Math.abs(wx) > 4 ? CELLS.outer : CELLS.inner;
     zone(f, { shape: 'rect', x: wx, z: -7, angle: 0, w: 0.35, h: 14, kind: 'white', start: f.t, end: slamT, owner: 'court', damage: 1,
@@ -775,13 +777,13 @@ function script(T, F) {
     let prev = tele;
     words.forEach((w, i) => { heartRing(f, { w: 1.6, th: 0.5, start: prev, end: w, n: 8, speed: 6, rot: i * Math.PI / 8 }); prev = w; });
   });
-  at(158.378, (f) => f.court.verdict(158.378, { until: 159.919, scripted: true, noLip: true, raise: 158.0, why: 'case closed' }));
-  at(160.297, (f) => f.court.verdict(160.297, { until: 162.244, lipFrom: 161.475, scripted: true, raise: 159.95, why: 'case closed' }));
+  at(158.378, (f) => !f.boss.scene && f.court.verdict(158.378, { until: 159.919, scripted: true, noLip: true, raise: 158.0, why: 'case closed' }));
+  at(160.297, (f) => !f.boss.scene && f.court.verdict(160.297, { until: 162.244, lipFrom: 161.475, scripted: true, raise: 159.95, why: 'case closed' }));
   at(158.4, (f) => { const b = H(f); if (b.state === 'desperate' && b.fig) b.fig.breakPiece('handcuffs'); });
   at(160.32, (f) => { const b = H(f); if (b.state === 'desperate' && b.fig) b.fig.breakPiece('sunglasses'); });
   // YOU'RE WELCOME: her bow; the finish is a gold circle round her (it's yours)
-  at(163.021, (f) => { const b = H(f); b.faceTarget = f.player; hold(f, 167); b.bow(1.8); face(b.fig, b.state === 'desperate' ? 'wrecked' : 'smug'); f.ppg.faceUntil = 0; });
-  at(164.573, (f) => { const b = H(f); goldMark(f, { x: b.x, z: b.z, r: 1.6, start: 164.573, end: 166.119 }); });
+  at(163.021, (f) => { const b = H(f); if (b.scene) return; b.faceTarget = f.player; hold(f, 167); b.bow(1.8); face(b.fig, b.state === 'desperate' ? 'wrecked' : 'smug'); f.ppg.faceUntil = 0; });
+  at(164.573, (f) => { const b = H(f); if (b.scene) return; goldMark(f, { x: b.x, z: b.z, r: 1.6, start: 164.573, end: 166.119 }); });
   // the press: flashbulbs on every beat from the out (a shutter you hear on every other one: not a second hi-hat)
   T.every({ s: 153.729 }, { s: 166.119 }, 1, (f) => { f.ppg.crowd.pressPop(f.t, Math.round((f.t - 153.729) / f.beat) % 2 === 1); f.ppg.crowd.galleryPop(f.t); });
 }
@@ -829,6 +831,7 @@ export default {
     S.selfLoveMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 14), new THREE.MeshPhysicalMaterial({ color: 0xff6fa8, emissive: new THREE.Color(0xff2f80), emissiveIntensity: 1.2, transparent: true, opacity: 0.85, roughness: 0.1 })); S.selfLoveMesh.visible = false; f.scene.add(S.selfLoveMesh);
     S.full = { ...f.ppg.arena ? f.ppg.arena.bounds : {} };
     S.keyMesh = makeGiantKey(); S.keyMesh.scale.setScalar(1.35); S.keyMesh.visible = false; f.scene.add(S.keyMesh);
+    S.endKit = buildEnd(f);
     return {
       arena: S.arena, bounds: arena.bounds, room: arena.room,
       resolve: (x, z, r) => {
@@ -837,6 +840,8 @@ export default {
         if (f.t >= 105.9 && f.t < 121.3) { p.x = THREE.MathUtils.clamp(p.x, -8 + r, 8 - r); p.z = Math.min(p.z, 4 - r); }
         return { x: p.x, z: p.z };
       },
+      // (the exhibits on the floor: a swing goes to the nearest when it's nearer than her, or she's pretty)
+      strikeables: () => (f.court ? f.court.floor : null),
       strikeArc: (x, z, a, range, arc, s) => {
         S.lastStrikeT = f.t;
         f.court.strikeArc(x, z, a, range, arc); S.props.strikeArc(x, z, a, range, arc, s);
@@ -850,6 +855,7 @@ export default {
       },
       update(dt, t, ff) { arena.update(dt, t, ff); },
       dispose() {
+        disposeEnd(f);
         arena.dispose(); S.justice.dispose(); S.court.dispose(); f.scene.remove(S.keyGlow, S.fuel.g, S.fire.g, S.keyMesh, S.caseGlass, S.chainLine, S.selfLoveMesh, ...Object.values(S.dropMesh), ...Object.values(S.flingMesh));
         for (const k of ['knives', 'motto', 'flats', 'props', 'shelving', 'page', 'cells', 'frost', 'doors', 'floor', 'prints', 'crowd', 'hall', 'doubles']) S[k].dispose();
         if (S.charm) f.scene.remove(S.charm.m); if (S.lips) f.scene.remove(S.lips);
@@ -869,6 +875,7 @@ export default {
   },
 
   script,
+  death,
 
   onStart(f) { setStateAt(f, 0); f.ppg.snaps[0] = snapNow(f); f.ppg.init = true; },
   onSection(f, sec) { f.ppg.snaps[sec.t0] = snapNow(f); },
@@ -888,17 +895,20 @@ export default {
     const S = f.ppg, b = f.boss, pl = f.player;
     S.snd.play('gavel', { pan: f.pan(b.x), gain: 1 }); S.justice.strike(f.t);
     clearMarks(f);   // the song clock stops here: the gold mark under her goes with her
+    f.court.close && f.court.close();
+    const onBlock = !!S.end;   // (death.js: she was on the sound block)
     const charm = new THREE.Group(); const gold = new THREE.MeshPhysicalMaterial({ color: 0xffc44a, metalness: 1, roughness: 0.18, emissive: new THREE.Color(0x804000), emissiveIntensity: 0.6 });
     const head = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 16), gold); head.rotation.z = Math.PI / 2; charm.add(head);
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.24, 10), gold); handle.position.y = -0.13; charm.add(handle);
     const chain = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.008, 6, 24, Math.PI * 1.3), gold); chain.position.y = 0.06; charm.add(chain);
     charm.scale.setScalar(1.5); charm.position.set(b.x, 1.4, b.z); f.scene.add(charm);
     const a = Math.atan2(pl.x - b.x, pl.z - b.z), stop = { x: pl.x - Math.sin(a) * 0.55, z: pl.z - Math.cos(a) * 0.55 };
-    S.charm = { m: charm, t0: f.t, from: { x: b.x, z: b.z }, to: stop };
+    if (onBlock) f.scene.remove(charm); else S.charm = { m: charm, t0: f.t, from: { x: b.x, z: b.z }, to: stop };
     // and one shard lands face up: her painted red lips, untouched
     const lips = new THREE.Mesh(new THREE.CircleGeometry(0.14, 20), new THREE.MeshPhysicalMaterial({ color: 0xf7f0ea, roughness: 0.1, clearcoat: 1 }));
     const kiss = new THREE.Mesh(new THREE.CircleGeometry(0.07, 16), new THREE.MeshPhysicalMaterial({ color: 0xc8102e, roughness: 0.2, clearcoat: 1 })); kiss.scale.set(1.3, 0.6, 1); kiss.position.z = 0.002; lips.add(kiss);
     lips.rotation.x = -Math.PI / 2; lips.position.set(b.x + 0.8, 0.02, b.z + 0.5); lips.visible = false; f.scene.add(lips); S.lips = lips;
+    if (onBlock) { lips.position.set(b.x + 0.05, 1.655, b.z + 0.12); lips.scale.setScalar(1.5); S.lipsAge = 0; }
   },
   onEncore(f) {},
 
@@ -909,12 +919,14 @@ export default {
     // dev: ?ppgcam=x,y,z,lx,ly,lz looks at the set from anywhere (inspection only)
     if (S.devCam === undefined) { const q = new URLSearchParams(location.search).get('ppgcam'); S.devCam = q ? q.split(',').map(Number) : null; }
     if (S.devCam) { const c = S.devCam; f.cam.override = { pos: new THREE.Vector3(c[0], c[1], c[2]), look: new THREE.Vector3(c[3], c[4], c[5]), k: 1 }; }
+    updateHazards(f); updateMarks(f);
     f.court.update(dt);
     S.justice.update(dt, t);
-    updateHazards(f); updateMarks(f);
+    endUpdate(f, dt);
+    if (S.lipsAge !== undefined && S.lips) { S.lipsAge += dt; if (S.lipsAge > 0.45) S.lips.visible = true; }
     b.gloss.update(dt);
     // her hop off the bench
-    if (S.hop) { const h = S.hop, k = THREE.MathUtils.clamp((t - h.t0) / (h.t1 - h.t0), 0, 1); b.root.position.y = lerp(h.y0, h.y1, k) + Math.sin(k * Math.PI) * h.peak; if (k >= 1) S.hop = null; }
+    if (S.hop && !b.scene) { const h = S.hop, k = THREE.MathUtils.clamp((t - h.t0) / (h.t1 - h.t0), 0, 1); b.root.position.y = lerp(h.y0, h.y1, k) + Math.sin(k * Math.PI) * h.peak; if (k >= 1) S.hop = null; }
     // the gum bubble swelling
     if (S.bubble) { const k = THREE.MathUtils.clamp((t - S.bubble.t0) / (S.bubble.t1 - S.bubble.t0), 0, 1); b.props.bubble.scale.setScalar(0.08 + 0.92 * k * k); }
     // the switchblade flicking open
@@ -1007,7 +1019,7 @@ export default {
     if (S.faceUntil && t > S.faceUntil && b.state !== 'desperate') { S.faceUntil = 0; face(b.fig, f.court.pretty ? 'smug' : 'hurt'); }
     // heels on the marble: you can hear where she is
     const sp = b._speed || 0;
-    if (sp > 0.6 && b.root.position.y < 0.05) { S.step = (S.step || 0) + dt * Math.min(3.2, sp * 1.4); if (S.step > 1) { S.step = 0; S.snd.play('heel', { pan: f.pan(b.x), gain: 0.25 + Math.min(0.25, sp * 0.05), gate: 0.12 }); } }
+    if (sp > 0.6 && b.root.position.y < 0.05 && !b.scene) { S.step = (S.step || 0) + dt * Math.min(3.2, sp * 1.4); if (S.step > 1) { S.step = 0; S.snd.play('heel', { pan: f.pan(b.x), gain: 0.25 + Math.min(0.25, sp * 0.05), gate: 0.12 }); } }
     // between scripted moves: PRETTY, she struts in arcs and poses for the gallery
     if (!b.busy && !b.move && t > (S.holdUntil || 0) && f.court.pretty && b.behave === 'hold' && t > 4.5 && b.state === 'perform') {
       S.idleT = (S.idleT || 0) + dt;

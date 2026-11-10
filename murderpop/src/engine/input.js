@@ -1,12 +1,13 @@
 // Keyboard and mouse. Presses are stamped with the frame time they arrived in (performance.now())
 // and kept in a short buffer, so an action pressed a little early still happens when it can.
-// Desktop only: WASD/arrows move, the mouse aims, LMB strike, RMB guard (hold to block, press as it lands to
-// send it back), E throws a ring at the reticle, Space dash, Q spotlight, Esc pause. (F is full screen, in main.js.)
+// Desktop only: WASD/arrows move, LMB strike (hold: the heavy), RMB guard (hold to block, press as it lands to
+// send it back), Space jump, Shift dash, Q spotlight, Esc pause. (F is full screen, in main.js.) The strike finds
+// her by itself: the mouse aims nothing. J K L and I do what the mouse and Space do, for hands that stay on the keys.
 
 const BIND = {
   KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
-  Space: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash', KeyQ: 'spot', KeyE: 'throw',
-  KeyJ: 'strike', KeyK: 'parry', KeyL: 'throw',
+  Space: 'jump', ShiftLeft: 'dash', ShiftRight: 'dash', KeyQ: 'spot', KeyE: 'throw',
+  KeyJ: 'strike', KeyK: 'parry', KeyL: 'dash', KeyI: 'jump',
   Escape: 'pause', KeyP: 'pause', Enter: 'confirm', NumpadEnter: 'confirm', KeyR: 'retry', KeyM: 'menu', Backspace: 'back',
 };
 
@@ -18,18 +19,21 @@ export class Input {
     this.released = [];
     this.mouse = { x: 0.5, y: 0.5, px: 0, py: 0, moved: false, inside: false };
     this.held = { strike: 0, parry: 0 }; // press times of held buttons (0 = up)
+    this.used = '';                      // 'keys' once J/K are what's being fought with, else 'mouse' (the pause card and prompts show the right ones)
     this.enabled = true;
     this.lastDevice = 'mouse';
     const kd = (e) => {
       if (e.repeat) return;
       const a = BIND[e.code];
       if (!a) return;
-      if (a === 'dash' || a === 'up' || a === 'down' || e.code === 'Space') e.preventDefault();
+      if (e.code === 'KeyJ' || e.code === 'KeyK') this.used = 'keys';
+      if (a === 'dash' || a === 'jump' || a === 'up' || a === 'down' || e.code === 'Space') e.preventDefault();
       this._press(a, e.timeStamp);
     };
     const ku = (e) => { const a = BIND[e.code]; if (a) this._release(a, e.timeStamp); };
     const md = (e) => {
       this._mousePos(e);
+      this.used = 'mouse';
       if (e.button === 0) this._press('strike', e.timeStamp);
       else if (e.button === 2) this._press('parry', e.timeStamp);
       else if (e.button === 1) { e.preventDefault(); this._press('spot', e.timeStamp); }

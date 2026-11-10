@@ -14,7 +14,8 @@ export class Autopilot {
   constructor(fight, skill = {}) {
     this.f = fight;
     // rhythm: how often it times a strike to the beat (a good player mostly does; mashing doesn't)
-    this.skill = { react: 0.1, jitter: 0.03, greed: 0.65, miss: 0.0, rhythm: 0.75, ...skill };
+    this.skill = { react: 0.1, jitter: 0.03, greed: 0.65, miss: 0.0, rhythm: 0.75, air: 0.5, ...skill };
+    this.taps = [];
     this.mouse = { x: 0.5, y: 0.5, px: 0, py: 0, moved: true, inside: true };
     this.down = new Set(); this.pressed = []; this.pressedAt = []; this.released = [];
     this.mv = { x: 0, y: 0 };
@@ -31,7 +32,9 @@ export class Autopilot {
   isDown(a) { return this.down.has(a); }
   takeRelease(a) { const i = this.released.indexOf(a); if (i >= 0) { this.released.splice(i, 1); return { action: a }; } return null; }
   clear() { this.pressed.length = 0; this.pressedAt.length = 0; this.released.length = 0; }
-  press(a) { this.pressed.push(a); this.pressedAt.push(this.f.t); this.down.add(a); }
+  press(a) { this.pressed.push(a); this.pressedAt.push(this.f.t); if (a === 'parry') this.down.add(a); }
+  // a press let go on the next frame (a held strike is the heavy: the bot taps)
+  tap(a) { this.pressed.push(a); this.pressedAt.push(this.f.t); this.down.add(a); this.taps.push(a); }
   release(a) { this.down.delete(a); this.released.push(a); }
 
   _shape(g) { return { shape: SHAPES[g.shape] || g.shape, x: g.x, z: g.z, angle: g.angle, w: g.w, h: g.h, param: g.param }; }
@@ -40,6 +43,14 @@ export class Autopilot {
   think() {
     const f = this.f, pl = f.player, b = f.boss, t = f.t, sk = this.skill;
     if (!pl || !b) return;
+    for (const a of this.taps.splice(0)) this.release(a);
+    // her death scene: the press it asks for, as its ring closes (the bad bot is late, or misses)
+    if (f.exec && f.exec.on) {
+      this.mv = { x: 0, y: 0 }; this.down.delete('parry');
+      const c = f.exec.current();
+      if (c && c.state === 'wait' && c !== this._qDone && t >= c.t - 0.03 + (this.rand() - 0.5) * sk.jitter * 2) { this._qDone = c; if (this.rand() > sk.miss) this.tap(c.key); }
+      return;
+    }
     // the song clock jumped back (a rewind, the encore): my timers were on the old clock
     if (this._lastT !== undefined && t < this._lastT - 0.5) { this.nextStrike = 0; this.blockUntil = -1; }
     this._lastT = t;
@@ -96,6 +107,7 @@ export class Autopilot {
       const tl = Math.max(0, gap / Math.max(0.1, w.speed));
       if (!sweep || tl < sweep.tl) sweep = { tl, x: w.x, z: w.z, wave: true };
     }
+    if (sweep && sweep.tl < 0.2 + sk.jitter && pl.dashCharges <= 0 && pl.grounded && pl.state !== 'strike' && this.rand() > sk.miss) { this.tap('jump'); return; }
     if (sweep && sweep.tl < 0.12 + sk.jitter && pl.dashCharges > 0 && pl.state !== 'dash' && this.rand() > sk.miss) {
       // through it: across a beam, into a wave (its band is thin)
       let ux, uz;
@@ -143,15 +155,16 @@ export class Autopilot {
       this.press('strike'); this.nextStrike = t + 0.3; return;
     }
     if (b.targetable && !b.guard) {
-      if (d > 2.6) {
-        if (d > 6 && pl.ringsInHand() > 0 && this.rand() < 0.02) { this.press('throw'); this.release('throw'); }
-        if (this.rand() < sk.greed) { const l = d || 1; this.mv = { x: dx / l, y: dz / l }; if (this._stepsInto(all, this.mv)) this.mv = { x: 0, y: 0 }; }
-      } else if (t >= this.nextStrike) {
-        this.press('strike');
-        // the next press: on the next beat (give or take a little), or whenever, mashing
-        const bm = f.bm;
-        if (bm && this.rand() < sk.rhythm) { const nb = bm.timeOf(Math.ceil(bm.beatAt(t + 0.16))); this.nextStrike = nb + (this.rand() - 0.6) * 0.07; }
-        else this.nextStrike = t + 0.18 + this.rand() * 0.12;
+      // the strike finds her from anywhere near (and from far it's the ring): walk in while pressing, on the tick
+      const bm = f.bm, edge = d - b.radius;
+      if (edge > 2.2 && this.rand() < sk.greed) { const l = d || 1; this.mv = { x: dx / l, y: dz / l }; if (this._stepsInto(all, this.mv)) this.mv = { x: 0, y: 0 }; }
+      if (t >= this.nextStrike && bm) {
+        // she's open and beside me, two cuts in: up she goes
+        const lift = sk.air && f._liftable && f._liftable() && !(f.air && f.air.up) && pl.grounded && pl.combo >= 2 && edge < 2.6 && this.rand() < sk.air;
+        this.tap(lift ? 'jump' : 'strike');
+        // the next press: on the next tick (give or take a little), or whenever, mashing
+        if (this.rand() < sk.rhythm) { const n = bm.nextTick(t, 0.1); this.nextStrike = n.time - 0.012 + (this.rand() - 0.5) * 1.2 * sk.jitter; }
+        else this.nextStrike = t + 0.15 + this.rand() * 0.16;
       }
     } else {
       // keep a respectful distance and circle

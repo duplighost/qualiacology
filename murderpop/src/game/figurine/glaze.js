@@ -9,6 +9,7 @@
 // Every kind shares the damage: a voronoi crack network grown from hit points (dark hairlines with a
 // faint kintsugi glow), chipped flakes of bare bisque, broken-off parts, a white-hot hit ring. With
 // {shard: true} the same material draws shatter shards positioned from a transform texture.
+import { HERO, heroChunk, HERO_PARS } from '../../engine/herolight.js';
 import * as THREE from 'three';
 
 // uniforms every material of one figurine shares (pass the same object to each makeGlaze call)
@@ -33,6 +34,7 @@ export function sharedUniforms() {
     fShardN: { value: 1 },
     fGlitterT: { value: 0 },
     fRim: { value: new THREE.Color(0, 0, 0) },                          // a pale rim on her silhouette (the room sets it)
+    fHero: { value: new THREE.Color(0, 0, 0) }, uHeroDir: HERO.dir, uHeroSpec: HERO.spec,   // the hero light (engine/herolight.js)
   };
 }
 
@@ -659,7 +661,7 @@ export function makeGlaze(kind, U, o = {}) {
   if (kind === 'body') local = { ...local, fLayN: { value: Math.max(1, o.layers || 1) }, fShellL: { value: o.shell ?? -1 } };
   m.userData.figUniforms = local;
   m.userData.figKind = kind;
-  const key = 'fig-' + kind + JSON.stringify(defines) + (o.normalMap ? 'n' : '') + (o.alphaTest ? 'a' : '');
+  const key = 'fig2-' + kind + JSON.stringify(defines) + (o.normalMap ? 'n' : '') + (o.alphaTest ? 'a' : '');
   m.customProgramCacheKey = () => key;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U, local);
@@ -668,7 +670,8 @@ export function makeGlaze(kind, U, o = {}) {
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + VERT_NORMAL)
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + VERT_POS);
     if (o.shard) vs = vs.replace('#include <skinning_vertex>', '').replace('#include <skinnormal_vertex>', '').replace('#include <skinbase_vertex>', '');
-    fs = fs.replace('#include <common>', '#include <common>\nuniform vec3 fRim;\n' + FRAG_PARS)
+    fs = fs.replace('#include <common>', '#include <common>\nuniform vec3 fRim; uniform vec3 fHero; ' + HERO_PARS + '\n' + FRAG_PARS)
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + heroChunk('fHero'))
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + FRAG_SURF)
       .replace('#include <color_fragment>', `#include <color_fragment>
         #ifdef USE_MAP

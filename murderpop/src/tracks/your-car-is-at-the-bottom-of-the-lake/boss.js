@@ -351,6 +351,13 @@ export class Solver {
     if (this.faceAcc) this.faceAcc.def.tears.visible = name === 'CUE';
   }
 
+  // her death scene's faces (death.js): any of them, whatever her bar says
+  sceneFace(name, fade = 0.08) {
+    this.face = name; this.baseFace = name; this.faceUntil = 0;
+    this.fig.setExpression(FACE_OF[name] || 'lake_sweet', { fade: Math.max(0.02, fade) });
+    if (this.faceAcc) this.faceAcc.def.tears.visible = name === 'CUE';
+  }
+
   // ---- the key ring: off her finger while it flies
   keysOn(on) { if (!this.keysAcc) return; for (const o of this.keysAcc.objects) o.visible = on; this.keysAcc.def.hidden = !on; }
 
@@ -469,9 +476,16 @@ export class Solver {
   // ---- per frame (after the Boss's own update has placed her)
   update(dt) {
     const f = this.f, b = this.boss, t = f.t;
+    if (this.faceAcc) this.faceAcc.def.hollow.visible = b.state === 'desperate' || b.state === 'finished';
+    // her death scene has her (death.js): where she is, how high (from the lawn's level), which way she faces, her
+    // face. Nothing of mine moves her: no feet on the floor, no glide, no wobble, no shimmer.
+    if (b.scene) {
+      this.glide = null; this.wobble = null; this.shimmerAt = null; this.shimmer.visible = false;
+      b.root.rotation.z = 0; b.root.position.y = b._sceneY || 0; this.y = b._sceneY || 0; this.floatY = 0;
+      return;
+    }
     if (t >= this.faceUntil && this.face !== this.baseFace) this._apply(this.baseFace, 0.12);
     if (b.state === 'desperate' && this.face !== 'WRECKED' && this.face !== 'REAL') this._apply('WRECKED', 0.2);
-    if (this.faceAcc) this.faceAcc.def.hollow.visible = b.state === 'desperate' || b.state === 'finished';
     // the pot hangs upright from its handle, except when she swings it, throws from it or pours
     if (this.potAcc) { const n = (b.rig && b.rig.baseName) || ''; this.potAcc.def.free = b.busy && /Sword|Throw|Scratch|Pistol|Spell|Melee/.test(n); }
     // feet: the floor under her (the porch, the pier, the mirror water when she glides on it)

@@ -27,8 +27,10 @@ const BEARER = {
 };
 
 // ------------------------------------------------------------------------------------------------ the pallbearers
+// (at the wedding they are the groomsmen: three a side of the altar, along the back wall)
+export const GROOMSMEN = [[-3.0, -4.85], [-3.9, -4.85], [-4.8, -4.85], [3.0, -4.85], [3.9, -4.85], [4.8, -4.85]];
 export class Bearers {
-  constructor(tr) { this.tr = tr; this.f = tr.f; this.men = []; this.on = false; this.state = 'off'; this.x = 0; this.z = -5; this.h = -PI / 2; this.carry = false; }
+  constructor(tr) { this.tr = tr; this.f = tr.f; this.men = []; this.on = false; this.state = 'off'; this.x = 0; this.z = -5; this.h = -PI / 2; this.carry = false; this.bow = false; this.bowK = 0; this._look = new THREE.Vector3(); }
   async build(kit) {
     try {
       const fig = await buildFigurine(kit, BEARER);
@@ -48,13 +50,35 @@ export class Bearers {
       if (this.tr.set.arena) { for (const m of this.men) this.tr.set.arena.addCaster(m.rig.root); }
     } catch (e) { console.warn('pallbearers:', e.message); this.men = []; }
   }
-  get footprint() { return this.on ? { type: 'box', x: this.x, z: this.z, hx: 0.85, hz: 1.25, rot: -this.h, name: 'bearers' } : null; }
+  get footprint() { return this.on && this.state !== 'wedding' ? { type: 'box', x: this.x, z: this.z, hx: 0.85, hz: 1.25, rot: -this.h, name: 'bearers' } : null; }
   reset(t) {
     this.on = false; this.state = 'off'; this.path = null; this.tr.set.release('casket');
+    this.bow = false; this.bowK = 0;
+    for (const m of this.men) { m.rig.lean.set(0, 0); m.rig.lookTarget = null; }
     // between their entrance and the cemetery, they stand round your casket by the catafalque
     if (t > TL.walls - 9 && t < TL.turf && t >= 46.436) { this.on = true; this.state = 'stand'; this.x = 0; this.z = -5.0; this.h = -PI / 2; this.carry = true; }
+    if (t >= TL.wedding) { this.on = true; this.state = 'wedding'; this.carry = false; }
     for (const m of this.men) m.rig.root.visible = this.on;
   }
+  // the wedding: the six of them stand as groomsmen either side of the altar and watch the bride; they bow when the
+  // lid is shut on her (death.js)
+  _wedding(dt) {
+    const f = this.f, b = f.boss;
+    if (this.state !== 'wedding') { this.on = true; this.state = 'wedding'; this.carry = false; this.path = null; this.tr.set.release('casket'); }
+    this.bowK += ((this.bow ? 1 : 0) - this.bowK) * Math.min(1, dt * 6);
+    const gone = !b || b.state === 'finished' || !b.fig.root.visible;
+    this._look.set(gone ? 0 : b.x, 1.5 + (gone ? -0.3 : (b._sceneY || 0)), gone ? -4.0 : b.z);
+    for (const m of this.men) {
+      const [x, z] = GROOMSMEN[m.i];
+      m.rig.root.visible = true;
+      m.rig.root.position.set(x, 0, z); m.rig.root.rotation.y = x < 0 ? 0.32 : -0.32;
+      m.rig.play('Idle_Loop', { fade: 0.25 });
+      m.rig.lookTarget = this.bowK > 0.3 ? null : this._look;
+      m.rig.lean.set(0, 0.95 * this.bowK);
+      m.rig.update(dt);
+    }
+  }
+  flinch(k = 0.8) { for (const m of this.men) { m.rig.flinchDir.set(0, 0, 1); m.rig.flinch = Math.max(m.rig.flinch, k); } }
   marchIn(t0, t1) {
     this.on = true; this.state = 'walk'; this.carry = false;
     this.path = { t0, t1, fx: 12.6, fz: -1.2, tx: 0.0, tz: -5.0, h0: -1.9, h1: -PI / 2 };
@@ -95,6 +119,7 @@ export class Bearers {
   update(dt) {
     const f = this.f, t = f.t;
     if (!this.men.length) return;
+    if (t >= TL.wedding) { this._wedding(dt); return; }
     if (t >= TL.turf && t < 170 && this.on) { this.on = false; this.tr.set.release('casket'); }
     let moving = 0;
     if (this.state === 'turn' && this.turn) { const k = Math.min(1, (t - this.turn.t0) / 0.3); let d = Math.atan2(Math.sin(this.turn.h1 - this.turn.h0), Math.cos(this.turn.h1 - this.turn.h0)); this.h = this.turn.h0 + d * k; if (k >= 1) this.state = 'stand'; }
@@ -143,12 +168,26 @@ export class Bearers {
 export class Ride {
   constructor(tr) { this.tr = tr; this.f = tr.f; this.on = false; this.island = false; this.bx = 0; this.bz = -4.6; this.h = 0; }
   get D() { return this.tr.D; }
+  // the song's two rides: out of the ground to the island, and the last one before the wedding
+  riding(t) { return (t >= TL.belovedOut - 0.1 && t < TL.island + 0.2) || (t >= 195.0 && t < 198.3); }
+  // she can't ride it: down on her knees or thrown in the air with her bar empty, or in her death scene
+  get unseated() { const f = this.f, b = f.boss; return b.pinned || b.scene || !!(f.air && f.air.up); }
   mount(again = false) {
     const f = this.f, b = f.boss;
     const base = again ? { x: 0, z: -5.6 } : { x: 0, z: -4.6 };
     this.island = false; this.bx = base.x; this.bz = base.z;
-    // too far to step onto it: she leaps on, and the ride starts when she lands
-    if (Math.hypot(b.x - base.x, b.z - base.z) > 1.2 && !this._leaping) { this._leaping = true; this.D.leap(base.x, base.z, 0.32); f.after(0.33, () => { this._leaping = false; this.mount(again); }); return; }
+    if (this.unseated) return;
+    // too far to step onto it: she leaps on, and the ride starts if she's there when she lands. (It used to try again
+    // every third of a second for as long as she wasn't: knocked away from it with her bar empty, she "mounted" it
+    // whenever she next came near, and BELOVED slid under her feet for the rest of the song.)
+    if (Math.hypot(b.x - base.x, b.z - base.z) > 1.2) {
+      if (this._leaping) return;
+      const id = this._try = (this._try || 0) + 1;
+      this._leaping = true; this.D.leap(base.x, base.z, 0.32);
+      f.after(0.33, () => { this._leaping = false; if (this._try === id && this.riding(f.t) && Math.hypot(b.x - base.x, b.z - base.z) <= 1.2) this.mount(again); });
+      return;
+    }
+    this._try = (this._try || 0) + 1;
     this.on = true; this.h = toward(base, f.player);
     b.place(base.x, base.z); b.setMark(base.x, base.z);
     this.D.hold('Sitting_Idle_Loop', 0.3, f.t + 60);
@@ -174,24 +213,29 @@ export class Ride {
   toIsland(tIsland) {
     const f = this.f, b = f.boss;
     if (!this.on) this.mount();
+    this._try = (this._try || 0) + 1;
     const dur = Math.max(0.3, tIsland - f.t);
-    b.moveTo(-0.5, 0, dur, { easing: 'inOut', face: false }); b.setMark(-0.5, 0);
+    // (BELOVED carries her there: straight, whatever stands on the way)
+    b.moveTo(-0.5, 0, dur, { easing: 'inOut', face: false, through: true }); b.setMark(-0.5, 0);
     f.after(dur, () => { this.island = true; this.on = false; this.D.free(); b.rig.upperStop(); this.D.face('pout'); });
   }
   dismount(x = 0, z = -4.0) {
     const f = this.f, b = f.boss;
+    this._try = (this._try || 0) + 1;
     this.on = false; this.island = false; this.D.free(); b.rig.upperStop();
     this.D.leap(x, z, 0.5);
   }
   reset(t) {
     // on a rewind: where the song has her (riding, on the island) is set again; the rams are not
-    this.on = false; this.island = false; this._leaping = false;
+    this.on = false; this.island = false; this._leaping = false; this._try = (this._try || 0) + 1;
     if (t >= TL.belovedOut && t < 127.0) this.mount();
     else if (t >= TL.island && t < 145.88) { this.island = true; this.f.boss.place(-0.5, 0); this.f.boss.setMark(-0.5, 0); }
     else if (t >= 195.4 && t < 198.163) this.mount(true);
   }
   update(dt) {
     const f = this.f, b = f.boss, set = this.tr.set, t = f.t;
+    // off it: the ride is over, or she's been knocked off it
+    if (this.on && (!this.riding(t) || this.unseated)) { this.on = false; this._try = (this._try || 0) + 1; if (!b.scene) { this.D.free(); b.rig.upperStop(); } }
     if (this.on) {
       // BELOVED under her, bucking
       set.drive('beloved', { x: b.x, z: b.z, y: 0.15, rotY: this.h + PI, rotX: Math.sin(t * 9) * 0.12 });

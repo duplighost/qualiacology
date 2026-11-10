@@ -176,7 +176,9 @@ export function lunge(f, R, { start, end, w = 1.0, len = 8 }) {
   area(f, { shape: 'rect', x: sx, z: sz, angle: ang, w, h: realLen, kind: 'pink', start, end, damage: 1, melee: true, onImpact: (hit) => { if (hit === 'parried') b.stop(); } });
   for (let k = 0; k < 3; k++) f.at(end - 0.36 + k * 0.08, () => R.snd.play('heel', { x: b.x, rate: 1.3 }));
   const travel = 0.22;
-  f.at(end - travel, () => { b.perform('Sword_Dash', { from: 0.1, to: 0.45, duration: travel + 0.3 }); b.moveTo(e.x, e.z, travel, { easing: 'in' }); R.snd.play('swish', { x: b.x }); });
+  // (straight down the lane YOU was shown: she stops at whatever stands in it, never through it or round it. Stunned
+  // as it starts, she doesn't lunge at all: it isn't kept for when she comes round)
+  f.at(end - travel, () => { b.perform('Sword_Dash', { from: 0.1, to: 0.45, duration: travel + 0.3 }); b.moveTo(e.x, e.z, travel, { easing: 'in', straight: true }); if (b.moveHeld) b.stop(); R.snd.play('swish', { x: b.x }); });
 }
 
 // a circle around her

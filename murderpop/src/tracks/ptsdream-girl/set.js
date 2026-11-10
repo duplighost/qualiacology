@@ -15,6 +15,7 @@ const ease = (k) => k * k * (3 - 2 * k);
 const C = (h) => new THREE.Color(h);
 const WHITE = new THREE.Color(1, 1, 1);
 const INF = 1e9;
+const SCENE_DARK = 0.7;        // how far the stage's light comes down for her death scene (0: as it was, 1: the end's dark)
 
 export async function buildSet(f, tr) { const s = new StageSet(f, tr); await s.build(); return s; }
 
@@ -216,8 +217,10 @@ class StageSet {
     slot(this.gondL, B0, B1, (t) => -this.gondX(t), -0.5); slot(this.gondR, B0, B1, (t) => this.gondX(t), -0.5);
     slot(this.aisle, B0, B1, 0, -0.5); slot(this.checkoutP, B0, B1, 2.4, -6.0); slot(this.fluo, B0, B1, 0, 0);
     // C: her stage (every chorus), and G: everything
+    // (the plinth stands between the EXIT door and the riser, on the line she walks out along on every chorus's
+    // downbeat: it comes up out of the floor behind her once she's through, not in her way)
     for (const [c0, c1] of [[T.stageIn, out(T.stop) + 0.6], [T.stage2, out(T.head)], [T.final, INF]]) {
-      slot(this.riserP, c0, c1, 0, -4.4); slot(this.plinth, c0 + 0.2, c1, 0, -5.8);
+      slot(this.riserP, c0, c1, 0, -4.4); slot(this.plinth, c0 + 2.4, c1, 0, -5.8);
       this.beacons.forEach((b, i) => slot(b, c0, c1, [-10.2, 10.2, -10.2, 10.2][i], [-6.2, -6.2, 6.0, 6.0][i]));
       slot(this.neon, c0, c1, 0, -7.6);
     }
@@ -358,13 +361,15 @@ class StageSet {
     arena.update(dt, f.cam.cam, f.player.root.position);
     arena.u.uMirrorGain.value *= (this.mirrorGain ?? 1);
     if (this.ripple && this.curFloor === 'F') { this.ripple.offset.x += dt * 0.02; this.ripple.offset.y += dt * 0.013; }
-    // characters standing on the riser stand on it
+    // characters standing on the riser stand on it: YOU (on top of her own height: a jump is still a jump), and her
+    // (her whole body lifted, whatever the song or a blow is doing with where she stands)
     const riserUp = this.riserP.landed;
     for (const who of [f.player, f.boss]) {
       const root = who && who.root; if (!root) continue;
       const on = riserUp && Math.hypot(who.x - 0, who.z + 4.4) < 2.15;
       root.userData.ptsdLift = (root.userData.ptsdLift || 0) + ((on ? 0.09 : 0) - (root.userData.ptsdLift || 0)) * Math.min(1, dt * 14);
-      if (who === f.player) root.position.y = root.userData.ptsdLift;
+      if (who === f.player) root.position.y = (who.y || 0) + root.userData.ptsdLift;
+      else if (who.rig && who.rig.body) who.rig.body.y = root.userData.ptsdLift < 0.002 ? 0 : root.userData.ptsdLift;
     }
     f.tele.y = riserUp ? 0.11 : 0.02;
     this._plPrev = { x: f.player.x, z: f.player.z };
@@ -573,7 +578,12 @@ class StageSet {
     const cur = K[i], prev = K[Math.max(0, i - 1)];
     const k = cur.fade > 0 ? clamp((t - cur.t) / cur.fade, 0, 1) : 1;
     const kk = ease(k);
-    try { this.arena.setState(prev.state, cur.state, kk); } catch (e) { /* missing state */ }
+    // her death scene: the house lights come most of the way down on the two of you (her stage's neon and bulbs, the
+    // follow spot and the bottle are the light), and stay down into the end's dark
+    const sk = this.sceneK = (this.sceneK || 0) + ((this.tr.kill && this.tr.kill.on ? 1 : 0) - (this.sceneK || 0)) * Math.min(1, dt * 4);
+    let stA = prev.state, stB = cur.state, stK = kk;
+    if (sk > 0.002) { if (cur.state === 'dark' && t >= T.end) stK = Math.max(kk, SCENE_DARK * sk); else if (cur.state === 'alarm') { stA = 'alarm'; stB = 'dark'; stK = SCENE_DARK * sk; } }
+    try { this.arena.setState(stA, stB, stK); } catch (e) { /* missing state */ }
     // the end: behind the dead stage the cyc goes pale dawn
     if (t >= T.end) {
       const kd = clamp((t - T.end - 0.6) / 2.4, 0, 1);
@@ -586,8 +596,8 @@ class StageSet {
     let exp = prev.exp + (cur.exp - prev.exp) * kk;
     // PANIC: the tint pulses with each shelf lurch
     if (t >= 46.6 && t < 49.4) { const p = f.bm.pulse(t, 4); gain.setRGB(1 + 0.2 * p, 1 - 0.18 * p, 1 - 0.14 * p); }
-    // SIREN: red and white on the beats
-    if (t >= 245.5 && t < T.end) { const ph = Math.floor(f.bm.beatAt(t)) % 2, p = f.bm.pulse(t, 6); if (ph) gain.setRGB(1 + 0.3 * p, 0.8, 0.8); else gain.setRGB(1 + 0.15 * p, 1 + 0.15 * p, 1 + 0.15 * p); }
+    // SIREN: red and white on the beats (in her death scene it's a pulse in the light, not a wash over the picture)
+    if (t >= 245.5 && t < T.end) { const ph = Math.floor(f.bm.beatAt(t)) % 2, p = f.bm.pulse(t, 6) * (1 - 0.6 * sk), w = 1 - 0.7 * sk; if (ph) gain.setRGB(1 + 0.3 * p, 1 - 0.2 * w, 1 - 0.2 * w); else gain.setRGB(1 + 0.15 * p, 1 + 0.15 * p, 1 + 0.15 * p); }
     // the song's silent instants: every light out
     if (this.tr.lightsOut || (t > 57.6 && t < 57.72)) exp *= 0.03;
     if (this.tr.blackout && t > 54.4 && t < 57.6) exp *= 0.75;
@@ -659,7 +669,11 @@ class StageSet {
     // the follow spot on her in the alarm, or on the cushion at the crown search
     const alarm = (t >= T.stageIn && t < T.stop) || (t >= T.stage2 && t < T.head) || (t >= T.final && t < T.end);
     const b = f.boss;
-    if (alarm && b && b.root.visible) { this.spot.intensity = 60; this.spot.position.set(b.x, 9, b.z + 3); this.spot.target.position.set(b.x, 0, b.z); this.spot.color.setRGB(1, 0.95, 0.95); }
+    if (alarm && b && b.root.visible) {
+      // (in her death scene it holds the two of you)
+      const pl = f.player, sx = b.x + (pl.x - b.x) * 0.5 * sk, sz = b.z + (pl.z - b.z) * 0.5 * sk;
+      this.spot.intensity = 60 + 50 * sk; this.spot.position.set(sx, 9, sz + 3); this.spot.target.position.set(sx, 0, sz); this.spot.color.setRGB(1, 0.95, 0.95);
+    }
     else this.spot.intensity = 0;
     // the blackout: her lips and eyes, red, are all you see of her
     if (!this.faceGlow) { this.faceGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.poolTex, color: C(0xff1a30).multiplyScalar(3), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); this.faceGlow.scale.setScalar(0.5); this.root.add(this.faceGlow); }
@@ -748,6 +762,14 @@ class StageSet {
   clearOf(x, z, m) {
     for (let it = 0; it < 6; it++) { const p = this.resolve(x, z, m); if (Math.hypot(p.x - x, p.z - z) < 1e-3) break; x = p.x; z = p.z; }
     return { x, z };
+  }
+  // is a body of radius m free to stand at (x, z)?
+  free(x, z, m) { const p = this.resolve(x, z, m); return Math.abs(p.x - x) + Math.abs(p.z - z) < 0.02; }
+  // the furthest open point on the straight line from (x0, z0) toward (x1, z1), for a body of radius m
+  reach(x0, z0, x1, z1, m) {
+    const d = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(d / 0.15)); let k0 = 0;
+    for (let i = 1; i <= n; i++) { const k = i / n; if (!this.free(x0 + (x1 - x0) * k, z0 + (z1 - z0) * k, m)) break; k0 = k; }
+    return { x: x0 + (x1 - x0) * k0, z: z0 + (z1 - z0) * k0 };
   }
   // everything uploaded and compiled before the needle drops: no hitch when a room first flies in
   warm(extra = [], fig = null) {
@@ -960,7 +982,8 @@ class StageSet {
     tr.snd.play('zip', { x: c.x });
     // where she holds the other end, 4 m off
     const b = f.boss; const a = Math.atan2(b.x - c.x, b.z - c.z) || 0;
-    tr.her.place(clamp(c.x + Math.sin(a) * 4.2, -10, 10), clamp(c.z + Math.cos(a) * 4.2, -6.5, 6.5));
+    const hs = tr.her.floor(clamp(c.x + Math.sin(a) * 4.2, -10, 10), clamp(c.z + Math.cos(a) * 4.2, -6.5, 6.5));
+    tr.her.place(hs.x, hs.z);
     b.behave = 'hold'; b.loop('Spell_Simple_Idle_Loop'); b.open(snap - f.t);
     const tg = f.tele.add({ shape: 'circle', x: c.x, z: c.z, w: 3.2, kind: 'white', start: f.t, end: snap });
     L.tg = tg;
@@ -1133,7 +1156,8 @@ class StageSet {
   // EVERY WOMAN'S LAUGH: three hollow copies of her and her, on the diagonals; the fourth to laugh is her
   decoys(split, laughs, lunge) {
     const f = this.f, tr = this.tr, b = f.boss, pl = f.player;
-    const spots = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([dx, dz]) => ({ x: clamp(pl.x + dx * 3.2, -10, 10), z: clamp(pl.z + dz * 3.2, -6.4, 6.4) }));
+    // (each on open floor: neither she nor a copy stands in the clock, the glass or a camera's stalk)
+    const spots = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([dx, dz]) => tr.her.floor(clamp(pl.x + dx * 3.2, -10, 10), clamp(pl.z + dz * 3.2, -6.4, 6.4)));
     const realIdx = Math.floor(Math.random() * 4);
     const order = [0, 1, 2, 3].filter((i) => i !== realIdx); order.sort(() => Math.random() - 0.5); order.push(realIdx);
     const copies = [];
@@ -1150,7 +1174,8 @@ class StageSet {
     laughs.forEach((tk, k) => f.at(tk, () => { const i = order[k]; const s = spots[i]; tr.snd.play('giggle', { x: s.x, rate: i === realIdx ? 0.84 : 1 }); f.fx.sparks(s.x, 1.9, s.z, new THREE.Color(3.5, 0.6, 1.4), 8); const c = copies.find((q) => q.i === i); if (c) c.flash = 1; else if (i === realIdx && b.fig) b.fig.setExpression('delight', { fade: 0.08 }); }));
     // the lunge: a white lane toward you from the real one, filling 106:4 to 107:1; hit her first and it's off
     f.at(laughs[3], () => { if (tr.wrecked || this._decoys.called) return; const ang = Math.atan2(pl.x - b.x, pl.z - b.z); const sh = { shape: 'rect', x: b.x, z: b.z, angle: ang, w: 0.8, h: 6 }; this._decoys.lane = f.pat.area(f, { ...sh, kind: 'white', start: f.t, end: lunge, damage: 1, melee: true }); tr.her.act('Sword_Dash', lunge, { contact: 0.6, dur: 0.5 }); this._decoys.ang = ang; });
-    f.at(lunge, () => { const D = this._decoys; if (!D) return; if (!D.called && !tr.wrecked) { const ex = clamp(b.x + Math.sin(D.ang) * 5.5, -10, 10), ez = clamp(b.z + Math.cos(D.ang) * 5.5, -6.5, 6.5); b.moveTo(ex, ez, 0.15, { easing: 'in' }); } });
+    // the lunge goes down the lane you were shown, as far as the first thing standing in it
+    f.at(lunge, () => { const D = this._decoys; if (!D) return; if (!D.called && !tr.wrecked) { const e = this.reach(b.x, b.z, clamp(b.x + Math.sin(D.ang) * 5.5, -10, 10), clamp(b.z + Math.cos(D.ang) * 5.5, -6.5, 6.5), b.radius * 0.8 + 0.04); b.moveTo(e.x, e.z, 0.15, { easing: 'in', through: true }); } });
     const hpAt = b.hp;
     this.job({ update: (dt, t) => {
       const D = this._decoys; if (!D) return false;
@@ -1269,7 +1294,8 @@ class StageSet {
   }
   wrecked() {}
   finish(t) {
-    // the bottle at her heart goes off: pink and gold, a perfume cloud
+    // the bottle at her heart goes off: pink and gold, a perfume cloud (her death scene has done it, and the pin, itself)
+    if (this.tr.kill && this.tr.kill.on) return;
     const f = this.f, b = f.boss;
     this.tr.her.cloud(b.x, b.z, 3.2, new THREE.Color(1.0, 0.4, 0.55), 1.6);
     f.fx.glitter(b.x, 1.6, b.z, new THREE.Color(3.4, 2.1, 0.6), 60, 2.2);

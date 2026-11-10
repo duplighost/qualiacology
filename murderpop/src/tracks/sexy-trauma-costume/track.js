@@ -13,6 +13,7 @@ import { SPEC, PIECES, Clerk } from './clerk.js';
 import { Room } from './room.js';
 import { script, SEC } from './script.js';
 import { U } from './moves.js';
+import { death } from './death.js';
 
 let kit = null;
 const ID = 'sexy-trauma-costume';
@@ -96,4 +97,5 @@ export default {
     f.clerk.update(dt); f.room.update(dt, roomT(f));
   },
   sections: SEC,
+  death,
 };

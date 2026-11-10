@@ -11,6 +11,7 @@ import { YardSounds } from './sounds.js';
 import { assistBot } from './botassist.js';
 import { script } from './script.js';
 import { canopyFade } from './canopy.js';
+import { death } from './death.js';
 
 const ID = 'i-fucked-your-dad';
 // the checkpoints: where YOU and she stand when a section starts again (design §5)
@@ -34,6 +35,7 @@ export const CHECK = [
 export default {
   id: ID, beats: ID, par: 85000, lastHit: 231.6,
   spawn: { player: CHECK[0].you, boss: CHECK[0].her },
+  death,                       // her end: death.js
 
   async buildArena(f) {
     this._f = f; this._started = false; this._outro = null;

@@ -57,6 +57,11 @@ export class Sound {
     // a heartbeat with a little body above the sub, so small speakers carry it too
     B.heart = this._buf(0.3, (t) => (sin(PI2 * 48 * t) * 0.7 + sin(PI2 * 96 * t) * 0.3 + sin(PI2 * 150 * t) * 0.1) * ex(-t * 14));
     B.clack = this._buf(0.12, (t, r) => (sin(PI2 * 1800 * t) * 0.4 + r() * 0.3) * ex(-t * 70));
+    // her box, struck: the cellophane's crackle, and the cereal in it rattling; milk taking something heavy; a spoon's ring
+    B.cello = this._buf(0.22, (t, r) => (r() > 0.82 ? r() : 0) * ex(-t * 16) * 0.8 + r() * ex(-t * 260) * 0.5);
+    B.rattle = this._buf(0.34, (t, r, lp) => lp(r() * (r() > 0.55 ? 1 : 0.05), 0.4) * (ex(-t * 9) * 0.7 + (t > 0.12 ? ex(-(t - 0.12) * 14) * 0.5 : 0)));
+    B.splash = this._buf(0.9, (t, r, lp, lp2) => lp2(lp(r(), 0.22), 0.5) * 2.2 * Math.min(1, t * 60) * ex(-t * 5.5) + sin(PI2 * 62 * t) * ex(-t * 14) * 0.5);
+    B.tink = this._buf(0.5, (t, r) => (sin(PI2 * 2090 * t) * 0.5 + sin(PI2 * 3140 * t) * 0.25 + sin(PI2 * 5210 * t) * 0.12) * ex(-t * 9) * 0.5 + r() * ex(-t * 400) * 0.3);
     B.thok = this._buf(0.2, (t, r, lp) => (sin(PI2 * 190 * t) * 0.7 + lp(r(), 0.3) * 0.3) * ex(-t * 28));
     // the set's faint electrical hum: room tone and a little lamp buzz
     B.hum = this._buf(2.0, (t, r, lp) => (sin(PI2 * 60 * t) * 0.3 + sin(PI2 * 120 * t) * 0.18 + sin(PI2 * 180 * t) * 0.06 + lp(r(), 0.02) * 0.6) * 0.06);
@@ -106,4 +111,5 @@ const VOL = {
   chunk: 0.55, chunkOff: 0.35, splice: 0.32, tape: 0.22, crunch: 0.5, crunchSmall: 0.3, cardboard: 0.4, gavel: 0.5, guilty: 0.75,
   charge: 0.5, tick: 0.35, pop: 0.42, match: 0.4, whoomph: 0.55, crackle: 0.25, pip: 0.4, shutter: 0.42, servo: 0.5, pour: 0.42,
   slosh: 0.42, popc: 0.24, creak: 0.35, bubble: 0.3, heart: 0.6, clack: 0.35, thok: 0.5, hum: 0.12,
+  cello: 0.3, rattle: 0.32, splash: 0.55, tink: 0.3,
 };

@@ -98,8 +98,18 @@ export const DRESSING = {
     for (const tl of this.tilts) if (Math.abs(tl.x) < 2) hero = Math.max(hero, 12 * bump(t, tl.t0, tl.t1));
     const every = t >= 271.9 && t < 282.92 ? 22 * ease(clamp01((t - 271.9) / 0.7)) : 0;
     hero = Math.max(hero, every);
-    if (this.arena && this.arena.nodes.herobox) this.arena.nodes.herobox.rotation.x = hero * Math.PI / 180;
-    else this.boxG.rotation.x = hero * Math.PI / 180;
+    // what lands on her box rocks it (two springs, in degrees: a tip, forward +, and a roll), and her death scene tips
+    // it over (sceneTip eases to tipT)
+    { const R = this.rock;
+      for (let n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n, i = 0; i < n; i++) {
+        R.va += (-420 * R.a - 7.5 * R.va) * h; R.a += R.va * h;
+        R.vr += (-520 * R.r - 9 * R.vr) * h; R.r += R.vr * h;
+      }
+      R.a = Math.max(-9, Math.min(9, R.a)); R.r = Math.max(-4, Math.min(4, R.r));
+      this.sceneTip = (this.sceneTip || 0) + ((this.tipT || 0) - (this.sceneTip || 0)) * Math.min(1, dt * (this.tipRate || 6));
+      this._tip = hero + R.a + this.sceneTip;
+      const box = this.arena && this.arena.nodes.herobox ? this.arena.nodes.herobox : this.boxG;
+      box.rotation.x = this._tip * Math.PI / 180; box.rotation.z = R.r * Math.PI / 180; }
     for (const [k, n] of Object.entries(this.boxNodes)) {
       let a = every * (0.85 + 0.15 * Math.sin(RECORD[k]));
       for (const tl of this.tilts) if (Math.abs(tl.x - RECORD[k]) < 2) a = Math.max(a, 14 * bump(t, tl.t0, tl.t1));
@@ -182,13 +192,19 @@ export const DRESSING = {
 
   // ---------------------------------------------------------------- the finish and the encore
   finish(f) {
-    const b = this.prize.boss;
+    const b = this.prize.boss, r = this.prizeRing; r.visible = true;
+    // her death scene ended her in the bowl: the ring comes up out of the milk, over the rim, and rolls to YOU
+    if (this.dth && this.dth.on && this.dth.where === 'bowl') {
+      r.position.set(b.x, 1.3, b.z);
+      this.ringRoll = { st: 0, vy: 5.2, vz: 3.0, x: b.x + 0.3, y: 1.3, z: b.z + 0.3, spin: 18, bounces: 0, ticks: 0 };
+      return;
+    }
+    // she went in her window: it bursts, and a cheap plastic ring drops out of her and rolls to YOU
     this.cello.visible = false;
     f.fx.glitter(0, 3.0, -7.0, new THREE.Color(3.6, 2.6, 1.0), 120, 2.4);
     f.fx.chips(0, 3.0, -7.0, new THREE.Color(2.6, 2.4, 2.2), 60);
     this.sound.play('cardboard', 0, { rate: 0.6, gain: 1.4 }); this.sound.play('crunch', 0, { rate: 0.8, gain: 1.2 });
-    // a cheap plastic ring drops out of her and rolls to YOU
-    const r = this.prizeRing; r.visible = true; r.position.set(0, 2.2, -7.2);
+    r.position.set(0, 2.2, -7.2);
     this.ringRoll = { st: 0, vy: 1.5, vz: 3.2, x: 0, y: 2.2, z: -7.2, spin: 18, bounces: 0, ticks: 0 };
   },
   _ringUpdate(f, dt, t) {
@@ -211,6 +227,7 @@ export const DRESSING = {
   },
   encore(f) {
     const b = this.prize.boss;
+    if (b.boxed) this._box(f, false, f.t);          // (out of her box for it)
     b.root.position.y = 0; b.intangible = false; b.lockFacing = false;
     b.place(0, -5.6, 0); b.perform('Spell_Simple_Enter', { duration: 0.4, then: 'Idle_Talking_Loop' });
     f.fx.glitter(0, 2.0, -6.5, new THREE.Color(3.4, 2.6, 1.0), 60, 1.6); this.sound.play('crunch', 0);

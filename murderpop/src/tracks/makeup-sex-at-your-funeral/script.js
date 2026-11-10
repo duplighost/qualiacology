@@ -84,7 +84,7 @@ export function choreograph(T, f, D, tr) {
 
   // ================================================================ CP3 · OPEN CASKET, OPEN BAR (21.999 - 31.133)
   D.at(B(16, 1), (ff) => { snd() && snd().play('woodLight', { x: 0, gain: 0.8 }); ff.fx.glitter(0.5, 1.4, -5, new THREE.Color(3, 2.9, 2.8), 20, 0.8); });
-  D.mark(B(16, 3), -9.0, -1.0, 'slide', 0.33);
+  D.mark(B(16, 3), -9.0, 0.7, 'slide', 0.33);      // (down the aisle: a line to z -1 went through a pew)
   // OPEN BAR: champagne at you; the neon buzzes on
   D.span(B(17, 1), B(17, 3), (ff, t0, t1) => {
     D.act('Shield_OneShot', t1 - t0, { from: 0.0, to: 0.7 });
@@ -341,7 +341,7 @@ export function choreograph(T, f, D, tr) {
   }
   function tableKick(ff, t0, t1) {
     const tb = set.props.table.obj; const from = { x: tb.position.x, z: tb.position.z };
-    D.go(0, -3.4, 'snap');
+    D.leap(0, -3.4, 0.3);                // (back over the table: a snap to her mark went through it)
     const a = toward(from, ff.player);
     D.lane(t0, t1, { from, angle: a, w: 0.7, h: 16, keep: true, onImpact: () => { snd() && snd().play('metalLight', { x: from.x }); tr.slideTable && tr.slideTable(from, a, 12); } });
     ff.after(Math.max(0, t1 - t0 - 0.2), () => D.act('Melee_Hook', 0.3, { from: 0.2, to: 0.7 }));

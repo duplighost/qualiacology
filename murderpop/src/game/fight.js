@@ -21,6 +21,10 @@ import { trackById } from '../tracks/index.js';
 import { makeKeepsake, KEEPSAKE_SIZE } from '../ui/keepsakes.js';
 import { SetPieces } from './setpieces.js';
 import { Finale } from './finale.js';
+import { threats } from './threats.js';
+import { Execution } from './execution.js';
+import { HERO } from '../engine/herolight.js';
+import { addXray } from '../engine/xray.js';
 
 const WAVE_GEO = new THREE.CircleGeometry(1, 128);
 function waveMaterial(color) {
@@ -33,13 +37,15 @@ function waveMaterial(color) {
         float edge = (1.0 - smoothstep(0.0, w * 3.0, abs(d - uOuter))) ;
         float a = (band * 0.55 + edge * 0.9) * uA; if (a < 0.01) discard; gl_FragColor = vec4(uC * a * uFxK, a); }` });
 }
-const GOLD = new THREE.Color(3.2, 2.0, 0.55), PINK = new THREE.Color(4, 0.6, 1.7), WHITE = new THREE.Color(2.6, 2.9, 3.4), PORCELAIN = new THREE.Color(2.2, 2.1, 2.0);
+const COPPER = new THREE.Color(2.3, 1.25, 0.6), GOLD = new THREE.Color(3.2, 2.0, 0.55), PINK = new THREE.Color(4, 0.6, 1.7), WHITE = new THREE.Color(2.6, 2.9, 3.4), PORCELAIN = new THREE.Color(2.2, 2.1, 2.0);
 const SOLO_BEATS = 8;
+// a guard pressed this long after a pink hit lands still catches it (hands come in a little behind the beat as often as ahead)
+const LATE = 0.075;
 // her health under the shared rules (hits sent back, finishers, the solo, the room's ornaments), on top of each track's
 // own: set so the good bot empties her bar at about 40% of the song (it plays on the beat and catches everything)
-const HEALTH = { 'sexy-trauma-costume': 1.63, 'rent-free': 1.1, 'makeup-sex-at-your-funeral': 1.31, 'try-me-free': 1.33, 'ptsdream-girl': 1.09,
-  'reverse-psychology-degree': 1.1, 'pretty-until-proven-guilty': 1.2, 'kiss-me-like-a-car-crash': 0.89, 'i-fucked-your-dad': 0.98,
-  'your-car-is-at-the-bottom-of-the-lake': 0.86 };
+const HEALTH = { 'sexy-trauma-costume': 2.1, 'rent-free': 1.65, 'makeup-sex-at-your-funeral': 1.95, 'try-me-free': 1.9, 'ptsdream-girl': 1.09,
+  'reverse-psychology-degree': 1.8, 'pretty-until-proven-guilty': 2.1, 'kiss-me-like-a-car-crash': 1.15, 'i-fucked-your-dad': 1.7,
+  'your-car-is-at-the-bottom-of-the-lake': 1.5 };
 const _SP = new THREE.Vector3(), _SOLO_LIT = new THREE.Color(1.0, 0.82, 0.6);
 const toward = (a, b) => Math.atan2(b.x - a.x, b.z - a.z);
 
@@ -68,11 +74,18 @@ export class Fight {
   // ---------------- loading ----------------
   async load(onProgress = () => {}) {
     const tr = this.track;
-    const [bm, chords] = await Promise.all([
+    const [bm, chords, acc] = await Promise.all([
       fetch(`data/beats/${tr.beats}.json`).then((r) => r.json()),
       fetch(`data/chords/${tr.beats}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`data/accents/${tr.beats}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     this.bm = new BeatMap(bm); this.chords = chords;
+    if (tr.downbeat !== undefined) this.bm.downbeat = tr.downbeat;
+    this.bm.setAccents(acc);
+    // the song's own moments, in order: its big hits (the strongest of them), and where it steps up
+    this.songHits = acc ? acc.hits.filter((h) => h.k >= 0.72).map((h) => ({ ...h })) : [];
+    this.songLifts = acc ? acc.lifts.map((h) => ({ ...h })) : [];
+    this._hitI = 0; this._liftI = 0;
     this.sfx.attach && this.sfx.attach(this);
     this.duration = tr.duration || this.bm.duration;
     onProgress(0.1);
@@ -102,6 +115,10 @@ export class Fight {
     this.cam.bounds = this.bounds;
     const room = this.arena.room || (this.arena.arena && this.arena.arena.room);
     this.cam.roomMaxZ = room && room.max ? room.max.z : undefined;
+    // the set's height and back wall: the camera never looks over the top of it
+    const rl = (v) => (Array.isArray(v) ? { x: v[0], y: v[1], z: v[2] } : v);
+    this.cam.room = room && room.max && room.min ? { top: tr.setTop ?? rl(room.max).y, backZ: rl(room.min).z } : null;
+    if (room && room.max && this.cam.roomMaxZ === undefined) this.cam.roomMaxZ = rl(room.max).z;
     onProgress(0.7);
     this.boss = await tr.buildBoss(this);
     this.player = this.app.player;
@@ -110,6 +127,11 @@ export class Fight {
     if (hk !== 1) { this.boss.maxHp = Math.round(this.boss.maxHp * hk); this.boss.hp = this.boss.maxHp; }
     if (this.encoreMode) { this.boss.maxHp = Math.round(this.boss.maxHp * 1.25); this.boss.hp = this.boss.maxHp; }
     onProgress(0.8);
+    // the two of you show through whatever of the set stands in front of you (engine/xray.js)
+    try {
+      if (!this.app._youXray) this.app._youXray = addXray(this.player.root, new THREE.Color(1.7, 0.9, 0.42));
+      this.herXray = addXray(this.boss.root, new THREE.Color(1.9, 0.45, 1.0));
+    } catch (e) { console.warn('xray', e.message); }
     // a porcelain figurine's shaders (glaze, cracks, the shatter) compile now, not on the first hit
     if (this.boss.fig && this.boss.fig.prepare) { try { await this.boss.fig.prepare(this.app.renderer, this.cam.cam, this.scene); } catch (e) { console.warn('figurine prepare', e.message); } }
     onProgress(0.85);
@@ -127,6 +149,7 @@ export class Fight {
     this.finalChorus = this.T.sections.find((s) => s.final) || this.T.sections[this.T.sections.length - 2] || this.T.sections[0];
     this.setPieces = new SetPieces(this);
     this.finale = new Finale(this); this.heat = 0;
+    this.exec = new Execution(this);
     this.boss.on('hit', (h) => this._bossHit(h));
     this.boss.on('break', (b) => this._bossBreak(b));
     this.boss.on('deflect', (h) => this._deflect(h));
@@ -199,9 +222,16 @@ export class Fight {
     // (practice from a section where she's already beaten: the finale is on from the start)
     if (this.harmless && !this.finale.on && this.state === 'play' && this.boss.state !== 'finished') this.finale.start();
     if (this.audio.sfxDuck && this.songEnv) this.audio.sfxDuck.gain.setTargetAtTime(this.audio.duckAt(this.songEnv, this.t), this.audio.ctx.currentTime, 0.12);
+    if (this.app._youXray) this.app._youXray.update(1);
+    if (this.herXray) this.herXray.update(this.boss.intangible || this.boss.state === 'finished' ? 0 : 1);
+    // her death scene, once it's on, moves the two of you (and the light on the two of you comes up for it)
+    this.exec.update(dt);
+    HERO.k += ((this.exec.on ? 0.8 : this.spotUntil > 0 ? 0.6 : this.track.heroLight ?? 0.42) - HERO.k) * Math.min(1, dt * 4);
+    this.hud.qte && this.hud.qte(this.exec.prompt);
     // entities
+    this.boss.airY = this.air && this.air.up ? this.air.y : 0;
     this.player.update(ctx);
-    if (this.player.aiming) this.fx.setAim(this.player.x, this.player.z, ctx.aim.x, ctx.aim.z, FEEL.ringRange);
+    this.cam.youY = this.player.y;
     this.boss.beatPulse = this.bm.pulse(this.t, 6);
     this.boss.nod = this.bm.strikePulse(this.t, 5);
     this.boss.update(dt, this.t, this.beat, this.player);
@@ -210,9 +240,16 @@ export class Fight {
     this.proj.update(dt, this.bounds, (p) => this._projHit(p, ctx));
     this._waves(dt, ctx); this._beams(ctx);
     this.tele.update(this.t, this.bm.pulse(this.t, 7));
+    // what's about to land on YOU: a ring closing on you for each (and the guard turns to face the first)
+    const th = this.state === 'play' ? threats(this) : [];
+    this.threats = th;
+    this.fx.drawNotes && this.fx.drawNotes(th, this.player, this.bm.tickPeriod(this.t));
+    const first = th.find((n) => n.kind === 'pink') || null;
+    this.player._threatAng = first && first.tl < 0.7 ? Math.atan2(first.x - this.player.x, first.z - this.player.z) : null;
+    this._lateUpdate(ctx);
     this.proj.draw(this.t);
     this.signs.update(this.t);
-    this.marks.update(this.player, this.boss, this.player.dashCharges, this.player.dashCool, FEEL.dashCharges, FEEL.dashRecharge, this.bm.pulse(this.t, 7) * (0.45 + 0.55 * this.bm.strikePulse(this.t, 3.5)));
+    this.marks.update(this.player, this.boss, this.player.dashCharges, this.player.dashCool, FEEL.dashCharges, FEEL.dashRecharge, this.bm.tickPulse(this.t, 7) * (this.bm.accent(Math.floor(this.bm.tickAt(this.t))) ? 1 : 0.5));
     // the song's words come out of the narrator's mouth; in the spotlight, out of YOU's (it's her song for two bars)
     const sing = this.state === 'play' ? this.vocal.at(this.t, dt) : 0, solo = this.spotUntil > 0;
     if (this.boss.fig && this.boss.fig.setMouth) this.boss.fig.setMouth(solo ? 0 : sing);
@@ -228,7 +265,7 @@ export class Fight {
     // death
     if (this.player.state === 'dead' && this.state === 'play') this._die();
     // the end of the song
-    if (this.state === 'play' && this.t >= this.lastHit - 0.005 && !this._ended) this._songEnd();
+    if (this.state === 'play' && this.t >= this.lastHit - 0.005 && !this._ended && !(this.exec.on && !this.exec.done)) this._songEnd();
     // camera, fx, hud
     this.cam.closeK += ((this.lastSection && this.lastSection.close ? 1 : 0) - this.cam.closeK) * Math.min(1, dt * 2);
     this.cam.update(dt, this.player, this.boss.state === 'gone' ? null : this.boss);
@@ -243,10 +280,12 @@ export class Fight {
     if (this.player.meter >= 1 && this.spotUntil <= 0 && this.state === 'play') { const sp = this.cam.toScreen(_SP.set(this.player.x, 2.05, this.player.z)); this.hud.keycap(true, sp.x, sp.y, this.bm.strikePulse(this.t, 5)); }
     else this.hud.keycap(false);
     this.fx.drawTargets(this.finale.on && (this.state === 'play' || this.state === 'finishing') && this.boss.state !== 'finished' ? this.finale.drawList() : [], this.bm.strikePulse(this.t, 6));
+    this._coach();
     // the room's lamps and neon brighten on the beat, more the hotter your combo
     const A = this.arena && (this.arena.arena || this.arena);
     const heatK = this.finale.down ? 4 : this.heat;
-    if (A && A.setBeat) A.setBeat(this.state === 'play' || this.state === 'finishing' ? (0.2 + 0.12 * heatK) * this.bm.pulse(this.t, 6) * (0.55 + 0.45 * this.bm.strikePulse(this.t, 3)) : 0);
+    if (A && A.setBeat) A.setBeat(this.state === 'play' || this.state === 'finishing' ? (0.24 + 0.13 * heatK) * this.bm.drumPulse(this.t, 6) * 1.25 : 0);
+    this._songMoments();
     if (this._finishT !== undefined && this.cam.override) {
       this._finishT += dt;
       const k = this._finishT < 0.35 ? this._finishT / 0.35 : this._finishT < 3.2 ? 1 : Math.max(0, 1 - (this._finishT - 3.2) / 1.2);
@@ -292,6 +331,8 @@ export class Fight {
     this.cam.floorPoint(m.x, m.y, this._aim);
     return { dt, t: this.t, input: this.input, aim: this._aim, boss: this.boss, projectiles: this.proj, beats: this.bm, fx: this.fx, sfx: this.sfx, arena: this.arena, hud: this.hud,
       onSpotlight: () => this._spotlight(), onPlayerLanded: (s, res, on, counter, at) => this._landed(s, res, on, counter, at),
+      onShock: (x, z, r, s) => this._shock(x, z, r, s), onWhiff: (s, deflected) => this._whiff(s, deflected), onStrikeStart: (s) => this._strikeStart(s),
+      things: () => (this.arena && this.arena.strikeables ? this.arena.strikeables() : null),
       onStrikeArc: (x, z, ang, range, arc, s) => { this.arena.strikeArc && this.arena.strikeArc(x, z, ang, range, arc, s, this); this.setPieces && this.setPieces.strikeArc(x, z, ang, range, arc, s); } };
   }
 
@@ -317,9 +358,13 @@ export class Fight {
         }
       }
       if (d < p.radius + FEEL.radius) {
-        if (pl.invulnerable) { if (pl.state === 'dash' && !p._nm) { p._nm = true; pl.nearMiss(ctx); this._good(60); } return; }
+        // up over it: a shot goes under your feet
+        if (pl.y > (p.y ?? 1) + 0.2) { if (!p._over) { p._over = true; this._over(p.x, p.z); } return; }
+        if (pl.untouchable) { if (pl.state === 'dash' && !p._nm) { p._nm = true; pl.nearMiss(ctx); this._good(60); } return; }
         // a pink shot on the held guard: stopped
         if (p.parryable && pl.blocking) { p.dead = true; this._block(p.x, p.z, { power: 0.5 }); return; }
+        // a pink shot that got there before the guard did: it has you in a moment, unless the guard comes up just behind it
+        if (p.parryable && !this._late && !pl.invulnerable) { p.dead = true; this._late = { until: this.t + LATE, x: p.x, z: p.z, damage: p.damage, shot: p, why: 'shot' }; return; }
         if (pl.hurt(ctx, p.damage, p.x, p.z, 'shot')) { this._hurt(p.x, p.z); }
         p.dead = true;
       }
@@ -361,9 +406,38 @@ export class Fight {
     }
     // the held guard stops anything pink
     if (o.kind === 'pink' && pl.blocking && !pl.invulnerable) { this._block(sh.x, sh.z, { power: o.melee ? 1 : 0.7 }); return 'blocked'; }
-    if (pl.invulnerable) { if (pl.state === 'dash') { pl.nearMiss(this._ctx(0)); this._good(70); } return 'dodged'; }
+    if (pl.invulnerable) { if (pl.state === 'dash') { pl.nearMiss(this._ctx(0)); this._good(70); } else if (pl.airborne) this._over(pl.x, pl.z); return 'dodged'; }
+    // a pink hit with no guard up: it lands (the track is told so now), but the heart goes a moment later, and not at
+    // all if the guard comes up just behind the beat
+    if (o.kind === 'pink' && !this._late && pl.state !== 'dead') { this._late = { until: this.t + LATE, x: sh.x, z: sh.z, damage: o.damage ?? 1, o, why: o.melee ? 'melee' : 'area' }; return 'hit'; }
     if (pl.hurt(this._ctx(0), o.damage ?? 1, sh.x, sh.z, o.melee ? 'melee' : 'area')) { this._hurt(sh.x, sh.z); return 'hit'; }
     return 'miss';
+  }
+
+  // the hit that's a moment from landing (see LATE): caught if the guard came up in time, else it lands
+  _lateUpdate(ctx) {
+    const L = this._late; if (!L) return;
+    const pl = this.player;
+    if (pl.state === 'dead' || this.harmless) { this._late = null; return; }
+    if (pl.catching) {
+      this._late = null;
+      const q = 'good';
+      pl.caught(q, ctx);
+      this.lastCatch = q;
+      this.fx.caught(pl.x, 1.2, pl.z, false);
+      this.sfx.parry && this.sfx.parry(q, this.pan(pl.x));
+      this._glimmer(1, true); this._good(80);
+      this._pop('+' + Math.round(80 * this.mult).toLocaleString('en-US'), pl.x, 2.5, pl.z, '');
+      if (L.o && L.o.melee) this.boss.open(0.9);
+      if (L.shot || (L.o && (L.o.melee || L.o.counter))) this._sendBack(q);
+      return;
+    }
+    if (pl.blocking) { this._late = null; this._block(L.x, L.z, { power: 0.7 }); return; }
+    if (this.t >= L.until) {
+      this._late = null;
+      if (pl.invulnerable) return;
+      if (pl.hurt(ctx, L.damage, L.x, L.z, L.why)) this._hurt(L.x, L.z);
+    }
   }
 
   addWave(w) { if (!this.suppress && !this.harmless) this.waves.push(w); }
@@ -381,7 +455,7 @@ export class Fight {
       const u = w.mesh.material.uniforms; u.uInner.value = Math.max(0, (w.r - w.band) / (w.r + 0.1)); u.uOuter.value = w.r / (w.r + 0.1); u.uA.value = Math.max(0, 1 - w.r / w.max);
       const d = Math.hypot(pl.x - w.x, pl.z - w.z);
       if (!w.hit && Math.abs(d - (w.r - w.band / 2)) < w.band / 2 + FEEL.radius * 0.6) {
-        if (pl.invulnerable) { if (pl.state === 'dash' && !w.nm) { w.nm = true; pl.nearMiss(ctx); this._good(60); } }
+        if (pl.invulnerable) { if (pl.state === 'dash' && !w.nm) { w.nm = true; pl.nearMiss(ctx); this._good(60); } else if (pl.airborne && !w.nm) { w.nm = true; this._over(pl.x, pl.z); } }
         else { w.hit = true; if (pl.hurt(ctx, w.damage, w.x, w.z, 'wave')) this._hurt(w.x, w.z); }
       }
       if (w.r > w.max) { this._dropWave(w); this.waves.splice(i, 1); }
@@ -430,33 +504,44 @@ export class Fight {
   _pop(text, x, y, z, cls = '') { const sp = this.cam.toScreen(_SP.set(x, y, z)); this.hud.pop(text, sp.x, sp.y, cls); }
   _mult() { this.mult = this.chain >= 40 ? 8 : this.chain >= 24 ? 6 : this.chain >= 14 ? 4 : this.chain >= 6 ? 2 : 1; }
 
+  // A strike of yours landed. Every one lands on the tick, so every one is solid: copper and ivory. Pressed on the tick
+  // it's gold, with a note of the chord, and hits harder. The heavy ones stop the picture for a moment.
   _landed(s, res, on, counter, at) {
-    const b = this.boss, pl = this.player;
+    const b = this.boss, pl = this.player, d = s.def || {};
     const x = at ? at.x : b.x, z = at ? at.z : b.z;
-    const dir = Math.atan2(b.x - pl.x, b.z - pl.z);
+    const dir = s.ang ?? Math.atan2(b.x - pl.x, b.z - pl.z);
+    const ring = s.name === 'ring';
     const big = !!(s.finisher || s.riposte), heavy = !!(s.heavy || counter || big);
     // a plain strike while she's performing counts toward her answer (an opening, a stagger, the solo don't)
-    if (s.name !== 'ring' && !big && b.state === 'perform' && !pl.solo) (this._landedAt ||= []).push(this.t);
-    // on the beat it's gold, loud and heavy; off the beat it's a small grey knock: you can see and hear which
-    const fat = on && (s.big || s.name === 'ring' || pl.solo);
+    if (!ring && !big && b.state === 'perform' && !pl.solo) (this._landedAt ||= []).push(this.t);
+    const fat = on && (s.big || ring || pl.solo);
     // the finale: the rings are the event; strikes between them are small (she's already beaten); up in the air, a juggle
     const up = !!(this.air && this.air.up), hy = up ? this.air.y : 0;
-    const fin = this.finale.on && s.name !== 'ring' && !s.finaleDone ? this.finale.struck(s, on, this.t, up) : null, small = fin && !fin.perfect;
-    const fk = small ? 0.45 : 1;
-    this.fx.sparks(x, 1.3 + hy, z, on ? GOLD : new THREE.Color(1.5, 1.4, 1.3), Math.round((big ? 40 : fat ? 26 : on ? 16 : 7) * fk), dir);
-    this.fx.chips(x, 1.3 + hy, z, PORCELAIN, Math.round((big ? 22 : fat ? 12 : on ? 8 : 4) * fk), dir);
-    if (on && !small) this.fx.glitter(x, 1.4 + hy, z, GOLD, big ? 26 : fat ? 10 : 5, big ? 0.8 : 0.3);
-    this.fx.impact && this.fx.impact(x, 1.25 + hy, z, dir, { gold: on, power: small ? 0.55 : big ? 2.2 : heavy && on ? 1.5 : fat ? 1.25 : on ? 0.95 : 0.5 });
-    // her body stops for a moment with yours: the hit has weight
-    if (b.rig && b.rig.hitStop) b.rig.hitStop(big ? 0.13 : fat ? 0.075 : on ? 0.055 : 0.025);
-    this.cam.shake(big ? 1.0 : heavy && on ? 0.55 : fat ? 0.42 : on ? 0.3 : 0.14, big ? 0.2 : 0.12);
-    if (heavy && on) this.cam.kick(big ? 2.4 : 0.9);
+    const fin = this.finale.on && !ring && !s.finaleDone ? this.finale.struck(s, on, this.t, up) : null, small = fin && !fin.perfect && !heavy;
+    const fk = small ? 0.6 : 1, yy = 1.25 + hy;
+    // tier: 0 a ring, 1 solid, 2 on the tick, 3 heavy, 4 the finisher / the cut sent back
+    const tier = big ? 4 : heavy ? 3 : on ? 2 : ring ? 0 : 1;
+    const hot = on ? GOLD : COPPER;
+    this.fx.sparks(x, yy, z, hot, Math.round([8, 14, 22, 30, 46][tier] * fk), dir);
+    this.fx.chips(x, yy, z, PORCELAIN, Math.round([3, 6, 9, 14, 24][tier] * fk), dir);
+    if (on && !small) this.fx.glitter(x, yy + 0.1, z, GOLD, big ? 26 : fat ? 12 : 6, big ? 0.8 : 0.3);
+    this.fx.impact && this.fx.impact(x, yy, z, dir, { gold: on, power: [0.6, 0.95, 1.25, 1.6, 2.3][tier] * (small ? 0.7 : 1), tilt: d.tilt, sweep: s.sweep });
+    // the picture stops with the blow: her, you, and the camera's knock
+    // (with the drum under it: the tick's kick or snare, measured from the song)
+    const dr = s.k !== undefined ? this.bm.drumAt(s.k) : 0.5, dk = 0.8 + 0.45 * dr;
+    const stop = [0.03, 0.055, 0.07, 0.1, 0.14][tier] * (small ? 0.6 : 1) * (0.9 + 0.25 * dr);
+    if (b.rig && b.rig.hitStop) b.rig.hitStop(stop);
+    b.shove && b.shove(dir, [0.14, 0.42, 0.52, 0.8, 1.1][tier] * (small ? 0.6 : 1), tier >= 3);
+    this.cam.shake([0.12, 0.26, 0.4, 0.62, 1.0][tier] * dk, tier >= 4 ? 0.2 : 0.12);
+    this.cam.punch && this.cam.punch(dir, [0.15, 0.5, 0.75, 1.1, 1.7][tier] * dk);
+    if (tier >= 3) this.cam.kick(tier >= 4 ? 2.4 : 1.1);
     if (big && !small) { this.fx.flash(new THREE.Color(0.16, 0.11, 0.03), 1); this.fx.aberrate(1.8); }
-    this.sfx.hit && this.sfx.hit({ heavy: heavy && on, onBeat: on, kind: s.name, pan: this.pan(x), crit: big, soft: !on });
+    else if (tier === 3) this.fx.flash(new THREE.Color(0.07, 0.05, 0.02), 1);
+    this.sfx.hit && this.sfx.hit({ heavy: tier >= 3, onBeat: on, kind: s.name, pan: this.pan(x), crit: big, tier, accent: !!s.big, move: s.move, drum: dr });
     if (big) this.sfx.goldBurst && this.sfx.goldBurst(this.pan(x));
     if (on && !this.finale.on) this._glimmer(big ? 2 : fat ? 1 : 0, false);
-    this._good(fin ? 0 : big ? 120 : fat ? 50 : on ? 35 : 12);   // (in the finale the points are the finale's)
-    if (big && !this.finale.on) this._pop('+' + Math.round(120 * this.mult).toLocaleString('en-US'), x, 2.3, z, 'gold');
+    this._good(fin ? 0 : [10, 20, 40, 60, 120][tier]);   // (in the finale the points are the finale's)
+    if (big && !this.finale.on) this._pop('+' + Math.round(120 * this.mult).toLocaleString('en-US'), x, 2.3 + hy, z, 'gold');
     // the finale: a ring closing on her as you land it is the big points (the last one, the final blow); a strike off
     // the beat takes a step of its multiplier
     if (fin && fin.last) this._finaleLast(fin);
@@ -469,13 +554,86 @@ export class Fight {
       }
       if (fin.broke) this.sfx.deflect && this.sfx.deflect(this.pan(x));
     }
-    b.fig && b.fig.hitAt && b.fig.hitAt(new THREE.Vector3(x, 1.3, z), new THREE.Vector3(Math.sin(dir), 0, Math.cos(dir)), { power: small ? 0.42 : fin ? 1.8 : big ? 2.2 : heavy && on ? 1.6 : fat ? 1.3 : on ? 1.05 : 0.6, chips: on && !small && !up });
-    // her bar is empty: what you land throws her up, and keeps her up
-    if (fin) this._launch(fin.perfect || !!s.finisher, on, dir);
-    // the finisher and a hit sent back throw her into the room
-    if (big) { this._knock(s.riposte ? 1.9 : 1.5, dir); if (s.finisher) b.open(0.6); }
+    b.fig && b.fig.hitAt && b.fig.hitAt(new THREE.Vector3(x, 1.3 + hy, z), new THREE.Vector3(Math.sin(dir), 0, Math.cos(dir)), { power: small ? 0.5 : [0.5, 0.9, 1.15, 1.6, 2.2][tier], chips: !small && !up });
+    // up she goes: the lift and the heavy when she's stunned or beaten; once her bar is empty, anything at all
+    const canLift = this._liftable();
+    if (up) {
+      if (s.spike) this._spike(dir);
+      else this._launch(s.launch ? 0.75 : fin && fin.perfect ? 0.6 : 0.36, dir, true);
+    } else if (canLift && s.launch) this._launch(s.launch, dir);
+    else if (fin && !ring) this._launch(fin.perfect || s.finisher ? 0.95 : on ? 0.45 : 0.2, dir);
+    // the finisher, the heavy and a hit sent back throw her into the room
+    else if (d.knock && !ring) { this._knock(d.knock, dir); if (s.finisher) b.open(0.6); }
+    else if (d.push && !ring) this._knock(d.push, dir, true);
     // a counter that lands (the cut of a hit sent back) stuns her
     if (s.riposte) this._counterStun();
+    if (!ring) b.react && b.react(tier, dir);
+  }
+  // she can be lifted off the floor: beaten (the finale), or stunned, staggered or opened up
+  _liftable() {
+    const b = this.boss;
+    if (this.track.juggle === false || b.lockPos || !b.targetable || b.state === 'finished') return false;
+    return this.finale.on || b.state === 'open' || b.state === 'stagger' || b.dazed;
+  }
+  // The first few times a thing matters, the button for it shows over the one it's about: right click as a pink ring
+  // closes on YOU, Space (or Shift) under a white one, Space over her when she can be lifted. Once you've done each a
+  // few times it stops showing (kept with your progress). No words.
+  _coach() {
+    const hud = this.hud; if (!hud.hint) return;
+    const T = this._taught ||= (() => { try { return JSON.parse(localStorage.getItem('mp-taught') || '{}'); } catch (e) { return {}; } })();
+    const pl = this.player, b = this.boss, st = pl.stats, S = this._coachS ||= { catches: st.catches, lifts: st.lifts, over: 0, heavy: 0 };
+    // what you've just done counts
+    const learn = (k, n) => { if (n > 0) { T[k] = (T[k] || 0) + n; try { localStorage.setItem('mp-taught', JSON.stringify(T)); } catch (e) { /* fine */ } } };
+    learn('parry', st.catches - S.catches); S.catches = st.catches;
+    learn('lift', st.lifts - S.lifts); S.lifts = st.lifts;
+    if (pl.airborne && !S.air) learn('jump', this.threats && this.threats.some((n) => n.kind === 'white' && n.tl < 0.4) ? 1 : 0);
+    S.air = pl.airborne;
+    let p = null;
+    if (this.state === 'play' && !this.exec.on && pl.state !== 'dead' && this.spotUntil <= 0) {
+      const dev = this.input.used === 'keys' ? 'keys' : 'mouse', pulse = this.bm.tickPulse(this.t, 6);
+      const n = (this.threats || [])[0];
+      const liftable = b.targetable && b.hp > 0 && this._liftable() && !(this.air && this.air.up) && pl.grounded && Math.hypot(b.x - pl.x, b.z - pl.z) - b.radius < FEEL.reach + 1.2;
+      if (n && n.tl < 1.0 && n.kind === 'pink' && (T.parry || 0) < 4) { const sp = this.cam.toScreen(_SP.set(pl.x, 2.15 + pl.y, pl.z)); p = { key: 'parry', x: sp.x, y: sp.y, pulse: Math.max(0, 1 - n.tl * 2.5), dev }; }
+      else if (n && n.tl < 1.0 && n.kind === 'white' && (T.jump || 0) < 3) { const sp = this.cam.toScreen(_SP.set(pl.x, 2.15 + pl.y, pl.z)); p = { key: 'jump', x: sp.x, y: sp.y, pulse: Math.max(0, 1 - n.tl * 2.5), dev }; }
+      else if (liftable && (T.lift || 0) < 4) { const sp = this.cam.toScreen(_SP.set(b.x, 2.75 + (b.root.position.y || 0), b.z)); p = { key: 'jump', x: sp.x, y: sp.y, pulse, dev }; }
+    }
+    hud.hint(p);
+  }
+  // the song's own moments reach the picture: its big hits knock the camera a touch; where the arrangement steps up
+  // (a chorus coming in, a drop) the room's lights jump and the picture opens for a moment
+  _songMoments() {
+    if (this.state !== 'play') return;
+    const t = this.t;
+    // (after a rewind or a start part-way in: find our place again)
+    if (this._momT === undefined || t < this._momT - 0.5 || t > this._momT + 2) { this._hitI = this.songHits.findIndex((h) => h.t > t); if (this._hitI < 0) this._hitI = this.songHits.length; this._liftI = this.songLifts.findIndex((h) => h.t > t); if (this._liftI < 0) this._liftI = this.songLifts.length; }
+    this._momT = t;
+    while (this._hitI < this.songHits.length && this.songHits[this._hitI].t <= t) { const h = this.songHits[this._hitI++]; if (t - h.t < 0.1 && t - (this._hitAt || -9) > 0.9) { this._hitAt = t; this.cam.kick(0.5 + 0.9 * (h.k - 0.72) / 0.28); } }
+    while (this._liftI < this.songLifts.length && this.songLifts[this._liftI].t <= t) {
+      const h = this.songLifts[this._liftI++]; if (t - h.t > 0.15 || t < 3) continue;
+      this.cam.kick(2.2); this.cam.shake(0.35, 0.3);
+      this.fx.flash(new THREE.Color(0.1, 0.08, 0.07), 1);
+      const pl = this.player; this.fx.ring && this.fx.ring(pl.x, pl.z, GOLD, 5.5);
+      this._liftGlow = 1; this.track.onLift && this.track.onLift(this, h);
+    }
+    if (this._liftGlow > 0) { this._liftGlow = Math.max(0, this._liftGlow - this.dt / 1.6); const A = this.arena && (this.arena.arena || this.arena); if (A && A.setBeat) A.setBeat(0.5 * this._liftGlow + 0.3 * this.bm.drumPulse(t, 6)); }
+  }
+  // the ground under a slam: a ring runs out, the room's things in it break
+  _shock(x, z, r, s) {
+    this.fx.ring && this.fx.ring(x, z, s.on ? GOLD : COPPER, r);
+    this.fx.dust(x, z, 12, new THREE.Color(0.75, 0.7, 0.66));
+    this.cam.shake(0.7, 0.2);
+    this.arena.strikeArc && this.arena.strikeArc(x, z, 0, r, Math.PI, { ...s, heavy: true, slam: true }, this);
+    this.setPieces && this.setPieces.strikeArc(x, z, 0, r, Math.PI, { ...s, heavy: true });
+    this.sfx.slamFloor ? this.sfx.slamFloor(this.pan(x)) : this.sfx.impactArea && this.sfx.impactArea('white', this.pan(x), 'miss');
+  }
+  _whiff(s, deflected) {}
+  _strikeStart(s) {}
+  // over it: a little something for clearing what was under you
+  _over(x, z) {
+    if (this.t < (this._overT || 0)) return;
+    this._overT = this.t + 0.3;
+    this.fx.glitter(x, 0.4, z, new THREE.Color(2.2, 2.3, 2.8), 6, 0.4);
+    this._good(25);
   }
 
   // ---------------- the guard, her answer, the set ----------------
@@ -528,9 +686,10 @@ export class Fight {
     this.counters = (this.counters || 0) + 1;
   }
   // she's thrown a little way; a wall or a prop in the way stops her hard: it hurts her, and breaks what it can
-  _knock(dist, ang) {
+  _knock(dist, ang, light = false) {
     const b = this.boss, A = this.arena;
     if (this.track.knockback === false || b.move || b.pinned || !b.targetable || b.state === 'finished' || b.lockPos) return;
+    if (light && (b.busy || b.state !== 'perform' && b.state !== 'open')) return;
     const res = (x, z) => (A && A.resolve ? A.resolve(x, z, b.radius * 0.8) : { x, z });
     // standing somewhere the room keeps you out of (a stage, behind a counter): she stays put
     const here = res(b.x, b.z); if (Math.hypot(here.x - b.x, here.z - b.z) > 0.04) return;
@@ -546,6 +705,7 @@ export class Fight {
       if (slam) break;
     }
     if (Math.hypot(ex - b.x, ez - b.z) < 0.05 && !slam) return;
+    if (light && slam) return;
     b.moveTo(ex, ez, 0.16, { easing: 'out', face: false });
     // where she lands: a wall stops her hard; the room's ornaments in the way go to pieces (and so does a bit of her)
     this.after(0.13, () => {
@@ -634,44 +794,61 @@ export class Fight {
   // to more damage when you hit")
   _counterStun() {
     const b = this.boss; if (b.hp <= 0 || !b.targetable || b.state === 'finished' || this.state !== 'play') return;
-    this.cRun = this.t - (this._cLast ?? -99) < 8 * this.beat ? (this.cRun || 0) + 1 : 1;
+    this.cRun = this.t - (this._cLast ?? -99) < 12 * this.beat ? (this.cRun || 0) + 1 : 1;
     this._cLast = this.t;
-    const lvl = Math.min(3, this.cRun), beats = [0, 1, 2, 4][lvl], k = [1, 1.35, 1.6, 2.0][lvl], sec = beats * this.beat;
+    // the first opens her up for a moment (lift her and it lasts as long as you keep her up there); the second in a
+    // row takes her turn away: what she had coming goes, and nothing more comes until she's back on her feet
+    const lvl = Math.min(3, this.cRun), tp = this.bm.tickPeriod(this.t), ticks = [0, 3, 5, 8][lvl], k = [1, 1.3, 1.5, 1.8][lvl], sec = ticks * tp;
     b.daze(sec, k);
     this.fx.dazeStars && this.fx.dazeStars(b, lvl, sec);
     this._glimmer(lvl + 1, true);
-    if (lvl >= 3 && this.spotUntil <= 0) {
-      const PINKG = new THREE.Color(3.4, 0.8, 1.9);
-      for (const g of this.tele.list) if (!g.dead && g.kind !== 'gold') { this.fx.glitter(g.x, 0.35, g.z, g.kind === 'pink' ? PINKG : WHITE, 6, Math.min(1.4, (g.w || 1) * 0.5)); g.dead = true; }
-      this.proj.clear('boss');
-      for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
-      for (const bm of this.beams) if (bm.mesh) this.scene.remove(bm.mesh); this.beams.length = 0;
-      this.suppress = true; this._stunHold = this.t + sec;
-      this.sfx.crackGlaze && this.sfx.crackGlaze(this.pan(b.x));
-      this.cam.kick(1.4);
-    }
+    if (lvl >= 2 && this.spotUntil <= 0) { this._hush(sec); this.sfx.crackGlaze && this.sfx.crackGlaze(this.pan(b.x)); this.cam.kick(1.4); }
+  }
+  // her turn is over for sec seconds: everything of hers in the air and on the floor bursts, and nothing new comes
+  _hush(sec) {
+    const PINKG = new THREE.Color(3.4, 0.8, 1.9);
+    for (const g of this.tele.list) if (!g.dead && g.kind !== 'gold') { this.fx.glitter(g.x, 0.35, g.z, g.kind === 'pink' ? PINKG : WHITE, 6, Math.min(1.4, (g.w || 1) * 0.5)); g.dead = true; }
+    this.proj.clear('boss');
+    for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
+    for (const bm of this.beams) if (bm.mesh) this.scene.remove(bm.mesh); this.beams.length = 0;
+    this.suppress = true; this._stunHold = Math.max(this._stunHold || 0, this.t + sec);
   }
 
   // ---------------- the juggle ----------------
   // Her bar is empty: what you land on her throws her up, and what you land on her up there keeps her there (Alex,
   // 7 Nov: "it just juggles them into the air and you feel like its really cool"). She cartwheels; stop and she comes
   // down hard, on her feet, and goes back to what she was doing (in her last bars, back on her knees).
-  _launch(big, on, dir) {
+  // power 0..1: how hard she goes up. keep: she's up already and this holds her there
+  _launch(power, dir, keep = false) {
     const b = this.boss; if (b.state === 'finished' || !b.targetable || this.track.juggle === false) return;
     const A = this.air || (this.air = { y: 0, vy: 0, vx: 0, vz: 0, spin: 0, spinV: 0, up: false });
-    const k = big ? 8.6 : on ? 6.0 : 3.9;
+    const k = 3.6 + 5.6 * Math.min(1.2, power);
     A.vy = A.up ? Math.max(A.vy, 0) * 0.3 + k * 0.85 : k;
-    if (A.y > 2.2) A.vy *= 0.55;                       // (she stays in the picture)
-    A.vx += Math.sin(dir) * 1.3; A.vz += Math.cos(dir) * 1.3;
-    A.spinV += (A.spinV >= 0 ? 1 : -1) * (big ? 8 : 4.5) * (Math.sin(dir) >= 0 ? 1 : -1) * (A.up ? 1 : (Math.random() < 0.5 ? -1 : 1));
-    if (!A.up) { A.up = true; this._airIdle = b.pinned ? null : b.idleClip; b.move = null; b.pin('Jump_Loop'); }
+    if (A.y > 2.3) A.vy *= 0.5;                       // (she stays in the picture)
+    A.vx += Math.sin(dir) * 1.1; A.vz += Math.cos(dir) * 1.1; A.spiked = false;
+    A.spinV += (A.spinV >= 0 ? 1 : -1) * (2.5 + 6 * power) * (Math.sin(dir) >= 0 ? 1 : -1) * (A.up ? 1 : (Math.random() < 0.5 ? -1 : 1));
+    if (!A.up) {
+      A.up = true; A.finale = this.finale.on; this._airIdle = b.pinned ? null : b.idleClip; b._endMove && b._endMove(true); b.move = null; b.pin('Jump_Loop'); b.juggled = true;
+      this.fx.dust && this.fx.dust(b.x, b.z, 8); this.sfx.liftOff && this.sfx.liftOff(this.pan(b.x));
+      // up there she can't do a thing: her turn waits for her to come down
+      if (!this.finale.on && this.spotUntil <= 0) this._hush(0.5);
+    }
+  }
+  // driven down out of the air: she hits the floor hard
+  _spike(dir) {
+    const A = this.air; if (!A || !A.up) return;
+    A.vy = -27; A.vx = Math.sin(dir) * 2.5; A.vz = Math.cos(dir) * 2.5; A.spiked = true; A.spinV *= 0.3;
   }
   _airUpdate(dt) {
     const A = this.air, b = this.boss;
     this.cam.bossAirY = A && A.up ? A.y : 0;
     if (!A || !A.up) return;
     if (b.state === 'finished' || b.state === 'gone') { A.up = false; return; }
+    if (!this.finale.on && b.hp > 0) { this.suppress = true; this._stunHold = Math.max(this._stunHold || 0, this.t + 0.25); b.dazeUntil = Math.max(b.dazeUntil || 0, this.t + 0.25); if (b.state === 'perform') { b.state = 'open'; b.st = 0; b.openFor = 0.3; } else if (b.state === 'open') b.openFor = Math.max(b.openFor || 0, b.st + 0.3); }
     A.vy -= 24 * dt; A.y += A.vy * dt;
+    // (never up into the lights: the picture stays on the two of you)
+    const top = Math.min(2.9, (this.cam.room ? this.cam.room.top : 9) - 2.9);
+    if (A.y > top) { A.y = top; if (A.vy > 0) A.vy = 0; }
     const dk = Math.exp(-3 * dt); A.vx *= dk; A.vz *= dk;
     let nx = b.x + A.vx * dt, nz = b.z + A.vz * dt;
     const Ar = this.arena, bd = this.bounds, r = b.radius || 0.8;
@@ -683,12 +860,25 @@ export class Fight {
     if (A.vy < 0 && A.y < 0.9) { const upr = Math.round(A.spin / (Math.PI * 2)) * Math.PI * 2; A.spin += (upr - A.spin) * Math.min(1, dt * 14); A.spinV *= 0.9; }
     if (A.y <= 0 && A.vy < 0) {
       A.y = 0;
-      if (A.vy < -7.5) { A.vy = -A.vy * 0.22; this.fx.dust && this.fx.dust(b.x, b.z, 8); this.cam.shake(0.3, 0.1); this.sfx.breakProp && this.sfx.breakProp(this.pan(b.x)); }
+      if (A.spiked) {
+        A.spiked = false; A.vy = 5.2; A.spinV = 0; A.spin = Math.round(A.spin / (Math.PI * 2)) * Math.PI * 2;
+        this.fx.ring && this.fx.ring(b.x, b.z, GOLD, 2.6); this.fx.dust && this.fx.dust(b.x, b.z, 16, new THREE.Color(0.75, 0.7, 0.66)); this.fx.chips(b.x, 0.5, b.z, PORCELAIN, 22);
+        this.cam.shake(1.0, 0.24); this.cam.kick(1.6); this.sfx.slamSet ? this.sfx.slamSet(this.pan(b.x)) : this.sfx.breakProp && this.sfx.breakProp(this.pan(b.x));
+        if (b.rig && b.rig.hitStop) b.rig.hitStop(0.1);
+        if (b.targetable) { b.takeHit({ dmg: 18, kind: 'slam', heavy: true, x: b.x, z: b.z, onBeat: false }); this._good(150); this._pop('+' + Math.round(150 * this.mult).toLocaleString('en-US'), b.x, 1.6, b.z, 'gold'); }
+        this.setPieces && this.setPieces.slam(b.x, b.z, 1.6);
+        this.arena.strikeArc && this.arena.strikeArc(b.x, b.z, 0, 1.8, Math.PI, { heavy: true, slam: true, name: 'slam', dmg: 30 }, this);
+      }
+      else if (A.vy < -7.5) { A.vy = -A.vy * 0.22; this.fx.dust && this.fx.dust(b.x, b.z, 8); this.cam.shake(0.3, 0.1); this.sfx.breakProp && this.sfx.breakProp(this.pan(b.x)); }
       else {
         A.vy = 0; A.up = false; A.spin = 0; A.spinV = 0; A.vx = A.vz = 0;
         this.fx.dust && this.fx.dust(b.x, b.z, 6);
         if (this.finale.down && this.track.finalePin !== false) b.pin('Crouch_Idle_Loop');
-        else { b.pinned = false; if (this._airIdle) b.idleClip = this._airIdle; b.loop(b.idleClip || 'Idle_Loop', { fade: 0.2 }); }
+        else {
+          b.pinned = false; b.juggled = false; if (this._airIdle) b.idleClip = this._airIdle; b.loop(b.idleClip || 'Idle_Loop', { fade: 0.2 });
+          // back on her feet: a moment, then her turn comes back
+          if (!this.finale.on && b.hp > 0) { const tp = this.bm.tickPeriod(this.t); b.daze(tp * 1.5, b.openK || 1.3); this._stunHold = Math.max(this._stunHold || 0, this.t + tp * 1.5); }
+        }
       }
     }
     // on the picture: up, and turning about her middle (not her feet)
@@ -886,14 +1076,15 @@ export class Fight {
   // the rewind: the colour drains while the record winds back (no TV lines: Alex wants it clean)
   _rewindFx(on) { const fx = this.app.post.fx; fx.vhs = 0; fx.desat = on ? 0.6 : 0; }
   _resetTo(cp) {
-    this.proj.clear(); this.tele.clear(); this.fx.clear();
+    this.proj.clear(); this.tele.clear(); this.fx.clear(); this._late = null;
     for (const w of this.waves) this._dropWave(w); this.waves.length = 0;
     for (const b of this.beams) if (b.mesh) this.scene.remove(b.mesh); this.beams.length = 0;
     if (this.spotUntil > 0) this._endSpotlight();
-    this.boss.pinned = false; this.boss.dazeUntil = 0; this.cRun = 0;
+    this.boss.pinned = false; this.boss.juggled = false; this.boss.dazeUntil = 0; this.cRun = 0;
     if (this._stunHold) { this._stunHold = 0; if (this.spotUntil <= 0) this.suppress = false; }
     if (this._airOn) { const o = this._airOn, r = this.boss.root; r.position.x -= o.dx; r.position.y -= o.dy; r.position.z -= o.dz; r.rotation.z = 0; this._airOn = null; }
     if (this.air) { this.air.up = false; this.air.y = 0; this.air.vy = 0; this.cam.bossAirY = 0; }
+    this.exec.reset(); this._shatterOpts = null;
     this.boss.restore(cp.boss);
     this.boss._now = cp.t; this.boss.busyUntil = 0;
     if (this.boss.hp > 0) this.finale.reset();
@@ -920,7 +1111,8 @@ export class Fight {
     this.hud.show(false);
     this.cam.shake(1.6, 0.45); this.cam.kick(3);
     this.proj.clear('boss'); this.tele.clear();
-    if (this.boss.fig && this.boss.fig.shatter) this.boss.fig.shatter(); else this.boss.root.visible = false;
+    const so = this._shatterOpts;
+    if (so && so.none) { /* her death scene has dealt with her */ } else if (this.boss.fig && this.boss.fig.shatter) this.boss.fig.shatter(so || undefined); else this.boss.root.visible = false;
     this.fx.chips(this.boss.x, 1.4, this.boss.z, PORCELAIN, 90); this.fx.glitter(this.boss.x, 1.5, this.boss.z, GOLD, 80, 1.4);
     this.boss.state = 'finished';
     this.score += 5000 * this.mult;
@@ -929,8 +1121,9 @@ export class Fight {
     // the camera leans in on the two of you (you keep control), then lets go
     const bx = this.boss.x, bz = this.boss.z, px = this.player.x, pz = this.player.z;
     const mx = (bx + px) / 2, mz = (bz + pz) / 2;
-    this.cam.override = { pos: new THREE.Vector3(mx + 1.5, 6.5, mz + 7.5), look: new THREE.Vector3(mx, 1.0, mz), k: 0 };
-    this._finishT = 0;
+    // (her death scene keeps its own picture, and lets go of it itself)
+    if (this.exec.on) this.exec.finish();
+    else { this.cam.override = { pos: new THREE.Vector3(mx + 1.5, 4.2, mz + 8.5), look: new THREE.Vector3(mx, 1.0, mz), k: 0 }; this._finishT = 0; }
     this.track.onFinish && this.track.onFinish(this);
     // the song plays out; then results
     this._seq([[Math.max(1.5, this.duration - this.t + 0.4), () => this._done(true)]]);
@@ -963,7 +1156,8 @@ export class Fight {
     const st = this.player.stats;
     const fi = this.finale;
     const result = { won, score: this.score, rewinds: this.rewinds, encores: this.encores, stats: st, grade: this.grade(),
-      finale: fi.on ? { bonus: fi.bank, rings: fi.perfect, of: fi.total, finalBlow: fi.finalBlow, kept: fi.kept > 1 } : null };
+      finale: fi.on ? { bonus: fi.bank, rings: fi.perfect, of: fi.total, finalBlow: fi.finalBlow, kept: fi.kept > 1 } : null,
+      kill: this.exec.on || this.exec.over ? { hits: this.exec.hits, of: this.exec.total } : null };
     this.resultCb && this.resultCb(result);
   }
   grade() {
@@ -996,7 +1190,9 @@ export class Fight {
     if (this._bloomBase !== undefined) this.app.post.fx.bloom = this._bloomBase;
     this.app.post.fx.focusK = 0; this.cam.soloK = 0;
     const A = this.arena && (this.arena.arena || this.arena); if (A && A.setBeat) A.setBeat(0);
-    this.hud.keycap(false); this.hud.finale(false); this.hud.chain(0, 1);
+    this.hud.keycap(false); this.hud.finale(false); this.hud.chain(0, 1); this.hud.hint && this.hud.hint(null);
+    this.exec && this.exec.dispose();
+    if (this.herXray) { this.herXray.dispose(); this.herXray = null; }
     this.fx.drawTargets && this.fx.drawTargets([]);
     this.sfx.detach && this.sfx.detach();
     this.proj.clear(); this.tele.clear(); this.fx.clear();

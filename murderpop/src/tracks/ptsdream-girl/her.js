@@ -14,7 +14,7 @@ const PINKC = new THREE.Color(3.6, 0.5, 1.5), GOLDC = new THREE.Color(3.4, 2.1, 
 
 // ---------------------------------------------------------------- shared look bits
 let GRENADE = null;
-function grenadeModel(H = 0.5) {
+export function grenadeModel(H = 0.5) {
   if (!GRENADE) {
     const g = grenadeGeometry(1);
     GRENADE = {
@@ -126,10 +126,27 @@ export class Her {
     if (hold) f.at((at ?? f.t) + hold, () => { if (!this.tr.wrecked) fig.setExpression(this.tr.baseExpr || 'smug', { fade: 0.3 }); });
   }
   place(x, z, face) { const b = this.boss; b.place(x, z, face ?? toward({ x, z }, this.f.player)); }
+  // a spot she can stand on: the nearest open floor to (x, z), clear of whatever's down (a flicker never puts her
+  // inside the island, the bed, a door post)
+  floor(x, z) { return this.tr.safeSpot ? this.tr.safeSpot(x, z, this.boss.radius * 0.8 + 0.04) : { x, z }; }
   hide(on) {
     const b = this.boss;
+    if (b.scene && on) return;            // her death scene has her: she doesn't vanish out of it
     b.intangible = on; b.root.visible = !on;
     if (b.fig && b.fig.world) b.fig.world.visible = true;
+  }
+  // her death scene begins: whatever she was in the middle of ends where it is (a leap comes down, a flicker comes
+  // back), and she is there to be seen
+  standDown() {
+    const b = this.boss;
+    for (const j of this.extraUpdate) j.cancel && j.cancel();
+    this.extraUpdate.length = 0;
+    for (const g of this.grenades) { for (const h of g.tickH || []) this.snd.stop(h); this._dispose(g); g.state = 'gone'; }
+    this.grenades.length = 0;
+    this.slapOn = false; this.watch = 0;
+    b.intangible = false; b.root.visible = true; b.lockFacing = false;
+    b.root.position.y = 0;
+    this.tr.extra && this.tr.extra.hideAllHeld();
   }
 
   // ---------- GRENADE ----------
@@ -340,6 +357,7 @@ export class Her {
     const f = this.f;
     const fire = () => {
       const b = this.boss;
+      if (b.scene) return;                 // (a kiss she'd wound up for as her death scene began)
       if (!from && (!b.root.visible || b.intangible)) return;
       const tgt = aim || f.player;
       // up close it's one kiss, softer, from her lips: yours to catch on the beat
@@ -411,7 +429,7 @@ export class Her {
     const f = this.f;
     const go = () => {
       const b = this.boss;
-      if (b.state === 'finished') return;
+      if (b.state === 'finished' || b.scene) return;
       this.tear(b.x, b.z);
       this.snd.play('vhs', { x: b.x });
       this.hide(true);
@@ -421,11 +439,13 @@ export class Her {
   in(t, x, z, { tell = 'floor', face = null, clip = null } = {}) {
     const f = this.f, bt = this.beatAt(t);
     const tellT = t - bt;
-    const doTell = () => { if (tell === 'floor') this.reflection(x, z, f.t, t); else this.tr.set && this.tr.set.tell(tell, f.t, t); this.snd.play(tell === 'floor' ? 'hiss' : 'latch', { x }); };
+    // out of the floor: on open floor (the spot asked for may be under something that's down)
+    if (tell === 'floor') ({ x, z } = this.floor(x, z));
+    const doTell = () => { if (this.boss.scene) return; if (tell === 'floor') this.reflection(x, z, f.t, t); else this.tr.set && this.tr.set.tell(tell, f.t, t); this.snd.play(tell === 'floor' ? 'hiss' : 'latch', { x }); };
     if (tellT <= f.t + 0.005) doTell(); else f.at(tellT, doTell);
     const go = () => {
       const b = this.boss;
-      if (b.state === 'finished') return;
+      if (b.state === 'finished' || b.scene) return;
       this.place(x, z, face ?? undefined);
       this.hide(false);
       this.tear(x, z, 0.12);
@@ -567,14 +587,16 @@ export class Her {
   // she goes up (off the top of the frame) at t0 and comes down on sh at t1
   leap(t0, t1, sh, { clipUp = 'Jump_Start', clipDown = 'Jump_Land', height = 13 } = {}) {
     const f = this.f;
+    // she comes down on the circle, on open floor (YOU can stand closer to a thing than she can: a hand's width off)
+    const land = () => { const b = this.boss, q = this.floor(sh.x, sh.z); b.place(q.x, q.z); };
     const job = { update: (dt, t) => {
       const b = this.boss;
       if (t < t0) return true;
       const up = 0.28, down = 0.2;
       if (t < t0 + up) { const k = (t - t0) / up; b.root.position.y = height * k * k; b.intangible = true; }
       else if (t < t1 - down) { b.root.position.y = height; b.intangible = true; b.root.visible = false; }
-      else if (t < t1) { if (!job.placed) { job.placed = true; b.place(sh.x, sh.z); b.root.visible = true; b.perform(clipDown, { duration: 0.5, from: 0, to: 1 }); } const k = (t1 - t) / down; b.root.position.y = height * k * k; }
-      else { b.root.position.y = 0; b.intangible = false; b.root.visible = true; if (!job.placed) b.place(sh.x, sh.z); return false; }
+      else if (t < t1) { if (!job.placed) { job.placed = true; land(); b.root.visible = true; b.perform(clipDown, { duration: 0.5, from: 0, to: 1 }); } const k = (t1 - t) / down; b.root.position.y = height * k * k; }
+      else { b.root.position.y = 0; b.intangible = false; b.root.visible = true; if (!job.placed) land(); return false; }
       return true;
     }, cancel: () => { const b = this.boss; b.root.position.y = 0; b.intangible = false; b.root.visible = true; } };
     this.extraUpdate.push(job);
@@ -596,7 +618,7 @@ export class Her {
   breakdown(t0, there, swipeT) {
     const f = this.f, pl = f.player;
     const aim = Math.atan2(f._aim ? f._aim.x - pl.x : 0, f._aim ? f._aim.z - pl.z : -1);
-    const bx = clamp(pl.x - Math.sin(aim) * 2.2, -10, 10), bz = clamp(pl.z - Math.cos(aim) * 2.2, -6.5, 6.5);
+    const { x: bx, z: bz } = this.floor(clamp(pl.x - Math.sin(aim) * 2.2, -10, 10), clamp(pl.z - Math.cos(aim) * 2.2, -6.5, 6.5));
     this.out(t0);
     this.reflection(bx, bz, t0, there);
     f.at(t0, () => this.snd.play('whoosh', { pan: -f.pan(pl.x) * 0.5, rate: 0.7 }));
@@ -623,7 +645,7 @@ export class Her {
   }
 
   // ---------- CROWN SEARCH ---------- she walks to the cushion, finds it empty, pats it, looks around: open
-  crown(t0, t1, { at = { x: 0, z: -5.0 } } = {}) {
+  crown(t0, t1, { at = { x: 0, z: -4.9 } } = {}) {
     const f = this.f, b = this.boss;
     const go = () => {
       if (b.intangible) this.hide(false);
@@ -646,7 +668,7 @@ export class Her {
     const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
     beats.forEach((tb, i) => {
       const bt = this.beatAt(tb);
-      const spot = () => { const pl = f.player; const [dx, dz] = dirs[i % 4]; return { x: clamp(pl.x + dx * dist, -10.2, 10.2), z: clamp(pl.z + dz * dist * 0.85, -6.4, 6.4) }; };
+      const spot = () => { const pl = f.player; const [dx, dz] = dirs[i % 4]; return this.floor(clamp(pl.x + dx * dist, -10.2, 10.2), clamp(pl.z + dz * dist * 0.85, -6.4, 6.4)); };
       let p = null;
       f.at(tb - bt, () => { p = spot(); this.reflection(p.x, p.z, f.t, tb); this.snd.play('hiss', { x: p.x }); });
       f.at(tb, () => {
@@ -698,7 +720,7 @@ export class Her {
   // the bar is empty: everything of hers turns to glitter, this frame
   glitterAll() {
     const f = this.f;
-    for (const g of this.grenades) { f.fx.glitter(g.model.root.position.x, 0.5, g.model.root.position.z, PINKC, 20, 1); this._dispose(g); g.state = 'gone'; }
+    for (const g of this.grenades) { f.fx.glitter(g.model.root.position.x, 0.5, g.model.root.position.z, PINKC, 20, 1); for (const h of g.tickH || []) this.snd.stop(h); this._dispose(g); g.state = 'gone'; }
     for (const p of f.proj.list) if (p.owner === 'boss') { f.fx.glitter(p.x, p.y, p.z, PINKC, 6, 0.4); p.dead = true; }
     f.tele.clear();
     for (const w of f.waves) f._dropWave(w);        // the ring's material goes back to the fight's pool

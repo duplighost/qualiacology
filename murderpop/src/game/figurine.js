@@ -38,6 +38,7 @@
 //   accessories: [{ type, name, ...opts }]: hat veil catEars tiara sunglasses pearls skirt coat handcuffs cuffs nametag tape shoes
 //   breaks: the three notch pieces, in order: accessory names/types, or body parts (hand_l/r forearm_l/r face
 //           shoulder_l/r chest back; at most four, their masks are baked at build time)
+import { HERO } from '../engine/herolight.js';
 import * as THREE from 'three';
 import { Rig } from '../engine/character.js';
 import { FXK } from '../engine/post.js';
@@ -782,7 +783,8 @@ export class Figurine {
     if (this.shatterAge !== undefined) { this.shatterAge += dt; this.U.fShardGlow.value = (0.9 * Math.exp(-this.shatterAge * 2.5) + 0.06) * Math.min(1, FXK.value); }
     // the white pop on a hit: quieter in a dark room raised by exposure (a combo strobed her pale)
     // her silhouette keeps a pale rim, so she reads on a dark floor (scaled like every glow: FXK)
-    if (this.U.fRim) this.U.fRim.value.setRGB(0.42, 0.36, 0.48).multiplyScalar((this.rimK ?? 1) * 0.55 * Math.min(1.2, FXK.value));
+    if (this.U.fRim) this.U.fRim.value.setRGB(0.42, 0.36, 0.48).multiplyScalar((this.rimK ?? 1) * 0.7 * Math.min(1.2, FXK.value));
+    if (this.U.fHero) this.U.fHero.value.setRGB(0.98, 0.92, 0.96).multiplyScalar((this.heroK ?? 1) * HERO.k * Math.min(1.2, FXK.value));
     this.pop = Math.max(0, (this.pop || 0) - dt * 14); this.U.fHitPop.value = Math.max(this.pop * 0.75, (this.hardK || 0) * 0.32) * Math.min(1, FXK.value);
     for (let s = 0; s < 4; s++) this.breakAge[s] += dt;
     this.U.fBreakAge.value.set(...this.breakAge);

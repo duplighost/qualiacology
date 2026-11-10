@@ -60,6 +60,7 @@ export class Justice {
     this.strikes = [];          // [{t, raise, hold}] scheduled gavel strikes
     this.tremUntil = -9;
     this.tilt = 0.25; this.tiltV = 0; this.tiltTarget = 0.25;   // + = GUILTY pan down
+    this.pose = null;
     this.panItems = [];
     this.waves = [];
     this.scale = o.scale ?? 4.0;
@@ -208,13 +209,15 @@ export class Justice {
   }
   setStateAt(t) {
     this.strikes = this.strikes.filter((s) => s.t <= t);
-    this.tremUntil = -9;
+    this.tremUntil = -9; this.pose = null;
     for (const w of this.waves) this.group.remove(w.m); this.waves = [];
     this.tiltTarget = this.f.court && !this.f.court.pretty ? -0.32 : 0.25; this.tilt = this.tiltTarget; this.tiltV = 0;
   }
 
   // the arm: 0 = the gavel's head on the block, 1 = raised high
+  // (her death scene holds the arm itself: this.pose is then a function returning where it is)
   armAt(t) {
+    if (this.pose) return this.pose(t);
     let k = 0.04;
     for (const s of this.strikes) {
       const top = Math.min(s.peak, s.t - 0.1), slam = s.t - 0.1;
