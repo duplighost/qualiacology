@@ -88,6 +88,7 @@ Old copies and retired folders are in `D:\Archive`; never copy from there.
 | starstruck | `node tools/build-site-copy.mjs --site=<this repo>` writes `starstruck/`; never hand-edit the site copy |
 | murderpop | `node tools/build-site-copy.mjs <this repo>` (it copies the card too); never hand-edit the site copy |
 | sill | the page here (`sill/index.html`) is hand-written. The game is a Windows desktop app built in `D:\Projects\sill`; its download is `SILL-windows.zip` on this repo's GitHub release `sill-v1.0.0` |
+| murderpop-greatest-hits | the page here (`murderpop-greatest-hits/index.html`) is hand-written. The game is an Unreal game built in `C:\Projects\MURDERPOP-GREATEST-HITS` by `tools\package.ps1`; its download is `MURDERPOP-GREATEST-HITS-windows.zip` on this repo's GitHub release `murderpop-greatest-hits-v1.0.0` (one file of a release must be under 2 GB). A new build is a new release and a new tag in `_redirects` |
 | everything else | none: the site copy here is the only source |
 
 ## Access and machine notes

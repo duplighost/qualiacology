@@ -93,6 +93,20 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "murderpop-greatest-hits",
+      "title": "MURDERPOP: GREATEST HITS",
+      "descriptor": "Hoverboard rides and rhythm boss fights",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/murderpop-greatest-hits-card-v20261117.jpg",
+      "alt": "A red-haired woman in a torn ivory dress, a bloodied baseball bat over her shoulder, looking back over it in an arena of pink stage screens. A giant cracked porcelain face fills the screen behind her, porcelain dancers on the stage under it, and the title MURDERPOP: GREATEST HITS in pink",
+      "summary": "Forty-three songs. One board. Every dip is a downbeat. In nineteen of them the song’s narrator comes down off the record to fight you, and the fight is the song. A Windows download, not a page.",
+      "metaDescription": "MURDERPOP: GREATEST HITS is a Windows game: forty-three songs ridden on a hoverboard, every dip a downbeat, and nineteen boss fights where the song’s narrator is the boss and the fight is the song. Keyboard and mouse.",
+      "controls": "Windows download · hold Space or click downhill, let go on the line · A/D or the mouse steers · in a fight: WASD move, left click strikes, right click guards · Esc pause, and the keys",
+      "actionLabel": "Download",
+      "duration": "Forty-three songs, about two and a half hours"
+    },
+    {
       "slug": "murderpop",
       "title": "MURDERPOP",
       "descriptor": "Rhythm boss fights",
