@@ -93,6 +93,19 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "everhouse",
+      "title": "EVERHOUSE",
+      "descriptor": "First-person horror",
+      "group": "horror",
+      "featured": false,
+      "image": "/assets/games/everhouse-ballroom-v1.jpg",
+      "alt": "A grand piano and wooden chairs stand around a flooded ballroom. The chandelier is still lit under the water.",
+      "summary": "The house has been alone for a very long time, and now it finally has a guest. It builds new rooms out of whatever you seem to like. It rearranges itself so you won’t find the way out.",
+      "metaDescription": "A first-person Windows game by Alexander Duncan Guitar. The house builds new rooms out of whatever you seem to like. It rearranges itself so you won’t find the way out.",
+      "controls": "Windows download · WASD and mouse to walk and look · E or left click to touch, take or place · middle click to lift or drag · Esc for controls",
+      "actionLabel": "Download"
+    },
+    {
       "slug": "murderpop-greatest-hits",
       "title": "MURDERPOP: GREATEST HITS",
       "descriptor": "Hoverboard rides and rhythm boss fights",
