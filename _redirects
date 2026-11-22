@@ -127,6 +127,9 @@
 /last-chorus.html  /sidechain/  301!
 /chorus  /sidechain/  302
 
+# --- EVERHOUSE ---
+/everhouse/download  https://github.com/duplighost/qualiacology/releases/download/everhouse-v1.0.0/EVERHOUSE-Windows.zip  302
+
 # --- MURDERPOP: GREATEST HITS (a Windows download: its zip is on this repo's GitHub release) ---
 /greatest-hits  /murderpop-greatest-hits/  302
 /murderpop-greatest-hits/download  https://github.com/duplighost/qualiacology/releases/download/murderpop-greatest-hits-v1.0.0/MURDERPOP-GREATEST-HITS-windows.zip  302
