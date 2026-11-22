@@ -55,10 +55,12 @@ jobs:
           generated_status="$(git status --porcelain -- \
             index.html \
             games/index.html \
+            arcade/index.html \
             music/index.html \
             psychopharmacology/index.html \
             sitemap.xml \
-            assets/hub)"
+            assets/hub \
+            assets/arcade/catalog.*.json)"
           if [[ -n "$generated_status" ]]; then
             printf '%s\n' "$generated_status"
             echo "Generated hub files are not current. Run npm run build and commit the result."

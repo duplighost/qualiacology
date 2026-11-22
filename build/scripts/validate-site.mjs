@@ -11,6 +11,7 @@ const generatedPages = [
   "index.html",
   join("psychopharmacology", "index.html"),
   join("games", "index.html"),
+  join("arcade", "index.html"),
   join("music", "index.html"),
 ];
 
@@ -88,7 +89,7 @@ for (const page of generatedPages) {
   assert(!/<style(?:\s|>)/i.test(html), `Inline style block found in ${page}`);
   assert(!/\sstyle="/i.test(html), `Inline style attribute found in ${page}`);
   assert(!/(?:fonts\.googleapis|cdnjs|font-?awesome)/i.test(html), `External font or icon dependency found in ${page}`);
-  assert(!html.toLowerCase().includes("blackthorn"), `Blackthorn reference found in ${page}`);
+  if (page !== join("arcade", "index.html")) assert(!html.toLowerCase().includes("blackthorn"), `Blackthorn reference found in ${page}`);
   assert((html.match(/<h1(?:\s|>)/g) || []).length === 1, `Expected exactly one H1 in ${page}`);
   for (const target of collectLocalReferences(html)) {
     assert(exactPathExists(target), `Missing or case-mismatched reference in ${page}: /${target.replaceAll(sep, "/")}`);
@@ -111,6 +112,35 @@ const home = read("index.html");
 const gamesPage = read(join("games", "index.html"));
 const musicPage = read(join("music", "index.html"));
 const sitemap = read("sitemap.xml");
+const arcadePage = read(join("arcade", "index.html"));
+const arcade = JSON.parse(readFileSync(join(projectRoot, "src", "content", "arcade-data.json"), "utf8"));
+const arcadeIds = new Set(), versionIds = new Set();
+assert(arcade.games.length === arcade.metadata.counts.families, "Arcade family count mismatch");
+assert(jsonLd(arcadePage).mainEntity.numberOfItems === arcade.games.length, "Arcade JSON-LD count mismatch");
+assert(sitemap.includes(`${data.site.origin}/arcade/`), "Arcade missing from sitemap");
+assert(arcade.games.filter(game => game.featured).length === expected.featuredGames, "Arcade featured selections changed");
+for (const game of arcade.games) {
+  assert(game.id && !arcadeIds.has(game.id), `Duplicate arcade family: ${game.id}`);
+  arcadeIds.add(game.id);
+  assert(game.title && game.versions.length && game.versions.some(version => version.id === game.preferredId), `Incomplete arcade entry: ${game.id}`);
+  assert(game.imageUrl, `Arcade image missing: ${game.id}`);
+  if (game.imageUrl.startsWith("/")) assert(exactPathExists(game.imageUrl), `Missing arcade cover: ${game.imageUrl}`);
+  for (const version of game.versions) {
+    assert(version.id && !versionIds.has(version.id), `Duplicate arcade build: ${version.id}`);
+    versionIds.add(version.id);
+    for (const value of [version.url, version.downloadUrl].filter(Boolean)) {
+      assert(/^https:\/\//.test(value), `Unsafe arcade launch URL: ${game.id}`);
+      assert(!/chatgpt\.com\/library|libfile_|(?:[?&])(?:token|secret|authorization)=/i.test(value), `Private reference in arcade launch URL: ${game.id}`);
+    }
+  }
+}
+assert(versionIds.size === arcade.metadata.counts.versions, "Arcade build count mismatch");
+const arcadeText = JSON.stringify(arcade);
+assert(!/libfile_|file_000000|\/workspace\/|[A-Z]:\\\\/.test(arcadeText), "Private file reference in public arcade data");
+for (const game of data.games) {
+  const matches = arcade.games.filter(entry => entry.title === game.title && entry.description === game.summary);
+  assert(matches.length > 0, `Authored website description missing from arcade: ${game.title}`);
+}
 const publicHubText = [home, read(join("psychopharmacology", "index.html")), sitemap].join("\n").toLowerCase();
 assert(!publicHubText.includes("this helped someone"), "Retired book title remains in public hub");
 assert(!publicHubText.includes("book.html"), "Retired book URL remains in public hub");
