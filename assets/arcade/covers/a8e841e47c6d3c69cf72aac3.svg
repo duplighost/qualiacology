@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-labelledby="title desc">
+<title id="title">SPAGHETTI and AL DENTE | Qualiacology — title artwork</title>
+<desc id="desc">Title artwork · gameplay screenshot not yet captured</desc>
+<rect width="800" height="450" fill="#1c2926"/>
+<rect x="24" y="24" width="752" height="402" rx="15" fill="none" stroke="#84baa0" stroke-opacity=".45"/>
+<path d="M24 92h752M24 360h752" stroke="#84baa0" stroke-opacity=".3" stroke-dasharray="3 7"/>
+<circle cx="24" cy="92" r="7" fill="#1c2926"/><circle cx="776" cy="92" r="7" fill="#1c2926"/>
+<circle cx="24" cy="360" r="7" fill="#1c2926"/><circle cx="776" cy="360" r="7" fill="#1c2926"/>
+<g fill="none" stroke="#84baa0" stroke-width="2" opacity=".13"><path d="M576 183l95-95 57 57-95 95zM600 206l95-95"/></g>
+<g font-family="Arial, Helvetica, sans-serif" fill="#84baa0" font-size="13" font-weight="700" letter-spacing="3">
+<text x="62" y="65">QUALIACOLOGY / ARCADE</text>
+<text x="62" y="392" font-size="12" letter-spacing="2">TITLE ARTWORK</text>
+</g>
+<g fill="#f3eee6" font-family="Arial, Helvetica, sans-serif" font-weight="800"><text x="62" y="181.8" font-size="62" textLength="582.2" lengthAdjust="spacingAndGlyphs">SPAGHETTI and AL</text><text x="62" y="250.6" font-size="62" textLength="247.0" lengthAdjust="spacingAndGlyphs">DENTE |</text><text x="62" y="319.4" font-size="62" textLength="405.7" lengthAdjust="spacingAndGlyphs">Qualiacology</text></g>
+<text x="62" y="414" font-family="Arial, Helvetica, sans-serif" fill="#c2bcb7" font-size="11">Gameplay screenshot not yet captured</text>
+<g transform="translate(694 58)" stroke="#84baa0" stroke-width="2" fill="none" opacity=".8"><path d="M-9 0h18M0-9v18"/><circle cx="35" cy="-5" r="3"/><circle cx="43" cy="5" r="3"/></g>
+</svg>

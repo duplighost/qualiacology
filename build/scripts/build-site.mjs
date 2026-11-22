@@ -10,6 +10,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkCatalog } from "./expected.mjs";
+import { arcadeMain } from "./arcade-page.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Publish target defaults to the site repo root (one level above build/), so
@@ -19,6 +20,7 @@ const outputRoot = rootArgument ? resolve(projectRoot, rootArgument) : resolve(p
 const sourceRoot = join(projectRoot, "src");
 const data = JSON.parse(readFileSync(join(sourceRoot, "content", "site-data.json"), "utf8"));
 const { site, games, albums, psych } = data;
+const arcade = JSON.parse(readFileSync(join(sourceRoot, "content", "arcade-data.json"), "utf8"));
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -86,13 +88,23 @@ function buildAssets() {
     }
   }
 
-  const css = readFileSync(join(sourceRoot, "site.css"));
+  const css = Buffer.concat([readFileSync(join(sourceRoot, "site.css")), Buffer.from("\n"), readFileSync(join(sourceRoot, "arcade.css"))]);
   const js = readFileSync(join(sourceRoot, "site.js"));
   const cssName = `qualiacology.${hash(css)}.css`;
   const jsName = `qualiacology.${hash(js)}.js`;
   writeFileSync(join(hubRoot, cssName), css);
   writeFileSync(join(hubRoot, jsName), js);
-  return { css: `/assets/hub/${cssName}`, js: `/assets/hub/${jsName}` };
+  const arcadeJs = readFileSync(join(sourceRoot, "arcade.js"));
+  const arcadeJsName = `arcade.${hash(arcadeJs)}.js`;
+  for (const name of readdirSync(hubRoot)) if (/^arcade\.[a-f0-9]{12}\.js$/.test(name)) unlinkSync(join(hubRoot,name));
+  writeFileSync(join(hubRoot, arcadeJsName), arcadeJs);
+  const catalogRoot = join(outputRoot, "assets", "arcade");
+  mkdirSync(catalogRoot, {recursive:true});
+  const catalogBytes = Buffer.from(JSON.stringify(arcade));
+  const catalogName = `catalog.${hash(catalogBytes)}.json`;
+  for (const name of readdirSync(catalogRoot)) if (/^catalog\.[a-f0-9]{12}\.json$/.test(name)) unlinkSync(join(catalogRoot,name));
+  writeFileSync(join(catalogRoot,catalogName),catalogBytes);
+  return { css: `/assets/hub/${cssName}`, js: `/assets/hub/${jsName}`, arcadeJs: `/assets/hub/${arcadeJsName}`, arcadeData: `/assets/arcade/${catalogName}` };
 }
 
 let builtAssets;
@@ -115,6 +127,7 @@ function header(current) {
       <nav class="desktop-nav" aria-label="Primary navigation">
         ${navLink("/psychopharmacology/", "Psychopharmacology", "psych", current)}
         ${navLink("/games/", "Games", "games", current)}
+        ${navLink("/arcade/", "Arcade", "arcade", current)}
         ${navLink("/music/", "Music", "music", current)}
         ${navLink("/#connect", "Connect", "connect", current)}
         <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Discord</a>
@@ -132,6 +145,7 @@ function header(current) {
         <a href="/">Home</a>
         <a href="/psychopharmacology/">Psychopharmacology</a>
         <a href="/games/">Games</a>
+        <a href="/arcade/">Arcade</a>
         <a href="/music/">Music</a>
         <a href="/#connect">Connect</a>
         <a href="${escapeHtml(site.discord)}" ${external}>Join Discord</a>
@@ -198,10 +212,11 @@ function head({ title, description, path, schema, image = "/assets/visuals/quali
   <script src="${builtAssets.js}" defer></script>`;
 }
 
-function page({ current, title, description, path, schema, main, bodyClass = "" }) {
+function page({ current, title, description, path, schema, main, bodyClass = "", scripts = [] }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>${head({ title, description, path, schema })}
+${scripts.map(src => `<script src="${escapeHtml(src)}" defer></script>`).join("\n")}
 </head>
 <body class="${bodyClass}" data-page="${current}" data-game-count="${games.length}" data-album-count="${albums.length}">
 ${header(current)}
@@ -606,6 +621,8 @@ function gamesPage() {
       </div>
     </section>
 
+    <section class="container" aria-label="Complete arcade"><div class="arcade-gateway"><div><h2>The complete arcade</h2><p>${arcade.games.length.toLocaleString()} games, experiences, and experiments, with earlier builds, search, filters, and your own favorites.</p></div><a class="button button-primary button-arrow" href="/arcade/">Enter the arcade</a></div></section>
+
     <section class="section" aria-labelledby="catalog-title">
       <div class="container">
         <div class="section-heading">
@@ -715,6 +732,7 @@ function sitemap() {
     ["/", "1.0"],
     ["/psychopharmacology/", "0.9"],
     ["/games/", "0.9"],
+    ["/arcade/", "0.9"],
     ["/music/", "0.9"],
     ...games.map((game) => [routeForGame(game), "0.8"]),
     ...albums.map((album) => [routeForAlbum(album), "0.7"]),
@@ -741,6 +759,13 @@ builtAssets = buildAssets();
 write("index.html", homepage());
 write(join("psychopharmacology", "index.html"), psychopharmacologyPage());
 write(join("games", "index.html"), gamesPage());
+write(join("arcade", "index.html"), page({
+  current: "arcade", title: "The Complete Arcade | Qualiacology",
+  description: "Explore the complete collection of games, interactive worlds, and experiments by Alexander Duncan Guitar. Search, sort, save favorites, and revisit earlier builds.",
+  path: "/arcade/", bodyClass: "arcade-page", scripts: [builtAssets.arcadeJs],
+  schema: {"@context":"https://schema.org", "@type":"CollectionPage", name:"Qualiacology Arcade", url:`${site.origin}/arcade/`, mainEntity:{"@type":"ItemList",numberOfItems:arcade.games.length,itemListElement:arcade.games.map((game,index)=>({"@type":"ListItem",position:index+1,name:game.title,url:`${site.origin}/arcade/?game=${encodeURIComponent(game.id)}`}))}},
+  main: arcadeMain(arcade, builtAssets.arcadeData, escapeHtml),
+}));
 write(join("music", "index.html"), musicPage());
 write("sitemap.xml", sitemap());
 
