@@ -33,6 +33,8 @@
   };
   const KIND = {game:'Browser game', experience:'Interactive experience', collection:'Collection', native:'Desktop game'};
   const preferred = game => game.versions.find(v => v.id === game.preferredId) || game.versions[0];
+  // Missing, zero or invalid sizes are not comparable with recorded byte counts.
+  const buildBytes = v => Number.isSafeInteger(v?.bytes) && v.bytes > 0 ? v.bytes : null;
   const statusText = v => STATUS[v?.status] || 'Not yet playtested';
   const launchUrl = v => {
     if (!v || ['restricted','unavailable','broken','failed','needs-fix'].includes(v.status)) return '';
@@ -44,7 +46,7 @@
     const zone = /^\d{4}-\d{2}-\d{2}$/.test(value) ? 'UTC' : 'America/New_York';
     return new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',year:'numeric',timeZone:zone}).format(new Date(value));
   };
-  const bytesText = value => !value ? 'Not recorded' : value > 1e9 ? `${(value / 1e9).toFixed(2)} GB` : value > 1e6 ? `${(value / 1e6).toFixed(1)} MB` : `${Math.ceil(value / 1e3)} KB`;
+  const bytesText = value => buildBytes({bytes:value}) === null ? 'Not recorded' : value > 1e9 ? `${(value / 1e9).toFixed(2)} GB` : value > 1e6 ? `${(value / 1e6).toFixed(1)} MB` : `${Math.ceil(value / 1e3)} KB`;
   const isRecent = game => (game.lastDate || '') >= catalog.metadata.recentSince && game.lastDate <= catalog.metadata.recentUntil;
   const cover = (game, detail = false) => {
     const src = game.imageUrl || '/assets/arcade/cover-unavailable.svg';
@@ -64,7 +66,9 @@
   }
   function card(game) {
     const v = preferred(game);
-    return `<li class="arcade-card" data-game-id="${esc(game.id)}"><div class="arcade-card-media"><button type="button" data-open="${esc(game.id)}" aria-label="View ${esc(game.title)}">${cover(game)}</button>${favoriteButton(game)}</div><div class="arcade-card-copy"><div class="arcade-card-kicker"><span>${esc(game.genres[0] || KIND[game.kind] || 'Browser game')}</span><time datetime="${esc(game.lastDate || '')}">${esc(dateText(game.lastDate))}</time></div><h2><button type="button" data-open="${esc(game.id)}">${esc(game.title)}</button></h2>${game.description ? `<p class="arcade-card-description">${esc(game.description)}</p>` : ''}<div class="arcade-card-bottom"><p class="arcade-card-status">${esc(statusText(v))}</p><div class="arcade-card-actions">${action(game,v)}<button type="button" class="arcade-builds" data-open="${esc(game.id)}">${game.versions.length > 1 ? `${game.versions.length} builds` : 'Details & controls'}<span class="sr-only"> for ${esc(game.title)}</span></button></div></div></div></li>`;
+    const bytes = buildBytes(v);
+    const size = bytes === null ? "Size not recorded" : bytesText(bytes);
+    return `<li class="arcade-card" data-game-id="${esc(game.id)}"><div class="arcade-card-media"><button type="button" data-open="${esc(game.id)}" aria-label="View ${esc(game.title)}">${cover(game)}</button>${favoriteButton(game)}</div><div class="arcade-card-copy"><div class="arcade-card-kicker"><span>${esc(game.genres[0] || KIND[game.kind] || 'Browser game')}</span><time datetime="${esc(game.lastDate || '')}">${esc(dateText(game.lastDate))}</time></div><h2><button type="button" data-open="${esc(game.id)}">${esc(game.title)}</button></h2>${game.description ? `<p class="arcade-card-description">${esc(game.description)}</p>` : ''}<div class="arcade-card-bottom"><p class="arcade-card-status">${esc(statusText(v))} &middot; <span title="${bytes === null ? 'Preferred build size not recorded' : 'Preferred build: ' + bytes.toLocaleString() + ' bytes'}">${esc(size)}</span></p><div class="arcade-card-actions">${action(game,v)}<button type="button" class="arcade-builds" data-open="${esc(game.id)}">${game.versions.length > 1 ? `${game.versions.length} builds` : 'Details & controls'}<span class="sr-only"> for ${esc(game.title)}</span></button></div></div></div></li>`;
   }
   function normalize(value) { return String(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
   // Group supplied descriptions into short, useful menu categories. Keep the
@@ -118,7 +122,14 @@
       (state.shelf === 'all' || state.shelf === 'new' && isRecent(game) || state.shelf === 'favorites' && favorites.has(game.id) || state.shelf === 'recent' && recency.has(game.id))
     );
     const byTitle = (a,b) => a.title.localeCompare(b.title,undefined,{numeric:true,sensitivity:'base'});
-    filtered.sort((a,b) => state.shelf === 'recent' && state.sort === 'newest' ? recency.get(a.id)-recency.get(b.id) : state.sort === 'az' ? byTitle(a,b) : state.sort === 'za' ? byTitle(b,a) : state.sort === 'oldest' ? (Date.parse(a.firstDate)||Infinity)-(Date.parse(b.firstDate)||Infinity) || byTitle(a,b) : state.sort === 'featured' ? Number(b.featured)-Number(a.featured) || byTitle(a,b) : (Date.parse(b.lastDate)||0)-(Date.parse(a.lastDate)||0) || byTitle(a,b));
+    const bySize = (a,b) => {
+      const aBytes = buildBytes(preferred(a)), bBytes = buildBytes(preferred(b));
+      // Unknowns always come last, even when known sizes are descending.
+      if ((aBytes === null) !== (bBytes === null)) return aBytes === null ? 1 : -1;
+      if (aBytes !== null && aBytes !== bBytes) return state.sort === 'size-asc' ? aBytes-bBytes : bBytes-aBytes;
+      return byTitle(a,b) || a.id.localeCompare(b.id);
+    };
+    filtered.sort((a,b) => state.sort === 'size-asc' || state.sort === 'size-desc' ? bySize(a,b) : state.shelf === 'recent' && state.sort === 'newest' ? recency.get(a.id)-recency.get(b.id) : state.sort === 'az' ? byTitle(a,b) : state.sort === 'za' ? byTitle(b,a) : state.sort === 'oldest' ? (Date.parse(a.firstDate)||Infinity)-(Date.parse(b.firstDate)||Infinity) || byTitle(a,b) : state.sort === 'featured' ? Number(b.featured)-Number(a.featured) || byTitle(a,b) : (Date.parse(b.lastDate)||0)-(Date.parse(a.lastDate)||0) || byTitle(a,b));
     const pages = Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
     state.page = Math.min(pages,Math.max(1,state.page));
     const start = (state.page-1)*PAGE_SIZE;
