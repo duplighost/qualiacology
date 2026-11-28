@@ -18,7 +18,9 @@ with these differences:
    verbatim.
 
 3. **Detail page** `music/<slug>/index.html` — copy `music/summer-people/`
-   and swap content. The per-track `<em>` one-liners are Alex's voice; if you
+   and swap content. Leave the `<!-- site:head -->`, `<!-- site:header -->`
+   and `<!-- site:footer -->` markers where they are: the build fills them
+   (and fails, naming the page, if one is missing). The per-track `<em>` one-liners are Alex's voice; if you
    don't have his, list titles only, don't invent them. Note the validator
    walks EVERY .html under root, so this page needs a
    `<meta name="description">` ending in `.`/`!`/`?`.
@@ -29,8 +31,7 @@ with these differences:
    with a message naming the file.
 
 5. Albums have **no per-album short-links** (only `/records → /music/`) —
-   don't invent one. No `404.html` change needed (it names games, not
-   albums).
+   don't invent one.
 
 6. **Featured order = albums array order.** The homepage shows the 3 featured
    albums in array order. To put a new release in the first featured slot,

@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SILL | Qualiacology</title>
   <meta name="description" content="SILL is a wordless Windows game that lives on your desktop: an old window opens over your apps, a fledgling falls out of it, and you look after it from summer to winter by moving the window." />
-  <meta name="theme-color" content="#121427" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Qualiacology" />
   <meta property="og:title" content="SILL | Qualiacology" />
@@ -21,58 +20,111 @@
   <meta name="twitter:image" content="https://qualiacology.com/assets/og/sill-og-v1.jpg" />
   <link rel="canonical" href="https://qualiacology.com/sill/" />
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #121427; color: #ece6da;
-      font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
-      line-height: 1.6; min-height: 100vh;
-      background-image:
-        radial-gradient(ellipse at 18% -8%, rgba(255, 196, 120, 0.16), transparent 55%),
-        radial-gradient(ellipse at 95% 30%, rgba(120, 140, 255, 0.07), transparent 45%);
-    }
-    .home-link {
-      position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 20;
-      color: rgba(255, 214, 160, .85); text-decoration: none; font: 800 11px/1.2 system-ui, sans-serif;
-      letter-spacing: .14em; text-transform: uppercase; padding: 8px 12px; border-radius: 999px;
-      border: 1px solid rgba(255, 214, 160, .28); background: rgba(18, 20, 39, .72);
-    }
-    .home-link:hover, .home-link:focus-visible { color: #fff; border-color: rgba(255, 214, 160, .7); outline: 0; }
-    .wrap { max-width: 920px; margin: 0 auto; padding: 4.6rem 1.4rem 5rem; }
-    .eyebrow { text-transform: uppercase; letter-spacing: 0.28em; font-size: 0.72rem; color: #ffc27a; font-weight: 700; }
-    h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); line-height: 1; margin: 0.5rem 0 1.6rem; letter-spacing: 0.04em; }
-    .shot { width: 100%; height: auto; display: block; border-radius: 14px;
-      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06); }
-    .summary { font-size: clamp(1.08rem, 2.2vw, 1.3rem); max-width: 40em; margin: 2rem 0 2.2rem; }
-    .get { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.2rem; }
-    .button {
-      display: inline-block; background: #ffc27a; color: #1c1a14; text-decoration: none; font-weight: 800;
-      padding: 0.9rem 1.5rem; border-radius: 999px; letter-spacing: 0.02em;
-      box-shadow: 0 10px 30px rgba(255, 180, 90, 0.18);
-    }
-    .button:hover, .button:focus-visible { background: #ffd8a2; outline: 3px solid rgba(255, 214, 160, 0.45); outline-offset: 3px; }
-    .size { color: #a9a6b8; font-size: 0.95rem; }
-    .notes { margin-top: 2.6rem; color: #b7b3c4; font-size: 0.98rem; max-width: 40em; }
-    .notes p + p { margin-top: 0.7rem; }
-    @media (max-width: 560px) { .wrap { padding-top: 4rem; } }
-  </style>
+  <meta name="theme-color" content="#09090b" />
+  <!-- site:head -->
+  <link rel="preload" href="/assets/fonts/fraunces-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/hub/qualiacology.aed24b68449b.css">
+  <script src="/assets/hub/qualiacology.38c5e571b9f6.js" defer></script>
+  <!-- /site:head -->
 </head>
-<body>
-  <main class="wrap">
-    <p class="eyebrow">For Windows · Fifteen minutes or so</p>
-    <h1>SILL</h1>
-    <img class="shot" src="/assets/games/sill-card-clean.jpg" width="1280" height="720"
-      alt="An old cream-painted sash window open on a dark computer desktop. Through it, at sunset, a robin with a worm stands over a nestling in a nest. A speckled fledgling stands on the sill outside, looking back in, and light from the window falls on the desktop below." />
-    <p class="summary">A window opens on your desktop and something falls out of it. It can’t fly yet. It stands on your real windows and rides them when you move them. Get it home, feed it, keep it away from the cat, and then let it go.</p>
-    <div class="get">
-      <a class="button" href="/sill/download">Download SILL</a>
-      <span class="size">Windows 10 or 11 · a 140 MB zip</span>
+<body class="leaf-page" data-page="games">
+  <!-- site:header -->
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <div class="container header-row">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true">Q.</span>
+        <span class="brand-word">Qualiacology</span>
+      </a>
+      <nav class="desktop-nav" aria-label="Primary navigation">
+        <a class="nav-link" href="/games/" aria-current="page">Games</a>
+        <a class="nav-link" href="/music/">Music</a>
+        <a class="nav-link" href="/psychopharmacology/">Psychopharmacology</a>
+        <a class="nav-link" href="/arcade/">Arcade</a>
+        <a class="nav-link" href="#connect">Connect</a>
+        <a class="button button-outline button-small external-link" href="https://discord.gg/NwvxKxUJpC" target="_blank" rel="noopener noreferrer">Discord</a>
+      </nav>
+      <button class="menu-button" type="button" data-menu-open aria-expanded="false" aria-controls="site-menu">Menu<span class="menu-icon" aria-hidden="true"></span></button>
     </div>
-    <div class="notes">
-      <p>Unzip it and open SILL.exe. The first time, Windows says it doesn’t recognise it: More info, then Run anyway.</p>
-      <p>It sits on top of whatever you have open. Your mouse goes through to your own apps everywhere except the window and the bird.</p>
-      <p>Sound on. Right-click the bird by the clock to start over or quit.</p>
+  </header>
+  <dialog class="mobile-dialog" id="site-menu" data-menu-dialog aria-label="Menu">
+    <div class="dialog-shell">
+      <div class="dialog-head">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">Q.</span>
+          <span class="brand-word">Qualiacology</span>
+        </a>
+        <button class="dialog-close" type="button" data-menu-close>Close</button>
+      </div>
+      <nav class="dialog-nav" aria-label="Mobile navigation">
+        <a href="/">Home</a>
+        <a href="/games/" aria-current="page">Games</a>
+        <a href="/music/">Music</a>
+        <a href="/psychopharmacology/">Psychopharmacology</a>
+        <a href="/arcade/">Arcade</a>
+        <a href="#connect">Connect</a>
+        <a class="external-link" href="https://discord.gg/NwvxKxUJpC" target="_blank" rel="noopener noreferrer">Discord</a>
+      </nav>
+    </div>
+  </dialog>
+  <!-- /site:header -->
+  <main id="main-content" class="container leaf game-page">
+    <a class="crumb" href="/games/">Games</a>
+    <header class="game-head">
+      <p class="eyebrow">For Windows · Fifteen minutes or so</p>
+      <h1>SILL</h1>
+    </header>
+    <div class="game-split">
+      <figure class="game-shot">
+        <!-- site:shot -->
+<picture>
+    <source type="image/avif" srcset="/assets/catalog/games/sill-480.avif?v=bf2b0fac 480w, /assets/catalog/games/sill-800.avif?v=31175b15 800w, /assets/catalog/games/sill-1200.avif?v=b9a26418 1200w" sizes="(min-width: 2125px) 930px, (min-width: 1500px) calc(25.6vw + 386px), (min-width: 896px) 54vw, 94vw">
+    <source type="image/webp" srcset="/assets/catalog/games/sill-480.webp?v=0777d50e 480w, /assets/catalog/games/sill-800.webp?v=b88fe1ff 800w, /assets/catalog/games/sill-1200.webp?v=15cf151a 1200w" sizes="(min-width: 2125px) 930px, (min-width: 1500px) calc(25.6vw + 386px), (min-width: 896px) 54vw, 94vw">
+    <img src="/assets/games/sill-card-clean.jpg?v=245c0d17" width="800" height="450" alt="An old cream-painted sash window open on a dark computer desktop. Through it, at sunset, a robin with a worm stands over a nestling in a nest; a speckled fledgling stands on the sill outside, looking back in, and the window&#39;s light falls on the desktop below" loading="eager" fetchpriority="high" decoding="async">
+  </picture>
+  <!-- /site:shot -->
+      </figure>
+      <div class="game-info">
+        <p class="game-summary">A window opens on your desktop and something falls out of it. It can’t fly yet. It stands on your real windows and rides them when you move them. Get it home, feed it, keep it away from the cat, and then let it go.</p>
+        <div class="game-get">
+          <a class="button button-gold" href="/sill/download">Download SILL</a>
+          <p class="game-size">Windows 10 or 11 · a 140 MB zip</p>
+          <div class="game-notes">
+            <p>Unzip it and open SILL.exe. The first time, Windows says it doesn’t recognise it: More info, then Run anyway.</p>
+            <p>It sits on top of whatever you have open. Your mouse goes through to your own apps everywhere except the window and the bird.</p>
+            <p>Sound on. Right-click the bird by the clock to start over or quit.</p>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
+  <!-- site:footer -->
+  <footer class="site-footer" id="connect">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-intro">
+          <h2>Connect</h2>
+          <p>Best way to reach me: email, Instagram DMs, or jump into the Discord.</p>
+        </div>
+        <nav class="footer-links" aria-label="Social and contact links">
+          <a href="mailto:alexdguitar@gmail.com">Email</a>
+          <a class="external-link" href="https://www.instagram.com/alex_the_duncan/" target="_blank" rel="noopener noreferrer">Instagram</a>
+          <a class="external-link" href="https://discord.gg/NwvxKxUJpC" target="_blank" rel="noopener noreferrer">Discord</a>
+          <a class="external-link" href="https://suno.com/@doopliss" target="_blank" rel="noopener noreferrer">Suno</a>
+          <a class="external-link" href="https://www.tiktok.com/@duplighost" target="_blank" rel="noopener noreferrer">TikTok</a>
+          <a class="external-link" href="https://www.youtube.com/@Alexander_Duncan" target="_blank" rel="noopener noreferrer">YouTube</a>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">Q.</span>
+          <span class="brand-word">Qualiacology</span>
+        </a>
+        <p>Alexander Duncan Guitar</p>
+      </div>
+    </div>
+  </footer>
+  <!-- /site:footer -->
 </body>
 </html>

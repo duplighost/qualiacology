@@ -11,10 +11,13 @@ an earlier deploy in the Netlify UI.
    first. Without it, stop at the open PR.
 2. **All copy is Alex's voice.** Reuse his lines; never invent taglines. Games other
    people made keep their own words.
-3. **The hub pages are generated.** `index.html`, `games/`, `music/`,
+3. **The hub pages are generated.** `index.html`, `games/`, `arcade/`, `music/`,
    `psychopharmacology/` and `sitemap.xml` come from `build/`; never edit them directly.
    Everything else at root (game folders, `music/<slug>/`, `_redirects`, `_headers`,
-   `404.html`) is static and hand-edited.
+   `404.html`) is static and hand-edited. The build also dresses the album pages, the
+   pages of games you download and `404.html`: it writes the site's header, footer and
+   stylesheet between their `<!-- site:… -->` markers. Edit outside the markers, then
+   run the build.
 
 ## Shipping a game change (the common case)
 
@@ -37,7 +40,8 @@ run one only if you changed how that game boots.
 ## Changing the hub
 
 Catalog entries, hub copy, templates, `site.css`, `site.js`, images, adding or removing
-a game or album:
+a game or album, which three games are on the homepage (`featured` in `site-data.json`:
+the first is the big one, and each needs a wide banner, see `images.md`):
 
 ```sh
 node build/scripts/preflight.mjs   # build + validate + route smoke; add --art if you touched an image
@@ -89,6 +93,7 @@ Old copies and retired folders are in `D:\Archive`; never copy from there.
 | murderpop | `node tools/build-site-copy.mjs <this repo>` (it copies the card too); never hand-edit the site copy |
 | sill | the page here (`sill/index.html`) is hand-written. The game is a Windows desktop app built in `D:\Projects\sill`; its download is `SILL-windows.zip` on this repo's GitHub release `sill-v1.0.0` |
 | murderpop-greatest-hits | the page here (`murderpop-greatest-hits/index.html`) is hand-written. The game is an Unreal game built in `C:\Projects\MURDERPOP-GREATEST-HITS` by `tools\package.ps1`; its download is `MURDERPOP-GREATEST-HITS-windows.zip` on this repo's GitHub release `murderpop-greatest-hits-v1.0.0` (one file of a release must be under 2 GB). A new build is a new release and a new tag in `_redirects` |
+| bring-an-umbrella | the page here (`bring-an-umbrella/index.html`) is hand-written. The game is an Unreal game built in `C:\Projects\Still`; the copy made for the site is `Release\Website\BRING AN UMBRELLA.zip` there (2.35 GB, so over the 2 GB a release file may be). Its download is not up: the page and its card say "Not out yet" (`"unreleased": true` in `site-data.json`), and when it goes up is Alex's to say |
 | everhouse | The Windows download page is `everhouse/index.html`. Upload the tested `Builds/Release/EVERHOUSE-Windows.zip` from the EVERHOUSE project to a versioned release on this site’s repository and update `/everhouse/download` in `_redirects`. The page and card show the game’s actual flooded ballroom. |
 | everything else | none: the site copy here is the only source |
 
@@ -98,5 +103,5 @@ Old copies and retired folders are in `D:\Archive`; never copy from there.
   Each game's source also has its own private repository, `duplighost/<site folder>`.
   Netlify team "Alexander Guitar", project `classy-strudel-55444b`.
 - CI (`.github/workflows/validate-site.yml`) rebuilds the hubs, validates, smoke-tests
-  every route and rejects stale generated pages. It never deploys.
+  every route and rejects stale generated or dressed pages. It never deploys.
 - PowerShell 5.1 has no `&&`; Git Bash does. Python is `py -3`.

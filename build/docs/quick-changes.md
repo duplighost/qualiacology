@@ -18,9 +18,14 @@ game/album has its own guide.
     (fingerprinted into `assets/hub/` by the build). Touching these requires
     `design-system.md` first.
 - **Static (edited directly, untouched by the build):** per-game folders at
-  root (`no-moon/`, `rally/`, `fetch/`, …) and albums under `music/<slug>/`.
-- **Hand-maintained (easy to forget):** `_redirects` (short links + guards),
-  `_headers`, `404.html` (it name-drops specific games).
+  root (`no-moon/`, `rally/`, `fetch/`, …).
+- **Hand-written, dressed by the build:** albums under `music/<slug>/`, the
+  pages of games you download (`murderpop-greatest-hits/`, `bring-an-umbrella/`,
+  `sill/`, `everhouse/`) and `404.html`. Their words are yours to edit; the
+  header, footer and stylesheet between the `<!-- site:… -->` markers are
+  written by the build, so run it afterwards.
+- **Hand-maintained (easy to forget):** `_redirects` (short links + guards)
+  and `_headers`.
 - `build/` itself is not served — `_redirects` 404s `/build/*`.
 
 ## The edit loop

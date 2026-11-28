@@ -51,6 +51,23 @@ const routeForGame = (game) => `/${game.slug}/`;
 const routeForAlbum = (album) => `/music/${album.slug}/`;
 const external = 'target="_blank" rel="noopener noreferrer"';
 
+// The pages the build does not write but does dress: it puts the site's fonts and
+// stylesheet, its header and its footer between the `<!-- site:… -->` markers in each
+// of them, and leaves everything else in the file alone. A game's own page (one you
+// download from, not one you play on) also gets its picture, at `<!-- site:shot -->`.
+const dressedPages = [
+  ...albums.map((album) => ({ file: join("music", album.slug, "index.html"), current: "music" })),
+  ...["murderpop-greatest-hits", "bring-an-umbrella", "sill", "everhouse"].map((slug) => ({
+    file: join(slug, "index.html"),
+    current: "games",
+    game: slug,
+  })),
+  { file: "404.html", current: "" },
+];
+
+const bannerWide = [800, 1200, 1600, 2160];
+const bannerTall = [640, 960];
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -70,6 +87,21 @@ function validateData() {
 
   for (const game of games) {
     assert(existsSync(join(outputRoot, game.slug, "index.html")), `Missing game route: ${routeForGame(game)}`);
+    if (game.featured) {
+      // The homepage shows its games as wide banners, so a featured game needs one.
+      assert(game.banner && game.bannerAlt, `Featured game needs "banner" and "bannerAlt": ${game.slug}`);
+    }
+    if (game.banner) {
+      assert(existsSync(join(outputRoot, game.banner.slice(1))), `Missing banner: ${game.banner}`);
+      for (const [shape, widths] of [["wide", bannerWide], ["tall", bannerTall]]) {
+        for (const width of widths) {
+          for (const ext of ["avif", "webp"]) {
+            const tier = `assets/banners/${game.slug}-${shape}-${width}.${ext}`;
+            assert(existsSync(join(outputRoot, tier)), `Missing banner size /${tier}: run "py -3 build/qa/catalog-art.py build --only=${game.slug}"`);
+          }
+        }
+      }
+    }
   }
 
   for (const album of albums) {
@@ -89,7 +121,19 @@ function buildAssets() {
     }
   }
 
-  const css = Buffer.concat([readFileSync(join(sourceRoot, "site.css")), Buffer.from("\n"), readFileSync(join(sourceRoot, "arcade.css"))]);
+  // Where each banner is held when its frame is not 3:1. One line per banner, from
+  // site-data, because the pages may not carry inline styles.
+  const bannerFocus = games
+    .filter((game) => game.banner)
+    .map((game) => `[data-banner="${game.slug}"] img { object-position: ${Number(game.bannerFocus ?? 50)}% 50%; }`)
+    .join("\n");
+
+  const css = Buffer.concat([
+    readFileSync(join(sourceRoot, "site.css")),
+    Buffer.from("\n"),
+    readFileSync(join(sourceRoot, "arcade.css")),
+    Buffer.from(`\n/* Banner focus, written by the build from site-data.json. */\n${bannerFocus}\n`),
+  ]);
   const js = readFileSync(join(sourceRoot, "site.js"));
   const cssName = `qualiacology.${hash(css)}.css`;
   const jsName = `qualiacology.${hash(js)}.js`;
@@ -110,91 +154,102 @@ function buildAssets() {
 
 let builtAssets;
 
-function navLink(href, label, key, current) {
-  const active = key === current ? ' aria-current="page"' : "";
-  return `<a class="nav-link" href="${href}"${active}>${label}</a>`;
-}
+// The menu, in the order it is read. Connect is the foot of whatever page you are on.
+const navItems = [
+  ["/games/", "Games", "games"],
+  ["/music/", "Music", "music"],
+  ["/psychopharmacology/", "Psychopharmacology", "psych"],
+  ["/arcade/", "Arcade", "arcade"],
+  ["#connect", "Connect", "connect"],
+];
 
 function header(current) {
+  const currentAttr = (key) => (key === current ? ' aria-current="page"' : "");
   return `
-  <a class="skip-link" href="#main-content">Skip to the work</a>
-  <div class="scroll-progress" data-scroll-progress aria-hidden="true"></div>
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="site-header">
     <div class="container header-row">
-      <a class="brand" href="/"${current === "home" ? ' aria-current="page"' : ""}>
+      <a class="brand" href="/"${currentAttr("home")}>
         <span class="brand-mark" aria-hidden="true">Q.</span>
         <span class="brand-word">Qualiacology</span>
       </a>
       <nav class="desktop-nav" aria-label="Primary navigation">
-        ${navLink("/psychopharmacology/", "Psychopharmacology", "psych", current)}
-        ${navLink("/games/", "Games", "games", current)}
-        ${navLink("/arcade/", "Arcade", "arcade", current)}
-        ${navLink("/music/", "Music", "music", current)}
-        ${navLink("/#connect", "Connect", "connect", current)}
-        <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Discord</a>
+        ${navItems.map(([href, label, key]) => `<a class="nav-link" href="${href}"${currentAttr(key)}>${label}</a>`).join("\n        ")}
+        <a class="button button-outline button-small external-link" href="${escapeHtml(site.discord)}" ${external}>Discord</a>
       </nav>
-      <button class="menu-button" type="button" data-menu-open aria-expanded="false" aria-controls="site-menu">Menu</button>
+      <button class="menu-button" type="button" data-menu-open aria-expanded="false" aria-controls="site-menu">Menu<span class="menu-icon" aria-hidden="true"></span></button>
     </div>
   </header>
-  <dialog class="mobile-dialog" id="site-menu" data-menu-dialog>
+  <dialog class="mobile-dialog" id="site-menu" data-menu-dialog aria-label="Menu">
     <div class="dialog-shell">
       <div class="dialog-head">
-        <span class="dialog-label">Choose a doorway</span>
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">Q.</span>
+          <span class="brand-word">Qualiacology</span>
+        </a>
         <button class="dialog-close" type="button" data-menu-close>Close</button>
       </div>
       <nav class="dialog-nav" aria-label="Mobile navigation">
-        <a href="/">Home</a>
-        <a href="/psychopharmacology/">Psychopharmacology</a>
-        <a href="/games/">Games</a>
-        <a href="/arcade/">Arcade</a>
-        <a href="/music/">Music</a>
-        <a href="/#connect">Connect</a>
-        <a href="${escapeHtml(site.discord)}" ${external}>Join Discord</a>
+        <a href="/"${currentAttr("home")}>Home</a>
+        ${navItems.map(([href, label, key]) => `<a href="${href}"${currentAttr(key)}>${label}</a>`).join("\n        ")}
+        <a class="external-link" href="${escapeHtml(site.discord)}" ${external}>Discord</a>
       </nav>
-      <p class="dialog-note">The serious work, the strange songs, and the people trying to get it right — all under one roof.</p>
     </div>
   </dialog>`;
 }
 
-function footer() {
+function footer({ audio = true } = {}) {
+  const links = [
+    [`mailto:${escapeHtml(site.email)}`, "Email", false],
+    [escapeHtml(site.instagram), "Instagram", true],
+    [escapeHtml(site.discord), "Discord", true],
+    [escapeHtml(site.suno), "Suno", true],
+    [escapeHtml(site.tiktok), "TikTok", true],
+    [escapeHtml(site.youtube), "YouTube", true],
+  ];
   return `
-  <footer class="site-footer">
+  <footer class="site-footer" id="connect">
     <div class="container">
-      <p class="footer-wordmark" aria-hidden="true">Qualiacology</p>
-    </div>
-    <div class="container footer-grid">
-      <div>
-        <p class="footer-name">Qualiacology</p>
-        <p class="footer-copy">Psychopharmacology, browser worlds, and murder pop by Alexander Duncan Guitar. Built by hand; best explored after dark.</p>
+      <div class="footer-top">
+        <div class="footer-intro">
+          <h2>Connect</h2>
+          <p>Best way to reach me: email, Instagram DMs, or jump into the Discord.</p>
+        </div>
+        <nav class="footer-links" aria-label="Social and contact links">
+          ${links.map(([href, label, out]) => `<a${out ? ' class="external-link"' : ""} href="${href}"${out ? ` ${external}` : ""}>${label}</a>`).join("\n          ")}
+        </nav>
       </div>
-      <nav class="footer-links" aria-label="Social and contact links">
-        <a class="external-link" href="${escapeHtml(site.discord)}" ${external}>Discord</a>
-        <a class="external-link" href="${escapeHtml(site.suno)}" ${external}>Suno</a>
-        <a class="external-link" href="${escapeHtml(site.tiktok)}" ${external}>TikTok</a>
-        <a class="external-link" href="${escapeHtml(site.instagram)}" ${external}>Instagram</a>
-        <a class="external-link" href="${escapeHtml(site.youtube)}" ${external}>YouTube</a>
-        <a href="mailto:${escapeHtml(site.email)}">Email</a>
-      </nav>
+      <div class="footer-base">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">Q.</span>
+          <span class="brand-word">Qualiacology</span>
+        </a>
+        <p>${escapeHtml(site.owner)}</p>
+      </div>
     </div>
-  </footer>
+  </footer>${audio ? `
   <button class="audio-toggle" type="button" data-audio-toggle data-audio-src="/assets/audio/jelly-strobe-instrumental-v280.mp3" aria-pressed="false">
-    <span data-audio-label>Sound off</span>
-  </button>`;
+    <span class="audio-bars" aria-hidden="true"><i></i><i></i><i></i></span><span data-audio-label>Sound off</span>
+  </button>` : ""}`;
 }
 
-function head({ title, description, path, schema, image = "/assets/visuals/qualiacology-social-1200x630-v3.jpg" }) {
+function fontPreloads() {
+  return `<link rel="preload" href="/assets/fonts/fraunces-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>`;
+}
+
+function head({ title, description, path, schema, image = "/assets/og/qualiacology-og-v20261128.jpg", preloadImage = "" }) {
   const url = `${site.origin}${path}`;
   return `
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#060a0f">
+  <meta name="theme-color" content="#09090b">
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(description)}">
   <link rel="canonical" href="${url}">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="/assets/site.webmanifest">
-  <link rel="preload" href="/assets/fonts/inter-latin-v20.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/assets/fonts/space-grotesk-latin-v22.woff2" as="font" type="font/woff2" crossorigin>
+  ${fontPreloads()}${preloadImage}
   <link rel="stylesheet" href="${builtAssets.css}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Qualiacology">
@@ -204,7 +259,7 @@ function head({ title, description, path, schema, image = "/assets/visuals/quali
   <meta property="og:image" content="${site.origin}${image}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Qualiacology — Psychopharmacology, Browser Worlds, Murder Pop">
+  <meta property="og:image:alt" content="Qualiacology. Studying what it feels like to be alive.">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
@@ -213,10 +268,10 @@ function head({ title, description, path, schema, image = "/assets/visuals/quali
   <script src="${builtAssets.js}" defer></script>`;
 }
 
-function page({ current, title, description, path, schema, main, bodyClass = "", scripts = [] }) {
+function page({ current, title, description, path, schema, main, bodyClass = "", scripts = [], preloadImage = "" }) {
   return `<!DOCTYPE html>
 <html lang="en">
-<head>${head({ title, description, path, schema })}
+<head>${head({ title, description, path, schema, preloadImage })}
 ${scripts.map(src => `<script src="${escapeHtml(src)}" defer></script>`).join("\n")}
 </head>
 <body class="${bodyClass}" data-page="${current}" data-game-count="${games.length}" data-album-count="${albums.length}">
@@ -228,29 +283,28 @@ ${footer()}
 `;
 }
 
-function heroPicture() {
-  // Phones get a 3:2 cut of the same plate. At 390w that renders 239px tall, against
-  // 201px for the 16:9 punch-out and 140px if the authored 41:16 simply carried down -
-  // so the small screen gets the biggest picture, not the widest one.
-  const phone = "/assets/visuals/qualiacology-candy-city-v2-portrait";
-  return `<picture>
-    <source media="(max-width: 44.99rem)" type="image/avif" srcset="${phone}-640.avif 640w, ${phone}-960.avif 960w" sizes="calc(100vw - 2rem)">
-    <source media="(max-width: 44.99rem)" type="image/webp" srcset="${phone}-640.webp 640w, ${phone}-960.webp 960w" sizes="calc(100vw - 2rem)">
-    <source type="image/avif" srcset="/assets/visuals/qualiacology-candy-city-v2-640.avif 640w, /assets/visuals/qualiacology-candy-city-v2-960.avif 960w, /assets/visuals/qualiacology-candy-city-v2-1280.avif 1280w, /assets/visuals/qualiacology-candy-city-v2-1640.avif 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
-    <source type="image/webp" srcset="/assets/visuals/qualiacology-candy-city-v2-640.webp 640w, /assets/visuals/qualiacology-candy-city-v2-960.webp 960w, /assets/visuals/qualiacology-candy-city-v2-1280.webp 1280w, /assets/visuals/qualiacology-candy-city-v2-1640.webp 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
-    <img src="/assets/visuals/qualiacology-candy-city-v2-1640.jpg" width="1640" height="640" alt="A candy-loving ghost in a dark rain-soaked neon city, holding a lollipop and a bag of Ghost Pops" fetchpriority="high" decoding="async">
-  </picture>`;
-}
+// `sizes` must describe the real width of the slot the picture sits in. Nothing checks
+// which file the browser picked, so one that under-asks silently upscales the art.
+// The column is 85rem, and the rem grows with the window (site.css, `html`): from
+// 1500px wide the column is 46.75vw + 707px, and from 2125px it stops at 1700px.
+const slotSizes = {
+  full: "(min-width: 2125px) 1700px, (min-width: 1500px) calc(46.75vw + 707px), 94vw",
+  half: "(min-width: 2125px) 835px, (min-width: 1500px) calc(23vw + 346px), (min-width: 768px) 46vw, 92vw",
+  third: "(min-width: 2125px) 545px, (min-width: 1500px) calc(15.2vw + 228px), (min-width: 992px) 30vw, (min-width: 640px) 46vw, 92vw",
+  beside: "(min-width: 2125px) 930px, (min-width: 1500px) calc(25.6vw + 386px), (min-width: 896px) 54vw, 94vw",
+};
+const cardSizes = {
+  games: slotSizes.third,
+  albums: "(min-width: 2125px) 403px, (min-width: 1500px) calc(11.3vw + 168px), (min-width: 992px) 22vw, (min-width: 768px) 30vw, 45vw",
+  homeAlbums: "(min-width: 2125px) 545px, (min-width: 1500px) calc(15.2vw + 228px), (min-width: 768px) 30vw, 44vw",
+};
 
-function catalogPicture(item, type, eager = false) {
+function catalogPicture(item, type, { eager = false, sizes = cardSizes[type] } = {}) {
   const isGame = type === "games";
-  // 1200/900 exist because the plate rail makes cards 440px wide, and a 2x screen then
-  // needs 880 device px - the 800w file was already under-resolving at the OLD 386px.
   const widths = isGame ? [480, 800, 1200] : [360, 600, 900];
   // Intrinsic size must match the real art (16:9 games, 1:1 albums) so the
   // browser reserves the right box and nothing shifts while images load.
   const dimensions = isGame ? [800, 450] : [600, 600];
-  const sizes = "(min-width: 1120px) 31vw, (min-width: 720px) 48vw, 86vw";
   const loading = eager ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
 
   if (item.image.endsWith(".svg")) {
@@ -267,56 +321,106 @@ function catalogPicture(item, type, eager = false) {
   </picture>`;
 }
 
-function gameCard(game, index, { eager = false } = {}) {
-  // Controls are post-decision information sitting in the pre-decision slot: eight
-  // tracked items telling you how to play a thing you have not chosen yet. They stay
-  // on each game's own page, where they answer a question you are actually asking.
-  // Play times stay here - 3 of 28 games report one, and that IS a choosing signal.
-  const metadata = [game.duration].filter(Boolean);
-  const secondaryAction = game.secondary
-    ? `\n          <a class="button button-quiet" href="${escapeHtml(game.secondary.href)}">${escapeHtml(game.secondary.label)}</a>`
+// A game's wide banner. Below `tallBelow` a phone gets the 4:3 cut of it instead of a
+// sliver of the whole width; the stylesheet switches the frame at the same width.
+function bannerPicture(game, { sizes, tallBelow = "", eager = false }) {
+  const root = `/assets/banners/${game.slug}`;
+  const set = (shape, widths, ext) =>
+    widths.map((width) => `${escapeHtml(versioned(`${root}-${shape}-${width}.${ext}`))} ${width}w`).join(", ");
+  const loading = eager ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
+  const tall = tallBelow
+    ? `<source media="(max-width: ${tallBelow})" type="image/avif" srcset="${set("tall", bannerTall, "avif")}" sizes="92vw">
+    <source media="(max-width: ${tallBelow})" type="image/webp" srcset="${set("tall", bannerTall, "webp")}" sizes="92vw">
+    `
     : "";
+  return `<picture>
+    ${tall}<source type="image/avif" srcset="${set("wide", bannerWide, "avif")}" sizes="${sizes}">
+    <source type="image/webp" srcset="${set("wide", bannerWide, "webp")}" sizes="${sizes}">
+    <img src="${escapeHtml(versioned(game.banner))}" width="2160" height="720" alt="${escapeHtml(game.bannerAlt)}" ${loading} decoding="async">
+  </picture>`;
+}
+
+// "MURDERPOP: GREATEST HITS" is set as a name and the line under it.
+function splitTitle(title) {
+  const at = title.indexOf(": ");
+  return at === -1 ? [title, ""] : [title.slice(0, at), title.slice(at + 2)];
+}
+
+// The line under a featured name is spread to the name's own width, letter by letter.
+function spreadLetters(text) {
+  return [...text].map((letter) => (letter === " " ? '<i class="gap"></i>' : `<i>${escapeHtml(letter)}</i>`)).join("");
+}
+
+// What a card says about a game that is not a page you play: his own words for it.
+function gameFacts(game) {
+  return [
+    game.duration,
+    game.kind === "windows" ? (game.unreleased ? "For Windows" : "Windows download") : "",
+    game.unreleased ? "Not out yet" : "",
+  ].filter(Boolean);
+}
+
+function featureBlock(game) {
+  const [name, line] = splitTitle(game.title);
+  const note = game.unreleased ? "Not out yet" : game.kind === "windows" ? "Windows download" : "";
+  return `<article class="feature" data-catalog-game="${escapeHtml(game.slug)}">
+          <div class="feature-media" data-banner="${escapeHtml(game.slug)}">
+            ${bannerPicture(game, { sizes: slotSizes.full, tallBelow: "47.99rem", eager: true })}
+          </div>
+          <p class="eyebrow feature-eyebrow">Featured game</p>
+          <h2 class="feature-title">
+            <a href="${routeForGame(game)}"><span class="feature-name">${escapeHtml(name)}</span>${line ? `<span class="visually-hidden">: ${escapeHtml(line)}</span><span class="feature-line" aria-hidden="true">${spreadLetters(line)}</span>` : ""}</a>
+          </h2>
+          <p class="feature-actions">
+            <span class="button button-gold button-arrow" aria-hidden="true">View game</span>${note ? `
+            <span class="feature-note">${escapeHtml(note)}</span>` : ""}
+          </p>
+        </article>`;
+}
+
+function bannerCard(game) {
+  return `<li data-catalog-game="${escapeHtml(game.slug)}">
+            <article class="banner-card">
+              <div class="banner-media" data-banner="${escapeHtml(game.slug)}">
+                ${bannerPicture(game, { sizes: slotSizes.half })}
+              </div>
+              <h3 class="banner-title"><a href="${routeForGame(game)}">${escapeHtml(game.title)}</a><span class="arrow" aria-hidden="true"></span></h3>
+            </article>
+          </li>`;
+}
+
+function gameCard(game, index, { eager = false } = {}) {
+  // Controls stay on each game's own page. Play times and "Windows download" are
+  // here because they help you choose.
+  const facts = gameFacts(game);
   return `<li data-filter-kind="${escapeHtml(game.group)}" data-catalog-game="${escapeHtml(game.slug)}">
     <article class="work-card">
-      <span class="card-index" aria-hidden="true"></span>
-      <a class="card-media" href="${routeForGame(game)}">
-        ${catalogPicture(game, "games", eager)}
-      </a>
+      <div class="card-media">
+        ${catalogPicture(game, "games", { eager })}
+      </div>
       <div class="card-body">
         <p class="card-kicker">${escapeHtml(game.descriptor)}</p>
-        <h3 class="card-title"><a href="${routeForGame(game)}">${escapeHtml(game.title)}</a></h3>
+        <h3 class="card-title">${escapeHtml(game.title)}</h3>
         <p class="card-summary">${escapeHtml(game.summary)}</p>
-${metadata.length ? `        <ul class="card-meta" aria-label="Game details">
-          ${metadata.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-        </ul>
-` : "\n"}        <div class="card-actions">
-          <a class="button button-primary button-arrow" href="${routeForGame(game)}">${escapeHtml(game.actionLabel)}</a>${secondaryAction}
-        </div>
+${facts.length ? `        <p class="card-meta">${facts.map(escapeHtml).join(" · ")}</p>
+` : ""}        <a class="card-action" href="${routeForGame(game)}">${escapeHtml(game.actionLabel)}<span class="visually-hidden">: ${escapeHtml(game.title)}</span></a>
       </div>
     </article>
   </li>`;
 }
 
-function albumCard(album, index, { eager = false } = {}) {
-  const meta = [...album.tags, ...(album.tracks ? [`${album.tracks} tracks`] : [])];
+function coverCard(album, { eager = false, sizes = cardSizes.albums, detail = false } = {}) {
+  // One album's own tag already says "28 tracks deep"; don't count them twice.
+  const tagsCountTracks = album.tags.some((tag) => /\btracks\b/i.test(tag));
+  const facts = [...album.tags, ...(album.tracks && !tagsCountTracks ? [`${album.tracks} tracks`] : [])];
   return `<li data-catalog-album="${escapeHtml(album.slug)}">
-    <article class="album-card">
-      <span class="card-index" aria-hidden="true"></span>
-      <a class="card-media" href="${routeForAlbum(album)}">
-        ${catalogPicture(album, "albums", eager)}
-      </a>
-      <div class="card-body">
-        <p class="card-kicker">Doopliss release</p>
-        <h3 class="card-title"><a href="${routeForAlbum(album)}">${escapeHtml(album.title)}</a></h3>
-        <p class="card-summary">${escapeHtml(album.summary)}</p>
-        <ul class="card-meta" aria-label="Release details">
-          ${meta.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-        </ul>
-        <div class="card-actions">
-          <a class="button button-pink external-link" href="${escapeHtml(album.listen)}" ${external}>Listen</a>
-          <a class="button button-quiet button-arrow" href="${routeForAlbum(album)}">Liner notes</a>
-        </div>
+    <article class="cover-card">
+      <div class="cover-media">
+        ${catalogPicture(album, "albums", { eager, sizes })}
       </div>
+      <h3 class="cover-title"><a href="${routeForAlbum(album)}">${escapeHtml(album.title)}</a></h3>${detail ? `
+      <p class="card-meta">${facts.map(escapeHtml).join(" · ")}</p>
+      <a class="cover-listen external-link" href="${escapeHtml(album.listen)}" ${external}>Listen<span class="visually-hidden"> to ${escapeHtml(album.title)}</span></a>` : ""}
     </article>
   </li>`;
 }
@@ -328,30 +432,10 @@ function discordPresence() {
   return `<p class="discord-presence" data-discord-presence="${escapeHtml(site.discordServer)}"></p>`;
 }
 
-// Halloween: the way into /spooky/ at the top of the homepage. A silent loop cut from the
-// Spooky Games trailer runs behind the title; site.js plays it only while it is on screen,
-// never under reduced motion, and stops it for good if the pause button is pressed.
-function spookyBanner() {
-  const names = ["olly-olly", "fetch", "starstruck", "curfew", "belfry"]
-    .map((slug) => games.find((game) => game.slug === slug)?.title)
-    .filter(Boolean);
-  return `<div class="spooky-banner">
-          <video class="spooky-banner-clip" muted loop playsinline preload="none" poster="${escapeHtml(versioned("/assets/visuals/spooky-loop-v1.webp"))}" aria-hidden="true" tabindex="-1" data-spooky-clip>
-            <source src="${escapeHtml(versioned("/assets/visuals/spooky-loop-v1.mp4"))}" type="video/mp4">
-          </video>
-          <a class="spooky-banner-link" href="/spooky/">
-            <span class="spooky-banner-title">Spooky Games <span class="spooky-banner-go" aria-hidden="true">→</span></span>
-            <span class="spooky-banner-names">${names.map(escapeHtml).join(" · ")}</span>
-          </a>
-          <button class="spooky-banner-pause" type="button" aria-label="Pause the clip" aria-pressed="false" data-spooky-pause hidden>
-            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path class="spooky-pause-bars" d="M4 3h3v10H4zM9 3h3v10H9z"/><path class="spooky-play-tri" d="M5 3l8 5-8 5z"/></svg>
-          </button>
-        </div>`;
-}
-
 function homepage() {
   const featuredGames = games.filter((item) => item.featured);
   const featuredAlbums = albums.filter((item) => item.featured);
+  const [feature, ...otherGames] = featuredGames;
   const schema = {
     "@context": "https://schema.org",
     "@graph": [
@@ -374,120 +458,47 @@ function homepage() {
   const main = `<main id="main-content">
     <section class="hero">
       <div class="container">
-        ${spookyBanner()}
-        <p class="role-line">${escapeHtml(site.role)}</p>
-        <h1>${escapeHtml(site.thesis).replace(/\balive\b/, '<span class="alive-word">alive</span>')}</h1>
-        ${site.thesisDeck ? `<p class="hero-deck">${escapeHtml(site.thesisDeck)}</p>` : ""}
-        <div class="button-row">
-          <a class="button button-primary button-arrow" href="#community">Explore the work</a>
-          <a class="button external-link" href="${escapeHtml(site.discord)}" ${external}>Join Discord</a>
+        <div class="masthead">
+          <h1>${escapeHtml(site.thesis).replace(/\balive\b/, "<em>alive</em>")}</h1>
+          <p class="role-line">${escapeHtml(site.role).replace(/[A-Za-z]+-[A-Za-z]+/g, (word) => `<span class="nowrap">${word}</span>`)}</p>
         </div>
-        <figure class="hero-art">
-          ${heroPicture()}
-        </figure>
-        <dl class="proof-list">
-          <div><dt>3,000+</dt><dd><a href="/psychopharmacology/">community members</a></dd></div>
-          <div><dt>${games.length}</dt><dd><a href="/games/">browser worlds</a></dd></div>
-          <div><dt>${albums.length}</dt><dd><a href="/music/">Doopliss releases</a></dd></div>
-        </dl>
+        ${featureBlock(feature)}
       </div>
     </section>
 
-    <section class="section" id="community">
+    <section class="section" id="games" aria-labelledby="games-title">
       <div class="container">
-        <div class="section-heading">
-          <span class="ghost-index" aria-hidden="true">01</span>
-          <div>
-            <p class="eyebrow">01 · Psychopharmacology</p>
-            <h2>The Psychopharmacology Server</h2>
-          </div>
-          <div class="section-heading-copy">
+        <div class="section-head">
+          <h2 id="games-title">Games</h2>
+          <a class="more-link" href="/games/">All games</a>
+        </div>
+        <ul class="banner-list" data-featured-games="${featuredGames.length}">
+          ${otherGames.map((item) => bannerCard(item)).join("\n          ")}
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="music" aria-labelledby="music-title">
+      <div class="container">
+        <div class="section-head">
+          <h2 id="music-title">Doopliss</h2>
+          <a class="more-link" href="/music/">All music</a>
+        </div>
+        <ul class="cover-list home-covers" data-featured-albums="${featuredAlbums.length}">
+          ${featuredAlbums.map((item) => coverCard(item, { sizes: cardSizes.homeAlbums })).join("\n          ")}
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="community" aria-labelledby="community-title">
+      <div class="container">
+        <div class="strip">
+          <h2 class="strip-title" id="community-title">The Psychopharmacology Server</h2>
+          <div class="strip-copy">
             <p>We study medication, help people, and chill with friends.</p>
-            <div class="section-action"><a class="button button-arrow" href="/psychopharmacology/">Explore the community</a></div>
+            ${discordPresence()}
           </div>
-        </div>
-
-        <div class="server-pillars">
-          <article class="server-pillar">
-            <span class="pillar-number" aria-hidden="true">01</span>
-            <h3>3,000+ members</h3>
-            <p>Members sharing knowledge, asking better questions, and comparing notes without treating anecdotes like scripture.</p>
-          </article>
-          <article class="server-pillar">
-            <span class="pillar-number" aria-hidden="true">02</span>
-            <h3>Saturdays · 4 PM ET</h3>
-            <p>Live voice chats — discussion, support, and figuring things out together.</p>
-          </article>
-          <article class="server-pillar">
-            <span class="pillar-number" aria-hidden="true">03</span>
-            <h3>Warm and blunt</h3>
-            <p>Credible, warm, and blunt enough to be useful when the subject is too important for fake certainty.</p>
-          </article>
-        </div>
-
-        <div class="button-row community-actions">
-          <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
-          ${discordPresence()}
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="game">
-      <div class="container">
-        <div class="section-heading">
-          <span class="ghost-index" aria-hidden="true">02</span>
-          <div>
-            <p class="eyebrow">02 · Browser worlds</p>
-            <h2>Games</h2>
-          </div>
-          <div class="section-heading-copy">
-            <p>Small, self-contained worlds that run right in your browser — horror, exploration, movement, celestial chaos, and descent. No downloads; each opens on its own page.</p>
-            <div class="section-action button-row"><a class="button button-arrow" href="/games/">Browse all ${games.length} worlds</a><a class="button button-arrow" href="/spooky/">Spooky Games</a></div>
-          </div>
-        </div>
-      </div>
-      <div class="plate-bleed">
-        <ul class="card-list homepage-shelf" data-featured-games="${featuredGames.length}">
-          ${featuredGames.map((item, index) => gameCard(item, index, { eager: index === 0 })).join("\n")}
-        </ul>
-      </div>
-    </section>
-
-    <section class="section" id="music">
-      <div class="container">
-        <div class="section-heading">
-          <span class="ghost-index" aria-hidden="true">03</span>
-          <div>
-            <p class="eyebrow">03 · Doopliss</p>
-            <h2>Doopliss</h2>
-          </div>
-          <div class="section-heading-copy">
-            <p>Bright, catchy, upbeat melodies with psychologically dark, emotionally raw lyrics — murder pop on purpose. The hooks invite you in. The subtext quietly locks the door behind you.</p>
-            <div class="section-action"><a class="button button-arrow" href="/music/">Explore all ${albums.length} releases</a></div>
-          </div>
-        </div>
-      </div>
-      <div class="plate-bleed">
-        <ul class="card-list homepage-shelf" data-featured-albums="${featuredAlbums.length}">
-          ${featuredAlbums.map((item, index) => albumCard(item, index)).join("\n")}
-        </ul>
-      </div>
-    </section>
-
-    <section class="section" id="connect">
-      <div class="container">
-        <div class="section-heading">
-          <span class="ghost-index" aria-hidden="true">04</span>
-          <div>
-            <p class="eyebrow">04 · Connect</p>
-            <h2>Find the right door.</h2>
-          </div>
-          <div class="section-heading-copy"><p>Best way to reach me: email, Instagram DMs, or jump into the Discord. Everything else is here if you want the full trail of evidence, noise, hooks, and neon.</p></div>
-        </div>
-        <div class="route-grid">
-          <a class="route-card" href="${escapeHtml(site.discord)}" ${external}><small>Psychopharmacology</small><strong>Join the Discord</strong><span>Enter the community ↗</span></a>
-          <a class="route-card" href="${escapeHtml(site.suno)}" ${external}><small>Music</small><strong>Follow Doopliss</strong><span>Listen on Suno ↗</span></a>
-          <a class="route-card" href="mailto:${escapeHtml(site.email)}"><small>Collaborate or say hi</small><strong>Email Alexander</strong><span>Start a conversation →</span></a>
+          <a class="button button-outline button-arrow" href="/psychopharmacology/">Explore the community</a>
         </div>
       </div>
     </section>
@@ -495,7 +506,7 @@ function homepage() {
 
   return page({
     current: "home",
-    title: "Qualiacology | Psychopharmacology, Browser Worlds & Murder Pop",
+    title: "Qualiacology | Psychopharmacology, Games & Murder Pop",
     description: site.description,
     path: "/",
     schema,
@@ -505,7 +516,7 @@ function homepage() {
 }
 
 function psychopharmacologyPage() {
-  const description = "The chemistry of subjective experience, traced through mechanism, evidence, and real human mess.";
+  const description = "The Psychopharmacology Server. We study medication, help people, and chill with friends.";
   const schema = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -527,56 +538,43 @@ function psychopharmacologyPage() {
     .join("");
 
   const main = `<main id="main-content">
-    <section class="subhero">
-      <div class="container subhero-grid">
-        <div>
-          <span class="ghost-index" aria-hidden="true">01</span>
-          <p class="eyebrow">01 · Psychopharmacology</p>
-          <h1>The Psychopharmacology Server</h1>
-          <p class="subhero-deck">We study medication, help people, and chill with friends.</p>
-        </div>
-        <div class="subhero-stat"><strong>3,000+</strong><span>members</span>${discordPresence()}</div>
-      </div>
-    </section>
-
-    <section class="section" id="community" aria-labelledby="community-title">
+    <section class="page-head">
       <div class="container">
-        <div class="section-heading">
-          <div><p class="eyebrow">The community</p><h2 id="community-title">We study medication, help people, and chill with friends.</h2></div>
-          <div class="section-heading-copy"><p>3,000+ people comparing notes, asking better questions, and helping each other out — without treating anecdotes like scripture.</p></div>
+        <h1>The Psychopharmacology Server</h1>
+        <p class="page-deck">We study medication, help people, and chill with friends.</p>
+        <div class="button-row">
+          <a class="button button-gold external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
+          <a class="button button-outline external-link" href="${escapeHtml(site.chatgptGroup)}" ${external}>ChatGPT group chat</a>
         </div>
-        <div class="community-grid">
-          <article class="community-card"><h3>3,000+ members</h3><p>Knowledge, questions, and useful disagreement without treating anecdotes like scripture.</p></article>
-          <article class="community-card"><h3>Practical support</h3><p>People help one another make sense of hard situations, find useful information, and feel less alone.</p></article>
-          <article class="community-card"><h3>Saturdays · 4 PM ET</h3><p>Live voice chats — discussion, support, and figuring things out together.</p></article>
-          <article class="community-card"><h3>Warm and blunt</h3><p>Credible, warm, and blunt enough to be useful when the subject is too important for fake certainty.</p></article>
-        </div>
+        <dl class="fact-row">
+          <div><dt>3,000+</dt><dd>members</dd></div>
+          <div><dt>Saturdays · 4 PM ET</dt><dd>Live voice chats</dd></div>
+          <div class="fact-live"><dt class="visually-hidden">In the server now</dt><dd>${discordPresence()}</dd></div>
+        </dl>
       </div>
     </section>
 
     <section class="section" id="rules" aria-labelledby="rules-title">
       <div class="container">
-        <div class="section-heading">
-          <div><p class="eyebrow">${escapeHtml(psych.rules.eyebrow)}</p><h2 id="rules-title">${escapeHtml(psych.rules.title)}</h2></div>
-          <div class="section-heading-copy"><p>${escapeHtml(psych.rules.copy)}</p></div>
+        <div class="section-head">
+          <h2 id="rules-title">${escapeHtml(psych.rules.title)}</h2>
         </div>
         <ol class="rules-list">${rules}
         </ol>
-        <div class="button-row section-action">
-          <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
-          <a class="button external-link" href="${escapeHtml(site.chatgptGroup)}" ${external}>ChatGPT group chat</a>
-        </div>
+        <p class="rules-thanks">${escapeHtml(psych.rules.copy)}</p>
       </div>
     </section>
 
-    <div class="container">
-      <aside class="server-notice" aria-labelledby="notice-title">
-        <p class="eyebrow" id="notice-title">${escapeHtml(psych.notice.eyebrow)}</p>
-        <p class="notice-body">${escapeHtml(psych.notice.body)}</p>
-        <p class="notice-lede">${escapeHtml(psych.notice.lede)}</p>
-        <p class="notice-answer">${escapeHtml(psych.notice.answer)}</p>
-      </aside>
-    </div>
+    <section class="section" aria-labelledby="notice-title">
+      <div class="container">
+        <aside class="server-notice">
+          <p class="eyebrow" id="notice-title">${escapeHtml(psych.notice.eyebrow)}</p>
+          <p class="notice-body">${escapeHtml(psych.notice.body)}</p>
+          <p class="notice-lede">${escapeHtml(psych.notice.lede)}</p>
+          <p class="notice-answer">${escapeHtml(psych.notice.answer)}</p>
+        </aside>
+      </div>
+    </section>
   </main>`;
 
   return page({
@@ -590,12 +588,13 @@ function psychopharmacologyPage() {
 }
 
 function gamesPage() {
+  const description = `${games.length} games by ${site.owner}. Most run in the browser; a few are Windows downloads.`;
   const schema = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Browser Games | Qualiacology",
+    name: "Games | Qualiacology",
     url: `${site.origin}/games/`,
-    description: `${games.length} small, self-contained browser worlds by Alexander Duncan Guitar. No downloads; each opens on its own page.`,
+    description,
     mainEntity: {
       "@type": "ItemList",
       numberOfItems: games.length,
@@ -609,41 +608,26 @@ function gamesPage() {
   };
 
   const main = `<main id="main-content">
-    <section class="subhero">
-      <div class="container subhero-grid">
-        <div>
-          <span class="ghost-index" aria-hidden="true">02</span>
-          <p class="eyebrow">02 · Browser worlds</p>
-          <h1>Games</h1>
-          <p class="subhero-deck">Small, self-contained worlds that run right in your browser — horror, exploration, movement, celestial chaos, and descent. No downloads; each opens on its own page.</p>
-          <div class="section-action"><a class="button button-arrow" href="/spooky/">Spooky Games</a></div>
-        </div>
-        <div class="subhero-stat"><strong>${games.length}</strong><span>playable routes</span></div>
+    <section class="page-head">
+      <div class="container">
+        <h1>Games</h1>
       </div>
     </section>
 
-    <section class="container" aria-label="Arcade"><div class="arcade-gateway"><div><h2>Arcade</h2><p>Scraps of unfinished games.</p></div><a class="button button-primary button-arrow" href="/arcade/">Enter the arcade</a></div></section>
-
-    <section class="section" aria-labelledby="catalog-title">
+    <section class="catalog" aria-label="All games">
       <div class="container">
-        <div class="section-heading">
-          <div><p class="eyebrow">The full shelf</p><h2 id="catalog-title">All ${games.length} worlds.</h2></div>
-          <div class="section-heading-copy"><p>Filter by mood. Play times are listed where the game actually reports them — where it doesn't, I left it blank instead of guessing.</p></div>
-        </div>
-      </div>
-      <div class="plate-bleed">
         <div class="filter-shell">
           <fieldset>
-            <legend>Filter the worlds</legend>
+            <legend class="visually-hidden">Filter the games</legend>
             <button class="filter-button" type="button" data-filter="all" aria-pressed="true">All ${games.length}</button>
             <button class="filter-button" type="button" data-filter="action" aria-pressed="false">Action</button>
             <button class="filter-button" type="button" data-filter="horror" aria-pressed="false">Horror</button>
             <button class="filter-button" type="button" data-filter="worlds" aria-pressed="false">Worlds &amp; toys</button>
           </fieldset>
-          <p class="filter-status" data-filter-status aria-live="polite">Showing ${games.length} worlds.</p>
+          <p class="filter-status" data-filter-status aria-live="polite">Showing ${games.length} games.</p>
         </div>
         <ul class="catalog-grid" data-game-catalog="${games.length}">
-          ${games.map((item, index) => gameCard(item, index, { eager: index < 2 })).join("\n")}
+          ${games.map((item, index) => gameCard(item, index, { eager: index < 3 })).join("\n")}
         </ul>
       </div>
     </section>
@@ -651,8 +635,8 @@ function gamesPage() {
 
   return page({
     current: "games",
-    title: `Browser Games | ${games.length} Worlds from Qualiacology`,
-    description: `${games.length} small, self-contained browser worlds — horror, exploration, movement, celestial chaos, and descent. No downloads; each opens on its own page.`,
+    title: "Games | Qualiacology",
+    description,
     path: "/games/",
     schema,
     main,
@@ -660,12 +644,13 @@ function gamesPage() {
 }
 
 function musicPage() {
+  const description = `${albums.length} Doopliss releases. Bright, catchy, upbeat melodies with psychologically dark, emotionally raw lyrics.`;
   const schema = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "Doopliss Music | Qualiacology",
     url: `${site.origin}/music/`,
-    description: `${albums.length} Doopliss releases — bright melodies, dark subtext, and pop songs that smile sweetly right before they bite.`,
+    description,
     mainEntity: {
       "@type": "ItemList",
       numberOfItems: albums.length,
@@ -683,45 +668,50 @@ function musicPage() {
   };
 
   const main = `<main id="main-content">
-    <section class="subhero">
-      <div class="container subhero-grid">
-        <div>
-          <span class="ghost-index" aria-hidden="true">03</span>
-          <p class="eyebrow">03 · Doopliss</p>
-          <h1>Doopliss</h1>
-          <p class="subhero-deck">Bright, catchy, upbeat melodies with psychologically dark, emotionally raw lyrics — murder pop on purpose. The hooks invite you in. The subtext quietly locks the door behind you.</p>
+    <section class="page-head">
+      <div class="container">
+        <h1>Doopliss</h1>
+        <p class="page-deck">Bright, catchy, upbeat melodies with psychologically dark, emotionally raw lyrics — murder pop on purpose.</p>
+        <div class="button-row">
+          <a class="button button-gold external-link" href="${escapeHtml(site.suno)}" ${external}>Follow on Suno</a>
+          <a class="button button-outline external-link" href="${escapeHtml(site.tiktok)}" ${external}>TikTok</a>
+          <a class="button button-outline external-link" href="${escapeHtml(site.youtube)}" ${external}>YouTube</a>
         </div>
-        <div class="subhero-stat"><strong>${albums.length}</strong><span>releases</span></div>
       </div>
     </section>
 
     <section class="section" aria-labelledby="music-catalog-title">
       <div class="container">
-        <div class="music-intro">
-          <div><p class="eyebrow">The artist</p><h2>Doopliss</h2><p>Doopliss lives in that deliciously wrong sweet spot between neon-pop seduction and emotional sabotage — playful, glossy, a little dangerous, and never interested in pretending the dark stuff only sounds dark.</p></div>
-          <div class="button-row"><a class="button button-pink external-link" href="${escapeHtml(site.suno)}" ${external}>Follow on Suno</a><a class="button external-link" href="${escapeHtml(site.tiktok)}" ${external}>TikTok</a></div>
+        <div class="section-head">
+          <h2 id="music-catalog-title">Albums</h2>
         </div>
-        <div class="music-intro">
-          <div><p class="eyebrow">One-off</p><h2>Instead of the Goodbye</h2><p>A walk dictated into a phone with no bars. Every message was written to someone who couldn't receive it yet. Recorded from a field recording, Oswegatchie Hills, August 1st — 5:54, with the photographs.</p></div>
-          <div class="button-row"><a class="button button-pink button-arrow" href="/instead-of-the-goodbye/">Keep walking</a></div>
-        </div>
-        <div class="section-heading">
-          <div><p class="eyebrow">The full discography</p><h2 id="music-catalog-title">All ${albums.length} releases.</h2></div>
-          <div class="section-heading-copy"><p>Every Doopliss release in one place. Track counts where the pages actually have them — nothing made up.</p></div>
-        </div>
-      </div>
-      <div class="plate-bleed">
-        <ul class="catalog-grid" data-album-catalog="${albums.length}">
-          ${albums.map((item, index) => albumCard(item, index, { eager: index < 2 })).join("\n")}
+        <ul class="cover-list album-grid" data-album-catalog="${albums.length}">
+          ${albums.map((item, index) => coverCard(item, { eager: index < 4, detail: true })).join("\n")}
         </ul>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="goodbye-title">
+      <div class="container">
+        <article class="aside-feature">
+          <div class="aside-feature-media">
+            <img src="${escapeHtml(versioned("/assets/og/instead-of-the-goodbye-1200x630.jpg"))}" width="1200" height="630" alt="" loading="lazy" decoding="async">
+          </div>
+          <div class="aside-feature-body">
+            <p class="eyebrow">One-off</p>
+            <h2 id="goodbye-title"><a href="/instead-of-the-goodbye/">Instead of the Goodbye</a></h2>
+            <p>A walk dictated into a phone with no bars. Every message was written to someone who couldn't receive it yet. Recorded from a field recording, Oswegatchie Hills, August 1st — 5:54, with the photographs.</p>
+            <span class="more-link" aria-hidden="true">Keep walking</span>
+          </div>
+        </article>
       </div>
     </section>
   </main>`;
 
   return page({
     current: "music",
-    title: `Doopliss Music | ${albums.length} Releases from Qualiacology`,
-    description: `${albums.length} Doopliss releases — bright melodies, dark subtext, and pop songs that smile sweetly right before they bite.`,
+    title: "Doopliss Music | Qualiacology",
+    description,
     path: "/music/",
     schema,
     main,
@@ -755,6 +745,40 @@ function write(relativePath, contents) {
   writeFileSync(target, contents, "utf8");
 }
 
+// Put the site's own parts into a page somebody wrote by hand: what goes in its <head>,
+// the header, and the footer. Everything outside the markers is left exactly as it is.
+function dress({ file, current, game: slug }) {
+  const target = join(outputRoot, file);
+  assert(existsSync(target), `Missing page to dress: ${file}`);
+  let html = readFileSync(target, "utf8");
+  const newline = html.includes("\r\n") ? "\r\n" : "\n";
+  const parts = {
+    head: `  ${fontPreloads()}
+  <link rel="stylesheet" href="${builtAssets.css}">
+  <script src="${builtAssets.js}" defer></script>`,
+    header: header(current),
+    footer: footer({ audio: false }),
+  };
+  if (slug) {
+    const game = games.find((item) => item.slug === slug);
+    assert(game, `No game called ${slug} in site-data.json for ${file}`);
+    // The wide banner where the game has one, across the page; its card beside the words where it doesn't.
+    parts.shot = game.banner
+      ? bannerPicture(game, { sizes: slotSizes.full, tallBelow: "47.99rem", eager: true })
+      : catalogPicture(game, "games", { eager: true, sizes: slotSizes.beside });
+  }
+  for (const [name, content] of Object.entries(parts)) {
+    const open = `<!-- site:${name} -->`;
+    const close = `<!-- /site:${name} -->`;
+    const start = html.indexOf(open);
+    const end = html.indexOf(close);
+    assert(start !== -1 && end > start, `${file} needs the markers ${open} and ${close} (see build/docs/design-system.md)`);
+    const body = content.replace(/^\n+/, "").replace(/\s+$/, "").replaceAll("\n", newline);
+    html = `${html.slice(0, start + open.length)}${newline}${body}${newline}  ${html.slice(end)}`;
+  }
+  writeFileSync(target, html, "utf8");
+}
+
 validateData();
 builtAssets = buildAssets();
 write("index.html", homepage());
@@ -769,12 +793,13 @@ write(join("arcade", "index.html"), page({
 }));
 write(join("music", "index.html"), musicPage());
 write("sitemap.xml", sitemap());
+for (const dressed of dressedPages) dress(dressed);
 
 for (const file of ["index.html", join("psychopharmacology", "index.html"), join("games", "index.html"), join("music", "index.html"), "sitemap.xml"]) {
   const contents = readFileSync(join(outputRoot, file), "utf8");
   assert(!contents.toLowerCase().includes("blackthorn"), `Forbidden Blackthorn reference in ${file}`);
 }
 
-console.log(`Built Qualiacology hub: ${games.length} games, ${albums.length} releases`);
+console.log(`Built Qualiacology hub: ${games.length} games, ${albums.length} releases, ${dressedPages.length} pages dressed`);
 console.log(`CSS ${builtAssets.css}`);
 console.log(`JS  ${builtAssets.js}`);

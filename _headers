@@ -75,6 +75,9 @@
 /assets/catalog/*
   Cache-Control: public, max-age=31536000, immutable
 
+/assets/banners/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /fetch/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 

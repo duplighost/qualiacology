@@ -60,9 +60,15 @@ jobs:
             psychopharmacology/index.html \
             sitemap.xml \
             assets/hub \
-            assets/arcade/catalog.*.json)"
+            assets/arcade/catalog.*.json \
+            404.html \
+            music \
+            murderpop-greatest-hits/index.html \
+            bring-an-umbrella/index.html \
+            sill/index.html \
+            everhouse/index.html)"
           if [[ -n "$generated_status" ]]; then
             printf '%s\n' "$generated_status"
-            echo "Generated hub files are not current. Run npm run build and commit the result."
+            echo "Generated or dressed pages are not current. Run npm run build and commit the result."
             exit 1
           fi

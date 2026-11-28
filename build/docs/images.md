@@ -14,12 +14,23 @@ art, OG images.
   the large tiers are real re-exports, never upscales. Target file sizes in
   line with existing cards (roughly 6–30 KB at 480w). SVG cards skip the
   catalog set.
+- **A wide banner**, for a game on the homepage (the three `featured` games must
+  have one; any other game may) and at the top of a download game's own page.
+  Master `assets/banners/<slug>-banner-v<date>.jpg` at 2160×720 (3:1), named in
+  `site-data.json` as `banner`, with `bannerAlt` (the card's `alt` describes a
+  different picture), `bannerFocus` (0–100: where across the picture it is held
+  when its frame is narrower than 3:1) and `bannerTallFocus` (0–100: where the
+  phone's 4:3 cut is taken). Tiers: `assets/banners/<slug>-wide-{800,1200,1600,2160}`
+  and `<slug>-tall-{640,960}`, each `.avif` and `.webp`. The build stops with
+  the command to run if one is missing. Alex's three, of 28 Nov 2026, came as
+  2172×724 pictures.
 
 ## The two commands
 
 ```sh
-python build/qa/catalog-art.py build     # regenerate all tiers from site-data masters
-python build/qa/catalog-art.py audit     # perceptual check; REQUIRED after ANY art change
+py -3 build/qa/catalog-art.py build --only=<slug>[,<slug>]   # tiers for just these (cards, covers, banners)
+py -3 build/qa/catalog-art.py build     # regenerate all tiers from site-data masters
+py -3 build/qa/catalog-art.py audit     # perceptual check; REQUIRED after ANY art change
 ```
 
 - **Derive every tier from the image `site-data.json` points at, never from a
@@ -61,11 +72,11 @@ python build/qa/catalog-art.py audit     # perceptual check; REQUIRED after ANY 
   top and bottom before centring the crop (FETCH's moon sits in the top 40px,
   so its cut comes entirely off the bottom).
 
-- **`catalog-art.py build` re-encodes every tier on the site** (~120 dirty
-  files even for one slug). Run it, then `git checkout --` the catalog paths
-  you did not mean to change, THEN rebuild the hubs — the `?v=` hashes are
-  content hashes of files on disk, so a rebuild BEFORE the revert bakes in
-  hashes for files that no longer exist.
+- **`catalog-art.py build` with no `--only` re-encodes every tier on the site.**
+  Use `--only=<slug>` for the pictures you changed. If you did run the whole
+  thing, `git checkout --` the catalog paths you did not mean to change, THEN
+  rebuild the hubs — the `?v=` hashes are content hashes of files on disk, so a
+  rebuild BEFORE the revert bakes in hashes for files that no longer exist.
 
 ## The cache trap
 
@@ -75,7 +86,8 @@ browser that cached a card keeps showing the OLD picture — a mix of old and
 new art that looks like a broken deploy. This has actually happened. The hub
 build stamps catalog image URLs with a content hash (`versioned()` in
 `build-site.mjs`, emitting `…webp?v=<hash>`), so changed art gets a new URL
-automatically — just rebuild after swapping any image. Assets the build does
-NOT emit (hero art, OG images, per-game assets) still need a manual version
-suffix in the filename when replaced. Dropping only the `immutable` token
+automatically — just rebuild after swapping any image. That covers cards,
+covers and banners, on the hub pages and on the pages the build dresses.
+Assets the build does NOT emit (OG images, per-game assets) still need a manual
+version suffix in the filename when replaced. Dropping only the `immutable` token
 would not fix this; the year-long `max-age` alone prevents revalidation.

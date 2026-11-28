@@ -1,113 +1,96 @@
-# The design system
+# The look
 
-**Required reading before touching `build/src/site.css`, `build/src/site.js`,
-or the templates in `build-site.mjs`.** Skip it entirely for content-only or
-game-folder work. A five-stage redesign landed 2026-08-27 (PRs #109–#112);
-the stylesheet's opening comment carries two laws — they are rules, not notes.
+**Read this before touching `build/src/site.css`, `build/src/site.js`, the templates in
+`build-site.mjs`, or one of the hand-written pages' markup.** Skip it for content-only
+or game-folder work.
 
-## Law 1: the discipline budget
+The site was redesigned on 28 Nov 2026, from mockups Alex brought ("an awesome new
+look", "I want it to look good"). Black, ivory and one gold; the pictures are the
+colour. Alex's standing words for how things should feel apply here too: "Elegantly
+simple", "dont use words where you don't have to", nothing floaty.
 
-One aura per view; resting wing alpha ≤ 8% (both `--wing-dim` values sit at
-0.06 and were deliberately NOT spent to the ceiling); glow shadows only on
-the scroll filament, the lit nav pilot light, and the playing audio LED.
-Hero art no longer glows — that glow was deleted on purpose. If you add a
-glow, you are spending from a fixed budget; say so out loud.
+## What it is made of
 
-## Law 2: the motion law — three lanes
+- **Two faces, both in `assets/fonts/`.** Fraunces Italic sets every name and title: the
+  site's, a game's, an album's, a page's. The file is italic only; the italic is the
+  face, not an emphasis, so `h1`–`h3` set `font-style: italic` and big sizes pin
+  `font-variation-settings: "opsz" 144` (smaller titles use 72 or 96, or the hairlines
+  go thin). Manrope sets everything else. Neither has arrows.
+- **Arrows are drawn in CSS** (`--arrow`, `--arrow-out`, as masks), never typed: a typed
+  → comes from whatever font the visitor's machine lends. `.button-arrow`,
+  `.more-link`, `.card-action`, `.external-link`, `.arrow`, `.crumb`, `.back-link`.
+- **Gold** (`--gold`) is for rules, small labels and the one thing on a view you press.
+  There is no second accent. Room colours (amber, cyan, pink) are gone on purpose.
+- **Rules** are 1px: gold (`--rule`) between the parts of a page, grey (`--rule-soft`)
+  inside a part.
+- **The rem grows with the window** on big desktop screens (`html { font-size: clamp(…) }`,
+  16px to 20px between about 1400 and 2100px wide), so the page gets larger, not just
+  wider. Everything is in rem for that reason. Media queries are not affected.
 
-Independent composited properties, so entrance, pointer and press can never
-write the same thing:
+## The pieces
 
-| lane | property | where |
+| piece | where | notes |
 |---|---|---|
-| entrance | `translate` | scroll timelines only — `rise`, `settle` |
-| pointer | `scale` | hover/focus, always inside `@media (hover: hover) and (prefers-reduced-motion: no-preference)` |
-| press | `transform` | `:active`, 45ms attack |
+| header, phone menu | every page | `header()` in `build-site.mjs`. Order: Games, Music, Psychopharmacology, Arcade, Connect, Discord. Connect is `#connect`, the footer of whatever page you are on |
+| footer | every page | `footer()`. It *is* the Connect section |
+| `.masthead` | homepage | the thesis and the line about him |
+| `.feature` | homepage | the first `featured` game, on its wide banner |
+| `.banner-card` | homepage | the other two featured games |
+| `.cover-card` | homepage, `/music/` | album covers; `/music/` adds tags and Listen |
+| `.strip` | homepage | the Psychopharmacology Server, with the live count |
+| `.page-head` | every other generated page | one big title, sometimes a line and buttons |
+| `.work-card` | `/games/` | picture, kicker, title, his summary, facts, his verb |
+| `.leaf …` | hand-written pages | `.album`, `.game-page`, `.lost` (the 404) |
 
-Entrance animations are **transform-family only, never opacity** — an opacity
-keyframe makes axe fail colour-contrast on below-fold content mid-animation.
-That lesson cost a session once. The stylesheet also carries an explicit
-not-doing list (no card tilt, parallax, magnetic buttons, cursor follower,
-cursor torch, fixed scroll lamp, `will-change` on card images) — all
-desktop-only, invisible in a stranger's first ten seconds, and untestable by
-a suite that runs at 390px and 1440px with no hover emulation.
+## Things that bite
 
-## Structures you will trip over if you don't know they exist
+- **A block that is one link.** The feature, a banner card, a cover, a game card and the
+  one-off on `/music/` each hold exactly one `<a>`, stretched over the block with
+  `::after` (`::before` on `.card-action`). Don't add a second link inside without
+  lifting it (`position: relative; z-index: 2`, as `.cover-listen` does). Keyboard focus
+  is shown on the whole block with `:has()`.
+- **The feature's name is sized off the feature** (`cqw`), so the name ends where the
+  picture's subject begins at every width. If you change the feature's padding or the
+  name's size, look at 800, 1100 and 1440 wide.
+- **A banner's frame is not always 3:1.** `bannerFocus` in `site-data.json` says where
+  the picture is held when the frame is narrower (the build writes one
+  `object-position` rule per banner into the stylesheet, because pages carry no inline
+  styles). `bannerTallFocus` says where the phone's 4:3 cut is taken.
+- **The phone cut switches at 48rem in two places**: `tallBelow: "47.99rem"` in
+  `build-site.mjs` and the `@media (min-width: 48rem)` rules for `.feature` and
+  `.game-shot-wide`. Move one, move the other.
+- **`sizes` describes real slot widths** (`slotSizes` in `build-site.mjs`), including
+  the growing rem. Change a grid's columns and you change these.
+- **No inline styles and exactly one `<h1>`** in the generated pages: the validator
+  fails the build.
+- **Browser QA holds onto these**: `.hero`, `.desktop-nav`, `[data-menu-open]` (named
+  "Menu"), the one `<dialog>` on the homepage, `[data-audio-toggle]` ("Sound off" /
+  "Sound on"), `[data-filter]`, `[data-filter-status]`, `[data-catalog-game]`,
+  `.banner-media img`. The desktop menu appears at 60rem (960px).
 
-- **The plate rail.** Grids are NOT inside `.container`. Text keeps the 76rem
-  measure; `<div class="plate-bleed">` gives pictures their own 100rem one,
-  so a 3-up card is 440px instead of 386px. Every catalog/shelf `<ul>` is a
-  sibling of `.container`, not a child. Use `rem`/`%` only inside it — never
-  `100vw`: the Windows scrollbar sits outside the viewport width and
-  `browser-qa.mjs` asserts `pageWidth <= width + 1`.
-- **The sticky filter rail lives in the plate rail too**, with the grid it
-  filters. A `position: sticky` element only sticks inside its own parent's
-  box — leaving it behind in `.container` (which ends above the grid)
-  silently kills the stick entirely. This shipped broken once.
-- **The card index is a CSS counter**, not template output. `build-site.mjs`
-  emits an empty `<span class="card-index">`; `counter-reset` is on the grid,
-  `counter-increment` on each `<li>`. That is what makes a filtered shelf
-  read 01–05 instead of 01/09/15 — `[hidden] { display: none }` means a
-  filtered-out item generates no box and cannot increment. Do not put numbers
-  back in the template.
-- **`data-here` on `<body>` is the room signal.** An IntersectionObserver in
-  site.js (rootMargin `-45% 0px -45% 0px`) reports which homepage section you
-  are in, driving the scroll filament's colour and the nav pilot lights. It
-  replaced fixed percentage keyframes that were 10–20% out of phase. **Do not
-  go back to percentage stops** — they drift the moment section heights
-  change. `.home-page` is a BODY class, so `data-here` must live on `<body>`
-  too.
-- **Seams are tokens.** `--seam-top` / `--seam-bot`, deliberately asymmetric;
-  they double as the chapter numeral's height budget: `.ghost-index` is sized
-  off them, which makes it arithmetically impossible for the numeral to reach
-  the heading at any width. It used to strike through the
-  `/psychopharmacology/` h1 by 122px.
-- **Two type registers, not one.** *Locator* (uppercase, tracked): eyebrows,
-  nav, kickers, filter buttons, stat labels. *Data* (sentence case,
-  untracked): `.card-meta li`, `.footer-links a`. The data register exists
-  because Alex's source strings are already cased on purpose — `WASD`, `LMB`,
-  `Esc`, `TikTok` — and `text-transform: uppercase` was flattening that
-  signal. Do not uppercase them again.
-- **Card art rests resolved.** The old `filter: saturate(0.55)
-  brightness(0.92)` is gone. Cards sit on `--surface` (lighter than the page)
-  with a `--rule-lit` top edge, so dark art reads as an object on a shelf,
-  not a hole. The hover "develop" is a 3% `scale`, in the pointer lane.
-- **Card action buttons sit at their natural width**, outlined on the
-  `/games/` shelf; the homepage featured three keep filled slabs on purpose.
-  Row slack collects above the action (`margin-top: auto` on `.card-actions`,
-  NOT on `.card-meta`) so every button in a row shares a baseline while
-  metadata stays welded to its summary. Alex rejected the ragged-baseline
-  alternative on sight.
-- **The homepage featured games are three equal 16:9 cards**, the same row
-  as `/games/`, every picture whole. Alex picked this on 11 Oct 2026 over a
-  double-height first card, which stretched its picture to a near-square
-  frame (about half the art showed) that ran past the bottom of a laptop
-  screen.
+## The pages the build dresses
 
-## Things that are load-bearing and look optional
+Album pages (`music/<slug>/index.html`), the pages of games you download
+(`murderpop-greatest-hits/`, `bring-an-umbrella/`, `sill/`, `everhouse/`) and
+`404.html` are written by hand, but the build puts the site's own parts into them,
+between these markers:
 
-- **`sizes` in `catalogPicture()` must describe the real slot width.**
-  Nothing asserts on `currentSrc`, so a `sizes` that under-asks silently
-  upscales the picture (a 31vw description once got a 480w file stretched
-  over an 875px slot). Change it whenever a card grid's columns change.
-- `heroPicture()`'s `<source media="(max-width: 44.99rem)">` phone crop and
-  the CSS `aspect-ratio` switch **must use the same breakpoint**, or a band
-  of widths gets a CSS box and a downloaded image with different ratios.
-- `.scroll-progress` has a base `transform: scaleX(0)` for the JS fallback.
-  The `@supports (animation-timeline: scroll(root))` block sets
-  `transform: none` **and must come after the base rule** — same specificity,
-  source order decides. Get either wrong and the filament is zero-width
-  forever. The JS write is guarded by
-  `CSS.supports("animation-timeline", "scroll(root)")` so both never run at
-  once.
-- Filtering: `applyFilter` captures the reader's scroll on **pointerdown**,
-  before the browser's own focus-scroll fires. Clicking a filter focuses it,
-  and because the rail is sticky the browser scrolls to the button's *layout*
-  position — hundreds of pixels away. That, not the document collapsing, is
-  what threw readers up the page. Keyboard focus deliberately still scrolls.
-- An `<a>` wrapping `<dt>` + `<dd>` is **invalid** inside a `<dl>` — axe
-  fails it on `definition-list` + `dlitem`. The hero's three "doors" put the
-  anchor inside the `<dd>` with a stretched `::after`. Keep it that way.
-- `.alive-word` on the homepage hero needs its padding/margin pair —
-  `background-clip: text` + negative letter-spacing shaves the last glyph
-  without it.
+```html
+<!-- site:head -->    fonts, the stylesheet, the script      <!-- /site:head -->
+<!-- site:header -->  the header and the phone menu          <!-- /site:header -->
+<!-- site:shot -->    a game page's picture (game pages only) <!-- /site:shot -->
+<!-- site:footer -->  the footer                             <!-- /site:footer -->
+```
+
+Never edit between the markers; edit everything else freely, then run the build. The
+list of dressed pages is `dressedPages` at the top of `build-site.mjs` (albums are
+taken from `site-data.json`). A page missing a marker fails the build by name. CI
+rejects a dressed page that is stale, the same way it rejects a stale hub page.
+
+Game pages you *play* on are not dressed: nothing of the site sits over a game.
+
+## Copy
+
+All of it is Alex's voice (AGENTS.md, rule 2). The redesign cut what sounded like a
+site describing itself. Don't bring that register back: no "doorways", "shelves" or
+"worlds", no notes about how the page was made.

@@ -23,7 +23,9 @@ const viewports = [
   { width: 1024, height: 768 },
   { width: 1440, height: 900 },
 ];
-const routes = ["/", "/psychopharmacology/", "/games/", "/music/"];
+// The four hub pages, and one of each kind of page the build dresses (an album, a game
+// you download, the 404), since they wear the same header, footer and stylesheet.
+const routes = ["/", "/psychopharmacology/", "/games/", "/music/", "/music/whoever-you-are/", "/murderpop-greatest-hits/", "/404.html"];
 const failures = [];
 const report = { viewports: [], routes: [], interactions: {}, accessibility: [] };
 
@@ -105,7 +107,6 @@ try {
     }
 
     if (viewport.width === 1440) {
-      // 6700: the 2026-07-24 psych-section redesign (server pillars + inline facts) sits at ~6617px.
       check(metrics.pageHeight <= 6700, `1440px homepage is too long: ${metrics.pageHeight}px`);
       await page.screenshot({ path: join(resultsRoot, "home-1440x900.png"), fullPage: true, animations: "disabled" });
     }
@@ -129,7 +130,9 @@ try {
       check(Boolean(routeMetrics.h1), `${route} has no visible H1 at ${viewport.width}px`);
       check(routeMetrics.pageWidth <= routeMetrics.width + 1, `${route} overflows horizontally at ${viewport.width}px`);
 
-      const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+      // An album page embeds YouTube's player, and what is wrong inside that frame is
+      // YouTube's: audit the page, not the player.
+      const axe = await new AxeBuilder({ page }).exclude("iframe").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
       const serious = axe.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
       report.accessibility.push({ route, viewport: viewport.width, violations: axe.violations.length, serious: serious.map((item) => item.id) });
       check(serious.length === 0, `${route} has serious/critical Axe violations at ${viewport.width}px: ${serious.map((item) => item.id).join(", ")}`);
@@ -142,7 +145,7 @@ try {
       const led = page.locator("[data-audio-toggle]");
       if (await led.count()) {
         await led.evaluate((button) => button.setAttribute("aria-pressed", "true"));
-        const axeLit = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+        const axeLit = await new AxeBuilder({ page }).exclude("iframe").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
         const seriousLit = axeLit.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
         check(seriousLit.length === 0, `${route} has serious/critical Axe violations with the audio LED lit at ${viewport.width}px: ${seriousLit.map((item) => item.id).join(", ")}`);
         await led.evaluate((button) => button.setAttribute("aria-pressed", "false"));
@@ -223,7 +226,7 @@ try {
     await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
     const motion = await page.evaluate(() => ({
       scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
-      cardTransition: getComputedStyle(document.querySelector(".work-card")).transitionDuration,
+      cardTransition: getComputedStyle(document.querySelector(".banner-media img")).transitionDuration,
     }));
     check(motion.scrollBehavior === "auto", `Reduced motion did not disable smooth scrolling: ${motion.scrollBehavior}`);
     report.interactions.reducedMotion = motion;

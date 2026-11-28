@@ -179,3 +179,7 @@
 # MURDERPOP
 /murderpop.html  /murderpop/  301!
 /murder-pop  /murderpop/  302
+
+# BRING AN UMBRELLA (a Windows game; its page is hand-written, and its download is not up yet)
+/umbrella  /bring-an-umbrella/  302
+/bring-an-umbrella.html  /bring-an-umbrella/  301!
