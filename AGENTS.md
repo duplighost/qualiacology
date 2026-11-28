@@ -10,7 +10,9 @@ an earlier deploy in the Netlify UI.
    merge approval: once he has said it, merge as soon as CI is green and run nothing else
    first. Without it, stop at the open PR.
 2. **All copy is Alex's voice.** Reuse his lines; never invent taglines. Games other
-   people made keep their own words.
+   people made keep their own words. On 28 Nov 2026, of the site's own copy: "Most of
+   my website was written by AI. So if something sounds too meta, it probably isn't
+   something I want."
 3. **The hub pages are generated.** `index.html`, `games/`, `arcade/`, `music/`,
    `psychopharmacology/` and `sitemap.xml` come from `build/`; never edit them directly.
    Everything else at root (game folders, `music/<slug>/`, `_redirects`, `_headers`,
