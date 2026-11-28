@@ -1,0 +1,65 @@
+{
+  "score": {
+    "title": "After Hours",
+    "model": "ElevenLabs Music v2.5",
+    "provider": "Creative Claw",
+    "creation_date": "2026-11-28",
+    "source_kind": "new_generation",
+    "source_job_id": "0ba10487-6628-4ef8-a877-6fcb380c727d",
+    "source_url": "https://cdn.creativeclaw.co/u/d47a3b90/audio/9e52873c-c82b-4ace-a78f-d9e9e86d33cc.wav",
+    "instrumental": true,
+    "bpm_measured": 128,
+    "key_measured": "D minor",
+    "source_duration_seconds": 120,
+    "description": "One newly generated score, edited into related gameplay cues. The baths use a darker EQ of the first drop; the midway and guardians share the later drop. These are not independent compositions."
+  },
+  "effects": {
+    "origin": "Original deterministic procedural synthesis in wreck-audio.js",
+    "imported_samples": false
+  },
+  "assets": [
+    {
+      "file": "garden.mp3",
+      "cue": "Nightshift",
+      "source_seconds": [
+        15.00696,
+        45.00769
+      ],
+      "bars": 16
+    },
+    {
+      "file": "baths.mp3",
+      "cue": "Under Pressure",
+      "source_seconds": [
+        15.00696,
+        45.00769
+      ],
+      "bars": 16,
+      "variation": "Additional broad -2dB dip at3400Hz"
+    },
+    {
+      "file": "midway.mp3",
+      "cue": "After the Last Ride / The Machines Wake",
+      "source_seconds": [
+        75.009,
+        105.00981
+      ],
+      "bars": 16
+    }
+  ],
+  "processing": {
+    "high_pass_hz": 32,
+    "mid_dip": {
+      "hz": 2400,
+      "Q": 0.8,
+      "gain_db": -3
+    },
+    "high_shelf": {
+      "hz": 4600,
+      "gain_db": -1.5
+    },
+    "peak_target_dbfs": -3.5,
+    "wrap_preroll_blend_seconds": 0.045
+  },
+  "rights_note": "Generated through the connected service for this project. No external recordings or sampled songs were supplied. This catalog records provenance and does not assert copyright exclusivity or a universal third-party license."
+}

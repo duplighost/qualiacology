@@ -1,0 +1,1000 @@
+{
+  "style": "Hand-painted nocturnal seaside pleasure park: ink shadows, amber practical light, verdigris, copper, glazed ceramic, burgundy enamel.",
+  "backgrounds": {
+    "garden": {
+      "src": "assets/garden.png",
+      "size": [
+        1586,
+        992
+      ],
+      "world": [
+        1600,
+        1000
+      ]
+    },
+    "baths": {
+      "src": "assets/baths.png",
+      "size": [
+        1586,
+        992
+      ],
+      "world": [
+        1600,
+        1000
+      ]
+    },
+    "midway": {
+      "src": "assets/midway.png",
+      "size": [
+        1586,
+        992
+      ],
+      "world": [
+        1600,
+        1000
+      ]
+    }
+  },
+  "sprites": {
+    "hero": {
+      "src": "assets/hero.png",
+      "crop": {
+        "x": 16,
+        "y": 195,
+        "w": 1228,
+        "h": 928
+      },
+      "anchor": {
+        "x": 0.49,
+        "y": 0.49
+      },
+      "facing": 0
+    },
+    "topiarist": {
+      "src": "assets/topiarist.png",
+      "crop": {
+        "x": 26,
+        "y": 226,
+        "w": 1202,
+        "h": 797
+      },
+      "anchor": {
+        "x": 0.49,
+        "y": 0.49
+      },
+      "facing": 0
+    },
+    "bathmaster": {
+      "src": "assets/bathmaster.png",
+      "crop": {
+        "x": 26,
+        "y": 51,
+        "w": 1202,
+        "h": 1085
+      },
+      "anchor": {
+        "x": 0.446,
+        "y": 0.5
+      },
+      "facing": 0
+    },
+    "carousel": {
+      "src": "assets/carousel.png",
+      "crop": {
+        "x": 30,
+        "y": 23,
+        "w": 1175,
+        "h": 1193
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "facing": 0
+    },
+    "enemy-rusher": {
+      "src": "assets/enemies.png",
+      "crop": {
+        "x": 44,
+        "y": 206,
+        "w": 645,
+        "h": 377
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.52
+      },
+      "facing": 0
+    },
+    "enemy-guard": {
+      "src": "assets/enemies.png",
+      "crop": {
+        "x": 732,
+        "y": 104,
+        "w": 660,
+        "h": 503
+      },
+      "anchor": {
+        "x": 0.51,
+        "y": 0.5
+      },
+      "facing": 0
+    },
+    "enemy-thrower": {
+      "src": "assets/enemies.png",
+      "crop": {
+        "x": 1473,
+        "y": 128,
+        "w": 672,
+        "h": 479
+      },
+      "anchor": {
+        "x": 0.47,
+        "y": 0.5
+      },
+      "facing": 0
+    },
+    "prop-glass": {
+      "src": "assets/props.png",
+      "crop": {
+        "x": 100,
+        "y": 14,
+        "w": 329,
+        "h": 479
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.55
+      }
+    },
+    "prop-crate": {
+      "src": "assets/props.png",
+      "crop": {
+        "x": 557,
+        "y": 44,
+        "w": 422,
+        "h": 439
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.55
+      }
+    },
+    "prop-machine": {
+      "src": "assets/props.png",
+      "crop": {
+        "x": 1117,
+        "y": 9,
+        "w": 307,
+        "h": 484
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.55
+      }
+    },
+    "prop-barrel": {
+      "src": "assets/props.png",
+      "crop": {
+        "x": 80,
+        "y": 533,
+        "w": 366,
+        "h": 462
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.55
+      }
+    },
+    "prop-core": {
+      "src": "assets/props.png",
+      "crop": {
+        "x": 576,
+        "y": 524,
+        "w": 384,
+        "h": 465
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.55
+      }
+    },
+    "prop-valve": {
+      "src": "assets/props.png",
+      "crop": {
+        "x": 1024,
+        "y": 540,
+        "w": 454,
+        "h": 455
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.55
+      }
+    },
+    "fixture-planter": {
+      "src": "assets/fixtures.png",
+      "crop": {
+        "x": 12,
+        "y": 162,
+        "w": 696,
+        "h": 409
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.55
+      }
+    },
+    "weight": {
+      "src": "assets/fixtures.png",
+      "crop": {
+        "x": 812,
+        "y": 156,
+        "w": 550,
+        "h": 436
+      },
+      "anchor": {
+        "x": 0.59,
+        "y": 0.5
+      },
+      "facing": 0
+    },
+    "fixture-gate": {
+      "src": "assets/fixtures.png",
+      "crop": {
+        "x": 1537,
+        "y": 0,
+        "w": 545,
+        "h": 717
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.66
+      }
+    },
+    "carousel-arm": {
+      "src": "assets/carousel-arms.png",
+      "crop": {
+        "x": 48,
+        "y": 379,
+        "w": 1034,
+        "h": 136
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "facing": 0,
+      "notes": "Horizontal shaft, natural alpha body1022\u00d7124; stretch to actual arm geometry."
+    },
+    "carousel-joint": {
+      "src": "assets/carousel-arms.png",
+      "crop": {
+        "x": 1166,
+        "y": 144,
+        "w": 538,
+        "h": 582
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "facing": 0,
+      "aperture": {
+        "x": 0.5,
+        "y": 0.5,
+        "radiusX": 0.23,
+        "radiusY": 0.22
+      },
+      "notes": "Neutral burgundy aperture center\u22481435,435 in full atlas. Renderer adds exact vulnerability overlays."
+    }
+  },
+  "notes": [
+    "Suggested crops/anchors; renderer may tune scale and anchor to physical contact centers.",
+    "Boss front direction is right in the source image. Topiarist rear flower core is left.",
+    "Carousel arms, actual attack tells, shutters, contact shadows, animation and weakpoint highlights remain renderer-owned.",
+    "All sprite PNGs have genuine alpha; background PNGs are opaque RGB. Props atlas has nonzero hidden RGB in transparent pixels; honor its alpha channel.",
+    "Ten generated PNG assets total about21.34MB at source resolution; no external runtime URLs or dependencies.",
+    "Three new surround paintings extend the existing arenas; original eleven PNG assets are preserved. Surrounds are opaque RGB and contain no gameplay geometry or threats."
+  ],
+  "surrounds": {
+    "garden": {
+      "src": "assets/garden-surround.png",
+      "size": [
+        1513,
+        1039
+      ],
+      "worldRect": {
+        "x": -800,
+        "y": -600,
+        "w": 3200,
+        "h": 2200
+      },
+      "arenaOverlay": {
+        "x": 0,
+        "y": 0,
+        "w": 1600,
+        "h": 1000
+      },
+      "exitApproach": {
+        "x": 1695,
+        "y": 500,
+        "width": 140
+      },
+      "notes": "Decorative surrounding world only. Draw under the unchanged original arena. A short threshold between worldx1580 and1720 joins the painted approach. Renderer supplies outer-edge continuation."
+    },
+    "baths": {
+      "src": "assets/baths-surround.png",
+      "size": [
+        1513,
+        1040
+      ],
+      "worldRect": {
+        "x": -800,
+        "y": -600,
+        "w": 3200,
+        "h": 2200
+      },
+      "arenaOverlay": {
+        "x": 0,
+        "y": 0,
+        "w": 1600,
+        "h": 1000
+      },
+      "exitApproach": {
+        "x": 1665,
+        "y": 500,
+        "width": 140
+      },
+      "notes": "Decorative surrounding world only. Draw under the unchanged original arena. A short threshold between worldx1580 and1720 joins the painted approach. Renderer supplies outer-edge continuation."
+    },
+    "midway": {
+      "src": "assets/midway-surround.png",
+      "size": [
+        1512,
+        1040
+      ],
+      "worldRect": {
+        "x": -800,
+        "y": -600,
+        "w": 3200,
+        "h": 2200
+      },
+      "arenaOverlay": {
+        "x": 0,
+        "y": 0,
+        "w": 1600,
+        "h": 1000
+      },
+      "exitApproach": {
+        "x": 1665,
+        "y": 500,
+        "width": 140
+      },
+      "notes": "Decorative surrounding world only. Draw under the unchanged original arena. A short threshold between worldx1580 and1720 joins the painted approach. Renderer supplies outer-edge continuation."
+    }
+  },
+  "animations": {
+    "heroWalk": {
+      "src": "assets/hero-walk.png",
+      "size": [
+        1254,
+        1254
+      ],
+      "format": "RGBA",
+      "layout": {
+        "columns": 4,
+        "rows": 4,
+        "xBoundaries": [
+          0,
+          314,
+          627,
+          940,
+          1254
+        ],
+        "yBoundaries": [
+          0,
+          314,
+          627,
+          940,
+          1254
+        ],
+        "rowOrder": [
+          "south",
+          "north",
+          "west",
+          "east"
+        ],
+        "frameOrder": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "directions": {
+        "south": {
+          "row": 0,
+          "idleFrame": 1,
+          "frames": [
+            {
+              "crop": {
+                "x": 0,
+                "y": 0,
+                "w": 314,
+                "h": 314
+              },
+              "anchor": {
+                "x": 0.550955,
+                "y": 0.964968
+              },
+              "bodyAnchorPixels": {
+                "x": 173,
+                "y": 174
+              },
+              "visibleBoundsInCell": {
+                "x": 56,
+                "y": 17,
+                "w": 184,
+                "h": 287
+              },
+              "bodyAnchor": {
+                "x": 0.550955,
+                "y": 0.55414
+              },
+              "groundAnchorPixels": {
+                "x": 173,
+                "y": 303
+              },
+              "groundAnchor": {
+                "x": 0.550955,
+                "y": 0.964968
+              }
+            },
+            {
+              "crop": {
+                "x": 314,
+                "y": 0,
+                "w": 313,
+                "h": 314
+              },
+              "anchor": {
+                "x": 0.555911,
+                "y": 0.952229
+              },
+              "bodyAnchorPixels": {
+                "x": 174,
+                "y": 174
+              },
+              "visibleBoundsInCell": {
+                "x": 60,
+                "y": 17,
+                "w": 185,
+                "h": 283
+              },
+              "bodyAnchor": {
+                "x": 0.555911,
+                "y": 0.55414
+              },
+              "groundAnchorPixels": {
+                "x": 174,
+                "y": 299
+              },
+              "groundAnchor": {
+                "x": 0.555911,
+                "y": 0.952229
+              }
+            },
+            {
+              "crop": {
+                "x": 627,
+                "y": 0,
+                "w": 313,
+                "h": 314
+              },
+              "anchor": {
+                "x": 0.559105,
+                "y": 0.958599
+              },
+              "bodyAnchorPixels": {
+                "x": 175,
+                "y": 174
+              },
+              "visibleBoundsInCell": {
+                "x": 62,
+                "y": 17,
+                "w": 184,
+                "h": 285
+              },
+              "bodyAnchor": {
+                "x": 0.559105,
+                "y": 0.55414
+              },
+              "groundAnchorPixels": {
+                "x": 175,
+                "y": 301
+              },
+              "groundAnchor": {
+                "x": 0.559105,
+                "y": 0.958599
+              }
+            },
+            {
+              "crop": {
+                "x": 940,
+                "y": 0,
+                "w": 314,
+                "h": 314
+              },
+              "anchor": {
+                "x": 0.557325,
+                "y": 0.952229
+              },
+              "bodyAnchorPixels": {
+                "x": 175,
+                "y": 174
+              },
+              "visibleBoundsInCell": {
+                "x": 66,
+                "y": 17,
+                "w": 181,
+                "h": 283
+              },
+              "bodyAnchor": {
+                "x": 0.557325,
+                "y": 0.55414
+              },
+              "groundAnchorPixels": {
+                "x": 175,
+                "y": 299
+              },
+              "groundAnchor": {
+                "x": 0.557325,
+                "y": 0.952229
+              }
+            }
+          ]
+        },
+        "north": {
+          "row": 1,
+          "idleFrame": 1,
+          "frames": [
+            {
+              "crop": {
+                "x": 0,
+                "y": 314,
+                "w": 314,
+                "h": 313
+              },
+              "anchor": {
+                "x": 0.512739,
+                "y": 0.955272
+              },
+              "bodyAnchorPixels": {
+                "x": 161,
+                "y": 169
+              },
+              "visibleBoundsInCell": {
+                "x": 93,
+                "y": 13,
+                "w": 167,
+                "h": 287
+              },
+              "bodyAnchor": {
+                "x": 0.512739,
+                "y": 0.539936
+              },
+              "groundAnchorPixels": {
+                "x": 161,
+                "y": 299
+              },
+              "groundAnchor": {
+                "x": 0.512739,
+                "y": 0.955272
+              }
+            },
+            {
+              "crop": {
+                "x": 314,
+                "y": 314,
+                "w": 313,
+                "h": 313
+              },
+              "anchor": {
+                "x": 0.520767,
+                "y": 0.955272
+              },
+              "bodyAnchorPixels": {
+                "x": 163,
+                "y": 169
+              },
+              "visibleBoundsInCell": {
+                "x": 98,
+                "y": 14,
+                "w": 159,
+                "h": 285
+              },
+              "bodyAnchor": {
+                "x": 0.520767,
+                "y": 0.539936
+              },
+              "groundAnchorPixels": {
+                "x": 163,
+                "y": 299
+              },
+              "groundAnchor": {
+                "x": 0.520767,
+                "y": 0.955272
+              }
+            },
+            {
+              "crop": {
+                "x": 627,
+                "y": 314,
+                "w": 313,
+                "h": 313
+              },
+              "anchor": {
+                "x": 0.517572,
+                "y": 0.955272
+              },
+              "bodyAnchorPixels": {
+                "x": 162,
+                "y": 169
+              },
+              "visibleBoundsInCell": {
+                "x": 96,
+                "y": 13,
+                "w": 159,
+                "h": 287
+              },
+              "bodyAnchor": {
+                "x": 0.517572,
+                "y": 0.539936
+              },
+              "groundAnchorPixels": {
+                "x": 162,
+                "y": 299
+              },
+              "groundAnchor": {
+                "x": 0.517572,
+                "y": 0.955272
+              }
+            },
+            {
+              "crop": {
+                "x": 940,
+                "y": 314,
+                "w": 314,
+                "h": 313
+              },
+              "anchor": {
+                "x": 0.522293,
+                "y": 0.955272
+              },
+              "bodyAnchorPixels": {
+                "x": 164,
+                "y": 169
+              },
+              "visibleBoundsInCell": {
+                "x": 90,
+                "y": 13,
+                "w": 166,
+                "h": 287
+              },
+              "bodyAnchor": {
+                "x": 0.522293,
+                "y": 0.539936
+              },
+              "groundAnchorPixels": {
+                "x": 164,
+                "y": 299
+              },
+              "groundAnchor": {
+                "x": 0.522293,
+                "y": 0.955272
+              }
+            }
+          ]
+        },
+        "west": {
+          "row": 2,
+          "idleFrame": 1,
+          "frames": [
+            {
+              "crop": {
+                "x": 0,
+                "y": 627,
+                "w": 314,
+                "h": 313
+              },
+              "anchor": {
+                "x": 0.477707,
+                "y": 0.932907
+              },
+              "bodyAnchorPixels": {
+                "x": 150,
+                "y": 170
+              },
+              "visibleBoundsInCell": {
+                "x": 66,
+                "y": 15,
+                "w": 206,
+                "h": 278
+              },
+              "bodyAnchor": {
+                "x": 0.477707,
+                "y": 0.543131
+              },
+              "groundAnchorPixels": {
+                "x": 150,
+                "y": 292
+              },
+              "groundAnchor": {
+                "x": 0.477707,
+                "y": 0.932907
+              }
+            },
+            {
+              "crop": {
+                "x": 314,
+                "y": 627,
+                "w": 313,
+                "h": 313
+              },
+              "anchor": {
+                "x": 0.479233,
+                "y": 0.932907
+              },
+              "bodyAnchorPixels": {
+                "x": 150,
+                "y": 170
+              },
+              "visibleBoundsInCell": {
+                "x": 86,
+                "y": 16,
+                "w": 176,
+                "h": 277
+              },
+              "bodyAnchor": {
+                "x": 0.479233,
+                "y": 0.543131
+              },
+              "groundAnchorPixels": {
+                "x": 150,
+                "y": 292
+              },
+              "groundAnchor": {
+                "x": 0.479233,
+                "y": 0.932907
+              }
+            },
+            {
+              "crop": {
+                "x": 627,
+                "y": 627,
+                "w": 313,
+                "h": 313
+              },
+              "anchor": {
+                "x": 0.476038,
+                "y": 0.932907
+              },
+              "bodyAnchorPixels": {
+                "x": 149,
+                "y": 170
+              },
+              "visibleBoundsInCell": {
+                "x": 66,
+                "y": 16,
+                "w": 201,
+                "h": 277
+              },
+              "bodyAnchor": {
+                "x": 0.476038,
+                "y": 0.543131
+              },
+              "groundAnchorPixels": {
+                "x": 149,
+                "y": 292
+              },
+              "groundAnchor": {
+                "x": 0.476038,
+                "y": 0.932907
+              }
+            },
+            {
+              "crop": {
+                "x": 940,
+                "y": 627,
+                "w": 314,
+                "h": 313
+              },
+              "anchor": {
+                "x": 0.477707,
+                "y": 0.932907
+              },
+              "bodyAnchorPixels": {
+                "x": 150,
+                "y": 170
+              },
+              "visibleBoundsInCell": {
+                "x": 86,
+                "y": 16,
+                "w": 179,
+                "h": 277
+              },
+              "bodyAnchor": {
+                "x": 0.477707,
+                "y": 0.543131
+              },
+              "groundAnchorPixels": {
+                "x": 150,
+                "y": 292
+              },
+              "groundAnchor": {
+                "x": 0.477707,
+                "y": 0.932907
+              }
+            }
+          ]
+        },
+        "east": {
+          "row": 3,
+          "idleFrame": 1,
+          "frames": [
+            {
+              "crop": {
+                "x": 0,
+                "y": 940,
+                "w": 314,
+                "h": 314
+              },
+              "anchor": {
+                "x": 0.528662,
+                "y": 0.936306
+              },
+              "bodyAnchorPixels": {
+                "x": 166,
+                "y": 170
+              },
+              "visibleBoundsInCell": {
+                "x": 50,
+                "y": 15,
+                "w": 203,
+                "h": 280
+              },
+              "bodyAnchor": {
+                "x": 0.528662,
+                "y": 0.541401
+              },
+              "groundAnchorPixels": {
+                "x": 166,
+                "y": 294
+              },
+              "groundAnchor": {
+                "x": 0.528662,
+                "y": 0.936306
+              }
+            },
+            {
+              "crop": {
+                "x": 314,
+                "y": 940,
+                "w": 313,
+                "h": 314
+              },
+              "anchor": {
+                "x": 0.527157,
+                "y": 0.93949
+              },
+              "bodyAnchorPixels": {
+                "x": 165,
+                "y": 170
+              },
+              "visibleBoundsInCell": {
+                "x": 55,
+                "y": 15,
+                "w": 178,
+                "h": 280
+              },
+              "bodyAnchor": {
+                "x": 0.527157,
+                "y": 0.541401
+              },
+              "groundAnchorPixels": {
+                "x": 165,
+                "y": 295
+              },
+              "groundAnchor": {
+                "x": 0.527157,
+                "y": 0.93949
+              }
+            },
+            {
+              "crop": {
+                "x": 627,
+                "y": 940,
+                "w": 313,
+                "h": 314
+              },
+              "anchor": {
+                "x": 0.530351,
+                "y": 0.93949
+              },
+              "bodyAnchorPixels": {
+                "x": 166,
+                "y": 170
+              },
+              "visibleBoundsInCell": {
+                "x": 48,
+                "y": 15,
+                "w": 204,
+                "h": 281
+              },
+              "bodyAnchor": {
+                "x": 0.530351,
+                "y": 0.541401
+              },
+              "groundAnchorPixels": {
+                "x": 166,
+                "y": 295
+              },
+              "groundAnchor": {
+                "x": 0.530351,
+                "y": 0.93949
+              }
+            },
+            {
+              "crop": {
+                "x": 940,
+                "y": 940,
+                "w": 314,
+                "h": 314
+              },
+              "anchor": {
+                "x": 0.535032,
+                "y": 0.936306
+              },
+              "bodyAnchorPixels": {
+                "x": 168,
+                "y": 170
+              },
+              "visibleBoundsInCell": {
+                "x": 58,
+                "y": 14,
+                "w": 177,
+                "h": 281
+              },
+              "bodyAnchor": {
+                "x": 0.535032,
+                "y": 0.541401
+              },
+              "groundAnchorPixels": {
+                "x": 168,
+                "y": 294
+              },
+              "groundAnchor": {
+                "x": 0.535032,
+                "y": 0.936306
+              }
+            }
+          ]
+        }
+      },
+      "recommendedCellWorldSize": 96,
+      "recommendedWalkFPS": 12,
+      "fullBodyRotation": false,
+      "notes": [
+        "Sixteen painted upright human walk poses: head remains screen-up and boots screen-down in every facing direction.",
+        "Select the anatomical direction row; never rotate or vertically flip the complete sprite. Dash ghosts must use the same upright frame.",
+        "Render complete cells at one shared scale; do not rescale individual visible bounds. Default ground anchors align the boot baseline to player.x/player.y; bodyAnchor is the waist position in the same cell.",
+        "96 world-pixel square cells produce about 85\u201388 world-pixel visible character height. Idle uses frame 1. Advance gait with movement speed or distance; freeze while idle.",
+        "Cream short coat and exposed dark-haired head, crimson scarf, navy trousers, dark boots and brass bracer retain the original identity at small game scale.",
+        "Original hero.png is preserved for the menu illustration. Rope attachment and gameplay collision remain renderer/physics responsibilities.",
+        "Atlas inspected visually and by alpha bounds: all figures fit their own cells, transparent gutters separate frames, no frame is clipped. Very faint edge alpha below 16 is antialiasing, not an opaque backdrop."
+      ],
+      "anchorMeaning": "Ground anchor at boot baseline, positioned at player.x/player.y; bodyAnchor retained separately for attachment calculations."
+    }
+  }
+}
