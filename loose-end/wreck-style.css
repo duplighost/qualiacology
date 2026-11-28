@@ -168,3 +168,18 @@ h1 em { font-style: normal; color: #dda75d; }
   .touch-dash { right: max(16px, calc(env(safe-area-inset-right) + 12px)); }
   .game-footer { padding-left: max(17px, calc(env(safe-area-inset-left) + 12px)); padding-right: max(17px, calc(env(safe-area-inset-right) + 12px)); }
 }
+
+/* A compact mixer using the park's existing brass and ink palette. */
+.audio-modal { z-index: 15; }
+.audio-panel { width: min(430px,100%); }
+.audio-panel h2 { margin-bottom: 17px; }
+.audio-channel { margin: 23px 0 0; }
+.audio-channel label { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; font-weight: bold; }
+.audio-channel output { color: var(--gold); font-size: 12px; font-variant-numeric: tabular-nums; }
+.audio-channel input { display: block; width: 100%; height: 36px; margin: 3px 0 0; cursor: pointer; accent-color: #e1b779; }
+.audio-channel input:focus-visible { outline: 2px solid #fff1b8; outline-offset: 2px; border-radius: 4px; }
+.audio-channel small { color: #a4b5b0; font-size: 11px; line-height: 1.5; }
+.audio-mute { min-height: 44px; display: flex; gap: 10px; align-items: center; margin: 17px 0 2px; color: #c6cfbf; font-size: 13px; cursor: pointer; }
+.audio-mute input { width: 18px; height: 18px; accent-color: #e1b779; }
+.audio-panel .primary-button { margin-top: 12px; }
+@media (max-height:650px) { .audio-channel { margin-top: 12px; }.audio-panel h2 { font-size: 32px; margin: 9px 0 13px; }.audio-panel h2 br { display: none; }.audio-panel h2 em { margin-left: 7px; }.audio-channel input { height: 28px; }.audio-panel .eyebrow { margin-bottom: 10px; }.audio-mute { margin-top: 7px; } }
