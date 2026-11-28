@@ -8,7 +8,7 @@
     "dateBasis": "Dates reflect saved files, installed builds, source records, or live Site updates; original creation dates are not always known.",
     "counts": {
       "families": 811,
-      "versions": 1782,
+      "versions": 1783,
       "baselineSourceRecords": 1716,
       "baselineSourceFamilies": 766,
       "baselineBrowserFamiliesInventoried": 755,
@@ -31,7 +31,7 @@
         "broken": 3,
         "download": 13,
         "environment-limited": 380,
-        "input-checked": 11,
+        "input-checked": 12,
         "launch-checked": 180,
         "launch-unverified": 8,
         "link-checked": 1169,
@@ -5650,8 +5650,8 @@
     },
     {
       "id": "borrowed-weight",
-      "title": "BORROWED WEIGHT: FLOOD CATHEDRAL",
-      "description": "An original game recovered from your Google Drive.",
+      "title": "BORROWED WEIGHT",
+      "description": "Everything in the drowned city has a center. Take it.",
       "genres": [],
       "controlKinds": [],
       "controls": [
@@ -5662,7 +5662,7 @@
       "firstDate": "2026-09-15T22:34:00.384963Z",
       "lastDate": "2026-10-02T01:11:36.233000Z",
       "featured": false,
-      "preferredId": "archive-archive-borrowed-weight-flood-cathedral-b62762f9a5",
+      "preferredId": "october-archive-borrowed-weight-388df9b8f5",
       "versions": [
         {
           "id": "archive-archive-borrowed-weight-flood-cathedral-b62762f9a5",
@@ -26288,10 +26288,26 @@
       "kind": "game",
       "imageUrl": "/assets/arcade/covers/d45cd096b1c55611d766d21e.webp",
       "firstDate": "2026-10-26T19:12:26.259000Z",
-      "lastDate": "2026-11-03T00:00:00Z",
+      "lastDate": "2026-11-25",
       "featured": false,
-      "preferredId": "pale-crown",
+      "preferredId": "pale-crown-world-20261125",
       "versions": [
+        {
+          "id": "pale-crown-world-20261125",
+          "title": "Pale Crown — A Dawn Without a King",
+          "label": "Castle depth and detail · 2026-11-25",
+          "date": "2026-11-25",
+          "url": "https://alex-games-october-2026.qualiacology.chatgpt.site/games/pale-crown-world-20261125/play.html",
+          "notes": "",
+          "status": "input-checked",
+          "controls": [
+            "AD Move · SPACE Jump · MOUSE Hold + sweep blade · J Extend forward · Q Spirit lance"
+          ],
+          "qaNote": "Launch and ordinary desktop movement/action inputs rendered Outer Vigil / The Ashen Causeway without page exceptions. Short opening sample only; campaign completion and mobile behavior unverified.",
+          "checkedAt": "2026-11-28T11:45:43.789Z",
+          "entryHtmlBytes": 7950023,
+          "entryHtmlSha256": "8417df9e725fd87f51355bbe3178ff63cf489d6116b530a1136cda438cd67d18"
+        },
         {
           "id": "pale-crown",
           "title": "Pale Crown",
@@ -39012,7 +39028,7 @@
       "firstDate": "2026-06-11T09:02:54.689405Z",
       "lastDate": "2026-06-25T01:57:14Z",
       "featured": false,
-      "preferredId": "archive-archive-spiggot-moonfeel-v2-1-a8025509e6",
+      "preferredId": "pc-history-spiggot-moonfeel-v2-2-36c8be0d-20261118",
       "versions": [
         {
           "id": "archive-archive-spiggot-moonfeel-v2-1-a8025509e6",
