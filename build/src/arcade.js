@@ -182,7 +182,9 @@
     }
   });
   root.addEventListener('change',event=>{
-    if (event.target.matches('[data-filter-key]')) { state[event.target.dataset.filterKey]=event.target.value; state.page=1; render(); }
+    // Search already uses the input debounce below. Redrawing on blur can detach
+    // a pressed card before its pending click completes.
+    if (event.target.matches('[data-filter-key]:not([data-search])')) { state[event.target.dataset.filterKey]=event.target.value; state.page=1; render(); }
   });
   let searchTimer;
   $('[data-search]').addEventListener('input',event=>{clearTimeout(searchTimer); const value=event.target.value; searchTimer=setTimeout(()=>{state.q=value; state.page=1; render();},120);});

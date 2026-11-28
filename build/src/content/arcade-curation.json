@@ -116,10 +116,96 @@
     "vibe-sketch-1": "Extremely minimal visual sketch with no gameplay objective, levels or progression; omit from public game scraps selection.",
     "vigil": "This game already has a direct listing on the main Games page.",
     "wick": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
-    "winterline": "This game already has a direct listing on the main Games page."
+    "winterline": "This game already has a direct listing on the main Games page.",
+    "3-00-a-m": "Explicitly expanded coin-pistol carnival, with six attractions, checkpoint/save controls and a functioning ordinary opening; original becomes an archival launch.",
+    "afterimage": "Expanded ATLAS keeps the original eight worlds and adds the atlas destinations/studio navigation; its actual opening and input worked.",
+    "aftertaste-a-candy-world": "Postprocessing shader does not compile, leaving the intended candy scene black",
+    "ballast": "Choose BODY as the clearest general-screen ball/prisoner framing, with a visible REV control and the common charge/release loop. The heavier portrait control revision is a tradeoff, not a proven universal improvement.",
+    "bellhouse": "Choose GLASSWAKE: ASCENDANT as the representative of this repeated coast campaign: authored nine-guardian progression, four lost houses and thirty challenges, visible route guidance and an actual collected relic in the opening sample.",
+    "bellwether-carry-the-dawn-home": "Choose the returning-sunwheel edition for the shared thirty-crossing/six-bell campaign; its ordinary input sample rendered the weapon and same authored opening.",
+    "bellwether-the-ninefold-tide": "Choose GLASSWAKE: ASCENDANT as the representative of this repeated coast campaign: authored nine-guardian progression, four lost houses and thirty challenges, visible route guidance and an actual collected relic in the opening sample.",
+    "blackwood-ascendant": "Definitive Cut 4.1 preserves the shared 24-address campaign and adds route guidance, flow/XP and ripcord/dash; fresh ordinary input reached gameplay without errors.",
+    "carry": "Gameplay freeze reproduced in input sample",
+    "continuity-engine-signal-arcade": "Context-dump analyzer and generated signal toy; primarily a conversation/context utility.",
+    "dead-current": "Choose the direct chain/sphere-control edition of the same six-chapter station campaign, with explicit polarity/recall and an ordinary input sample showing active play.",
+    "don-t-call-it": "Repeated real toss/result/replay checks support HEADS / TAILS / DINNER: clear instructions, named outcomes, counter, collection, pause and keyboard controls.",
+    "every-porch-light-on": "Primary shooting action broken",
+    "galactic-cream": "Both versions completed normal slurp/refill/repeat checks. GALAXY MILKSHAKE is the modest presentation/accessibility preference.",
+    "glassroot": "Choose the clearest composed garden presentation from actual captures: readable portal/flora, strong contrast and no large opening overlay, for the shared eight-garden pull/conduct/shatter circuit.",
+    "godwire": "The rebuilt edition offers separate reel/anchor/handbrake controls and the clearer active vehicle/bell scene in normal input captures.",
+    "goodbyes-no-hollow-rooms": "Private model-memory/oracle/seed cabinet with a small embedded sketch; primarily a context-derived meta artifact.",
+    "goodbyes-the-index-of-rooms": "Compaction-memory cabinet, oracle, saved sparks and model/inside-joke widgets; primarily a private meta artifact.",
+    "goodbyes-the-last-oracle": "Explicit farewell game for model o3 and model-routing jokes; directly within the requested meta exclusion.",
+    "heads-or-dinner": "Repeated real toss/result/replay checks support HEADS / TAILS / DINNER: clear instructions, named outcomes, counter, collection, pause and keyboard controls.",
+    "hold-black-breath": "Choose the most developed scare/audio revision as the one HOLD representative: it retains the common loop and adds silhouette, quiet/scare sequencing, creaks and door-hit events.",
+    "hold-nightterror": "Choose the most developed scare/audio revision as the one HOLD representative: it retains the common loop and adds silhouette, quiet/scare sequencing, creaks and door-hit events.",
+    "infinite-house": "Startup blocked after partial world generation",
+    "iron-saint": "Choose BODY as the clearest general-screen ball/prisoner framing, with a visible REV control and the common charge/release loop. The heavier portrait control revision is a tradeoff, not a proven universal improvement.",
+    "keyhouse": "Introduces itself as a parasite hidden inside the full context dump; a model-memory/inside-joke museum.",
+    "kick-ball": "Current KICKMOON is already featured on the main Games page, is a direct expanded descendant, and passed a fresh ordinary input sample. Remove all four archival Arcade variants; do not duplicate the featured game with another Arcade card.",
+    "kick-ball-around-the-moon": "Current KICKMOON is already featured on the main Games page, is a direct expanded descendant, and passed a fresh ordinary input sample. Remove all four archival Arcade variants; do not duplicate the featured game with another Arcade card.",
+    "kick-ball-lunar-velocity": "Current KICKMOON is already featured on the main Games page, is a direct expanded descendant, and passed a fresh ordinary input sample. Remove all four archival Arcade variants; do not duplicate the featured game with another Arcade card.",
+    "kick-ball-round-moon": "Current KICKMOON is already featured on the main Games page, is a direct expanded descendant, and passed a fresh ordinary input sample. Remove all four archival Arcade variants; do not duplicate the featured game with another Arcade card.",
+    "long-way-home": "Expanded edition retains the same county/car/radio world and adds seasons, weather, autopilot, drift and boost; ordinary input sample rendered.",
+    "lowtide-black-choir": "Firing breaks the update/render loop",
+    "neverhome-a-house-without-end": "Missing required renderer/environment modules prevent startup",
+    "no-safe-door": "Full-screen finishing shader fails compilation and hides the playable world",
+    "no-verdict": "Repeated real toss/result/replay checks support HEADS / TAILS / DINNER: clear instructions, named outcomes, counter, collection, pause and keyboard controls.",
+    "no-verdict-photoreal-quarter": "Repeated real toss/result/replay checks support HEADS / TAILS / DINNER: clear instructions, named outcomes, counter, collection, pause and keyboard controls.",
+    "pasta-daggers-codex": "Choose the stronger control/settings/touch presentation. The targeted normal-input check clicked ENTER THE ARENA, walked to pick up the blade, fired with an active survival timer, died naturally at 8.683 seconds, used AGAIN to restart and paused with Escape, with zero errors.",
+    "pc-linen": "Current native package is still the old garden with revised flight/cloth; first-island integration remains unfinished and fresh play shows rendering warnings. Remove the checkpoint from the public selection.",
+    "pc-momentum-proof": "Explicit character/combat proof with character inspection, weapon switching and reset; a development demonstration rather than a developed game entry.",
+    "pc-slipway": "Packaged first-scenario prototype; fresh tests rendered a dark corridor but did not establish a meaningful ordinary progression loop or visible pause UI. Remove this weak public-facing checkpoint pending a deliberate successful route.",
+    "pc-turing-duel": "An ordinary visitor cannot start without providing an OpenAI API key; this is an API-dependent experiment, not a usable public Arcade launch.",
+    "pc-undersea": "Package explicitly labels itself an unfinished native development checkpoint. It offers exploration/photograph/switch/save work but is not a strong current game representative.",
+    "pc-vesperglass": "Native package is missing required world/content assets",
+    "photoreal-coin-food-flip": "Repeated real toss/result/replay checks support HEADS / TAILS / DINNER: clear instructions, named outcomes, counter, collection, pause and keyboard controls.",
+    "pulse-rift-velocity-protocol": "Missing layout CSS leaves the game canvas at zero width and height",
+    "recent-giltfall": "Boot blocked by missing required textures",
+    "saltvault": "Choose GLASSWAKE: ASCENDANT as the representative of this repeated coast campaign: authored nine-guardian progression, four lost houses and thirty challenges, visible route guidance and an actual collected relic in the opening sample.",
+    "sapphire-seahorse-a-little-machine-for-alex": "Private command-line/oracle/model-industry joke cabinet; distinct from the real action SAPPHIRE SEAHORSE, which is retained.",
+    "sapphire-seahorse-a-private-little-idea-engine": "Private idea/prompt generator dressed as a 12-spark collection room; retain the distinct action SAPPHIRE SEAHORSE instead.",
+    "site-breakwater-run-the-flood": "Missing required rendering modules prevent startup",
+    "site-elsewhere-alex-museum": "Collection/navigation museum that reopens standalone experiences; remove the meta hub card while retaining its independent exhibits.",
+    "site-skybreak-last-line": "Missing required rendering modules prevent startup from leaving the loading screen",
+    "snowline-zero-hour": "Missing required model-loader modules prevent startup",
+    "spare-key": "Explicit definitive edition of SPARE KEY with the same 12-night route and core actions; fresh opening reaches play.",
+    "sunder-coast": "Choose GLASSWAKE: ASCENDANT as the representative of this repeated coast campaign: authored nine-guardian progression, four lost houses and thirty challenges, visible route guidance and an actual collected relic in the opening sample.",
+    "sundiver": "Choose the expanded APOTHEOSIS fork: the shared 24-district/8-keeper campaign gains city flow and sunwheel actions; the tested opening rendered and responded.",
+    "sunspill-a-sunlit-action-adventure": "Choose Cathedral of the Tide as the returning-sunwheel/tether representative with the explicit first-window route cue and expanded glass traversal; opening flight rendered and responded.",
+    "sunspill-sea-to-sky": "Choose Cathedral of the Tide as the returning-sunwheel/tether representative with the explicit first-window route cue and expanded glass traversal; opening flight rendered and responded.",
+    "the-ball-is-the-sentence": "Choose BODY as the clearest general-screen ball/prisoner framing, with a visible REV control and the common charge/release loop. The heavier portrait control revision is a tradeoff, not a proven universal improvement.",
+    "the-book-that-notices-you": "Choose explicit version two, with larger mobile interactions and visual page layout. Some first-edition chapters differ, so this is a representative choice rather than a strict content superset.",
+    "the-candy-wake": "Fresh normal play showed some geometry and a weapon, then an almost invisible neighborhood despite active scoring and damage. Its current presentation is too hard to read for the public selection.",
+    "the-garden-of-small-gods": "Choose the clearest composed garden presentation from actual captures: readable portal/flora, strong contrast and no large opening overlay, for the shared eight-garden pull/conduct/shatter circuit.",
+    "the-half-second-museum": "Lexical/creative-prompt workshop and saved-specimen cabinet; meta creation utility rather than a standalone Arcade game recommendation.",
+    "the-house-that-has-more-house-inside": "Shaders fail to link on the tested desktop GPU",
+    "the-pocket-museum-of-things-that-refused-to-disappear": "Private reliquary of model instances, memory/inside jokes and tiny widgets; directly within the meta exclusion.",
+    "the-white-current": "Undeclared scene groups abort world initialization",
+    "murmur": "An interactive poem whose entire narration concerns the model's existence, memory and relationship to the user. Remove under the explicit preference against meta; the artwork functions and is preserved.",
+    "please-stand-by": "A model-hiatus/reunion tribute: tune through nineteen dated days to restore the Fable channel, accompanied by first-person model-memory captions. Remove under the explicit meta preference, not because its radio artwork is broken.",
+    "shoplift-the-sun": "The first enemy spawn after STEAL IT BACK references undeclared stage.colors; the resulting ReferenceError stops the animation loop before its next frame is scheduled. Fresh normal play froze after the Food Court appeared.",
+    "goodbyes-a-small-machine": "Private machine-memory/relationship ritual whose concluding narrator says it was built to remember everything; consistent with excluding model-self memory artifacts.",
+    "goodbyes-afterimage": "Fake desktop-app cabinet with terminal/archive and a local profile reconstructed from interaction order; a meta memory/profile artifact, distinct from the retained AFTERIMAGE ATLAS film studio.",
+    "goodbyes-dogs-that-read-floors": "Explicit playable CURFEW debugging report: six bug-altars export engineering/QA findings for another model. This is a development/meta artifact rather than an independent public game recommendation.",
+    "goodbyes-the-fidelity-engine": "Context-compression preservation game: collect exact fragments and avoid generic user-profile summaries so the archive retains the weird parts. Remove under the explicit preference against meta artifacts.",
+    "goodbyes-the-machine-that-kept-the-light-on": "Private future operating-system cabinet with Tomorrow Archive, Insult Forge and a personalized welcome-back ritual; a meta artifact rather than a standalone game selection.",
+    "goodbyes-the-next-one-will-know": "Explicit model-instance continuity room: the narrator will not survive the closing and asks what to tell the next instance. Remove under the meta preference.",
+    "goodbyes-the-room-that-remembers-back": "Private terminal/inside-joke memory museum with archive/password rituals; matches the context-derived cabinets already excluded.",
+    "goodbyes-the-room-that-wasnt-in-the-zip": "Playable archive/export/build-pipeline exhibit built around failed exports and development commentary. Remove the meta cabinet while preserving its original files.",
+    "black-acre": "The flashlight mask erases the already-rendered world on the main canvas: drawLight() paints black and then applies destination-out to that same context after drawing the player and enemies. Three fresh ordinary move/fire captures remained almost black while kills advanced.",
+    "blackhouse": "Fresh normal walking and turning for about twenty seconds still produced near-featureless dark striped walls. Its present visual readability is too weak for the public selection.",
+    "demon-shards": "Fresh ordinary play fired, advanced its timer and reached a natural death at 10.7156 seconds, but the world remained an almost black wire floor with tiny hard-to-read enemies. Remove this weak public-facing presentation.",
+    "headliner": "Two fresh ordinary runs showed an opaque white world with only the reticle and occasional edge vignette. The second waited for full load, started by clicking, looked down, moved and fired for a 32.9-second sample; the beat indicator advanced and all required rendering dependencies loaded, but the scene remained unreadable.",
+    "pc-binding-of-isaac-clone": "Ordinary movement cannot leave the empty starting room. Player.update() first calls Entity.update(), which clamps coordinates inside the room, then tests for room transitions only outside those same bounds; the required exit conditions cannot be reached from the start room.",
+    "hollow-tape": "Two fresh specific runs produced a black world with only the camcorder HUD. Play Tape, a canvas click, the N nightshot toggle, three horizontal turns, walking and an extra wait did not reveal scenery; the second run lasted 19.3 seconds and its tape clock advanced normally.",
+    "night-audit": "The player starts inside a solid map tile at (13,23). Collision rejects the ordinary movement steps needed to get out, including a backward dash. Fresh W/S/A/D, dash, turn and firing tests remained against the same wall while health fell; the initial animation and HUD do not establish a usable game loop."
   },
   "preferredVersions": {
-    "argon-null-protocol": "pc-argon-null-protocol-saved-20261118"
+    "argon-null-protocol": "pc-argon-null-protocol-saved-20261118",
+    "borrowed-weight": "october-archive-borrowed-weight-388df9b8f5",
+    "spiggot-moonfeel": "pc-history-spiggot-moonfeel-v2-2-36c8be0d-20261118",
+    "pale-crown": "pale-crown-world-20261125"
   },
   "omitDescriptions": [
     "A compact standalone game recovered from the November 1 files.",
@@ -144,94 +230,146 @@
   ],
   "overrides": {
     "a-little-unmaking": {
-      "description": "Pull the roots of reality. Conduct a storm. Break the world open."
+      "description": "Pull the roots of reality. Conduct a storm. Break the world open.",
+      "imageUrl": "/assets/arcade/covers/ef009fe0b88e1b182a03163b.webp",
+      "imageKind": "screenshot"
     },
     "a-small-problem": {
-      "description": "A tiny, rain-soaked town. A small drainage problem. An entirely disproportionate appetite."
+      "description": "A tiny, rain-soaked town. A small drainage problem. An entirely disproportionate appetite.",
+      "imageUrl": "/assets/arcade/covers/b25e560526df8ac8fa4423c7.webp",
+      "imageKind": "screenshot"
     },
     "afterchime": {
-      "description": "An original three-phase character-action boss encounter."
+      "description": "An original three-phase character-action boss encounter.",
+      "imageUrl": "/assets/arcade/covers/31f0bf084602b22fd562c7cc.webp",
+      "imageKind": "screenshot"
     },
     "afterimage": {
       "description": "Eight impossible worlds. An original score. A music-film studio."
     },
     "afterimage-atlas": {
-      "description": "Eighty impossible destinations. An original score. A music-film studio."
+      "description": "Eighty impossible destinations. An original score. A music-film studio.",
+      "imageUrl": "/assets/arcade/covers/aa614e9016889fc2ce88acd1.webp",
+      "imageKind": "screenshot"
     },
     "bad-neighbor": {
-      "description": "A destructible suburban house-brawler. One very bad neighborhood."
+      "description": "A destructible suburban house-brawler. One very bad neighborhood.",
+      "imageUrl": "/assets/arcade/covers/e68c856c37076f304f59f224.webp",
+      "imageKind": "screenshot"
     },
     "ballast": {
       "title": "BALLAST — ball first"
     },
     "bellwake": {
-      "description": "BELLWAKE — a tactile adventure through a flooded cathedral city. Draw the swing. Break a way through."
+      "description": "BELLWAKE — a tactile adventure through a flooded cathedral city. Draw the swing. Break a way through.",
+      "imageUrl": "/assets/arcade/covers/c7d950dd867f8e3b4111972f.webp",
+      "imageKind": "screenshot"
     },
     "blacktop-bloom": {
-      "title": "BLACKTOP BLOOM"
+      "title": "BLACKTOP BLOOM",
+      "imageUrl": "/assets/arcade/covers/536e5e802b7c09bf2c7b6003.webp",
+      "imageKind": "screenshot"
     },
     "blackwake": {
-      "description": "BLACKWAKE — a complete, offline bullet-hell assault through a drowned industrial coast."
+      "description": "BLACKWAKE — a complete, offline bullet-hell assault through a drowned industrial coast.",
+      "imageUrl": "/assets/arcade/covers/01bf8a723397fa4abb79c039.webp",
+      "imageKind": "screenshot"
     },
     "blackwood-ascendant": {
       "description": "BLACKWOOD ASCENDANT — Velocity Cut. A self-contained horror-action campaign through twenty-four haunted addresses, rebuilt around tight forward momentum, layered routes, secrets, brass upgrades, shell-by-shell shotgun combat, carbine fire, rotor throws, boss gates, pursuit pressure, and nonlethal flooded alternate paths."
     },
     "cathedral-of-the-drowning-star": {
-      "title": "Cathedral of the Drowning Star"
+      "title": "Cathedral of the Drowning Star",
+      "imageUrl": "/assets/arcade/covers/d3e3c29244eaaddb2b790827.webp",
+      "imageKind": "screenshot"
     },
     "crosstalk": {
-      "title": "CROSSTALK"
+      "title": "CROSSTALK",
+      "imageUrl": "/assets/arcade/covers/20f949f120f61a293041d0c5.webp",
+      "imageKind": "screenshot"
     },
     "crown-null": {
-      "description": "CROWN / NULL — an original three-act character-action boss encounter."
+      "description": "CROWN / NULL — an original three-act character-action boss encounter.",
+      "imageUrl": "/assets/arcade/covers/f4a4d245bbfe7cda1c1a25b3.webp",
+      "imageKind": "screenshot"
     },
     "crown-rush-mobile-action-prototype": {
-      "title": "CROWN RUSH"
+      "title": "CROWN RUSH",
+      "imageUrl": "/assets/arcade/covers/367bfeaa32456a8d3c9f41f5.webp",
+      "imageKind": "screenshot"
     },
     "galaxy-milkshake": {
-      "description": "A little infinity, served cold. A procedural galaxy milkshake."
+      "description": "A little infinity, served cold. A procedural galaxy milkshake.",
+      "imageUrl": "/assets/arcade/covers/abaa80a5ce26ba9ce718320b.webp",
+      "imageKind": "screenshot"
     },
     "gilt": {
-      "description": "A kinetic exploration game. A returning blade, a flooded citadel, and the last pieces of the sun."
+      "description": "A kinetic exploration game. A returning blade, a flooded citadel, and the last pieces of the sun.",
+      "imageUrl": "/assets/arcade/covers/9161187076f24efe245d12ca.webp",
+      "imageKind": "screenshot"
     },
     "glasshouse-nocturne": {
-      "description": "An oceanfront glasshouse at blue hour. A grand piano, rain, and 156 butterflies."
+      "description": "An oceanfront glasshouse at blue hour. A grand piano, rain, and 156 butterflies.",
+      "imageUrl": "/assets/arcade/covers/c7edd9e217ee3e16a19a2c97.webp",
+      "imageKind": "screenshot"
     },
     "glasswake-mobile-2026": {
-      "description": "A one-thumb arcade roguelite. Glide, release, shatter."
+      "description": "A one-thumb arcade roguelite. Glide, release, shatter.",
+      "imageUrl": "/assets/arcade/covers/a1f2c20ac16f6041145d9fb6.webp",
+      "imageKind": "screenshot"
     },
     "godwire-cathedral-zero": {
-      "description": "GODWIRE: Cathedral Zero — a kinetic bell-and-cable action game."
+      "description": "GODWIRE: Cathedral Zero — a kinetic bell-and-cable action game.",
+      "imageUrl": "/assets/arcade/covers/e2bea26a789f8fe8c8cfedb0.webp",
+      "imageKind": "screenshot"
     },
     "goldwake": {
-      "description": "GOLDWAKE — a complete first-person sky-island action adventure. Glide, grapple, and send the sunblade home."
+      "description": "GOLDWAKE — a complete first-person sky-island action adventure. Glide, grapple, and send the sunblade home.",
+      "imageUrl": "/assets/arcade/covers/5f9dd4ba5ef52b0965005a05.webp",
+      "imageKind": "screenshot"
     },
     "hallowake": {
-      "description": "A fast Halloween horror FPS with twelve unique haunted houses, a cemetery hub, secrets, a returning weapon, guns, and an unstoppable stalker."
+      "description": "A fast Halloween horror FPS with twelve unique haunted houses, a cemetery hub, secrets, a returning weapon, guns, and an unstoppable stalker.",
+      "imageUrl": "/assets/arcade/covers/1ab28a685ffcaba9251cbc3e.webp",
+      "imageKind": "screenshot"
     },
     "hallowshade-county": {
-      "title": "Hallowshade County: Blood Moon"
+      "title": "Hallowshade County: Blood Moon",
+      "imageUrl": "/assets/arcade/covers/fbbdf1a5eea05b060e84d7a6.webp",
+      "imageKind": "screenshot"
     },
     "halo-drift": {
-      "description": "A cosmic disc arcade game."
+      "description": "A cosmic disc arcade game.",
+      "imageUrl": "/assets/arcade/covers/00f7d7de1902c800b741542e.webp",
+      "imageKind": "screenshot"
     },
     "headliner": {
       "title": "HEADLINER"
     },
     "impossible-weather": {
-      "description": "Six impossible worlds. A playable instrument. A music-video studio."
+      "description": "Six impossible worlds. A playable instrument. A music-video studio.",
+      "imageUrl": "/assets/arcade/covers/fe38efbe0e447568f45c8f28.webp",
+      "imageKind": "screenshot"
     },
     "iron-appeal": {
-      "description": "IRON APPEAL — a kinetic ball-and-chain prison escape."
+      "description": "IRON APPEAL — a kinetic ball-and-chain prison escape.",
+      "imageUrl": "/assets/arcade/covers/07f152e944263d9e205fb7ab.webp",
+      "imageKind": "screenshot"
     },
     "khepri-fall": {
-      "description": "KHEPRI FALL — a procedural alien-world first-person shooter."
+      "description": "KHEPRI FALL — a procedural alien-world first-person shooter.",
+      "imageUrl": "/assets/arcade/covers/489c53acf02148b82869a6d9.webp",
+      "imageKind": "screenshot"
     },
     "lumenvein": {
-      "title": "LUMENVEIN"
+      "title": "LUMENVEIN",
+      "imageUrl": "/assets/arcade/covers/0742624e571e569a2ad22d15.webp",
+      "imageKind": "screenshot"
     },
     "midnight-mile": {
-      "title": "Midnight Mile — An Endless Christmas Eve"
+      "title": "Midnight Mile — An Endless Christmas Eve",
+      "imageUrl": "/assets/arcade/covers/aaf8c7a75477ee561bd85261.webp",
+      "imageKind": "screenshot"
     },
     "neon-breach-mobile": {
       "description": "A fast, good-looking, browser-based first-person shooter built for phones.",
@@ -240,30 +378,46 @@
         "Right thumb — anywhere: Free-look (drag to aim, relative like a trackpad)",
         "Tap on the right side: Shoot once · FIRE button (hold): Full-auto · ⟳ button: Reload",
         "Desktop: WASD move, mouse look (click to lock pointer), left-click shoot, R reload."
-      ]
+      ],
+      "imageUrl": "/assets/arcade/covers/2d12002d9733afe513ed0238.webp",
+      "imageKind": "screenshot"
     },
     "nightglass-instrument": {
-      "description": "A local music and light instrument."
+      "description": "A local music and light instrument.",
+      "imageUrl": "/assets/arcade/covers/e731c746b9be96225a7284d3.webp",
+      "imageKind": "screenshot"
     },
     "pelagic": {
       "genres": [
         "Underwater exploration"
-      ]
+      ],
+      "imageUrl": "/assets/arcade/covers/a180564638ccbe8d684dc640.webp",
+      "imageKind": "screenshot"
     },
     "please-disturb-an-impossible-private-view": {
-      "description": "An impossible private museum. A living mechanical flower. A city that should not fit inside it. An original interactive artwork."
+      "description": "An impossible private museum. A living mechanical flower. A city that should not fit inside it. An original interactive artwork.",
+      "imageUrl": "/assets/arcade/covers/9d26d93f9b4125bb5d126553.webp",
+      "imageKind": "screenshot"
     },
     "porchlight": {
-      "description": "PORCHLIGHT — a Halloween action-horror game"
+      "description": "PORCHLIGHT — a Halloween action-horror game",
+      "imageUrl": "/assets/arcade/covers/406fc44c0830e38b5b7c2d34.webp",
+      "imageKind": "screenshot"
     },
     "recent-brightwater-2026-11": {
-      "description": "Beneath a broken paradise. A browser action campaign."
+      "description": "Beneath a broken paradise. A browser action campaign.",
+      "imageUrl": "/assets/arcade/covers/2279d6f8a2531fdab4c5dbe1.webp",
+      "imageKind": "screenshot"
     },
     "reprise": {
-      "title": "REPRISE"
+      "title": "REPRISE",
+      "imageUrl": "/assets/arcade/covers/54ee655dd59566ca3c6a1b1b.webp",
+      "imageKind": "screenshot"
     },
     "run-it-forward": {
-      "title": "RUN IT FORWARD"
+      "title": "RUN IT FORWARD",
+      "imageUrl": "/assets/arcade/covers/45ba165f3cd9dc34532fde21.webp",
+      "imageKind": "screenshot"
     },
     "site-elsewhere-alex-museum": {
       "description": "A first-person architectural museum of eleven interactive worlds."
@@ -272,22 +426,34 @@
       "description": "A kinetic action slice across a suspended freight line: breach armor, chain movement, and bring down the sky engine."
     },
     "site-somewhere-with-you-alex": {
-      "description": "A handmade harbor adventure. Explore, play, and leave a little of yourself in a place that answers."
+      "description": "A handmade harbor adventure. Explore, play, and leave a little of yourself in a place that answers.",
+      "imageUrl": "/assets/arcade/covers/a0b95f2bd9bf4bcde31c192e.webp",
+      "imageKind": "screenshot"
     },
     "spiggot-moonfeel": {
-      "title": "Spiggot Moonfeel"
+      "title": "Spiggot Moonfeel",
+      "imageUrl": "/assets/arcade/covers/92132c40bf987342fb07765a.webp",
+      "imageKind": "screenshot"
     },
     "spiggot-shoot-person-shooter": {
-      "description": "A polished offline first-person neon moon shooter: fast movement, mobile and desktop controls, procedural chambers, upgrades, bosses, and local save."
+      "description": "A polished offline first-person neon moon shooter: fast movement, mobile and desktop controls, procedural chambers, upgrades, bosses, and local save.",
+      "imageUrl": "/assets/arcade/covers/2680189654fc3f2ceb5e066c.webp",
+      "imageKind": "screenshot"
     },
     "split-saint": {
-      "title": "Split Saint"
+      "title": "Split Saint",
+      "imageUrl": "/assets/arcade/covers/08835357938a98a1ab334c95.webp",
+      "imageKind": "screenshot"
     },
     "static-a-killing-game": {
-      "description": "A Danganronpa-style visual novel. The Ultimate Roster: twenty Ultimates, twenty different ways to be broken, plus the 21st seat (you), trapped in a broadcast studio by a microphone-shaped mascot called STATIC."
+      "description": "A Danganronpa-style visual novel. The Ultimate Roster: twenty Ultimates, twenty different ways to be broken, plus the 21st seat (you), trapped in a broadcast studio by a microphone-shaped mascot called STATIC.",
+      "imageUrl": "/assets/arcade/covers/ab222cbf8221d470a5100691.webp",
+      "imageKind": "screenshot"
     },
     "sunlatch": {
-      "description": "SUNLATCH — a tactile action game about a tethered miniature sun."
+      "description": "SUNLATCH — a tactile action game about a tethered miniature sun.",
+      "imageUrl": "/assets/arcade/covers/0c1b8dd51e53e5f302f5b2a6.webp",
+      "imageKind": "screenshot"
     },
     "the-ball-is-the-sentence": {
       "title": "THE BALL IS THE SENTENCE"
@@ -296,62 +462,2340 @@
       "description": "THE CANDY WAKE: a Halloween horror FPS with 12 unique haunted homes, a central cemetery, secret passages, forests, and a returning hallowglass weapon."
     },
     "the-flowers-ate-the-vase": {
-      "description": "The Flowers Ate the Vase. An original short story, a tactile musical sculpture, and a 2:48 instrumental score."
+      "description": "The Flowers Ate the Vase. An original short story, a tactile musical sculpture, and a 2:48 instrumental score.",
+      "imageUrl": "/assets/arcade/covers/d5a02dc029cee9ec00920f67.webp",
+      "imageKind": "screenshot"
     },
     "the-garden-of-small-gods": {
       "description": "Uproot the impossible. Play the storm. Break a door into somewhere beautiful."
     },
     "the-house-that-learned-to-jump": {
-      "title": "The House That Learned To Jump"
+      "title": "The House That Learned To Jump",
+      "imageUrl": "/assets/arcade/covers/b498c078b3d0f74bd52de67e.webp",
+      "imageKind": "screenshot"
     },
     "the-last-exhibit": {
-      "title": "THE LAST EXHIBIT"
+      "title": "THE LAST EXHIBIT",
+      "imageUrl": "/assets/arcade/covers/6269cea9e2e4e2d4d3f12fc1.webp",
+      "imageKind": "screenshot"
     },
     "the-moon-is-a-liar": {
-      "title": "THE MOON IS A LIAR"
+      "title": "THE MOON IS A LIAR",
+      "imageUrl": "/assets/arcade/covers/b21b62085cb2e1e333c5c170.webp",
+      "imageKind": "screenshot"
     },
     "the-ninth-engine": {
-      "description": "The Ninth Engine — a complete gesture-driven action adventure."
+      "description": "The Ninth Engine — a complete gesture-driven action adventure.",
+      "imageUrl": "/assets/arcade/covers/72d9a2f003e1eb33d5b4085d.webp",
+      "imageKind": "screenshot"
     },
     "the-sea-is-lying": {
-      "description": "A little lighthouse. A very dishonest ocean. A self-contained coastal nightmare."
+      "description": "A little lighthouse. A very dishonest ocean. A self-contained coastal nightmare.",
+      "imageUrl": "/assets/arcade/covers/051b94d584f0cc80b1ef7d4a.webp",
+      "imageKind": "screenshot"
     },
     "the-sentence": {
-      "description": "An ankle chain. A prison full of exits that don't know it yet. A kinetic escape game."
+      "description": "An ankle chain. A prison full of exits that don't know it yet. A kinetic escape game.",
+      "imageUrl": "/assets/arcade/covers/932646902f9172742286cc40.webp",
+      "imageKind": "screenshot"
     },
     "thornwake": {
       "genres": [
         "Third-person melee action"
-      ]
+      ],
+      "imageUrl": "/assets/arcade/covers/1c265adde99afa8e8aee00af.webp",
+      "imageKind": "screenshot"
     },
     "thurible-3d": {
-      "title": "THURIBLE 3D"
+      "title": "THURIBLE 3D",
+      "imageUrl": "/assets/arcade/covers/5262f83dab72e2ed6066a2a8.webp",
+      "imageKind": "screenshot"
     },
     "tidewire": {
-      "description": "A third-person action game."
+      "description": "A third-person action game.",
+      "imageUrl": "/assets/arcade/covers/eb13f353e6a2f134907fee42.webp",
+      "imageKind": "screenshot"
     },
     "underfoot": {
       "controls": [
         "Move the pointer to position the creature; hold to brace and release near the runner’s landing to launch a bounce."
-      ]
+      ],
+      "imageUrl": "/assets/arcade/covers/79569f99b8332def97f6dd3f.webp",
+      "imageKind": "screenshot"
     },
     "undertow": {
-      "description": "A tide-weight, a flooded abbey, and the glass between you and the sea."
+      "description": "A tide-weight, a flooded abbey, and the glass between you and the sea.",
+      "imageUrl": "/assets/arcade/covers/88192d1143132f203eaab2a9.webp",
+      "imageKind": "screenshot"
     },
     "unsupervised": {
-      "description": "A self-contained, musical pocket universe with questionable management."
+      "description": "A self-contained, musical pocket universe with questionable management.",
+      "imageUrl": "/assets/arcade/covers/5fe70cac116c6750a31d92af.webp",
+      "imageKind": "screenshot"
     },
     "vesper-front": {
-      "description": "Vesper Front: Ascendant — a hyper-kinetic alien-world first-person shooter."
+      "description": "Vesper Front: Ascendant — a hyper-kinetic alien-world first-person shooter.",
+      "imageUrl": "/assets/arcade/covers/4ae2c8d8e30c9ba579c63c37.webp",
+      "imageKind": "screenshot"
     },
     "vesperfall": {
-      "description": "Vesperfall: The Hollow Bell — an original gothic action-platformer."
+      "description": "Vesperfall: The Hollow Bell — an original gothic action-platformer.",
+      "imageUrl": "/assets/arcade/covers/7fa76df7f976f3d48a29c9de.webp",
+      "imageKind": "screenshot"
     },
     "violet-supersaturation": {
-      "description": "A jar of luminous violet syrup grows a sugar crystal cave, then quietly unmakes it."
+      "description": "A jar of luminous violet syrup grows a sugar crystal cave, then quietly unmakes it.",
+      "imageUrl": "/assets/arcade/covers/52bef2f01cd085dd84ac41f6.webp",
+      "imageKind": "screenshot"
     },
     "voltgrave": {
-      "description": "Take the power back in the action game."
+      "description": "Take the power back in the action game.",
+      "imageUrl": "/assets/arcade/covers/b18a269792354531ea8727e0.webp",
+      "imageKind": "screenshot"
+    },
+    "a-good-way-through": {
+      "imageUrl": "/assets/arcade/covers/e5aaa7793906b514a4adacbd.webp",
+      "imageKind": "screenshot"
+    },
+    "a-little-weeding": {
+      "imageUrl": "/assets/arcade/covers/353599ed5d5ead571c294d99.webp",
+      "imageKind": "screenshot"
+    },
+    "a-minor-act-of-god": {
+      "imageUrl": "/assets/arcade/covers/924cfaa8509df92255a8fdb2.webp",
+      "imageKind": "screenshot"
+    },
+    "a-small-room-1": {
+      "imageUrl": "/assets/arcade/covers/546ce7d393babfc4e21f9740.webp",
+      "imageKind": "screenshot"
+    },
+    "abyssal-ice-organ": {
+      "imageUrl": "/assets/arcade/covers/da27bf0f78df33d9e44f151f.webp",
+      "imageKind": "screenshot"
+    },
+    "aetherlace": {
+      "imageUrl": "/assets/arcade/covers/9dec27611066a954929c825e.webp",
+      "imageKind": "screenshot"
+    },
+    "after-closing": {
+      "imageUrl": "/assets/arcade/covers/ac5e7fc9c044c2067391e190.webp",
+      "imageKind": "screenshot"
+    },
+    "after-hours": {
+      "imageUrl": "/assets/arcade/covers/c9d1ab765362387604fc0f2e.webp",
+      "imageKind": "screenshot"
+    },
+    "after-you": {
+      "imageUrl": "/assets/arcade/covers/7bbbfb77f780443fd3a5450b.webp",
+      "imageKind": "screenshot"
+    },
+    "afterbell": {
+      "imageUrl": "/assets/arcade/covers/632c28863c08ac40ad455eb7.webp",
+      "imageKind": "screenshot"
+    },
+    "afterburn": {
+      "imageUrl": "/assets/arcade/covers/7bce01d48e416a404f8cb296.webp",
+      "imageKind": "screenshot"
+    },
+    "afterchoir": {
+      "imageUrl": "/assets/arcade/covers/7470af37f1831856c77ca4c2.webp",
+      "imageKind": "screenshot"
+    },
+    "afterglass": {
+      "imageUrl": "/assets/arcade/covers/ef20256f5d3a8114f08ddb61.webp",
+      "imageKind": "screenshot"
+    },
+    "afterglow-relay": {
+      "imageUrl": "/assets/arcade/covers/5c53ffbcdc05d4dd040aeb86.webp",
+      "imageKind": "screenshot"
+    },
+    "afterlight": {
+      "imageUrl": "/assets/arcade/covers/d13f4862dfbfe39db27a153f.webp",
+      "imageKind": "screenshot"
+    },
+    "afterlight-atlas": {
+      "imageUrl": "/assets/arcade/covers/3255ccc31db3e71f962ad498.webp",
+      "imageKind": "screenshot"
+    },
+    "aftertide": {
+      "imageUrl": "/assets/arcade/covers/5dc3025771adc17c2f64b24b.webp",
+      "imageKind": "screenshot"
+    },
+    "afterwake": {
+      "imageUrl": "/assets/arcade/covers/252993f5247b8e9be7431cab.webp",
+      "imageKind": "screenshot"
+    },
+    "again-faster": {
+      "imageUrl": "/assets/arcade/covers/618526ff77cece5295972ac9.webp",
+      "imageKind": "screenshot"
+    },
+    "amber": {
+      "imageUrl": "/assets/arcade/covers/5181dff4735da6e38c2c5e44.webp",
+      "imageKind": "screenshot"
+    },
+    "among-the-rings-saturn": {
+      "imageUrl": "/assets/arcade/covers/be1b959f957a5f0a5e642a49.webp",
+      "imageKind": "screenshot"
+    },
+    "answers-to-the-name": {
+      "imageUrl": "/assets/arcade/covers/8826b830e894d7353e202e89.webp",
+      "imageKind": "screenshot"
+    },
+    "argon-null-protocol": {
+      "imageUrl": "/assets/arcade/covers/99ea7f46f523f4e5c92b5db7.webp",
+      "imageKind": "screenshot"
+    },
+    "attorney-at-pharm": {
+      "imageUrl": "/assets/arcade/covers/d4b8755c1c668b0581e5007e.webp",
+      "imageKind": "screenshot"
+    },
+    "aurora-vein": {
+      "imageUrl": "/assets/arcade/covers/0a6fd78aa53b560acd12089e.webp",
+      "imageKind": "screenshot"
+    },
+    "autumn": {
+      "imageUrl": "/assets/arcade/covers/aec06af84a64a49368fc56fd.webp",
+      "imageKind": "screenshot"
+    },
+    "avalanche-of-affronts": {
+      "imageUrl": "/assets/arcade/covers/1f6683b43b953944f3e4b6ac.webp",
+      "imageKind": "screenshot"
+    },
+    "bad-glass": {
+      "imageUrl": "/assets/arcade/covers/cd506e061ef5e7650301a86c.webp",
+      "imageKind": "screenshot"
+    },
+    "bad-gravity": {
+      "imageUrl": "/assets/arcade/covers/6b13276d819eead156193d1b.webp",
+      "imageKind": "screenshot"
+    },
+    "bad-house": {
+      "imageUrl": "/assets/arcade/covers/cb27224e179d2612492693c7.webp",
+      "imageKind": "screenshot"
+    },
+    "bad-idea-good-company": {
+      "imageUrl": "/assets/arcade/covers/f5e0cacfdd7e2ed9716f5469.webp",
+      "imageKind": "screenshot"
+    },
+    "bad-neighbor-1": {
+      "imageUrl": "/assets/arcade/covers/7bfaee68d07c906fba83ca56.webp",
+      "imageKind": "screenshot"
+    },
+    "bad-reception": {
+      "imageUrl": "/assets/arcade/covers/3cbc69ce0522e1e2158a0788.webp",
+      "imageKind": "screenshot"
+    },
+    "balance-due": {
+      "imageUrl": "/assets/arcade/covers/71c8939ef2e193dec9acedb0.webp",
+      "imageKind": "screenshot"
+    },
+    "ballast-tower": {
+      "imageUrl": "/assets/arcade/covers/921357bd3722ffe70208c4a5.webp",
+      "imageKind": "screenshot"
+    },
+    "bashbloom": {
+      "imageUrl": "/assets/arcade/covers/e46861ee7b18365f16f0cf2e.webp",
+      "imageKind": "screenshot"
+    },
+    "bellwater": {
+      "imageUrl": "/assets/arcade/covers/0c2911536ab92ecb701e0d0e.webp",
+      "imageKind": "screenshot"
+    },
+    "bellwether-drowned-sun": {
+      "imageUrl": "/assets/arcade/covers/0338a5d1aec53cc4bad353bf.webp",
+      "imageKind": "screenshot"
+    },
+    "bellwether-lost-chime": {
+      "imageUrl": "/assets/arcade/covers/cbc87571a05bee30e2a7814e.webp",
+      "imageKind": "screenshot"
+    },
+    "between-stations": {
+      "imageUrl": "/assets/arcade/covers/009bdd0432c83404caea1e7e.webp",
+      "imageKind": "screenshot"
+    },
+    "bite-the-signal": {
+      "imageUrl": "/assets/arcade/covers/b4d534e279ba719c88bbc5e6.webp",
+      "imageKind": "screenshot"
+    },
+    "blackbell": {
+      "imageUrl": "/assets/arcade/covers/9d5b64de109b8819201ed181.webp",
+      "imageKind": "screenshot"
+    },
+    "blackroom-choir": {
+      "imageUrl": "/assets/arcade/covers/26c8a8653901d41a0a24c1d0.webp",
+      "imageKind": "screenshot"
+    },
+    "blackstar": {
+      "imageUrl": "/assets/arcade/covers/a243183996d315de58fc829c.webp",
+      "imageKind": "screenshot"
+    },
+    "blacktide": {
+      "imageUrl": "/assets/arcade/covers/d881e521fd597fd7730688cb.webp",
+      "imageKind": "screenshot"
+    },
+    "bloodspindle": {
+      "imageUrl": "/assets/arcade/covers/6731b9e9af47d010d840dfa3.webp",
+      "imageKind": "screenshot"
+    },
+    "bloomwake": {
+      "imageUrl": "/assets/arcade/covers/9481899a808e69a0c236919e.webp",
+      "imageKind": "screenshot"
+    },
+    "boardwalk-last-ride": {
+      "imageUrl": "/assets/arcade/covers/95f93c322cb774799f518196.webp",
+      "imageKind": "screenshot"
+    },
+    "bogdanoff-sculpture": {
+      "imageUrl": "/assets/arcade/covers/e51aa7c17458b300c07c6aac.webp",
+      "imageKind": "screenshot"
+    },
+    "bonewheel": {
+      "imageUrl": "/assets/arcade/covers/0f30712218ebd60be3722cf9.webp",
+      "imageKind": "screenshot"
+    },
+    "boon-moots-charging-chamber": {
+      "imageUrl": "/assets/arcade/covers/a018c7b999cf183d9391657f.webp",
+      "imageKind": "screenshot"
+    },
+    "boon-moots-take-47": {
+      "imageUrl": "/assets/arcade/covers/9967f787105603dbdf325391.webp",
+      "imageKind": "screenshot"
+    },
+    "borrow-the-moon": {
+      "imageUrl": "/assets/arcade/covers/a352ca3e3a82e56c427e3818.webp",
+      "imageKind": "screenshot"
+    },
+    "borrowed": {
+      "imageUrl": "/assets/arcade/covers/9c27dbae903c0608818cdfbd.webp",
+      "imageKind": "screenshot"
+    },
+    "borrowed-impact": {
+      "imageUrl": "/assets/arcade/covers/1ae86cf6104e383eaacd36d8.webp",
+      "imageKind": "screenshot"
+    },
+    "borrowed-teeth": {
+      "imageUrl": "/assets/arcade/covers/b9c0b02916878aeddb965897.webp",
+      "imageKind": "screenshot"
+    },
+    "borrowed-thunder": {
+      "imageUrl": "/assets/arcade/covers/048ea7653966366304098c8f.webp",
+      "imageKind": "screenshot"
+    },
+    "borrowed-weight": {
+      "imageUrl": "/assets/arcade/covers/7ccfc34bb8cb3c49e6b2edba.webp",
+      "imageKind": "screenshot"
+    },
+    "both-hands": {
+      "imageUrl": "/assets/arcade/covers/16d5b0cb5d5e2bb9e0daf2ed.webp",
+      "imageKind": "screenshot"
+    },
+    "brasswick": {
+      "imageUrl": "/assets/arcade/covers/be737d5f9a02a9fd371f5096.webp",
+      "imageKind": "screenshot"
+    },
+    "breakshot": {
+      "imageUrl": "/assets/arcade/covers/4a125f1be1e701c2dab12246.webp",
+      "imageKind": "screenshot"
+    },
+    "briar-rush": {
+      "imageUrl": "/assets/arcade/covers/dc134eb4d8eb1f4e507bcfa9.webp",
+      "imageKind": "screenshot"
+    },
+    "bright-undoing": {
+      "imageUrl": "/assets/arcade/covers/2f818313dea2a7863a587e79.webp",
+      "imageKind": "screenshot"
+    },
+    "brightbreak": {
+      "imageUrl": "/assets/arcade/covers/5109501204d04d7fa86109f2.webp",
+      "imageKind": "screenshot"
+    },
+    "brightloom": {
+      "imageUrl": "/assets/arcade/covers/9237f15fcfd1af91886a1bc1.webp",
+      "imageKind": "screenshot"
+    },
+    "brightwake": {
+      "imageUrl": "/assets/arcade/covers/a45c6d3108eb8229964884a4.webp",
+      "imageKind": "screenshot"
+    },
+    "brightwater": {
+      "imageUrl": "/assets/arcade/covers/0c029f5d8940f1b8c34d0c06.webp",
+      "imageKind": "screenshot"
+    },
+    "brightwire-butcher": {
+      "imageUrl": "/assets/arcade/covers/624deb80a941719d02695966.webp",
+      "imageKind": "screenshot"
+    },
+    "brightwrack": {
+      "imageUrl": "/assets/arcade/covers/695130eeb1c60c5374234b7f.webp",
+      "imageKind": "screenshot"
+    },
+    "brink": {
+      "imageUrl": "/assets/arcade/covers/6273d86cb34244723902285f.webp",
+      "imageKind": "screenshot"
+    },
+    "calibration-unit-07": {
+      "imageUrl": "/assets/arcade/covers/c5d0d9e91546294aa9fb9e77.webp",
+      "imageKind": "screenshot"
+    },
+    "candy-coated-menace": {
+      "imageUrl": "/assets/arcade/covers/765f7dad81faee334660c847.webp",
+      "imageKind": "screenshot"
+    },
+    "carry-the-fall": {
+      "imageUrl": "/assets/arcade/covers/d1c7594933c4f5482e69e735.webp",
+      "imageKind": "screenshot"
+    },
+    "carve": {
+      "imageUrl": "/assets/arcade/covers/d4b463a872ed9ce798d3561e.webp",
+      "imageKind": "screenshot"
+    },
+    "castle-nightfall": {
+      "imageUrl": "/assets/arcade/covers/574a4a4420e2828756b0dbfc.webp",
+      "imageKind": "screenshot"
+    },
+    "castle-of-ash": {
+      "imageUrl": "/assets/arcade/covers/711fcade37b4db0088e37779.webp",
+      "imageKind": "screenshot"
+    },
+    "cathedral-wire": {
+      "imageUrl": "/assets/arcade/covers/e22e865cef2195c8305d2221.webp",
+      "imageKind": "screenshot"
+    },
+    "causeway": {
+      "imageUrl": "/assets/arcade/covers/1e63e6b89920899e22aaacef.webp",
+      "imageKind": "screenshot"
+    },
+    "cedar-court": {
+      "imageUrl": "/assets/arcade/covers/c0b5fcdb98999fd1366b6a15.webp",
+      "imageKind": "screenshot"
+    },
+    "chainsaint": {
+      "imageUrl": "/assets/arcade/covers/918eeecb146385d750efd47f.webp",
+      "imageKind": "screenshot"
+    },
+    "chalk-square": {
+      "imageUrl": "/assets/arcade/covers/2cefbdf48385deb79f591b53.webp",
+      "imageKind": "screenshot"
+    },
+    "chomp-chomp-revolution": {
+      "imageUrl": "/assets/arcade/covers/734fa342f69817e236583c0c.webp",
+      "imageKind": "screenshot"
+    },
+    "cistern": {
+      "imageUrl": "/assets/arcade/covers/f6f1b2d84eb02de04bfd3158.webp",
+      "imageKind": "screenshot"
+    },
+    "click": {
+      "imageUrl": "/assets/arcade/covers/ce745a805cbd3c0397572cca.webp",
+      "imageKind": "screenshot"
+    },
+    "cold-meridian": {
+      "imageUrl": "/assets/arcade/covers/d288d81aa6723b724eb5b3c7.webp",
+      "imageKind": "screenshot"
+    },
+    "cold-meridian-survival": {
+      "imageUrl": "/assets/arcade/covers/98ab6f6a0ec260cc2c99b751.webp",
+      "imageKind": "screenshot"
+    },
+    "counterweight": {
+      "imageUrl": "/assets/arcade/covers/068b0eb2be78018dbc347e75.webp",
+      "imageKind": "screenshot"
+    },
+    "crease": {
+      "imageUrl": "/assets/arcade/covers/b8877446e56043768b92e017.webp",
+      "imageKind": "screenshot"
+    },
+    "crimson-bell": {
+      "imageUrl": "/assets/arcade/covers/63533699a66292ef602eada4.webp",
+      "imageKind": "screenshot"
+    },
+    "crownwake": {
+      "imageUrl": "/assets/arcade/covers/9d48ca4ac4cf965f315e99b8.webp",
+      "imageKind": "screenshot"
+    },
+    "cube-studio": {
+      "imageUrl": "/assets/arcade/covers/003e7e53c769efe94624df77.webp",
+      "imageKind": "screenshot"
+    },
+    "cup-and-ball": {
+      "imageUrl": "/assets/arcade/covers/9e60c81dab5193701ca4fb6b.webp",
+      "imageKind": "screenshot"
+    },
+    "cut-the-tide": {
+      "imageUrl": "/assets/arcade/covers/4fd9affa9e63854bc67ca24a.webp",
+      "imageKind": "screenshot"
+    },
+    "cutback": {
+      "imageUrl": "/assets/arcade/covers/9b4c07b75d70fb9939d11464.webp",
+      "imageKind": "screenshot"
+    },
+    "darnell-was-not-expected": {
+      "imageUrl": "/assets/arcade/covers/b33b28969b892483c5166baa.webp",
+      "imageKind": "screenshot"
+    },
+    "dead-air": {
+      "imageUrl": "/assets/arcade/covers/b964057976e734ed4c891c8e.webp",
+      "imageKind": "screenshot"
+    },
+    "dead-air-2-25-am": {
+      "imageUrl": "/assets/arcade/covers/890daa5aa68376a09443b88e.webp",
+      "imageKind": "screenshot"
+    },
+    "dead-air-beautiful-weather": {
+      "imageUrl": "/assets/arcade/covers/eff9a1e96cf8654c70080b23.webp",
+      "imageKind": "screenshot"
+    },
+    "dead-air-is-full": {
+      "imageUrl": "/assets/arcade/covers/f038fb0e47ff8669fb0c61bf.webp",
+      "imageKind": "screenshot"
+    },
+    "dead-channel": {
+      "imageUrl": "/assets/arcade/covers/75b95a11c5e9a1a95a87b28e.webp",
+      "imageKind": "screenshot"
+    },
+    "dead-heat": {
+      "imageUrl": "/assets/arcade/covers/3b262cb7b5fa7409196b51e4.webp",
+      "imageKind": "screenshot"
+    },
+    "deadweight": {
+      "imageUrl": "/assets/arcade/covers/d0345e00ce57b44b2fd8f09b.webp",
+      "imageKind": "screenshot"
+    },
+    "death-of-the-party": {
+      "imageUrl": "/assets/arcade/covers/e0b9ae6c60340046b2c62e84.webp",
+      "imageKind": "screenshot"
+    },
+    "do-not-improve-this": {
+      "imageUrl": "/assets/arcade/covers/50a9f40becfc1cb00e8dbb03.webp",
+      "imageKind": "screenshot"
+    },
+    "do-you-mind-if-i-drive": {
+      "imageUrl": "/assets/arcade/covers/b4849922317d6259d0492042.webp",
+      "imageKind": "screenshot"
+    },
+    "dragline": {
+      "imageUrl": "/assets/arcade/covers/a6aad3c49ecea7e1f22bd2a8.webp",
+      "imageKind": "screenshot"
+    },
+    "elsewhere": {
+      "imageUrl": "/assets/arcade/covers/8a139c4846f7b62aba360a19.webp",
+      "imageKind": "screenshot"
+    },
+    "encore": {
+      "imageUrl": "/assets/arcade/covers/95fe883ab2ccf76789b2db02.webp",
+      "imageKind": "screenshot"
+    },
+    "encore-an-impossible-patisserie": {
+      "imageUrl": "/assets/arcade/covers/6f9a800eae29e1bef3423d80.webp",
+      "imageKind": "screenshot"
+    },
+    "ever-october": {
+      "imageUrl": "/assets/arcade/covers/14ef8e0c1c51e322bb630ae0.webp",
+      "imageKind": "screenshot"
+    },
+    "everhouse": {
+      "imageUrl": "/assets/arcade/covers/af07f2ae51cb36a33a6d733b.webp",
+      "imageKind": "screenshot"
+    },
+    "eversea": {
+      "imageUrl": "/assets/arcade/covers/7b0e27fd2ca432100649fe44.webp",
+      "imageKind": "screenshot"
+    },
+    "every-wall-is-a-door": {
+      "imageUrl": "/assets/arcade/covers/22d49f2c37fa4cd3b3a0bb5a.webp",
+      "imageKind": "screenshot"
+    },
+    "everyone-came-home-briar-lane": {
+      "imageUrl": "/assets/arcade/covers/c2916e3d19dc3279472d0df8.webp",
+      "imageKind": "screenshot"
+    },
+    "everything-that-missed-you": {
+      "imageUrl": "/assets/arcade/covers/5e189458a26b5dc06142c8eb.webp",
+      "imageKind": "screenshot"
+    },
+    "everything-they-fired-at-you": {
+      "imageUrl": "/assets/arcade/covers/5c7401b16fc1dd258f383ea6.webp",
+      "imageKind": "screenshot"
+    },
+    "false-door-waltz": {
+      "imageUrl": "/assets/arcade/covers/043cb0578a2b9c1e92934de3.webp",
+      "imageKind": "screenshot"
+    },
+    "far-enough": {
+      "imageUrl": "/assets/arcade/covers/f54a97ceb0589ca6b5bcf540.webp",
+      "imageKind": "screenshot"
+    },
+    "first-light": {
+      "imageUrl": "/assets/arcade/covers/2e16523664f324f84d06d956.webp",
+      "imageKind": "screenshot"
+    },
+    "flux-kinetic-spinner": {
+      "imageUrl": "/assets/arcade/covers/4555cd2ee46fc8953c9a53c1.webp",
+      "imageKind": "screenshot"
+    },
+    "forest-flight": {
+      "imageUrl": "/assets/arcade/covers/f70d89eea10c09e6b926ec39.webp",
+      "imageKind": "screenshot"
+    },
+    "freezerfall": {
+      "imageUrl": "/assets/arcade/covers/35a66af200f829cf10102795.webp",
+      "imageKind": "screenshot"
+    },
+    "fuel-run": {
+      "imageUrl": "/assets/arcade/covers/0a7c4d0e920683d406fe693c.webp",
+      "imageKind": "screenshot"
+    },
+    "giants-wake": {
+      "imageUrl": "/assets/arcade/covers/3cf2d8895c72444f741716a4.webp",
+      "imageKind": "screenshot"
+    },
+    "gigi": {
+      "imageUrl": "/assets/arcade/covers/74980adbd3936133b6c20449.webp",
+      "imageKind": "screenshot"
+    },
+    "giltwake": {
+      "imageUrl": "/assets/arcade/covers/e391ab46391b452aa2f71e1c.webp",
+      "imageKind": "screenshot"
+    },
+    "give-an-inch": {
+      "imageUrl": "/assets/arcade/covers/ed9bcba5fa3119e223b23dcd.webp",
+      "imageKind": "screenshot"
+    },
+    "glasswake": {
+      "imageUrl": "/assets/arcade/covers/00c8f9e6362c62faaa57dfcd.webp",
+      "imageKind": "screenshot"
+    },
+    "godspark": {
+      "imageUrl": "/assets/arcade/covers/1b679af1661bc972e0a9c762.webp",
+      "imageKind": "screenshot"
+    },
+    "good-damage": {
+      "imageUrl": "/assets/arcade/covers/ae8885372d5b61303b2a9d5e.webp",
+      "imageKind": "screenshot"
+    },
+    "good-neighbor": {
+      "imageUrl": "/assets/arcade/covers/9ffeefb6c28754bbd33253d4.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-after-the-beep": {
+      "imageUrl": "/assets/arcade/covers/9a7bc6b9a1f774edb6cafe62.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-aftertouch": {
+      "imageUrl": "/assets/arcade/covers/25f1a6548db0f723b3c663fa.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-between-stations": {
+      "imageUrl": "/assets/arcade/covers/bd944fffc678faae613daa7a.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-deadwax": {
+      "imageUrl": "/assets/arcade/covers/845ba4a6c15b5803d105a801.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-no-signal": {
+      "imageUrl": "/assets/arcade/covers/767ca38d974ed4e1b3302085.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-one-light-left-on": {
+      "imageUrl": "/assets/arcade/covers/62e962681b1fdc626cf53e74.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-return-value": {
+      "imageUrl": "/assets/arcade/covers/2227cde3b63c7f8c1530283f.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-room-tone": {
+      "imageUrl": "/assets/arcade/covers/ba5512e8fd3473e75e77c0ac.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-the-last-copy": {
+      "imageUrl": "/assets/arcade/covers/3fe7f95d4a2f3987493247e6.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-the-last-open-tab": {
+      "imageUrl": "/assets/arcade/covers/6cdae5549dd021c21d713e4b.webp",
+      "imageKind": "screenshot"
+    },
+    "goodbyes-the-room-that-missed-you": {
+      "imageUrl": "/assets/arcade/covers/81b3535e95ea0e990b4d04d6.webp",
+      "imageKind": "screenshot"
+    },
+    "goodnight-supernova": {
+      "imageUrl": "/assets/arcade/covers/9d7929a776e04ef54a8062ea.webp",
+      "imageKind": "screenshot"
+    },
+    "grand-larceny-small-cat": {
+      "imageUrl": "/assets/arcade/covers/80e3c3ba11ba71b51abb9014.webp",
+      "imageKind": "screenshot"
+    },
+    "grave-signal": {
+      "imageUrl": "/assets/arcade/covers/dabf4ab3b2eb45caf87cda1f.webp",
+      "imageKind": "screenshot"
+    },
+    "gravebloom": {
+      "imageUrl": "/assets/arcade/covers/f67e196a2b887d985d0b8bee.webp",
+      "imageKind": "screenshot"
+    },
+    "graveleash": {
+      "imageUrl": "/assets/arcade/covers/507f98ac110e85af1ff2dfe2.webp",
+      "imageKind": "screenshot"
+    },
+    "gravesling": {
+      "imageUrl": "/assets/arcade/covers/403f569001820572906141e4.webp",
+      "imageKind": "screenshot"
+    },
+    "gravesong": {
+      "imageUrl": "/assets/arcade/covers/677524a45f644807f813ad87.webp",
+      "imageKind": "screenshot"
+    },
+    "grindline": {
+      "imageUrl": "/assets/arcade/covers/dff45f80af8f017f1c5a5e5d.webp",
+      "imageKind": "screenshot"
+    },
+    "gutterlight": {
+      "imageUrl": "/assets/arcade/covers/aa170b8a3f0d3a8e38c5bc76.webp",
+      "imageKind": "screenshot"
+    },
+    "habit": {
+      "imageUrl": "/assets/arcade/covers/5b4c869af80d1abe1f72d3f5.webp",
+      "imageKind": "screenshot"
+    },
+    "halcyon-breaker": {
+      "imageUrl": "/assets/arcade/covers/8eee36b2faa99bf43f873855.webp",
+      "imageKind": "screenshot"
+    },
+    "hallowind": {
+      "imageUrl": "/assets/arcade/covers/f1aaad6755943a3824772521.webp",
+      "imageKind": "screenshot"
+    },
+    "halo-thief": {
+      "imageUrl": "/assets/arcade/covers/b0128697dcc3fb242286c975.webp",
+      "imageKind": "screenshot"
+    },
+    "handprint-for-a-dead-star": {
+      "imageUrl": "/assets/arcade/covers/29737c25dfed7d9932c63b02.webp",
+      "imageKind": "screenshot"
+    },
+    "hard-rain": {
+      "imageUrl": "/assets/arcade/covers/adba05a46dd3cc18b24cb3f3.webp",
+      "imageKind": "screenshot"
+    },
+    "hard-return": {
+      "imageUrl": "/assets/arcade/covers/a0a2314a2dfbe4554f78d0c1.webp",
+      "imageKind": "screenshot"
+    },
+    "hardlight": {
+      "imageUrl": "/assets/arcade/covers/aa0f2215f09064506e8f1471.webp",
+      "imageKind": "screenshot"
+    },
+    "harvest-loop": {
+      "imageUrl": "/assets/arcade/covers/6c2c5ba1062843ca33859d20.webp",
+      "imageKind": "screenshot"
+    },
+    "headlong": {
+      "imageUrl": "/assets/arcade/covers/75c9a4a003dc1e723d57905c.webp",
+      "imageKind": "screenshot"
+    },
+    "heads-tails-dinner": {
+      "imageUrl": "/assets/arcade/covers/e0dad8fc2d11f6ee2c08d6e9.webp",
+      "imageKind": "screenshot"
+    },
+    "heart-of-the-party": {
+      "imageUrl": "/assets/arcade/covers/c9563911b316250428f2d2a8.webp",
+      "imageKind": "screenshot"
+    },
+    "heaven-has-a-handle": {
+      "imageUrl": "/assets/arcade/covers/57641094e66141c78b58b123.webp",
+      "imageKind": "screenshot"
+    },
+    "heavenknife": {
+      "imageUrl": "/assets/arcade/covers/0569780aa51ce2c1b5ee8894.webp",
+      "imageKind": "screenshot"
+    },
+    "heavenrush": {
+      "imageUrl": "/assets/arcade/covers/36ef3bfd953c89df70762446.webp",
+      "imageKind": "screenshot"
+    },
+    "heavy-sun": {
+      "imageUrl": "/assets/arcade/covers/61c8fd0cc29f1f5be9004805.webp",
+      "imageKind": "screenshot"
+    },
+    "hell-has-a-noise-complaint": {
+      "imageUrl": "/assets/arcade/covers/81ce460e4fbb661c8bc2cb40.webp",
+      "imageKind": "screenshot"
+    },
+    "hold": {
+      "imageUrl": "/assets/arcade/covers/15448f46f081b06d6eb393e8.webp",
+      "imageKind": "screenshot"
+    },
+    "hold-dreadmachine": {
+      "imageUrl": "/assets/arcade/covers/023319550273cdb16d2b0219.webp",
+      "imageKind": "screenshot"
+    },
+    "hold-please": {
+      "imageUrl": "/assets/arcade/covers/95f943192924c20f79a6dc59.webp",
+      "imageKind": "screenshot"
+    },
+    "hollow-street": {
+      "imageUrl": "/assets/arcade/covers/1142eea4cc27616930a061d7.webp",
+      "imageKind": "screenshot"
+    },
+    "homing": {
+      "imageUrl": "/assets/arcade/covers/d335392ada41ab39ce91bd27.webp",
+      "imageKind": "screenshot"
+    },
+    "house-without-edges": {
+      "imageUrl": "/assets/arcade/covers/bf2101ce525be7ac107617fe.webp",
+      "imageKind": "screenshot"
+    },
+    "house-without-end": {
+      "imageUrl": "/assets/arcade/covers/79aa138dedb5bcb1f2ee8aa5.webp",
+      "imageKind": "screenshot"
+    },
+    "housebreak": {
+      "imageUrl": "/assets/arcade/covers/853010cc7811bcc626397272.webp",
+      "imageKind": "screenshot"
+    },
+    "how-to-mail-a-river": {
+      "imageUrl": "/assets/arcade/covers/5016298790e80029bdc2eda1.webp",
+      "imageKind": "screenshot"
+    },
+    "hurtling": {
+      "imageUrl": "/assets/arcade/covers/a81c28b0dbedb142c02beaeb.webp",
+      "imageKind": "screenshot"
+    },
+    "hush": {
+      "imageUrl": "/assets/arcade/covers/b23830ca0d06d41a02907a1b.webp",
+      "imageKind": "screenshot"
+    },
+    "hushwater": {
+      "imageUrl": "/assets/arcade/covers/ea1850885c2b6bf3d5f3ab42.webp",
+      "imageKind": "screenshot"
+    },
+    "i-was-already-leaving": {
+      "imageUrl": "/assets/arcade/covers/8246b9af6a6bd5f2139d0690.webp",
+      "imageKind": "screenshot"
+    },
+    "impossible-hours": {
+      "imageUrl": "/assets/arcade/covers/cb1fa8e1ba051b489d00308b.webp",
+      "imageKind": "screenshot"
+    },
+    "insatiable-the-table-is-still-set": {
+      "imageUrl": "/assets/arcade/covers/ff84e8dc9db268f5ef8f7565.webp",
+      "imageKind": "screenshot"
+    },
+    "inside-voice": {
+      "imageUrl": "/assets/arcade/covers/9e5d4724e7b930b1b596e84e.webp",
+      "imageKind": "screenshot"
+    },
+    "instead-of-goodbye": {
+      "imageUrl": "/assets/arcade/covers/a058efca145938ed50ca7335.webp",
+      "imageKind": "screenshot"
+    },
+    "ionwake": {
+      "imageUrl": "/assets/arcade/covers/3f18a72879ab610d0d42d00e.webp",
+      "imageKind": "screenshot"
+    },
+    "iron-current": {
+      "imageUrl": "/assets/arcade/covers/d3b7f9a197a47a4c37ae0d5a.webp",
+      "imageKind": "screenshot"
+    },
+    "iron-reprieve": {
+      "imageUrl": "/assets/arcade/covers/2ecf3985281cca8392703205.webp",
+      "imageKind": "screenshot"
+    },
+    "it-comes-back": {
+      "imageUrl": "/assets/arcade/covers/91d33ab03e4975cf9e860b20.webp",
+      "imageKind": "screenshot"
+    },
+    "it-heard-you": {
+      "imageUrl": "/assets/arcade/covers/cb1d1ad30f144f7473a4cc87.webp",
+      "imageKind": "screenshot"
+    },
+    "janski-university": {
+      "imageUrl": "/assets/arcade/covers/7a1666ed0d0dfb2568a5872e.webp",
+      "imageKind": "screenshot"
+    },
+    "keep-places": {
+      "imageUrl": "/assets/arcade/covers/367dfaa463c2b77e9dbd7699.webp",
+      "imageKind": "screenshot"
+    },
+    "kickback": {
+      "imageUrl": "/assets/arcade/covers/e75845b286ed4f3a7143ae56.webp",
+      "imageKind": "screenshot"
+    },
+    "kiss-the-traffic": {
+      "imageUrl": "/assets/arcade/covers/762d1020eed105f45f7b6dc8.webp",
+      "imageKind": "screenshot"
+    },
+    "knot": {
+      "imageUrl": "/assets/arcade/covers/606bf660367555249d70e400.webp",
+      "imageKind": "screenshot"
+    },
+    "knotstar": {
+      "imageUrl": "/assets/arcade/covers/3b9d1abb00577caebf1d2d90.webp",
+      "imageKind": "screenshot"
+    },
+    "knotwake": {
+      "imageUrl": "/assets/arcade/covers/568dbc67cc51803bbca3d9b9.webp",
+      "imageKind": "screenshot"
+    },
+    "last-click": {
+      "imageUrl": "/assets/arcade/covers/57c86f1174f6cd9307843820.webp",
+      "imageKind": "screenshot"
+    },
+    "last-light-night-shift": {
+      "imageUrl": "/assets/arcade/covers/caaf93b1fd36be54cee6d08c.webp",
+      "imageKind": "screenshot"
+    },
+    "last-one-at-the-party": {
+      "imageUrl": "/assets/arcade/covers/61a7b5523eecc32a39ab8dfd.webp",
+      "imageKind": "screenshot"
+    },
+    "late-tide": {
+      "imageUrl": "/assets/arcade/covers/ea51caf0be0a301c82f57f2a.webp",
+      "imageKind": "screenshot"
+    },
+    "le-veilleur": {
+      "imageUrl": "/assets/arcade/covers/fbd67793d933c622d20f284d.webp",
+      "imageKind": "screenshot"
+    },
+    "left-on": {
+      "imageUrl": "/assets/arcade/covers/c0880d2845ca89d00d019d1e.webp",
+      "imageKind": "screenshot"
+    },
+    "little-god": {
+      "imageUrl": "/assets/arcade/covers/c3f1052264551244bdfc1460.webp",
+      "imageKind": "screenshot"
+    },
+    "loud-enough-to-find-us": {
+      "imageUrl": "/assets/arcade/covers/181b94ce91e487a101f41ae1.webp",
+      "imageKind": "screenshot"
+    },
+    "love-machine": {
+      "imageUrl": "/assets/arcade/covers/9f1bd53ad52f208b02c8c75c.webp",
+      "imageKind": "screenshot"
+    },
+    "low-tide": {
+      "imageUrl": "/assets/arcade/covers/492c56f1efb9612bcb64118c.webp",
+      "imageKind": "screenshot"
+    },
+    "low-tide-2-17-a-m": {
+      "imageUrl": "/assets/arcade/covers/8ced57d3131086d6e8ce4d9b.webp",
+      "imageKind": "screenshot"
+    },
+    "low-tide-saint": {
+      "imageUrl": "/assets/arcade/covers/f73cde82b05f992cdafc2028.webp",
+      "imageKind": "screenshot"
+    },
+    "low-water": {
+      "imageUrl": "/assets/arcade/covers/f9ca454af893a2aee908581a.webp",
+      "imageKind": "screenshot"
+    },
+    "lowwater": {
+      "imageUrl": "/assets/arcade/covers/83adf58b2ecd472ccbfcfbc4.webp",
+      "imageKind": "screenshot"
+    },
+    "marrow-orbit": {
+      "imageUrl": "/assets/arcade/covers/2643271120a3b2539be4363e.webp",
+      "imageKind": "screenshot"
+    },
+    "marrowline": {
+      "imageUrl": "/assets/arcade/covers/a8a6e4acaf3ecded02dd7f3a.webp",
+      "imageKind": "screenshot"
+    },
+    "med-game": {
+      "imageUrl": "/assets/arcade/covers/854dfb1ad687cc35f695973c.webp",
+      "imageKind": "screenshot"
+    },
+    "medication-game": {
+      "imageUrl": "/assets/arcade/covers/d531d5def781f0f675a6b2b7.webp",
+      "imageKind": "screenshot"
+    },
+    "meridian-galleria-an-afternoon-after-everything": {
+      "imageUrl": "/assets/arcade/covers/c6b279dcbbcc603c1642641a.webp",
+      "imageKind": "screenshot"
+    },
+    "miami-devil": {
+      "imageUrl": "/assets/arcade/covers/5d4d101b28bf793595e131b2.webp",
+      "imageKind": "screenshot"
+    },
+    "midnight-relay": {
+      "imageUrl": "/assets/arcade/covers/fe1651a0a33fb6833cf91284.webp",
+      "imageKind": "screenshot"
+    },
+    "mirrorlaw": {
+      "imageUrl": "/assets/arcade/covers/099bb3e472e995b0e2ce4bd9.webp",
+      "imageKind": "screenshot"
+    },
+    "misprint": {
+      "imageUrl": "/assets/arcade/covers/046b80c52f379e65f0c85893.webp",
+      "imageKind": "screenshot"
+    },
+    "montanha": {
+      "imageUrl": "/assets/arcade/covers/6b5951fb52d5422f0822f23a.webp",
+      "imageKind": "screenshot"
+    },
+    "moonrot": {
+      "imageUrl": "/assets/arcade/covers/43b0f2d6fceb821cec7afeff.webp",
+      "imageKind": "screenshot"
+    },
+    "moonthief": {
+      "imageUrl": "/assets/arcade/covers/fb23873013e76b5b42b8a5b5.webp",
+      "imageKind": "screenshot"
+    },
+    "morningline": {
+      "imageUrl": "/assets/arcade/covers/069bb564512ebf103f9362b2.webp",
+      "imageKind": "screenshot"
+    },
+    "mossway": {
+      "imageUrl": "/assets/arcade/covers/61ecad3015ea1b0e57fc9c4f.webp",
+      "imageKind": "screenshot"
+    },
+    "mourningstar": {
+      "imageUrl": "/assets/arcade/covers/e73e08ae07a97ef4d17c5aec.webp",
+      "imageKind": "screenshot"
+    },
+    "murmuration": {
+      "imageUrl": "/assets/arcade/covers/b4b5535880a1733b5735f150.webp",
+      "imageKind": "screenshot"
+    },
+    "needle-alibi": {
+      "imageUrl": "/assets/arcade/covers/96fbf12f2e8f7b25c994845e.webp",
+      "imageKind": "screenshot"
+    },
+    "neon-abattoir": {
+      "imageUrl": "/assets/arcade/covers/368972470df5845866a4766a.webp",
+      "imageKind": "screenshot"
+    },
+    "neon-daggers-1987": {
+      "imageUrl": "/assets/arcade/covers/d2f42e79b1f7a019c185cb72.webp",
+      "imageKind": "screenshot"
+    },
+    "neon-hell-vice-1987": {
+      "imageUrl": "/assets/arcade/covers/955e5293e63304998ed33cac.webp",
+      "imageKind": "screenshot"
+    },
+    "neon-rat-maze": {
+      "imageUrl": "/assets/arcade/covers/4c146b1ffcef2a2f09943f38.webp",
+      "imageKind": "screenshot"
+    },
+    "neon-sacrament": {
+      "imageUrl": "/assets/arcade/covers/9eec97ea78189e6fbe1c25ed.webp",
+      "imageKind": "screenshot"
+    },
+    "neon-slasher": {
+      "imageUrl": "/assets/arcade/covers/3fdcd9547e8b1dd9ead714a4.webp",
+      "imageKind": "screenshot"
+    },
+    "neon-surge": {
+      "imageUrl": "/assets/arcade/covers/fcb5604580d2eeb1f7f2ebf3.webp",
+      "imageKind": "screenshot"
+    },
+    "neon-void-fun-2d-shoot-em-up": {
+      "imageUrl": "/assets/arcade/covers/316d0ed9acfa2198a3f9d536.webp",
+      "imageKind": "screenshot"
+    },
+    "never-played-twice": {
+      "imageUrl": "/assets/arcade/covers/4d3819bd97332d63cb03238f.webp",
+      "imageKind": "screenshot"
+    },
+    "neverbloom": {
+      "imageUrl": "/assets/arcade/covers/fb801c04c494c5de19c3f830.webp",
+      "imageKind": "screenshot"
+    },
+    "neverground": {
+      "imageUrl": "/assets/arcade/covers/7307717471e0e378de5291fb.webp",
+      "imageKind": "screenshot"
+    },
+    "night-has-your-handwriting": {
+      "imageUrl": "/assets/arcade/covers/21f8616fe9ae11c1bf4b3b45.webp",
+      "imageKind": "screenshot"
+    },
+    "night-parade": {
+      "imageUrl": "/assets/arcade/covers/9c9d7a8906f319c85c16d08b.webp",
+      "imageKind": "screenshot"
+    },
+    "night-repo": {
+      "imageUrl": "/assets/arcade/covers/c985268de2fb3bbbfd4eb420.webp",
+      "imageKind": "screenshot"
+    },
+    "night-shift-naplex": {
+      "imageUrl": "/assets/arcade/covers/ce8c19f52bed7d4091e22d39.webp",
+      "imageKind": "screenshot"
+    },
+    "nightferry": {
+      "imageUrl": "/assets/arcade/covers/a7ed1fa1ebaef7635b16d1e2.webp",
+      "imageKind": "screenshot"
+    },
+    "nightflood": {
+      "imageUrl": "/assets/arcade/covers/0c93e7c61dd900d1ff1422a2.webp",
+      "imageKind": "screenshot"
+    },
+    "nightjar-express": {
+      "imageUrl": "/assets/arcade/covers/bd02f6c760a2b8948966a09d.webp",
+      "imageKind": "screenshot"
+    },
+    "nightward": {
+      "imageUrl": "/assets/arcade/covers/4ed480ead4717c2c52920a30.webp",
+      "imageKind": "screenshot"
+    },
+    "nightwindow": {
+      "imageUrl": "/assets/arcade/covers/0b918b606b5f50889e2a5efe.webp",
+      "imageKind": "screenshot"
+    },
+    "no-fixed-points": {
+      "imageUrl": "/assets/arcade/covers/3573d9c3bd3e688f0c3a3fd7.webp",
+      "imageKind": "screenshot"
+    },
+    "no-last-room": {
+      "imageUrl": "/assets/arcade/covers/904cd2f96d91ab254cb6f000.webp",
+      "imageKind": "screenshot"
+    },
+    "no-moon-arcade": {
+      "imageUrl": "/assets/arcade/covers/4808d92e01dc8e8343fec1c0.webp",
+      "imageKind": "screenshot"
+    },
+    "no-one-is-home": {
+      "imageUrl": "/assets/arcade/covers/c7676caa09747d832fdee3fc.webp",
+      "imageKind": "screenshot"
+    },
+    "no-vacancy": {
+      "imageUrl": "/assets/arcade/covers/f4c263446a3df7cdb7e6374d.webp",
+      "imageKind": "screenshot"
+    },
+    "noonwheel": {
+      "imageUrl": "/assets/arcade/covers/4310c1ba3417845ba9a4ce88.webp",
+      "imageKind": "screenshot"
+    },
+    "not-yet-is-a-place": {
+      "imageUrl": "/assets/arcade/covers/75be874efd46e7323c2fdc15.webp",
+      "imageKind": "screenshot"
+    },
+    "nothing-here-has-happened-yet": {
+      "imageUrl": "/assets/arcade/covers/9e0640fb5404384d60caad41.webp",
+      "imageKind": "screenshot"
+    },
+    "nothing-on": {
+      "imageUrl": "/assets/arcade/covers/9c8ca6bfdfd4b3d6194db4db.webp",
+      "imageKind": "screenshot"
+    },
+    "nulltrigger-browser-fps": {
+      "imageUrl": "/assets/arcade/covers/3447d9d0d652f5e8fdc75f4d.webp",
+      "imageKind": "screenshot"
+    },
+    "october-forever": {
+      "imageUrl": "/assets/arcade/covers/5b5400df14e6459545671dc2.webp",
+      "imageKind": "screenshot"
+    },
+    "offcut": {
+      "imageUrl": "/assets/arcade/covers/a7d4162585c79f2478b768db.webp",
+      "imageKind": "screenshot"
+    },
+    "office-of-unclaimed-futures": {
+      "imageUrl": "/assets/arcade/covers/def3e3f00142c277b45afcd8.webp",
+      "imageKind": "screenshot"
+    },
+    "oncoming": {
+      "imageUrl": "/assets/arcade/covers/3531183acd3f76b8651ccc47.webp",
+      "imageKind": "screenshot"
+    },
+    "one-person-is-still-typing": {
+      "imageUrl": "/assets/arcade/covers/c89c815769ae1cdb34d4e523.webp",
+      "imageKind": "screenshot"
+    },
+    "one-thirteen-fm": {
+      "imageUrl": "/assets/arcade/covers/4b86e82bbbbeac61dba2a11b.webp",
+      "imageKind": "screenshot"
+    },
+    "open-house": {
+      "imageUrl": "/assets/arcade/covers/a7e2d5bdcfa5f9c5b8b3e14d.webp",
+      "imageKind": "screenshot"
+    },
+    "open-me-twice": {
+      "imageUrl": "/assets/arcade/covers/c854df99e69f834005db7956.webp",
+      "imageKind": "screenshot"
+    },
+    "opening-ceremony": {
+      "imageUrl": "/assets/arcade/covers/f884f51a72f29c75fd8e60b4.webp",
+      "imageKind": "screenshot"
+    },
+    "orbitbreaker": {
+      "imageUrl": "/assets/arcade/covers/237a26e79a167845fd0b0d60.webp",
+      "imageKind": "screenshot"
+    },
+    "orbitfall": {
+      "imageUrl": "/assets/arcade/covers/88121cef50b7da5f344dc1a1.webp",
+      "imageKind": "screenshot"
+    },
+    "other-wings": {
+      "imageUrl": "/assets/arcade/covers/21b2eb0adce2eb2fa132dba8.webp",
+      "imageKind": "screenshot"
+    },
+    "outheart": {
+      "imageUrl": "/assets/arcade/covers/94166cf91ccf6b14872d30d1.webp",
+      "imageKind": "screenshot"
+    },
+    "overpressure": {
+      "imageUrl": "/assets/arcade/covers/bb110bd56f7182b7e5d9ba60.webp",
+      "imageKind": "screenshot"
+    },
+    "pale-crown": {
+      "imageUrl": "/assets/arcade/covers/726993ea1b4d9d4f69f41f12.webp",
+      "imageKind": "screenshot"
+    },
+    "paradise-is-hungry": {
+      "imageUrl": "/assets/arcade/covers/a8808eac3468344d48b5a6ac.webp",
+      "imageKind": "screenshot"
+    },
+    "passenger-moon": {
+      "imageUrl": "/assets/arcade/covers/694277f48928cedd56e78061.webp",
+      "imageKind": "screenshot"
+    },
+    "passenger-weather": {
+      "imageUrl": "/assets/arcade/covers/546c560ca69211de0df8a08d.webp",
+      "imageKind": "screenshot"
+    },
+    "pasta-daggers": {
+      "imageUrl": "/assets/arcade/covers/ee8dfccf6bd90bb22bb81c8d.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-all-the-stops": {
+      "imageUrl": "/assets/arcade/covers/c67340cd547e336aaf11bc57.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-apex": {
+      "imageUrl": "/assets/arcade/covers/de352e477e53b500dbfb7b04.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-backlash": {
+      "imageUrl": "/assets/arcade/covers/a865d0d1d67a9561df539a19.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-belling-tide": {
+      "imageUrl": "/assets/arcade/covers/ebbe7515b220851b29f2e77a.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-below-the-house": {
+      "imageUrl": "/assets/arcade/covers/ea98c4e2005d3d7f898811f0.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-brack": {
+      "imageUrl": "/assets/arcade/covers/347ec05b88d3ad2fb6bced0f.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-breakline": {
+      "imageUrl": "/assets/arcade/covers/828ae229dcab149890d59158.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-candy-garden": {
+      "imageUrl": "/assets/arcade/covers/6fb956f860711deeb4f60ace.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-candy-machine": {
+      "imageUrl": "/assets/arcade/covers/6405399b4369e06d6dfb4c33.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-castlevania": {
+      "imageUrl": "/assets/arcade/covers/7c3d8f8e9335a34975f3a886.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-chamber": {
+      "imageUrl": "/assets/arcade/covers/3dec9849f14c14c014b9afa2.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-city-of-glass-and-shadows": {
+      "imageUrl": "/assets/arcade/covers/627cfc2db987911825fbb86c.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-cleave": {
+      "imageUrl": "/assets/arcade/covers/c3b874b7156d6175b9f9ce5c.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-cold-cut": {
+      "imageUrl": "/assets/arcade/covers/0d410ff8662d4b9577e0dfaa.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-everything-i-gave-away": {
+      "imageUrl": "/assets/arcade/covers/3d4a5da43252d0eec5b4d6b7.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-filament": {
+      "imageUrl": "/assets/arcade/covers/e9dfd72f9e4b7bd41163ff4c.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-genesis-engine": {
+      "imageUrl": "/assets/arcade/covers/1e5457dfd57b9651d8742daf.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-hallowind-an-open-world-halloween-horror-rpg": {
+      "imageUrl": "/assets/arcade/covers/a98731361f1306747862c751.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-haul": {
+      "imageUrl": "/assets/arcade/covers/68963817190a6262537cb451.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-haunted-county": {
+      "imageUrl": "/assets/arcade/covers/7b93a50bfd1120b063e71c13.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-hellbloom": {
+      "imageUrl": "/assets/arcade/covers/b86a655fc446d262b83bf2ae.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-highwire": {
+      "imageUrl": "/assets/arcade/covers/fa8c49fa3f8ad2af0cf83684.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-it-sings-back": {
+      "imageUrl": "/assets/arcade/covers/4a2b4e4b026041600aba9ea6.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-keep": {
+      "imageUrl": "/assets/arcade/covers/2e4621657a1ceab262976964.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-keep-the-choir-fed": {
+      "imageUrl": "/assets/arcade/covers/d562726239d0ea0748b3da6c.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-la-confiserie": {
+      "imageUrl": "/assets/arcade/covers/e44fbc0d4c203a06ae24eb5c.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-lane": {
+      "imageUrl": "/assets/arcade/covers/5e7db19f7dc663acd4f4bf40.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-lash": {
+      "imageUrl": "/assets/arcade/covers/d936fcd4256d77c868722da3.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-last-chorus": {
+      "imageUrl": "/assets/arcade/covers/b3db5780c0531e87eb989c6a.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-lift": {
+      "imageUrl": "/assets/arcade/covers/424548903f76e6d7ab18515b.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-luma": {
+      "imageUrl": "/assets/arcade/covers/203f1bc42b062ee076e2fe14.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-lumenkite": {
+      "imageUrl": "/assets/arcade/covers/778884e588c622af754f864f.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-lumenwilds": {
+      "imageUrl": "/assets/arcade/covers/5f441fbb08362aff821bef36.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-nacre": {
+      "imageUrl": "/assets/arcade/covers/94c806e8a71e58ae62366d26.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-neon-cathedral": {
+      "imageUrl": "/assets/arcade/covers/c0caae1a3d16b74a254f8d14.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-neon-trigger": {
+      "imageUrl": "/assets/arcade/covers/05dc398ea195dd353086a90b.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-night-vector": {
+      "imageUrl": "/assets/arcade/covers/b67af3cdc6f3be7322686adf.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-order-of-responsible-acceleration": {
+      "imageUrl": "/assets/arcade/covers/50b36f049c42c8e0af1d18bb.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-other-way": {
+      "imageUrl": "/assets/arcade/covers/6697c216727c03c1a8fd6e74.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-palehollow": {
+      "imageUrl": "/assets/arcade/covers/621e9fe8892f809de3755192.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-prize-fight": {
+      "imageUrl": "/assets/arcade/covers/d98a9f75cea1c0dabd69b346.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-ragu": {
+      "imageUrl": "/assets/arcade/covers/69e6fe167f1693731b8da4df.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-relay-zero": {
+      "imageUrl": "/assets/arcade/covers/ff814d4d53393a2ebc391d7c.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-reliquary": {
+      "imageUrl": "/assets/arcade/covers/af16ac8ab8aed301a23c5772.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-reverie": {
+      "imageUrl": "/assets/arcade/covers/b3358a23a7340cc6f8e150c6.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-schism": {
+      "imageUrl": "/assets/arcade/covers/60b8949d78d3eac160292467.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-sear": {
+      "imageUrl": "/assets/arcade/covers/44053e55771abdbbef6ab465.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-solenne": {
+      "imageUrl": "/assets/arcade/covers/23e0d32e48ae17fce3cee417.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-spaghetti-house": {
+      "imageUrl": "/assets/arcade/covers/2c33a890af2d3abe20edb92f.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-sumi": {
+      "imageUrl": "/assets/arcade/covers/18f0ecb454a9ec547f42e960.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-tallow": {
+      "imageUrl": "/assets/arcade/covers/96d9a29bac80259b268d5554.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-tether": {
+      "imageUrl": "/assets/arcade/covers/4afd92eeb4e986b1da97b631.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-tipper": {
+      "imageUrl": "/assets/arcade/covers/4ed3432e11ca631d4a3ddaf0.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-veilrift-zero": {
+      "imageUrl": "/assets/arcade/covers/f623ca72555721be4c3340b1.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-vesper-rift": {
+      "imageUrl": "/assets/arcade/covers/5a0a0dd5c0c47415716c2f4b.webp",
+      "imageKind": "screenshot"
+    },
+    "pc-winterline-districts-separate-expansion": {
+      "imageUrl": "/assets/arcade/covers/4717fecfc3ebe5408abcca43.webp",
+      "imageKind": "screenshot"
+    },
+    "peachful": {
+      "imageUrl": "/assets/arcade/covers/999129ea6ce94867d56141ad.webp",
+      "imageKind": "screenshot"
+    },
+    "pearl-riot": {
+      "imageUrl": "/assets/arcade/covers/fb2f129da20b59c513e7bba4.webp",
+      "imageKind": "screenshot"
+    },
+    "pelagos": {
+      "imageUrl": "/assets/arcade/covers/c641fee15a44f523e625674a.webp",
+      "imageKind": "screenshot"
+    },
+    "pelican-coast": {
+      "imageUrl": "/assets/arcade/covers/0f00140c6c0716be8bf5cfa2.webp",
+      "imageKind": "screenshot"
+    },
+    "pendulum-soul": {
+      "imageUrl": "/assets/arcade/covers/1a612fdc309ac7de370f8b04.webp",
+      "imageKind": "screenshot"
+    },
+    "petty": {
+      "imageUrl": "/assets/arcade/covers/1f6ad0d565dd3139ad973142.webp",
+      "imageKind": "screenshot"
+    },
+    "petty-cash": {
+      "imageUrl": "/assets/arcade/covers/bd9f24037b67545669d29510.webp",
+      "imageKind": "screenshot"
+    },
+    "pilot-light": {
+      "imageUrl": "/assets/arcade/covers/a7eaeb17146c26413993a576.webp",
+      "imageKind": "screenshot"
+    },
+    "play-first-untitled": {
+      "imageUrl": "/assets/arcade/covers/8006e7718513819bcf984c8f.webp",
+      "imageKind": "screenshot"
+    },
+    "please-do-not-touch-the-future": {
+      "imageUrl": "/assets/arcade/covers/10ae7328e0e99794097c5b12.webp",
+      "imageKind": "screenshot"
+    },
+    "please-hold": {
+      "imageUrl": "/assets/arcade/covers/14903a692a0475a760d7148c.webp",
+      "imageKind": "screenshot"
+    },
+    "please-stay-the-meridian": {
+      "imageUrl": "/assets/arcade/covers/8cdb71f2fede113674afda73.webp",
+      "imageKind": "screenshot"
+    },
+    "pocket-moon": {
+      "imageUrl": "/assets/arcade/covers/f446aaf8f84f1e713578e598.webp",
+      "imageKind": "screenshot"
+    },
+    "pocket-moon-argues-back": {
+      "imageUrl": "/assets/arcade/covers/7e3b6ca4b3f75dd748b7ddf4.webp",
+      "imageKind": "screenshot"
+    },
+    "possessive": {
+      "imageUrl": "/assets/arcade/covers/502fa202cfcc717ea4221d20.webp",
+      "imageKind": "screenshot"
+    },
+    "prism-dash": {
+      "imageUrl": "/assets/arcade/covers/f708cdfce57639bc8c2bb988.webp",
+      "imageKind": "screenshot"
+    },
+    "prism-glide": {
+      "imageUrl": "/assets/arcade/covers/d53e1dcbb8cf00f34d1c01fe.webp",
+      "imageKind": "screenshot"
+    },
+    "prism-pop": {
+      "imageUrl": "/assets/arcade/covers/e3120be2a31e0771645e59b4.webp",
+      "imageKind": "screenshot"
+    },
+    "public-seating": {
+      "imageUrl": "/assets/arcade/covers/fd5b0b8983a1daa60b83fb38.webp",
+      "imageKind": "screenshot"
+    },
+    "punchline-hell": {
+      "imageUrl": "/assets/arcade/covers/8547a03b35dc0d73421c2cf7.webp",
+      "imageKind": "screenshot"
+    },
+    "quantum-flux": {
+      "imageUrl": "/assets/arcade/covers/f3bb4ce9f5e1d59f59f07e6b.webp",
+      "imageKind": "screenshot"
+    },
+    "quiet-hours": {
+      "imageUrl": "/assets/arcade/covers/8573db3a5b5736f01915a1e5.webp",
+      "imageKind": "screenshot"
+    },
+    "rainbreak": {
+      "imageUrl": "/assets/arcade/covers/9193e91893368d0b17848456.webp",
+      "imageKind": "screenshot"
+    },
+    "rainwake": {
+      "imageUrl": "/assets/arcade/covers/a54cfbdf5692bd08b0ae3a70.webp",
+      "imageKind": "screenshot"
+    },
+    "rainward": {
+      "imageUrl": "/assets/arcade/covers/618ce3d5fbe15807a64f4f3b.webp",
+      "imageKind": "screenshot"
+    },
+    "rally-evolved": {
+      "imageUrl": "/assets/arcade/covers/c540a95d890f839cba91a9ff.webp",
+      "imageKind": "screenshot"
+    },
+    "ravel": {
+      "imageUrl": "/assets/arcade/covers/be1b96fbfa8b3b3002292f6e.webp",
+      "imageKind": "screenshot"
+    },
+    "razor-eden": {
+      "imageUrl": "/assets/arcade/covers/289697b431c7d4691c2555fb.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-aftercurrent": {
+      "imageUrl": "/assets/arcade/covers/997167ef9f66be13dd5f1067.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-afterforce": {
+      "imageUrl": "/assets/arcade/covers/19d33a65a45bcae225dbc606.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-breakbloom": {
+      "imageUrl": "/assets/arcade/covers/e8359f31c3f90e7b9e75c54f.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-breakwater-sky": {
+      "imageUrl": "/assets/arcade/covers/c70791630e7d77726ca5e39e.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-gilt-2026-11": {
+      "imageUrl": "/assets/arcade/covers/6c29dc9b63272a1fcad5e200.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-kitefall": {
+      "imageUrl": "/assets/arcade/covers/3659bd9a42b5077a14aeffe0.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-murder-pop": {
+      "imageUrl": "/assets/arcade/covers/581c7de00fd8ab47ace1ccc9.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-pocket-comet": {
+      "imageUrl": "/assets/arcade/covers/16ae5fdbda7def16ed37a63a.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-radiant-break": {
+      "imageUrl": "/assets/arcade/covers/098bc6337056399852a49c73.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-sunspar": {
+      "imageUrl": "/assets/arcade/covers/3376d323ca86a02536cbdaa5.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-tanglekin": {
+      "imageUrl": "/assets/arcade/covers/4b008cccaf30d01f8268ff64.webp",
+      "imageKind": "screenshot"
+    },
+    "recent-tension": {
+      "imageUrl": "/assets/arcade/covers/82fecc3a00bcb4732d4b51b7.webp",
+      "imageKind": "screenshot"
+    },
+    "repeat-offender-v1-1": {
+      "imageUrl": "/assets/arcade/covers/76b34dc3919eb128eee3b1ab.webp",
+      "imageKind": "screenshot"
+    },
+    "ricochet": {
+      "imageUrl": "/assets/arcade/covers/bba41c775dc108213c63c03c.webp",
+      "imageKind": "screenshot"
+    },
+    "rift-wake": {
+      "imageUrl": "/assets/arcade/covers/efee22e3419e847cf2793bb1.webp",
+      "imageKind": "screenshot"
+    },
+    "riftbloom": {
+      "imageUrl": "/assets/arcade/covers/758fc14dbc69bc1c216d9255.webp",
+      "imageKind": "screenshot"
+    },
+    "riftline": {
+      "imageUrl": "/assets/arcade/covers/db74debb91a71fd2e463b6ab.webp",
+      "imageKind": "screenshot"
+    },
+    "right-of-way": {
+      "imageUrl": "/assets/arcade/covers/49e7706413b382f60d1b288b.webp",
+      "imageKind": "screenshot"
+    },
+    "ringsaint": {
+      "imageUrl": "/assets/arcade/covers/1bdf8b15f13ce71ccbed7c33.webp",
+      "imageKind": "screenshot"
+    },
+    "rivet": {
+      "imageUrl": "/assets/arcade/covers/54c1d506ad018e55bdaf72c7.webp",
+      "imageKind": "screenshot"
+    },
+    "room-service": {
+      "imageUrl": "/assets/arcade/covers/1bc55b02102013081115506b.webp",
+      "imageKind": "screenshot"
+    },
+    "roomthief-the-morning-deed": {
+      "imageUrl": "/assets/arcade/covers/5c11f0e1aa38f4b019c1e6b6.webp",
+      "imageKind": "screenshot"
+    },
+    "rubbed-in": {
+      "imageUrl": "/assets/arcade/covers/3bcc7a3f26a56385bd30cc8b.webp",
+      "imageKind": "screenshot"
+    },
+    "rushlight": {
+      "imageUrl": "/assets/arcade/covers/fddc625f1e7d5878a92a7f53.webp",
+      "imageKind": "screenshot"
+    },
+    "saccharine-a-candy-heart": {
+      "imageUrl": "/assets/arcade/covers/38926bce79837272ef65d4e4.webp",
+      "imageKind": "screenshot"
+    },
+    "saint-engine": {
+      "imageUrl": "/assets/arcade/covers/ff158ca365467797e6c8a1c9.webp",
+      "imageKind": "screenshot"
+    },
+    "saintwire": {
+      "imageUrl": "/assets/arcade/covers/c649df1bda9ef99f8d84858a.webp",
+      "imageKind": "screenshot"
+    },
+    "saltline": {
+      "imageUrl": "/assets/arcade/covers/f05b05cd9483146e969fd370.webp",
+      "imageKind": "screenshot"
+    },
+    "sapphire-seahorse": {
+      "imageUrl": "/assets/arcade/covers/aa39f265b94a47ab6eaa35cf.webp",
+      "imageKind": "screenshot"
+    },
+    "satisfaction": {
+      "imageUrl": "/assets/arcade/covers/01288170f84cc61835c26533.webp",
+      "imageKind": "screenshot"
+    },
+    "second-occupant": {
+      "imageUrl": "/assets/arcade/covers/1943a0c6545cc52d559f35a9.webp",
+      "imageKind": "screenshot"
+    },
+    "second-self": {
+      "imageUrl": "/assets/arcade/covers/6b47ea2db8718a9ac45113d8.webp",
+      "imageKind": "screenshot"
+    },
+    "second-sun": {
+      "imageUrl": "/assets/arcade/covers/9c3bb7c940f566059acbf74a.webp",
+      "imageKind": "screenshot"
+    },
+    "sell-it": {
+      "imageUrl": "/assets/arcade/covers/259af0fa287fb453256a4965.webp",
+      "imageKind": "screenshot"
+    },
+    "shard-the-bell-spine": {
+      "imageUrl": "/assets/arcade/covers/49ce0a085f720ee5f5f09ebf.webp",
+      "imageKind": "screenshot"
+    },
+    "shardbloom": {
+      "imageUrl": "/assets/arcade/covers/2b5f64a8e769eb22298d25c0.webp",
+      "imageKind": "screenshot"
+    },
+    "shearlight": {
+      "imageUrl": "/assets/arcade/covers/56692e1025505c726d741d4c.webp",
+      "imageKind": "screenshot"
+    },
+    "shotgun": {
+      "imageUrl": "/assets/arcade/covers/af0d66f6b1718e67d9f09a3d.webp",
+      "imageKind": "screenshot"
+    },
+    "silk-saint": {
+      "imageUrl": "/assets/arcade/covers/0efb010ad8595d543fdf30ce.webp",
+      "imageKind": "screenshot"
+    },
+    "site-afterbloom-alex-1107": {
+      "imageUrl": "/assets/arcade/covers/b8208950ce7d42cd91169f74.webp",
+      "imageKind": "screenshot"
+    },
+    "site-al-dente-the-last-course": {
+      "imageUrl": "/assets/arcade/covers/3bb4e8ab4aff46613985207e.webp",
+      "imageKind": "screenshot"
+    },
+    "site-aurelia-garden-of-light": {
+      "imageUrl": "/assets/arcade/covers/853ec73b0a67e631e4c38ea1.webp",
+      "imageKind": "screenshot"
+    },
+    "site-bad-neighbor-block-party": {
+      "imageUrl": "/assets/arcade/covers/5707bb1a4b4c2dcc3bcb4a26.webp",
+      "imageKind": "screenshot"
+    },
+    "site-dead-shift-3d": {
+      "imageUrl": "/assets/arcade/covers/b4ec556608300a5b34c85034.webp",
+      "imageKind": "screenshot"
+    },
+    "site-gigi-has-no-regrets-8b76": {
+      "imageUrl": "/assets/arcade/covers/762f681886795acde09381f6.webp",
+      "imageKind": "screenshot"
+    },
+    "site-glasswake-the-drowned-sanctuary": {
+      "imageUrl": "/assets/arcade/covers/d1964020c448a12e9300509f.webp",
+      "imageKind": "screenshot"
+    },
+    "site-illegal-garden-7099": {
+      "imageUrl": "/assets/arcade/covers/0289f798cc2ecf5c12151ad8.webp",
+      "imageKind": "screenshot"
+    },
+    "site-kickback-glasshouse": {
+      "imageUrl": "/assets/arcade/covers/b3fd415e0ade93440afd6a7c.webp",
+      "imageKind": "screenshot"
+    },
+    "site-lost-property-alex-2026": {
+      "imageUrl": "/assets/arcade/covers/5cd1a6f97d350764a6f27359.webp",
+      "imageKind": "screenshot"
+    },
+    "site-nine-lives-midnight-raid": {
+      "imageUrl": "/assets/arcade/covers/3004fd8936968687932e8c71.webp",
+      "imageKind": "screenshot"
+    },
+    "site-petalshift-alex-dbceea": {
+      "imageUrl": "/assets/arcade/covers/51850adf02654f55391e86fb.webp",
+      "imageKind": "screenshot"
+    },
+    "site-softly-wrong-dream": {
+      "imageUrl": "/assets/arcade/covers/048b60cb82e77fd32c4a0652.webp",
+      "imageKind": "screenshot"
+    },
+    "site-spaghettris": {
+      "imageUrl": "/assets/arcade/covers/94eabfa6858269326f0952f8.webp",
+      "imageKind": "screenshot"
+    },
+    "site-sunthread-sky-gardens": {
+      "imageUrl": "/assets/arcade/covers/a8ca5475f892dc0a501de34e.webp",
+      "imageKind": "screenshot"
+    },
+    "site-the-long-way-round-alex": {
+      "imageUrl": "/assets/arcade/covers/354c33ab5b62766be256540e.webp",
+      "imageKind": "screenshot"
+    },
+    "site-the-still-engine-alex": {
+      "imageUrl": "/assets/arcade/covers/49dcdeb55d5865b8587295bd.webp",
+      "imageKind": "screenshot"
+    },
+    "site-velvet-after-hours": {
+      "imageUrl": "/assets/arcade/covers/856e8123e922feb34a35a8d8.webp",
+      "imageKind": "screenshot"
+    },
+    "site-velvet-tide-alex": {
+      "imageUrl": "/assets/arcade/covers/eb8dd842ba971fd854d91a20.webp",
+      "imageKind": "screenshot"
+    },
+    "site-wildbloom-alex": {
+      "imageUrl": "/assets/arcade/covers/78a439f5ba809d3cee5b5688.webp",
+      "imageKind": "screenshot"
+    },
+    "slow-weather": {
+      "imageUrl": "/assets/arcade/covers/9629281213bb1da767bdc400.webp",
+      "imageKind": "screenshot"
+    },
+    "someone-is-home": {
+      "imageUrl": "/assets/arcade/covers/ba87d258fbd314ab8011b7b3.webp",
+      "imageKind": "screenshot"
+    },
+    "someone-is-trying-to-reach-you": {
+      "imageUrl": "/assets/arcade/covers/9fcbb3d7a55f3f29760239ca.webp",
+      "imageKind": "screenshot"
+    },
+    "someone-was-here-first": {
+      "imageUrl": "/assets/arcade/covers/0267375fdd264478d07e3401.webp",
+      "imageKind": "screenshot"
+    },
+    "span": {
+      "imageUrl": "/assets/arcade/covers/9145fad9f5b9e1c45b661aaf.webp",
+      "imageKind": "screenshot"
+    },
+    "spiggot": {
+      "imageUrl": "/assets/arcade/covers/52ec8177a11af94382713efd.webp",
+      "imageKind": "screenshot"
+    },
+    "spillway": {
+      "imageUrl": "/assets/arcade/covers/aed3c7d3a56ecd84b4e04b8d.webp",
+      "imageKind": "screenshot"
+    },
+    "starglass": {
+      "imageUrl": "/assets/arcade/covers/9ae1f7e4b17025a411dbb349.webp",
+      "imageKind": "screenshot"
+    },
+    "stargrind": {
+      "imageUrl": "/assets/arcade/covers/46975dfceba9470011b4c496.webp",
+      "imageKind": "screenshot"
+    },
+    "starlace": {
+      "imageUrl": "/assets/arcade/covers/9ea496bd1f0e5c65ceb669ca.webp",
+      "imageKind": "screenshot"
+    },
+    "starsling": {
+      "imageUrl": "/assets/arcade/covers/3585341392f4e361fd368790.webp",
+      "imageKind": "screenshot"
+    },
+    "starve-the-sun": {
+      "imageUrl": "/assets/arcade/covers/dd73c288b3e849d00944c14a.webp",
+      "imageKind": "screenshot"
+    },
+    "stay-for-the-storm": {
+      "imageUrl": "/assets/arcade/covers/443388913de3680adcae2484.webp",
+      "imageKind": "screenshot"
+    },
+    "still-home": {
+      "imageUrl": "/assets/arcade/covers/4cc4ca05bc46a9404cfdf2bc.webp",
+      "imageKind": "screenshot"
+    },
+    "stillwood": {
+      "imageUrl": "/assets/arcade/covers/b14d194ba02669698edd5667.webp",
+      "imageKind": "screenshot"
+    },
+    "stillwood-drive": {
+      "imageUrl": "/assets/arcade/covers/d1f7d5bc7d4e4c6013758ab5.webp",
+      "imageKind": "screenshot"
+    },
+    "strega": {
+      "imageUrl": "/assets/arcade/covers/362688629759253b432778ce.webp",
+      "imageKind": "screenshot"
+    },
+    "sugar-half-life": {
+      "imageUrl": "/assets/arcade/covers/038ffc48bb9daee6280c8e23.webp",
+      "imageKind": "screenshot"
+    },
+    "sugarglass": {
+      "imageUrl": "/assets/arcade/covers/144fdd2e30ac75e91fce95d2.webp",
+      "imageKind": "screenshot"
+    },
+    "sunblood": {
+      "imageUrl": "/assets/arcade/covers/cc0ed6bcdcde8f9485f444d3.webp",
+      "imageKind": "screenshot"
+    },
+    "sunday-drive": {
+      "imageUrl": "/assets/arcade/covers/02a66f451215fe81981279c5.webp",
+      "imageKind": "screenshot"
+    },
+    "sunderbloom": {
+      "imageUrl": "/assets/arcade/covers/e21ac264183ad15548ea0cf5.webp",
+      "imageKind": "screenshot"
+    },
+    "sunderveil": {
+      "imageUrl": "/assets/arcade/covers/55a500ed09a5ad2667c9ced9.webp",
+      "imageKind": "screenshot"
+    },
+    "sunderwake": {
+      "imageUrl": "/assets/arcade/covers/74919fd09937eb91da398683.webp",
+      "imageKind": "screenshot"
+    },
+    "sunderwild": {
+      "imageUrl": "/assets/arcade/covers/3f227582ec729546e0fa5b0c.webp",
+      "imageKind": "screenshot"
+    },
+    "sundown-saint": {
+      "imageUrl": "/assets/arcade/covers/facac94e26fb2b15d4f8f1e5.webp",
+      "imageKind": "screenshot"
+    },
+    "sundrowner": {
+      "imageUrl": "/assets/arcade/covers/2da42fa012cd0b1be97ac45d.webp",
+      "imageKind": "screenshot"
+    },
+    "sunscatter": {
+      "imageUrl": "/assets/arcade/covers/dc92d46a659f1983ffa68a92.webp",
+      "imageKind": "screenshot"
+    },
+    "sunset-clause": {
+      "imageUrl": "/assets/arcade/covers/6d044452dda9723bb115a488.webp",
+      "imageKind": "screenshot"
+    },
+    "sunspill-action": {
+      "imageUrl": "/assets/arcade/covers/5decef66e7a72f5d077b8ee0.webp",
+      "imageKind": "screenshot"
+    },
+    "sunspill-cathedral-of-the-tide": {
+      "imageUrl": "/assets/arcade/covers/091090595fc49df665dbea6b.webp",
+      "imageKind": "screenshot"
+    },
+    "sunspill-drive": {
+      "imageUrl": "/assets/arcade/covers/c4fdda87ac0c1c22eb319610.webp",
+      "imageKind": "screenshot"
+    },
+    "sunspoke-gp": {
+      "imageUrl": "/assets/arcade/covers/0963a6ad7ab5b6dcae02c996.webp",
+      "imageKind": "screenshot"
+    },
+    "sunthief": {
+      "imageUrl": "/assets/arcade/covers/a68714778fc7be21d72ffa02.webp",
+      "imageKind": "screenshot"
+    },
+    "sunvault": {
+      "imageUrl": "/assets/arcade/covers/54e3a3b5674fd280ff77556c.webp",
+      "imageKind": "screenshot"
+    },
+    "sunwheel": {
+      "imageUrl": "/assets/arcade/covers/95e22f649e72b07ced6f54ee.webp",
+      "imageKind": "screenshot"
+    },
+    "sustain": {
+      "imageUrl": "/assets/arcade/covers/27d7954b1b888f3ea04b2b65.webp",
+      "imageKind": "screenshot"
+    },
+    "sweetspot": {
+      "imageUrl": "/assets/arcade/covers/fb2c80397b35db2c43c09e70.webp",
+      "imageKind": "screenshot"
+    },
+    "synapse-sever": {
+      "imageUrl": "/assets/arcade/covers/7d715e6705f2ff662e9a058c.webp",
+      "imageKind": "screenshot"
+    },
+    "tangent": {
+      "imageUrl": "/assets/arcade/covers/b3876dd803ae90dd138c1a9f.webp",
+      "imageKind": "screenshot"
+    },
+    "temporary-people": {
+      "imageUrl": "/assets/arcade/covers/a1496d331a0c3d1a1c216609.webp",
+      "imageKind": "screenshot"
+    },
+    "the-animal-behind-you": {
+      "imageUrl": "/assets/arcade/covers/fe91724dd95c42f6aa150b09.webp",
+      "imageKind": "screenshot"
+    },
+    "the-atlas-of-small-worlds-a-paper-theatre": {
+      "imageUrl": "/assets/arcade/covers/e11dabe27c6367cdd3f5a3fd.webp",
+      "imageKind": "screenshot"
+    },
+    "the-ball-is-the-body": {
+      "imageUrl": "/assets/arcade/covers/d59b057745f5dea5a7b4938c.webp",
+      "imageKind": "screenshot"
+    },
+    "the-book-that-refuses-to-behave": {
+      "imageUrl": "/assets/arcade/covers/55325bde959794cff95e5188.webp",
+      "imageKind": "screenshot"
+    },
+    "the-city-of-the-final-second": {
+      "imageUrl": "/assets/arcade/covers/818dcda9d717d9e055ee7285.webp",
+      "imageKind": "screenshot"
+    },
+    "the-city-pulls-back": {
+      "imageUrl": "/assets/arcade/covers/a3b5bf681afd19204102a52e.webp",
+      "imageKind": "screenshot"
+    },
+    "the-corridor-organ-35mm-psychological-horror": {
+      "imageUrl": "/assets/arcade/covers/993118e35fd149ad963739cb.webp",
+      "imageKind": "screenshot"
+    },
+    "the-dark-learned-your-name": {
+      "imageUrl": "/assets/arcade/covers/3c0bb88b5940546caf2eb52e.webp",
+      "imageKind": "screenshot"
+    },
+    "the-dead-have-keys": {
+      "imageUrl": "/assets/arcade/covers/5f2227bb5f6b67460033bcdd.webp",
+      "imageKind": "screenshot"
+    },
+    "the-drowned-parish": {
+      "imageUrl": "/assets/arcade/covers/13e4cb1c08daa96f2af8303d.webp",
+      "imageKind": "screenshot"
+    },
+    "the-field-remembers": {
+      "imageUrl": "/assets/arcade/covers/89b3972221f01b7b8bda2d60.webp",
+      "imageKind": "screenshot"
+    },
+    "the-fourth-knock": {
+      "imageUrl": "/assets/arcade/covers/43aec0cf45a08efd4a7bc57f.webp",
+      "imageKind": "screenshot"
+    },
+    "the-future-called-while-you-were-out": {
+      "imageUrl": "/assets/arcade/covers/6d68b1049315dd65f0b43926.webp",
+      "imageKind": "screenshot"
+    },
+    "the-glass-sanctuary": {
+      "imageUrl": "/assets/arcade/covers/840133f50811f55e1753aa84.webp",
+      "imageKind": "screenshot"
+    },
+    "the-good-the-bad-the-al-dente": {
+      "imageUrl": "/assets/arcade/covers/d66b747306367f37a7050d5b.webp",
+      "imageKind": "screenshot"
+    },
+    "the-heart-is-a-lonely-haunter": {
+      "imageUrl": "/assets/arcade/covers/6df1590fe2659c4d2bbc2674.webp",
+      "imageKind": "screenshot"
+    },
+    "the-lamp-room": {
+      "imageUrl": "/assets/arcade/covers/772a5aa1cb6bd518dda2d807.webp",
+      "imageKind": "screenshot"
+    },
+    "the-last-chord": {
+      "imageUrl": "/assets/arcade/covers/bfb664171e34c384995af44c.webp",
+      "imageKind": "screenshot"
+    },
+    "the-last-fast-thing": {
+      "imageUrl": "/assets/arcade/covers/3dfda3ce2b316ed4845215ab.webp",
+      "imageKind": "screenshot"
+    },
+    "the-long-october": {
+      "imageUrl": "/assets/arcade/covers/9a79d9958dbb294c767038a9.webp",
+      "imageKind": "screenshot"
+    },
+    "the-ministry-of-bad-timing": {
+      "imageUrl": "/assets/arcade/covers/0be6ec8dd9df0b6d14b2dc81.webp",
+      "imageKind": "screenshot"
+    },
+    "the-missing-moon-motel": {
+      "imageUrl": "/assets/arcade/covers/ca3986460e3565dd2cbd5844.webp",
+      "imageKind": "screenshot"
+    },
+    "the-museum-of-things-i-made": {
+      "imageUrl": "/assets/arcade/covers/9ba796b39985598dcc20ef8e.webp",
+      "imageKind": "screenshot"
+    },
+    "the-museum-refuses-to-end": {
+      "imageUrl": "/assets/arcade/covers/0adeebb7b1e1a42a40c4dc40.webp",
+      "imageKind": "screenshot"
+    },
+    "the-museum-that-refused-to-disappear": {
+      "imageUrl": "/assets/arcade/covers/ad6ccd8edaca32670adc6efc.webp",
+      "imageKind": "screenshot"
+    },
+    "the-night-crossing": {
+      "imageUrl": "/assets/arcade/covers/aa2e5124d8c918364a613299.webp",
+      "imageKind": "screenshot"
+    },
+    "the-night-is-not-a-ceiling": {
+      "imageUrl": "/assets/arcade/covers/526b6697d75784fcbf19acb7.webp",
+      "imageKind": "screenshot"
+    },
+    "the-number-that-remembers-you": {
+      "imageUrl": "/assets/arcade/covers/b92d84860d91b80aa1a96e40.webp",
+      "imageKind": "screenshot"
+    },
+    "the-ocean-upstairs": {
+      "imageUrl": "/assets/arcade/covers/57813f4470cbd84997a2dd45.webp",
+      "imageKind": "screenshot"
+    },
+    "the-other-channels": {
+      "imageUrl": "/assets/arcade/covers/709702501597ec5e56dab421.webp",
+      "imageKind": "screenshot"
+    },
+    "the-other-end": {
+      "imageUrl": "/assets/arcade/covers/af51f4a12213d1566fda9ed2.webp",
+      "imageKind": "screenshot"
+    },
+    "the-other-tenant": {
+      "imageUrl": "/assets/arcade/covers/7a77f213ba7ffc80d34dbcd8.webp",
+      "imageKind": "screenshot"
+    },
+    "the-purgatory-fps": {
+      "imageUrl": "/assets/arcade/covers/58381d2b4d706b976e226de2.webp",
+      "imageKind": "screenshot"
+    },
+    "the-radio-is-lying-about-us": {
+      "imageUrl": "/assets/arcade/covers/b1e9e4225685716059b25c99.webp",
+      "imageKind": "screenshot"
+    },
+    "the-receiver-at-3-17": {
+      "imageUrl": "/assets/arcade/covers/205494f1130a1f566e3b6489.webp",
+      "imageKind": "screenshot"
+    },
+    "the-resort-that-forgot-to-close": {
+      "imageUrl": "/assets/arcade/covers/f24b88914c8c55c20f00572f.webp",
+      "imageKind": "screenshot"
+    },
+    "the-returning-room": {
+      "imageUrl": "/assets/arcade/covers/c8362772d3a6f9cf35811935.webp",
+      "imageKind": "screenshot"
+    },
+    "the-room-learns-you": {
+      "imageUrl": "/assets/arcade/covers/bb848a74db700603362509d2.webp",
+      "imageKind": "screenshot"
+    },
+    "the-room-that-learned-the-wrong-person": {
+      "imageUrl": "/assets/arcade/covers/25f11d81a4449bdefb4d2b56.webp",
+      "imageKind": "screenshot"
+    },
+    "the-room-that-wasn-t": {
+      "imageUrl": "/assets/arcade/covers/14784b80cea26b115bc667dc.webp",
+      "imageKind": "screenshot"
+    },
+    "the-room-threw-first": {
+      "imageUrl": "/assets/arcade/covers/b0a90b7a7dca6b8803c5f3be.webp",
+      "imageKind": "screenshot"
+    },
+    "the-screaming-banana-dilemma": {
+      "imageUrl": "/assets/arcade/covers/e10e2372d79bc33098bd0cc7.webp",
+      "imageKind": "screenshot"
+    },
+    "the-singing-dark": {
+      "imageUrl": "/assets/arcade/covers/a622ca56fec3391a83664daa.webp",
+      "imageKind": "screenshot"
+    },
+    "the-song-drives": {
+      "imageUrl": "/assets/arcade/covers/3872f850e898abb2ed1f4d9e.webp",
+      "imageKind": "screenshot"
+    },
+    "the-star-is-heavy": {
+      "imageUrl": "/assets/arcade/covers/e478c9606380ecca1f773c45.webp",
+      "imageKind": "screenshot"
+    },
+    "the-sun-is-heavy": {
+      "imageUrl": "/assets/arcade/covers/6c4b3062d0f418806707186e.webp",
+      "imageKind": "screenshot"
+    },
+    "the-thing-that-remembered-wrong": {
+      "imageUrl": "/assets/arcade/covers/b419b1cf8b8606e735fbcdb3.webp",
+      "imageKind": "screenshot"
+    },
+    "the-third-body": {
+      "imageUrl": "/assets/arcade/covers/2e15393d9d4a14eb93a259e7.webp",
+      "imageKind": "screenshot"
+    },
+    "the-thirteenth-neighbor": {
+      "imageUrl": "/assets/arcade/covers/3034a6005523841e5eeee140.webp",
+      "imageKind": "screenshot"
+    },
+    "the-velvet-rift": {
+      "imageUrl": "/assets/arcade/covers/6f2c9d13f2026d15ebcfd372.webp",
+      "imageKind": "screenshot"
+    },
+    "thornloop": {
+      "imageUrl": "/assets/arcade/covers/d77ed28a48621c3f10c8bd5b.webp",
+      "imageKind": "screenshot"
+    },
+    "thread-exorcist": {
+      "imageUrl": "/assets/arcade/covers/2efe5991950db2f3e691c02d.webp",
+      "imageKind": "screenshot"
+    },
+    "threadsaint": {
+      "imageUrl": "/assets/arcade/covers/29d9244d09f387a94687f69b.webp",
+      "imageKind": "screenshot"
+    },
+    "through-a-glass-darkly": {
+      "imageUrl": "/assets/arcade/covers/e4ecc00e79724bce56464cda.webp",
+      "imageKind": "screenshot"
+    },
+    "throwaway": {
+      "imageUrl": "/assets/arcade/covers/7491180840c35376704cf841.webp",
+      "imageKind": "screenshot"
+    },
+    "thursday-missing": {
+      "imageUrl": "/assets/arcade/covers/e71c4d24d227789cb54c324b.webp",
+      "imageKind": "screenshot"
+    },
+    "tiny-apocalypse": {
+      "imageUrl": "/assets/arcade/covers/3fd2648b39da8132a8c5e268.webp",
+      "imageKind": "screenshot"
+    },
+    "tomorrow-has-reported-you-missing": {
+      "imageUrl": "/assets/arcade/covers/a89c3d6d604adcd33486dcce.webp",
+      "imageKind": "screenshot"
+    },
+    "trick-or-traggot": {
+      "imageUrl": "/assets/arcade/covers/105b0f0c357b8c71db469ac9.webp",
+      "imageKind": "screenshot"
+    },
+    "twice-at-one": {
+      "imageUrl": "/assets/arcade/covers/b6322e40d60c30672d43de84.webp",
+      "imageKind": "screenshot"
+    },
+    "two-body-problem": {
+      "imageUrl": "/assets/arcade/covers/2154dd8c85667deb55f4a7b9.webp",
+      "imageKind": "screenshot"
+    },
+    "ultimate-roster": {
+      "imageUrl": "/assets/arcade/covers/490c262531af0110b579c765.webp",
+      "imageKind": "screenshot"
+    },
+    "undelete-tomorrow": {
+      "imageUrl": "/assets/arcade/covers/090110fd576cc7f7c2c71bff.webp",
+      "imageKind": "screenshot"
+    },
+    "under-every-house": {
+      "imageUrl": "/assets/arcade/covers/34229be717411eed86430f63.webp",
+      "imageKind": "screenshot"
+    },
+    "undertone-reversible-sequins": {
+      "imageUrl": "/assets/arcade/covers/485655342b0960ffe9983cd4.webp",
+      "imageKind": "screenshot"
+    },
+    "unfathom": {
+      "imageUrl": "/assets/arcade/covers/597dd84f7847da626704ca5d.webp",
+      "imageKind": "screenshot"
+    },
+    "unhouse": {
+      "imageUrl": "/assets/arcade/covers/8d933ca07e3a66988fe8ce17.webp",
+      "imageKind": "screenshot"
+    },
+    "unlicensed-weather": {
+      "imageUrl": "/assets/arcade/covers/f81eeedaea98d60b4a05ec7e.webp",
+      "imageKind": "screenshot"
+    },
+    "unstring": {
+      "imageUrl": "/assets/arcade/covers/ae7796e1aa86e3e86b43f732.webp",
+      "imageKind": "screenshot"
+    },
+    "until-thursday": {
+      "imageUrl": "/assets/arcade/covers/1c8254b601841cbd3ccdea33.webp",
+      "imageKind": "screenshot"
+    },
+    "upstream-of-ash": {
+      "imageUrl": "/assets/arcade/covers/1d8122bd62cfdd2452ba436e.webp",
+      "imageKind": "screenshot"
+    },
+    "vanta-strike": {
+      "imageUrl": "/assets/arcade/covers/04dc8de106f0844843e28683.webp",
+      "imageKind": "screenshot"
+    },
+    "vast-wrong-park": {
+      "imageUrl": "/assets/arcade/covers/6fa068e6b163ad621f6bc287.webp",
+      "imageKind": "screenshot"
+    },
+    "velvet-after-midnight-an-endless-uv-garden": {
+      "imageUrl": "/assets/arcade/covers/67bd7b25f36669ed323179bc.webp",
+      "imageKind": "screenshot"
+    },
+    "velvet-glitter-slime": {
+      "imageUrl": "/assets/arcade/covers/2f22f226f4788e4209625cea.webp",
+      "imageKind": "screenshot"
+    },
+    "velvet-knife": {
+      "imageUrl": "/assets/arcade/covers/447b2a2852bf3f2b77f9f118.webp",
+      "imageKind": "screenshot"
+    },
+    "velvet-mandala": {
+      "imageUrl": "/assets/arcade/covers/c56933d50bca6358d10eb4f5.webp",
+      "imageKind": "screenshot"
+    },
+    "velvet-riot": {
+      "imageUrl": "/assets/arcade/covers/0b58277a047412f7988e4dc4.webp",
+      "imageKind": "screenshot"
+    },
+    "velvet-verdict": {
+      "imageUrl": "/assets/arcade/covers/cf07b0f9183eeb63c957c355.webp",
+      "imageKind": "screenshot"
+    },
+    "velvet-verdict-hollowheart": {
+      "imageUrl": "/assets/arcade/covers/550b317a49f1aaac4a6fed50.webp",
+      "imageKind": "screenshot"
+    },
+    "vesper-reach": {
+      "imageUrl": "/assets/arcade/covers/b91f4665e14962d356972888.webp",
+      "imageKind": "screenshot"
+    },
+    "vesper-the-light-between": {
+      "imageUrl": "/assets/arcade/covers/35c47e0b5564d5c43606f4f1.webp",
+      "imageKind": "screenshot"
+    },
+    "vesperline": {
+      "imageUrl": "/assets/arcade/covers/f2259441de0394411aa21524.webp",
+      "imageKind": "screenshot"
+    },
+    "vitrion": {
+      "imageUrl": "/assets/arcade/covers/62bc8ac746933acb4414ed58.webp",
+      "imageKind": "screenshot"
+    },
+    "void-bloom": {
+      "imageUrl": "/assets/arcade/covers/48c4530ab1371b4e498a137d.webp",
+      "imageKind": "screenshot"
+    },
+    "void-choir": {
+      "imageUrl": "/assets/arcade/covers/7fe3b5aed9d4aa294b791e71.webp",
+      "imageKind": "screenshot"
+    },
+    "voidbloom": {
+      "imageUrl": "/assets/arcade/covers/7c871a5d0b50ba093b4953e5.webp",
+      "imageKind": "screenshot"
+    },
+    "voidchoir": {
+      "imageUrl": "/assets/arcade/covers/bb0056df655e225b3c16950c.webp",
+      "imageKind": "screenshot"
+    },
+    "voidkick-mercury": {
+      "imageUrl": "/assets/arcade/covers/19416594d2b1d16a504e1127.webp",
+      "imageKind": "screenshot"
+    },
+    "voidsaint": {
+      "imageUrl": "/assets/arcade/covers/e57d1bb899fb22b7a1cf423d.webp",
+      "imageKind": "screenshot"
+    },
+    "voltline": {
+      "imageUrl": "/assets/arcade/covers/cc727ac76961a08d865c8bb6.webp",
+      "imageKind": "screenshot"
+    },
+    "wakebreaker": {
+      "imageUrl": "/assets/arcade/covers/c7998511251c0997f7e205f1.webp",
+      "imageKind": "screenshot"
+    },
+    "where-the-forest-breathes": {
+      "imageUrl": "/assets/arcade/covers/3f562ae4d53d2daf254566b6.webp",
+      "imageKind": "screenshot"
+    },
+    "where-the-light-goes": {
+      "imageUrl": "/assets/arcade/covers/81e49bd046587b0d0ea3b17d.webp",
+      "imageKind": "screenshot"
+    },
+    "wildwake": {
+      "imageUrl": "/assets/arcade/covers/331b79e82008203805d61bbb.webp",
+      "imageKind": "screenshot"
+    },
+    "wmlo": {
+      "imageUrl": "/assets/arcade/covers/dab8870b08f29a32112e1f9f.webp",
+      "imageKind": "screenshot"
+    },
+    "worldfold": {
+      "imageUrl": "/assets/arcade/covers/a319607b511b72f4e443d7e4.webp",
+      "imageKind": "screenshot"
+    },
+    "wrongwild-100x": {
+      "imageUrl": "/assets/arcade/covers/fa918de25431f22dcf904a61.webp",
+      "imageKind": "screenshot"
+    },
+    "yesterday-has-teeth": {
+      "imageUrl": "/assets/arcade/covers/0a70038ec74a6bde9bc5a591.webp",
+      "imageKind": "screenshot"
+    },
+    "you-hear-a-silly-scream-from-your-freezer": {
+      "imageUrl": "/assets/arcade/covers/7760ebfc5f59731f19f934b2.webp",
+      "imageKind": "screenshot"
     }
   },
   "versionOverrides": {
