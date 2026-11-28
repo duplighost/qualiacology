@@ -78,7 +78,6 @@
       "group": "action",
       "featured": true,
       "kind": "windows",
-      "unreleased": true,
       "image": "/assets/games/bring-an-umbrella-card-v20261128.jpg",
       "banner": "/assets/banners/bring-an-umbrella-banner-v20261128.jpg",
       "bannerFocus": 50,
@@ -87,7 +86,7 @@
       "alt": "A woman in a red skirt holding up a yellow umbrella in a piazza at sunset, festival lights strung between the houses, people stopped in the middle of a dance around her, and the sea standing over the rooftops as one green wave",
       "summary": "One stopped night on a festival island. Your grandmother stopped it one second before the sea landed on it, and she can’t let go. You aren’t stopped, because you’re carrying an umbrella. Under the open umbrella, time runs. A Windows game.",
       "metaDescription": "BRING AN UMBRELLA is a Windows game by Alexander Duncan Guitar: one stopped night on a festival island, and the one person on it who isn’t stopped, because she is carrying an umbrella.",
-      "actionLabel": "View game"
+      "actionLabel": "Download"
     },
     {
       "slug": "the-wake",

@@ -180,6 +180,9 @@
 /murderpop.html  /murderpop/  301!
 /murder-pop  /murderpop/  302
 
-# BRING AN UMBRELLA (a Windows game; its page is hand-written, and its download is not up yet)
+# BRING AN UMBRELLA (a Windows download in two parts, because one release file must be under 2 GB:
+# build/scripts/pack-bring-an-umbrella.py makes them. A new build is a new release and a new tag in both lines)
 /umbrella  /bring-an-umbrella/  302
 /bring-an-umbrella.html  /bring-an-umbrella/  301!
+/bring-an-umbrella/download  https://github.com/duplighost/qualiacology/releases/download/bring-an-umbrella-v1.0.0/BRING-AN-UMBRELLA-windows-1-of-2.zip  302
+/bring-an-umbrella/download-2  https://github.com/duplighost/qualiacology/releases/download/bring-an-umbrella-v1.0.0/BRING-AN-UMBRELLA-windows-2-of-2.zip  302
