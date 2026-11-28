@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "description": "Public arcade curation. Archival source records and original games remain intact.",
+  "excludeMainSiteGames": true,
+  "excluded": {
+    "a-way-through": "No public launch URL or download URL exists in the current public catalogue.",
+    "afterparty-at-the-end-of-the-world": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "arc": "This game already has a direct listing on the main Games page.",
+    "behind-you": "This game already has a direct listing on the main Games page.",
+    "belfry": "This game already has a direct listing on the main Games page.",
+    "black-lacquer": "This game already has a direct listing on the main Games page.",
+    "blackthorn-manor": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "boon-moots": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "chainsaint-no-ui": "UI/input presentation variant of CHAINSAINT; retain one CHAINSAINT listing.",
+    "cinderbloom": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "collateral": "This game already has a direct listing on the main Games page.",
+    "crown-of-fools": "No public launch URL or download URL exists in the current public catalogue.",
+    "curfew": "This game already has a direct listing on the main Games page.",
+    "duskfall": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "everybody-leaves-in-4-4": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "falling-open": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "fetch": "This game already has a direct listing on the main Games page.",
+    "galaxy-sandbox": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "gilt-gravity": "No public launch URL or download URL exists in the current public catalogue.",
+    "glide": "This game already has a direct listing on the main Games page.",
+    "gorethread-hellspindle": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "hearse": "This game already has a direct listing on the main Games page.",
+    "hem": "No public launch URL or download URL exists in the current public catalogue.",
+    "i-seent-it-lunar-custody": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "i-seent-it-moon-fishing": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "in-every-direction": "This game already has a direct listing on the main Games page.",
+    "iron-psalm": "This game already has a direct listing on the main Games page.",
+    "kickmoon": "This game already has a direct listing on the main Games page.",
+    "lead": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "lowbell": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "moonless-passenger": "Incomplete manifest and service-worker packaging; omit from the public scraps selection.",
+    "murderpop": "This game already has a direct listing on the main Games page.",
+    "nave": "An anchor/camera/threshold tuning harness with world/screen velocity diagnostics rather than a visitor-facing game.",
+    "no-moon": "This game already has a direct listing on the main Games page.",
+    "no-shore": "This game already has a direct listing on the main Games page.",
+    "olly-olly": "This game already has a direct listing on the main Games page.",
+    "one-room-no-moon": "Historical Rocket Shoes family alternative; main Rocket Shoes already appears on Games.",
+    "party-animal": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pasta": "This game already has a direct listing on the main Games page.",
+    "pasta-mortale": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pasta-sunshine-delfino-plaza-edition": "An archived Pasta Sunshine release is already represented by the main PASTA collection. This is a family/content duplication decision, not a claim of byte identity.",
+    "pc-afterglow": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-al-dente-original": "An archived AL DENTE release is already represented by the main PASTA collection. This is a family/content duplication decision, not a claim of byte identity.",
+    "pc-boil": "No public launch URL or download URL exists in the current public catalogue.",
+    "pc-duet": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-echo-saint": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-evensong": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-everhouse": "This game already has a direct listing on the main Games page.",
+    "pc-finale": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-flare": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-free-play": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-goodfire": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-goodnight-little-gods": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-hand-me-down": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-lil-big-bang": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-marrow": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-murderpop-greatest-hits": "This game already has a direct listing on the main Games page.",
+    "pc-neon-breach": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-niantic": "Exact copy of the game already hosted at /niantic/.",
+    "pc-ninefold-burn": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-relay-eclipse": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-rocket-shoes-isometric": "Historical Rocket Shoes family alternative; main Rocket Shoes already appears on Games.",
+    "pc-spaghetti": "An archived SPAGHETTI release is already represented by the main PASTA collection. This is a family/content duplication decision, not a claim of byte identity.",
+    "pc-spaghetti-and-al-dente": "An archived SPAGHETTI and AL DENTE launcher release is already represented by the main PASTA collection. This is a family/content duplication decision, not a claim of byte identity.",
+    "pc-spaghetti-sunshine": "An archived Spaghetti Sunshine release is already represented by the main PASTA collection. This is a family/content duplication decision, not a claim of byte identity.",
+    "pc-still": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-the-lag": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pc-threshold": "The same game is already hosted at /threshold/.",
+    "pc-uninvited": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "pocket-sun": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "potlight": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "rally": "This game already has a direct listing on the main Games page.",
+    "rocket-shoes": "This game already has a direct listing on the main Games page.",
+    "secondhand-saint": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "sidechain": "This game already has a direct listing on the main Games page.",
+    "sideways-please": "No public launch URL or download URL exists in the current public catalogue.",
+    "silk-violence": "Touch players can become trapped in pause after the page loses focus.",
+    "sill": "This game already has a direct listing on the main Games page.",
+    "skip": "This game already has a direct listing on the main Games page.",
+    "skyshard": "This game already has a direct listing on the main Games page.",
+    "spaceboarding": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "spaghetti-64-eighteen-pasta-worlds": "An archived Spaghetti 64 release is already represented by the main PASTA collection. This is a family/content duplication decision, not a claim of byte identity.",
+    "spaghetti-kingdom-world-1-1": "An archived Spaghetti Mario release is already represented by the main PASTA collection. This is a family/content duplication decision, not a claim of byte identity.",
+    "spiggot-moonrun-deluxe": "Older Moonrun branch of the Moonfeel family; retain the later Moonfeel 2.2 candidate.",
+    "starstruck": "This game already has a direct listing on the main Games page.",
+    "stay": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "still": "No public launch URL or download URL exists in the current public catalogue.",
+    "stormglass": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "strung": "This game already has a direct listing on the main Games page.",
+    "sundog": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "the-blue-pot": "No public launch URL or download URL exists in the current public catalogue.",
+    "the-dead-keep-playing": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "the-eaten-path": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "the-glass-chorale-cathedral": "Shipped Oracle interactions reference missing helpers or an empty API key.",
+    "the-last-room": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "the-wake": "This game already has a direct listing on the main Games page.",
+    "the-way-i-came": "This game already has a direct listing on the main Games page.",
+    "thrown": "This game already has a direct listing on the main Games page.",
+    "thurible": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "tideglass": "This game already has a direct listing on the main Games page.",
+    "tinbound": "This game already has a direct listing on the main Games page.",
+    "unsay-it": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "vanta-9": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "vesperbane": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "vesperwake": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "vibe-blobs": "Extremely minimal visual sketch with no gameplay objective, levels or progression; omit from public game scraps selection.",
+    "vibe-sketch-1": "Extremely minimal visual sketch with no gameplay objective, levels or progression; omit from public game scraps selection.",
+    "vigil": "This game already has a direct listing on the main Games page.",
+    "wick": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
+    "winterline": "This game already has a direct listing on the main Games page."
+  },
+  "preferredVersions": {
+    "argon-null-protocol": "pc-argon-null-protocol-saved-20261118"
+  },
+  "omitDescriptions": [
+    "A compact standalone game recovered from the November 1 files.",
+    "A standalone mini-game from the recovered anthology.",
+    "Additional HTML game discovered in your Google Drive.",
+    "An original game recovered from your ChatGPT files.",
+    "An original game recovered from your Google Drive.",
+    "Newer saved build added alongside the earlier reviewed version.",
+    "Recovered original game build.",
+    "Starts the current installed Unreal project. Active development build.",
+    "The desktop Pasta Daggers build from this Codex chat."
+  ],
+  "omitControls": [
+    "See game instructions",
+    "See the game instructions",
+    "See the game menu for bindings",
+    "See the game’s controls",
+    "See the game’s own controls.",
+    "See the in-game instructions. Controls have not been reverified for this version.",
+    "See the in-game instructions; controls have not been tested.",
+    "Use the instructions and controls shown in the game."
+  ],
+  "overrides": {
+    "a-little-unmaking": {
+      "description": "Pull the roots of reality. Conduct a storm. Break the world open."
+    },
+    "a-small-problem": {
+      "description": "A tiny, rain-soaked town. A small drainage problem. An entirely disproportionate appetite."
+    },
+    "afterchime": {
+      "description": "An original three-phase character-action boss encounter."
+    },
+    "afterimage": {
+      "description": "Eight impossible worlds. An original score. A music-film studio."
+    },
+    "afterimage-atlas": {
+      "description": "Eighty impossible destinations. An original score. A music-film studio."
+    },
+    "bad-neighbor": {
+      "description": "A destructible suburban house-brawler. One very bad neighborhood."
+    },
+    "ballast": {
+      "title": "BALLAST — ball first"
+    },
+    "bellwake": {
+      "description": "BELLWAKE — a tactile adventure through a flooded cathedral city. Draw the swing. Break a way through."
+    },
+    "blacktop-bloom": {
+      "title": "BLACKTOP BLOOM"
+    },
+    "blackwake": {
+      "description": "BLACKWAKE — a complete, offline bullet-hell assault through a drowned industrial coast."
+    },
+    "blackwood-ascendant": {
+      "description": "BLACKWOOD ASCENDANT — Velocity Cut. A self-contained horror-action campaign through twenty-four haunted addresses, rebuilt around tight forward momentum, layered routes, secrets, brass upgrades, shell-by-shell shotgun combat, carbine fire, rotor throws, boss gates, pursuit pressure, and nonlethal flooded alternate paths."
+    },
+    "cathedral-of-the-drowning-star": {
+      "title": "Cathedral of the Drowning Star"
+    },
+    "crosstalk": {
+      "title": "CROSSTALK"
+    },
+    "crown-null": {
+      "description": "CROWN / NULL — an original three-act character-action boss encounter."
+    },
+    "crown-rush-mobile-action-prototype": {
+      "title": "CROWN RUSH"
+    },
+    "galaxy-milkshake": {
+      "description": "A little infinity, served cold. A procedural galaxy milkshake."
+    },
+    "gilt": {
+      "description": "A kinetic exploration game. A returning blade, a flooded citadel, and the last pieces of the sun."
+    },
+    "glasshouse-nocturne": {
+      "description": "An oceanfront glasshouse at blue hour. A grand piano, rain, and 156 butterflies."
+    },
+    "glasswake-mobile-2026": {
+      "description": "A one-thumb arcade roguelite. Glide, release, shatter."
+    },
+    "godwire-cathedral-zero": {
+      "description": "GODWIRE: Cathedral Zero — a kinetic bell-and-cable action game."
+    },
+    "goldwake": {
+      "description": "GOLDWAKE — a complete first-person sky-island action adventure. Glide, grapple, and send the sunblade home."
+    },
+    "hallowake": {
+      "description": "A fast Halloween horror FPS with twelve unique haunted houses, a cemetery hub, secrets, a returning weapon, guns, and an unstoppable stalker."
+    },
+    "hallowshade-county": {
+      "title": "Hallowshade County: Blood Moon"
+    },
+    "halo-drift": {
+      "description": "A cosmic disc arcade game."
+    },
+    "headliner": {
+      "title": "HEADLINER"
+    },
+    "impossible-weather": {
+      "description": "Six impossible worlds. A playable instrument. A music-video studio."
+    },
+    "iron-appeal": {
+      "description": "IRON APPEAL — a kinetic ball-and-chain prison escape."
+    },
+    "khepri-fall": {
+      "description": "KHEPRI FALL — a procedural alien-world first-person shooter."
+    },
+    "lumenvein": {
+      "title": "LUMENVEIN"
+    },
+    "midnight-mile": {
+      "title": "Midnight Mile — An Endless Christmas Eve"
+    },
+    "neon-breach-mobile": {
+      "description": "A fast, good-looking, browser-based first-person shooter built for phones.",
+      "controls": [
+        "Left thumb — anywhere: Floating movement stick (slide to walk/strafe; it follows your thumb)",
+        "Right thumb — anywhere: Free-look (drag to aim, relative like a trackpad)",
+        "Tap on the right side: Shoot once · FIRE button (hold): Full-auto · ⟳ button: Reload",
+        "Desktop: WASD move, mouse look (click to lock pointer), left-click shoot, R reload."
+      ]
+    },
+    "nightglass-instrument": {
+      "description": "A local music and light instrument."
+    },
+    "pelagic": {
+      "genres": [
+        "Underwater exploration"
+      ]
+    },
+    "please-disturb-an-impossible-private-view": {
+      "description": "An impossible private museum. A living mechanical flower. A city that should not fit inside it. An original interactive artwork."
+    },
+    "porchlight": {
+      "description": "PORCHLIGHT — a Halloween action-horror game"
+    },
+    "recent-brightwater-2026-11": {
+      "description": "Beneath a broken paradise. A browser action campaign."
+    },
+    "reprise": {
+      "title": "REPRISE"
+    },
+    "run-it-forward": {
+      "title": "RUN IT FORWARD"
+    },
+    "site-elsewhere-alex-museum": {
+      "description": "A first-person architectural museum of eleven interactive worlds."
+    },
+    "site-skybreak-last-line": {
+      "description": "A kinetic action slice across a suspended freight line: breach armor, chain movement, and bring down the sky engine."
+    },
+    "site-somewhere-with-you-alex": {
+      "description": "A handmade harbor adventure. Explore, play, and leave a little of yourself in a place that answers."
+    },
+    "spiggot-moonfeel": {
+      "title": "Spiggot Moonfeel"
+    },
+    "spiggot-shoot-person-shooter": {
+      "description": "A polished offline first-person neon moon shooter: fast movement, mobile and desktop controls, procedural chambers, upgrades, bosses, and local save."
+    },
+    "split-saint": {
+      "title": "Split Saint"
+    },
+    "static-a-killing-game": {
+      "description": "A Danganronpa-style visual novel. The Ultimate Roster: twenty Ultimates, twenty different ways to be broken, plus the 21st seat (you), trapped in a broadcast studio by a microphone-shaped mascot called STATIC."
+    },
+    "sunlatch": {
+      "description": "SUNLATCH — a tactile action game about a tethered miniature sun."
+    },
+    "the-ball-is-the-sentence": {
+      "title": "THE BALL IS THE SENTENCE"
+    },
+    "the-candy-wake": {
+      "description": "THE CANDY WAKE: a Halloween horror FPS with 12 unique haunted homes, a central cemetery, secret passages, forests, and a returning hallowglass weapon."
+    },
+    "the-flowers-ate-the-vase": {
+      "description": "The Flowers Ate the Vase. An original short story, a tactile musical sculpture, and a 2:48 instrumental score."
+    },
+    "the-garden-of-small-gods": {
+      "description": "Uproot the impossible. Play the storm. Break a door into somewhere beautiful."
+    },
+    "the-house-that-learned-to-jump": {
+      "title": "The House That Learned To Jump"
+    },
+    "the-last-exhibit": {
+      "title": "THE LAST EXHIBIT"
+    },
+    "the-moon-is-a-liar": {
+      "title": "THE MOON IS A LIAR"
+    },
+    "the-ninth-engine": {
+      "description": "The Ninth Engine — a complete gesture-driven action adventure."
+    },
+    "the-sea-is-lying": {
+      "description": "A little lighthouse. A very dishonest ocean. A self-contained coastal nightmare."
+    },
+    "the-sentence": {
+      "description": "An ankle chain. A prison full of exits that don't know it yet. A kinetic escape game."
+    },
+    "thornwake": {
+      "genres": [
+        "Third-person melee action"
+      ]
+    },
+    "thurible-3d": {
+      "title": "THURIBLE 3D"
+    },
+    "tidewire": {
+      "description": "A third-person action game."
+    },
+    "underfoot": {
+      "controls": [
+        "Move the pointer to position the creature; hold to brace and release near the runner’s landing to launch a bounce."
+      ]
+    },
+    "undertow": {
+      "description": "A tide-weight, a flooded abbey, and the glass between you and the sea."
+    },
+    "unsupervised": {
+      "description": "A self-contained, musical pocket universe with questionable management."
+    },
+    "vesper-front": {
+      "description": "Vesper Front: Ascendant — a hyper-kinetic alien-world first-person shooter."
+    },
+    "vesperfall": {
+      "description": "Vesperfall: The Hollow Bell — an original gothic action-platformer."
+    },
+    "violet-supersaturation": {
+      "description": "A jar of luminous violet syrup grows a sugar crystal cave, then quietly unmakes it."
+    },
+    "voltgrave": {
+      "description": "Take the power back in the action game."
+    }
+  },
+  "versionOverrides": {
+    "github-Fps": {
+      "controls": [
+        "Left thumb — anywhere: Floating movement stick (slide to walk/strafe; it follows your thumb)",
+        "Right thumb — anywhere: Free-look (drag to aim, relative like a trackpad)",
+        "Tap on the right side: Shoot once · FIRE button (hold): Full-auto · ⟳ button: Reload",
+        "Desktop: WASD move, mouse look (click to lock pointer), left-click shoot, R reload."
+      ]
+    },
+    "october-library-zip-rocket-shoes": {
+      "controls": [
+        "WASD or arrows move; mouse aims and left click fires; Space, Shift or right click dash; E/F buys; 1–3 select an upgrade; Esc pauses."
+      ]
+    },
+    "archive-library-zip-underfoot": {
+      "controls": [
+        "Move the pointer to position the creature; hold to brace and release near the runner’s landing to launch a bounce."
+      ]
+    }
+  }
+}

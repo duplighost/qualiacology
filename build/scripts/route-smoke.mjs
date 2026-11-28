@@ -14,6 +14,7 @@ const routes = [
   "/",
   "/psychopharmacology/",
   "/games/",
+  "/arcade/",
   "/music/",
   ...data.games.map((game) => `/${game.slug}/`),
   ...data.albums.map((album) => `/music/${album.slug}/`),

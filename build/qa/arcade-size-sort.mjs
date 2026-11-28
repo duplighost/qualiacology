@@ -7,7 +7,11 @@ import { chromium } from 'playwright';
 import { createStaticServer } from '../scripts/static-server.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const catalog = JSON.parse(readFileSync(join(root,'build/src/content/arcade-data.json'),'utf8'));
+const arcadeHtml = readFileSync(join(root,'arcade/index.html'),'utf8');
+const catalogUrl = arcadeHtml.match(/data-catalog="([^"]+)"/)?.[1];
+assert.ok(catalogUrl,'The generated arcade must reference its public catalog.');
+const catalogPath = new URL(catalogUrl,'https://qualiacology.com').pathname.replace(/^\/+/, '');
+const catalog = JSON.parse(readFileSync(join(root,catalogPath),'utf8'));
 const games = catalog.games;
 const recommended = g => g.versions.find(v => v.id === g.preferredId);
 const bytes = g => recommended(g).bytes;
@@ -57,23 +61,19 @@ try {
   const context = await browser.newContext({viewport:{width:1440,height:900}});
   const page = await context.newPage();
   watch(page);
-  assert.equal(games.length,catalog.metadata.counts.families);
-  assert.equal(games.reduce((n,g)=>n+g.versions.length,0),catalog.metadata.counts.versions);
-  const buildCount = games.reduce((n,g)=>n+g.versions.length,0);
   const pages = Math.ceil(games.length/36);
   await load(page);
-  assert.equal(await sort(page).inputValue(),'newest');
-  assert.deepEqual(await sort(page).locator('option').evaluateAll(opts=>opts.map(o=>o.value)),['newest','oldest','az','za','featured','size-asc','size-desc']);
+  assert.equal(await sort(page).inputValue(),'az');
+  assert.deepEqual(await sort(page).locator('option').evaluateAll(opts=>opts.map(o=>o.value)),['az','za','recent','size-asc','size-desc']);
   assert.ok((await page.locator('[data-results-count]').innerText()).includes(games.length.toLocaleString()));
-  pass(games.length+' families / '+buildCount.toLocaleString()+' builds; all seven sort choices; newest remains default');
+  pass(games.length+' games; five sort choices; A–Z is the default');
   for (const [mode,desc] of [['size-asc',false],['size-desc',true]]) {
     await choose(page,'sort',mode);
     assert.equal(param(page,'sort'),mode);
     assert.equal(param(page,'page'),null);
     const first = (await ids(page))[0];
     const firstCard = page.locator('[data-game-id]').first();
-    assert.match(await firstCard.locator('.arcade-card-status').innerText(),/KB|MB|GB/);
-    assert.equal(await firstCard.locator('.arcade-card-status span').getAttribute('title'),'Preferred build: '+bytes(games.find(g=>g.id===first)).toLocaleString()+' bytes');
+    assert.match(await firstCard.locator('.arcade-card-size').innerText(),/KB|MB|GB/);
     if (report) {
       mkdirSync(report,{recursive:true});
       await page.locator('[data-results]').scrollIntoViewIfNeeded();
@@ -84,7 +84,7 @@ try {
     assert.equal(new Set(all).size,games.length);
     assert.equal(param(page,'page'),pages>1?String(pages):null);
     assert.equal(await page.locator('[data-page-next]').isDisabled(),true);
-    if (!known(games.find(g=>g.id===all[(pages-1)*36]))) assert.equal(await page.locator('.arcade-card-status span').first().innerText(),'Size not recorded');
+    if (!known(games.find(g=>g.id===all[(pages-1)*36]))) assert.equal(await page.locator('[data-game-id]').first().locator('.arcade-card-size').count(),0);
     pass(mode+': all '+pages+' pages / '+games.length+' unique families; known order, ties and unknowns last; first '+first);
     await page.reload();
     await page.locator('[data-loading]').waitFor({state:'hidden'});
@@ -102,9 +102,9 @@ try {
   pass('type filter composes with both directions and resets pagination');
 
   // Use a selected real game to exercise simultaneous search, facets and URL state.
-  await load(page,'?sort=size-asc&kind=game&status=playable');
-  const match = games.find(g=>g.kind==='game' && known(g) && g.controlKinds.includes('Keyboard') && g.versions.length>1 && /^https:\/\//.test(recommended(g).url||'') && !['restricted','unavailable','broken','failed','needs-fix'].includes(recommended(g).status))
-    || games.find(g=>g.kind==='game' && known(g) && g.controlKinds.length && g.versions.length>1 && /^https:\/\//.test(recommended(g).url||'') && !['restricted','unavailable','broken','failed','needs-fix'].includes(recommended(g).status));
+  await load(page,'?sort=size-asc&kind=game');
+  const match = games.find(g=>g.kind==='game' && known(g) && g.controlKinds.includes('Keyboard') && /^(https:\/\/|\/(?!\/))/.test(recommended(g).url||''))
+    || games.find(g=>g.kind==='game' && known(g) && g.controlKinds.length && /^(https:\/\/|\/(?!\/))/.test(recommended(g).url||''));
   assert.ok(match);
   const search = page.locator('[data-search]');
   await search.fill(match.title);
@@ -127,9 +127,9 @@ try {
   await page.reload();
   await page.locator('[data-loading]').waitFor({state:'hidden'});
   assert.equal(page.url(),selectedUrl);
-  for (const [key,value] of [['sort','size-desc'],['kind','game'],['status','playable'],['control',control],['genre',genre],['q',match.title]]) assert.equal(param(page,key),value);
+  for (const [key,value] of [['sort','size-desc'],['kind','game'],['control',control],['genre',genre],['q',match.title]]) assert.equal(param(page,key),value);
   assert.equal(await search.inputValue(),match.title);
-  pass('search + genre + type + controls + availability survive sort and reload');
+  pass('search + genre + type + controls survive sort and reload');
   await page.locator('[data-layout="list"]').click();
   assert.equal(await page.locator('[data-arcade-grid]').getAttribute('data-layout'),'list');
   const card = page.locator('[data-game-id="'+match.id+'"]');
@@ -138,29 +138,27 @@ try {
   const dialog=page.locator('#arcade-game');
   assert.equal(await dialog.isVisible(),true);
   assert.equal(param(page,'game'),match.id);
-  const other=match.versions.find(v=>v.id!==match.preferredId);
-  await dialog.locator('[data-version]').selectOption(other.id);
-  assert.equal(param(page,'build'),other.id);
   assert.equal(param(page,'sort'),'size-desc');
   await page.reload();
   await page.locator('[data-loading]').waitFor({state:'hidden'});
-  assert.equal(await dialog.locator('[data-version]').inputValue(),other.id);
-  assert.equal(param(page,'build'),other.id);
+  assert.equal(await dialog.isVisible(),true);
+  assert.equal(param(page,'game'),match.id);
+  assert.equal(await dialog.locator('#arcade-dialog-title').innerText(),match.title);
+  assert.equal(await dialog.locator('[data-play]').getAttribute('href'),recommended(match).url || recommended(match).downloadUrl);
   await dialog.locator('[data-dialog-close]').click();
   await page.waitForFunction(()=>!new URL(location.href).searchParams.has('game'));
-  assert.equal(param(page,'build'),null);
   assert.equal(param(page,'sort'),'size-desc');
   assert.equal(await page.locator('[data-arcade-grid]').getAttribute('data-layout'),'list');
-  pass('list layout, favorite, detail dialog and alternate-build deep links preserved');
+  pass('list layout, favorite, detail dialog and game deep links preserved');
   await page.locator('[data-reset]').first().click();
   assert.equal(param(page,'sort'),null);
   assert.equal(param(page,'q'),null);
-  assert.equal(await sort(page).inputValue(),'newest');
+  assert.equal(await sort(page).inputValue(),'az');
   await page.locator('[data-shelf="favorites"]').click();
   await choose(page,'sort','size-desc');
   assert.deepEqual(await ids(page),[match.id]);
   pass('clear filters resets sort; favorites shelf remains sortable');
-  const playable=games.filter(g=>/^https:\/\//.test(recommended(g).url||'') && !['restricted','unavailable','broken','failed','needs-fix'].includes(recommended(g).status) && known(g)).slice(0,4);
+  const playable=games.filter(g=>/^(https:\/\/|\/(?!\/))/.test(recommended(g).url||'') && known(g)).slice(0,4);
   await page.evaluate(items=>localStorage.setItem('qualiacology.arcade.recent',JSON.stringify(items)),playable.map((g,i)=>({id:g.id,at:Date.now()-i})));
   await load(page,'?shelf=recent');
   assert.deepEqual(await ids(page),playable.map(g=>g.id));
@@ -168,18 +166,19 @@ try {
   assert.deepEqual(await ids(page),expected(playable,true));
   pass('recent shelf default play order and explicit size ordering');
   await load(page,'?sort=invalid');
-  assert.equal(await sort(page).inputValue(),'newest');
+  assert.equal(await sort(page).inputValue(),'az');
   assert.equal(param(page,'sort'),null);
   await search.fill('no-match-8bf432e16');
   await page.locator('[data-empty]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-random]').isDisabled(),true);
   pass('invalid sort falls back; no-results state remains functional');
-  for (const mode of ['newest','oldest','az','za','featured']) {
+  for (const mode of ['az','za','recent']) {
     await load(page,'?sort='+mode);
-    const ordered = games.slice().sort((a,b)=>mode==='az'?title(a,b):mode==='za'?title(b,a):mode==='oldest'?(Date.parse(a.firstDate)||Infinity)-(Date.parse(b.firstDate)||Infinity)||title(a,b):mode==='featured'?Number(b.featured)-Number(a.featured)||title(a,b):(Date.parse(b.lastDate)||0)-(Date.parse(a.lastDate)||0)||title(a,b));
+    const recency = new Map(playable.map((game,index)=>[game.id,index]));
+    const ordered = games.slice().sort((a,b)=>mode==='za'?title(b,a):mode==='recent'?(recency.get(a.id) ?? Infinity)-(recency.get(b.id) ?? Infinity)||title(a,b):title(a,b));
     assert.deepEqual(await ids(page),ordered.slice(0,36).map(g=>g.id));
   }
-  pass('all five existing sort orders match their original first pages');
+  pass('title and recent-play sort orders match their expected first pages');
   await context.close();
 
   const mobile = await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
@@ -202,16 +201,16 @@ try {
   const samples = [null,undefined,0,-1,'42',1.5,Number.MAX_SAFE_INTEGER+1,100,100,20];
   const fixture = {...catalog,games:samples.map((value,i)=>{
     const source=games[i];
-    return {...source,id:'fixture-'+i,title:i===7?'Zeta':i===8?'Alpha':String(i),preferredId:'pref-'+i,versions:[{...recommended(source),id:'other-'+i,bytes:1},{...recommended(source),id:'pref-'+i,bytes:value}]};
+    return {...source,id:'fixture-'+i,title:i===7?'Zeta':i===8?'Alpha':String(i),preferredId:'pref-'+i,versions:[{...recommended(source),id:'pref-'+i,bytes:value}]};
   })};
   await ep.route('**/assets/arcade/catalog.*.json',route=>route.fulfill({json:fixture}));
   for(const [mode,desc] of [['size-asc',false],['size-desc',true]]) {
     await load(ep,'?sort='+mode);
     assert.deepEqual(await ids(ep),expected(fixture.games,desc));
     assert.deepEqual((await ids(ep)).slice(0,3),desc?['fixture-8','fixture-7','fixture-9']:['fixture-9','fixture-8','fixture-7']);
-    assert.equal(await ep.locator('.arcade-card-status span').filter({hasText:'Size not recorded'}).count(),7);
+    assert.equal(await ep.locator('.arcade-card-size').count(),3);
   }
-  pass('test-only invalid/missing/zero/negative/non-numeric/unsafe byte values; preferred build vs older build; exact-size ties');
+  pass('test-only invalid/missing/zero/negative/non-numeric/unsafe byte values stay unlabeled; exact-size ties');
   await edge.close();
   assert.deepEqual(errors,[]);
   pass('zero uncaught browser JavaScript errors');
