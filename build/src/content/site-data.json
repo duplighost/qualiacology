@@ -93,6 +93,45 @@
       "actionLabel": "Go outside"
     },
     {
+      "slug": "nightlash",
+      "title": "NIGHTLASH",
+      "descriptor": "Gunwhip adventure",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/nightlash-card-v20261128.jpg",
+      "alt": "A red-haired woman in a black coat swings a chain weapon through shattered stone inside a candlelit gothic castle, pink light curling around her boots.",
+      "summary": "Swing through a branching castle with Scarlet’s gunwhip. Hold your aim to shoot, follow the target reticle, and explore rooms full of breakable scenery, working mechanisms and guarded treasure.",
+      "metaDescription": "NIGHTLASH: The Castle. Explore the Grand Hall and its wings with Scarlet's physical gunwhip.",
+      "controls": "WASD / arrows move · drag to swing · hold aim, Space or F to shoot · flick back and forward for a power shot · E use · M map · P / Esc pause · touch controls",
+      "actionLabel": "Play"
+    },
+    {
+      "slug": "thoroughbred-liars",
+      "title": "THOROUGHBRED LIARS",
+      "descriptor": "Steeplechase racing",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/thoroughbred-liars-card-v20261128.jpg",
+      "alt": "Two people in a smiling brown horse costume sprint ahead of real racehorses, four human legs in trainers kicking up dirt on a sunny racecourse.",
+      "summary": "Marnie takes the front. Ruth takes the back. The prize money is real.",
+      "metaDescription": "Two women in a pantomime horse enter an actual steeplechase. A complete original racing game.",
+      "controls": "WASD / arrows run · Space jump · Shift brace / tuck · E + steer swings the rear · Q / Ctrl surge · R recover · keyboard, touch and gamepad",
+      "actionLabel": "Race"
+    },
+    {
+      "slug": "loose-end",
+      "title": "LOOSE END",
+      "descriptor": "Cable-weight action",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/loose-end-card-v20261128.jpg",
+      "alt": "A young man in an ivory coat and red scarf swings a heavy weight on a cable through a glass mechanism in an overgrown seaside pleasure garden at dusk.",
+      "summary": "Find your opening. Commit to the swing. Tear through the park and the machines that guard it.",
+      "metaDescription": "A kinetic cable-weight action game through a painted park after dark. Outmaneuver its guardians with swings, reversals, returns and well-timed dodges.",
+      "controls": "WASD / arrows move · mouse swings without clicking, closer retracts · Space / Shift dash · Esc pause · left thumb moves, right thumb swings, DASH dodges",
+      "actionLabel": "Play the adventure"
+    },
+    {
       "slug": "everhouse",
       "title": "EVERHOUSE",
       "descriptor": "First-person horror",

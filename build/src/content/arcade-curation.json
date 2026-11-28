@@ -3,6 +3,10 @@
   "description": "Public arcade curation. Archival source records and original games remain intact.",
   "excludeMainSiteGames": true,
   "excluded": {
+    "nightlash": "Promoted to the main Games page with the latest NIGHTLASH: The Castle release.",
+    "nightlash-3d": "Older NIGHTLASH edition superseded by The Castle on the main Games page.",
+    "thoroughbred-liars": "Promoted to the main Games page with the latest complete release.",
+    "loose-end": "Promoted to the main Games page with the latest After Hours release.",
     "a-way-through": "No public launch URL or download URL exists in the current public catalogue.",
     "afterparty-at-the-end-of-the-world": "This game was already removed from the website and its route is explicitly required to stay gone. Do not resurface it through the arcade.",
     "arc": "This game already has a direct listing on the main Games page.",
