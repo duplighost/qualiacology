@@ -1,9 +1,11 @@
 # Qualiacology build tooling
 
-Generates the hub pages (the homepage, `/games/`, `/music/`, `/psychopharmacology/`),
-their fingerprinted `assets/hub/` CSS and JS, and `sitemap.xml`, writing them into the
-repo root in place. Games, album pages and redirects live at the repo root and are not
-generated.
+Generates the hub pages (the homepage, `/games/`, `/arcade/`, `/music/`,
+`/psychopharmacology/`), their fingerprinted `assets/hub/` CSS and JS, and `sitemap.xml`,
+writing them into the repo root in place. It also dresses the hand-written pages (albums,
+the pages of games you download, `404.html`) with the site's header, footer and
+stylesheet, between their `<!-- site:… -->` markers. Games and redirects live at the repo
+root and are not generated.
 
 Edit copy and the catalog in `src/content/site-data.json`, templates in
 `scripts/build-site.mjs`, styles and behaviour in `src/site.css` and `src/site.js`, then

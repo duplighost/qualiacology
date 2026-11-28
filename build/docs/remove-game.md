@@ -4,7 +4,7 @@ Read this only when taking a game off the site. It is the inverse of the
 add-game checklist — grep the slug until it's zero:
 
 game dir → `assets/games/` card → `assets/catalog/games/` set → any OG image
-→ `_redirects` entries → `_headers` block → `404.html` mentions → orphaned
+→ `_redirects` entries → `_headers` block → orphaned
 `assets/` files referencing it → catalog entry in `site-data.json` → count
 asserts (all four spots listed in `add-game.md` step 5, including the
 horror-filter roster in `browser-qa.mjs` if it was a horror game) → rebuild +

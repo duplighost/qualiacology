@@ -2,7 +2,7 @@
 // album means editing site-data.json AND bumping expected.json — one
 // deliberate step, replacing the four hardcoded asserts that used to live in
 // build-site.mjs, validate-site.mjs, and browser-qa.mjs. Everything else here
-// (horror roster, "Showing N worlds.") derives from the catalog itself.
+// (horror roster, "Showing N games.") derives from the catalog itself.
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,7 @@ const data = JSON.parse(readFileSync(join(contentRoot, "site-data.json"), "utf8"
 // Games-array order: the /games/ shelf renders in array order and the filter
 // preserves DOM order, so this list is also the expected on-page order.
 export const horrorSlugs = data.games.filter((game) => game.group === "horror").map((game) => game.slug);
-export const horrorStatus = `Showing ${horrorSlugs.length} worlds.`;
+export const horrorStatus = `Showing ${horrorSlugs.length} games.`;
 
 export function checkCatalog(assert) {
   const bump = "if the change is intentional, bump build/src/content/expected.json";

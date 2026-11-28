@@ -41,9 +41,16 @@ touching site.css/site.js/templates.
      not "fix" its absence from the shelf, and do not restore the `/games/`
      intro clause naming controls. `duration` DOES still render and is the
      only thing in `.card-meta`.
-   - `featured: true` only by swapping — exactly 3 games are featured (grid
-     is 3 columns; keep it a multiple of 3), and which ones is Alex's call.
-     Featured order = games array order.
+   - `featured: true` only by swapping — exactly 3 games are featured, and
+     which ones is Alex's call. Featured order = games array order: the first
+     is the big one at the top of the homepage, the other two are the banners
+     under it. A featured game needs a wide banner (`images.md`).
+   - A game you download, not play on a page: `"kind": "windows"` (its card
+     and the homepage say "Windows download"). One that isn't out:
+     `"unreleased": true` as well ("For Windows · Not out yet"). Its own page
+     is hand-written and dressed by the build: copy
+     `murderpop-greatest-hits/index.html`, keep the markers, and add its slug
+     to `dressedPages` in `build-site.mjs` (`design-system.md` has the rest).
 
 5. **Bump `build/src/content/expected.json`** — the ONE place catalog
    counts are declared (games/albums/featuredGames/featuredAlbums). Every
@@ -55,8 +62,7 @@ touching site.css/site.js/templates.
 6. **Short links** in `_redirects` (e.g. `/dusk  /duskfall/  302`) — check
    for collisions first. Add a `_headers` block only if the game needs one.
 
-7. **`404.html`** is hand-coded and name-drops specific games — update it if
-   it references anything you removed.
+7. `404.html` names no game any more; nothing to do there.
 
 8. Build → validate → serve locally
    (`node build/scripts/static-server.mjs --root=. --port=4173`) and confirm

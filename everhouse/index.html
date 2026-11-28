@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EVERHOUSE | Qualiacology</title>
   <meta name="description" content="A first-person Windows game by Alexander Duncan Guitar. The house builds new rooms out of whatever you seem to like. It rearranges itself so you won’t find the way out.">
-  <meta name="theme-color" content="#1c201a">
+  <meta name="theme-color" content="#09090b">
   <link rel="canonical" href="https://qualiacology.com/everhouse/">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
@@ -21,65 +21,112 @@
   <meta name="twitter:title" content="EVERHOUSE">
   <meta name="twitter:description" content="The house builds new rooms out of whatever you seem to like. A Windows game by Alexander Duncan Guitar.">
   <meta name="twitter:image" content="https://qualiacology.com/assets/og/everhouse-ballroom-v1.jpg">
-  <style>
-    :root {
-      color-scheme: dark;
-      --night: #1c201a;
-      --paper: #f4ecda;
-      --linen: #dbd3bd;
-      --brass: #e8c98e;
-      --line: #4e5143;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--night); color: var(--paper); font: 1rem/1.55 Georgia, "Times New Roman", serif; }
-    main { max-width: 1400px; margin: auto; padding: clamp(1.4rem, 4.5vw, 4.5rem) clamp(1.15rem, 5.4vw, 5rem); }
-    header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1.3rem 2rem; padding-bottom: clamp(1.4rem, 3vw, 2.4rem); }
-    h1 { margin: 0; font-size: clamp(3.15rem, 8.5vw, 7.25rem); font-weight: 400; line-height: .94; letter-spacing: -.065em; }
-    .byline { margin: .6rem 0 0; color: var(--linen); font-size: clamp(1rem, 1.6vw, 1.22rem); }
-    .download { display: inline-flex; flex-direction: column; align-items: center; gap: .38rem; }
-    .button, .details, .install, figcaption { font-family: "Segoe UI", system-ui, sans-serif; }
-    .button { display: inline-flex; align-items: center; gap: 1.3rem; padding: .82rem 1.25rem; border: 1px solid var(--brass); border-radius: 2px; background: var(--brass); color: #201d14; text-decoration: none; font-size: 1rem; font-weight: 650; }
-    .button:hover { background: #f5dfb0; }
-    .button:focus-visible { outline: 3px solid var(--paper); outline-offset: 5px; }
-    .details, figcaption { color: var(--linen); font-size: .82rem; }
-    figure { margin: 0; }
-    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); }
-    figcaption { margin-top: .45rem; text-align: right; }
-    .notes { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(14rem, .7fr); gap: 1.5rem 5vw; padding-top: clamp(1.2rem, 2.8vw, 2rem); }
-    .story { margin: 0; max-width: 43ch; font-size: clamp(1.25rem, 2.2vw, 1.85rem); line-height: 1.35; }
-    .install { color: var(--linen); font-size: .95rem; }
-    .install p { margin: 0 0 .6rem; }
-    .install strong { color: var(--paper); }
-    @media (max-width: 640px) {
-      .notes { grid-template-columns: 1fr; }
-      .download { align-items: flex-start; }
-      figcaption { text-align: left; }
-    }
-  </style>
+  <!-- site:head -->
+  <link rel="preload" href="/assets/fonts/fraunces-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/hub/qualiacology.aed24b68449b.css">
+  <script src="/assets/hub/qualiacology.38c5e571b9f6.js" defer></script>
+  <!-- /site:head -->
 </head>
-<body>
-  <main>
-    <header>
-      <div>
-        <h1>EVERHOUSE</h1>
-        <p class="byline">A game by Alexander Duncan Guitar</p>
+<body class="leaf-page" data-page="games">
+  <!-- site:header -->
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <div class="container header-row">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true">Q.</span>
+        <span class="brand-word">Qualiacology</span>
+      </a>
+      <nav class="desktop-nav" aria-label="Primary navigation">
+        <a class="nav-link" href="/games/" aria-current="page">Games</a>
+        <a class="nav-link" href="/music/">Music</a>
+        <a class="nav-link" href="/psychopharmacology/">Psychopharmacology</a>
+        <a class="nav-link" href="/arcade/">Arcade</a>
+        <a class="nav-link" href="#connect">Connect</a>
+        <a class="button button-outline button-small external-link" href="https://discord.gg/NwvxKxUJpC" target="_blank" rel="noopener noreferrer">Discord</a>
+      </nav>
+      <button class="menu-button" type="button" data-menu-open aria-expanded="false" aria-controls="site-menu">Menu<span class="menu-icon" aria-hidden="true"></span></button>
+    </div>
+  </header>
+  <dialog class="mobile-dialog" id="site-menu" data-menu-dialog aria-label="Menu">
+    <div class="dialog-shell">
+      <div class="dialog-head">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">Q.</span>
+          <span class="brand-word">Qualiacology</span>
+        </a>
+        <button class="dialog-close" type="button" data-menu-close>Close</button>
       </div>
-      <div class="download">
-        <a class="button" href="/everhouse/download">Download for Windows <span aria-hidden="true">↓</span></a>
-        <span class="details">64-bit Windows · 944 MB ZIP</span>
-      </div>
+      <nav class="dialog-nav" aria-label="Mobile navigation">
+        <a href="/">Home</a>
+        <a href="/games/" aria-current="page">Games</a>
+        <a href="/music/">Music</a>
+        <a href="/psychopharmacology/">Psychopharmacology</a>
+        <a href="/arcade/">Arcade</a>
+        <a href="#connect">Connect</a>
+        <a class="external-link" href="https://discord.gg/NwvxKxUJpC" target="_blank" rel="noopener noreferrer">Discord</a>
+      </nav>
+    </div>
+  </dialog>
+  <!-- /site:header -->
+  <main id="main-content" class="container leaf game-page">
+    <a class="crumb" href="/games/">Games</a>
+    <header class="game-head">
+      <p class="eyebrow">For Windows</p>
+      <h1>EVERHOUSE</h1>
     </header>
-    <figure>
-      <img src="/assets/games/everhouse-ballroom-v1.jpg" width="1280" height="720" fetchpriority="high" alt="A grand piano and wooden chairs stand around a flooded ballroom. The chandelier is still lit under the water.">
-      <figcaption>The flooded ballroom, in game.</figcaption>
-    </figure>
-    <div class="notes">
-      <p class="story">The house has been alone for a very long time, and now it finally has a guest. It builds new rooms out of whatever you seem to like. It rearranges itself so you won’t find the way out.</p>
-      <div class="install">
-        <p>Choose <strong>Extract All</strong> on the downloaded ZIP. Open the extracted folder and double-click <strong>Everhouse.exe</strong>.</p>
-        <p>Keyboard and mouse. Esc pauses and shows the controls. Requires DirectX 12 with Shader Model 6.</p>
+    <div class="game-split">
+      <figure class="game-figure">
+        <div class="game-shot">
+          <!-- site:shot -->
+<picture>
+    <source type="image/avif" srcset="/assets/catalog/games/everhouse-480.avif?v=73e40037 480w, /assets/catalog/games/everhouse-800.avif?v=414d9c71 800w, /assets/catalog/games/everhouse-1200.avif?v=82914af8 1200w" sizes="(min-width: 2125px) 930px, (min-width: 1500px) calc(25.6vw + 386px), (min-width: 896px) 54vw, 94vw">
+    <source type="image/webp" srcset="/assets/catalog/games/everhouse-480.webp?v=20fad999 480w, /assets/catalog/games/everhouse-800.webp?v=15662c6d 800w, /assets/catalog/games/everhouse-1200.webp?v=82e3d65b 1200w" sizes="(min-width: 2125px) 930px, (min-width: 1500px) calc(25.6vw + 386px), (min-width: 896px) 54vw, 94vw">
+    <img src="/assets/games/everhouse-ballroom-v1.jpg?v=8ef3753c" width="800" height="450" alt="A grand piano and wooden chairs stand around a flooded ballroom. The chandelier is still lit under the water." loading="eager" fetchpriority="high" decoding="async">
+  </picture>
+  <!-- /site:shot -->
+        </div>
+        <figcaption>The flooded ballroom, in game.</figcaption>
+      </figure>
+      <div class="game-info">
+        <p class="game-summary">The house has been alone for a very long time, and now it finally has a guest. It builds new rooms out of whatever you seem to like. It rearranges itself so you won’t find the way out.</p>
+        <div class="game-get">
+          <a class="button button-gold" href="/everhouse/download">Download EVERHOUSE</a>
+          <p class="game-size">64-bit Windows · a 944 MB zip</p>
+          <div class="game-notes">
+            <p>Choose <strong>Extract All</strong> on the downloaded ZIP. Open the extracted folder and double-click <strong>Everhouse.exe</strong>.</p>
+            <p>Keyboard and mouse. Esc pauses and shows the controls. Requires DirectX 12 with Shader Model 6.</p>
+          </div>
+        </div>
       </div>
     </div>
   </main>
+  <!-- site:footer -->
+  <footer class="site-footer" id="connect">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-intro">
+          <h2>Connect</h2>
+          <p>Best way to reach me: email, Instagram DMs, or jump into the Discord.</p>
+        </div>
+        <nav class="footer-links" aria-label="Social and contact links">
+          <a href="mailto:alexdguitar@gmail.com">Email</a>
+          <a class="external-link" href="https://www.instagram.com/alex_the_duncan/" target="_blank" rel="noopener noreferrer">Instagram</a>
+          <a class="external-link" href="https://discord.gg/NwvxKxUJpC" target="_blank" rel="noopener noreferrer">Discord</a>
+          <a class="external-link" href="https://suno.com/@doopliss" target="_blank" rel="noopener noreferrer">Suno</a>
+          <a class="external-link" href="https://www.tiktok.com/@duplighost" target="_blank" rel="noopener noreferrer">TikTok</a>
+          <a class="external-link" href="https://www.youtube.com/@Alexander_Duncan" target="_blank" rel="noopener noreferrer">YouTube</a>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">Q.</span>
+          <span class="brand-word">Qualiacology</span>
+        </a>
+        <p>Alexander Duncan Guitar</p>
+      </div>
+    </div>
+  </footer>
+  <!-- /site:footer -->
 </body>
 </html>

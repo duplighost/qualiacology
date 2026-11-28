@@ -1,62 +1,5 @@
 document.documentElement.classList.add("js");
 
-const progress = document.querySelector("[data-scroll-progress]");
-const header = document.querySelector(".site-header");
-
-if (progress) {
-  let scheduled = false;
-  let maxScroll = 1;
-  let needsMeasure = true;
-  // Where the browser can drive the filament off a scroll timeline it already does
-  // (see @keyframes filament). Writing transform here as well would scale it twice.
-  const cssDrivesFilament = CSS.supports("animation-timeline", "scroll(root)");
-
-  const paint = () => {
-    if (!cssDrivesFilament) {
-      if (needsMeasure) {
-        maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        needsMeasure = false;
-      }
-      const ratio = Math.min(1, Math.max(0, window.scrollY / maxScroll));
-      progress.style.transform = `scaleX(${ratio})`;
-    }
-    header?.classList.toggle("is-top", window.scrollY < 8);
-    scheduled = false;
-  };
-
-  const schedule = () => {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(paint);
-  };
-
-  const markForRemeasure = () => {
-    needsMeasure = true;
-    if (window.scrollY > 0) schedule();
-  };
-
-  window.addEventListener("scroll", schedule, { passive: true });
-  window.addEventListener("resize", markForRemeasure, { passive: true });
-  schedule();
-}
-
-// Which room are you standing in? The stylesheet asserts that the lit pilot light and
-// the filament's colour both mean exactly this, so it has to be measured, not guessed
-// from scroll percentages that go stale every time the seams change.
-const rooms = [...document.querySelectorAll("#community, #game, #music, #connect")];
-
-if (rooms.length && "IntersectionObserver" in window) {
-  const seen = new Map();
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => seen.set(entry.target.id, entry.isIntersecting));
-    const here = rooms.find((room) => seen.get(room.id));
-    if (here) document.body.dataset.here = here.id;
-    else delete document.body.dataset.here;
-  }, { rootMargin: "-45% 0px -45% 0px" });
-
-  rooms.forEach((room) => observer.observe(room));
-}
-
 const menuButton = document.querySelector("[data-menu-open]");
 const menuDialog = document.querySelector("[data-menu-dialog]");
 
@@ -174,7 +117,7 @@ if (filterButtons.length && filterItems.length) {
     }
 
     if (filterStatus) {
-      filterStatus.textContent = `Showing ${visible} ${visible === 1 ? "world" : "worlds"}.`;
+      filterStatus.textContent = `Showing ${visible} ${visible === 1 ? "game" : "games"}.`;
     }
 
     if (updateUrl && window.history?.replaceState) {
@@ -288,35 +231,6 @@ if (presenceLines.length && "fetch" in window) {
       });
     })
     .catch(() => {});
-}
-
-// Halloween: the Spooky Games strip's silent clip plays only while it is on screen, never
-// under reduced motion, and stays stopped once someone presses its pause button.
-const spookyClip = document.querySelector("[data-spooky-clip]");
-
-if (spookyClip && "IntersectionObserver" in window) {
-  const still = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const pauseButton = document.querySelector("[data-spooky-pause]");
-  let onScreen = false;
-  let stopped = false;
-
-  const sync = () => {
-    if (onScreen && !stopped && !still.matches) spookyClip.play().catch(() => {});
-    else spookyClip.pause();
-    if (pauseButton) pauseButton.hidden = still.matches;
-  };
-
-  new IntersectionObserver((entries) => {
-    onScreen = entries[0].isIntersecting;
-    sync();
-  }).observe(spookyClip);
-  still.addEventListener?.("change", sync);
-
-  pauseButton?.addEventListener("click", () => {
-    stopped = !stopped;
-    pauseButton.setAttribute("aria-pressed", String(stopped));
-    sync();
-  });
 }
 
 document.querySelectorAll("[data-current-year]").forEach((node) => {
