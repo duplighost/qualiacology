@@ -1,0 +1,65 @@
+[
+  {
+    "id": "stone.albedo",
+    "source": "https://polyhaven.com/a/old_stone_wall_02",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "Maps resized to 512x512 and JPEG-encoded; embedded locally."
+  },
+  {
+    "id": "stone.normal",
+    "source": "https://polyhaven.com/a/old_stone_wall_02",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "Maps resized to 512x512 and JPEG-encoded; embedded locally."
+  },
+  {
+    "id": "stone.orm",
+    "source": "https://polyhaven.com/a/old_stone_wall_02",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "Maps resized to 512x512 and JPEG-encoded; embedded locally."
+  },
+  {
+    "id": "floor.albedo",
+    "source": "https://polyhaven.com/a/monastery_stone_floor",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "Maps resized to 512x512 and JPEG-encoded; embedded locally."
+  },
+  {
+    "id": "floor.normal",
+    "source": "https://polyhaven.com/a/monastery_stone_floor",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "Maps resized to 512x512 and JPEG-encoded; embedded locally."
+  },
+  {
+    "id": "floor.orm",
+    "source": "https://polyhaven.com/a/monastery_stone_floor",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "Maps resized to 512x512 and JPEG-encoded; embedded locally."
+  },
+  {
+    "id": "model.statue",
+    "source": "https://polyhaven.com/a/gothic_statue",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "GLB images resized to at most 512 pixels per side and JPEG-encoded; geometry retained; embedded locally."
+  },
+  {
+    "id": "model.bust",
+    "source": "https://polyhaven.com/a/marble_bust_01",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "GLB images resized to at most 512 pixels per side and JPEG-encoded; geometry retained; embedded locally."
+  },
+  {
+    "id": "model.chandelier",
+    "source": "https://polyhaven.com/a/Chandelier_01",
+    "license": "CC0",
+    "provenance": "Asset and source attribution recovered from the supplied FIRST LIGHT build manifest.",
+    "modifications": "GLB images resized to at most 512 pixels per side and JPEG-encoded; geometry retained; embedded locally."
+  }
+]

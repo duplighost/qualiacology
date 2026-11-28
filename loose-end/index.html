@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b171b">
+  <meta name="description" content="A kinetic cable-weight action game through a painted park after dark. Outmaneuver its guardians with swings, reversals, returns and well-timed dodges.">
+  <title>LOOSE END — After Hours | Qualiacology</title>
+  <link rel="preload" href="assets/garden.png" as="image" fetchpriority="high">
+  <link rel="stylesheet" href="wreck-style.css?v=5.1.0">
+  <link rel="canonical" href="https://qualiacology.com/loose-end/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:title" content="LOOSE END — After Hours | Qualiacology">
+  <meta property="og:description" content="A kinetic cable-weight action game through a painted park after dark. Outmaneuver its guardians with swings, reversals, returns and well-timed dodges.">
+  <meta property="og:url" content="https://qualiacology.com/loose-end/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/loose-end-card-v20261128.jpg">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="720">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="LOOSE END — After Hours | Qualiacology">
+  <meta name="twitter:description" content="A kinetic cable-weight action game through a painted park after dark. Outmaneuver its guardians with swings, reversals, returns and well-timed dodges.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/loose-end-card-v20261128.jpg">
+</head>
+<body>
+  <main id="game" aria-label="Loose End demolition game">
+    <canvas id="world" tabindex="0" aria-label="Pleasure park. WASD or arrow keys move you. The mouse controls your wrecking weight without clicking. Space or Shift dashes. Break targets and defeat the guardians to open the exit."></canvas>
+    <header class="topbar">
+      <button id="home" class="brand" aria-label="Pause or return to menu">LOOSE END<span>AFTER HOURS</span></button>
+      <div id="room-heading" class="room-heading" hidden><span id="room-number">STAGE 01 / 06</span><strong id="room-name">Saltglass Gardens</strong></div>
+      <nav class="tools" aria-label="Game controls">
+        <button id="sound" class="icon-button" aria-label="Mute sound" aria-pressed="false" title="Sound on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4V5Z"/><path class="sound-wave" d="M15 8c2 2 2 6 0 8m3-11c4 4 4 10 0 14"/></svg></button>
+        <button id="pause" class="icon-button" aria-label="Pause game" title="Pause (Esc)" hidden><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+        <button id="fullscreen" class="icon-button" aria-label="Enter full screen" title="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></svg></button>
+      </nav>
+    </header>
+    <section id="menu" class="menu-screen" aria-label="Start game">
+      <img class="menu-hero" src="assets/hero.png" decoding="async" fetchpriority="high" alt="" aria-hidden="true" draggable="false">
+      <div class="menu-card">
+        <p class="eyebrow"><span class="park-mark" aria-hidden="true">✦</span> ONE WEIGHT. ONE LONG NIGHT.</p>
+        <h1>LOOSE<br><em>END.</em></h1>
+        <p class="edition">After Hours</p>
+        <p class="intro">A beautiful place to pick a fight.</p>
+        <p class="description">Find your opening. Commit to the swing. Tear through the park and the machines that guard it.</p>
+        <button id="play" class="primary-button">Play the adventure <span class="weight-icon" aria-hidden="true"></span></button>
+        <div class="menu-secondary"><button id="practice" class="secondary-button">Free smash <small>No damage</small></button><button id="encounters" class="secondary-button">Boss practice <small>Pick a fight</small></button></div>
+        <div class="howto desktop-help"><span><b>WASD</b> move</span><span><b>MOUSE</b> swing</span><span><b>SPACE</b> dash</span></div>
+        <div class="howto touch-help"><span><b>LEFT THUMB</b> move</span><span><b>RIGHT THUMB</b> swing</span></div>
+        <p id="record" class="record" hidden></p>
+        
+      </div>
+      <div class="menu-stamp" aria-hidden="true"><span>GARDENS · BATHS · MIDWAY</span><strong>Every swing<br>has a consequence.</strong></div>
+    </section>
+    <section id="hud" class="hud" aria-label="Run status" hidden>
+      <div class="health" aria-label="Health"><div id="health-pips"></div><span id="dash-ready">DASH READY</span></div>
+      <div class="progress"><div class="progress-label"><span id="objective">BREAK TARGETS</span><strong id="break-count">0 / 12</strong></div><div class="progress-track"><i id="break-fill"></i></div><div id="enemy-status"><span>THREATS REMAINING</span><span id="enemy-count">0</span></div></div>
+      <div class="score"><span>SCORE</span><strong id="score">0</strong></div>
+    </section>
+    <section id="boss-hud" class="boss-hud" aria-label="Guardian status" hidden><div class="boss-top"><span id="boss-name"></span><strong id="boss-hp"></strong></div><div class="boss-track"><i id="boss-fill"></i></div><div class="boss-bottom"><span id="boss-phase"></span><span id="boss-parts"></span></div><p id="boss-hint"></p></section>
+    <div id="room-banner" class="room-banner" aria-live="polite"><span id="banner-kicker"></span><strong id="banner-title"></strong><small id="banner-note"></small></div>
+    <div id="combo" class="combo" hidden><strong id="combo-number">2×</strong><span id="combo-label">KEEP BREAKING</span><i id="combo-fill"></i></div>
+    <div id="hint" class="hint" hidden></div>
+    <footer id="footer" class="game-footer" hidden><span class="desktop-help"><b>WASD / ARROWS</b> move <i>·</i> <b>MOUSE</b> swing <i>·</i> <b>SPACE</b> dash</span><span class="touch-help"><b>LEFT</b> move <i>·</i> <b>RIGHT</b> swing</span><span id="exit-status">BREAK YOUR WAY OUT</span></footer>
+    <button id="touch-dash" class="touch-dash" aria-label="Dash" hidden>DASH</button>
+    <section id="encounter-panel" class="modal" aria-label="Choose a guardian" hidden><div class="panel encounter-panel"><p class="eyebrow">PICK YOUR ENCOUNTER</p><h2>Meet the<br><em>locals.</em></h2><p>Full health. Straight into the fight. Retry as often as you like.</p><div class="encounter-list"><button class="encounter-button" data-encounter="1"><span class="encounter-icon garden-icon" aria-hidden="true">✤</span><span><strong>The Topiarist</strong><small>Bait the charge. Strike its back.</small></span><i>01</i></button><button class="encounter-button" data-encounter="3"><span class="encounter-icon bath-icon" aria-hidden="true">◉</span><span><strong>The Bathmaster</strong><small>Return the pearls. Dodge the bolts.</small></span><i>02</i></button><button class="encounter-button" data-encounter="5"><span class="encounter-icon midway-icon" aria-hidden="true">✺</span><span><strong>The Carousel</strong><small>Read the sweep. Break the arms.</small></span><i>03</i></button></div><button id="encounter-back" class="text-button">Back to the park</button></div></section>
+    <section id="pause-panel" class="modal" aria-label="Game paused" hidden><div class="panel"><p class="eyebrow">THE DUST CAN WAIT</p><h2>Take<br><em>a breath.</em></h2><p class="desktop-help">WASD or arrows move you. The mouse moves the weight. Space or Shift dashes in your movement direction.</p><p class="touch-help">Left thumb moves you. Sweep your right thumb to swing the weight. Tap DASH to dodge.</p><p>Swing through targets with speed. Pull the cursor closer to retract the weight. Watch each guardian’s windup, then find an opening. Retrying begins at this stage.</p><button id="resume" class="primary-button">Keep wrecking</button><button id="restart" class="secondary-button">Restart this stage</button><button id="quit" class="text-button">Back to the park</button></div></section>
+    <section id="result-panel" class="modal" aria-label="Run result" hidden><div class="panel result-panel"><p id="result-kicker" class="eyebrow"></p><h2 id="result-title"></h2><p id="result-copy"></p><div class="result-stats"><div><span>SCORE</span><strong id="final-score">0</strong></div><div><span>STAGE</span><strong id="final-room">1 / 6</strong></div></div><button id="retry" class="primary-button">Try this room again</button><button id="result-menu" class="text-button">Back to the park</button></div></section>
+    <div id="error-message" role="alert" hidden>The game stopped responding. Reload the page to try again.</div>
+  </main>
+  <script src="wreck-physics.js?v=5.1.0"></script>
+  <script src="wreck-render.js?v=5.1.0"></script>
+  <script src="wreck-game.js?v=5.1.0"></script>
+</body>
+</html>
